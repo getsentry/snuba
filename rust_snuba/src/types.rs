@@ -444,6 +444,7 @@ impl<T> BytesInsertBatch<Vec<T>> {
 }
 
 /// The return value of message processors that produce typed rows for RowBinary insertion.
+/// A single Kafka message may produce multiple rows, hence Vec<T>.
 #[derive(Clone, Debug)]
 pub struct TypedInsertBatch<T> {
     pub rows: Vec<T>,

@@ -197,6 +197,9 @@ pub fn make_rust_processor_row_binary<T: Clone + Send + Sync + 'static>(
         timestamp: DateTime<Utc>,
         stop_at_timestamp: Option<i64>,
     ) -> anyhow::Result<Message<BytesInsertBatch<Vec<T>>>> {
+        // If a stop timestamp is set (used for backfills / replays), skip
+        // processing messages whose timestamp exceeds the cutoff by returning
+        // an empty batch that still commits the offset.
         if let Some(stop) = stop_at_timestamp {
             if stop < timestamp.timestamp() {
                 let payload = BytesInsertBatch::from_rows(Vec::new());

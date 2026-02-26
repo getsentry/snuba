@@ -30,6 +30,8 @@ impl<T> Clone for RowBinaryTaskRunner<T> {
 
 impl<T> RowBinaryTaskRunner<T>
 where
+    // Send + Sync + 'static required because T is used in async tasks dispatched
+    // across threads via RunTaskInThreads.
     T: clickhouse::Row + serde::Serialize + Send + Sync + 'static,
 {
     fn new(config: &ClickhouseConfig, table: String) -> Self {
@@ -40,6 +42,9 @@ where
             .with_password(&config.password)
             .with_database(&config.database)
             .with_option("load_balancing", "in_order")
+            // Wait for data to be written to all shards before returning success.
+            // Without this, inserts return immediately after writing to the local
+            // node and data is forwarded asynchronously, risking data loss on failure.
             .with_option("insert_distributed_sync", "1")
             .with_option("input_format_binary_read_json_as_string", "1");
 
