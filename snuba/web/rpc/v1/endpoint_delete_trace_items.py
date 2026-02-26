@@ -14,23 +14,8 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.lw_deletions.types import AttributeConditions
 from snuba.web.bulk_delete_query import delete_from_storage
 from snuba.web.rpc import RPCEndpoint
+from snuba.web.rpc.common.common import _scalar_value
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-
-
-def _extract_scalar_value(v: Any) -> Any:
-    """Extract a scalar Python value from an AttributeValue proto."""
-    value_type = v.WhichOneof("value")
-    if value_type == "val_str":
-        return v.val_str
-    elif value_type == "val_int":
-        return v.val_int
-    elif value_type == "val_float":
-        return v.val_float
-    elif value_type == "val_double":
-        return v.val_double
-    elif value_type == "val_bool":
-        return v.val_bool
-    raise BadSnubaRPCRequestException(f"Unsupported scalar value type in array: {value_type}")
 
 
 def _extract_attribute_value(comparison_filter: ComparisonFilter) -> Any:
@@ -45,7 +30,7 @@ def _extract_attribute_value(comparison_filter: ComparisonFilter) -> Any:
     elif value_field == "val_bool":
         return comparison_filter.value.val_bool
     elif value_field == "val_array":
-        return [_extract_scalar_value(elem) for elem in comparison_filter.value.val_array.values]
+        return [_scalar_value(elem) for elem in comparison_filter.value.val_array.values]
     else:
         raise BadSnubaRPCRequestException(f"Unsupported attribute value type: {value_field}")
 
