@@ -60,14 +60,18 @@ Tout = TypeVar("Tout", bound=ProtobufMessage)
 BUCKET_COUNT = 40
 
 
-def transform_array_value(value: dict[str, str]) -> Any:
+def transform_array_value(value: dict[str, Any]) -> Any:
     for t, v in value.items():
         if t == "Int":
             return int(v)
         if t == "Double":
             return float(v)
-        if t in {"String", "Bool"}:
+        if t == "Bool":
+            return str(v).lower() == "true"
+        if t == "String":
             return v
+        if t == "Null":
+            return None
     raise BadSnubaRPCRequestException(f"array value type unknown: {type(v)}")
 
 

@@ -31,7 +31,11 @@ def _convert_array_value(raw: Any) -> AttributeValue:
     values = []
     for elem in elements:
         py_val = transform_array_value(elem)
-        if isinstance(py_val, int):
+        if py_val is None:
+            values.append(AttributeValue(is_null=True))
+        elif isinstance(py_val, bool):
+            values.append(AttributeValue(val_bool=py_val))
+        elif isinstance(py_val, int):
             values.append(AttributeValue(val_int=py_val))
         elif isinstance(py_val, float):
             values.append(AttributeValue(val_double=py_val))
