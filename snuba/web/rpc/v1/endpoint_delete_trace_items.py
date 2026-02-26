@@ -24,6 +24,8 @@ def _extract_scalar_value(v: Any) -> Any:
         return v.val_str
     elif value_type == "val_int":
         return v.val_int
+    elif value_type == "val_float":
+        return v.val_float
     elif value_type == "val_double":
         return v.val_double
     elif value_type == "val_bool":

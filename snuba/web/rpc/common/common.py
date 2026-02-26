@@ -82,10 +82,16 @@ def process_arrays(raw: str) -> dict[str, list[Any]]:
 def _check_non_string_values_cannot_ignore_case(
     comparison_filter: ComparisonFilter,
 ) -> None:
-    if comparison_filter.ignore_case and comparison_filter.value.WhichOneof("value") not in (
-        "val_str",
-        "val_array",
-    ):
+    if not comparison_filter.ignore_case:
+        return
+    value_type = comparison_filter.value.WhichOneof("value")
+    if value_type == "val_array":
+        if not all(
+            elem.WhichOneof("value") == "val_str"
+            for elem in comparison_filter.value.val_array.values
+        ):
+            raise BadSnubaRPCRequestException("Cannot ignore case on non-string values")
+    elif value_type != "val_str":
         raise BadSnubaRPCRequestException("Cannot ignore case on non-string values")
 
 
