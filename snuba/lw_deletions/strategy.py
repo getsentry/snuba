@@ -73,6 +73,8 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         self.__metrics = metrics
         self.__last_ongoing_mutations_check: Optional[float] = None
         self.__redis_client = get_redis_client(RedisClientKey.CONFIG)
+        self.__local_inflight_count = 0
+        self.__mutations_issued_this_submit = 0
 
     def poll(self) -> None:
         self.__next_step.poll()
@@ -99,6 +101,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             return org_ids_delete_allowlist.issuperset(query_org_ids)
 
     def submit(self, message: Message[ValuesBatch[KafkaPayload]]) -> None:
+        self.__mutations_issued_this_submit = 0
         decode_messages = [rapidjson.loads(m.payload.value) for m in message.value.payload]
         conditions = self.__formatter.format(decode_messages)
 
@@ -233,6 +236,14 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         tracking_key = f"lw_delete_partitions:{self.__storage_name}:{cond_hash}"
         ttl = settings.LW_DELETES_PARTITION_TRACKING_TTL
 
+        per_submit_budget = typing.cast(
+            int,
+            get_int_config(
+                "lw_deletes_per_submit_budget",
+                default=settings.LW_DELETES_PER_SUBMIT_BUDGET,
+            ),
+        )
+
         for partition_date in partition_dates:
             member = f"{table}:{partition_date}"
             days_delta = (datetime.strptime(partition_date, "%Y-%m-%d") - datetime.now()).days
@@ -248,6 +259,11 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
                     table,
                 )
                 continue
+
+            if self.__mutations_issued_this_submit >= per_submit_budget:
+                raise TooManyOngoingMutationsError(
+                    f"per-submit budget of {per_submit_budget} mutations exhausted"
+                )
 
             self._check_ongoing_mutations(skip_throttle=True)
             partition_condition = equals(
@@ -285,6 +301,8 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
                 attribution_info=self._get_attribute_info(),
                 query_settings=query_settings,
             )
+            self.__local_inflight_count += 1
+            self.__mutations_issued_this_submit += 1
             self.__metrics.timing(
                 "execute_delete_query_ms",
                 (time.time() - start) * 1000,
@@ -299,7 +317,31 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
                 else:
                     raise LWDeleteQueryException(exc.message)
 
+        delay_ms = get_int_config("lw_delete_inter_mutation_delay_ms", default=0)
+        if delay_ms and delay_ms > 0:
+            time.sleep(delay_ms / 1000.0)
+
     def _check_ongoing_mutations(self, skip_throttle: bool = False) -> None:
+        max_ongoing_mutations = typing.cast(
+            int,
+            get_int_config(
+                "max_ongoing_mutations_for_delete",
+                default=settings.MAX_ONGOING_MUTATIONS_FOR_DELETE,
+            ),
+        )
+
+        # Fast path: local counter already exceeds limit, no need to query CH
+        if self.__local_inflight_count > max_ongoing_mutations:
+            now = time.time()
+            if (
+                self.__last_ongoing_mutations_check is not None
+                and now - self.__last_ongoing_mutations_check < 1.0
+            ):
+                raise TooManyOngoingMutationsError(
+                    f"local inflight count {self.__local_inflight_count} exceeds max {max_ongoing_mutations}"
+                )
+            # Fall through to reconcile with CH
+
         now = time.time()
         if (
             not skip_throttle
@@ -312,13 +354,8 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         start = time.time()
         ongoing_mutations = _num_ongoing_mutations(self.__storage.get_cluster(), self.__tables)
         self.__last_ongoing_mutations_check = time.time()
-        max_ongoing_mutations = typing.cast(
-            int,
-            get_int_config(
-                "max_ongoing_mutations_for_delete",
-                default=settings.MAX_ONGOING_MUTATIONS_FOR_DELETE,
-            ),
-        )
+        # Reconcile: trust CH as source of truth for completions
+        self.__local_inflight_count = ongoing_mutations
         self.__metrics.timing("ongoing_mutations_query_ms", (time.time() - start) * 1000)
         if ongoing_mutations > max_ongoing_mutations:
             raise TooManyOngoingMutationsError(

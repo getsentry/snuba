@@ -20,6 +20,7 @@ from snuba.lw_deletions.types import ConditionsType
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.web.bulk_delete_query import DeleteQueryMessage
+from snuba.web.delete_query import TooManyOngoingMutationsError
 
 ROWS_CONDITIONS = {
     5: {"project_id": [1], "group_id": [1, 2, 3, 4]},
@@ -485,3 +486,229 @@ def test_partition_date_filtering(mock_execute: Mock, mock_num_mutations: Mock) 
     ]
     assert len(filtered_calls) == 1
     assert filtered_calls[0][1]["value"] == 2
+
+
+@patch("snuba.lw_deletions.strategy._execute_query")
+@pytest.mark.redis_db
+def test_local_inflight_counter_reconciles_with_ch(mock_execute: Mock) -> None:
+    """
+    Verify that the local in-flight counter reconciles with CH on each check.
+    When CH returns 0 (stale), the counter resets, allowing more deletes.
+    When CH returns a high value, the counter reflects it and blocks.
+    """
+    commit_step = Mock()
+    metrics = Mock()
+    storage = get_writable_storage(StorageKey("search_issues"))
+
+    state.set_config("max_ongoing_mutations_for_delete", 3)
+    state.set_config("lw_deletes_split_by_partition_search_issues", 1)
+    state.set_config("lw_deletes_per_submit_budget", 100)
+
+    partition_dates = ["2024-01-01", "2024-01-08", "2024-01-15"]
+
+    format_query = FormatQuery(commit_step, storage, SearchIssuesFormatter(), metrics)
+
+    # CH always returns 0 (stale) — all 3 partitions should execute
+    with (
+        patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=0),
+        patch.object(
+            format_query,
+            "_FormatQuery__partition_column",
+            "receive_timestamp",
+        ),
+        patch.object(
+            FormatQuery,
+            "_get_partition_dates",
+            return_value=partition_dates,
+        ),
+    ):
+        strategy = BatchStepCustom(
+            max_batch_size=8,
+            max_batch_time=1000,
+            next_step=format_query,
+            increment_by=increment_by,
+        )
+        strategy.submit(_make_single_message())
+        strategy.join(2.0)
+
+    # CH says 0 each time → local counter reconciles to 0 → all execute
+    assert mock_execute.call_count == 3
+    assert commit_step.submit.call_count == 1
+
+
+@patch("snuba.lw_deletions.strategy._execute_query")
+@pytest.mark.redis_db
+def test_local_counter_increments_after_each_delete(mock_execute: Mock) -> None:
+    """
+    Verify that _execute_single_delete increments local inflight counter
+    and that the counter reconciles with CH value on _check_ongoing_mutations.
+    """
+    from snuba.query.query_settings import HTTPQuerySettings
+
+    metrics = Mock()
+    storage = get_writable_storage(StorageKey("search_issues"))
+
+    state.set_config("max_ongoing_mutations_for_delete", 5)
+
+    format_query = FormatQuery(Mock(), storage, SearchIssuesFormatter(), metrics)
+
+    with patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=0):
+        # Initial CH check: reconciles local counter to 0
+        format_query._check_ongoing_mutations()
+        assert format_query._FormatQuery__local_inflight_count == 0  # type: ignore[attr-defined]
+
+        # Simulate deletes — counter should increment
+        query = Mock()
+        format_query._execute_single_delete("test_table", query, HTTPQuerySettings())
+        assert format_query._FormatQuery__local_inflight_count == 1  # type: ignore[attr-defined]
+
+        format_query._execute_single_delete("test_table", query, HTTPQuerySettings())
+        assert format_query._FormatQuery__local_inflight_count == 2  # type: ignore[attr-defined]
+
+        # CH check with skip_throttle=True reconciles counter to CH value (0)
+        format_query._check_ongoing_mutations(skip_throttle=True)
+        assert format_query._FormatQuery__local_inflight_count == 0  # type: ignore[attr-defined]
+
+
+@patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
+@patch("snuba.lw_deletions.strategy._execute_query")
+@pytest.mark.redis_db
+def test_per_submit_budget_exhaustion(mock_execute: Mock, mock_num_mutations: Mock) -> None:
+    """
+    When partition splitting produces more partitions than the per-submit budget,
+    the budget should stop issuing DELETEs and raise TooManyOngoingMutationsError.
+    On retry, Redis tracking skips already-processed partitions.
+    We test _execute_delete_by_partition directly for precise control.
+    """
+    from snuba.query.query_settings import HTTPQuerySettings
+
+    metrics = Mock()
+    storage = get_writable_storage(StorageKey("search_issues"))
+
+    state.set_config("lw_deletes_split_by_partition_search_issues", 1)
+    state.set_config("lw_deletes_per_submit_budget", 2)
+
+    partition_dates = ["2024-01-01", "2024-01-08", "2024-01-15", "2024-01-22", "2024-01-29"]
+
+    format_query = FormatQuery(Mock(), storage, SearchIssuesFormatter(), metrics)
+    conditions = SearchIssuesFormatter().format(
+        [_get_message(10, {"project_id": [1], "group_id": [1]})]
+    )
+    where_clause = Mock()
+    query_settings = HTTPQuerySettings()
+
+    with (
+        patch.object(
+            format_query,
+            "_FormatQuery__partition_column",
+            "receive_timestamp",
+        ),
+        patch.object(
+            FormatQuery,
+            "_get_partition_dates",
+            return_value=partition_dates,
+        ),
+        patch(
+            "snuba.web.bulk_delete_query.construct_query",
+            return_value=Mock(),
+        ),
+    ):
+        table = "search_issues_local_v2"
+
+        # First call: processes 2 partitions, budget exhausted
+        with pytest.raises(TooManyOngoingMutationsError, match="per-submit budget"):
+            format_query._execute_delete_by_partition(
+                table, where_clause, query_settings, conditions
+            )
+
+        assert mock_execute.call_count == 2
+
+        # Redis should have the 2 processed partitions tracked
+        redis_client = get_redis_client(RedisClientKey.CONFIG)
+        keys = list(redis_client.scan_iter("lw_delete_partitions:search_issues:*"))
+        assert len(keys) == 1
+        members = redis_client.smembers(keys[0])
+        assert len(members) == 2
+
+        # Retry: reset the per-submit counter (simulating a new submit() call)
+        mock_execute.reset_mock()
+        format_query._FormatQuery__mutations_issued_this_submit = 0  # type: ignore[attr-defined]
+
+        with pytest.raises(TooManyOngoingMutationsError, match="per-submit budget"):
+            format_query._execute_delete_by_partition(
+                table, where_clause, query_settings, conditions
+            )
+
+        # 2 skipped via Redis, 2 more processed
+        assert mock_execute.call_count == 2
+        members = redis_client.smembers(keys[0])
+        assert len(members) == 4
+
+        # Final retry: 4 skipped, 1 remaining fits in budget
+        mock_execute.reset_mock()
+        format_query._FormatQuery__mutations_issued_this_submit = 0  # type: ignore[attr-defined]
+
+        format_query._execute_delete_by_partition(table, where_clause, query_settings, conditions)
+
+        assert mock_execute.call_count == 1
+        members = redis_client.smembers(keys[0])
+        assert len(members) == 5
+
+
+@patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
+@patch("snuba.lw_deletions.strategy._execute_query")
+@patch("snuba.lw_deletions.strategy.time.sleep")
+@pytest.mark.redis_db
+def test_inter_delete_delay(mock_sleep: Mock, mock_execute: Mock, mock_num_mutations: Mock) -> None:
+    """
+    When lw_delete_inter_mutation_delay_ms is set, time.sleep should be called
+    after each _execute_single_delete.
+    """
+    commit_step = Mock()
+    metrics = Mock()
+    storage = get_writable_storage(StorageKey("search_issues"))
+
+    state.set_config("lw_delete_inter_mutation_delay_ms", 200)
+
+    strategy = BatchStepCustom(
+        max_batch_size=8,
+        max_batch_time=1000,
+        next_step=FormatQuery(commit_step, storage, SearchIssuesFormatter(), metrics),
+        increment_by=increment_by,
+    )
+    strategy.submit(_make_single_message())
+    strategy.join(2.0)
+
+    assert mock_execute.call_count == 1
+    # sleep(0.2) should have been called once (200ms)
+    mock_sleep.assert_called_once_with(0.2)
+
+
+@patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
+@patch("snuba.lw_deletions.strategy._execute_query")
+@patch("snuba.lw_deletions.strategy.time.sleep")
+@pytest.mark.redis_db
+def test_inter_delete_delay_disabled_by_default(
+    mock_sleep: Mock, mock_execute: Mock, mock_num_mutations: Mock
+) -> None:
+    """
+    By default (delay_ms=0), time.sleep should not be called.
+    """
+    commit_step = Mock()
+    metrics = Mock()
+    storage = get_writable_storage(StorageKey("search_issues"))
+
+    # Explicitly set to 0 (the default)
+    state.set_config("lw_delete_inter_mutation_delay_ms", 0)
+
+    strategy = BatchStepCustom(
+        max_batch_size=8,
+        max_batch_time=1000,
+        next_step=FormatQuery(commit_step, storage, SearchIssuesFormatter(), metrics),
+        increment_by=increment_by,
+    )
+    strategy.submit(_make_single_message())
+    strategy.join(2.0)
+
+    assert mock_execute.call_count == 1
+    mock_sleep.assert_not_called()
