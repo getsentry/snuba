@@ -27,6 +27,7 @@ def main() -> None:
                     file=sys.stderr,
                 )
                 print(result.stdout.decode(errors="replace"), file=sys.stderr)
+                print(result.stderr.decode(errors="replace"), file=sys.stderr)
         except Exception:
             pass
 

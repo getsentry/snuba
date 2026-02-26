@@ -168,8 +168,10 @@ COPY --from=distroless_prep /etc/passwd /etc/passwd
 COPY --from=distroless_prep /etc/group /etc/group
 
 WORKDIR /usr/src/snuba
+ARG SOURCE_COMMIT
 ENV PATH="/.venv/bin:/usr/bin:$PATH" \
     LD_PRELOAD=/usr/lib/libjemalloc.so.2 \
+    SNUBA_RELEASE=$SOURCE_COMMIT \
     FLASK_DEBUG=0 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
@@ -189,8 +191,10 @@ COPY --from=distroless_prep /etc/passwd /etc/passwd
 COPY --from=distroless_prep /etc/group /etc/group
 
 WORKDIR /usr/src/snuba
+ARG SOURCE_COMMIT
 ENV PATH="/.venv/bin:/usr/bin:$PATH" \
     LD_PRELOAD=/usr/lib/libjemalloc.so.2 \
+    SNUBA_RELEASE=$SOURCE_COMMIT \
     FLASK_DEBUG=0 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
