@@ -25,13 +25,13 @@ from sentry_protos.snuba.v1.error_pb2 import Error
 from sentry_protos.snuba.v1.formula_pb2 import Literal
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    Array,
     AttributeAggregation,
     AttributeKey,
     AttributeKeyExpression,
     AttributeValue,
     ExtrapolationMode,
     Function,
-    StrArray,
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     AndFilter,
@@ -631,7 +631,12 @@ class TestTimeSeriesApi(BaseApiTest):
                                 key=AttributeKey(type=AttributeKey.TYPE_STRING, name="customer"),
                                 op=ComparisonFilter.OP_IN,
                                 value=AttributeValue(
-                                    val_str_array=StrArray(values=["bob", "alice"])
+                                    val_array=Array(
+                                        values=[
+                                            AttributeValue(val_str="bob"),
+                                            AttributeValue(val_str="alice"),
+                                        ]
+                                    )
                                 ),
                             )
                         ),
@@ -725,7 +730,12 @@ class TestTimeSeriesApi(BaseApiTest):
                                 key=AttributeKey(type=AttributeKey.TYPE_STRING, name="customer"),
                                 op=ComparisonFilter.OP_IN,
                                 value=AttributeValue(
-                                    val_str_array=StrArray(values=["BOB", "AlIcE"])
+                                    val_array=Array(
+                                        values=[
+                                            AttributeValue(val_str="BOB"),
+                                            AttributeValue(val_str="AlIcE"),
+                                        ]
+                                    )
                                 ),
                                 ignore_case=True,
                             )

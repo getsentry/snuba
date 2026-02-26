@@ -37,13 +37,13 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
     TraceItemType,
 )
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    Array,
     AttributeAggregation,
     AttributeKey,
     AttributeValue,
     ExtrapolationMode,
     Function,
     Reliability,
-    StrArray,
     VirtualColumnContext,
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
@@ -2897,11 +2897,11 @@ class TestTraceItemTable(BaseApiTest):
                                         ),
                                         op=ComparisonFilter.OP_IN,
                                         value=AttributeValue(
-                                            val_str_array=StrArray(
+                                            val_array=Array(
                                                 values=[
-                                                    "500",
-                                                    "502",
-                                                    "504",
+                                                    AttributeValue(val_str="500"),
+                                                    AttributeValue(val_str="502"),
+                                                    AttributeValue(val_str="504"),
                                                 ],
                                             ),
                                         ),

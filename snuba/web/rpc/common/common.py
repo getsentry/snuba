@@ -82,9 +82,9 @@ def process_arrays(raw: str) -> dict[str, list[Any]]:
 def _check_non_string_values_cannot_ignore_case(
     comparison_filter: ComparisonFilter,
 ) -> None:
-    if comparison_filter.ignore_case and (
-        comparison_filter.value.WhichOneof("value") != "val_str"
-        and comparison_filter.value.WhichOneof("value") != "val_str_array"
+    if comparison_filter.ignore_case and comparison_filter.value.WhichOneof("value") not in (
+        "val_str",
+        "val_array",
     ):
         raise BadSnubaRPCRequestException("Cannot ignore case on non-string values")
 
@@ -177,6 +177,23 @@ def add_existence_check_to_subscriptable_references(query: Query) -> None:
     query.transform_expressions(transform)
 
 
+def _scalar_value(v: AttributeValue) -> bool | str | int | float:
+    """Extract a Python scalar from an AttributeValue proto."""
+    match v.WhichOneof("value"):
+        case "val_bool":
+            return v.val_bool
+        case "val_str":
+            return v.val_str
+        case "val_float":
+            return v.val_float
+        case "val_double":
+            return v.val_double
+        case "val_int":
+            return v.val_int
+        case other:
+            raise NotImplementedError(f"not a scalar AttributeValue type: {other}")
+
+
 def _attribute_value_to_expression(v: AttributeValue) -> Expression:
     """Convert an AttributeValue proto to a Snuba Expression."""
     value_type = v.WhichOneof("value")
@@ -191,14 +208,8 @@ def _attribute_value_to_expression(v: AttributeValue) -> Expression:
             return literal(v.val_double)
         case "val_int":
             return literal(v.val_int)
-        case "val_str_array":
-            return literals_array(None, [literal(x) for x in v.val_str_array.values])
-        case "val_int_array":
-            return literals_array(None, [literal(x) for x in v.val_int_array.values])
-        case "val_float_array":
-            return literals_array(None, [literal(x) for x in v.val_float_array.values])
-        case "val_double_array":
-            return literals_array(None, [literal(x) for x in v.val_double_array.values])
+        case "val_array":
+            return literals_array(None, [literal(_scalar_value(x)) for x in v.val_array.values])
         case default:
             raise NotImplementedError(
                 f"translation of AttributeValue type {default} is not implemented"
@@ -266,12 +277,21 @@ def _any_attribute_filter_to_expression(
     if value_type is None:
         raise BadSnubaRPCRequestException("any_attribute_filter does not have a value")
 
-    if filt.ignore_case and value_type not in ("val_str", "val_str_array"):
-        raise BadSnubaRPCRequestException("Cannot ignore case on non-string values")
+    if filt.ignore_case:
+        if value_type == "val_array":
+            if not all(elem.WhichOneof("value") == "val_str" for elem in v.val_array.values):
+                raise BadSnubaRPCRequestException("Cannot ignore case on non-string values")
+        elif value_type != "val_str":
+            raise BadSnubaRPCRequestException("Cannot ignore case on non-string values")
 
-    _ARRAY_VALUE_TYPES = {"val_str_array", "val_int_array", "val_float_array", "val_double_array"}
-    if effective_op == AnyAttributeFilter.OP_IN and value_type not in _ARRAY_VALUE_TYPES:
-        raise BadSnubaRPCRequestException("IN/NOT_IN operations require an array value type")
+    if effective_op == AnyAttributeFilter.OP_IN and value_type != "val_array":
+        raise BadSnubaRPCRequestException(
+            "IN/NOT_IN operations require an array value type (val_array)"
+        )
+
+    # Validate that IN/NOT_IN arrays are non-empty
+    if effective_op == AnyAttributeFilter.OP_IN and len(v.val_array.values) == 0:
+        raise BadSnubaRPCRequestException("IN/NOT_IN operations require a non-empty array")
 
     v_expression = _attribute_value_to_expression(v)
 
@@ -294,13 +314,15 @@ def _any_attribute_filter_to_expression(
                 f.lower(x),
                 literals_array(
                     None,
-                    [literal(s.lower()) for s in v.val_str_array.values],
+                    [literal(elem.val_str.lower()) for elem in v.val_array.values],
                 ),
             )
         else:
             comparison = in_cond(x, v_expression)
     else:
-        raise BadSnubaRPCRequestException(f"Unsupported any_attribute_filter op: {filt.op}")
+        raise BadSnubaRPCRequestException(
+            f"Unsupported any_attribute_filter op: {AnyAttributeFilter.Op.Name(filt.op)}"
+        )
 
     lam = Lambda(None, ("x",), comparison)
 
@@ -439,7 +461,7 @@ def trace_item_filters_to_expression(
                 k_expression = f.lower(k_expression)
                 v_expression = literals_array(
                     None,
-                    list(map(lambda x: literal(x.lower()), v.val_str_array.values)),
+                    [literal(elem.val_str.lower()) for elem in v.val_array.values],
                 )
             expr = in_cond(k_expression, v_expression)
             # note: v_expression must be an array
@@ -456,7 +478,7 @@ def trace_item_filters_to_expression(
                 k_expression = f.lower(k_expression)
                 v_expression = literals_array(
                     None,
-                    list(map(lambda x: literal(x.lower()), v.val_str_array.values)),
+                    [literal(elem.val_str.lower()) for elem in v.val_array.values],
                 )
             expr = not_cond(in_cond(k_expression, v_expression))
             # note: v_expression must be an array

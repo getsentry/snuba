@@ -14,10 +14,9 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
     TraceItemType,
 )
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    Array,
     AttributeKey,
     AttributeValue,
-    IntArray,
-    StrArray,
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     AnyAttributeFilter,
@@ -171,7 +170,9 @@ class TestAnyAttributeFilter:
     def test_ignore_case_on_non_string_in_raises(self) -> None:
         filt = AnyAttributeFilter(
             op=AnyAttributeFilter.OP_IN,
-            value=AttributeValue(val_int_array=IntArray(values=[1, 2, 3])),
+            value=AttributeValue(
+                val_array=Array(values=[AttributeValue(val_int=1), AttributeValue(val_int=2)])
+            ),
             ignore_case=True,
         )
         with pytest.raises(
@@ -196,6 +197,26 @@ class TestAnyAttributeFilter:
         )
         with pytest.raises(
             BadSnubaRPCRequestException, match="IN/NOT_IN operations require an array value type"
+        ):
+            _any_attribute_filter_to_expression(filt)
+
+    def test_in_with_empty_array_raises(self) -> None:
+        filt = AnyAttributeFilter(
+            op=AnyAttributeFilter.OP_IN,
+            value=AttributeValue(val_array=Array(values=[])),
+        )
+        with pytest.raises(
+            BadSnubaRPCRequestException, match="IN/NOT_IN operations require a non-empty array"
+        ):
+            _any_attribute_filter_to_expression(filt)
+
+    def test_not_in_with_empty_array_raises(self) -> None:
+        filt = AnyAttributeFilter(
+            op=AnyAttributeFilter.OP_NOT_IN,
+            value=AttributeValue(val_array=Array(values=[])),
+        )
+        with pytest.raises(
+            BadSnubaRPCRequestException, match="IN/NOT_IN operations require a non-empty array"
         ):
             _any_attribute_filter_to_expression(filt)
 
@@ -326,7 +347,12 @@ class TestAnyAttributeFilterIntegration:
                 any_attribute_filter=AnyAttributeFilter(
                     op=AnyAttributeFilter.OP_IN,
                     value=AttributeValue(
-                        val_str_array=StrArray(values=[self.UNIQUE_VALUE, "no-match"])
+                        val_array=Array(
+                            values=[
+                                AttributeValue(val_str=self.UNIQUE_VALUE),
+                                AttributeValue(val_str="no-match"),
+                            ]
+                        )
                     ),
                 )
             )

@@ -17,6 +17,20 @@ from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
+def _extract_scalar_value(v: Any) -> Any:
+    """Extract a scalar Python value from an AttributeValue proto."""
+    value_type = v.WhichOneof("value")
+    if value_type == "val_str":
+        return v.val_str
+    elif value_type == "val_int":
+        return v.val_int
+    elif value_type == "val_double":
+        return v.val_double
+    elif value_type == "val_bool":
+        return v.val_bool
+    raise BadSnubaRPCRequestException(f"Unsupported scalar value type in array: {value_type}")
+
+
 def _extract_attribute_value(comparison_filter: ComparisonFilter) -> Any:
     """Extract the value from a ComparisonFilter's AttributeValue."""
     value_field = comparison_filter.value.WhichOneof("value")
@@ -28,12 +42,8 @@ def _extract_attribute_value(comparison_filter: ComparisonFilter) -> Any:
         return comparison_filter.value.val_double
     elif value_field == "val_bool":
         return comparison_filter.value.val_bool
-    elif value_field == "val_str_array":
-        return list(comparison_filter.value.val_str_array.values)
-    elif value_field == "val_int_array":
-        return list(comparison_filter.value.val_int_array.values)
-    elif value_field == "val_double_array":
-        return list(comparison_filter.value.val_double_array.values)
+    elif value_field == "val_array":
+        return [_extract_scalar_value(elem) for elem in comparison_filter.value.val_array.values]
     else:
         raise BadSnubaRPCRequestException(f"Unsupported attribute value type: {value_field}")
 
