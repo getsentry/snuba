@@ -1,3 +1,4 @@
+import json
 import re
 from collections import defaultdict
 from typing import Any, Callable, Dict, Iterable
@@ -8,14 +9,35 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableRequest,
 )
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    Array,
     AttributeKey,
     AttributeValue,
     Function,
     Reliability,
 )
 
+from snuba.web.rpc.common.common import transform_array_value
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.common.aggregation import ExtrapolationContext
+
+
+def _convert_array_value(raw: Any) -> AttributeValue:
+    """Convert a JSON-encoded array string from ClickHouse to an AttributeValue.
+
+    ClickHouse returns array attribute values as JSON strings like:
+    [{"String": "value1"}, {"Int": "42"}]
+    """
+    elements = json.loads(raw) if isinstance(raw, str) else raw
+    values = []
+    for elem in elements:
+        py_val = transform_array_value(elem)
+        if isinstance(py_val, int):
+            values.append(AttributeValue(val_int=py_val))
+        elif isinstance(py_val, float):
+            values.append(AttributeValue(val_double=py_val))
+        else:
+            values.append(AttributeValue(val_str=str(py_val)))
+    return AttributeValue(val_array=Array(values=values))
 
 
 def _get_converter_for_type(
@@ -32,6 +54,8 @@ def _get_converter_for_type(
         return lambda x: AttributeValue(val_float=float(x))
     elif key_type == AttributeKey.TYPE_DOUBLE:
         return lambda x: AttributeValue(val_double=float(x))
+    elif key_type == AttributeKey.TYPE_ARRAY:
+        return _convert_array_value
     else:
         raise BadSnubaRPCRequestException(
             f"unknown attribute type: {AttributeKey.Type.Name(key_type)}"
