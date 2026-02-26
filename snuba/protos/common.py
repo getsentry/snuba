@@ -59,7 +59,6 @@ PROTO_TYPE_TO_ATTRIBUTE_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]]
     AttributeKey.Type.TYPE_DOUBLE: "attributes_float",
     AttributeKey.Type.TYPE_FLOAT: "attributes_float",
     AttributeKey.Type.TYPE_BOOLEAN: "attributes_bool",
-    AttributeKey.Type.TYPE_ARRAY: "attributes_array",
 }
 
 
