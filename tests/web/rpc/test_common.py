@@ -9,7 +9,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, Attrib
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import ComparisonFilter, TraceItemFilter
 
 from snuba import settings
-from snuba.query.expressions import DangerousRawSQL, FunctionCall, Lambda
+from snuba.query.expressions import FunctionCall, Lambda
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     next_monday,
@@ -84,8 +84,8 @@ class TestTraceItemFiltersArrayLike:
         assert lam.parameters == ("x",)
         assert isinstance(lam.transformation, FunctionCall)
         assert lam.transformation.function_name == "like"
-        # Second param is the array expression (DangerousRawSQL)
-        assert isinstance(result.parameters[1], DangerousRawSQL)
+        # Second param is the array expression (from attribute_key_to_expression)
+        assert isinstance(result.parameters[1], FunctionCall)
 
     def test_like_on_array_key_ignore_case(self) -> None:
         item_filter = self._make_like_filter(
