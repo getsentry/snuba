@@ -22,7 +22,7 @@ RUN set -ex; \
         gcc \
         libc6-dev \
         liblz4-dev \
-        libpcre3-dev \
+        libpcre2-dev \
         libssl-dev \
         wget \
         zlib1g-dev \
