@@ -187,7 +187,7 @@ def add_existence_check_to_subscriptable_references(query: Query) -> None:
     query.transform_expressions(transform)
 
 
-def _scalar_value(v: AttributeValue) -> bool | str | int | float:
+def _scalar_value(v: AttributeValue) -> bool | str | int | float | None:
     """Extract a Python scalar from an AttributeValue proto."""
     match v.WhichOneof("value"):
         case "val_bool":
@@ -200,6 +200,8 @@ def _scalar_value(v: AttributeValue) -> bool | str | int | float:
             return v.val_double
         case "val_int":
             return v.val_int
+        case None:
+            return None
         case other:
             raise NotImplementedError(f"not a scalar AttributeValue type: {other}")
 
