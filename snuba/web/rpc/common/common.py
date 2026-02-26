@@ -277,10 +277,19 @@ def _any_attribute_filter_to_expression(
             )
         columns_to_search = string_cols
 
+    # ignore_case uses lower() which only works on string columns
+    if filt.ignore_case:
+        string_cols = [c for c in columns_to_search if c in _STRING_COLUMNS]
+        if not string_cols:
+            raise BadSnubaRPCRequestException(
+                "ignore_case is only supported on string attribute types"
+            )
+        columns_to_search = string_cols
+
     # 2. Extract comparison value
     v = filt.value
     value_type = v.WhichOneof("value")
-    if value_type is None:
+    if value_type is None or value_type == "val_null":
         raise BadSnubaRPCRequestException("any_attribute_filter does not have a value")
 
     if filt.ignore_case:
