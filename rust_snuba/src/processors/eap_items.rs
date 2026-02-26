@@ -100,7 +100,7 @@ pub fn process_message_row_binary(
 ) -> anyhow::Result<TypedInsertBatch<EAPItemRow>> {
     let processed = process_eap_item(msg, config)?;
     let mut batch = TypedInsertBatch::from_rows(
-        vec![EAPItemRow::from(processed.eap_item)],
+        vec![EAPItemRow::try_from(processed.eap_item)?],
         processed.origin_timestamp,
     );
     batch.item_type_metrics = Some(processed.item_type_metrics);
@@ -326,13 +326,17 @@ pub struct EAPItemRow {
 }
 }
 
-impl From<EAPItem> for EAPItemRow {
+impl TryFrom<EAPItem> for EAPItemRow {
+    type Error = anyhow::Error;
+
     #[allow(clippy::needless_return)]
-    fn from(item: EAPItem) -> Self {
+    fn try_from(item: EAPItem) -> Result<Self, Self::Error> {
+        let attributes_array = serde_json::to_string(&item.attributes.attributes_array)?;
+
         // `return` is needed because `seq_attrs!` expands with a trailing semicolon,
         // which makes the struct expression a statement rather than a tail expression.
         seq_attrs! {
-            return EAPItemRow {
+            return Ok(EAPItemRow {
                 organization_id: item.organization_id,
                 project_id: item.project_id,
                 item_type: item.item_type,
@@ -351,8 +355,8 @@ impl From<EAPItem> for EAPItemRow {
                 attributes_string_~N: item.attributes.attributes_string_~N.into_iter().collect(),
                 attributes_float_~N: item.attributes.attributes_float_~N.into_iter().collect(),
                 )*
-                attributes_array: serde_json::to_string(&item.attributes.attributes_array).unwrap_or_default(),
-            };
+                attributes_array,
+            });
         }
     }
 }
