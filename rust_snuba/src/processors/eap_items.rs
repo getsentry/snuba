@@ -177,6 +177,7 @@ macro_rules! seq_attrs {
 }
 
 #[derive(Debug, Serialize, PartialEq)]
+#[serde(untagged)]
 enum EAPValue {
     String(String),
     Bool(bool),
