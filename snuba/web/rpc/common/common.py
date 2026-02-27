@@ -53,23 +53,9 @@ Tout = TypeVar("Tout", bound=ProtobufMessage)
 BUCKET_COUNT = 40
 
 
-def transform_array_value(value: dict[str, str]) -> Any:
-    for t, v in value.items():
-        if t == "Int":
-            return int(v)
-        if t == "Double":
-            return float(v)
-        if t in {"String", "Bool"}:
-            return v
-    raise BadSnubaRPCRequestException(f"array value type unknown: {type(v)}")
-
-
 def process_arrays(raw: str) -> dict[str, list[Any]]:
     parsed = json.loads(raw) or {}
-    arrays = {}
-    for key, values in parsed.items():
-        arrays[key] = [transform_array_value(v) for v in values]
-    return arrays
+    return {key: list(values) for key, values in parsed.items()}
 
 
 def _check_non_string_values_cannot_ignore_case(
