@@ -215,7 +215,9 @@ def _build_query(
         SelectedExpression("attributes_bool", column("attributes_bool", alias="attributes_bool")),
         SelectedExpression(
             "attributes_array",
-            FunctionCall("attributes_array", "toJSONString", (column("attributes_array"),)),
+            FunctionCall(
+                "attributes_array", "CAST", (column("attributes_array"), literal("String"))
+            ),
         ),
     ]
 
