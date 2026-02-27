@@ -95,7 +95,7 @@ def _check_non_string_values_cannot_ignore_case(
             for elem in comparison_filter.value.val_array.values
         ):
             raise BadSnubaRPCRequestException("Cannot ignore case on non-string values")
-    elif value_type != "val_str":
+    elif value_type not in ("val_str", "val_str_array"):
         raise BadSnubaRPCRequestException("Cannot ignore case on non-string values")
 
 
@@ -222,6 +222,8 @@ def _attribute_value_to_expression(v: AttributeValue) -> Expression:
             return literal(v.val_int)
         case "val_array":
             return literals_array(None, [literal(_scalar_value(x)) for x in v.val_array.values])
+        case "val_str_array" | "val_int_array" | "val_float_array" | "val_double_array":
+            return literals_array(None, [literal(x) for x in getattr(v, value_type).values])
         case default:
             raise NotImplementedError(
                 f"translation of AttributeValue type {default} is not implemented"
@@ -249,6 +251,19 @@ _VALUE_TYPE_TO_COLUMN: dict[str, str] = {
     "val_float": "attributes_float",
     "val_double": "attributes_float",
     "val_bool": "attributes_bool",
+    # Deprecated per-type array fields (still supported)
+    "val_str_array": "attributes_string",
+    "val_int_array": "attributes_float",
+    "val_float_array": "attributes_float",
+    "val_double_array": "attributes_float",
+}
+
+_ARRAY_VALUE_TYPES = {
+    "val_array",
+    "val_str_array",
+    "val_int_array",
+    "val_float_array",
+    "val_double_array",
 }
 
 
@@ -276,19 +291,24 @@ def _any_attribute_filter_to_expression(
     is_negative = filt.op in _NEGATIVE_OPS
     effective_op = _POSITIVE_OP_FOR_NEGATIVE.get(filt.op, filt.op)
 
-    if effective_op == AnyAttributeFilter.OP_IN and value_type != "val_array":
+    is_array = value_type in _ARRAY_VALUE_TYPES
+    if effective_op == AnyAttributeFilter.OP_IN and not is_array:
         raise BadSnubaRPCRequestException(
             "IN/NOT_IN operations require an array value type (val_array)"
         )
 
-    if effective_op != AnyAttributeFilter.OP_IN and value_type == "val_array":
+    if effective_op != AnyAttributeFilter.OP_IN and is_array:
         raise BadSnubaRPCRequestException(
             f"{AnyAttributeFilter.Op.Name(filt.op)} does not support array values, use OP_IN/OP_NOT_IN"
         )
 
     # Validate that IN/NOT_IN arrays are non-empty
-    if effective_op == AnyAttributeFilter.OP_IN and len(v.val_array.values) == 0:
-        raise BadSnubaRPCRequestException("IN/NOT_IN operations require a non-empty array")
+    if effective_op == AnyAttributeFilter.OP_IN:
+        arr_values = (
+            v.val_array.values if value_type == "val_array" else getattr(v, value_type).values
+        )
+        if len(arr_values) == 0:
+            raise BadSnubaRPCRequestException("IN/NOT_IN operations require a non-empty array")
 
     # 2. Determine which column to search based on the value type
     if value_type == "val_array":
@@ -333,12 +353,13 @@ def _any_attribute_filter_to_expression(
             comparison = f.like(x, v_expression)
     elif effective_op == AnyAttributeFilter.OP_IN:
         if filt.ignore_case:
+            if value_type == "val_str_array":
+                lowered = [literal(s.lower()) for s in v.val_str_array.values]
+            else:
+                lowered = [literal(elem.val_str.lower()) for elem in v.val_array.values]
             comparison = in_cond(
                 f.lower(x),
-                literals_array(
-                    None,
-                    [literal(elem.val_str.lower()) for elem in v.val_array.values],
-                ),
+                literals_array(None, lowered),
             )
         else:
             comparison = in_cond(x, v_expression)
@@ -470,10 +491,16 @@ def trace_item_filters_to_expression(
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
             if item_filter.comparison_filter.ignore_case:
                 k_expression = f.lower(k_expression)
-                v_expression = literals_array(
-                    None,
-                    [literal(elem.val_str.lower()) for elem in v.val_array.values],
-                )
+                if value_type == "val_str_array":
+                    v_expression = literals_array(
+                        None,
+                        [literal(s.lower()) for s in v.val_str_array.values],
+                    )
+                else:
+                    v_expression = literals_array(
+                        None,
+                        [literal(elem.val_str.lower()) for elem in v.val_array.values],
+                    )
             expr = in_cond(k_expression, v_expression)
             # note: v_expression must be an array
             # we redefine the way in works for nulls
@@ -487,10 +514,16 @@ def trace_item_filters_to_expression(
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
             if item_filter.comparison_filter.ignore_case:
                 k_expression = f.lower(k_expression)
-                v_expression = literals_array(
-                    None,
-                    [literal(elem.val_str.lower()) for elem in v.val_array.values],
-                )
+                if value_type == "val_str_array":
+                    v_expression = literals_array(
+                        None,
+                        [literal(s.lower()) for s in v.val_str_array.values],
+                    )
+                else:
+                    v_expression = literals_array(
+                        None,
+                        [literal(elem.val_str.lower()) for elem in v.val_array.values],
+                    )
             expr = not_cond(in_cond(k_expression, v_expression))
             # note: v_expression must be an array
             # we redefine the way not in works for nulls

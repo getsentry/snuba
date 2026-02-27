@@ -31,6 +31,8 @@ def _extract_attribute_value(comparison_filter: ComparisonFilter) -> Any:
         return comparison_filter.value.val_bool
     elif value_field == "val_array":
         return [_scalar_value(elem) for elem in comparison_filter.value.val_array.values]
+    elif value_field in ("val_str_array", "val_int_array", "val_double_array", "val_float_array"):
+        return list(getattr(comparison_filter.value, value_field).values)
     else:
         raise BadSnubaRPCRequestException(f"Unsupported attribute value type: {value_field}")
 
