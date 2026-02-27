@@ -25,7 +25,7 @@ def main(context: dict[str, str]) -> int:
     print("syncing .venv ...")
     proc.run(
         (
-            f"{reporoot}/.devenv/bin/uv",
+            "uv",
             "sync",
             "--frozen",
             "--active",
