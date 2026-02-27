@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.13"
 resolution-markers = [
     "sys_platform == 'darwin'",
@@ -924,14 +924,14 @@ wheels = [
 
 [[package]]
 name = "sentry-devenv"
-version = "1.22.2"
+version = "1.28.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
     { name = "sentry-sdk", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "typing-extensions", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_devenv-1.22.2-py3-none-any.whl", hash = "sha256:0ecd7c5793ee44a6fe401991589fae2a53e7d4dd0506d031994a00fe82e22390" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_devenv-1.28.0-py3-none-any.whl", hash = "sha256:304b603c561c4a0a206c7d1346aebf8ec44e6175f44ecce0b9c1a5848fb3f7ca" },
 ]
 
 [[package]]
@@ -1187,7 +1187,7 @@ dev = [
     { name = "pytest-cov", specifier = ">=4.1.0" },
     { name = "pytest-watch", specifier = ">=4.2.0" },
     { name = "ruff", specifier = ">=0.14.0" },
-    { name = "sentry-devenv", specifier = ">=1.22.2" },
+    { name = "sentry-devenv", specifier = ">=1.28.0" },
     { name = "time-machine", specifier = ">=2.13.0" },
     { name = "types-google-cloud-ndb", specifier = ">=2.2.0" },
     { name = "types-protobuf", specifier = ">=5.27.0.20240626" },
