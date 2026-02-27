@@ -607,9 +607,9 @@ def get_field_existence_expression(field: Expression) -> Expression:
     if isinstance(field, FunctionCall) and field.function_name == "arrayElement":
         return f.mapContains(field.parameters[0], field.parameters[1])
 
-    if isinstance(field, FunctionCall) and field.function_name == "arrayMap":
-        # Array attributes in the JSON column return empty arrays (not NULL)
-        # for missing keys, so notEmpty is the correct existence check.
-        return f.notEmpty(field)
+    if isinstance(field, FunctionCall) and field.function_name == "toJSONString":
+        # toJSONString wraps an array from the JSON column; missing keys
+        # produce empty arrays (not NULL), so check the inner array.
+        return f.notEmpty(field.parameters[0])
 
     return f.isNotNull(field)

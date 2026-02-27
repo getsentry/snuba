@@ -846,16 +846,30 @@ def _calculate_approximate_ci_percentile_levels(
     return (lower_index / n, upper_index / n)
 
 
+def _unwrap_to_json_string(field: Expression) -> Expression:
+    """If *field* is ``toJSONString(inner)``, return *inner* (the raw array).
+
+    Aggregation functions like ``uniqArrayIfOrNull`` need the underlying
+    Array, not the stringified JSON wrapper that ``attribute_key_to_expression``
+    produces for TYPE_ARRAY.
+    """
+    if isinstance(field, FunctionCall) and field.function_name == "toJSONString":
+        return field.parameters[0]
+    return field
+
+
 def _array_aggregation_to_expression(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
     field: Expression,
     condition_in_aggregation: Expression,
     alias_dict: dict[str, str],
 ) -> Expression:
+    # Aggregation operates on the raw array, not the JSON string.
+    array_field = _unwrap_to_json_string(field)
     if aggregation.aggregate == Function.FUNCTION_UNIQ:
         return f.round(
             f.uniqArrayIfOrNull(
-                field,
+                array_field,
                 and_cond(get_field_existence_expression(field), condition_in_aggregation),
             ),
             _FLOATING_POINT_PRECISION,
