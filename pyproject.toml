@@ -64,7 +64,7 @@ url = "https://pypi.devinfra.sentry.io/simple"
 default = true
 
 [build-system]
-requires = ["uv_build==0.8.2"]
+requires = ["uv_build"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
