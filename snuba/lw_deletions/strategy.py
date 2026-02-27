@@ -42,7 +42,7 @@ from snuba.web.constants import LW_DELETE_NON_RETRYABLE_CLICKHOUSE_ERROR_CODES
 from snuba.web.delete_query import (
     TooManyOngoingMutationsError,
     _execute_query,
-    _num_ongoing_mutations,
+    _num_parts_currently_mutating,
 )
 
 TPayload = TypeVar("TPayload")
@@ -310,19 +310,19 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
                 "ongoing mutations check is throttled to once per second"
             )
         start = time.time()
-        ongoing_mutations = _num_ongoing_mutations(self.__storage.get_cluster(), self.__tables)
+        parts_mutating = _num_parts_currently_mutating(self.__storage.get_cluster())
         self.__last_ongoing_mutations_check = time.time()
-        max_ongoing_mutations = typing.cast(
+        max_parts_mutating = typing.cast(
             int,
             get_int_config(
-                "max_ongoing_mutations_for_delete",
-                default=settings.MAX_ONGOING_MUTATIONS_FOR_DELETE,
+                "max_parts_mutating_for_delete",
+                default=settings.MAX_PARTS_MUTATING_FOR_DELETE,
             ),
         )
         self.__metrics.timing("ongoing_mutations_query_ms", (time.time() - start) * 1000)
-        if ongoing_mutations > max_ongoing_mutations:
+        if parts_mutating > max_parts_mutating:
             raise TooManyOngoingMutationsError(
-                f"{ongoing_mutations} mutations for {self.__tables} table(s) is above max ongoing mutations: {max_ongoing_mutations} "
+                f"{parts_mutating} parts mutating is above max: {max_parts_mutating} "
             )
 
     def close(self) -> None:
