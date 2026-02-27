@@ -54,8 +54,7 @@ BUCKET_COUNT = 40
 
 
 def process_arrays(raw: str) -> dict[str, list[Any]]:
-    parsed = json.loads(raw) or {}
-    return {key: list(values) for key, values in parsed.items()}
+    return json.loads(raw) or {}
 
 
 def _check_non_string_values_cannot_ignore_case(
