@@ -210,49 +210,6 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
                 alias,
             )
 
-    if attr_key.type == AttributeKey.Type.TYPE_ARRAY:
-        alias = _build_label_mapping_key(attr_key)
-        # Array values are stored as tagged variants (e.g. {"String": "alice"},
-        # {"Int": "123"}) in the JSON column. Cast to Array(JSON), then extract
-        # the value from whichever variant tag is present. We coalesce across
-        # all supported types, converting non-string types via toString so the
-        # result is always a string array.
-        x = Argument(None, "x")
-        return FunctionCall(
-            alias=alias,
-            function_name="arrayMap",
-            parameters=(
-                Lambda(
-                    alias=None,
-                    parameters=("x",),
-                    transformation=FunctionCall(
-                        alias=None,
-                        function_name="coalesce",
-                        parameters=(
-                            JsonPath(None, x, "String", "Nullable(String)"),
-                            FunctionCall(
-                                None,
-                                "toString",
-                                (JsonPath(None, x, "Int", "Nullable(Int64)"),),
-                            ),
-                            FunctionCall(
-                                None,
-                                "toString",
-                                (JsonPath(None, x, "Double", "Nullable(Float64)"),),
-                            ),
-                            JsonPath(None, x, "Bool", "Nullable(String)"),
-                        ),
-                    ),
-                ),
-                JsonPath(
-                    alias=None,
-                    base=column("attributes_array"),
-                    path=attr_key.name,
-                    return_type="Array(JSON)",
-                ),
-            ),
-        )
-
     raise MalformedAttributeException(
         f"Attribute {attr_key.name} has an unknown type: {AttributeKey.Type.Name(attr_key.type)}"
     )
