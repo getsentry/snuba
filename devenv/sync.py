@@ -1,3 +1,4 @@
+import os
 import shutil
 
 from devenv.lib import brew, proc
@@ -17,6 +18,12 @@ def main(context: dict[str, str]) -> int:
 
     if not shutil.which("rustup"):
         raise SystemExit("rustup not on PATH. Did you run `direnv allow`?")
+
+    if os.path.exists(f"{reporoot}/.devenv/bin/uv"):
+        os.remove(f"{reporoot}/.devenv/bin/uv")
+
+    if os.path.exists(f"{reporoot}/.devenv/bin/uvx"):
+        os.remove(f"{reporoot}/.devenv/bin/uvx")
 
     if not shutil.which("uv"):
         print("\n\n\ndevenv is no longer managing uv; please run `brew install uv`.\n\n\n")
