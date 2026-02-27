@@ -76,7 +76,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
     timer = Timer("test")
 
     @pytest.mark.parametrize("subscription", TESTS_CREATE)
-    @pytest.mark.clickhouse_db
+    @pytest.mark.events_db
     @pytest.mark.redis_db
     def test(self, subscription: SubscriptionData) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
@@ -94,7 +94,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
         )
 
     @pytest.mark.parametrize("subscription", TESTS_INVALID)
-    @pytest.mark.clickhouse_db
+    @pytest.mark.events_db
     @pytest.mark.redis_db
     def test_invalid_condition_column(self, subscription: SubscriptionData) -> None:
         override_entity_column_validator(EntityKey.EVENTS, ColumnValidationMode.ERROR)
@@ -105,7 +105,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                 self.timer,
             )
 
-    @pytest.mark.clickhouse_db
+    @pytest.mark.events_db
     @pytest.mark.redis_db
     def test_invalid_aggregation(self) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
@@ -122,7 +122,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                 self.timer,
             )
 
-    @pytest.mark.clickhouse_db
+    @pytest.mark.events_db
     def test_invalid_time_window(self) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         with raises(InvalidSubscriptionError):
@@ -169,7 +169,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                 self.timer,
             )
 
-    @pytest.mark.clickhouse_db
+    @pytest.mark.events_db
     def test_invalid_resolution(self) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         with raises(InvalidSubscriptionError):
@@ -301,7 +301,7 @@ class TestMetricsCountersSubscriptionCreator:
 
 
 class TestSubscriptionDeleter(BaseSubscriptionTest):
-    @pytest.mark.clickhouse_db
+    @pytest.mark.events_db
     @pytest.mark.redis_db
     def test(self) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
@@ -343,7 +343,7 @@ class TestRPCSubscriptionCreator:
     def setup_method(self) -> None:
         self.dataset = get_dataset("events_analytics_platform")
 
-    @pytest.mark.clickhouse_db
+    @pytest.mark.eap
     @pytest.mark.redis_db
     def test_rpc_subscription_creator(self) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.EAP_ITEMS)

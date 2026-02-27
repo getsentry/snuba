@@ -25,5 +25,5 @@ schema:
     ]
   local_table_name: eap_item_co_occurring_attrs_1_local
   dist_table_name: eap_item_co_occurring_attrs_1_dist
-  partition_format: [date]
+  partition_format: [retention_days, date]
 allocation_policies: []

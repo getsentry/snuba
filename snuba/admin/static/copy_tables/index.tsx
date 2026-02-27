@@ -18,7 +18,7 @@ function CopyTables(props: {
 }) {
   const [nodeData, setNodeData] = useState<ClickhouseNodeData[]>([]);
   const [copyTableHosts, setCopyTableHosts] = useState<CopyTableHostsState>({
-    sourceHost: {}
+    sourceHost: {},
   });
   const [copyTableResult, setCopyTableResult] = useState<CopyTableResult | null>(null);
   const [queryError, setQueryError] = useState<Error | null>(null);
@@ -51,23 +51,27 @@ function CopyTables(props: {
       copyTableHosts.sourceHost.host = host
       copyTableHosts.sourceHost.port = parseInt(portAsString, 10)
 
-
       return {
         ...copyTableHosts,
-
       };
     });
   }
 
+  const [targetHostInput, setTargetHostInput] = useState("");
+
   function executeCopyTableQuery(shouldExecute: boolean) {
-    const query = {
-      storage: copyTableHosts.sourceHost.storage,
-      source_host: copyTableHosts.sourceHost.host,
-      source_port: copyTableHosts.sourceHost.port,
+    const query: CopyTableRequest = {
+      storage: copyTableHosts.sourceHost.storage!,
+      source_host: copyTableHosts.sourceHost.host!,
+      source_port: copyTableHosts.sourceHost.port!,
       dry_run: !shouldExecute,
     }
+    const trimmed = targetHostInput.trim();
+    if (trimmed) {
+      query.target_host = trimmed;
+    }
     return props.api
-      .executeCopyTable(query as CopyTableRequest)
+      .executeCopyTable(query)
       .then((result) => {
         setQueryError(null);
         setCopyTableResult(result);
@@ -103,21 +107,34 @@ function CopyTables(props: {
             </div>
           </div>
           <div style={sectionContainerStyle}>
-            <div style={buttonContainerStyle}>
-              <ExecuteButton
-                label=" DRY RUN"
-                onError={handleQueryError}
-                onClick={() => executeCopyTableQuery(false)}
-                disabled={copyTableHosts.sourceHost.host ? false : true}
-              />
-              <ExecuteButton
-                label=" ‼️ COPY TABLES FOR CLUSTER ‼️ "
-                onError={handleQueryError}
-                onClick={() => executeCopyTableQuery(true)}
-                disabled={copyTableHosts.sourceHost.host ? false : true}
+            <h3>Target host (optional):</h3>
+            <p style={targetHelpTextStyle}>
+              If specified, CREATE statements will be run on this host instead of the source host.
+            </p>
+            <div style={{ marginTop: 10 }}>
+              <input
+                type="text"
+                style={textInputStyle}
+                placeholder="e.g. my-clickhouse-node.example.com"
+                value={targetHostInput}
+                onChange={(e) => setTargetHostInput(e.target.value)}
               />
             </div>
           </div>
+        </div>
+        <div style={buttonRowStyle}>
+          <ExecuteButton
+            label=" DRY RUN"
+            onError={handleQueryError}
+            onClick={() => executeCopyTableQuery(false)}
+            disabled={copyTableHosts.sourceHost.host ? false : true}
+          />
+          <ExecuteButton
+            label=" ‼️ COPY TABLES FOR CLUSTER ‼️ "
+            onError={handleQueryError}
+            onClick={() => executeCopyTableQuery(true)}
+            disabled={copyTableHosts.sourceHost.host ? false : true}
+          />
         </div>
       </form >
 
@@ -201,11 +218,26 @@ const hostSelectStyle = {
   marginTop: 10,
 }
 
-const buttonContainerStyle = {
+const buttonRowStyle = {
   display: 'flex',
-  flexDirection: 'column' as const,
   gap: 10,
   marginTop: 10,
+}
+
+const targetHelpTextStyle = {
+  fontSize: '0.85em',
+  color: COLORS.TEXT_DEFAULT,
+  marginTop: 4,
+  marginBottom: 0,
+}
+
+const textInputStyle = {
+  width: '100%',
+  padding: '6px 10px',
+  border: `1px solid ${COLORS.BORDER_GRAY}`,
+  borderRadius: 4,
+  fontSize: '14px',
+  boxSizing: 'border-box' as const,
 }
 
 const tableListStyle = {

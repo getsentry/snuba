@@ -60,7 +60,7 @@ def admin_api() -> FlaskClient:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 def test_migration_groups(admin_api: FlaskClient) -> None:
     runner = Runner()
     with patch("snuba.admin.auth.DEFAULT_ROLES", [generate_tool_test_role("all")]):
@@ -73,7 +73,7 @@ def test_migration_groups(admin_api: FlaskClient) -> None:
         "snuba.admin.auth.DEFAULT_ROLES",
         [
             generate_migration_test_role("system", "all"),
-            generate_migration_test_role("generic_metrics", "non_blocking"),
+            generate_migration_test_role("events_analytics_platform", "non_blocking"),
             generate_tool_test_role("all"),
         ],
     ):
@@ -94,22 +94,24 @@ def test_migration_groups(admin_api: FlaskClient) -> None:
                 "migration_ids": get_migration_ids(MigrationGroup.SYSTEM, "AllMigrationsPolicy"),
             },
             {
-                "group": "generic_metrics",
+                "group": "events_analytics_platform",
                 "migration_ids": get_migration_ids(
-                    MigrationGroup.GENERIC_METRICS, "NonBlockingMigrationsPolicy"
+                    MigrationGroup.EVENTS_ANALYTICS_PLATFORM, "NonBlockingMigrationsPolicy"
                 ),
             },
         ]
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 def test_list_migration_status(admin_api: FlaskClient) -> None:
+    # Run the migraitons for test_migration checks below
+    Runner().run_all(group=MigrationGroup.TEST_MIGRATION)
     with patch(
         "snuba.admin.auth.DEFAULT_ROLES",
         [
             generate_migration_test_role("system", "non_blocking"),
-            generate_migration_test_role("generic_metrics", "none"),
+            generate_migration_test_role("events_analytics_platform", "none"),
             generate_tool_test_role("all"),
         ],
     ):
@@ -136,7 +138,7 @@ def test_list_migration_status(admin_api: FlaskClient) -> None:
         "snuba.admin.auth.DEFAULT_ROLES",
         [
             generate_migration_test_role("test_migration", "non_blocking"),
-            generate_migration_test_role("generic_metrics", "none"),
+            generate_migration_test_role("events_analytics_platform", "none"),
             generate_tool_test_role("all"),
         ],
     ):
@@ -165,7 +167,7 @@ def test_list_migration_status(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.parametrize("action", ["run", "reverse"])
 def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
     method = "run_migration" if action == "run" else "reverse_migration"
