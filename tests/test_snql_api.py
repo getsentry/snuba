@@ -1329,13 +1329,15 @@ class TestSnQLApi(BaseApiTest):
                     }
                 ),
             )
-            assert response.status_code == 429
+            # TOO_MANY_BYTES is a clickhouse error, not a rate limit.
+            # The response should surface the clickhouse error type and code
+            # so that consumers (e.g. sentry) can distinguish it from
+            # snuba-level rate limiting.
+            assert response.status_code == 400
+            assert response.json["error"]["type"] == "clickhouse"
+            assert response.json["error"]["code"] == 307
 
-            assert (
-                response.json["error"]["message"]
-                == "Query scanned more than the allocated amount of bytes"
-            )
-
+            # quota_allowance should still be available in stats
             expected_quota_allowance = {
                 "details": {
                     "MaxBytesPolicy123": {
@@ -1373,7 +1375,9 @@ class TestSnQLApi(BaseApiTest):
                 },
             }
 
-            assert response.json["quota_allowance"] == expected_quota_allowance
+            assert (
+                response.json["stats"]["quota_allowance"] == expected_quota_allowance
+            )
 
     def test_allocation_policy_violation(self) -> None:
         with patch(
