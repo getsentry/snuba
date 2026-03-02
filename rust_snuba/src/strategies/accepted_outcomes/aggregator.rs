@@ -159,7 +159,11 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
             }
         };
 
-        let ts_secs = trace_item.received.as_ref().map(|t| t.seconds as u64).unwrap_or(0);
+        let ts_secs = trace_item
+            .received
+            .as_ref()
+            .map(|t| t.seconds as u64)
+            .unwrap_or(0);
         let org_id = trace_item.organization_id;
         let project_id = trace_item.project_id;
 
@@ -215,10 +219,7 @@ mod tests {
             Ok(())
         }
         fn terminate(&mut self) {}
-        fn join(
-            &mut self,
-            _: Option<Duration>,
-        ) -> Result<Option<CommitRequest>, StrategyError> {
+        fn join(&mut self, _: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
             Ok(None)
         }
     }
@@ -256,8 +257,7 @@ mod tests {
 
     #[test]
     fn submit_tracks_max_offset_per_partition() {
-        let mut aggregator =
-            OutcomesAggregator::new(Noop, 60, Duration::from_millis(5_000));
+        let mut aggregator = OutcomesAggregator::new(Noop, 60, Duration::from_millis(5_000));
 
         let partition = Partition::new(Topic::new("accepted-outcomes"), 0);
         let invalid_payload = KafkaPayload::new(None, None, Some(vec![0, 1, 2]));

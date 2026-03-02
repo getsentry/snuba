@@ -13,7 +13,6 @@ Usage:
 
 import argparse
 import random
-import time
 import uuid
 from collections import Counter
 from datetime import UTC, datetime, timedelta

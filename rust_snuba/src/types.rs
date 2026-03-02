@@ -604,13 +604,6 @@ pub struct AggregatedOutcomesBatch {
     /// Map from bucket key to aggregated statistics
     pub buckets: HashMap<BucketKey, BucketStats>,
     pub bucket_interval: u64,
-
-    /// Metadata similar to BytesInsertBatch
-    message_timestamp: LatencyRecorder,
-    origin_timestamp: LatencyRecorder,
-    sentry_received_timestamp: LatencyRecorder,
-    commit_log_offsets: CommitLogOffsets,
-    cogs_data: CogsData,
 }
 
 impl AggregatedOutcomesBatch {
@@ -635,71 +628,5 @@ impl AggregatedOutcomesBatch {
     /// Get the total number of buckets
     pub fn num_buckets(&self) -> usize {
         self.buckets.len()
-    }
-
-    /// Get the total quantity across all buckets
-    pub fn total_quantity(&self) -> u64 {
-        self.buckets.values().map(|stats| stats.quantity).sum()
-    }
-
-    /// Merge another batch into this one
-    pub fn merge(&mut self, other: AggregatedOutcomesBatch) {
-        for (key, stats) in other.buckets {
-            self.buckets
-                .entry(key)
-                .and_modify(|existing| existing.merge(&stats))
-                .or_insert(stats);
-        }
-
-        self.message_timestamp.merge(other.message_timestamp);
-        self.origin_timestamp.merge(other.origin_timestamp);
-        self.sentry_received_timestamp
-            .merge(other.sentry_received_timestamp);
-        self.commit_log_offsets.merge(other.commit_log_offsets);
-        self.cogs_data.merge(other.cogs_data);
-    }
-
-    /// Builder methods similar to BytesInsertBatch
-    pub fn with_message_timestamp(mut self, timestamp: DateTime<Utc>) -> Self {
-        self.message_timestamp = LatencyRecorder::from(timestamp);
-        self
-    }
-
-    pub fn with_origin_timestamp(mut self, timestamp: DateTime<Utc>) -> Self {
-        self.origin_timestamp = LatencyRecorder::from(timestamp);
-        self
-    }
-
-    pub fn with_sentry_received_timestamp(mut self, timestamp: DateTime<Utc>) -> Self {
-        self.sentry_received_timestamp = LatencyRecorder::from(timestamp);
-        self
-    }
-
-    pub fn with_commit_log_offsets(mut self, offsets: CommitLogOffsets) -> Self {
-        self.commit_log_offsets = offsets;
-        self
-    }
-
-    pub fn with_cogs_data(mut self, cogs_data: CogsData) -> Self {
-        self.cogs_data = cogs_data;
-        self
-    }
-
-    pub fn commit_log_offsets(&self) -> &CommitLogOffsets {
-        &self.commit_log_offsets
-    }
-
-    pub fn cogs_data(&self) -> &CogsData {
-        &self.cogs_data
-    }
-
-    pub fn record_message_latency(&self) {
-        let write_time = Utc::now();
-
-        self.message_timestamp.send_metric(write_time, "latency");
-        self.origin_timestamp
-            .send_metric(write_time, "end_to_end_latency");
-        self.sentry_received_timestamp
-            .send_metric(write_time, "sentry_received_latency");
     }
 }
