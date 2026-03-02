@@ -144,6 +144,18 @@ ALTER_QUERY_RE = re.compile(
     re.IGNORECASE + re.VERBOSE,
 )
 
+DROP_TABLE_QUERY_RE = re.compile(
+    r"""
+        ^
+        (DROP\sTABLE)
+        \s
+        [\w\s,=()*+<>'%"\-\/:\.`]+
+        ;? # Optional semicolon
+        $
+    """,
+    re.IGNORECASE + re.VERBOSE,
+)
+
 
 def is_query_using_only_system_tables(
     clickhouse_host: str,
@@ -262,6 +274,15 @@ def is_query_alter(sql_query: str) -> bool:
     return True if match else False
 
 
+def is_query_drop(sql_query: str) -> bool:
+    """
+    Validates whether we are running something like DROP TABLE ...
+    """
+    sql_query = " ".join(sql_query.split())
+    match = DROP_TABLE_QUERY_RE.match(sql_query)
+    return True if match else False
+
+
 def validate_query(
     clickhouse_host: str,
     clickhouse_port: int,
@@ -277,6 +298,7 @@ def validate_query(
         is_system_command(system_query_sql)
         or is_query_alter(system_query_sql)
         or is_query_optimize(system_query_sql)
+        or is_query_drop(system_query_sql)
     ):
         return
 

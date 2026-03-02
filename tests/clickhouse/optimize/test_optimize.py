@@ -109,7 +109,7 @@ test_data = [
     reason="This test still is flaky sometimes and then completely blocks CI / deployment"
 )
 class TestOptimize:
-    @pytest.mark.clickhouse_db
+    @pytest.mark.events_db
     @pytest.mark.redis_db
     @pytest.mark.parametrize(
         "storage_key, create_event_row_for_date, current_time",
@@ -233,7 +233,7 @@ test_data = [
 
 
 class TestOptimizeError:
-    @pytest.mark.clickhouse_db
+    @pytest.mark.events_db
     @pytest.mark.redis_db
     @pytest.mark.parametrize(
         "storage_key, current_time",
@@ -281,7 +281,7 @@ class TestOptimizeError:
 
 
 class TestOptimizeFrequency:
-    @pytest.mark.clickhouse_db
+    @pytest.mark.events_db
     @pytest.mark.redis_db
     @pytest.mark.parametrize(
         "storage_key, current_time",
@@ -326,7 +326,7 @@ class TestOptimizeFrequency:
         clickhouse.execute(f"DROP TABLE IF EXISTS {database}.{table} SYNC")
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
     """
     Tests that a JobTimeoutException is raised when a cutoff time is reached.

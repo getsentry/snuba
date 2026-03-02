@@ -1,5 +1,8 @@
-minVersion: "0.27.2"
-changelogPolicy: auto
+minVersion: "2.21.4"
+changelog:
+  policy: auto
+versioning:
+  policy: calver
 artifactProvider:
   name: none
 statusProvider:
@@ -20,5 +23,3 @@ targets:
   target: getsentry/snuba
   targetFormat: '{{{target}}}:latest'
 - name: github
-versioning:
-  policy: calver

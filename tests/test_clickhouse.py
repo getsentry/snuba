@@ -59,7 +59,7 @@ def test_reconnect(FakeClient: Client) -> None:
     ]
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_capture_trace() -> None:
     storage = get_storage(StorageKey.ERRORS)
     clickhouse = storage.get_cluster().get_query_connection(ClickhouseClientSettings.QUERY)

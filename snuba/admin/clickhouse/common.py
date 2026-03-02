@@ -207,15 +207,38 @@ def get_clusterless_node_connection(
 
 def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) -> None:
     """
-    Simple validation to ensure query only attempts read queries.
+    Validates that the query is a safe read-only query.
 
     If allowed_tables is provided, ensures the 'from' clause contains
     an allowed table. All tables are allowed otherwise.
 
     Raises InvalidCustomQuery if query is invalid or not allowed.
     """
+    # Check for balanced quotes to prevent injection
+    single_quote_count = sql_query.count("'")
+    double_quote_count = sql_query.count('"')
+    if single_quote_count % 2 != 0 or double_quote_count % 2 != 0:
+        raise InvalidCustomQuery("Unbalanced quotes detected in query")
+
     lowered = sql_query.lower()
-    disallowed_keywords = ["insert", ";"]
+    # Enhanced disallowed keywords to prevent SQL injection and data modification
+    disallowed_keywords = [
+        "insert",
+        "update",
+        "delete",
+        "drop",
+        "create",
+        "alter",
+        "truncate",
+        "replace",
+        ";",  # Prevent query chaining
+        "--",  # Prevent comment-based injection
+        "/*",  # Prevent multi-line comment injection
+        "*/",
+        "exec",
+        "execute",
+        "xp_",  # Prevent stored procedure execution
+    ]
 
     for kw in disallowed_keywords:
         if kw in lowered:
