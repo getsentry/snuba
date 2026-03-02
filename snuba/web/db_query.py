@@ -476,12 +476,6 @@ def _raw_query(
         elif isinstance(cause, ClickhouseError):
             error_code = cause.code
             status = get_query_status_from_error_codes(error_code)
-            if error_code == ErrorCodes.TOO_MANY_BYTES:
-                calculated_cause = RateLimitExceeded(
-                    "Query scanned more than the allocated amount of bytes",
-                    quota_allowance=stats["quota_allowance"],
-                )
-
             with configure_scope() as scope:
                 fingerprint = ["{{default}}", str(cause.code), dataset_name]
                 if error_code not in constants.CLICKHOUSE_SYSTEMATIC_FAILURES:

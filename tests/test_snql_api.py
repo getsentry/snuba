@@ -1329,15 +1329,10 @@ class TestSnQLApi(BaseApiTest):
                     }
                 ),
             )
-            # TOO_MANY_BYTES is a clickhouse error, not a rate limit.
-            # The response should surface the clickhouse error type and code
-            # so that consumers (e.g. sentry) can distinguish it from
-            # snuba-level rate limiting.
             assert response.status_code == 400
             assert response.json["error"]["type"] == "clickhouse"
             assert response.json["error"]["code"] == 307
 
-            # quota_allowance should still be available in stats
             expected_quota_allowance = {
                 "details": {
                     "MaxBytesPolicy123": {
