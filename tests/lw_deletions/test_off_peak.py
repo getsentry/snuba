@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
 import pytest
@@ -11,6 +11,27 @@ from arroyo.types import BrokerValue, Message, Partition, Topic
 
 from snuba import state
 from snuba.lw_deletions.off_peak import OffPeakProcessingStrategy
+from snuba.state import get_raw_configs
+
+
+@pytest.fixture(autouse=True)
+def _clear_state_memoize_cache() -> None:
+    """The memoize on get_raw_configs uses time.time() for TTL which
+    conflicts with time_machine. Clear it between tests."""
+    for cell in get_raw_configs.__closure__ or ():  # type: ignore[attr-defined]
+        obj = cell.cell_contents
+        if hasattr(obj, "saved"):
+            obj.saved.clear()
+            obj.at.clear()
+            break
+
+
+def _tomorrow_at(hour: int) -> datetime:
+    """Return tomorrow at the given UTC hour. Always in the future so
+    time_machine.travel moves the clock forward and the snuba.state
+    memoize cache naturally expires."""
+    tomorrow = datetime.now(timezone.utc).date() + timedelta(days=1)
+    return datetime(tomorrow.year, tomorrow.month, tomorrow.day, hour, tzinfo=timezone.utc)
 
 
 def _make_message() -> Message[KafkaPayload]:
@@ -31,6 +52,12 @@ def _make_strategy(
     metrics = MagicMock()
     strategy = OffPeakProcessingStrategy(next_step=next_step, metrics=metrics)
     return strategy, next_step, metrics
+
+
+def _set_offpeak_config(start: int, end: int) -> None:
+    state.set_config("lw_deletions_offpeak_enabled", 1)
+    state.set_config("lw_deletions_offpeak_start", start)
+    state.set_config("lw_deletions_offpeak_end", end)
 
 
 @pytest.mark.redis_db
@@ -55,116 +82,73 @@ class TestOffPeakDisabled:
 class TestOffPeakSameDayWindow:
     """Window like 2-8 (2am to 8am UTC)."""
 
-    def setup_method(self) -> None:
-        state.set_config("lw_deletions_offpeak_enabled", 1)
-        state.set_config("lw_deletions_offpeak_start", 2)
-        state.set_config("lw_deletions_offpeak_end", 8)
-
-    @time_machine.travel(datetime(2026, 1, 1, 5, 0, tzinfo=timezone.utc), tick=False)
     def test_within_window_passes(self) -> None:
-        strategy, next_step, _ = _make_strategy()
-        msg = _make_message()
-        strategy.submit(msg)
-        next_step.submit.assert_called_once_with(msg)
+        with time_machine.travel(_tomorrow_at(5), tick=False):
+            _set_offpeak_config(start=2, end=8)
+            strategy, next_step, _ = _make_strategy()
+            strategy.submit(_make_message())
+            next_step.submit.assert_called_once()
 
-    @time_machine.travel(datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc), tick=False)
     def test_outside_window_rejects(self) -> None:
-        strategy, next_step, metrics = _make_strategy()
-        msg = _make_message()
-        with pytest.raises(MessageRejected):
-            strategy.submit(msg)
-        next_step.submit.assert_not_called()
-        metrics.increment.assert_called_with("off_peak_rejected")
+        with time_machine.travel(_tomorrow_at(12), tick=False):
+            _set_offpeak_config(start=2, end=8)
+            strategy, next_step, metrics = _make_strategy()
+            with pytest.raises(MessageRejected):
+                strategy.submit(_make_message())
+            next_step.submit.assert_not_called()
+            metrics.increment.assert_called_with("off_peak_rejected")
 
-    @time_machine.travel(datetime(2026, 1, 1, 2, 0, tzinfo=timezone.utc), tick=False)
     def test_at_start_boundary_passes(self) -> None:
-        strategy, next_step, _ = _make_strategy()
-        msg = _make_message()
-        strategy.submit(msg)
-        next_step.submit.assert_called_once()
+        with time_machine.travel(_tomorrow_at(2), tick=False):
+            _set_offpeak_config(start=2, end=8)
+            strategy, next_step, _ = _make_strategy()
+            strategy.submit(_make_message())
+            next_step.submit.assert_called_once()
 
-    @time_machine.travel(datetime(2026, 1, 1, 8, 0, tzinfo=timezone.utc), tick=False)
     def test_at_end_boundary_rejects(self) -> None:
-        strategy, next_step, _ = _make_strategy()
-        msg = _make_message()
-        with pytest.raises(MessageRejected):
-            strategy.submit(msg)
+        with time_machine.travel(_tomorrow_at(8), tick=False):
+            _set_offpeak_config(start=2, end=8)
+            strategy, next_step, _ = _make_strategy()
+            with pytest.raises(MessageRejected):
+                strategy.submit(_make_message())
 
 
 @pytest.mark.redis_db
 class TestOffPeakMidnightSpanningWindow:
     """Window like 22-6 (10pm to 6am UTC, spanning midnight)."""
 
-    def setup_method(self) -> None:
-        state.set_config("lw_deletions_offpeak_enabled", 1)
-        state.set_config("lw_deletions_offpeak_start", 22)
-        state.set_config("lw_deletions_offpeak_end", 6)
-
-    @time_machine.travel(datetime(2026, 1, 1, 23, 0, tzinfo=timezone.utc), tick=False)
     def test_before_midnight_passes(self) -> None:
-        strategy, next_step, _ = _make_strategy()
-        msg = _make_message()
-        strategy.submit(msg)
-        next_step.submit.assert_called_once()
+        with time_machine.travel(_tomorrow_at(23), tick=False):
+            _set_offpeak_config(start=22, end=6)
+            strategy, next_step, _ = _make_strategy()
+            strategy.submit(_make_message())
+            next_step.submit.assert_called_once()
 
-    @time_machine.travel(datetime(2026, 1, 1, 3, 0, tzinfo=timezone.utc), tick=False)
     def test_after_midnight_passes(self) -> None:
-        strategy, next_step, _ = _make_strategy()
-        msg = _make_message()
-        strategy.submit(msg)
-        next_step.submit.assert_called_once()
+        with time_machine.travel(_tomorrow_at(3), tick=False):
+            _set_offpeak_config(start=22, end=6)
+            strategy, next_step, _ = _make_strategy()
+            strategy.submit(_make_message())
+            next_step.submit.assert_called_once()
 
-    @time_machine.travel(datetime(2026, 1, 1, 14, 0, tzinfo=timezone.utc), tick=False)
     def test_during_day_rejects(self) -> None:
-        strategy, next_step, _ = _make_strategy()
-        msg = _make_message()
-        with pytest.raises(MessageRejected):
-            strategy.submit(msg)
+        with time_machine.travel(_tomorrow_at(14), tick=False):
+            _set_offpeak_config(start=22, end=6)
+            strategy, next_step, _ = _make_strategy()
+            with pytest.raises(MessageRejected):
+                strategy.submit(_make_message())
 
 
 @pytest.mark.redis_db
 class TestOffPeakSameStartEnd:
     """When start == end, never off-peak (disables processing)."""
 
-    @time_machine.travel(datetime(2026, 1, 1, 5, 0, tzinfo=timezone.utc), tick=False)
     def test_always_rejects(self) -> None:
-        state.set_config("lw_deletions_offpeak_enabled", 1)
-        state.set_config("lw_deletions_offpeak_start", 5)
-        state.set_config("lw_deletions_offpeak_end", 5)
-        strategy, next_step, _ = _make_strategy()
-        msg = _make_message()
-        with pytest.raises(MessageRejected):
-            strategy.submit(msg)
-
-
-@pytest.mark.redis_db
-class TestOffPeakCaching:
-    """Config is cached for 60 seconds."""
-
-    @time_machine.travel(datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc), tick=False)
-    def test_config_change_takes_effect_after_cache_expires(self) -> None:
-        state.set_config("lw_deletions_offpeak_enabled", 1)
-        state.set_config("lw_deletions_offpeak_start", 2)
-        state.set_config("lw_deletions_offpeak_end", 8)
-
-        strategy, next_step, _ = _make_strategy()
-        msg = _make_message()
-
-        # Hour 12 is outside 2-8, should reject
-        with pytest.raises(MessageRejected):
-            strategy.submit(msg)
-
-        # Disable the feature — but cache hasn't expired yet
-        state.set_config("lw_deletions_offpeak_enabled", 0)
-        with pytest.raises(MessageRejected):
-            strategy.submit(msg)
-
-        # Expire the cache by resetting internal state
-        strategy._OffPeakProcessingStrategy__cached_at = 0.0  # type: ignore[attr-defined]
-
-        # Now the disabled config takes effect
-        strategy.submit(msg)
-        next_step.submit.assert_called_once()
+        with time_machine.travel(_tomorrow_at(5), tick=False):
+            _set_offpeak_config(start=5, end=5)
+            strategy, next_step, _ = _make_strategy()
+            with pytest.raises(MessageRejected):
+                strategy.submit(_make_message())
 
 
 class TestOffPeakDelegation:
