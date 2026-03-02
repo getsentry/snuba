@@ -1,5 +1,6 @@
 use std::cmp::min;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
@@ -532,5 +533,173 @@ mod tests {
             metrics1.bytes_processed.get(&TraceItemType::Log),
             Some(&275)
         ); // 200 + 75
+    }
+}
+
+/// A single accepted outcome to be produced to the outcomes-billing topic.
+#[derive(Debug, Clone, Serialize)]
+pub struct TrackOutcome {
+    /// Bucket timestamp in seconds: offset * bucket_interval
+    pub timestamp: u64,
+    pub org_id: u64,
+    pub project_id: u64,
+    pub key_id: u64,
+    /// DataCategory uint32 value as defined in Relay
+    pub category: u32,
+    pub quantity: u64,
+}
+
+/// Key used to bucket accepted outcomes by time slot, organization, project, key, and data category.
+/// Outcome type is omitted because this consumer only processes accepted outcomes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct BucketKey {
+    /// Time slot index: floor(event_timestamp_secs / bucket_interval)
+    pub time_offset: u64,
+    pub org_id: u64,
+    pub project_id: u64,
+    pub key_id: u64,
+    /// DataCategory uint32 value as defined in Relay
+    pub category: u32,
+}
+
+/// One accepted-outcome data point parsed from a TraceItem, before bucketing.
+/// `time_offset` is the raw event timestamp in seconds (TraceItem.timestamp.seconds);
+/// the aggregator divides by `bucket_interval` to produce the final `BucketKey.time_offset`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BucketKeyValue {
+    pub time_offset: u64,
+    pub org_id: u64,
+    pub project_id: u64,
+    pub key_id: u64,
+    pub category: u32,
+    pub quantity: u64,
+}
+
+/// Statistics for a single bucket
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BucketStats {
+    pub quantity: u64,
+}
+
+impl BucketStats {
+    pub fn new(quantity: u64) -> Self {
+        Self { quantity }
+    }
+
+    pub fn merge(&mut self, other: &BucketStats) {
+        self.quantity += other.quantity;
+    }
+}
+
+impl Default for BucketStats {
+    fn default() -> Self {
+        Self { quantity: 0 }
+    }
+}
+
+/// Batch type for aggregated outcomes data
+/// Stores bucketed counts instead of raw row data
+#[derive(Clone, Debug, Default)]
+pub struct AggregatedOutcomesBatch {
+    /// Map from bucket key to aggregated statistics
+    pub buckets: HashMap<BucketKey, BucketStats>,
+    pub bucket_interval: u64,
+
+    /// Metadata similar to BytesInsertBatch
+    message_timestamp: LatencyRecorder,
+    origin_timestamp: LatencyRecorder,
+    sentry_received_timestamp: LatencyRecorder,
+    commit_log_offsets: CommitLogOffsets,
+    cogs_data: CogsData,
+}
+
+impl AggregatedOutcomesBatch {
+    /// Create a new empty batch
+    pub fn new(bucket_interval: u64) -> Self {
+        Self {
+            bucket_interval,
+            ..Default::default()
+        }
+    }
+
+    /// Add or update a bucket with a count and quantity
+    pub fn add_to_bucket(&mut self, key: BucketKey, quantity: u64) {
+        self.buckets
+            .entry(key)
+            .and_modify(|stats| {
+                stats.quantity += quantity;
+            })
+            .or_insert_with(|| BucketStats::new(quantity));
+    }
+
+    /// Get the total number of buckets
+    pub fn num_buckets(&self) -> usize {
+        self.buckets.len()
+    }
+
+    /// Get the total quantity across all buckets
+    pub fn total_quantity(&self) -> u64 {
+        self.buckets.values().map(|stats| stats.quantity).sum()
+    }
+
+    /// Merge another batch into this one
+    pub fn merge(&mut self, other: AggregatedOutcomesBatch) {
+        for (key, stats) in other.buckets {
+            self.buckets
+                .entry(key)
+                .and_modify(|existing| existing.merge(&stats))
+                .or_insert(stats);
+        }
+
+        self.message_timestamp.merge(other.message_timestamp);
+        self.origin_timestamp.merge(other.origin_timestamp);
+        self.sentry_received_timestamp
+            .merge(other.sentry_received_timestamp);
+        self.commit_log_offsets.merge(other.commit_log_offsets);
+        self.cogs_data.merge(other.cogs_data);
+    }
+
+    /// Builder methods similar to BytesInsertBatch
+    pub fn with_message_timestamp(mut self, timestamp: DateTime<Utc>) -> Self {
+        self.message_timestamp = LatencyRecorder::from(timestamp);
+        self
+    }
+
+    pub fn with_origin_timestamp(mut self, timestamp: DateTime<Utc>) -> Self {
+        self.origin_timestamp = LatencyRecorder::from(timestamp);
+        self
+    }
+
+    pub fn with_sentry_received_timestamp(mut self, timestamp: DateTime<Utc>) -> Self {
+        self.sentry_received_timestamp = LatencyRecorder::from(timestamp);
+        self
+    }
+
+    pub fn with_commit_log_offsets(mut self, offsets: CommitLogOffsets) -> Self {
+        self.commit_log_offsets = offsets;
+        self
+    }
+
+    pub fn with_cogs_data(mut self, cogs_data: CogsData) -> Self {
+        self.cogs_data = cogs_data;
+        self
+    }
+
+    pub fn commit_log_offsets(&self) -> &CommitLogOffsets {
+        &self.commit_log_offsets
+    }
+
+    pub fn cogs_data(&self) -> &CogsData {
+        &self.cogs_data
+    }
+
+    pub fn record_message_latency(&self) {
+        let write_time = Utc::now();
+
+        self.message_timestamp.send_metric(write_time, "latency");
+        self.origin_timestamp
+            .send_metric(write_time, "end_to_end_latency");
+        self.sentry_received_timestamp
+            .send_metric(write_time, "sentry_received_latency");
     }
 }
