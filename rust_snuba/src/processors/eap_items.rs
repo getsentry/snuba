@@ -26,8 +26,7 @@ pub fn process_message(
     let origin_timestamp = trace_item
         .received
         .as_ref()
-        .and_then(|received| DateTime::from_timestamp(received.seconds, 0))
-        .or(Some(Utc::now()));
+        .and_then(|received| DateTime::from_timestamp(received.seconds, 0));
     let retention_days = Some(enforce_retention(
         Some(trace_item.retention_days as u16),
         &config.env_config,
