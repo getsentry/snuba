@@ -23,7 +23,11 @@ pub fn process_message(
 ) -> anyhow::Result<InsertBatch> {
     let payload: &[u8] = msg.payload().context("Expected payload")?;
     let trace_item = TraceItem::decode(payload)?;
-    let origin_timestamp = DateTime::from_timestamp(trace_item.received.unwrap().seconds, 0);
+    let origin_timestamp = trace_item
+        .received
+        .as_ref()
+        .and_then(|received| DateTime::from_timestamp(received.seconds, 0))
+        .or(Some(Utc::now()));
     let retention_days = Some(enforce_retention(
         Some(trace_item.retention_days as u16),
         &config.env_config,
