@@ -5,10 +5,20 @@ from google.protobuf import json_format, struct_pb2
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import ComparisonFilter, TraceItemFilter
 
 from snuba import settings
-from snuba.web.rpc.common.common import next_monday, prev_monday, use_sampling_factor
+from snuba.query.expressions import FunctionCall, Lambda
+from snuba.web.rpc.common.common import (
+    attribute_key_to_expression,
+    next_monday,
+    prev_monday,
+    trace_item_filters_to_expression,
+    use_sampling_factor,
+)
 from snuba.web.rpc.common.exceptions import (
+    BadSnubaRPCRequestException,
     RPCAllocationPolicyException,
     convert_rpc_exception_to_proto,
 )
@@ -43,6 +53,138 @@ class TestCommon:
         snuba_set_config("use_sampling_factor_timestamp_seconds", 10)
         assert use_sampling_factor(RequestMeta(start_timestamp=Timestamp(seconds=10)))
         assert not use_sampling_factor(RequestMeta(start_timestamp=Timestamp(seconds=9)))
+
+
+class TestTraceItemFiltersArrayLike:
+    def _make_like_filter(
+        self,
+        attr_name: str,
+        attr_type: AttributeKey.Type.ValueType,
+        pattern: str,
+        op: ComparisonFilter.Op.ValueType = ComparisonFilter.OP_LIKE,
+        ignore_case: bool = False,
+    ) -> TraceItemFilter:
+        return TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=attr_type, name=attr_name),
+                op=op,
+                value=AttributeValue(val_str=pattern),
+                ignore_case=ignore_case,
+            )
+        )
+
+    def test_like_on_array_key(self) -> None:
+        item_filter = self._make_like_filter("my_tags", AttributeKey.Type.TYPE_ARRAY, "%error%")
+        result = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        assert isinstance(result, FunctionCall)
+        assert result.function_name == "arrayExists"
+        # First param is a Lambda with like
+        lam = result.parameters[0]
+        assert isinstance(lam, Lambda)
+        assert lam.parameters == ("x",)
+        assert isinstance(lam.transformation, FunctionCall)
+        assert lam.transformation.function_name == "like"
+        # Second param is the array expression (from attribute_key_to_expression)
+        assert isinstance(result.parameters[1], FunctionCall)
+
+    def test_like_on_array_key_ignore_case(self) -> None:
+        item_filter = self._make_like_filter(
+            "my_tags", AttributeKey.Type.TYPE_ARRAY, "%error%", ignore_case=True
+        )
+        result = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        assert isinstance(result, FunctionCall)
+        assert result.function_name == "arrayExists"
+        lam = result.parameters[0]
+        assert isinstance(lam, Lambda)
+        assert isinstance(lam.transformation, FunctionCall)
+        assert lam.transformation.function_name == "ilike"
+
+    def test_not_like_on_array_key(self) -> None:
+        item_filter = self._make_like_filter(
+            "my_tags",
+            AttributeKey.Type.TYPE_ARRAY,
+            "%error%",
+            op=ComparisonFilter.OP_NOT_LIKE,
+        )
+        result = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        # Result should be NOT(arrayExists(...))
+        assert isinstance(result, FunctionCall)
+        assert result.function_name == "not"
+        inner = result.parameters[0]
+        assert isinstance(inner, FunctionCall)
+        assert inner.function_name == "arrayExists"
+        lam = inner.parameters[0]
+        assert isinstance(lam, Lambda)
+        assert isinstance(lam.transformation, FunctionCall)
+        assert lam.transformation.function_name == "like"
+
+    def test_not_like_on_array_key_ignore_case(self) -> None:
+        item_filter = self._make_like_filter(
+            "my_tags",
+            AttributeKey.Type.TYPE_ARRAY,
+            "%error%",
+            op=ComparisonFilter.OP_NOT_LIKE,
+            ignore_case=True,
+        )
+        result = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        assert isinstance(result, FunctionCall)
+        assert result.function_name == "not"
+        inner = result.parameters[0]
+        assert isinstance(inner, FunctionCall)
+        assert inner.function_name == "arrayExists"
+        lam = inner.parameters[0]
+        assert isinstance(lam, Lambda)
+        assert isinstance(lam.transformation, FunctionCall)
+        assert lam.transformation.function_name == "ilike"
+
+    def test_like_on_array_key_non_string_value_raises(self) -> None:
+        item_filter = TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_ARRAY, name="my_tags"),
+                op=ComparisonFilter.OP_LIKE,
+                value=AttributeValue(val_int=42),
+            )
+        )
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="LIKE/NOT_LIKE on array keys requires a string pattern",
+        ):
+            trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+
+    def test_equals_on_array_key_raises(self) -> None:
+        item_filter = TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_ARRAY, name="my_tags"),
+                op=ComparisonFilter.OP_EQUALS,
+                value=AttributeValue(val_str="something"),
+            )
+        )
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="only LIKE and NOT_LIKE comparisons are supported on array keys",
+        ):
+            trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+
+    def test_like_on_int_key_raises(self) -> None:
+        item_filter = self._make_like_filter("my_int", AttributeKey.Type.TYPE_INT, "%something%")
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="LIKE comparison is only supported on string and array keys",
+        ):
+            trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+
+    def test_not_like_on_int_key_raises(self) -> None:
+        item_filter = self._make_like_filter(
+            "my_int",
+            AttributeKey.Type.TYPE_INT,
+            "%something%",
+            op=ComparisonFilter.OP_NOT_LIKE,
+        )
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="NOT LIKE comparison is only supported on string and array keys",
+        ):
+            trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
 
 
 @pytest.mark.redis_db
