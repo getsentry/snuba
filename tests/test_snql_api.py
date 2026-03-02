@@ -1375,9 +1375,7 @@ class TestSnQLApi(BaseApiTest):
                 },
             }
 
-            assert (
-                response.json["stats"]["quota_allowance"] == expected_quota_allowance
-            )
+            assert response.json["stats"]["quota_allowance"] == expected_quota_allowance
 
     def test_allocation_policy_violation(self) -> None:
         with patch(
