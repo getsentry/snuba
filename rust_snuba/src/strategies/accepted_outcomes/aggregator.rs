@@ -20,29 +20,13 @@ struct TraceItemOutcome {
 
 struct TraceItemOutcomes(Vec<TraceItemOutcome>);
 
-fn item_type_to_category(item_type: i32) -> u32 {
-    match TraceItemType::try_from(item_type).ok() {
-        Some(TraceItemType::Span) => 16,
-        Some(TraceItemType::Log) => 23,
-        Some(TraceItemType::Metric) => 33,
-        _ => 0,
-    }
-}
-
 impl TryFrom<TraceItem> for TraceItemOutcomes {
     type Error = anyhow::Error;
 
     fn try_from(from: TraceItem) -> Result<Self, Self::Error> {
         let mut outcomes = Vec::new();
-        let item_type = from.item_type;
         let Some(trace_outcomes) = from.outcomes else {
-            // todo error if there are no outcomes
-            outcomes.push(TraceItemOutcome {
-                key_id: 0,
-                category: item_type_to_category(item_type),
-                quantity: 1,
-            });
-            return Ok(TraceItemOutcomes(outcomes));
+            return Ok(TraceItemOutcomes(vec![]));
         };
 
         let key_id = trace_outcomes.key_id;
