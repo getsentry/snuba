@@ -13,8 +13,8 @@ The goal of this project is to provide a feature complete Rust equivalent to the
 To run with a debugger
 1. ensure you have CodeLLDB vscode extension (vadimcn.vscode-lldb)
 2. `make watch-rust-snuba` -- build & watch rust
-2. go to the vscode debug tab and find the target (we only have eap items at this point)
-3. you can use `scripts/generate_items.py` to publish to the topic
+3. go to the vscode debug tab and find the target (we only have eap items at this point)
+4. you can use `scripts/generate_items.py` to publish to the topic
 
 ## Troubleshooting
 * Make sure `devservices up`
