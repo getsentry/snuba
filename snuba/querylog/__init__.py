@@ -35,12 +35,13 @@ _ITEM_TYPE_TO_APP_FEATURE: dict[str, str] = {
     "TRACE_ITEM_TYPE_ATTACHMENT": "attachments",
     "TRACE_ITEM_TYPE_PREPROD": "preprod",
     "TRACE_ITEM_TYPE_USER_SESSION": "sessions",
+    "TRACE_ITEM_TYPE_UNSPECIFIED": "null",
 }
 
 
 def _get_eap_app_feature(request: Request) -> str:
     item_type = request.original_body.get("meta", {}).get("traceItemType", "")
-    return _ITEM_TYPE_TO_APP_FEATURE.get(item_type, "eap")
+    return _ITEM_TYPE_TO_APP_FEATURE.get(item_type, "null")
 
 
 def _record_timer_metrics(
