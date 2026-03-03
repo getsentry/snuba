@@ -8,3 +8,13 @@ The goal of this project is to provide a feature complete Rust equivalent to the
 
 1. Run `make watch-rust-snuba`.
 2. `snuba rust-consumer` can now be used to run a simple Rust consumer that currently does not insert into clickhouse.
+
+**Debug**
+To run with a debugger
+1. `make watch-rust-snuba` -- build & watch rust
+2. go to the vscode debug tab and find the target (we only have eap items at this point)
+3. you can use `scripts/generate_items.py` to publish to the topic
+
+## Troubleshooting
+* Make sure `devservices up`
+* If it says you are missing the kafka topic: `snuba bootstrap --force`
