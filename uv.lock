@@ -658,10 +658,10 @@ wheels = [
 
 [[package]]
 name = "pyasn1"
-version = "0.4.8"
+version = "0.6.2"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/pyasn1-0.4.8-py2.py3-none-any.whl", hash = "sha256:39c7e2ec30515947ff4e87fb6f456dfc6e84857d34be479c9d4a4ba4bf46aa5d" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/pyasn1-0.6.2-py3-none-any.whl", hash = "sha256:1eb26d860996a18e9b6ed05e7aae0e9fc21619fcee6af91cca9bad4fbea224bf" },
 ]
 
 [[package]]
@@ -744,7 +744,7 @@ wheels = [
 
 [[package]]
 name = "python-jose"
-version = "3.4.0"
+version = "3.5.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
     { name = "ecdsa", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -752,7 +752,7 @@ dependencies = [
     { name = "rsa", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/python_jose-3.4.0-py2.py3-none-any.whl", hash = "sha256:9c9f616819652d109bd889ecd1e15e9a162b9b94d682534c9c2146092945b78f" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/python_jose-3.5.0-py2.py3-none-any.whl", hash = "sha256:abd1202f23d34dfad2c3d28cb8617b90acf34132c7afd60abd0b0b7d3cb55771" },
 ]
 
 [package.optional-dependencies]
@@ -1080,6 +1080,7 @@ dependencies = [
     { name = "progressbar2", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "proto-plus", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "protobuf", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
+    { name = "pyasn1", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "python-dateutil", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "python-jose", extra = ["cryptography"], marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "python-rapidjson", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -1151,8 +1152,9 @@ requires-dist = [
     { name = "progressbar2", specifier = ">=4.2.0" },
     { name = "proto-plus", specifier = ">=1.24.0" },
     { name = "protobuf", specifier = ">=5.29.5" },
+    { name = "pyasn1", specifier = ">=0.6.2" },
     { name = "python-dateutil", specifier = ">=2.8.2" },
-    { name = "python-jose", extras = ["cryptography"], specifier = ">=3.3.0" },
+    { name = "python-jose", extras = ["cryptography"], specifier = ">=3.5.0" },
     { name = "python-rapidjson", specifier = ">=1.8" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "redis", specifier = ">=4.5.4" },
