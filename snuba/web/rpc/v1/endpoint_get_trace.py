@@ -230,8 +230,8 @@ def _build_query(
                 name="attributes_array",
                 expression=FunctionCall(
                     "attributes_array",
-                    "toJSONString",
-                    (column("attributes_array"),),
+                    "CAST",
+                    (column("attributes_array"), literal("String")),
                 ),
             ),
         ]
