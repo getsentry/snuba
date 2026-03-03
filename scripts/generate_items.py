@@ -27,8 +27,7 @@ def generate_item_message(start_timestamp: Optional[datetime] = None) -> bytes:
     item_timestamp = Timestamp()
     item_timestamp.FromDatetime(start_timestamp)
 
-    received = Timestamp()
-    received.GetCurrentTime()
+    received = Timestamp(seconds=item_timestamp.seconds, nanos=item_timestamp.nanos)
 
     end_timestamp = start_timestamp + timedelta(seconds=1)
 
