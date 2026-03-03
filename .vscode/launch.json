@@ -17,6 +17,24 @@
                 "${file}"
             ],
             "console": "integratedTerminal",
+        },
+        {
+            "name": "Debug Rust Consumer (eap_items)",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/.venv/bin/python",
+            "args": [
+                "${workspaceFolder}/.venv/bin/snuba",
+                "rust-consumer",
+                "--storage=eap_items",
+                "--consumer-group=eap_items_group",
+                "--auto-offset-reset=latest",
+                "--no-strict-offset-reset",
+                "--use-rust-processor",
+                "--enforce-schema"
+            ],
+            "cwd": "${workspaceFolder}",
+            "sourceLanguages": ["rust"]
         }
     ]
 }
