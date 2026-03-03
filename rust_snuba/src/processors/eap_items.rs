@@ -1,5 +1,6 @@
 use anyhow::Context;
 use chrono::DateTime;
+use chrono::Duration;
 use chrono::Utc;
 use prost::Message;
 use seq_macro::seq;
@@ -26,7 +27,18 @@ pub fn process_message(
     let origin_timestamp = trace_item
         .received
         .as_ref()
-        .and_then(|received| DateTime::from_timestamp(received.seconds, 0));
+        .and_then(|received| proto_to_chrono(&received));
+    // If origin timestamp is none, use trace_item.timestamp.
+
+    let stale_timestamp = origin_timestamp
+        .or_else(|| trace_item.timestamp.map(|t| proto_to_chrono(&t)).flatten())
+        .unwrap_or(_metadata.timestamp);
+
+    let tmp = is_stale(stale_timestamp);
+    if is_stale(stale_timestamp) {
+        return Err(anyhow::anyhow!("Message is stale: {}", stale_timestamp));
+    }
+
     let retention_days = Some(enforce_retention(
         Some(trace_item.retention_days as u16),
         &config.env_config,
@@ -77,6 +89,16 @@ pub fn process_message(
     batch.item_type_metrics = Some(item_type_metrics);
     batch.cogs_data = Some(cogs_data);
     Ok(batch)
+}
+
+fn is_stale(timestamp: DateTime<Utc>) -> bool {
+    let threshold = Duration::minutes(30);
+    let diff = Utc::now() - timestamp;
+    diff > threshold
+}
+
+fn proto_to_chrono(ts: &prost_types::Timestamp) -> Option<DateTime<Utc>> {
+    DateTime::from_timestamp(ts.seconds, 0)
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -278,6 +300,10 @@ mod tests {
     use super::*;
 
     fn generate_trace_item(item_id: Uuid) -> TraceItem {
+        generate_trace_item_with_timestamp(item_id, 1745562493)
+    }
+
+    fn generate_trace_item_with_timestamp(item_id: Uuid, seconds: i64) -> TraceItem {
         TraceItem {
             attributes: Default::default(),
             downsampled_retention_days: Default::default(),
@@ -285,15 +311,9 @@ mod tests {
             item_type: TraceItemType::Span.into(),
             organization_id: 1,
             project_id: 1,
-            received: Some(Timestamp {
-                seconds: 1745562493,
-                nanos: 0,
-            }),
+            received: Some(Timestamp { seconds, nanos: 0 }),
             retention_days: 90,
-            timestamp: Some(Timestamp {
-                seconds: 1745562493,
-                nanos: 0,
-            }),
+            timestamp: Some(Timestamp { seconds, nanos: 0 }),
             trace_id: Uuid::new_v4().to_string(),
             client_sample_rate: 1.0,
             server_sample_rate: 1.0,
@@ -489,5 +509,149 @@ mod tests {
                 .unwrap()[0],
             EAPValue::Int(1234567890)
         );
+    }
+
+    #[test]
+    fn test_is_stale_old_timestamp() {
+        let thirty_one_days_ago =
+            DateTime::from_timestamp(Utc::now().timestamp() - 60 * 60 * 24 * 31, 0).unwrap();
+        assert!(is_stale(thirty_one_days_ago));
+    }
+
+    #[test]
+    fn test_is_stale_fresh_timestamp() {
+        let one_day_ago =
+            DateTime::from_timestamp(Utc::now().timestamp() - 60 * 60 * 24, 0).unwrap();
+        assert!(!is_stale(one_day_ago));
+    }
+
+    #[test]
+    fn test_proto_to_chrono_valid() {
+        let ts = prost_types::Timestamp {
+            seconds: 1745562493,
+            nanos: 0,
+        };
+        let result = proto_to_chrono(&ts);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().timestamp(), 1745562493);
+    }
+
+    #[test]
+    fn test_proto_to_chrono_zero() {
+        let ts = prost_types::Timestamp {
+            seconds: 0,
+            nanos: 0,
+        };
+        let result = proto_to_chrono(&ts);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().timestamp(), 0);
+    }
+
+    #[test]
+    fn test_stale_received_rejected() {
+        let thirty_one_days_ago = Utc::now().timestamp() - 60 * 60 * 24 * 31;
+        let item_id = Uuid::new_v4();
+        let trace_item = generate_trace_item_with_timestamp(item_id, thirty_one_days_ago);
+
+        let mut payload = Vec::new();
+        trace_item.encode(&mut payload).unwrap();
+
+        let payload = KafkaPayload::new(None, None, Some(payload));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+
+        let result = process_message(payload, meta, &ProcessorConfig::default());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("stale"));
+    }
+
+    #[test]
+    fn test_stale_timestamp_fallback_rejected() {
+        let thirty_one_days_ago = Utc::now().timestamp() - 60 * 60 * 24 * 31;
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item_with_timestamp(item_id, thirty_one_days_ago);
+        trace_item.received = None;
+
+        let mut payload = Vec::new();
+        trace_item.encode(&mut payload).unwrap();
+
+        let payload = KafkaPayload::new(None, None, Some(payload));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+
+        let result = process_message(payload, meta, &ProcessorConfig::default());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("stale"));
+    }
+
+    #[test]
+    fn test_stale_metadata_fallback_rejected() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.received = None;
+        trace_item.timestamp = None;
+
+        let mut payload = Vec::new();
+        trace_item.encode(&mut payload).unwrap();
+
+        let payload = KafkaPayload::new(None, None, Some(payload));
+        let thirty_one_days_ago =
+            DateTime::from_timestamp(Utc::now().timestamp() - 60 * 60 * 24 * 31, 0).unwrap();
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: thirty_one_days_ago,
+        };
+
+        let result = process_message(payload, meta, &ProcessorConfig::default());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("stale"));
+    }
+
+    #[test]
+    fn test_fresh_message_with_no_received_uses_timestamp() {
+        let now = Utc::now().timestamp();
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item_with_timestamp(item_id, now);
+        trace_item.received = None;
+
+        let mut payload = Vec::new();
+        trace_item.encode(&mut payload).unwrap();
+
+        let payload = KafkaPayload::new(None, None, Some(payload));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+
+        let result = process_message(payload, meta, &ProcessorConfig::default());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_fresh_message_accepted() {
+        let now = Utc::now().timestamp();
+        let item_id = Uuid::new_v4();
+        let trace_item = generate_trace_item_with_timestamp(item_id, now);
+
+        let mut payload = Vec::new();
+        trace_item.encode(&mut payload).unwrap();
+
+        let payload = KafkaPayload::new(None, None, Some(payload));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+
+        let result = process_message(payload, meta, &ProcessorConfig::default());
+        assert!(result.is_ok());
     }
 }
