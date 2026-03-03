@@ -136,7 +136,7 @@ def _record_cogs(
     cluster_name = query_metadata.query_list[0].stats.get("cluster_name", "")
 
     if cluster_name.startswith("snuba-events-analytics-platform"):
-        if random() < (state.get_config("snuba_api_eap_cogs_probability") or 0):
+        if random() < (state.get_config("snuba_api_cogs_probability") or 0):
             record_cogs(
                 resource_id="clickhouse",
                 app_feature=_get_eap_app_feature(request),
