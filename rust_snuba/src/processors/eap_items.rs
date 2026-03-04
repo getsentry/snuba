@@ -16,6 +16,11 @@ use crate::processors::utils::enforce_retention;
 use crate::types::CogsData;
 use crate::types::{InsertBatch, ItemTypeMetrics, KafkaMessageMetadata, TypedInsertBatch};
 
+/// Precision factor for sampling_factor calculations to compensate for floating point errors
+const SAMPLING_FACTOR_PRECISION: f64 = 1e9;
+/// Minimum allowed sampling_factor value
+const MIN_SAMPLING_FACTOR: f64 = 1.0 / SAMPLING_FACTOR_PRECISION;
+
 struct ProcessedItem {
     eap_item: EAPItem,
     origin_timestamp: Option<DateTime<Utc>>,
@@ -26,7 +31,10 @@ struct ProcessedItem {
 fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Result<ProcessedItem> {
     let payload: &[u8] = msg.payload().context("Expected payload")?;
     let trace_item = TraceItem::decode(payload)?;
-    let origin_timestamp = DateTime::from_timestamp(trace_item.received.unwrap().seconds, 0);
+    let origin_timestamp = trace_item
+        .received
+        .as_ref()
+        .and_then(|received| DateTime::from_timestamp(received.seconds, 0));
     let retention_days = Some(enforce_retention(
         Some(trace_item.retention_days as u16),
         &config.env_config,
@@ -175,8 +183,16 @@ impl TryFrom<TraceItem> for EAPItem {
         }
 
         // Lower precision to compensate floating point errors.
+        eap_item.sampling_factor = (eap_item.sampling_factor * SAMPLING_FACTOR_PRECISION).round()
+            / SAMPLING_FACTOR_PRECISION;
+
+        // Ensure sampling_factor has a minimum value to prevent zero
+        if eap_item.sampling_factor < MIN_SAMPLING_FACTOR {
+            eap_item.sampling_factor = MIN_SAMPLING_FACTOR;
+        }
+
+        // Calculate sampling_weight after applying minimum to ensure correct value
         eap_item.sampling_weight = (1.0 / eap_item.sampling_factor).round() as u64;
-        eap_item.sampling_factor = (eap_item.sampling_factor * 1e9).round() / 1e9;
 
         Ok(eap_item)
     }
@@ -1193,5 +1209,31 @@ mod tests {
             .execute()
             .await
             .ok();
+    }
+
+    #[test]
+    fn test_very_low_sample_rates_do_not_result_in_zero_sampling_factor() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+
+        // Set extremely low sample rates that would multiply to a value smaller than 1e-9
+        trace_item.client_sample_rate = 0.00001; // 1e-5
+        trace_item.server_sample_rate = 0.00001; // 1e-5
+                                                 // Combined: 1e-10, which is smaller than MIN_SAMPLING_FACTOR (1e-9)
+
+        let eap_item = EAPItem::try_from(trace_item);
+
+        assert!(eap_item.is_ok());
+        let eap_item = eap_item.unwrap();
+
+        // Verify that sampling_factor is not zero and equals the minimum
+        assert_eq!(eap_item.sampling_factor, MIN_SAMPLING_FACTOR);
+        assert!(eap_item.sampling_factor > 0.0);
+
+        // Verify that sampling_weight is calculated correctly
+        assert_eq!(
+            eap_item.sampling_weight,
+            (1.0 / MIN_SAMPLING_FACTOR).round() as u64
+        );
     }
 }

@@ -58,7 +58,7 @@ def generate_message() -> Iterator[Message[KafkaPayload]]:
         i += 1
 
 
-@patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
+@patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
 def test_multiple_batches_strategies(mock_execute: Mock, mock_num_mutations: Mock) -> None:
@@ -84,7 +84,7 @@ def test_multiple_batches_strategies(mock_execute: Mock, mock_num_mutations: Moc
     assert commit_step.submit.call_count == 2
 
 
-@patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
+@patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
 def test_clickhouse_settings(mock_execute: Mock, mock_num_mutations: Mock) -> None:
@@ -124,7 +124,7 @@ def test_clickhouse_settings(mock_execute: Mock, mock_num_mutations: Mock) -> No
     assert commit_step.submit.call_count == 2
 
 
-@patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
+@patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
 def test_single_batch(mock_execute: Mock, mock_num_mutations: Mock) -> None:
@@ -159,16 +159,16 @@ def test_single_batch(mock_execute: Mock, mock_num_mutations: Mock) -> None:
     assert commit_step.submit.call_count == 1
 
 
-@patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=10)
+@patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=100)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
 def test_too_many_mutations(mock_execute: Mock, mock_num_mutations: Mock) -> None:
     """
     Before we execute the DELETE FROM query, we check to see how many
-    ongoing mutations there are.If there are more ongoing mutations than
-    the max allows, we raise MessageRejected and back pressure is applied.
+    parts are currently mutating. If there are more than the max allows,
+    we raise MessageRejected and back pressure is applied.
 
-    The max is 5 (the default) and our mocked ongoing mutations is 10.
+    The max is 20 (the default) and our mocked parts mutating is 100.
     """
     commit_step = Mock()
     metrics = Mock()
@@ -220,7 +220,7 @@ def _make_single_message(
     )
 
 
-@patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
+@patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @patch.object(
     FormatQuery,
@@ -274,7 +274,7 @@ def test_split_by_partition_enabled(mock_execute: Mock, mock_num_mutations: Mock
     assert len(increment_calls) == 3
 
 
-@patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
+@patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
 def test_split_by_partition_disabled(mock_execute: Mock, mock_num_mutations: Mock) -> None:
@@ -303,7 +303,7 @@ def test_split_by_partition_disabled(mock_execute: Mock, mock_num_mutations: Moc
     assert commit_step.submit.call_count == 1
 
 
-@patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
+@patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
 def test_split_by_partition_redis_tracking(mock_execute: Mock, mock_num_mutations: Mock) -> None:
@@ -393,7 +393,7 @@ def test_split_by_partition_redis_tracking(mock_execute: Mock, mock_num_mutation
     assert commit_step.submit.call_count == 1
 
 
-@patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
+@patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
 def test_split_by_partition_fallback(mock_execute: Mock, mock_num_mutations: Mock) -> None:
@@ -435,7 +435,7 @@ def test_split_by_partition_fallback(mock_execute: Mock, mock_num_mutations: Moc
     assert commit_step.submit.call_count == 1
 
 
-@patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
+@patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
 def test_partition_date_filtering(mock_execute: Mock, mock_num_mutations: Mock) -> None:
