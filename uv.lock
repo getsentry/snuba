@@ -587,10 +587,10 @@ wheels = [
 
 [[package]]
 name = "pip"
-version = "23.3.2"
+version = "26.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/pip-23.3.2-py3-none-any.whl", hash = "sha256:5052d7889c1f9d05224cd41741acb7c5d6fa735ab34e339624a614eaaa7e7d76" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/pip-26.0-py3-none-any.whl", hash = "sha256:98436feffb9e31bc9339cf369fd55d3331b1580b6a6f1173bacacddcf9c34754" },
 ]
 
 [[package]]
