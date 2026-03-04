@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import threading
 from typing import Callable, Mapping, Optional, Sequence, Union
 
@@ -7,6 +8,8 @@ from datadog import DogStatsd
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.types import Tags
+
+logger = logging.getLogger(__name__)
 
 
 class DatadogMetricsBackend(MetricsBackend):
@@ -33,11 +36,24 @@ class DatadogMetricsBackend(MetricsBackend):
         self.__thread_state = threading.local()
 
     @property
-    def __client(self) -> DogStatsd:
+    def __client(self) -> Optional[DogStatsd]:
         try:
             client = self.__thread_state.client
         except AttributeError:
-            client = self.__thread_state.client = self.__client_factory()
+            try:
+                client = self.__thread_state.client = self.__client_factory()
+            except Exception as e:
+                # During thread cleanup (e.g., ThreadPoolExecutor shutdown), the client
+                # factory may fail or set an exception while returning a value, causing
+                # a SystemError. We catch this and log it, returning None to allow
+                # metrics calls to fail silently rather than crashing the application.
+                logger.warning(
+                    "Failed to create DogStatsd client in thread %s: %s",
+                    threading.current_thread().name,
+                    e,
+                    exc_info=True,
+                )
+                return None
         return client
 
     def __normalize_tags(self, tags: Optional[Tags]) -> Optional[Sequence[str]]:
@@ -53,7 +69,10 @@ class DatadogMetricsBackend(MetricsBackend):
         tags: Optional[Tags] = None,
         unit: Optional[str] = None,
     ) -> None:
-        self.__client.increment(
+        client = self.__client
+        if client is None:
+            return
+        client.increment(
             name,
             value,
             tags=self.__normalize_tags(tags),
@@ -67,7 +86,10 @@ class DatadogMetricsBackend(MetricsBackend):
         tags: Optional[Tags] = None,
         unit: Optional[str] = None,
     ) -> None:
-        self.__client.gauge(
+        client = self.__client
+        if client is None:
+            return
+        client.gauge(
             name,
             value,
             tags=self.__normalize_tags(tags),
@@ -81,7 +103,10 @@ class DatadogMetricsBackend(MetricsBackend):
         tags: Optional[Tags] = None,
         unit: Optional[str] = None,
     ) -> None:
-        self.__client.timing(
+        client = self.__client
+        if client is None:
+            return
+        client.timing(
             name,
             value,
             tags=self.__normalize_tags(tags),
@@ -95,7 +120,10 @@ class DatadogMetricsBackend(MetricsBackend):
         tags: Optional[Tags] = None,
         unit: Optional[str] = None,
     ) -> None:
-        self.__client.distribution(
+        client = self.__client
+        if client is None:
+            return
+        client.distribution(
             name,
             value,
             tags=self.__normalize_tags(tags),
@@ -110,7 +138,10 @@ class DatadogMetricsBackend(MetricsBackend):
         priority: str,
         tags: Optional[Tags] = None,
     ) -> None:
-        self.__client.event(
+        client = self.__client
+        if client is None:
+            return
+        client.event(
             title=title,
             text=text,
             alert_type=alert_type,
