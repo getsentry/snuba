@@ -16,6 +16,8 @@ ACCEPTABLE_CLICKHOUSE_ERROR_CODES = {
     *CLICKHOUSE_TYPING_ERROR_CODES,
     # queries that can never return the amount of data requested by the user are not an internal error
     ErrorCodes.MEMORY_LIMIT_EXCEEDED,
+    # query exceeded the max_bytes_to_read limit set by an allocation policy
+    ErrorCodes.TOO_MANY_BYTES,
 }
 
 NON_RETRYABLE_CLICKHOUSE_ERROR_CODES = {

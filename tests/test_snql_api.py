@@ -1329,12 +1329,9 @@ class TestSnQLApi(BaseApiTest):
                     }
                 ),
             )
-            assert response.status_code == 429
-
-            assert (
-                response.json["error"]["message"]
-                == "Query scanned more than the allocated amount of bytes"
-            )
+            assert response.status_code == 400
+            assert response.json["error"]["type"] == "clickhouse"
+            assert response.json["error"]["code"] == 307
 
             expected_quota_allowance = {
                 "details": {
@@ -1373,7 +1370,7 @@ class TestSnQLApi(BaseApiTest):
                 },
             }
 
-            assert response.json["quota_allowance"] == expected_quota_allowance
+            assert response.json["stats"]["quota_allowance"] == expected_quota_allowance
 
     def test_allocation_policy_violation(self) -> None:
         with patch(
