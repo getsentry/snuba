@@ -203,6 +203,25 @@ FROM (
     )
 
 
+def _num_parts_currently_mutating(cluster: ClickhouseCluster) -> int:
+    """
+    Returns the number of parts currently being mutated across the cluster.
+    Uses the PartMutation metric from system.metrics, which directly correlates
+    with CPU usage from ongoing mutations.
+    """
+    if cluster.is_single_node():
+        query = "SELECT value FROM system.metrics WHERE metric = 'PartMutation'"
+    else:
+        query = f"""
+SELECT max(value)
+FROM clusterAllReplicas('{cluster.get_clickhouse_cluster_name()}', 'system', metrics)
+WHERE metric = 'PartMutation'
+"""
+    return int(
+        cluster.get_query_connection(ClickhouseClientSettings.QUERY).execute(query).results[0][0]
+    )
+
+
 def deletes_are_enabled() -> bool:
     return bool(get_config("storage_deletes_enabled", 1))
 

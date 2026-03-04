@@ -27,6 +27,7 @@ from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.lw_deletions.batching import BatchStepCustom, NoBatchStep, ValuesBatch
 from snuba.lw_deletions.formatters import Formatter
+from snuba.lw_deletions.off_peak import OffPeakProcessingStrategy
 from snuba.lw_deletions.types import ConditionsBag
 from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.conditions import combine_and_conditions
@@ -42,7 +43,7 @@ from snuba.web.constants import LW_DELETE_NON_RETRYABLE_CLICKHOUSE_ERROR_CODES
 from snuba.web.delete_query import (
     TooManyOngoingMutationsError,
     _execute_query,
-    _num_ongoing_mutations,
+    _num_parts_currently_mutating,
 )
 
 TPayload = TypeVar("TPayload")
@@ -310,19 +311,19 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
                 "ongoing mutations check is throttled to once per second"
             )
         start = time.time()
-        ongoing_mutations = _num_ongoing_mutations(self.__storage.get_cluster(), self.__tables)
+        parts_mutating = _num_parts_currently_mutating(self.__storage.get_cluster())
         self.__last_ongoing_mutations_check = time.time()
-        max_ongoing_mutations = typing.cast(
+        max_parts_mutating = typing.cast(
             int,
             get_int_config(
-                "max_ongoing_mutations_for_delete",
-                default=settings.MAX_ONGOING_MUTATIONS_FOR_DELETE,
+                "max_parts_mutating_for_delete",
+                default=settings.MAX_PARTS_MUTATING_FOR_DELETE,
             ),
         )
         self.__metrics.timing("ongoing_mutations_query_ms", (time.time() - start) * 1000)
-        if ongoing_mutations > max_ongoing_mutations:
+        if parts_mutating > max_parts_mutating:
             raise TooManyOngoingMutationsError(
-                f"{ongoing_mutations} mutations for {self.__tables} table(s) is above max ongoing mutations: {max_ongoing_mutations} "
+                f"{parts_mutating} parts mutating is above max: {max_parts_mutating} "
             )
 
     def close(self) -> None:
@@ -374,11 +375,12 @@ class LWDeletionsConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]
             CommitOffsets(commit), self.storage, self.formatter, self.metrics
         )
         if self.no_batch:
-            return NoBatchStep(next_step=format_query)
+            step: ProcessingStrategy[KafkaPayload] = NoBatchStep(next_step=format_query)
         else:
-            return BatchStepCustom(
+            step = BatchStepCustom(
                 max_batch_size=self.max_batch_size,
                 max_batch_time=(self.max_batch_time_ms / 1000),
                 next_step=format_query,
                 increment_by=increment_by,
             )
+        return OffPeakProcessingStrategy(next_step=step, metrics=self.metrics)
