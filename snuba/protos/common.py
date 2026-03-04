@@ -7,9 +7,11 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import arrayElement, column, literal
 from snuba.query.expressions import (
+    Argument,
     Expression,
     FunctionCall,
     JsonPath,
+    Lambda,
     SubscriptableReference,
 )
 
@@ -152,22 +154,6 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
             alias=alias,
         )
 
-    if attr_key.type == AttributeKey.Type.TYPE_ARRAY:
-        # Array values are stored as tagged variants in the JSON column.
-        # Return the raw JSON string and let the application handle typing.
-        return FunctionCall(
-            alias=alias,
-            function_name="toJSONString",
-            parameters=(
-                JsonPath(
-                    alias=None,
-                    base=column("attributes_array"),
-                    path=attr_key.name,
-                    return_type="Array(JSON)",
-                ),
-            ),
-        )
-
     if attr_key.type in PROTO_TYPE_TO_ATTRIBUTE_COLUMN:
         if attr_key.name in ATTRIBUTES_TO_COALESCE:
             expressions = [
@@ -190,6 +176,49 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
                 attr_key.type,
                 alias,
             )
+
+    if attr_key.type == AttributeKey.Type.TYPE_ARRAY:
+        alias = _build_label_mapping_key(attr_key)
+        # Array values are stored as tagged variants (e.g. {"String": "alice"},
+        # {"Int": "123"}) in the JSON column. Cast to Array(JSON), then extract
+        # the value from whichever variant tag is present. We coalesce across
+        # all supported types, converting non-string types via toString so the
+        # result is always a string array.
+        x = Argument(None, "x")
+        return FunctionCall(
+            alias=alias,
+            function_name="arrayMap",
+            parameters=(
+                Lambda(
+                    alias=None,
+                    parameters=("x",),
+                    transformation=FunctionCall(
+                        alias=None,
+                        function_name="coalesce",
+                        parameters=(
+                            JsonPath(None, x, "String", "Nullable(String)"),
+                            FunctionCall(
+                                None,
+                                "toString",
+                                (JsonPath(None, x, "Int", "Nullable(Int64)"),),
+                            ),
+                            FunctionCall(
+                                None,
+                                "toString",
+                                (JsonPath(None, x, "Double", "Nullable(Float64)"),),
+                            ),
+                            JsonPath(None, x, "Bool", "Nullable(String)"),
+                        ),
+                    ),
+                ),
+                JsonPath(
+                    alias=None,
+                    base=column("attributes_array"),
+                    path=attr_key.name,
+                    return_type="Array(JSON)",
+                ),
+            ),
+        )
 
     raise MalformedAttributeException(
         f"Attribute {attr_key.name} has an unknown type: {AttributeKey.Type.Name(attr_key.type)}"
