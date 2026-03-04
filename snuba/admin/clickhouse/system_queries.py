@@ -144,6 +144,18 @@ ALTER_QUERY_RE = re.compile(
     re.IGNORECASE + re.VERBOSE,
 )
 
+DROP_TABLE_QUERY_RE = re.compile(
+    r"""
+        ^
+        (DROP\sTABLE)
+        \s
+        [\w\s,=()*+<>'%"\-\/:\.`]+
+        ;? # Optional semicolon
+        $
+    """,
+    re.IGNORECASE + re.VERBOSE,
+)
+
 
 def is_query_using_only_system_tables(
     clickhouse_host: str,
@@ -151,15 +163,15 @@ def is_query_using_only_system_tables(
     storage_name: str,
     sql_query: str,
     clusterless_mode: bool,
+    sudo_mode: bool = False,
 ) -> bool:
     """
     Run the EXPLAIN QUERY TREE on the given sql_query and check that the only tables
     in the query are system tables.
     """
     sql_query = sql_query.strip().rstrip(";") if sql_query.endswith(";") else sql_query
-    explain_query_tree_query = (
-        f"EXPLAIN QUERY TREE {sql_query} SETTINGS allow_experimental_analyzer = 1"
-    )
+    settings_clause = "" if sudo_mode else " SETTINGS allow_experimental_analyzer = 1"
+    explain_query_tree_query = f"EXPLAIN QUERY TREE {sql_query}{settings_clause}"
     explain_query_tree_result = _run_sql_query_on_host(
         clickhouse_host,
         clickhouse_port,
@@ -194,6 +206,7 @@ def is_valid_system_query(
     storage_name: str,
     sql_query: str,
     clusterless_mode: bool,
+    sudo_mode: bool = False,
 ) -> bool:
     """
     Validation based on Query Tree and AST to ensure the query is a valid select query.
@@ -209,7 +222,7 @@ def is_valid_system_query(
             return False
 
     return is_query_using_only_system_tables(
-        clickhouse_host, clickhouse_port, storage_name, sql_query, clusterless_mode
+        clickhouse_host, clickhouse_port, storage_name, sql_query, clusterless_mode, sudo_mode
     )
 
 
@@ -261,6 +274,15 @@ def is_query_alter(sql_query: str) -> bool:
     return True if match else False
 
 
+def is_query_drop(sql_query: str) -> bool:
+    """
+    Validates whether we are running something like DROP TABLE ...
+    """
+    sql_query = " ".join(sql_query.split())
+    match = DROP_TABLE_QUERY_RE.match(sql_query)
+    return True if match else False
+
+
 def validate_query(
     clickhouse_host: str,
     clickhouse_port: int,
@@ -276,11 +298,17 @@ def validate_query(
         is_system_command(system_query_sql)
         or is_query_alter(system_query_sql)
         or is_query_optimize(system_query_sql)
+        or is_query_drop(system_query_sql)
     ):
         return
 
     if is_valid_system_query(
-        clickhouse_host, clickhouse_port, storage_name, system_query_sql, clusterless_mode
+        clickhouse_host,
+        clickhouse_port,
+        storage_name,
+        system_query_sql,
+        clusterless_mode,
+        sudo_mode,
     ):
         if sudo_mode:
             raise InvalidCustomQuery("Query is valid but sudo is not allowed")

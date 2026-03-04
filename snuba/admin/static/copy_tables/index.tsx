@@ -3,6 +3,7 @@ import Client from "SnubaAdmin/api_client";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
 import { CustomSelect } from "SnubaAdmin/select";
 import { getHostsForStorage, getErrorDomElement } from "SnubaAdmin/utils/clickhouse_node_utils";
+import { COLORS } from "SnubaAdmin/theme";
 
 import {
   ClickhouseNodeData,
@@ -18,7 +19,6 @@ function CopyTables(props: {
   const [nodeData, setNodeData] = useState<ClickhouseNodeData[]>([]);
   const [copyTableHosts, setCopyTableHosts] = useState<CopyTableHostsState>({
     sourceHost: {},
-    targetHost: {}
   });
   const [copyTableResult, setCopyTableResult] = useState<CopyTableResult | null>(null);
   const [queryError, setQueryError] = useState<Error | null>(null);
@@ -35,24 +35,8 @@ function CopyTables(props: {
       // clear old host port
       delete copyTableHosts.sourceHost.host
       delete copyTableHosts.sourceHost.port
-      delete copyTableHosts.targetHost.host
-      delete copyTableHosts.targetHost.port
 
       copyTableHosts.sourceHost.storage = storage
-      copyTableHosts.targetHost.storage = storage
-
-      return {
-        ...copyTableHosts,
-      };
-    });
-  }
-
-  function selectTargetHost(value: string) {
-    setCopyTableHosts((copyTableHosts) => {
-
-      copyTableHosts.targetHost.host = value
-      copyTableHosts.targetHost.port = 9000
-
 
       return {
         ...copyTableHosts,
@@ -67,25 +51,27 @@ function CopyTables(props: {
       copyTableHosts.sourceHost.host = host
       copyTableHosts.sourceHost.port = parseInt(portAsString, 10)
 
-
       return {
         ...copyTableHosts,
-
       };
     });
   }
 
+  const [targetHostInput, setTargetHostInput] = useState("");
+
   function executeCopyTableQuery(shouldExecute: boolean) {
-    const query = {
-      storage: copyTableHosts.sourceHost.storage,
-      source_host: copyTableHosts.sourceHost.host,
-      source_port: copyTableHosts.sourceHost.port,
-      target_host: copyTableHosts.targetHost.host,
-      target_port: copyTableHosts.targetHost.port,
+    const query: CopyTableRequest = {
+      storage: copyTableHosts.sourceHost.storage!,
+      source_host: copyTableHosts.sourceHost.host!,
+      source_port: copyTableHosts.sourceHost.port!,
       dry_run: !shouldExecute,
     }
+    const trimmed = targetHostInput.trim();
+    if (trimmed) {
+      query.target_host = trimmed;
+    }
     return props.api
-      .executeCopyTable(query as CopyTableRequest)
+      .executeCopyTable(query)
       .then((result) => {
         setQueryError(null);
         setCopyTableResult(result);
@@ -99,9 +85,9 @@ function CopyTables(props: {
   return (
     <div>
       <form>
-        <div style={sectionStyle}>
-          <div>
-            <h3>Source Host</h3>
+        <div style={formRowStyle}>
+          <div style={sectionContainerStyle}>
+            <h3>Select source host:</h3>
             <div style={hostSelectStyle}>
               <CustomSelect
                 value={copyTableHosts.sourceHost.storage || ""}
@@ -120,98 +106,193 @@ function CopyTables(props: {
               />
             </div>
           </div>
-          <div>
-            <h3>Target Host</h3>
-            <div style={hostSelectStyle}>
+          <div style={sectionContainerStyle}>
+            <h3>Target host (optional):</h3>
+            <p style={targetHelpTextStyle}>
+              If specified, CREATE statements will be run on this host instead of the source host.
+            </p>
+            <div style={{ marginTop: 10 }}>
               <input
-                style={inputStyle}
-                id="clusterless"
-                value={copyTableHosts.targetHost.host || ""}
-                onChange={(evt) => selectTargetHost(evt.target.value)}
-                name="target-host"
-                placeholder="target host"
                 type="text"
+                style={textInputStyle}
+                placeholder="e.g. my-clickhouse-node.example.com"
+                value={targetHostInput}
+                onChange={(e) => setTargetHostInput(e.target.value)}
               />
             </div>
           </div>
         </div>
+        <div style={buttonRowStyle}>
+          <ExecuteButton
+            label=" DRY RUN"
+            onError={handleQueryError}
+            onClick={() => executeCopyTableQuery(false)}
+            disabled={copyTableHosts.sourceHost.host ? false : true}
+          />
+          <ExecuteButton
+            label=" ‼️ COPY TABLES FOR CLUSTER ‼️ "
+            onError={handleQueryError}
+            onClick={() => executeCopyTableQuery(true)}
+            disabled={copyTableHosts.sourceHost.host ? false : true}
+          />
+        </div>
       </form >
 
-      <div style={sectionStyle}>
-        <div>
-          <div style={hostSelectStyle}>
-            <ExecuteButton
-              label=" DRY RUN"
-              onError={handleQueryError}
-              onClick={() => executeCopyTableQuery(false)}
-              disabled={copyTableHosts.targetHost.host ? false : true}
-            />
-            <ExecuteButton
-              label=" ‼️ COPY TABLE ‼️ "
-              onError={handleQueryError}
-              onClick={() => executeCopyTableQuery(true)}
-              disabled={copyTableHosts.targetHost.host ? false : true}
-            />
-          </div>
-          <div>
-            {getErrorDomElement(queryError, collapseOpened, setCollapseOpened)}
-          </div>
-          {copyTableResult && (
-            <div style={copyTableResultStyle}>
-              <h2>{copyTableResult.dry_run ? "Dry Ran with" : "Executed with"}</h2>
-              <div>
-                <p>Source Host: <code>{copyTableResult.source_host}</code></p>
-                <p>Target Host: <code>{copyTableResult.target_host}</code></p>
-                <p>Cluster Name: <code>{copyTableResult.cluster_name}</code></p>
-              </div>
-              <p>Tables:</p>
-              <div style={tableListStyle}>
-                {copyTableResult.tables.split(',')?.map((val, inx) => (
-                  <div key={inx}><code>{val}</code></div>
-                ))}
-              </div>
+      <div>
+        {getErrorDomElement(queryError, collapseOpened, setCollapseOpened)}
+      </div>
+
+      {copyTableResult && (
+        <div style={copyTableResultStyle}>
+          <h4>
+            {copyTableResult.dry_run ? "DRY RUN" : <>Executed <code>CREATE TABLE</code></>}
+            {" "}with <strong>Source Host:</strong> <code>{copyTableResult.source_host}</code>
+            {copyTableResult.cluster_name && (
+              <> and <strong>Cluster Name:</strong> <code>{copyTableResult.cluster_name}</code></>
+            )}
+          </h4>
+
+          {(copyTableResult.incomplete_hosts || copyTableResult.verified) && (
+            <div style={resultSectionStyle}>
+              <h3>Table Verification</h3>
+              {(() => {
+                const verifiedHosts = copyTableResult.verified ?? 0;
+                const incompleteHosts = Object.keys(copyTableResult.incomplete_hosts ?? {}).length;
+                const totalHosts = verifiedHosts + incompleteHosts;
+                const allVerified = incompleteHosts === 0;
+
+                return (
+                  <>
+                    <p style={allVerified ? successStyle : missingTablesStyle}>
+                      <strong>{verifiedHosts} of {totalHosts} hosts verified</strong>
+                      {allVerified ? " ✓" : ""}
+                    </p>
+                    {incompleteHosts > 0 && (
+                      <div style={unverifiedHostsContainerStyle}>
+                        {Object.entries(copyTableResult.incomplete_hosts ?? {}).map(([host, missingTables]) => (
+                          <div key={host} style={hostItemStyle}>
+                            <p><strong>Host:</strong> <code>{host}</code></p>
+                            <p style={missingTablesStyle}>
+                              <strong>Missing Tables:</strong> <code>{missingTables}</code>
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           )}
+
+          <div style={resultSectionStyle}>
+            <h3>Tables Created</h3>
+            <div style={tableListStyle}>
+              {copyTableResult.tables.split(',')?.map((val, inx) => (
+                <div key={inx}><code>{val}</code></div>
+              ))}
+            </div>
+          </div>
+
+
         </div>
-      </div>
-    </div >
+      )}
+    </div>
   );
 }
 
 
-const sectionStyle = {
+const formRowStyle = {
   display: "flex",
-  marginTop: 8,
+  alignItems: 'flex-start',
+  gap: 20,
+  marginBottom: 20,
 };
 
 const hostSelectStyle = {
-  width: '30em',
-  height: '4em',
-  margin: '8px 0px',
+  width: '100%',
+  minWidth: '25em',
   display: 'flex',
   flexDirection: 'column' as const,
-  justifyContent: 'space-between',
-  marginRight: 40,
+  gap: 10,
+  marginTop: 10,
 }
 
-const inputStyle = {
-  fontSize: 16,
-  minHeight: '2.25rem',
+const buttonRowStyle = {
+  display: 'flex',
+  gap: 10,
+  marginTop: 10,
+}
+
+const targetHelpTextStyle = {
+  fontSize: '0.85em',
+  color: COLORS.TEXT_DEFAULT,
+  marginTop: 4,
+  marginBottom: 0,
+}
+
+const textInputStyle = {
+  width: '100%',
+  padding: '6px 10px',
+  border: `1px solid ${COLORS.BORDER_GRAY}`,
+  borderRadius: 4,
+  fontSize: '14px',
+  boxSizing: 'border-box' as const,
 }
 
 const tableListStyle = {
+  marginTop: 10,
   marginLeft: 5,
-  overflowY: "scroll" as const,
+  maxHeight: '200px',
+  overflowY: "auto" as const,
 }
 
 const copyTableResultStyle = {
   display: 'flex',
-  justifyContent: 'space-between',
+  flexDirection: 'column' as const,
   width: '60em',
-  height: '40em',
+  maxHeight: '60em',
   marginRight: 40,
   marginTop: 20,
   overflowY: "scroll" as const,
+  padding: 15,
+  border: `1px solid ${COLORS.BORDER_GRAY_LIGHT}`,
+  borderRadius: 8,
+  backgroundColor: COLORS.BG_GRAY_LIGHTER,
+}
+
+const sectionContainerStyle = {
+  padding: 15,
+  backgroundColor: COLORS.WHITE,
+  border: `1px solid ${COLORS.BORDER_GRAY}`,
+  borderRadius: 5,
+  marginTop: 0,
+}
+
+const resultSectionStyle = {
+  ...sectionContainerStyle,
+  marginTop: 20,
+}
+
+const hostItemStyle = {
+  marginBottom: 15,
+  padding: 10,
+  backgroundColor: COLORS.BG_GRAY_LIGHT,
+  borderRadius: 4,
+}
+
+const missingTablesStyle = {
+  color: COLORS.ERROR,
+  marginTop: 5,
+}
+
+const successStyle = {
+  color: COLORS.SUCCESS,
+  marginTop: 5,
+}
+
+const unverifiedHostsContainerStyle = {
+  marginTop: 15,
 }
 
 export default CopyTables;

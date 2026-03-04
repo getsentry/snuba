@@ -51,7 +51,7 @@ from snuba.admin.user import AdminUser
         "SELECT count() FROM merge('system', '.*settings')",
     ],
 )
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_is_valid_system_query(sql_query: str) -> None:
     assert is_valid_system_query(
         settings.CLUSTERS[0]["host"], int(settings.CLUSTERS[0]["port"]), "errors", sql_query, False
@@ -90,7 +90,7 @@ def test_is_valid_system_query(sql_query: str) -> None:
         """,
     ],
 )
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_invalid_system_query(sql_query: str) -> None:
     with pytest.raises(Exception):
         is_valid_system_query(
@@ -118,13 +118,20 @@ def test_invalid_system_query(sql_query: str) -> None:
         ("OPTIMIZE TABLE eap_spans_local", True),
         ("optimize table eap_spans_local", True),
         ("optimize   TABLE eap_spans_local", True),
+        ("DROP TABLE eap_spans_local", True),
+        ("drop table eap_spans_local", True),
+        ("DROP TABLE IF EXISTS eap_spans_local", True),
+        (
+            "DROP TABLE IF EXISTS default.eap_items_1_dist ON CLUSTER 'snuba-events-analytics-platform' SYNC;",
+            True,
+        ),
         (
             "SYSTEM DROP REPLICA 'snuba-events-analytics-platform-2-2' FROM ZKPATH '/clickhouse/tables/events_analytics_platform/2/default/eap_spans_2_local'",
             True,
         ),
     ],
 )
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_sudo_queries(sudo_query: str, expected: bool) -> None:
     if expected:
         validate_query(
@@ -184,7 +191,7 @@ def test_sudo_queries(sudo_query: str, expected: bool) -> None:
         ),
     ],
 )
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_run_sudo_queries(
     query: str,
     roles: Sequence[Role],
@@ -215,3 +222,55 @@ def test_run_sudo_queries(
             run_query()
     else:
         run_query()
+
+
+@pytest.mark.parametrize(
+    "sql_query, sudo_mode",
+    [
+        ("SELECT * FROM system.clusters;", True),
+        ("SELECT * FROM system.clusters;", False),
+    ],
+)
+@pytest.mark.events_db
+def test_sudo_mode_skips_experimental_analyzer(sql_query: str, sudo_mode: bool) -> None:
+    """
+    Test that when sudo_mode=True, the experimental analyzer setting is not
+    appended to the EXPLAIN QUERY TREE command.
+    """
+    from unittest.mock import patch
+
+    with patch("snuba.admin.clickhouse.system_queries._run_sql_query_on_host") as mock_run:
+        # Mock the response to simulate successful validation
+        mock_result = type("MockResult", (), {"results": []})()
+        mock_run.return_value = mock_result
+
+        try:
+            is_valid_system_query(
+                settings.CLUSTERS[0]["host"],
+                int(settings.CLUSTERS[0]["port"]),
+                "errors",
+                sql_query,
+                False,
+                sudo_mode,
+            )
+        except Exception:
+            pass  # We don't care if validation fails, we just want to check the query
+
+        # Check that the EXPLAIN QUERY TREE was called
+        calls = [call for call in mock_run.call_args_list if "EXPLAIN QUERY TREE" in str(call)]
+        assert len(calls) > 0, "Expected EXPLAIN QUERY TREE to be called"
+
+        # Get the explain query from the call - it's the 4th positional argument (index 3)
+        # call signature: _run_sql_query_on_host(host, port, storage, sql, sudo, clusterless)
+        explain_query = calls[0][0][3]  # Fourth argument is the SQL query
+
+        if sudo_mode:
+            # Should NOT contain the experimental analyzer setting
+            assert "allow_experimental_analyzer" not in explain_query, (
+                f"Sudo mode should not use experimental analyzer, but got: {explain_query}"
+            )
+        else:
+            # Should contain the experimental analyzer setting
+            assert "allow_experimental_analyzer" in explain_query, (
+                f"Non-sudo mode should use experimental analyzer, but got: {explain_query}"
+            )

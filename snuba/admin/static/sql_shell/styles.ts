@@ -154,10 +154,16 @@ export const useShellStyles = createStyles((theme) => ({
   },
   commandText: {
     color: "#e6edf3",
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+    overflowWrap: "break-word",
   },
   infoText: {
     color: "#58a6ff",
     padding: "4px 0",
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+    overflowWrap: "break-word",
   },
   errorText: {
     color: "#f85149",
@@ -166,6 +172,9 @@ export const useShellStyles = createStyles((theme) => ({
     borderRadius: "6px",
     borderLeft: "3px solid #f85149",
     marginBottom: "8px",
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+    overflowWrap: "break-word",
   },
   resultBox: {
     backgroundColor: "rgba(13, 17, 23, 0.6)",
@@ -269,6 +278,9 @@ export const useShellStyles = createStyles((theme) => ({
     marginLeft: "16px",
     fontSize: "12px",
     lineHeight: 1.5,
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+    overflowWrap: "break-word",
   },
   executingIndicator: {
     color: "#ffa657",
@@ -361,10 +373,9 @@ export const useShellStyles = createStyles((theme) => ({
       padding: "4px 10px",
       borderBottom: "1px solid #21262d",
       color: "#e6edf3",
-      maxWidth: "300px",
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap",
+      whiteSpace: "pre-wrap",
+      wordBreak: "break-word",
+      overflowWrap: "break-word",
     },
     "& tr:hover td": {
       backgroundColor: "rgba(88, 166, 255, 0.05)",
@@ -376,13 +387,6 @@ export const useShellStyles = createStyles((theme) => ({
   nullValue: {
     color: "#6e7681",
     fontStyle: "italic",
-  },
-  truncatedNote: {
-    color: "#6e7681",
-    fontSize: "10px",
-    marginTop: "6px",
-    paddingTop: "6px",
-    borderTop: "1px solid #21262d",
   },
   emptyResult: {
     color: "#6e7681",
@@ -408,5 +412,65 @@ export const useShellStyles = createStyles((theme) => ({
     fontSize: "11px",
     lineHeight: 1.4,
     fontFamily: "inherit",
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+    overflowWrap: "break-word",
+  },
+  // JSON output format styles
+  jsonOutput: {
+    color: "#e6edf3",
+    fontSize: "11px",
+    lineHeight: 1.5,
+    fontFamily: "inherit",
+    margin: 0,
+    padding: "8px",
+    backgroundColor: "rgba(13, 17, 23, 0.4)",
+    borderRadius: "4px",
+    overflow: "auto",
+    maxHeight: "400px",
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+  },
+  // CSV output format styles
+  csvOutput: {
+    color: "#e6edf3",
+    fontSize: "11px",
+    lineHeight: 1.5,
+    fontFamily: "inherit",
+    margin: 0,
+    padding: "8px",
+    backgroundColor: "rgba(13, 17, 23, 0.4)",
+    borderRadius: "4px",
+    overflow: "auto",
+    maxHeight: "400px",
+    whiteSpace: "pre",
+  },
+  // Vertical output format styles
+  verticalOutput: {
+    fontSize: "11px",
+    lineHeight: 1.5,
+    fontFamily: "inherit",
+  },
+  verticalRow: {
+    marginBottom: "12px",
+  },
+  verticalRowHeader: {
+    color: "#ffa657",
+    marginBottom: "4px",
+    fontWeight: 500,
+  },
+  verticalField: {
+    display: "flex",
+    color: "#e6edf3",
+    lineHeight: 1.6,
+  },
+  verticalFieldName: {
+    color: "#58a6ff",
+    whiteSpace: "pre",
+    minWidth: "120px",
+  },
+  verticalFieldValue: {
+    color: "#e6edf3",
+    wordBreak: "break-word",
   },
 }));

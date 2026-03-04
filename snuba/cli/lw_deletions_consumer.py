@@ -86,6 +86,12 @@ logger = logging.getLogger(__name__)
     default=None,
     help="Kafka group instance id. passing a value here will run kafka with static membership.",
 )
+@click.option(
+    "--no-batch",
+    is_flag=True,
+    default=False,
+    help="Disable batching. Each delete message is processed individually.",
+)
 def lw_deletions_consumer(
     *,
     consumer_group: str,
@@ -99,6 +105,7 @@ def lw_deletions_consumer(
     queued_min_messages: int,
     log_level: str,
     group_instance_id: Optional[str],
+    no_batch: bool,
 ) -> None:
     setup_logging(log_level)
     setup_sentry()
@@ -172,6 +179,7 @@ def lw_deletions_consumer(
             storage=writable_storage,
             formatter=formatter,
             metrics=metrics,
+            no_batch=no_batch,
         )
 
         consumer = consumer_builder.build_lw_deletions_consumer(strategy_factory)

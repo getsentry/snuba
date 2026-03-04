@@ -1,7 +1,6 @@
 import random
 import re
 from datetime import datetime, timedelta
-from math import inf
 from typing import Any
 from unittest.mock import MagicMock, call, patch
 
@@ -54,7 +53,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     OrFilter,
     TraceItemFilter,
 )
-from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
+from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -3302,13 +3301,15 @@ class TestTraceItemTable(BaseApiTest):
             ],
         )
         response = EndpointTraceItemTable().execute(message)
+        # With NULL-safe division, both NULL denominator and division by zero return the default (0.0)
+        # Results ordered ascending: 0.0 (null denom), 0.0 (div by zero), 5.0 (10/2)
         assert response.column_values == [
             TraceItemColumnValues(
                 attribute_name="myformula",
                 results=[
                     AttributeValue(val_double=0.0),
+                    AttributeValue(val_double=0.0),
                     AttributeValue(val_double=5),
-                    AttributeValue(val_double=inf),
                 ],
             ),
         ]
@@ -3359,6 +3360,102 @@ class TestTraceItemTable(BaseApiTest):
                 ],
             ),
         ]
+
+
+def _str_array(*values: str) -> AnyValue:
+    return AnyValue(array_value=ArrayValue(values=[AnyValue(string_value=v) for v in values]))
+
+
+class TestArrayWildcardSearch(BaseApiTest):
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    def test_like_filter_on_array_attribute(self) -> None:
+        """Wildcard search on array attributes using LIKE returns matching items."""
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        items_storage = get_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,  # type: ignore
+            [
+                gen_item_message(
+                    span_ts, attributes={"tags": _str_array("auth-error", "timeout", "retry")}
+                ),
+                gen_item_message(span_ts, attributes={"tags": _str_array("success", "cached")}),
+                gen_item_message(
+                    span_ts, attributes={"tags": _str_array("auth-failure", "network-error")}
+                ),
+            ],
+        )
+
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_ARRAY,
+                        name="tags",
+                    ),
+                    op=ComparisonFilter.OP_LIKE,
+                    value=AttributeValue(val_str="%error%"),
+                )
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        # Only the two items with "error" in one of their tags should match
+        assert len(response.column_values[0].results) == 2
+
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    def test_not_like_filter_on_array_attribute(self) -> None:
+        """NOT_LIKE on array attributes excludes items where any element matches."""
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        items_storage = get_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,  # type: ignore
+            [
+                gen_item_message(span_ts, attributes={"tags": _str_array("auth-error", "timeout")}),
+                gen_item_message(span_ts, attributes={"tags": _str_array("success", "cached")}),
+                gen_item_message(span_ts, attributes={"tags": _str_array("network-error")}),
+            ],
+        )
+
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_ARRAY,
+                        name="tags",
+                    ),
+                    op=ComparisonFilter.OP_NOT_LIKE,
+                    value=AttributeValue(val_str="%error%"),
+                )
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        # Only the item with ["success", "cached"] should match (no "error" elements)
+        assert len(response.column_values[0].results) == 1
 
 
 class TestUtils:

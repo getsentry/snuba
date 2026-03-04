@@ -51,7 +51,7 @@ def subscription_data_builder() -> SubscriptionData:
     )
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.genmetrics_db
 @pytest.mark.redis_db
 def test_entity_subscriptions_data() -> None:
     admin_client = AdminClient(get_default_kafka_configuration())

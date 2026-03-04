@@ -10,7 +10,7 @@ jobs:
       SENTRY_AUTH_TOKEN: ${{ secrets.SNUBA_SENTRY_SOURCEMAP_KEY }}
       NODE_VERSION: 20.8.1
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.2
         name: Checkout code
       - uses: actions/setup-python@v6
         with:

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import time
-from typing import Callable, Generic, MutableSequence, Optional, TypeVar, Union
+from typing import Callable, Generic, MutableSequence, Optional, TypeVar, Union, cast
 
 from arroyo.processing.strategies.abstract import ProcessingStrategy
 from arroyo.processing.strategies.buffer import Buffer
-from arroyo.types import BaseValue, FilteredPayload, Message, TStrategyPayload
+from arroyo.types import BaseValue, FilteredPayload, Message, TStrategyPayload, Value
 
 ValuesBatch = MutableSequence[BaseValue[TStrategyPayload]]
 
@@ -109,6 +109,32 @@ class ReduceCustom(
 
     def join(self, timeout: Optional[float] = None) -> None:
         self.__buffer_step.join(timeout)
+
+
+class NoBatchStep(ProcessingStrategy[Union[FilteredPayload, TStrategyPayload]]):
+    def __init__(
+        self,
+        next_step: ProcessingStrategy[ValuesBatch[TStrategyPayload]],
+    ) -> None:
+        self.__next_step = next_step
+
+    def submit(self, message: Message[Union[FilteredPayload, TStrategyPayload]]) -> None:
+        if isinstance(message.payload, FilteredPayload):
+            return
+        value = cast(BaseValue[TStrategyPayload], message.value)
+        self.__next_step.submit(Message(Value([value], value.committable)))
+
+    def poll(self) -> None:
+        self.__next_step.poll()
+
+    def close(self) -> None:
+        self.__next_step.close()
+
+    def terminate(self) -> None:
+        self.__next_step.terminate()
+
+    def join(self, timeout: Optional[float] = None) -> None:
+        self.__next_step.join(timeout)
 
 
 class BatchStepCustom(ProcessingStrategy[Union[FilteredPayload, TStrategyPayload]]):

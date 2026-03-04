@@ -49,7 +49,7 @@ test_data = [
 ]
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 class TestCleanup:
     @pytest.mark.parametrize(
