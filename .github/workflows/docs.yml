@@ -40,7 +40,7 @@ jobs:
           force_orphan: true
 
       - name: Archive Docs
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: docs
           path: docs/build
