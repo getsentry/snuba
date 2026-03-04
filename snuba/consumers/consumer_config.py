@@ -49,6 +49,7 @@ class EnvConfig:
     sentry_dsn: Optional[str]
     dogstatsd_host: Optional[str]
     dogstatsd_port: Optional[int]
+    dogstatsd_socket_path: Optional[str]
     default_retention_days: int
     lower_retention_days: int
     valid_retention_days: list[int]
@@ -131,6 +132,7 @@ def _resolve_env_config() -> EnvConfig:
         sentry_dsn=sentry_dsn,
         dogstatsd_host=dogstatsd_host,
         dogstatsd_port=dogstatsd_port,
+        dogstatsd_socket_path=settings.DOGSTATSD_SOCKET_PATH,
         default_retention_days=default_retention_days,
         lower_retention_days=lower_retention_days,
         valid_retention_days=valid_retention_days,

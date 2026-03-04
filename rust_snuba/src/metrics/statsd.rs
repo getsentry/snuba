@@ -7,6 +7,7 @@ use statsdproxy::middleware::aggregate::AggregateMetrics;
 use statsdproxy::middleware::upstream::Upstream;
 
 use crate::metrics::global_tags::AddGlobalTags;
+use crate::metrics::unix_upstream::UnixUpstream;
 
 #[derive(Debug)]
 pub struct StatsDBackend {
@@ -45,6 +46,28 @@ impl StatsDBackend {
             // adding global tags *after* aggregation is more performant than trying to do the same
             // in cadence, as it means more bytes and more memory to deal with in
             // AggregateMetricsConfig
+            AddGlobalTags::new(aggregate)
+        });
+
+        let recorder = StatsdRecorder::new(prefix, Wrapper(Box::new(aggregator_sink)));
+
+        Self { recorder }
+    }
+
+    pub fn new_uds(socket_path: &str, prefix: &str) -> Self {
+        let path = socket_path.to_owned();
+        let aggregator_sink = StatsdProxyMetricSink::new(move || {
+            let upstream = UnixUpstream::new(path.clone()).unwrap();
+
+            let config = AggregateMetricsConfig {
+                aggregate_counters: true,
+                flush_offset: 0,
+                flush_interval: Duration::from_secs(1),
+                aggregate_gauges: true,
+                max_map_size: None,
+            };
+            let aggregate = AggregateMetrics::new(config, upstream);
+
             AddGlobalTags::new(aggregate)
         });
 

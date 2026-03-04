@@ -136,7 +136,18 @@ pub fn consumer_impl(
     }
 
     // setup arroyo metrics
-    if let (Some(host), Some(port)) = (
+    if let Some(socket_path) = env_config.dogstatsd_socket_path.clone() {
+        let storage_name = consumer_config
+            .storages
+            .iter()
+            .map(|s| s.name.clone())
+            .collect::<Vec<_>>()
+            .join(",");
+        set_global_tag("storage".to_owned(), storage_name);
+        set_global_tag("consumer_group".to_owned(), consumer_group.to_owned());
+
+        metrics::init(StatsDBackend::new_uds(&socket_path, "snuba.consumer")).unwrap();
+    } else if let (Some(host), Some(port)) = (
         consumer_config.env.dogstatsd_host,
         consumer_config.env.dogstatsd_port,
     ) {
