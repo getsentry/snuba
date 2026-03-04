@@ -562,19 +562,6 @@ pub struct BucketKey {
     pub category: u32,
 }
 
-/// One accepted-outcome data point parsed from a TraceItem, before bucketing.
-/// `time_offset` is the raw event timestamp in seconds (TraceItem.timestamp.seconds);
-/// the aggregator divides by `bucket_interval` to produce the final `BucketKey.time_offset`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BucketKeyValue {
-    pub time_offset: u64,
-    pub org_id: u64,
-    pub project_id: u64,
-    pub key_id: u64,
-    pub category: u32,
-    pub quantity: u64,
-}
-
 /// Statistics for a single bucket
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BucketStats {
@@ -584,10 +571,6 @@ pub struct BucketStats {
 impl BucketStats {
     pub fn new(quantity: u64) -> Self {
         Self { quantity }
-    }
-
-    pub fn merge(&mut self, other: &BucketStats) {
-        self.quantity += other.quantity;
     }
 }
 
