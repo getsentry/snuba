@@ -78,7 +78,7 @@ watch-rust-snuba:
 test-rust:
 	. scripts/rust-envvars && \
 		cd rust_snuba && \
-		cargo test --workspace -- --include-ignored
+		cargo test --workspace
 .PHONY: test-rust
 
 lint-rust:

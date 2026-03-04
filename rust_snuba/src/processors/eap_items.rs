@@ -1091,12 +1091,7 @@ mod tests {
         );
     }
 
-    /// Integration test that actually inserts an EAPItemRow into ClickHouse
-    /// via RowBinary and reads it back. Requires ClickHouse with migrations applied.
-    /// Runs in CI (where snuba-test-rust runs migrations first) but skipped locally
-    /// unless explicitly requested with --include-ignored.
     #[tokio::test]
-    #[ignore]
     async fn test_row_binary_clickhouse_insert() {
         let host = std::env::var("CLICKHOUSE_HOST").unwrap_or("127.0.0.1".to_string());
         let http_port: u16 = std::env::var("CLICKHOUSE_HTTP_PORT")
