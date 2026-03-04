@@ -54,11 +54,14 @@ impl StatsDBackend {
         Self { recorder }
     }
 
-    pub fn new_uds(socket_path: &str, prefix: &str) -> Self {
+    pub fn new_uds(socket_path: &str, prefix: &str, tags: &[(&'static str, String)]) -> Self {
         let socket = UnixDatagram::unbound().unwrap();
         socket.set_nonblocking(true).unwrap();
         let sink = cadence::BufferedUnixMetricSink::from(socket_path, socket);
-        let recorder = StatsdRecorder::new(prefix, Wrapper(Box::new(sink)));
+        let mut recorder = StatsdRecorder::new(prefix, Wrapper(Box::new(sink)));
+        for (key, value) in tags {
+            recorder = recorder.with_tag(key, value);
+        }
 
         Self { recorder }
     }
