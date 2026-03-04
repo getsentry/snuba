@@ -43,6 +43,7 @@ class SparseAggregateAttributeTransformer:
         agg_keys = []
         for column in self.req.columns:
             if column.WhichOneof("column") == "conditional_aggregation":
+                # not supported for KeyExpression in conditional_aggregate
                 if column.conditional_aggregation.key != AttributeKey():
                     agg_keys.append(column.conditional_aggregation.key)
 
