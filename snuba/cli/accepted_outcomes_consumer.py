@@ -47,12 +47,19 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
 @click.option("--raw-topic", help="Topic to consumer from.")
-@click.option("--produce-topic", help="Topic to produce outcomes to.")
+@click.option(
+    "--accepted-outcomes-topic", default="outcomes-billing", help="Topic to produce outcomes to."
+)
 @click.option(
     "--bootstrap-server",
     "bootstrap_servers",
     multiple=True,
     help="Kafka bootstrap server to use for consuming.",
+)
+@click.option(
+    "--accepted-outcomes-bootstrap-server",
+    multiple=True,
+    help="Kafka bootstrap server to use to produce the accepted outcomes.",
 )
 @click.option(
     "--max-batch-size",
@@ -128,8 +135,9 @@ def accepted_outcomes_consumer(
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
     raw_topic: Optional[str],
-    produce_topic: str,
+    accepted_outcomes_topic: str,
     bootstrap_servers: Sequence[str],
+    accepted_outcomes_bootstrap_server: Sequence[str],
     max_batch_size: int,
     max_batch_time_ms: int,
     bucket_interval: int,
@@ -151,9 +159,11 @@ def accepted_outcomes_consumer(
         raw_topic=raw_topic,
         commit_log_topic=None,
         replacements_topic=None,
+        accepted_outcomes_topic=accepted_outcomes_topic,
         bootstrap_servers=bootstrap_servers,
         commit_log_bootstrap_servers=[],
         replacement_bootstrap_servers=[],
+        accepted_outcomes_bootstrap_servers=accepted_outcomes_bootstrap_server,
         max_batch_size=max_batch_size,
         max_batch_time_ms=max_batch_time_ms,
         queued_max_messages_kbytes=queued_max_messages_kbytes,
@@ -170,7 +180,6 @@ def accepted_outcomes_consumer(
     import rust_snuba
 
     os.environ["RUST_LOG"] = log_level.lower()
-    produce_topic = produce_topic
 
     exitcode = rust_snuba.accepted_outcomes_consumer(  # type: ignore
         consumer_group,
@@ -184,9 +193,9 @@ def accepted_outcomes_consumer(
         health_check_file,
         max_dlq_buffer_length,
         join_timeout_ms,
+        max_batch_size,
         max_batch_time_ms,
         bucket_interval,
-        produce_topic,
     )
 
     sys.exit(exitcode)

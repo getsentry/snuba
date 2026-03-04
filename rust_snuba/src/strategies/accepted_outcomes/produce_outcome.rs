@@ -1,6 +1,7 @@
 use crate::types::{AggregatedOutcomesBatch, TrackOutcome};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::backends::Producer;
+use sentry_arroyo::counter;
 use sentry_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
@@ -8,6 +9,7 @@ use sentry_arroyo::processing::strategies::{
     CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
 use sentry_arroyo::types::{Message, Topic, TopicOrPartition};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -43,12 +45,14 @@ impl TaskRunner<AggregatedOutcomesBatch, AggregatedOutcomesBatch, anyhow::Error>
         let skip_produce = self.skip_produce;
 
         Box::pin(async move {
-            if skip_produce {
-                return Ok(message);
-            }
+            let mut category_metrics: BTreeMap<u32, (u64, u64)> = BTreeMap::new();
 
             let bucket_interval = message.payload().bucket_interval;
             for (key, stats) in &message.payload().buckets {
+                let entry = category_metrics.entry(key.category).or_insert((0, 0));
+                entry.0 += 1;
+                entry.1 += stats.quantity;
+
                 let outcome = TrackOutcome {
                     timestamp: key.time_offset * bucket_interval,
                     org_id: key.org_id,
@@ -57,6 +61,10 @@ impl TaskRunner<AggregatedOutcomesBatch, AggregatedOutcomesBatch, anyhow::Error>
                     category: key.category,
                     quantity: stats.quantity,
                 };
+
+                if skip_produce {
+                    continue;
+                }
 
                 let payload_bytes = serde_json::to_vec(&outcome).map_err(|e| {
                     RunTaskError::Other(anyhow::anyhow!("serialization error: {}", e))
@@ -68,6 +76,19 @@ impl TaskRunner<AggregatedOutcomesBatch, AggregatedOutcomesBatch, anyhow::Error>
                     tracing::error!(error, "Error producing outcome");
                     return Err(RunTaskError::RetryableError);
                 }
+            }
+
+            for (category, (bucket_count, total_quantity)) in &category_metrics {
+                counter!(
+                    "accepted_outcomes.bucket_count",
+                    *bucket_count as i64,
+                    "data_category" => category.to_string()
+                );
+                counter!(
+                    "accepted_outcomes.total_quantity",
+                    *total_quantity as i64,
+                    "data_category" => category.to_string()
+                );
             }
 
             Ok(message)
@@ -198,5 +219,59 @@ mod tests {
 
         let produced = produced_payloads.lock().unwrap();
         assert_eq!(produced.len(), 2);
+    }
+
+    #[test]
+    fn skip_produce_does_not_produce() {
+        struct MockProducer {
+            pub payloads: Arc<Mutex<Vec<KafkaPayload>>>,
+        }
+
+        impl Producer<KafkaPayload> for MockProducer {
+            fn produce(
+                &self,
+                _topic: &TopicOrPartition,
+                payload: KafkaPayload,
+            ) -> Result<(), ProducerError> {
+                self.payloads.lock().unwrap().push(payload);
+                Ok(())
+            }
+        }
+
+        let produced_payloads = Arc::new(Mutex::new(Vec::new()));
+
+        let mut batch = AggregatedOutcomesBatch::new(60);
+        batch.buckets.insert(
+            BucketKey {
+                time_offset: 100,
+                org_id: 1,
+                project_id: 100,
+                key_id: 10,
+                category: 1,
+            },
+            BucketStats::new(5),
+        );
+
+        let producer = MockProducer {
+            payloads: produced_payloads.clone(),
+        };
+
+        let concurrency = ConcurrencyConfig::new(1);
+        let mut strategy = ProduceAcceptedOutcome::new(
+            Noop,
+            Arc::new(producer),
+            Topic::new("test-outcomes"),
+            &concurrency,
+            true, // skip_produce
+        );
+
+        strategy
+            .submit(Message::new_any_message(batch, BTreeMap::new()))
+            .unwrap();
+        strategy.poll().unwrap();
+        strategy.join(None).unwrap();
+
+        let produced = produced_payloads.lock().unwrap();
+        assert_eq!(produced.len(), 0);
     }
 }

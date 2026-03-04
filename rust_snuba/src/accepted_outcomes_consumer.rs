@@ -18,6 +18,7 @@ use crate::config;
 use crate::logging::{setup_logging, setup_sentry};
 use crate::metrics::global_tags::set_global_tag;
 use crate::metrics::statsd::StatsDBackend;
+use crate::runtime_config::get_str_config;
 use crate::strategies::accepted_outcomes::aggregator::OutcomesAggregator;
 use crate::strategies::accepted_outcomes::commit_outcomes::CommitOutcomes;
 use crate::strategies::accepted_outcomes::produce_outcome::ProduceAcceptedOutcome;
@@ -25,10 +26,12 @@ use crate::strategies::noop::Noop;
 
 pub struct AcceptedOutcomesStrategyFactory {
     bucket_interval: u64,
+    max_batch_size: usize,
     max_batch_time_ms: Duration,
     produce_topic: Topic,
     producer: Arc<KafkaProducer>,
     concurrency: ConcurrencyConfig,
+    skip_produce: bool,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for AcceptedOutcomesStrategyFactory {
@@ -42,13 +45,14 @@ impl ProcessingStrategyFactory<KafkaPayload> for AcceptedOutcomesStrategyFactory
             self.producer.clone(),
             self.produce_topic,
             &self.concurrency,
-            false,
+            self.skip_produce,
         );
         let commit = CommitOutcomes::new(produce);
         Box::new(OutcomesAggregator::new(
             commit,
-            self.bucket_interval,
+            self.max_batch_size,
             self.max_batch_time_ms,
+            self.bucket_interval,
         ))
     }
 }
@@ -68,9 +72,9 @@ pub fn accepted_outcomes_consumer(
     health_check_file: Option<&str>,
     max_dlq_buffer_length: Option<usize>,
     join_timeout_ms: Option<u64>,
+    max_batch_size: usize,
     max_batch_time_ms: u64,
     bucket_interval: u64,
-    produce_topic: &str,
 ) -> usize {
     py.allow_threads(|| {
         accepted_outcomes_consumer_impl(
@@ -85,9 +89,9 @@ pub fn accepted_outcomes_consumer(
             health_check_file,
             max_dlq_buffer_length,
             join_timeout_ms,
+            max_batch_size,
             max_batch_time_ms,
             bucket_interval,
-            produce_topic,
         )
     })
 }
@@ -105,9 +109,9 @@ pub fn accepted_outcomes_consumer_impl(
     _health_check_file: Option<&str>,
     max_dlq_buffer_length: Option<usize>,
     _join_timeout_ms: Option<u64>,
+    max_batch_size: usize,
     max_batch_time_ms: u64,
     bucket_interval: u64,
-    produce_topic: &str,
 ) -> usize {
     setup_logging();
 
@@ -141,29 +145,16 @@ pub fn accepted_outcomes_consumer_impl(
         metrics::init(StatsDBackend::new(&host, port, "snuba.consumer")).unwrap();
     }
 
-    let produce_broker_config = consumer_config.raw_topic.broker_config.clone();
-
-    let config = KafkaConfig::new_consumer_config(
-        vec![],
-        consumer_group.to_owned(),
-        auto_offset_reset.parse().expect(
-            "Invalid value for `auto_offset_reset`. Valid values: `error`, `earliest`, `latest`",
-        ),
-        !no_strict_offset_reset,
-        max_poll_interval_ms,
-        Some(consumer_config.raw_topic.broker_config),
-    );
-
     // DLQ setup
     let dlq_concurrency_config = ConcurrencyConfig::new(10);
 
     let dlq_policy = consumer_config.dlq_topic.map(|dlq_topic_config| {
-        let producer_config =
+        let dlq_producer_config =
             KafkaConfig::new_producer_config(vec![], Some(dlq_topic_config.broker_config));
-        let producer = KafkaProducer::new(producer_config);
+        let dlq_producer = KafkaProducer::new(dlq_producer_config);
 
         let kafka_dlq_producer = Box::new(KafkaDlqProducer::new(
-            producer,
+            dlq_producer,
             Topic::new(&dlq_topic_config.physical_topic_name),
         ));
 
@@ -179,18 +170,43 @@ pub fn accepted_outcomes_consumer_impl(
         )
     });
 
+    let consumer_broker_config = consumer_config.raw_topic.broker_config.clone();
+    let config = KafkaConfig::new_consumer_config(
+        vec![],
+        consumer_group.to_owned(),
+        auto_offset_reset.parse().expect(
+            "Invalid value for `auto_offset_reset`. Valid values: `error`, `earliest`, `latest`",
+        ),
+        !no_strict_offset_reset,
+        max_poll_interval_ms,
+        Some(consumer_broker_config),
+    );
+
     let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);
 
-    let produce_topic = Topic::new(produce_topic);
-    let producer_config = KafkaConfig::new_producer_config(vec![], Some(produce_broker_config));
+    let topic_config = consumer_config
+        .accepted_outcomes_topic
+        .expect("accepted_outcomes_topic must be configured");
+    // TODO consider adding a higher linger.ms to the config for batching produced messages
+    let producer_config =
+        KafkaConfig::new_producer_config(vec![], Some(topic_config.broker_config));
     let producer = Arc::new(KafkaProducer::new(producer_config));
+    let produce_topic = Topic::new(&topic_config.physical_topic_name);
+    // Default to skipping produce for now
+    let skip_produce = get_str_config("accepted_outcomes_skip_produce")
+        .ok()
+        .flatten()
+        .unwrap_or("1".to_string())
+        == "1";
 
     let factory = AcceptedOutcomesStrategyFactory {
         bucket_interval,
+        max_batch_size,
         max_batch_time_ms: Duration::from_millis(max_batch_time_ms),
         produce_topic,
         producer,
         concurrency: ConcurrencyConfig::new(concurrency),
+        skip_produce,
     };
     let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);
 

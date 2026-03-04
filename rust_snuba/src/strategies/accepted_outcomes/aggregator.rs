@@ -4,10 +4,10 @@ use std::time::{Duration, Instant};
 use prost::Message as ProstMessage;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::processing::strategies::{
-    CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
+    CommitRequest, InvalidMessage, ProcessingStrategy, StrategyError, SubmitError,
 };
 use sentry_arroyo::types::{InnerMessage, Message, Partition};
-use sentry_protos::snuba::v1::{TraceItem, TraceItemType};
+use sentry_protos::snuba::v1::TraceItem;
 
 use crate::types::{AggregatedOutcomesBatch, BucketKey};
 
@@ -20,13 +20,11 @@ struct TraceItemOutcome {
 
 struct TraceItemOutcomes(Vec<TraceItemOutcome>);
 
-impl TryFrom<TraceItem> for TraceItemOutcomes {
-    type Error = anyhow::Error;
-
-    fn try_from(from: TraceItem) -> Result<Self, Self::Error> {
+impl TraceItemOutcomes {
+    fn from_trace_item(item: TraceItem) -> Self {
         let mut outcomes = Vec::new();
-        let Some(trace_outcomes) = from.outcomes else {
-            return Ok(TraceItemOutcomes(vec![]));
+        let Some(trace_outcomes) = item.outcomes else {
+            return TraceItemOutcomes(vec![]);
         };
 
         let key_id = trace_outcomes.key_id;
@@ -37,12 +35,14 @@ impl TryFrom<TraceItem> for TraceItemOutcomes {
                 quantity: cc.quantity,
             });
         }
-        Ok(TraceItemOutcomes(outcomes))
+        TraceItemOutcomes(outcomes)
     }
 }
 
 pub struct OutcomesAggregator<TNext> {
     next_step: TNext,
+    /// Maximum number of outcome buckets to accumulate before flushing.
+    max_batch_size: usize,
     /// Seconds per time slot: offset = floor(event_ts_secs / bucket_interval)
     bucket_interval: u64,
     /// How long to accumulate before flushing
@@ -54,11 +54,17 @@ pub struct OutcomesAggregator<TNext> {
 }
 
 impl<TNext> OutcomesAggregator<TNext> {
-    pub fn new(next_step: TNext, bucket_interval: u64, max_batch_time_ms: Duration) -> Self {
+    pub fn new(
+        next_step: TNext,
+        max_batch_size: usize,
+        max_batch_time_ms: Duration,
+        bucket_interval: u64,
+    ) -> Self {
         Self {
             next_step,
-            bucket_interval,
+            max_batch_size,
             max_batch_time_ms,
+            bucket_interval,
             last_flush: Instant::now(),
             batch: AggregatedOutcomesBatch::new(bucket_interval),
             latest_offsets: HashMap::new(),
@@ -69,13 +75,6 @@ impl<TNext> OutcomesAggregator<TNext> {
     where
         TNext: ProcessingStrategy<AggregatedOutcomesBatch>,
     {
-        let num_buckets = self.batch.num_buckets();
-
-        if num_buckets > 0 {
-            // todo: do metrics for quanitites and category
-            tracing::info!("Flushing {} outcome bucket(s)", num_buckets);
-        }
-
         let batch = std::mem::take(&mut self.batch);
         let latest_offsets = std::mem::take(&mut self.latest_offsets);
 
@@ -112,7 +111,9 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
     for OutcomesAggregator<TNext>
 {
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
-        if self.last_flush.elapsed() >= self.max_batch_time_ms {
+        if self.batch.num_buckets() >= self.max_batch_size
+            || self.last_flush.elapsed() >= self.max_batch_time_ms
+        {
             self.flush()?;
         }
         self.next_step.poll()
@@ -139,7 +140,9 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
             Ok(t) => t,
             Err(e) => {
                 tracing::error!("Failed to decode TraceItem: {:?}", e);
-                return Ok(());
+                return Err(SubmitError::InvalidMessage(InvalidMessage::from(
+                    broker_msg,
+                )));
             }
         };
 
@@ -151,22 +154,16 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
         let org_id = trace_item.organization_id;
         let project_id = trace_item.project_id;
 
-        match TraceItemOutcomes::try_from(trace_item) {
-            Ok(outcomes) => {
-                for item in outcomes.0 {
-                    let key = BucketKey {
-                        time_offset: ts_secs / self.bucket_interval,
-                        org_id,
-                        project_id,
-                        key_id: item.key_id,
-                        category: item.category,
-                    };
-                    self.batch.add_to_bucket(key, item.quantity);
-                }
-            }
-            Err(e) => {
-                tracing::error!("Failed to parse outcomes from TraceItem: {:?}", e);
-            }
+        let TraceItemOutcomes(outcomes) = TraceItemOutcomes::from_trace_item(trace_item);
+        for item in outcomes {
+            let key = BucketKey {
+                time_offset: ts_secs / self.bucket_interval,
+                org_id,
+                project_id,
+                key_id: item.key_id,
+                category: item.category,
+            };
+            self.batch.add_to_bucket(key, item.quantity);
         }
 
         Ok(())
@@ -191,15 +188,18 @@ mod tests {
     use sentry_arroyo::types::{Partition, Topic};
     use sentry_protos::snuba::v1::{CategoryCount, Outcomes};
 
-    struct Noop;
+    struct Noop {
+        last_message: Option<Message<AggregatedOutcomesBatch>>,
+    }
     impl ProcessingStrategy<AggregatedOutcomesBatch> for Noop {
         fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
             Ok(None)
         }
         fn submit(
             &mut self,
-            _: Message<AggregatedOutcomesBatch>,
+            message: Message<AggregatedOutcomesBatch>,
         ) -> Result<(), SubmitError<AggregatedOutcomesBatch>> {
+            self.last_message = Some(message);
             Ok(())
         }
         fn terminate(&mut self) {}
@@ -241,40 +241,67 @@ mod tests {
 
     #[test]
     fn submit_tracks_max_offset_per_partition() {
-        let mut aggregator = OutcomesAggregator::new(Noop, 60, Duration::from_millis(5_000));
+        let mut aggregator = OutcomesAggregator::new(
+            Noop { last_message: None },
+            500,
+            Duration::from_millis(5_000),
+            60,
+        );
 
-        let partition = Partition::new(Topic::new("accepted-outcomes"), 0);
-        let invalid_payload = KafkaPayload::new(None, None, Some(vec![0, 1, 2]));
+        let topic = Topic::new("accepted-outcomes");
+        let partition_0 = Partition::new(topic.clone(), 0);
+        let partition_1 = Partition::new(topic, 1);
+        let payload = make_payload(1_700_000_000, 1, 2, 3, &[(4, 1)]);
 
-        aggregator
-            .submit(Message::new_broker_message(
-                invalid_payload.clone(),
-                partition.clone(),
-                2,
-                Utc::now(),
-            ))
-            .unwrap();
-        aggregator
-            .submit(Message::new_broker_message(
-                invalid_payload,
-                partition.clone(),
-                10,
-                Utc::now(),
-            ))
-            .unwrap();
+        // Partition 0: offsets 2, 5, 10 → max = 10 → committable = 11
+        for offset in [2, 5, 10] {
+            aggregator
+                .submit(Message::new_broker_message(
+                    payload.clone(),
+                    partition_0.clone(),
+                    offset,
+                    Utc::now(),
+                ))
+                .unwrap();
+        }
+        // Partition 1: offsets 3, 7, 15 → max = 15 → committable = 16
+        for offset in [3, 7, 15] {
+            aggregator
+                .submit(Message::new_broker_message(
+                    payload.clone(),
+                    partition_1.clone(),
+                    offset,
+                    Utc::now(),
+                ))
+                .unwrap();
+        }
+
+        aggregator.flush().unwrap();
+
+        let msg = aggregator.next_step.last_message.take().unwrap();
+        let InnerMessage::AnyMessage(am) = msg.inner_message else {
+            panic!("expected AnyMessage");
+        };
+        assert_eq!(am.committable.get(&partition_0).copied(), Some(11));
+        assert_eq!(am.committable.get(&partition_1).copied(), Some(16));
     }
 
     #[test]
     fn submit_multiple_messages_accumulates_batch() {
-        let mut aggregator = OutcomesAggregator::new(Noop, 60, Duration::from_millis(2_000));
+        let mut aggregator = OutcomesAggregator::new(
+            Noop { last_message: None },
+            500,
+            Duration::from_millis(2_000),
+            60,
+        );
 
         let topic = Topic::new("snuba-items");
         let partition = Partition::new(topic, 0);
 
-        // ts_secs=6000 → time_offset = 6000/60 = 100; two separate submits for the same bucket
+        // Two submits land in the same minute bucket.
         aggregator
             .submit(Message::new_broker_message(
-                make_payload(6_000, 1, 2, 3, &[(4, 7)]),
+                make_payload(1_700_000_000, 1, 2, 3, &[(4, 7)]),
                 partition.clone(),
                 0,
                 Utc::now(),
@@ -282,44 +309,91 @@ mod tests {
             .unwrap();
         aggregator
             .submit(Message::new_broker_message(
-                make_payload(6_000, 1, 2, 3, &[(4, 3)]),
+                make_payload(1_700_000_000, 1, 2, 3, &[(4, 3)]),
                 partition.clone(),
                 1,
                 Utc::now(),
             ))
             .unwrap();
-        // Different bucket: ts_secs=7200 → time_offset = 7200/60 = 120
+        // One minute later lands in a different bucket, plus has two category counts for the same message
         aggregator
             .submit(Message::new_broker_message(
-                make_payload(7_200, 1, 2, 3, &[(4, 5)]),
+                make_payload(1_700_000_060, 1, 2, 3, &[(4, 5), (7, 2)]),
                 partition.clone(),
                 2,
                 Utc::now(),
             ))
             .unwrap();
 
-        let key_100 = BucketKey {
-            time_offset: 100,
+        let key_1700000000 = BucketKey {
+            time_offset: 28_333_333,
             org_id: 1,
             project_id: 2,
             key_id: 3,
             category: 4,
         };
-        let key_120 = BucketKey {
-            time_offset: 120,
+        let key_1700003600 = BucketKey {
+            time_offset: 28_333_334,
             org_id: 1,
             project_id: 2,
             key_id: 3,
             category: 4,
         };
-        assert_eq!(aggregator.batch.num_buckets(), 2);
+        let key_1700003600_category_7 = BucketKey {
+            time_offset: 28_333_334,
+            org_id: 1,
+            project_id: 2,
+            key_id: 3,
+            category: 7,
+        };
+        assert_eq!(aggregator.batch.num_buckets(), 3);
         assert_eq!(
-            aggregator.batch.buckets.get(&key_100).map(|s| s.quantity),
+            aggregator
+                .batch
+                .buckets
+                .get(&key_1700000000)
+                .map(|s| s.quantity),
             Some(10) // 7 + 3
         );
         assert_eq!(
-            aggregator.batch.buckets.get(&key_120).map(|s| s.quantity),
+            aggregator
+                .batch
+                .buckets
+                .get(&key_1700003600)
+                .map(|s| s.quantity),
             Some(5)
         );
+        // separate batch for same timestamp because of category
+        assert_eq!(
+            aggregator
+                .batch
+                .buckets
+                .get(&key_1700003600_category_7)
+                .map(|s| s.quantity),
+            Some(2)
+        );
+    }
+
+    #[test]
+    fn poll_flushes_when_max_batch_size_reached() {
+        let mut aggregator = OutcomesAggregator::new(
+            Noop { last_message: None },
+            1,
+            Duration::from_millis(30_000),
+            60,
+        );
+
+        let partition = Partition::new(Topic::new("accepted-outcomes"), 0);
+        aggregator
+            .submit(Message::new_broker_message(
+                make_payload(6_000, 1, 2, 3, &[(4, 7)]),
+                partition,
+                0,
+                Utc::now(),
+            ))
+            .unwrap();
+
+        aggregator.poll().unwrap();
+        assert_eq!(aggregator.batch.num_buckets(), 0);
     }
 }
