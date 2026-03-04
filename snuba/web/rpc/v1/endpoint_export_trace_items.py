@@ -302,7 +302,9 @@ def _to_any_value(value: Any) -> AnyValue:
     elif isinstance(value, str):
         return AnyValue(string_value=value)
     elif isinstance(value, list):
-        return AnyValue(array_value=ArrayValue(values=[_to_any_value(v) for v in value]))
+        return AnyValue(
+            array_value=ArrayValue(values=[_to_any_value(v) for v in value if v is not None])
+        )
     elif isinstance(value, datetime):
         return AnyValue(double_value=value.timestamp())
     else:
