@@ -11,6 +11,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import ExistsFilter, TraceItemFilter
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
+from snuba import state
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
@@ -235,6 +236,76 @@ class TestTraceItemAttributeNames(BaseApiTest):
             ),
         ]
         assert res.attributes == expected
+
+    def test_basic_with_v2_storage(self) -> None:
+        state.set_config("use_co_occurring_attrs_v2", 1)
+        try:
+            req = TraceItemAttributeNamesRequest(
+                meta=RequestMeta(
+                    project_ids=[1, 2, 3],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    start_timestamp=Timestamp(
+                        seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
+                    ),
+                    end_timestamp=Timestamp(
+                        seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
+                    ),
+                ),
+                limit=TOTAL_GENERATED_ATTR_PER_TYPE,
+                type=AttributeKey.Type.TYPE_STRING,
+                value_substring_match="a_tag",
+            )
+            res = EndpointTraceItemAttributeNames().execute(req)
+            expected = []
+            for i in range(TOTAL_GENERATED_ATTR_PER_TYPE):
+                expected.append(
+                    TraceItemAttributeNamesResponse.Attribute(
+                        name=f"a_tag_{str(i).zfill(3)}", type=AttributeKey.Type.TYPE_STRING
+                    )
+                )
+            assert res.attributes == expected
+        finally:
+            state.set_config("use_co_occurring_attrs_v2", 0)
+
+    def test_v2_storage_with_co_occurring_filter(self) -> None:
+        state.set_config("use_co_occurring_attrs_v2", 1)
+        try:
+            req = TraceItemAttributeNamesRequest(
+                meta=RequestMeta(
+                    project_ids=[1, 2, 3],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    start_timestamp=Timestamp(
+                        seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
+                    ),
+                    end_timestamp=Timestamp(
+                        seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
+                    ),
+                ),
+                limit=TOTAL_GENERATED_ATTR_PER_TYPE,
+                intersecting_attributes_filter=TraceItemFilter(
+                    exists_filter=ExistsFilter(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="a_tag_000")
+                    )
+                ),
+                value_substring_match="000",
+                type=AttributeKey.Type.TYPE_STRING,
+            )
+            res = EndpointTraceItemAttributeNames().execute(req)
+            expected = [
+                TraceItemAttributeNamesResponse.Attribute(
+                    name="a_tag_000", type=AttributeKey.Type.TYPE_STRING
+                ),
+                TraceItemAttributeNamesResponse.Attribute(
+                    name="c_tag_000", type=AttributeKey.Type.TYPE_STRING
+                ),
+            ]
+            assert res.attributes == expected
+        finally:
+            state.set_config("use_co_occurring_attrs_v2", 0)
 
     def test_simple_boolean(self) -> None:
         req = TraceItemAttributeNamesRequest(
