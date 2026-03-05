@@ -8,7 +8,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SENTRY_AUTH_TOKEN: ${{ secrets.SNUBA_SENTRY_SOURCEMAP_KEY }}
-      NODE_VERSION: 20.8.1
     steps:
       - uses: actions/checkout@v6.0.2
         name: Checkout code
@@ -17,6 +16,6 @@ jobs:
           python-version: 3.8
       - uses: actions/setup-node@v6
         with:
-          node-version: ${{env.NODE_VERSION}}
+          node-version-file: snuba/admin/package.json
       - name: Build admin sourcemaps
         run: make build-admin
