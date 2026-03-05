@@ -250,7 +250,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=self.storage_set_key,
                 table_name=self.old_meta_dist_table_name,
                 engine=table_engines.Distributed(
-                    local_table_name=self.meta_local_table_name, sharding_key=None
+                    local_table_name=self.old_meta_local_table_name, sharding_key=None
                 ),
                 columns=self.meta_table_columns,
                 target=OperationTarget.DISTRIBUTED,
@@ -259,7 +259,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=self.storage_set_key,
                 view_name=self.old_meta_view_name,
                 columns=self.meta_table_columns,
-                destination_table_name=self.meta_local_table_name,
+                destination_table_name=self.old_meta_local_table_name,
                 target=OperationTarget.LOCAL,
                 query="""
                 SELECT
@@ -302,7 +302,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=self.storage_set_key,
                 table_name=self.old_tag_value_dist_table_name,
                 engine=table_engines.Distributed(
-                    local_table_name=self.tag_value_local_table_name, sharding_key=None
+                    local_table_name=self.old_tag_value_local_table_name, sharding_key=None
                 ),
                 columns=self.tag_value_table_columns,
                 target=OperationTarget.DISTRIBUTED,
@@ -311,7 +311,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=self.storage_set_key,
                 view_name=self.old_tag_value_view_name,
                 columns=self.tag_value_table_columns,
-                destination_table_name=self.tag_value_local_table_name,
+                destination_table_name=self.old_tag_value_local_table_name,
                 target=OperationTarget.LOCAL,
                 query="""
                 SELECT
