@@ -20,7 +20,7 @@ use crate::config;
 use crate::factory_v2::ConsumerStrategyFactoryV2;
 use crate::logging::{setup_logging, setup_sentry};
 use crate::metrics::global_tags::set_global_tag;
-use crate::metrics::statsd::StatsDBackend;
+use crate::metrics::statsd::DogStatsDBackend;
 use crate::processors;
 use crate::rebalancing;
 use crate::types::{InsertOrReplacement, KafkaMessageMetadata};
@@ -143,29 +143,34 @@ pub fn consumer_impl(
             .map(|s| s.name.clone())
             .collect::<Vec<_>>()
             .join(",");
+        let tags = [
+            ("storage", storage_name.clone()),
+            ("consumer_group", consumer_group.to_owned()),
+        ];
 
-        let statsd_backend = if let Some(socket_path) = env_config.dogstatsd_socket_path.clone() {
-            Some(StatsDBackend::new_uds(
+        let backend = if let Some(socket_path) = env_config.dogstatsd_socket_path.clone() {
+            Some(DogStatsDBackend::new_uds(
                 &socket_path,
                 "snuba.consumer",
-                &[
-                    ("storage", storage_name.clone()),
-                    ("consumer_group", consumer_group.to_owned()),
-                ],
+                &tags,
             ))
         } else if let (Some(host), Some(port)) = (
             consumer_config.env.dogstatsd_host,
             consumer_config.env.dogstatsd_port,
         ) {
-            Some(StatsDBackend::new(&host, port, "snuba.consumer"))
+            Some(DogStatsDBackend::new_udp(
+                &host,
+                port,
+                "snuba.consumer",
+                &tags,
+            ))
         } else {
             None
         };
 
-        if let Some(backend) = statsd_backend {
+        if let Some(backend) = backend {
             set_global_tag("storage".to_owned(), storage_name);
             set_global_tag("consumer_group".to_owned(), consumer_group.to_owned());
-
             metrics::init(backend).unwrap();
         }
     }

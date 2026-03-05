@@ -24,7 +24,6 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 adler = "1.0.2"
 anyhow = { version = "1.0.69", features = ["backtrace"] }
-cadence = "1.0.0"
 chrono = { version = "0.4.26", features = ["serde"] }
 ctrlc = { version = "3.2.5", features = ["termination"] }
 data-encoding = "2.5.0"
@@ -32,6 +31,8 @@ futures = "0.3.21"
 hyper = "1.2.0"
 json-schema-diff = "0.1.7"
 md5 = "0.7.0"
+metrics = "0.24"
+metrics-exporter-dogstatsd = "0.9.6"
 parking_lot = "0.12.1"
 procspawn = { version = "1.0.0", features = ["json"] }
 prost = "0.14"
@@ -61,7 +62,6 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 serde_path_to_error = "0.1.15"
 serde_with = "3.8.1"
-statsdproxy = { version = "0.4.1", features = ["cadence"] }
 thiserror = "1.0"
 tokio = { version = "1.38.2", features = ["full"] }
 tokio-stream = "0.1.15"
