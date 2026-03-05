@@ -166,7 +166,7 @@ fn decode_encoded_into_numeric_array<T, const SIZE: usize>(
 where
     T: Decodable<SIZE>,
 {
-    if data.len() % T::SIZE == 0 {
+    if data.len().is_multiple_of(T::SIZE) {
         Ok(data
             .chunks_exact(T::SIZE)
             .map(TryInto::try_into)
