@@ -154,6 +154,8 @@ def accepted_outcomes_consumer(
     Accepted outcomes consumer
     """
 
+    assert bucket_interval >= 1, "bucket_interval must be greater than 0"
+
     consumer_config = resolve_consumer_config(
         storage_names=[storage_name],
         raw_topic=raw_topic,
