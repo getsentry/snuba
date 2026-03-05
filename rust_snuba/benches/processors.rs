@@ -7,9 +7,9 @@ use criterion::{black_box, BenchmarkGroup, BenchmarkId, Criterion, Throughput};
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use rust_snuba::{
-    BrokerConfig, ClickhouseConfig, ConsumerStrategyFactoryV2, EnvConfig, KafkaMessageMetadata,
-    MessageProcessorConfig, ProcessingFunction, ProcessingFunctionType, ProcessorConfig,
-    StatsDBackend, StorageConfig, TopicConfig, PROCESSORS,
+    BrokerConfig, ClickhouseConfig, ConsumerStrategyFactoryV2, DogStatsDBackend, EnvConfig,
+    KafkaMessageMetadata, MessageProcessorConfig, ProcessingFunction, ProcessingFunctionType,
+    ProcessorConfig, StorageConfig, TopicConfig, PROCESSORS,
 };
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::backends::local::broker::LocalBroker;
@@ -206,7 +206,13 @@ fn run_processor_bench(
 
 fn main() {
     // this sends to nowhere, but because it's UDP we won't error.
-    metrics::init(StatsDBackend::new("127.0.0.1", 8081, "snuba.consumer")).unwrap();
+    metrics::init(DogStatsDBackend::new_udp(
+        "127.0.0.1",
+        8081,
+        "snuba.consumer",
+        &[],
+    ))
+    .unwrap();
 
     let mut c = Criterion::default().configure_from_args();
 

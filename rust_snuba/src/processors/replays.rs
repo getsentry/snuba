@@ -902,7 +902,7 @@ mod tests {
         assert_eq!(&replay_row.user_geo_country_code, "");
         assert_eq!(&replay_row.user_geo_region, "");
         assert_eq!(&replay_row.user_geo_subdivision, "");
-        assert_eq!(replay_row.error_ids, vec![]);
+        assert_eq!(replay_row.error_ids, Vec::<Uuid>::new());
         assert_eq!(replay_row.error_sample_rate, -1.0);
         assert_eq!(replay_row.ip_address_v4, None);
         assert_eq!(replay_row.ip_address_v6, None);
@@ -918,7 +918,7 @@ mod tests {
         assert_eq!(replay_row.segment_id, None);
         assert_eq!(replay_row.session_sample_rate, -1.0);
         assert_eq!(replay_row.title, None);
-        assert_eq!(replay_row.trace_ids, vec![]);
+        assert_eq!(replay_row.trace_ids, Vec::<Uuid>::new());
         assert_eq!(replay_row.urls, Vec::<String>::new());
 
         // Default columns - not providable on this event.
@@ -1030,7 +1030,7 @@ mod tests {
         assert_eq!(&replay_row.user, "");
         assert_eq!(replay_row.debug_id, Uuid::nil());
         assert_eq!(replay_row.error_id, Uuid::nil());
-        assert_eq!(replay_row.error_ids, vec![]);
+        assert_eq!(replay_row.error_ids, Vec::<Uuid>::new());
         assert_eq!(replay_row.error_sample_rate, -1.0);
         assert_eq!(replay_row.fatal_id, Uuid::nil());
         assert_eq!(replay_row.info_id, Uuid::nil());
@@ -1041,7 +1041,7 @@ mod tests {
         assert_eq!(replay_row.replay_start_timestamp, None);
         assert_eq!(replay_row.session_sample_rate, -1.0);
         assert_eq!(replay_row.title, None);
-        assert_eq!(replay_row.trace_ids, vec![]);
+        assert_eq!(replay_row.trace_ids, Vec::<Uuid>::new());
         assert_eq!(replay_row.urls, Vec::<String>::new());
         assert_eq!(replay_row.viewed_by_id, 0);
         assert_eq!(replay_row.warning_id, Uuid::nil());
@@ -1115,7 +1115,7 @@ mod tests {
         assert_eq!(&replay_row.user, "");
         assert_eq!(replay_row.debug_id, Uuid::nil());
         assert_eq!(replay_row.error_id, Uuid::nil());
-        assert_eq!(replay_row.error_ids, vec![]);
+        assert_eq!(replay_row.error_ids, Vec::<Uuid>::new());
         assert_eq!(replay_row.error_sample_rate, -1.0);
         assert_eq!(replay_row.fatal_id, Uuid::nil());
         assert_eq!(replay_row.info_id, Uuid::nil());
@@ -1126,7 +1126,7 @@ mod tests {
         assert_eq!(replay_row.replay_start_timestamp, None);
         assert_eq!(replay_row.session_sample_rate, -1.0);
         assert_eq!(replay_row.title, None);
-        assert_eq!(replay_row.trace_ids, vec![]);
+        assert_eq!(replay_row.trace_ids, Vec::<Uuid>::new());
         assert_eq!(replay_row.urls, Vec::<String>::new());
         assert_eq!(replay_row.viewed_by_id, 0);
         assert_eq!(replay_row.warning_id, Uuid::nil());
@@ -1212,7 +1212,7 @@ mod tests {
         assert_eq!(replay_row.click_is_dead, 0);
         assert_eq!(replay_row.click_is_rage, 0);
         assert_eq!(replay_row.click_node_id, 0);
-        assert_eq!(replay_row.error_ids, vec![]);
+        assert_eq!(replay_row.error_ids, Vec::<Uuid>::new());
         assert_eq!(replay_row.error_sample_rate, -1.0);
         assert_eq!(replay_row.ip_address_v4, None);
         assert_eq!(replay_row.ip_address_v6, None);
@@ -1221,7 +1221,7 @@ mod tests {
         assert_eq!(replay_row.replay_start_timestamp, None);
         assert_eq!(replay_row.session_sample_rate, -1.0);
         assert_eq!(replay_row.title, None);
-        assert_eq!(replay_row.trace_ids, vec![]);
+        assert_eq!(replay_row.trace_ids, Vec::<Uuid>::new());
         assert_eq!(replay_row.urls, Vec::<String>::new());
         assert_eq!(replay_row.viewed_by_id, 0);
     }
@@ -1294,7 +1294,7 @@ mod tests {
         assert_eq!(replay_row.click_node_id, 0);
         assert_eq!(replay_row.debug_id, Uuid::nil());
         assert_eq!(replay_row.error_id, Uuid::nil());
-        assert_eq!(replay_row.error_ids, vec![]);
+        assert_eq!(replay_row.error_ids, Vec::<Uuid>::new());
         assert_eq!(replay_row.error_sample_rate, -1.0);
         assert_eq!(replay_row.fatal_id, Uuid::nil());
         assert_eq!(replay_row.info_id, Uuid::nil());
@@ -1304,7 +1304,7 @@ mod tests {
         assert_eq!(replay_row.replay_start_timestamp, None);
         assert_eq!(replay_row.session_sample_rate, -1.0);
         assert_eq!(replay_row.title, None);
-        assert_eq!(replay_row.trace_ids, vec![]);
+        assert_eq!(replay_row.trace_ids, Vec::<Uuid>::new());
         assert_eq!(replay_row.urls, Vec::<String>::new());
         assert_eq!(replay_row.viewed_by_id, 0);
         assert_eq!(replay_row.warning_id, Uuid::nil());
@@ -1365,7 +1365,7 @@ mod tests {
         assert_eq!(&replay_row.dist, "");
         assert_eq!(&replay_row.environment, "");
         assert_eq!(replay_row.error_id, Uuid::nil());
-        assert_eq!(replay_row.error_ids, vec![]);
+        assert_eq!(replay_row.error_ids, Vec::<Uuid>::new());
         assert_eq!(replay_row.error_sample_rate, -1.0);
         assert_eq!(replay_row.fatal_id, Uuid::nil());
         assert_eq!(replay_row.info_id, Uuid::nil());
@@ -1388,7 +1388,7 @@ mod tests {
         assert_eq!(replay_row.tags_key, Vec::<String>::new());
         assert_eq!(replay_row.tags_value, Vec::<String>::new());
         assert_eq!(replay_row.title, None);
-        assert_eq!(replay_row.trace_ids, vec![]);
+        assert_eq!(replay_row.trace_ids, Vec::<Uuid>::new());
         assert_eq!(replay_row.urls, Vec::<String>::new());
         assert_eq!(&replay_row.user_email, "");
         assert_eq!(&replay_row.user_id, "");

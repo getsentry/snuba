@@ -46,7 +46,7 @@ impl Recorder for DogStatsDBackend {
             .iter()
             .map(|(k, v)| Label::new(k.to_string(), v.to_string()))
             .collect();
-        let metadata = metrics::Metadata::new(module_path!(), metrics::Level::INFO, None);
+        let metadata = metrics::Metadata::new("snuba", metrics::Level::INFO, None);
         let key = metrics::Key::from_parts(key, labels);
 
         match metric.ty {

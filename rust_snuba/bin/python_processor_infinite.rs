@@ -19,6 +19,7 @@ fn main() {
     let output = Arc::new(AtomicUsize::new(0));
     let output2 = output.clone();
 
+    #[allow(clippy::result_large_err)]
     let step = RunTask::new(
         move |message| {
             output2.fetch_add(1, Ordering::Relaxed);
