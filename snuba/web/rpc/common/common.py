@@ -582,6 +582,8 @@ def trace_item_filters_to_expression(
         )
 
     if item_filter.HasField("any_attribute_filter"):
+        if not state.get_int_config("enable_any_attribute_filter", 1):
+            return literal(True)
         return _any_attribute_filter_to_expression(item_filter.any_attribute_filter)
 
     return literal(True)
