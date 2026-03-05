@@ -3363,7 +3363,7 @@ dependencies = [
  "sentry",
  "sentry-kafka-schemas",
  "sentry_arroyo",
- "sentry_protos 0.7.1",
+ "sentry_protos",
  "sentry_usage_accountant",
  "seq-macro",
  "serde",
@@ -3646,7 +3646,7 @@ dependencies = [
  "prettyplease",
  "prost",
  "schemars 0.8.22",
- "sentry_protos 0.8.2",
+ "sentry_protos",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -3725,18 +3725,6 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
-]
-
-[[package]]
-name = "sentry_protos"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ce7306945b58bf13c874a5b0a52c8e08c5150eba2e893131d9f2c6cd992e50f"
-dependencies = [
- "prost",
- "prost-types",
- "tonic",
- "tonic-prost",
 ]
 
 [[package]]
