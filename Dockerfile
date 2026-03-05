@@ -97,15 +97,15 @@ RUN set -ex; \
 
 # Install nodejs and yarn and build the admin UI
 FROM build_base AS build_admin_ui
-ENV NODE_VERSION=20
+ENV VOLTA_HOME=/root/.volta
+ENV PATH=$VOLTA_HOME/bin:$PATH
 
 COPY ./snuba/admin ./snuba/admin
 RUN set -ex; \
     mkdir -p snuba/admin/dist/; \
-    curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - && \
-    apt-get install -y nodejs --no-install-recommends && \
-    npm install -g yarn && \
+    curl -fsSL https://get.volta.sh | bash && \
     cd snuba/admin && \
+    volta install node yarn && \
     yarn install && \
     yarn run build
 
