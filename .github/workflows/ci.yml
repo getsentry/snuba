@@ -119,6 +119,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6.0.2
         name: Checkout code
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
       - name: Install protoc
         uses: arduino/setup-protoc@v3
         with:
