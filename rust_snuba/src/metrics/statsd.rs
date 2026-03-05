@@ -6,9 +6,7 @@ use sentry_arroyo::metrics::{Metric, MetricType, MetricValue, Recorder};
 /// to DogStatsD over UDP or Unix domain sockets. Adapts arroyo's [`Recorder`]
 /// trait to the `metrics` crate facade installed by the exporter.
 #[derive(Debug)]
-pub struct DogStatsDBackend {
-    prefix: String,
-}
+pub struct DogStatsDBackend;
 
 impl DogStatsDBackend {
     pub fn new_udp(host: &str, port: u16, prefix: &str, tags: &[(&str, String)]) -> Self {
@@ -35,19 +33,13 @@ impl DogStatsDBackend {
             .install()
             .expect("failed to install DogStatsD exporter");
 
-        let prefix = if prefix.is_empty() {
-            String::new()
-        } else {
-            format!("{}.", prefix.trim_end_matches('.'))
-        };
-
-        Self { prefix }
+        Self
     }
 }
 
 impl Recorder for DogStatsDBackend {
     fn record_metric(&self, metric: Metric<'_>) {
-        let key: metrics::SharedString = format!("{}{}", self.prefix, metric.key).into();
+        let key: metrics::SharedString = metric.key.to_string().into();
         let labels: Vec<Label> = metric
             .tags
             .iter()
