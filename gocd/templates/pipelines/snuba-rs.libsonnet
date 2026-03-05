@@ -64,6 +64,25 @@ local saas_health_check(region) =
     [];
 
 
+local peak_hours_check(region) =
+  if region == 'us' then
+    [
+      {
+        'check-peak-hours': {
+          jobs: {
+            'check-peak-hours': {
+              elastic_profile_id: 'snuba',
+              tasks: [
+                gocdtasks.script(importstr '../bash/check-peak-hours.sh'),
+              ],
+            },
+          },
+        },
+      },
+    ]
+  else
+    [];
+
 local deploy_canary_stage(region) =
   if region == 'us' then
     [
@@ -169,7 +188,7 @@ function(region) {
       },
     },
 
-  ] + deploy_canary_stage(region) + [
+  ] + peak_hours_check(region) + deploy_canary_stage(region) + [
 
     {
       'deploy-primary': {
