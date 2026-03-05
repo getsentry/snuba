@@ -81,7 +81,7 @@ impl<TNext> OutcomesAggregator<TNext> {
         // Committable offset is latest_offset + 1 (next offset to consume) per partition.
         let committable: BTreeMap<Partition, u64> = latest_offsets
             .iter()
-            .map(|(partition, offset)| (partition.clone(), offset + 1))
+            .map(|(partition, offset)| (*partition, offset + 1))
             .collect();
 
         let message = Message::new_any_message(batch.clone(), committable);
@@ -124,7 +124,7 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
             return Ok(());
         };
 
-        let partition = broker_msg.partition.clone();
+        let partition = broker_msg.partition;
         let broker_offset = broker_msg.offset;
 
         self.latest_offsets

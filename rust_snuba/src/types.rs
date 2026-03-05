@@ -563,7 +563,7 @@ pub struct BucketKey {
 }
 
 /// Statistics for a single bucket
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct BucketStats {
     pub quantity: u64,
 }
@@ -571,12 +571,6 @@ pub struct BucketStats {
 impl BucketStats {
     pub fn new(quantity: u64) -> Self {
         Self { quantity }
-    }
-}
-
-impl Default for BucketStats {
-    fn default() -> Self {
-        Self { quantity: 0 }
     }
 }
 
