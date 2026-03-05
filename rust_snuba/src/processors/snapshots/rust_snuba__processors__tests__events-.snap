@@ -4,6 +4,12 @@ expression: diff
 ---
 [
     Change {
+        path: ".<anyOf:0>.0",
+        change: FormatAdd {
+            added: "uint8",
+        },
+    },
+    Change {
         path: ".<anyOf:0>.2",
         change: PropertyAdd {
             lhs_additional_properties: true,
@@ -25,9 +31,45 @@ expression: diff
         },
     },
     Change {
+        path: ".<anyOf:0>.2.data.exception.<anyOf:0>.values.<anyOf:0>.?.<anyOf:0>.thread_id.<anyOf:0>.<anyOf:0>",
+        change: FormatAdd {
+            added: "uint64",
+        },
+    },
+    Change {
+        path: ".<anyOf:0>.2.data.threads.<anyOf:0>.values.<anyOf:0>.?.<anyOf:0>.id.<anyOf:0>.<anyOf:0>",
+        change: FormatAdd {
+            added: "uint64",
+        },
+    },
+    Change {
+        path: ".<anyOf:0>.2.event_id",
+        change: FormatAdd {
+            added: "uuid",
+        },
+    },
+    Change {
+        path: ".<anyOf:0>.2.group_id",
+        change: FormatAdd {
+            added: "uint64",
+        },
+    },
+    Change {
+        path: ".<anyOf:0>.2.project_id",
+        change: FormatAdd {
+            added: "uint64",
+        },
+    },
+    Change {
         path: ".<anyOf:1>.0",
         change: TypeRemove {
             removed: Number,
+        },
+    },
+    Change {
+        path: ".<anyOf:1>.0",
+        change: FormatAdd {
+            added: "uint8",
         },
     },
     Change {
@@ -36,6 +78,12 @@ expression: diff
             added: Minimum(
                 0.0,
             ),
+        },
+    },
+    Change {
+        path: ".<anyOf:1>.2.project_id",
+        change: FormatAdd {
+            added: "uint64",
         },
     },
 ]
