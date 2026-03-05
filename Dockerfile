@@ -9,7 +9,7 @@ ENV PATH="/.venv/bin:$PATH" UV_PROJECT_ENVIRONMENT=/.venv \
     UV_COMPILE_BYTECODE=1 UV_NO_CACHE=1
 
 RUN python3 -m pip install \
-		--index-url 'https://pypi.devinfra.sentry.io/simple' 'uv==0.8.2'
+		--index-url 'https://pypi.devinfra.sentry.io/simple' 'uv'
 
 # We don't want uv-managed python, we want to use python from the image.
 # We only want to use uv to manage dependencies.
