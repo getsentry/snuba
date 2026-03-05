@@ -133,7 +133,7 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
             .or_insert(broker_offset);
 
         let maybe_err = SubmitError::InvalidMessage(InvalidMessage {
-            partition: partition,
+            partition,
             offset: broker_offset,
         });
 
