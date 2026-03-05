@@ -58,6 +58,8 @@ impl TaskRunner<AggregatedOutcomesBatch, AggregatedOutcomesBatch, anyhow::Error>
                     org_id: key.org_id,
                     project_id: key.project_id,
                     key_id: key.key_id,
+                    // always ACCEPTED outcome
+                    outcome: 0,
                     category: key.category,
                     quantity: stats.quantity,
                 };

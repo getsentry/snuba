@@ -75,7 +75,10 @@ impl<TNext> OutcomesAggregator<TNext> {
     where
         TNext: ProcessingStrategy<AggregatedOutcomesBatch>,
     {
-        let batch = std::mem::take(&mut self.batch);
+        let batch = std::mem::replace(
+            &mut self.batch,
+            AggregatedOutcomesBatch::new(self.bucket_interval),
+        );
         let latest_offsets = std::mem::take(&mut self.latest_offsets);
 
         // Committable offset is latest_offset + 1 (next offset to consume) per partition.
@@ -401,5 +404,7 @@ mod tests {
 
         aggregator.poll().unwrap();
         assert_eq!(aggregator.batch.num_buckets(), 0);
+        // make sure new batch retains bucket_interval
+        assert_eq!(aggregator.batch.bucket_interval, 60);
     }
 }

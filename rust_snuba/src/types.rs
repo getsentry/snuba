@@ -544,6 +544,8 @@ pub struct TrackOutcome {
     pub org_id: u64,
     pub project_id: u64,
     pub key_id: u64,
+    /// (0 = accepted)
+    pub outcome: u8,
     /// DataCategory uint32 value as defined in Relay
     pub category: u32,
     pub quantity: u64,
@@ -576,11 +578,20 @@ impl BucketStats {
 
 /// Batch type for aggregated outcomes data
 /// Stores bucketed counts instead of raw row data
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct AggregatedOutcomesBatch {
     /// Map from bucket key to aggregated statistics
     pub buckets: HashMap<BucketKey, BucketStats>,
     pub bucket_interval: u64,
+}
+
+impl Default for AggregatedOutcomesBatch {
+    fn default() -> Self {
+        Self {
+            buckets: HashMap::new(),
+            bucket_interval: 60,
+        }
+    }
 }
 
 impl AggregatedOutcomesBatch {
