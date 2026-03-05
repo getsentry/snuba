@@ -30,6 +30,7 @@ impl DogStatsDBackend {
             .expect("invalid DogStatsD address")
             .set_global_prefix(prefix)
             .with_global_labels(global_labels)
+            .send_histograms_as_distributions(false)
             .install()
             .expect("failed to install DogStatsD exporter");
 
