@@ -249,7 +249,7 @@ mod tests {
         );
 
         let topic = Topic::new("accepted-outcomes");
-        let partition_0 = Partition::new(topic.clone(), 0);
+        let partition_0 = Partition::new(topic, 0);
         let partition_1 = Partition::new(topic, 1);
         let payload = make_payload(1_700_000_000, 1, 2, 3, &[(4, 1)]);
 
@@ -258,7 +258,7 @@ mod tests {
             aggregator
                 .submit(Message::new_broker_message(
                     payload.clone(),
-                    partition_0.clone(),
+                    partition_0,
                     offset,
                     Utc::now(),
                 ))
@@ -269,7 +269,7 @@ mod tests {
             aggregator
                 .submit(Message::new_broker_message(
                     payload.clone(),
-                    partition_1.clone(),
+                    partition_1,
                     offset,
                     Utc::now(),
                 ))
@@ -302,7 +302,7 @@ mod tests {
         aggregator
             .submit(Message::new_broker_message(
                 make_payload(1_700_000_000, 1, 2, 3, &[(4, 7)]),
-                partition.clone(),
+                partition,
                 0,
                 Utc::now(),
             ))
@@ -310,7 +310,7 @@ mod tests {
         aggregator
             .submit(Message::new_broker_message(
                 make_payload(1_700_000_000, 1, 2, 3, &[(4, 3)]),
-                partition.clone(),
+                partition,
                 1,
                 Utc::now(),
             ))
@@ -319,7 +319,7 @@ mod tests {
         aggregator
             .submit(Message::new_broker_message(
                 make_payload(1_700_000_060, 1, 2, 3, &[(4, 5), (7, 2)]),
-                partition.clone(),
+                partition,
                 2,
                 Utc::now(),
             ))
