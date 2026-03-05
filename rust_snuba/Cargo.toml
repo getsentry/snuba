@@ -26,6 +26,7 @@ adler = "1.0.2"
 anyhow = { version = "1.0.69", features = ["backtrace"] }
 cadence = "1.0.0"
 chrono = { version = "0.4.26", features = ["serde"] }
+clickhouse = { version = "0.13", features = ["uuid"] }
 ctrlc = { version = "3.2.5", features = ["termination"] }
 data-encoding = "2.5.0"
 futures = "0.3.21"

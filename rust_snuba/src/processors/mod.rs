@@ -1,4 +1,4 @@
-mod eap_items;
+pub mod eap_items;
 mod errors;
 mod functions;
 mod generic_metrics;
