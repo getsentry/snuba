@@ -107,6 +107,7 @@ def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
                 "--storage=eap_items",
                 "--consumer-group=eap_items_group",
                 "--use-rust-processor",
+                "--use-row-binary",
                 *COMMON_RUST_CONSUMER_DEV_OPTIONS,
                 f"--log-level={log_level}",
             ],

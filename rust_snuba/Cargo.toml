@@ -25,6 +25,7 @@ crate-type = ["cdylib", "rlib"]
 adler = "1.0.2"
 anyhow = { version = "1.0.69", features = ["backtrace"] }
 chrono = { version = "0.4.26", features = ["serde"] }
+clickhouse = { version = "0.13", features = ["uuid"] }
 ctrlc = { version = "3.2.5", features = ["termination"] }
 data-encoding = "2.5.0"
 futures = "0.3.21"
@@ -53,7 +54,7 @@ sentry = { version = "0.41.0", default-features = false, features = [
     "tracing",
     "logs"
 ] }
-sentry-kafka-schemas = "2.1.21"
+sentry-kafka-schemas = "2.1.24"
 sentry_protos = "0.7.0"
 sentry_arroyo = { version = "2.37.0", features = ["ssl"] }
 sentry_usage_accountant = { version = "0.1.2", features = ["kafka"] }

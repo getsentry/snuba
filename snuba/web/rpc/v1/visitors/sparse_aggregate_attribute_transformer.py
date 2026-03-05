@@ -1,4 +1,5 @@
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     AndFilter,
     ExistsFilter,
@@ -42,7 +43,9 @@ class SparseAggregateAttributeTransformer:
         agg_keys = []
         for column in self.req.columns:
             if column.WhichOneof("column") == "conditional_aggregation":
-                agg_keys.append(column.conditional_aggregation.key)
+                # not supported for KeyExpression in conditional_aggregate
+                if column.conditional_aggregation.key != AttributeKey():
+                    agg_keys.append(column.conditional_aggregation.key)
 
         if len(agg_keys) == 0:
             return self.req
