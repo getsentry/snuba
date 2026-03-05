@@ -121,7 +121,7 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
 
     fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), SubmitError<KafkaPayload>> {
         let InnerMessage::BrokerMessage(ref broker_msg) = message.inner_message else {
-            return Ok(());
+            unreachable!("Unexpected message type");
         };
 
         let partition = broker_msg.partition;
@@ -132,8 +132,14 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
             .and_modify(|o| *o = (*o).max(broker_offset))
             .or_insert(broker_offset);
 
-        let Some(payload) = broker_msg.payload.payload() else {
-            return Ok(());
+        let maybe_err = SubmitError::InvalidMessage(InvalidMessage {
+            partition: partition,
+            offset: broker_offset,
+        });
+
+        let kafka_payload = &broker_msg.payload.clone();
+        let Some(payload) = kafka_payload.payload() else {
+            return Err(maybe_err);
         };
 
         let trace_item = match TraceItem::decode(payload as &[u8]) {
