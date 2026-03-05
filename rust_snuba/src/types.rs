@@ -540,7 +540,7 @@ mod tests {
 #[derive(Debug, Clone, Serialize)]
 pub struct TrackOutcome {
     /// Bucket timestamp in seconds: offset * bucket_interval
-    pub timestamp: u64,
+    pub timestamp: DateTime<Utc>,
     pub org_id: u64,
     pub project_id: u64,
     pub key_id: u64,

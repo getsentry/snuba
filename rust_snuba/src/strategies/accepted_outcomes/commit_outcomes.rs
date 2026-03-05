@@ -8,7 +8,6 @@ use sentry_arroyo::types::{Message, Partition};
 
 use crate::types::AggregatedOutcomesBatch;
 
-/// Commits Kafka offsets for a batch of TrackOutcome messages and forwards to the next step.
 pub struct CommitOutcomes<TNext> {
     next_step: TNext,
     /// Accumulated max committable offset per partition, drained on each poll/join.

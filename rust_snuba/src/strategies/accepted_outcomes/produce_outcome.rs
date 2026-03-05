@@ -1,4 +1,5 @@
 use crate::types::{AggregatedOutcomesBatch, TrackOutcome};
+use chrono::{DateTime, Utc};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::backends::Producer;
 use sentry_arroyo::counter;
@@ -53,8 +54,12 @@ impl TaskRunner<AggregatedOutcomesBatch, AggregatedOutcomesBatch, anyhow::Error>
                 entry.0 += 1;
                 entry.1 += stats.quantity;
 
+                let ts_secs = key.time_offset * bucket_interval;
+                let timestamp =
+                    DateTime::from_timestamp(ts_secs as i64, 0).unwrap_or_else(Utc::now);
+
                 let outcome = TrackOutcome {
-                    timestamp: key.time_offset * bucket_interval,
+                    timestamp,
                     org_id: key.org_id,
                     project_id: key.project_id,
                     key_id: key.key_id,
