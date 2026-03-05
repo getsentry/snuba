@@ -46,7 +46,7 @@ def create_metrics(
 
     use_uds = str(state.get_config("use_dogstatsd_uds", "0")) == "1"
 
-    if use_uds:
+    if use_uds and settings.DOGSTATSD_SOCKET_PATH is not None:
         return SentryDatadogMetricsBackend(
             DatadogMetricsBackend(
                 partial(
