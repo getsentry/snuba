@@ -32,7 +32,7 @@ jobs:
     - uses: actions/checkout@v6.0.2
       with:
         token: ${{ secrets.GETSENTRY_BOT_REVERT_TOKEN }}
-    - uses: astral-sh/setup-uv@884ad927a57e558e7a70b92f2bccf9198a4be546 # v6
+    - uses: astral-sh/setup-uv@v7
     - run: uv python install
     - run: |
         set -euxo pipefail
