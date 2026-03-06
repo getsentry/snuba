@@ -32,18 +32,17 @@ jobs:
       - uses: actions/checkout@v6.0.2
         name: Checkout code
 
-      - uses: astral-sh/setup-uv@884ad927a57e558e7a70b92f2bccf9198a4be546 # v6
+      - uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098 # v7.3.1
         with:
-          version: '0.8.2'
           enable-cache: false
 
       - name: Test bump_version.py runs without errors
         run: |
           # Test that the script can be imported and shows help
-          python tools/bump_version.py --help
+          uv run python tools/bump_version.py --help
 
           # Test with a dry run (should fail with appropriate message for non-existent package)
-          python tools/bump_version.py test-package 1.0.0 || echo "Expected failure for non-existent package"
+          uv run python tools/bump_version.py test-package 1.0.0 || echo "Expected failure for non-existent package"
 
   linting:
     name: "pre-commit hooks" # (includes Python formatting + linting)
@@ -64,9 +63,8 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
 
-      - uses: astral-sh/setup-uv@884ad927a57e558e7a70b92f2bccf9198a4be546 # v6
+      - uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098 # v7.3.1
         with:
-          version: '0.8.2'
           # we just cache the venv-dir directly in action-setup-venv
           enable-cache: false
 
@@ -149,9 +147,8 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
 
-      - uses: astral-sh/setup-uv@884ad927a57e558e7a70b92f2bccf9198a4be546 # v6
+      - uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098 # v7.3.1
         with:
-          version: '0.8.2'
           # we just cache the venv-dir directly in action-setup-venv
           enable-cache: false
 
