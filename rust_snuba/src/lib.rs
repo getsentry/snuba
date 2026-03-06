@@ -27,7 +27,7 @@ pub use config::{
     StorageConfig, TopicConfig,
 };
 pub use factory_v2::ConsumerStrategyFactoryV2;
-pub use metrics::statsd::StatsDBackend;
+pub use metrics::statsd::DogStatsDBackend;
 pub use processors::{ProcessingFunction, ProcessingFunctionType, PROCESSORS};
 pub use strategies::noop::Noop;
 pub use strategies::python::PythonTransformStep;

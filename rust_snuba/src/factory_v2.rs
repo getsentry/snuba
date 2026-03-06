@@ -146,6 +146,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             &self.clickhouse_concurrency,
         );
 
+        #[allow(clippy::result_large_err)]
         let accumulator = Arc::new(
             |batch: BytesInsertBatch<RowData>, small_batch: Message<BytesInsertBatch<RowData>>| {
                 Ok(batch.merge(small_batch.into_payload()))
@@ -327,6 +328,7 @@ impl ConsumerStrategyFactoryV2 {
             &self.clickhouse_concurrency,
         );
 
+        #[allow(clippy::result_large_err)]
         let accumulator = Arc::new(
             |batch: BytesInsertBatch<Vec<T>>, small_batch: Message<BytesInsertBatch<Vec<T>>>| {
                 Ok(batch.merge(small_batch.into_payload()))

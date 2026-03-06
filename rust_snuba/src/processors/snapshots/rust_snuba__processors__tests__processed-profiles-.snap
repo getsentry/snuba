@@ -4,26 +4,19 @@ expression: diff
 ---
 [
     Change {
-        path: "",
-        change: PropertyAdd {
-            lhs_additional_properties: true,
-            added: "environment",
-        },
-    },
-    Change {
-        path: ".chunk_id",
+        path: ".duration_ns",
         change: FormatAdd {
-            added: "uuid",
+            added: "uint64",
         },
     },
     Change {
-        path: ".end_timestamp",
+        path: ".organization_id",
         change: FormatAdd {
-            added: "double",
+            added: "uint64",
         },
     },
     Change {
-        path: ".profiler_id",
+        path: ".profile_id",
         change: FormatAdd {
             added: "uuid",
         },
@@ -41,9 +34,15 @@ expression: diff
         },
     },
     Change {
-        path: ".start_timestamp",
+        path: ".trace_id",
         change: FormatAdd {
-            added: "double",
+            added: "uuid",
+        },
+    },
+    Change {
+        path: ".transaction_id",
+        change: FormatAdd {
+            added: "uuid",
         },
     },
 ]

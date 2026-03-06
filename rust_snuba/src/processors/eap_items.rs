@@ -73,6 +73,7 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
         TraceItemType::Attachment => "attachments",
         TraceItemType::Preprod => "preprod",
         TraceItemType::UserSession => "sessions",
+        TraceItemType::ProcessingError => "processing_errors",
         TraceItemType::Unspecified => "null",
     }
     .to_string();

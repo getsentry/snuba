@@ -1,56 +1,99 @@
-use std::time::Duration;
+use metrics::Label;
+use metrics_exporter_dogstatsd::DogStatsDBuilder;
+use sentry_arroyo::metrics::{Metric, MetricType, MetricValue, Recorder};
 
-use sentry_arroyo::metrics::{Metric, MetricSink, Recorder, StatsdRecorder};
-use statsdproxy::cadence::StatsdProxyMetricSink;
-use statsdproxy::config::AggregateMetricsConfig;
-use statsdproxy::middleware::aggregate::AggregateMetrics;
-use statsdproxy::middleware::upstream::Upstream;
+use crate::metrics::global_tags::get_global_tags;
 
-use crate::metrics::global_tags::AddGlobalTags;
-
+/// A metrics backend that uses `metrics-exporter-dogstatsd` to send metrics
+/// to DogStatsD over UDP or Unix domain sockets. Adapts arroyo's [`Recorder`]
+/// trait to the `metrics` crate facade installed by the exporter.
 #[derive(Debug)]
-pub struct StatsDBackend {
-    recorder: StatsdRecorder<Wrapper>,
+pub struct DogStatsDBackend;
+
+impl DogStatsDBackend {
+    pub fn new_udp(host: &str, port: u16, prefix: &str, tags: &[(&str, String)]) -> Self {
+        let addr = format!("{}:{}", host, port);
+        Self::build(&addr, prefix, tags)
+    }
+
+    pub fn new_uds(socket_path: &str, prefix: &str, tags: &[(&str, String)]) -> Self {
+        let addr = format!("unixgram://{}", socket_path);
+        Self::build(&addr, prefix, tags)
+    }
+
+    fn build(addr: &str, prefix: &str, tags: &[(&str, String)]) -> Self {
+        let global_labels: Vec<Label> = tags
+            .iter()
+            .map(|(k, v)| Label::new(k.to_string(), v.clone()))
+            .collect();
+
+        DogStatsDBuilder::default()
+            .with_remote_address(addr)
+            .expect("invalid DogStatsD address")
+            .set_global_prefix(prefix)
+            .with_global_labels(global_labels)
+            .send_histograms_as_distributions(false)
+            .install()
+            .expect("failed to install DogStatsD exporter");
+
+        Self
+    }
 }
 
-impl Recorder for StatsDBackend {
+impl Recorder for DogStatsDBackend {
     fn record_metric(&self, metric: Metric<'_>) {
-        self.recorder.record_metric(metric)
-    }
-}
+        let key: metrics::SharedString = metric.key.to_string().into();
+        let mut labels: Vec<Label> = metric
+            .tags
+            .iter()
+            .map(|(k, v)| Label::new(k.to_string(), v.to_string()))
+            .collect();
 
-struct Wrapper(Box<dyn cadence::MetricSink + Send + Sync + 'static>);
+        for (k, v) in get_global_tags() {
+            labels.push(Label::new(k, v));
+        }
+        let metadata = metrics::Metadata::new("snuba", metrics::Level::INFO, None);
+        let key = metrics::Key::from_parts(key, labels);
 
-impl MetricSink for Wrapper {
-    fn emit(&self, metric: &str) {
-        let _ = self.0.emit(metric);
-    }
-}
-
-impl StatsDBackend {
-    pub fn new(host: &str, port: u16, prefix: &str) -> Self {
-        let upstream_addr = format!("{}:{}", host, port);
-        let aggregator_sink = StatsdProxyMetricSink::new(move || {
-            let upstream = Upstream::new(upstream_addr.clone()).unwrap();
-
-            let config = AggregateMetricsConfig {
-                aggregate_counters: true,
-                flush_offset: 0,
-                flush_interval: Duration::from_secs(1),
-                aggregate_gauges: true,
-                max_map_size: None,
-            };
-            let aggregate = AggregateMetrics::new(config, upstream);
-
-            // adding global tags *after* aggregation is more performant than trying to do the same
-            // in cadence, as it means more bytes and more memory to deal with in
-            // AggregateMetricsConfig
-            AddGlobalTags::new(aggregate)
-        });
-
-        let recorder = StatsdRecorder::new(prefix, Wrapper(Box::new(aggregator_sink)));
-
-        Self { recorder }
+        match metric.ty {
+            MetricType::Counter => {
+                let value = match metric.value {
+                    MetricValue::I64(v) => v as u64,
+                    MetricValue::U64(v) => v,
+                    MetricValue::F64(v) => v as u64,
+                    MetricValue::Duration(d) => d.as_millis() as u64,
+                    _ => return,
+                };
+                metrics::with_recorder(|rec| {
+                    rec.register_counter(&key, &metadata).increment(value);
+                });
+            }
+            MetricType::Gauge => {
+                let value = match metric.value {
+                    MetricValue::I64(v) => v as f64,
+                    MetricValue::U64(v) => v as f64,
+                    MetricValue::F64(v) => v,
+                    MetricValue::Duration(d) => d.as_millis() as f64,
+                    _ => return,
+                };
+                metrics::with_recorder(|rec| {
+                    rec.register_gauge(&key, &metadata).set(value);
+                });
+            }
+            MetricType::Timer => {
+                let value = match metric.value {
+                    MetricValue::I64(v) => v as f64,
+                    MetricValue::U64(v) => v as f64,
+                    MetricValue::F64(v) => v,
+                    MetricValue::Duration(d) => d.as_millis() as f64,
+                    _ => return,
+                };
+                metrics::with_recorder(|rec| {
+                    rec.register_histogram(&key, &metadata).record(value);
+                });
+            }
+            _ => {}
+        }
     }
 }
 
@@ -61,8 +104,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn statsd_metric_backend() {
-        let backend = StatsDBackend::new("0.0.0.0", 8125, "test");
+    fn dogstatsd_metric_backend() {
+        let backend = DogStatsDBackend::new_udp("0.0.0.0", 8125, "test", &[]);
 
         backend.record_metric(metric!(Counter: "a", 1, "tag1" => "value1"));
         backend.record_metric(metric!(Gauge: "b", 20, "tag2" => "value2"));

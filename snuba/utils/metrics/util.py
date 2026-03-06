@@ -1,8 +1,8 @@
+import _strptime  # NOQA fixes _strptime deferred import issue
 import inspect
 from functools import partial, wraps
 from typing import Any, Callable, Mapping, Optional, TypeVar, cast
 
-import _strptime  # NOQA fixes _strptime deferred import issue
 import sentry_sdk
 
 from snuba import settings
@@ -35,11 +35,30 @@ def create_metrics(
             f"DOGSTATSD_HOST and DOGSTATSD_PORT should both be None or not None. Found DOGSTATSD_HOST: {host}, DOGSTATSD_PORT: {port} instead."
         )
 
-    from datadog import DogStatsd
+    from datadog import DogStatsd  # type: ignore[attr-defined]
 
+    from snuba import state
     from snuba.utils.metrics.backends.datadog import DatadogMetricsBackend
     from snuba.utils.metrics.backends.dualwrite import SentryDatadogMetricsBackend
     from snuba.utils.metrics.backends.sentry import SentryMetricsBackend
+
+    constant_tags = [f"{key}:{value}" for key, value in tags.items()] if tags is not None else None
+
+    use_uds = str(state.get_config("use_dogstatsd_uds", "0")) == "1"
+
+    if use_uds and settings.DOGSTATSD_SOCKET_PATH is not None:
+        return SentryDatadogMetricsBackend(
+            DatadogMetricsBackend(
+                partial(
+                    DogStatsd,
+                    socket_path=settings.DOGSTATSD_SOCKET_PATH,
+                    namespace=prefix,
+                    constant_tags=constant_tags,
+                ),
+                sample_rates,
+            ),
+            SentryMetricsBackend(),
+        )
 
     return SentryDatadogMetricsBackend(
         DatadogMetricsBackend(
@@ -48,9 +67,7 @@ def create_metrics(
                 host=host,
                 port=port,
                 namespace=prefix,
-                constant_tags=(
-                    [f"{key}:{value}" for key, value in tags.items()] if tags is not None else None
-                ),
+                constant_tags=constant_tags,
             ),
             sample_rates,
         ),

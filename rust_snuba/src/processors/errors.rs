@@ -90,6 +90,7 @@ pub fn process_message_with_replacement(
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(untagged)]
+#[allow(clippy::large_enum_variant)]
 enum Message {
     FourTrain(FourTrain),
     ThreeTrain(ThreeTrain),

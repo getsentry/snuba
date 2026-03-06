@@ -1,125 +1,60 @@
 use std::collections::BTreeMap;
+use std::sync::{LazyLock, RwLock};
 
-use parking_lot::RwLock;
-use statsdproxy::middleware::Middleware;
-use statsdproxy::types::Metric;
+static GLOBAL_TAGS: LazyLock<RwLock<BTreeMap<String, String>>> =
+    LazyLock::new(|| RwLock::new(BTreeMap::new()));
 
-static GLOBAL_TAGS: RwLock<BTreeMap<String, String>> = RwLock::new(BTreeMap::new());
-
+/// Sets a tag on the current Sentry scope and stores it for DogStatsD metrics.
 pub fn set_global_tag(key: String, value: String) {
     sentry::configure_scope(|scope| {
         scope.set_tag(&key, &value);
     });
-    GLOBAL_TAGS.write().insert(key, value);
+    GLOBAL_TAGS.write().unwrap().insert(key, value);
 }
 
-pub struct AddGlobalTags<'a, M> {
-    next: M,
-    global_tags: &'a RwLock<BTreeMap<String, String>>,
-}
-
-impl<M> AddGlobalTags<'static, M>
-where
-    M: Middleware,
-{
-    pub fn new(next: M) -> Self {
-        Self::new_with_tagmap(next, &GLOBAL_TAGS)
-    }
-}
-
-impl<'a, M> AddGlobalTags<'a, M>
-where
-    M: Middleware,
-{
-    fn new_with_tagmap(next: M, global_tags: &'a RwLock<BTreeMap<String, String>>) -> Self {
-        AddGlobalTags { next, global_tags }
-    }
-}
-
-impl<M> Middleware for AddGlobalTags<'_, M>
-where
-    M: Middleware,
-{
-    fn poll(&mut self) {
-        self.next.poll()
-    }
-
-    fn submit(&mut self, metric: &mut Metric) {
-        let global_tags = self.global_tags.read();
-
-        if global_tags.is_empty() {
-            return self.next.submit(metric);
-        }
-
-        let mut tag_buffer: Vec<u8> = Vec::new();
-        let mut add_comma = false;
-        match metric.tags() {
-            Some(tags) if !tags.is_empty() => {
-                tag_buffer.extend(tags);
-                add_comma = true;
-            }
-            _ => (),
-        }
-        for (k, v) in global_tags.iter() {
-            if add_comma {
-                tag_buffer.push(b',');
-            }
-            tag_buffer.extend(k.as_bytes());
-            tag_buffer.push(b':');
-            tag_buffer.extend(v.as_bytes());
-            add_comma = true;
-        }
-
-        metric.set_tags(&tag_buffer);
-
-        self.next.submit(metric)
-    }
+pub fn get_global_tags() -> Vec<(String, String)> {
+    GLOBAL_TAGS
+        .read()
+        .unwrap()
+        .iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    use std::cell::RefCell;
-    use std::collections::BTreeMap;
+    #[test]
+    fn test_set_and_get_global_tags() {
+        set_global_tag("env".to_owned(), "production".to_owned());
+        set_global_tag("region".to_owned(), "us-east".to_owned());
 
-    use statsdproxy::{middleware::Middleware, types::Metric};
-
-    struct FnStep<F>(pub F);
-
-    impl<F> Middleware for FnStep<F>
-    where
-        F: FnMut(&mut Metric),
-    {
-        fn submit(&mut self, metric: &mut Metric) {
-            (self.0)(metric)
-        }
+        let tags = get_global_tags();
+        assert!(tags.contains(&("env".to_owned(), "production".to_owned())));
+        assert!(tags.contains(&("region".to_owned(), "us-east".to_owned())));
     }
 
     #[test]
-    fn test_basic() {
-        let test_cases = [
-            // Without tags
-            ("users.online:1|c", "users.online:1|c|#env:prod"),
-            // With tags
-            (
-                "users.online:1|c|#tag1:a",
-                "users.online:1|c|#tag1:a,env:prod",
-            ),
-        ];
+    fn test_overwrite_global_tag() {
+        set_global_tag("env".to_owned(), "staging".to_owned());
+        set_global_tag("env".to_owned(), "production".to_owned());
 
-        for test_case in test_cases {
-            let results = RefCell::new(vec![]);
-            let global_tags = RwLock::new(BTreeMap::from([("env".to_owned(), "prod".to_owned())]));
+        let tags = get_global_tags();
+        let env_tags: Vec<_> = tags.iter().filter(|(k, _)| k == "env").collect();
+        assert_eq!(env_tags.len(), 1);
+        assert_eq!(env_tags[0].1, "production");
+    }
 
-            let step = FnStep(|metric: &mut Metric| results.borrow_mut().push(metric.clone()));
-            let mut middleware = AddGlobalTags::new_with_tagmap(step, &global_tags);
+    #[test]
+    fn test_tags_sorted_by_key() {
+        set_global_tag("z_key".to_owned(), "z_val".to_owned());
+        set_global_tag("a_key".to_owned(), "a_val".to_owned());
 
-            let mut metric = Metric::new(test_case.0.as_bytes().to_vec());
-            middleware.submit(&mut metric);
-            assert_eq!(results.borrow().len(), 1);
-            let updated_metric = Metric::new(results.borrow_mut()[0].raw.clone());
-            assert_eq!(updated_metric.raw, test_case.1.as_bytes());
-        }
+        let tags = get_global_tags();
+        let keys: Vec<_> = tags.iter().map(|(k, _)| k.clone()).collect();
+        let mut sorted_keys = keys.clone();
+        sorted_keys.sort();
+        assert_eq!(keys, sorted_keys);
     }
 }
