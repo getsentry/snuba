@@ -1231,4 +1231,28 @@ mod tests {
             (1.0 / MIN_SAMPLING_FACTOR).round() as u64
         );
     }
+
+    #[test]
+    #[should_panic(expected = "mid > len")]
+    fn test_empty_item_id_field() {
+        // When a producer omits item_id, proto3 defaults it to empty bytes (vec![]).
+        // read_item_id calls split_at(16) on the empty vec, which panics.
+        // This demonstrates a latent crash bug: any TraceItem missing item_id
+        // will take down the Snuba consumer.
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.item_id = vec![];
+
+        let mut payload = Vec::new();
+        trace_item.encode(&mut payload).unwrap();
+
+        let kafka_payload = KafkaPayload::new(None, None, Some(payload));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+
+        let _ = process_message(kafka_payload, meta, &ProcessorConfig::default());
+    }
 }
