@@ -12,9 +12,7 @@ class Migration(migration.ClickhouseNodeMigration):
     blocking = False
     granularity = "2048"
     tag_value_view_name = "generic_metric_counters_meta_tag_value_aggregation_mv"
-    tag_value_local_table_name = (
-        "generic_metric_counters_meta_tag_value_aggregated_local"
-    )
+    tag_value_local_table_name = "generic_metric_counters_meta_tag_value_aggregated_local"
     tag_value_dist_table_name = "generic_metric_counters_meta_tag_value_aggregated_dist"
     tag_value_table_columns: Sequence[Column[Modifiers]] = [
         Column("project_id", UInt(64)),
@@ -169,7 +167,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     toStartOfWeek(timestamp) as timestamp,
                     retention_days,
                     groupUniqArrayState(tag_value) as `tag_values`,
-                    sumState(count_value) as count
+                    sumState(count_value) as value
                 FROM generic_metric_counters_raw_local
                 ARRAY JOIN
                     tags.key AS tag_key, tags.raw_value AS tag_value

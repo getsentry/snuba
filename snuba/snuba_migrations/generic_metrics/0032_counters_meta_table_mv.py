@@ -43,7 +43,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     toStartOfWeek(timestamp) as timestamp,
                     retention_days,
                     groupUniqArrayState(tag_value) as `tag_values`,
-                    sumState(count_value) as count
+                    sumState(count_value) as value
                 FROM generic_metric_counters_raw_local
                 ARRAY JOIN
                     tags.key AS tag_key, tags.raw_value AS tag_value
