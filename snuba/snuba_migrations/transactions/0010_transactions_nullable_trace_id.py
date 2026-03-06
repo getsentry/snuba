@@ -29,7 +29,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
                 table_name=table_name,
                 column=Column(
                     "trace_id",
-                    UUID(Modifiers(default="'00000000-0000-0000-0000-000000000000'")),
+                    UUID(Modifiers(default="toUUID('00000000-0000-0000-0000-000000000000')")),
                 ),
             ),
         ]
