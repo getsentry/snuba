@@ -36,7 +36,7 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("timestamp", DateTime(modifiers=Modifiers(codecs=["DoubleDelta"]))),
         Column("retention_days", UInt(16)),
         Column("tag_values", AggregateFunction("groupUniqArray", [String()])),
-        Column("value", AggregateFunction("sum", [Float(64)])),
+        Column("count", AggregateFunction("sum", [Float(64)])),
     ]
 
     storage_set_key = StorageSetKey.GENERIC_METRICS_COUNTERS
@@ -167,7 +167,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     toStartOfWeek(timestamp) as timestamp,
                     retention_days,
                     groupUniqArrayState(tag_value) as `tag_values`,
-                    sumState(count_value) as value
+                    sumState(count_value) as count
                 FROM generic_metric_counters_raw_local
                 ARRAY JOIN
                     tags.key AS tag_key, tags.raw_value AS tag_value
