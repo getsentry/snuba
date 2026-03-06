@@ -21,7 +21,7 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("timestamp", DateTime(modifiers=Modifiers(codecs=["DoubleDelta"]))),
         Column("retention_days", UInt(16)),
         Column("tag_values", AggregateFunction("groupUniqArray", [String()])),
-        Column("value", AggregateFunction("sum", [Float(64)])),
+        Column("count", AggregateFunction("sum", [Float(64)])),
     ]
     storage_set_key = StorageSetKey.GENERIC_METRICS_COUNTERS
 

@@ -52,9 +52,9 @@ class Migration(migration.ClickhouseNodeMigration):
                     tags.key,
                     tags.indexed_value,
                     tags.raw_value,
-                    maxState(timestamp as raw_timestamp) as last_timestamp,
+                    maxState(timestamp) as last_timestamp,
                     toDateTime(multiIf(granularity=0,10,granularity=1,60,granularity=2,3600,granularity=3,86400,-1) *
-                      intDiv(toUnixTimestamp(raw_timestamp),
+                      intDiv(toUnixTimestamp(timestamp),
                              multiIf(granularity=0,10,granularity=1,60,granularity=2,3600,granularity=3,86400,-1))) as rounded_timestamp,
                     least(retention_days,
                         multiIf(granularity=0,decasecond_retention_days,
@@ -68,7 +68,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     sumState(sampling_weight * arrayJoin(gauges_values.sum)) AS sum_weighted,
                     sumState(arrayJoin(gauges_values.count)) as count,
                     sumState(sampling_weight * arrayJoin(gauges_values.count)) AS count_weighted,
-                    argMaxState(arrayJoin(gauges_values.last), raw_timestamp) as last
+                    argMaxState(arrayJoin(gauges_values.last), timestamp) as last
                 FROM generic_metric_gauges_raw_local
                 WHERE materialization_version = 3
                   AND metric_type = 'gauge'
@@ -80,7 +80,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     tags.key,
                     tags.indexed_value,
                     tags.raw_value,
-                    raw_timestamp,
+                    timestamp,
                     granularity,
                     retention_days
                 """,
