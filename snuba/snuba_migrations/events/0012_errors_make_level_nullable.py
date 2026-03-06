@@ -29,7 +29,10 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
             operations.ModifyColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name=table_name,
-                column=Column("level", String(Modifiers(low_cardinality=True))),
+                column=Column(
+                    "level",
+                    String(Modifiers(low_cardinality=True, default="''")),
+                ),
             )
         ]
 
