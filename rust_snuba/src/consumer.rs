@@ -19,7 +19,6 @@ use pyo3::types::PyBytes;
 use crate::config;
 use crate::factory_v2::ConsumerStrategyFactoryV2;
 use crate::logging::{setup_logging, setup_sentry};
-use crate::metrics::global_tags::set_global_tag;
 use crate::metrics::statsd::DogStatsDBackend;
 use crate::processors;
 use crate::rebalancing;
@@ -172,8 +171,6 @@ pub fn consumer_impl(
         };
 
         if let Some(backend) = backend {
-            set_global_tag("storage".to_owned(), storage_name);
-            set_global_tag("consumer_group".to_owned(), consumer_group.to_owned());
             metrics::init(backend).unwrap();
         }
     }

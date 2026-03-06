@@ -2,6 +2,8 @@ use metrics::Label;
 use metrics_exporter_dogstatsd::DogStatsDBuilder;
 use sentry_arroyo::metrics::{Metric, MetricType, MetricValue, Recorder};
 
+use crate::metrics::global_tags::get_global_tags;
+
 /// A metrics backend that uses `metrics-exporter-dogstatsd` to send metrics
 /// to DogStatsD over UDP or Unix domain sockets. Adapts arroyo's [`Recorder`]
 /// trait to the `metrics` crate facade installed by the exporter.
@@ -41,11 +43,15 @@ impl DogStatsDBackend {
 impl Recorder for DogStatsDBackend {
     fn record_metric(&self, metric: Metric<'_>) {
         let key: metrics::SharedString = metric.key.to_string().into();
-        let labels: Vec<Label> = metric
+        let mut labels: Vec<Label> = metric
             .tags
             .iter()
             .map(|(k, v)| Label::new(k.to_string(), v.to_string()))
             .collect();
+
+        for (k, v) in get_global_tags() {
+            labels.push(Label::new(k, v));
+        }
         let metadata = metrics::Metadata::new("snuba", metrics::Level::INFO, None);
         let key = metrics::Key::from_parts(key, labels);
 
