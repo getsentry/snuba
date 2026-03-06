@@ -229,9 +229,12 @@ def resolve_consumer_config(
             ",".join(replacement_bootstrap_servers),
         )
 
+    accepted_outcomes_topic_spec = (
+        KafkaTopicSpec(Topic(accepted_outcomes_topic)) if accepted_outcomes_topic else None
+    )
     resolved_accepted_outcomes_topic = _resolve_topic_config(
         "accepted outcomes topic",
-        KafkaTopicSpec(Topic.OUTCOMES_BILLING),
+        accepted_outcomes_topic_spec,
         accepted_outcomes_topic,
         slice_id,
     )
