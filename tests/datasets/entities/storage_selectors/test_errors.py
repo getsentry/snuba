@@ -109,10 +109,7 @@ def test_query_storage_selector(
     use_readable: bool,
     expected_storage: Storage,
 ) -> None:
-    if use_readable:
-        state.set_config("enable_events_readonly_table", True)
-    else:
-        state.set_config("enable_events_readonly_table", False)
+    state.set_config("enable_events_readonly_table", use_readable)
 
     query = parse_snql_query(str(snql_query), dataset)
     assert isinstance(query, Query)
