@@ -13,6 +13,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     TraceItemFilter,
 )
 
+from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.pluggable_dataset import PluggableDataset
@@ -52,6 +53,10 @@ UNSEARCHABLE_ATTRIBUTE_KEYS = [
 ]
 
 NON_STORED_ATTRIBUTE_KEYS = ["sentry.service"]
+
+
+def _use_v2_co_occurring_attrs() -> bool:
+    return state.get_config("use_co_occurring_attrs_v2", 0) == 1
 
 
 class AttributeKeyCollector(ProtoVisitor):
@@ -161,7 +166,10 @@ def get_co_occurring_attributes(
     collector = AttributeKeyCollector()
     TraceItemFilterWrapper(request.intersecting_attributes_filter).accept(collector)
     attribute_keys_to_search = collector.keys
-    storage_key = StorageKey("eap_item_co_occurring_attrs")
+    if _use_v2_co_occurring_attrs():
+        storage_key = StorageKey("eap_item_co_occurring_attrs_v2")
+    else:
+        storage_key = StorageKey("eap_item_co_occurring_attrs")
 
     storage = Storage(
         key=storage_key,
@@ -305,11 +313,7 @@ def convert_co_occurring_results_to_attributes(
     query_res: QueryResult,
 ) -> list[TraceItemAttributeNamesResponse.Attribute]:
     def t(row: Row) -> TraceItemAttributeNamesResponse.Attribute:
-        # our query to snuba only selected 1 column, attr_key
-        # so the result should only have 1 item per row
-        vals = row.values()
-        assert len(vals) == 1
-        attr_type, attr_name = list(vals)[0]
+        attr_type, attr_name = row["attr_key"]
         assert isinstance(attr_type, str)
         return TraceItemAttributeNamesResponse.Attribute(
             name=attr_name, type=getattr(AttributeKey.Type, attr_type)
