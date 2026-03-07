@@ -1,3 +1,4 @@
+mod accepted_outcomes_consumer;
 mod config;
 mod consumer;
 mod factory_v2;
@@ -15,6 +16,10 @@ use pyo3::prelude::*;
 fn rust_snuba(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(consumer::consumer, m)?)?;
     m.add_function(wrap_pyfunction!(consumer::process_message, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        accepted_outcomes_consumer::accepted_outcomes_consumer,
+        m
+    )?)?;
     Ok(())
 }
 

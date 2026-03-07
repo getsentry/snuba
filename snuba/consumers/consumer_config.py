@@ -66,6 +66,7 @@ class ConsumerConfig:
     raw_topic: TopicConfig
     commit_log_topic: Optional[TopicConfig]
     replacements_topic: Optional[TopicConfig]
+    accepted_outcomes_topic: Optional[TopicConfig]
     dlq_topic: Optional[TopicConfig]
     max_batch_size: int
     max_batch_time_ms: int
@@ -151,6 +152,8 @@ def resolve_consumer_config(
     slice_id: Optional[int],
     max_batch_size: int,
     max_batch_time_ms: int,
+    accepted_outcomes_topic: Optional[str] = None,
+    accepted_outcomes_bootstrap_servers: Sequence[str] = (),
     queued_max_messages_kbytes: Optional[int] = None,
     queued_min_messages: Optional[int] = None,
     group_instance_id: Optional[str] = None,
@@ -226,6 +229,22 @@ def resolve_consumer_config(
             ",".join(replacement_bootstrap_servers),
         )
 
+    accepted_outcomes_topic_spec = (
+        KafkaTopicSpec(Topic(accepted_outcomes_topic)) if accepted_outcomes_topic else None
+    )
+    resolved_accepted_outcomes_topic = _resolve_topic_config(
+        "accepted outcomes topic",
+        accepted_outcomes_topic_spec,
+        accepted_outcomes_topic,
+        slice_id,
+    )
+    if resolved_accepted_outcomes_topic and accepted_outcomes_bootstrap_servers:
+        resolved_accepted_outcomes_topic = _add_to_topic_broker_config(
+            resolved_accepted_outcomes_topic,
+            "bootstrap.servers",
+            ",".join(accepted_outcomes_bootstrap_servers),
+        )
+
     resolved_env_config = _resolve_env_config()
 
     # DLQ topic does not support override via CLI
@@ -253,6 +272,7 @@ def resolve_consumer_config(
         raw_topic=resolved_raw_topic,
         commit_log_topic=resolved_commit_log_topic,
         replacements_topic=resolved_replacements_topic,
+        accepted_outcomes_topic=resolved_accepted_outcomes_topic,
         dlq_topic=resolved_dlq_topic,
         max_batch_size=max_batch_size,
         max_batch_time_ms=max_batch_time_ms,
