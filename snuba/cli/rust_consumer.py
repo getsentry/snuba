@@ -181,6 +181,12 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     help="Specify which health check to use for the consumer. If not specified, the default Arroyo health check is used.",
 )
 @click.option(
+    "--use-row-binary",
+    is_flag=True,
+    default=False,
+    help="Use RowBinary format for ClickHouse inserts instead of JSONEachRow. Currently only supported for EAPItemsProcessor.",
+)
+@click.option(
     "--consumer-version",
     default="v2",
     type=click.Choice(["v1", "v2"]),
@@ -218,6 +224,7 @@ def rust_consumer(
     max_dlq_buffer_length: Optional[int],
     quantized_rebalance_consumer_group_delay_secs: Optional[int],
     join_timeout_ms: Optional[int],
+    use_row_binary: bool,
     consumer_version: Optional[str],
 ) -> None:
     """
@@ -273,6 +280,7 @@ def rust_consumer(
         batch_write_timeout_ms,
         max_dlq_buffer_length,
         join_timeout_ms,
+        use_row_binary,
     )
 
     sys.exit(exitcode)

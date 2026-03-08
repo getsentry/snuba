@@ -1,5 +1,6 @@
 use std::cmp::min;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
@@ -288,7 +289,7 @@ impl<R> BytesInsertBatch<R> {
     /// Use builder methods to set optional fields as needed.
     ///
     /// # Example
-    /// ```ignore
+    /// ```text
     /// let batch = BytesInsertBatch::from_rows(rows)
     ///     .with_message_timestamp(timestamp)
     ///     .with_cogs_data(cogs_data);
@@ -425,6 +426,47 @@ impl BytesInsertBatch<RowData> {
     }
 }
 
+impl<T> BytesInsertBatch<Vec<T>> {
+    pub fn len(&self) -> usize {
+        self.rows.len()
+    }
+
+    pub fn merge(mut self, other: Self) -> Self {
+        self.rows.extend(other.rows);
+        self.commit_log_offsets.merge(other.commit_log_offsets);
+        self.message_timestamp.merge(other.message_timestamp);
+        self.origin_timestamp.merge(other.origin_timestamp);
+        self.sentry_received_timestamp
+            .merge(other.sentry_received_timestamp);
+        self.cogs_data.merge(other.cogs_data);
+        self.item_type_metrics.merge(other.item_type_metrics);
+        self
+    }
+}
+
+/// The return value of message processors that produce typed rows for RowBinary insertion.
+/// A single Kafka message may produce multiple rows, hence Vec<T>.
+#[derive(Clone, Debug)]
+pub struct TypedInsertBatch<T> {
+    pub rows: Vec<T>,
+    pub origin_timestamp: Option<DateTime<Utc>>,
+    pub sentry_received_timestamp: Option<DateTime<Utc>>,
+    pub cogs_data: Option<CogsData>,
+    pub item_type_metrics: Option<ItemTypeMetrics>,
+}
+
+impl<T> TypedInsertBatch<T> {
+    pub fn from_rows(rows: Vec<T>, origin_timestamp: Option<DateTime<Utc>>) -> Self {
+        Self {
+            rows,
+            origin_timestamp,
+            sentry_received_timestamp: None,
+            cogs_data: None,
+            item_type_metrics: None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq)]
 pub struct RowData {
     pub encoded_rows: Vec<u8>,
@@ -532,5 +574,88 @@ mod tests {
             metrics1.bytes_processed.get(&TraceItemType::Log),
             Some(&275)
         ); // 200 + 75
+    }
+}
+
+/// A single accepted outcome to be produced to the outcomes-billing topic.
+#[derive(Debug, Clone, Serialize)]
+pub struct TrackOutcome {
+    /// Bucket timestamp in seconds: offset * bucket_interval
+    pub timestamp: DateTime<Utc>,
+    pub org_id: u64,
+    pub project_id: u64,
+    pub key_id: u64,
+    /// (0 = accepted)
+    pub outcome: u8,
+    /// DataCategory uint32 value as defined in Relay
+    pub category: u32,
+    pub quantity: u64,
+}
+
+/// Key used to bucket accepted outcomes by time slot, organization, project, key, and data category.
+/// Outcome type is omitted because this consumer only processes accepted outcomes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct BucketKey {
+    /// Time slot index: floor(event_timestamp_secs / bucket_interval)
+    pub time_offset: u64,
+    pub org_id: u64,
+    pub project_id: u64,
+    pub key_id: u64,
+    /// DataCategory uint32 value as defined in Relay
+    pub category: u32,
+}
+
+/// Statistics for a single bucket
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct BucketStats {
+    pub quantity: u64,
+}
+
+impl BucketStats {
+    pub fn new(quantity: u64) -> Self {
+        Self { quantity }
+    }
+}
+
+/// Batch type for aggregated outcomes data
+/// Stores bucketed counts instead of raw row data
+#[derive(Clone, Debug)]
+pub struct AggregatedOutcomesBatch {
+    /// Map from bucket key to aggregated statistics
+    pub buckets: HashMap<BucketKey, BucketStats>,
+    pub bucket_interval: u64,
+}
+
+impl Default for AggregatedOutcomesBatch {
+    fn default() -> Self {
+        Self {
+            buckets: HashMap::new(),
+            bucket_interval: 60,
+        }
+    }
+}
+
+impl AggregatedOutcomesBatch {
+    /// Create a new empty batch
+    pub fn new(bucket_interval: u64) -> Self {
+        Self {
+            bucket_interval,
+            ..Default::default()
+        }
+    }
+
+    /// Add or update a bucket with a count and quantity
+    pub fn add_to_bucket(&mut self, key: BucketKey, quantity: u64) {
+        self.buckets
+            .entry(key)
+            .and_modify(|stats| {
+                stats.quantity += quantity;
+            })
+            .or_insert_with(|| BucketStats::new(quantity));
+    }
+
+    /// Get the total number of buckets
+    pub fn num_buckets(&self) -> usize {
+        self.buckets.len()
     }
 }

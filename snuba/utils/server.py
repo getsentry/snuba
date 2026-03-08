@@ -15,6 +15,7 @@ def serve(
     reload: bool = False,
     name: str | None = None,
     lifetime: int | None = None,
+    max_rss: int | None = None,
 ) -> None:
     host, port = bind.rsplit(":", maxsplit=1)
     server = Granian(
@@ -25,6 +26,7 @@ def serve(
         backlog=backlog,
         workers=processes,
         workers_lifetime=lifetime,
+        workers_max_rss=max_rss,
         workers_kill_timeout=30,
         blocking_threads=threads,
         respawn_failed_workers=True,

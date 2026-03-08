@@ -280,13 +280,17 @@ export function ShellInput({
       parent: containerRef.current,
     });
 
-    // Focus on mount
-    viewRef.current.focus();
-
     return () => {
       viewRef.current?.destroy();
       viewRef.current = null;
     };
+  }, []);
+
+  // Focus editor after paint to ensure it sticks on page navigation
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      viewRef.current?.focus();
+    });
   }, []);
 
   // Sync value from parent

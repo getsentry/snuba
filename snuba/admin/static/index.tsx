@@ -31,14 +31,14 @@ client.getSettings().then((settings) => {
     Sentry.init({
       dsn: settings.dsn,
       integrations: [
-        new Sentry.BrowserTracing(),
-        new Sentry.Replay({ maskAllText: false, blockAllMedia: false }),
-        new Sentry.BrowserProfilingIntegration(),
+        Sentry.browserTracingIntegration(),
+        Sentry.replayIntegration({ maskAllText: false, blockAllMedia: false }),
+        Sentry.browserProfilingIntegration(),
       ],
       // Performance Monitoring
       tracesSampleRate: settings.tracesSampleRate,
       // Profiles
-      profilesSampleRate: settings.profilesSampleRate,
+      profileSessionSampleRate: settings.profileSessionSampleRate,
       tracePropagationTargets: settings.tracePropagationTargets ?? undefined,
       // Session Replay
       replaysSessionSampleRate: settings.replaysSessionSampleRate,

@@ -11,17 +11,17 @@ from snuba.utils import server
 @click.option("--bind", help="Address to listen on.")
 @click.option("--debug", is_flag=True)
 @click.option("--log-level", help="Logging level to use.")
-@click.option("--processes", type=click.IntRange(1), default=1)
+@click.option("--processes", type=click.IntRange(1))
 @click.option("--threads", type=click.IntRange(1))
-@click.option("--backlog", type=click.IntRange(128), default=128)
+@click.option("--backlog", type=click.IntRange(128))
 def api(
     *,
     bind: Optional[str],
     debug: bool,
     log_level: Optional[str],
-    processes: int,
+    processes: Optional[int],
     threads: Optional[int],
-    backlog: int,
+    backlog: Optional[int],
 ) -> None:
     from snuba import settings
 
@@ -34,6 +34,9 @@ def api(
             raise click.ClickException("bind can only be in the format <host>:<port>")
     else:
         host, port = settings.HOST, settings.PORT
+
+    processes = processes or settings.API_WORKERS or 1
+    threads = threads or settings.API_THREADS
 
     if debug:
         if processes > 1 or (threads or 1) > 1:
@@ -51,11 +54,17 @@ def api(
         if log_level:
             os.environ["LOG_LEVEL"] = log_level
 
+        lifetime = settings.API_WORKERS_LIFETIME
+        max_rss = settings.API_WORKERS_MAX_RSS
+        backlog = backlog or max(128, 64 * processes)
+
         server.serve(
             "snuba.web.wsgi:application",
             f"{host}:{port}",
             processes=processes,
             threads=threads,
             backlog=backlog,
+            lifetime=lifetime,
+            max_rss=max_rss,
             name="snuba-api",
         )

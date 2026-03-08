@@ -22,6 +22,27 @@ from snuba.web import QueryException, QueryResult
 metrics = MetricsWrapper(environment.metrics, "api")
 from snuba.querylog.query_metadata import get_request_status
 
+_ITEM_TYPE_TO_APP_FEATURE: dict[str, str] = {
+    "TRACE_ITEM_TYPE_SPAN": "spans",
+    "TRACE_ITEM_TYPE_ERROR": "errors",
+    "TRACE_ITEM_TYPE_LOG": "our_logs",
+    "TRACE_ITEM_TYPE_UPTIME_CHECK": "uptime",
+    "TRACE_ITEM_TYPE_UPTIME_RESULT": "uptime",
+    "TRACE_ITEM_TYPE_REPLAY": "replays",
+    "TRACE_ITEM_TYPE_OCCURRENCE": "issueplatform",
+    "TRACE_ITEM_TYPE_METRIC": "sessions",
+    "TRACE_ITEM_TYPE_PROFILE_FUNCTION": "profiles",
+    "TRACE_ITEM_TYPE_ATTACHMENT": "attachments",
+    "TRACE_ITEM_TYPE_PREPROD": "preprod",
+    "TRACE_ITEM_TYPE_USER_SESSION": "sessions",
+    "TRACE_ITEM_TYPE_UNSPECIFIED": "null",
+}
+
+
+def _get_eap_app_feature(request: Request) -> str:
+    item_type = request.original_body.get("meta", {}).get("traceItemType", "")
+    return _ITEM_TYPE_TO_APP_FEATURE.get(item_type, "null")
+
 
 def _record_timer_metrics(
     request: Request,
@@ -113,6 +134,18 @@ def _record_cogs(
     if not profile or (bytes_scanned := profile.get("progress_bytes")) is None:
         return
 
+    cluster_name = query_metadata.query_list[0].stats.get("cluster_name", "")
+
+    if cluster_name.startswith("snuba-events-analytics-platform"):
+        if random() < (state.get_config("snuba_api_cogs_probability") or 0):
+            record_cogs(
+                resource_id="clickhouse",
+                app_feature=_get_eap_app_feature(request),
+                amount=bytes_scanned,
+                usage_type=UsageUnit.BYTES,
+            )
+        return
+
     # The dataset is usually a good proxy for app_feature
     # However, this is not always the case. We can
     # check the entity as well as a fallback option
@@ -128,8 +161,6 @@ def _record_cogs(
 
     elif query_metadata.dataset == "events":
         app_feature = "errors"
-
-    cluster_name = query_metadata.query_list[0].stats.get("cluster_name", "")
 
     if not cluster_name.startswith("snuba-gen-metrics"):
         return  # Only track shared clusters

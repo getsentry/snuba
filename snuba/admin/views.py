@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import io
-import ipaddress
 import sys
 from contextlib import redirect_stdout
 from dataclasses import asdict
@@ -167,7 +166,7 @@ def settings_endpoint() -> Response:
             {
                 "dsn": settings.ADMIN_FRONTEND_DSN,
                 "tracesSampleRate": settings.ADMIN_TRACE_SAMPLE_RATE,
-                "profilesSampleRate": settings.ADMIN_PROFILES_SAMPLE_RATE,
+                "profileSessionSampleRate": settings.ADMIN_PROFILES_SAMPLE_RATE,
                 "tracePropagationTargets": settings.ADMIN_FRONTEND_TRACE_PROPAGATION_TARGETS,
                 "replaysSessionSampleRate": settings.ADMIN_REPLAYS_SAMPLE_RATE,
                 "replaysOnErrorSampleRate": settings.ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR,
@@ -461,17 +460,15 @@ def copy_table_query() -> Response:
     try:
         storage = req["storage"]
         source_host = req["source_host"]
-        target_host = req["target_host"]
-        # raises a ValueError when an invalid ip
-        ipaddress.ip_address(target_host)
 
         dry_run = req.get("dry_run", True)
+        target_host = req.get("target_host")
 
         resp = copy_tables(
             source_host=source_host,
-            target_host=target_host,
             storage_name=storage,
             dry_run=dry_run,
+            target_host=target_host,
         )
     except KeyError as err:
         return make_response(

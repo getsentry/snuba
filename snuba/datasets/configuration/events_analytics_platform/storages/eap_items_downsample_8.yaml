@@ -107,7 +107,7 @@ schema:
     ]
   local_table_name: eap_items_1_downsample_8_local
   dist_table_name: eap_items_1_downsample_8_dist
-  partition_format: [date]
+  partition_format: [retention_days, date]
 
 query_processors:
   - processor: UniqInSelectAndHavingProcessor

@@ -35,6 +35,7 @@ function createInitialState(mode: ShellMode): ShellState {
     profileEnabled: true,
     traceFormatted: true,
     sudoEnabled: false,
+    outputFormat: "table",
     history: [],
     commandHistory: loadCommandHistory(mode),
     historyIndex: -1,

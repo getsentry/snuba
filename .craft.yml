@@ -1,6 +1,8 @@
-minVersion: "2.15.0"
+minVersion: "2.21.4"
 changelog:
   policy: auto
+versioning:
+  policy: calver
 artifactProvider:
   name: none
 statusProvider:
@@ -21,5 +23,3 @@ targets:
     target: ghcr.io/getsentry/snuba
     targetFormat: '{{{target}}}:latest'
   - name: github
-versioning:
-  policy: calver

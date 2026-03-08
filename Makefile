@@ -47,7 +47,7 @@ install-rs-dev:
 
 snubadocs:
 	uv pip install -U -r ./docs-requirements.txt
-	sphinx-build -W -b html docs/source docs/build
+	uv run sphinx-build -W -b html docs/source docs/build
 
 build-admin:
 	cd snuba/admin && yarn install && yarn run build
@@ -63,11 +63,11 @@ test-frontend-admin:
 	cd snuba/admin && yarn install && yarn run test
 
 validate-configs:
-	.venv/bin/python snuba/validate_configs.py
+	uv run python snuba/validate_configs.py
 
 generate-config-docs:
 	uv pip install -r ./docs-requirements.txt
-	.venv/bin/python -m snuba.datasets.configuration.generate_config_docs
+	uv run python -m snuba.datasets.configuration.generate_config_docs
 
 watch-rust-snuba:
 	which cargo-watch || cargo install cargo-watch
@@ -110,3 +110,9 @@ gocd:
 	cd ./gocd/templates && jsonnet --ext-code output-files=true -J vendor -m ../generated-pipelines ./snuba-rs.jsonnet
 	cd ./gocd/generated-pipelines && find . -type f \( -name '*.yaml' \) -print0 | xargs -n 1 -0 yq -p json -o yaml -i
 .PHONY: gocd
+
+install-proto-dev:
+	devenv sync && \
+	uv pip install -e ../sentry-protos/py --config-settings editable_mode=compat && \
+	echo "Installed local sentry-protos, please restart the vscode language server. Run 'uv pip uninstall sentry-protos && uv sync' to go back to the original version."
+.PHONY: install-proto-dev

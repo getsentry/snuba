@@ -22,6 +22,7 @@ from snuba.query.expressions import (
     Expression,
     ExpressionVisitor,
     FunctionCall,
+    JsonPath,
     Lambda,
     Literal,
     SubscriptableReference,
@@ -299,6 +300,13 @@ class BranchCutter(ExpressionVisitor[SubExpression]):
 
     def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> SubExpression:
         return UnclassifiedExpression(exp)
+
+    def visit_json_path(self, exp: JsonPath) -> SubExpression:
+        visited_base = exp.base.accept(self)
+        return replace(
+            visited_base,
+            main_expression=replace(exp, base=visited_base.main_expression),
+        )
 
 
 class AggregateBranchCutter(BranchCutter):
