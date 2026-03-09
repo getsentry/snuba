@@ -21,9 +21,7 @@ class BatchWriter(ABC, Generic[T]):
 
 
 class BatchWriterEncoderWrapper(BatchWriter[TDecoded]):
-    def __init__(
-        self, writer: BatchWriter[TEncoded], encoder: Encoder[TEncoded, TDecoded]
-    ) -> None:
+    def __init__(self, writer: BatchWriter[TEncoded], encoder: Encoder[TEncoded, TDecoded]) -> None:
         self.__writer = writer
         self.__encoder = encoder
 

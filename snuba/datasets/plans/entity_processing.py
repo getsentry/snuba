@@ -55,9 +55,7 @@ class EntityProcessingExecutor:
         self.__post_processors = post_processors or []
         self.__partition_key_column_name = partition_key_column_name
 
-    def get_storage(
-        self, query: LogicalQuery, settings: QuerySettings
-    ) -> EntityStorageConnection:
+    def get_storage(self, query: LogicalQuery, settings: QuerySettings) -> EntityStorageConnection:
         with sentry_sdk.start_span(
             op="build_plan.storage_query_plan_builder", description="select_storage"
         ):
@@ -70,9 +68,9 @@ class EntityProcessingExecutor:
             with sentry_sdk.start_span(
                 op="build_plan.sliced_storage", description="select_storage"
             ):
-                assert (
-                    self.__partition_key_column_name is not None
-                ), "partition key column name must be defined for a sliced storage"
+                assert self.__partition_key_column_name is not None, (
+                    "partition key column name must be defined for a sliced storage"
+                )
                 assert isinstance(storage, ReadableTableStorage)
                 return ColumnBasedStorageSliceSelector(
                     storage=storage.get_storage_key(),
@@ -126,9 +124,7 @@ class EntityProcessingExecutor:
         return self.translate_query_and_apply_mappers(query, settings)
 
 
-def run_entity_processing_executor(
-    query: LogicalQuery, query_settings: QuerySettings
-) -> Query:
+def run_entity_processing_executor(query: LogicalQuery, query_settings: QuerySettings) -> Query:
     from snuba.datasets.entities.entity_key import EntityKey
     from snuba.datasets.entities.factory import get_entity
     from snuba.datasets.pluggable_entity import PluggableEntity
@@ -139,7 +135,5 @@ def run_entity_processing_executor(
     entity = get_entity(entity_key)
     assert isinstance(entity, PluggableEntity)
     entity_processing_executor = entity.get_processing_executor()
-    physical_query = entity_processing_executor.execute(
-        cast(EntityQuery, query), query_settings
-    )
+    physical_query = entity_processing_executor.execute(cast(EntityQuery, query), query_settings)
     return physical_query

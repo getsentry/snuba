@@ -22,9 +22,7 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT foo(1) AS `alias`, bar(2) AS `alias`",
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("alias", f.foo(literal(1), alias="alias")),
                 SelectedExpression("alias", f.bar(literal(2), alias="alias")),
@@ -44,9 +42,7 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT test_func(release) AS test_func_alias, event_id BY project_id, platform WHERE timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1",
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("project_id", column("project_id")),
                 SelectedExpression("platform", column("platform")),
@@ -82,27 +78,19 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT count(platform) AS platforms, uniq(platform) AS uniq_platforms, testF(platform, release) AS top_platforms, f1(partition, offset) AS f1_alias, f2() AS f2_alias BY format_eventid(event_id) WHERE tags[sentry:dist] IN tuple('dist1', 'dist2') AND timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1 HAVING retention_days > 1",
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression(
                     "format_eventid(event_id)",
-                    f.format_eventid(
-                        column("event_id"), alias="format_eventid(event_id)"
-                    ),
+                    f.format_eventid(column("event_id"), alias="format_eventid(event_id)"),
                 ),
-                SelectedExpression(
-                    "platforms", f.count(column("platform"), alias="platforms")
-                ),
+                SelectedExpression("platforms", f.count(column("platform"), alias="platforms")),
                 SelectedExpression(
                     "uniq_platforms", f.uniq(column("platform"), alias="uniq_platforms")
                 ),
                 SelectedExpression(
                     "top_platforms",
-                    f.testF(
-                        column("platform"), column("release"), alias="top_platforms"
-                    ),
+                    f.testF(column("platform"), column("release"), alias="top_platforms"),
                 ),
                 SelectedExpression(
                     "f1_alias",
@@ -130,9 +118,7 @@ test_cases = [
                     f.equals(column("project_id"), literal(1)),
                 ),
             ),
-            groupby=[
-                f.format_eventid(column("event_id"), alias="format_eventid(event_id)")
-            ],
+            groupby=[f.format_eventid(column("event_id"), alias="format_eventid(event_id)")],
             having=f.greater(column("retention_days"), literal(1)),
             order_by=None,
             limitby=None,
@@ -145,9 +131,7 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT partition, offset WHERE timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1 ORDER BY partition ASC, offset DESC, func(retention_days) DESC",
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("partition", column("partition")),
                 SelectedExpression("offset", column("offset")),
@@ -182,9 +166,7 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT partition BY platform WHERE timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1 ORDER BY partition DESC",
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("platform", column("platform")),
                 SelectedExpression("partition", column("partition")),
@@ -215,9 +197,7 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT platform, tags[test] BY foo(tags[test2]) WHERE timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1",
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression(
                     "foo(tags[test2])",
@@ -252,17 +232,11 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT group_id, goo(partition) AS issue_id, foo(zoo(offset)) AS offset WHERE foo(issue_id) AS group_id = 1 AND timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1 ORDER BY group_id ASC",
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("group_id", column("group_id")),
-                SelectedExpression(
-                    "issue_id", f.goo(column("partition"), alias="issue_id")
-                ),
-                SelectedExpression(
-                    "offset", f.foo(f.zoo(column("offset")), alias="offset")
-                ),
+                SelectedExpression("issue_id", f.goo(column("partition"), alias="issue_id")),
+                SelectedExpression("offset", f.foo(f.zoo(column("offset")), alias="offset")),
             ],
             array_join=None,
             condition=and_cond(
@@ -294,9 +268,7 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT foo(partition) AS exp, foo(partition) AS exp WHERE timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1",
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("exp", f.foo(column("partition"), alias="exp")),
                 SelectedExpression("exp", f.foo(column("partition"), alias="exp")),
@@ -327,9 +299,7 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT foo(partition) AS exp, exp WHERE timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1",
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("exp", f.foo(column("partition"), alias="exp")),
                 SelectedExpression("exp", column("exp")),
@@ -360,14 +330,10 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT count() AS count, exception_stacks.type ARRAY JOIN exception_stacks.type WHERE timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1",
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("count", f.count(alias="count")),
-                SelectedExpression(
-                    "exception_stacks.type", column("exception_stacks.type")
-                ),
+                SelectedExpression("exception_stacks.type", column("exception_stacks.type")),
             ],
             array_join=[column("exception_stacks.type")],
             condition=and_cond(
@@ -395,14 +361,10 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT count() AS count, exception_stacks.type WHERE exception_stacks.type LIKE 'Arithmetic%' AND timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1",
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("count", f.count(alias="count")),
-                SelectedExpression(
-                    "exception_stacks.type", column("exception_stacks.type")
-                ),
+                SelectedExpression("exception_stacks.type", column("exception_stacks.type")),
             ],
             array_join=None,
             condition=and_cond(
@@ -434,14 +396,10 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT count() AS count, exception_stacks.type ARRAY JOIN exception_stacks.type WHERE exception_stacks.type LIKE 'Arithmetic%' AND timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1",
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("count", f.count(alias="count")),
-                SelectedExpression(
-                    "exception_stacks.type", column("exception_stacks.type")
-                ),
+                SelectedExpression("exception_stacks.type", column("exception_stacks.type")),
             ],
             array_join=[column("exception_stacks.type")],
             condition=and_cond(
@@ -473,16 +431,12 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT count() AS count, arrayJoin(exception_stacks) WHERE exception_stacks.type LIKE 'Arithmetic%' AND timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1",
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("count", f.count(alias="count")),
                 SelectedExpression(
                     "arrayJoin(exception_stacks)",
-                    f.arrayJoin(
-                        column("exception_stacks"), alias="arrayJoin(exception_stacks)"
-                    ),
+                    f.arrayJoin(column("exception_stacks"), alias="arrayJoin(exception_stacks)"),
                 ),
             ],
             array_join=None,
@@ -515,14 +469,10 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT count() AS count, exception_stacks.type WHERE or(equals(exception_stacks.type, 'ArithmeticException'), equals(exception_stacks.type, 'RuntimeException')) = 1 AND timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1",
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("count", f.count(alias="count")),
-                SelectedExpression(
-                    "exception_stacks.type", column("exception_stacks.type")
-                ),
+                SelectedExpression("exception_stacks.type", column("exception_stacks.type")),
             ],
             array_join=None,
             condition=and_cond(
@@ -566,9 +516,7 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT count() AS count, arrayJoin(exception_stacks.type) WHERE or(equals(exception_stacks.type, 'ArithmeticException'), equals(exception_stacks.type, 'RuntimeException')) = 1 AND timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1",
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("count", f.count(alias="count")),
                 SelectedExpression(
@@ -621,9 +569,7 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT count() AS count BY tags_key WHERE or(equals(ifNull(tags[foo], ''), 'baz'), equals(ifNull(tags[foo.bar], ''), 'qux')) = 1 AND timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1",
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("tags_key", column("tags_key")),
                 SelectedExpression("count", f.count(alias="count")),
@@ -670,14 +616,10 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT count() AS count, exception_stacks.type ARRAY JOIN exception_stacks WHERE or(equals(exception_stacks.type, 'ArithmeticException'), equals(exception_stacks.type, 'RuntimeException')) = 1 AND timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1",
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("count", f.count(alias="count")),
-                SelectedExpression(
-                    "exception_stacks.type", column("exception_stacks.type")
-                ),
+                SelectedExpression("exception_stacks.type", column("exception_stacks.type")),
             ],
             array_join=[column("exception_stacks")],
             condition=and_cond(
@@ -721,14 +663,10 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT count() AS count, exception_stacks.type ARRAY JOIN exception_stacks WHERE or(equals(exception_stacks.type, 'ArithmeticException'), equals(exception_stacks.type, 'RuntimeException')) = 1 AND timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1",
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("count", f.count(alias="count")),
-                SelectedExpression(
-                    "exception_stacks.type", column("exception_stacks.type")
-                ),
+                SelectedExpression("exception_stacks.type", column("exception_stacks.type")),
             ],
             array_join=[column("exception_stacks")],
             condition=and_cond(
@@ -772,9 +710,7 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT group_id, count(), divide(uniq(tags[url]) AS a+*, 1) BY group_id WHERE timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1",
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("group_id", column("group_id")),
                 SelectedExpression("group_id", column("group_id")),
@@ -814,9 +750,7 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT f1(column1, column2) AS f1_alias, f2() AS f2_alias, testF(platform, field2) AS f1_alias WHERE project_id = 1 AND timestamp >= toDateTime('2020-01-01 12:00:00') AND timestamp < toDateTime('2020-01-02 12:00:00')",
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression(
                     "f1_alias",
@@ -855,13 +789,9 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT f1(column1, f2) AS f1, f2(f1) AS f2 WHERE project_id = 1 AND timestamp >= toDateTime('2020-01-01 12:00:00') AND timestamp < toDateTime('2020-01-02 12:00:00')",
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
-                SelectedExpression(
-                    "f1", f.f1(column("column1"), column("f2"), alias="f1")
-                ),
+                SelectedExpression("f1", f.f1(column("column1"), column("f2"), alias="f1")),
                 SelectedExpression("f2", f.f2(column("f1"), alias="f2")),
             ],
             array_join=None,
@@ -891,9 +821,7 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT f1(f2(c) AS f2) AS c WHERE project_id = 1 AND timestamp >= toDateTime('2020-01-01 12:00:00') AND timestamp < toDateTime('2020-01-02 12:00:00')",
         Query(
-            from_clause=Entity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("c", f.f1(f.f2(column("c"), alias="f2"), alias="c"))
             ],
@@ -924,9 +852,7 @@ test_cases = [
     pytest.param(
         "MATCH (replays) SELECT replay_id BY replay_id WHERE project_id IN array(4552673527463954) AND timestamp < toDateTime('2023-09-22T18:18:10.891157') AND timestamp >= toDateTime('2023-06-24T18:18:10.891157') HAVING or(1, 1, 1, 1) != 0 LIMIT 10",
         Query(
-            from_clause=Entity(
-                EntityKey.REPLAYS, get_entity(EntityKey.REPLAYS).get_data_model()
-            ),
+            from_clause=Entity(EntityKey.REPLAYS, get_entity(EntityKey.REPLAYS).get_data_model()),
             selected_columns=[
                 SelectedExpression("replay_id", column("replay_id")),
                 SelectedExpression("replay_id", column("replay_id")),
@@ -946,9 +872,7 @@ test_cases = [
                 ),
             ),
             groupby=[column("replay_id")],
-            having=f.notEquals(
-                or_cond(literal(1), literal(1), literal(1), literal(1)), literal(0)
-            ),
+            having=f.notEquals(or_cond(literal(1), literal(1), literal(1), literal(1)), literal(0)),
             order_by=None,
             limitby=None,
             limit=10,

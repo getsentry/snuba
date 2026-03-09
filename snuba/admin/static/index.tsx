@@ -8,6 +8,7 @@ import Body from "SnubaAdmin/body";
 import { NAV_ITEMS } from "SnubaAdmin/data";
 import Client from "SnubaAdmin/api_client";
 import { MantineProvider } from "@mantine/core";
+import { ShellStateProvider } from "SnubaAdmin/sql_shell/shell_context";
 
 import 'bootstrap/dist/css/bootstrap.min.css';
 
@@ -20,6 +21,8 @@ const containerStyle = {
 const bodyStyle = {
   flexGrow: 1,
   display: "flex",
+  minHeight: 0,
+  overflow: "auto",
 };
 
 let client = Client();
@@ -28,14 +31,14 @@ client.getSettings().then((settings) => {
     Sentry.init({
       dsn: settings.dsn,
       integrations: [
-        new Sentry.BrowserTracing(),
-        new Sentry.Replay({ maskAllText: false, blockAllMedia: false }),
-        new Sentry.BrowserProfilingIntegration(),
+        Sentry.browserTracingIntegration(),
+        Sentry.replayIntegration({ maskAllText: false, blockAllMedia: false }),
+        Sentry.browserProfilingIntegration(),
       ],
       // Performance Monitoring
       tracesSampleRate: settings.tracesSampleRate,
       // Profiles
-      profilesSampleRate: settings.profilesSampleRate,
+      profileSessionSampleRate: settings.profileSessionSampleRate,
       tracePropagationTargets: settings.tracePropagationTargets ?? undefined,
       // Session Replay
       replaysSessionSampleRate: settings.replaysSessionSampleRate,
@@ -70,13 +73,15 @@ function App() {
 
   return (
     <MantineProvider withGlobalStyles withNormalizeCSS>
-      <div style={containerStyle}>
-        <Header />
-        <div style={bodyStyle}>
-          <Nav active={activeTab} navigate={navigate} api={client} />
-          {activeTab && <Body active={activeTab} api={client} />}
+      <ShellStateProvider>
+        <div style={containerStyle}>
+          <Header />
+          <div style={bodyStyle}>
+            <Nav active={activeTab} navigate={navigate} api={client} />
+            {activeTab && <Body active={activeTab} api={client} />}
+          </div>
         </div>
-      </div>
+      </ShellStateProvider>
     </MantineProvider>
   );
 }

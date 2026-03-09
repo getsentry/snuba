@@ -108,7 +108,7 @@ schema:
     ]
   local_table_name: eap_items_1_local
   dist_table_name: eap_items_1_dist
-  partition_format: [date]
+  partition_format: [retention_days, date]
 
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
@@ -130,6 +130,7 @@ query_processors:
       settings:
         max_execution_time: 25
         timeout_before_checking_execution_speed: 0
+        distributed_product_mode: global
 
 delete_allocation_policies: []
 
@@ -137,6 +138,7 @@ deletion_settings:
   is_enabled: 1
   max_rows_to_delete: 2000000
   bulk_delete_only: true
+  partition_column: timestamp
   tables:
     - eap_items_1_local
     - eap_items_1_downsample_8_local
@@ -147,6 +149,9 @@ deletion_settings:
     - organization_id
     - trace_id
     - item_type
+  allowed_attributes_by_item_type:
+    occurrence:
+      - group_id
 
 mandatory_condition_checkers:
   - condition: OrgIdEnforcer

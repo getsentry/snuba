@@ -7,6 +7,7 @@ from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth_roles import ExecuteSudoSystemQuery
 from snuba.admin.clickhouse.common import (
     InvalidCustomQuery,
+    get_clusterless_node_connection,
     get_ro_node_connection,
     get_sudo_node_connection,
 )
@@ -24,7 +25,12 @@ class UnauthorizedForSudo(SerializableException):
 
 
 def _run_sql_query_on_host(
-    clickhouse_host: str, clickhouse_port: int, storage_name: str, sql: str, sudo: bool
+    clickhouse_host: str,
+    clickhouse_port: int,
+    storage_name: str,
+    sql: str,
+    sudo: bool,
+    clusterless_mode: bool,
 ) -> ClickhouseResult:
     """
     Run the SQL query. It should be validated before getting to this point
@@ -38,12 +44,16 @@ def _run_sql_query_on_host(
     else:
         settings = ClickhouseClientSettings.QUERY
 
+    if clusterless_mode:
+        connection = get_clusterless_node_connection(
+            clickhouse_host, clickhouse_port, storage_name, settings
+        )
+        return connection.execute(query=sql, with_column_types=True)
+
     connection = (
         get_ro_node_connection(clickhouse_host, clickhouse_port, storage_name, settings)
         if not sudo
-        else get_sudo_node_connection(
-            clickhouse_host, clickhouse_port, storage_name, settings
-        )
+        else get_sudo_node_connection(clickhouse_host, clickhouse_port, storage_name, settings)
     )
     query_result = connection.execute(query=sql, with_column_types=True)
     return query_result
@@ -134,23 +144,41 @@ ALTER_QUERY_RE = re.compile(
     re.IGNORECASE + re.VERBOSE,
 )
 
+DROP_TABLE_QUERY_RE = re.compile(
+    r"""
+        ^
+        (DROP\sTABLE)
+        \s
+        [\w\s,=()*+<>'%"\-\/:\.`]+
+        ;? # Optional semicolon
+        $
+    """,
+    re.IGNORECASE + re.VERBOSE,
+)
+
 
 def is_query_using_only_system_tables(
     clickhouse_host: str,
     clickhouse_port: int,
     storage_name: str,
     sql_query: str,
+    clusterless_mode: bool,
+    sudo_mode: bool = False,
 ) -> bool:
     """
     Run the EXPLAIN QUERY TREE on the given sql_query and check that the only tables
     in the query are system tables.
     """
     sql_query = sql_query.strip().rstrip(";") if sql_query.endswith(";") else sql_query
-    explain_query_tree_query = (
-        f"EXPLAIN QUERY TREE {sql_query} SETTINGS allow_experimental_analyzer = 1"
-    )
+    settings_clause = "" if sudo_mode else " SETTINGS allow_experimental_analyzer = 1"
+    explain_query_tree_query = f"EXPLAIN QUERY TREE {sql_query}{settings_clause}"
     explain_query_tree_result = _run_sql_query_on_host(
-        clickhouse_host, clickhouse_port, storage_name, explain_query_tree_query, False
+        clickhouse_host,
+        clickhouse_port,
+        storage_name,
+        explain_query_tree_query,
+        False,
+        clusterless_mode,
     )
 
     for line in explain_query_tree_result.results:
@@ -173,7 +201,12 @@ def is_query_using_only_system_tables(
 
 
 def is_valid_system_query(
-    clickhouse_host: str, clickhouse_port: int, storage_name: str, sql_query: str
+    clickhouse_host: str,
+    clickhouse_port: int,
+    storage_name: str,
+    sql_query: str,
+    clusterless_mode: bool,
+    sudo_mode: bool = False,
 ) -> bool:
     """
     Validation based on Query Tree and AST to ensure the query is a valid select query.
@@ -181,17 +214,15 @@ def is_valid_system_query(
     explain_ast_query = f"EXPLAIN AST {sql_query}"
     disallowed_ast_nodes = ["AlterQuery", "AlterCommand", "DropQuery", "InsertQuery"]
     explain_ast_result = _run_sql_query_on_host(
-        clickhouse_host, clickhouse_port, storage_name, explain_ast_query, False
+        clickhouse_host, clickhouse_port, storage_name, explain_ast_query, False, clusterless_mode
     )
 
     for node in disallowed_ast_nodes:
-        if any(
-            line[0].lstrip().startswith(node) for line in explain_ast_result.results
-        ):
+        if any(line[0].lstrip().startswith(node) for line in explain_ast_result.results):
             return False
 
     return is_query_using_only_system_tables(
-        clickhouse_host, clickhouse_port, storage_name, sql_query
+        clickhouse_host, clickhouse_port, storage_name, sql_query, clusterless_mode, sudo_mode
     )
 
 
@@ -243,12 +274,22 @@ def is_query_alter(sql_query: str) -> bool:
     return True if match else False
 
 
+def is_query_drop(sql_query: str) -> bool:
+    """
+    Validates whether we are running something like DROP TABLE ...
+    """
+    sql_query = " ".join(sql_query.split())
+    match = DROP_TABLE_QUERY_RE.match(sql_query)
+    return True if match else False
+
+
 def validate_query(
     clickhouse_host: str,
     clickhouse_port: int,
     storage_name: str,
     system_query_sql: str,
     sudo_mode: bool,
+    clusterless_mode: bool,
 ) -> None:
     if is_query_describe(system_query_sql) or is_query_show(system_query_sql):
         return
@@ -257,11 +298,17 @@ def validate_query(
         is_system_command(system_query_sql)
         or is_query_alter(system_query_sql)
         or is_query_optimize(system_query_sql)
+        or is_query_drop(system_query_sql)
     ):
         return
 
     if is_valid_system_query(
-        clickhouse_host, clickhouse_port, storage_name, system_query_sql
+        clickhouse_host,
+        clickhouse_port,
+        storage_name,
+        system_query_sql,
+        clusterless_mode,
+        sudo_mode,
     ):
         if sudo_mode:
             raise InvalidCustomQuery("Query is valid but sudo is not allowed")
@@ -276,6 +323,7 @@ def run_system_query_on_host_with_sql(
     storage_name: str,
     system_query_sql: str,
     sudo_mode: bool,
+    clusterless_mode: bool,
     user: AdminUser,
 ) -> ClickhouseResult:
     if sudo_mode:
@@ -288,12 +336,22 @@ def run_system_query_on_host_with_sql(
             raise UnauthorizedForSudo()
 
     validate_query(
-        clickhouse_host, clickhouse_port, storage_name, system_query_sql, sudo_mode
+        clickhouse_host,
+        clickhouse_port,
+        storage_name,
+        system_query_sql,
+        sudo_mode,
+        clusterless_mode,
     )
 
     try:
         return _run_sql_query_on_host(
-            clickhouse_host, clickhouse_port, storage_name, system_query_sql, sudo_mode
+            clickhouse_host,
+            clickhouse_port,
+            storage_name,
+            system_query_sql,
+            sudo_mode,
+            clusterless_mode,
         )
     except ClickhouseError as exc:
         # Don't send error to Snuba if it is an unknown table or column as it
@@ -313,6 +371,21 @@ def run_system_query_on_host_with_sql(
                     "clickhouse_host": clickhouse_host,
                     "storage_name": storage_name,
                     "sudo_mode": sudo_mode,
+                    "clusterless_mode": clusterless_mode,
                 },
                 notify=sudo_mode,
+            )
+        if clusterless_mode and not sudo_mode:
+            audit_log.record(
+                user.email,
+                AuditLogAction.RAN_CLUSTERLESS_SYSTEM_QUERY,
+                {
+                    "query": system_query_sql,
+                    "clickhouse_port": clickhouse_port,
+                    "clickhouse_host": clickhouse_host,
+                    "storage_name": storage_name,
+                    "sudo_mode": sudo_mode,
+                    "clusterless_mode": clusterless_mode,
+                },
+                notify=clusterless_mode,
             )

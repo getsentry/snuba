@@ -60,28 +60,18 @@ class NonBlockingMigrationsPolicy(MigrationPolicy):
     """
 
     def can_run(self, migration_key: MigrationKey) -> bool:
-        if (
-            get_group_readiness_state(migration_key.group)
-            == ReadinessState.EXPERIMENTAL
-        ):
+        if get_group_readiness_state(migration_key.group) == ReadinessState.EXPERIMENTAL:
             return True
 
-        migration = get_group_loader(migration_key.group).load_migration(
-            migration_key.migration_id
-        )
+        migration = get_group_loader(migration_key.group).load_migration(migration_key.migration_id)
         return False if migration.blocking else True
 
     def can_reverse(self, migration_key: MigrationKey) -> bool:
-        if (
-            get_group_readiness_state(migration_key.group)
-            == ReadinessState.EXPERIMENTAL
-        ):
+        if get_group_readiness_state(migration_key.group) == ReadinessState.EXPERIMENTAL:
             return True
 
         status, timestamp = Runner().get_status(migration_key)
-        migration = get_group_loader(migration_key.group).load_migration(
-            migration_key.migration_id
-        )
+        migration = get_group_loader(migration_key.group).load_migration(migration_key.migration_id)
         if status == Status.IN_PROGRESS:
             return False if migration.blocking else True
 

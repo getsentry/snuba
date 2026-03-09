@@ -50,9 +50,7 @@ class TestingMetricsBackend(MetricsBackend):
     # TODO: This might make sense to extend the dummy metrics backend.
 
     def __init__(self) -> None:
-        self.calls: MutableSequence[
-            Union[Increment, Gauge, Timing, Distribution, Events]
-        ] = []
+        self.calls: MutableSequence[Union[Increment, Gauge, Timing, Distribution, Events]] = []
 
     def increment(
         self,

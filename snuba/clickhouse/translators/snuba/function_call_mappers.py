@@ -96,8 +96,7 @@ class AggregateCurriedFunctionMapper(CurriedFunctionCallMapper):
                 None,
                 self.to_name,
                 tuple(
-                    p.accept(children_translator)
-                    for p in expression.internal_function.parameters
+                    p.accept(children_translator) for p in expression.internal_function.parameters
                 ),
             ),
             _build_parameters(expression, children_translator, self.aggr_col_name),

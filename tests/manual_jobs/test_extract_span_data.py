@@ -95,9 +95,9 @@ def _gen_message(
 @pytest.mark.redis_db
 @pytest.mark.skip(reason="can't test writing to GCS")
 def test_extract_span_data() -> None:
-    BASE_TIME = datetime.utcnow().replace(
-        minute=0, second=0, microsecond=0
-    ) - timedelta(minutes=180)
+    BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
+        minutes=180
+    )
     organization_ids = [0, 1]
     spans_storage = get_storage(StorageKey("eap_spans"))
     messages = [

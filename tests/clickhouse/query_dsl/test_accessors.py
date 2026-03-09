@@ -35,9 +35,7 @@ from snuba.query.logical import Query
                 "in",
                 (
                     Column("_snuba_project_id", None, "project_id"),
-                    FunctionCall(
-                        None, "array", tuple([Literal(None, i) for i in range(1, 5)])
-                    ),
+                    FunctionCall(None, "array", tuple([Literal(None, i) for i in range(1, 5)])),
                 ),
             ),
             set([1, 2, 3, 4]),

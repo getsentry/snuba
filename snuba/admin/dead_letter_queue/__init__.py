@@ -33,7 +33,6 @@ def get_dlq_topics() -> Sequence[Topic]:
 
     storages = get_writable_storages()
     for storage in storages:
-
         stream_loader = storage.get_table_writer().get_stream_loader()
         dlq_topic_spec = stream_loader.get_dlq_topic_spec()
         if dlq_topic_spec is not None:

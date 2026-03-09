@@ -36,9 +36,7 @@ def run_snql_query(body: Dict[str, Any], user: str) -> Response:
     return run_query_with_audit(body["query"], user)
 
 
-def _validate_projects_in_query(
-    body: Dict[str, Any], dataset: Dataset, is_mql: bool
-) -> None:
+def _validate_projects_in_query(body: Dict[str, Any], dataset: Dataset, is_mql: bool) -> None:
     """
     Validates that the projects accessed by the query are allowed to be accessed.
     """
@@ -51,18 +49,16 @@ def _validate_projects_in_query(
         query = parse_snql_query(request_parts.query["query"], dataset)
         project_ids = ProjectsFinder().visit(query)
     else:
-        request_parts = RequestSchema.build(
-            settings_class=HTTPQuerySettings, is_mql=True
-        ).validate(body)
+        request_parts = RequestSchema.build(settings_class=HTTPQuerySettings, is_mql=True).validate(
+            body
+        )
         mql_context = request_parts.query["mql_context"]
         project_ids = set(mql_context["scope"]["project_ids"])
 
     if project_ids == set():
         raise InvalidQueryException("Missing project ID")
 
-    disallowed_project_ids = project_ids.difference(
-        set(settings.ADMIN_ALLOWED_PROD_PROJECTS)
-    )
+    disallowed_project_ids = project_ids.difference(set(settings.ADMIN_ALLOWED_PROD_PROJECTS))
     if len(disallowed_project_ids) > 0:
         raise InvalidQueryException(
             f"Cannot access the following project ids: {disallowed_project_ids}"

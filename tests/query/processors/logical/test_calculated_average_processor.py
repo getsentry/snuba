@@ -27,16 +27,12 @@ SUM_OVER_COUNT_EXPRESSION = FunctionCall(
         FunctionCall(
             alias=None,
             function_name="sum",
-            parameters=(
-                Column(alias="_snuba_value", table_name=None, column_name="value"),
-            ),
+            parameters=(Column(alias="_snuba_value", table_name=None, column_name="value"),),
         ),
         FunctionCall(
             alias=None,
             function_name="count",
-            parameters=(
-                Column(alias="_snuba_value", table_name=None, column_name="value"),
-            ),
+            parameters=(Column(alias="_snuba_value", table_name=None, column_name="value"),),
         ),
     ),
 )
@@ -74,9 +70,7 @@ def sumif_over_countif(condition: FunctionCall) -> FunctionCall:
             Query(
                 query_entity,
                 selected_columns=[
-                    SelectedExpression(
-                        name="aggregate_value", expression=AVG_VALUE_EXPRESSION
-                    )
+                    SelectedExpression(name="aggregate_value", expression=AVG_VALUE_EXPRESSION)
                 ],
             ),
             Query(
@@ -242,9 +236,7 @@ def sumif_over_countif(condition: FunctionCall) -> FunctionCall:
         ),
     ],
 )
-def test_calculated_average_processor(
-    input_query: Query, expected_query: Query
-) -> None:
+def test_calculated_average_processor(input_query: Query, expected_query: Query) -> None:
     # TODO: Don't use the guages entity in this test, it shouldn't be necessary
     CalculatedAverageProcessor().process_query(input_query, HTTPQuerySettings())
     assert input_query == expected_query

@@ -34,9 +34,7 @@ test_data = [
             condition=binary_condition(
                 BooleanFunctions.AND,
                 in_condition(Column(None, None, "project_id"), [Literal(None, 123)]),
-                binary_condition(
-                    "equals", Column(None, None, "org_id"), Literal(None, 1)
-                ),
+                binary_condition("equals", Column(None, None, "org_id"), Literal(None, 1)),
             ),
         ),
         True,
@@ -54,9 +52,7 @@ test_data = [
                     Column(None, None, "project_id"),
                     literals_array(None, [Literal(None, 123)]),
                 ),
-                binary_condition(
-                    "equals", Column(None, None, "org_id"), Literal(None, 1)
-                ),
+                binary_condition("equals", Column(None, None, "org_id"), Literal(None, 1)),
             ),
         ),
         True,
@@ -69,9 +65,7 @@ test_data = [
             selected_columns=[],
             condition=binary_condition(
                 BooleanFunctions.AND,
-                binary_condition(
-                    "equals", Column(None, None, "project_id"), Literal(None, 1)
-                ),
+                binary_condition("equals", Column(None, None, "project_id"), Literal(None, 1)),
                 binary_condition(
                     "greaterOrEquals",
                     Column(None, None, "timestamp"),
@@ -89,12 +83,8 @@ test_data = [
             selected_columns=[],
             condition=binary_condition(
                 BooleanFunctions.AND,
-                binary_condition(
-                    "equals", Column(None, None, "a_col"), Literal(None, 1)
-                ),
-                binary_condition(
-                    "equals", Column(None, None, "another_col"), Literal(None, 1)
-                ),
+                binary_condition("equals", Column(None, None, "a_col"), Literal(None, 1)),
+                binary_condition("equals", Column(None, None, "another_col"), Literal(None, 1)),
             ),
         ),
         False,
@@ -107,12 +97,8 @@ test_data = [
             selected_columns=[],
             condition=binary_condition(
                 BooleanFunctions.OR,
-                binary_condition(
-                    "equals", Column(None, None, "project_id"), Literal(None, 1)
-                ),
-                binary_condition(
-                    "equals", Column(None, None, "org_id"), Literal(None, 1)
-                ),
+                binary_condition("equals", Column(None, None, "project_id"), Literal(None, 1)),
+                binary_condition("equals", Column(None, None, "org_id"), Literal(None, 1)),
             ),
         ),
         False,
@@ -126,9 +112,7 @@ test_data = [
             condition=binary_condition(
                 BooleanFunctions.AND,
                 in_condition(Column(None, None, "project_id"), [Literal(None, 123)]),
-                binary_condition(
-                    "equals", Column(None, None, "organization_id"), Literal(None, 1)
-                ),
+                binary_condition("equals", Column(None, None, "organization_id"), Literal(None, 1)),
             ),
         ),
         True,
@@ -158,9 +142,7 @@ test_data = [
 
 @pytest.mark.parametrize("query, valid, org_id_enforcer", test_data)
 @pytest.mark.redis_db
-def test_condition_enforcer(
-    query: Query, valid: bool, org_id_enforcer: OrgIdEnforcer
-) -> None:
+def test_condition_enforcer(query: Query, valid: bool, org_id_enforcer: OrgIdEnforcer) -> None:
     set_config("mandatory_condition_enforce", 1)
     query_settings = HTTPQuerySettings(consistent=True)
     processor = MandatoryConditionEnforcer([org_id_enforcer, ProjectIdEnforcer()])

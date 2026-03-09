@@ -98,9 +98,7 @@ class TestMigrationPolicies:
         return_value=ReadinessState.EXPERIMENTAL,
     )
     def test_experimental_groups(self, mock_readiness_state: Mock) -> None:
-        migration_key = MigrationKey(
-            MigrationGroup("test_migration"), "0001_create_test_table"
-        )
+        migration_key = MigrationKey(MigrationGroup("test_migration"), "0001_create_test_table")
         assert NonBlockingMigrationsPolicy().can_run(migration_key) == True
         assert NonBlockingMigrationsPolicy().can_reverse(migration_key) == True
 
@@ -116,9 +114,7 @@ class TestMigrationPolicies:
         allowed under this policy.
         """
         # non-blocking migration
-        migration_key = MigrationKey(
-            MigrationGroup("events"), "0016_drop_legacy_events"
-        )
+        migration_key = MigrationKey(MigrationGroup("events"), "0016_drop_legacy_events")
         assert NonBlockingMigrationsPolicy().can_reverse(migration_key) == True
 
         # blocking migration
@@ -129,8 +125,7 @@ class TestMigrationPolicies:
         "snuba.migrations.runner.Runner.get_status",
         return_value=(
             Status.COMPLETED,
-            datetime.now()
-            + timedelta(hours=-(MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS - 5)),
+            datetime.now() + timedelta(hours=-(MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS - 5)),
         ),
     )
     @pytest.mark.clickhouse_db
@@ -143,9 +138,7 @@ class TestMigrationPolicies:
         allowed time range, we don't allow reversing.
         """
         # non-blocking migration
-        migration_key = MigrationKey(
-            MigrationGroup("events"), "0016_drop_legacy_events"
-        )
+        migration_key = MigrationKey(MigrationGroup("events"), "0016_drop_legacy_events")
         assert NonBlockingMigrationsPolicy().can_reverse(migration_key) == True
 
         # blocking migration

@@ -14,9 +14,7 @@ from snuba.writer import WriterTableRow
 POSTGRES_DATE_FORMAT_WITH_NS = "%Y-%m-%d %H:%M:%S.%f%z"
 POSTGRES_DATE_FORMAT_WITHOUT_NS = "%Y-%m-%d %H:%M:%S%z"
 
-date_re = re.compile(
-    r"^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})(\.\d{1,6})?(\+\d{2})"
-)
+date_re = re.compile(r"^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})(\.\d{1,6})?(\+\d{2})")
 
 date_with_nanosec = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.")
 
@@ -89,11 +87,7 @@ class CdcProcessor(DatasetMessageProcessor, metaclass=RegisteredClass):
         columnnames: Sequence[str],
         columnvalues: Sequence[Any],
     ) -> Sequence[WriterTableRow]:
-        return [
-            self._message_row_class.from_wal(
-                offset, columnnames, columnvalues
-            ).to_clickhouse()
-        ]
+        return [self._message_row_class.from_wal(offset, columnnames, columnvalues).to_clickhouse()]
 
     def _process_update(
         self,
@@ -110,9 +104,7 @@ class CdcProcessor(DatasetMessageProcessor, metaclass=RegisteredClass):
             ret.extend(self._process_delete(offset, key))
 
         ret.append(
-            self._message_row_class.from_wal(
-                offset, columnnames, columnvalues
-            ).to_clickhouse()
+            self._message_row_class.from_wal(offset, columnnames, columnvalues).to_clickhouse()
         )
         return ret
 
@@ -144,9 +136,7 @@ class CdcProcessor(DatasetMessageProcessor, metaclass=RegisteredClass):
 
             operation = value["kind"]
             if operation == "insert":
-                messages = self._process_insert(
-                    offset, value["columnnames"], value["columnvalues"]
-                )
+                messages = self._process_insert(offset, value["columnnames"], value["columnvalues"])
             elif operation == "update":
                 messages = self._process_update(
                     offset,
@@ -161,9 +151,7 @@ class CdcProcessor(DatasetMessageProcessor, metaclass=RegisteredClass):
                     "Invalid value for operation in replication log: %s" % value["kind"]
                 )
         else:
-            raise ValueError(
-                "Invalid value for event in replication log: %s" % value["event"]
-            )
+            raise ValueError("Invalid value for event in replication log: %s" % value["event"])
 
         if not messages:
             return None

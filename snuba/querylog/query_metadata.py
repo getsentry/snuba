@@ -274,9 +274,7 @@ class SnubaQueryMetadata:
                     entity_obj = get_entity(entity_key)
                     entity_name = entity_key.value
                     if entity_obj.required_time_column is not None:
-                        start, end = get_time_range(
-                            request.query, entity_obj.required_time_column
-                        )
+                        start, end = get_time_range(request.query, entity_obj.required_time_column)
             self.start_timestamp = start
             self.end_timestamp = end
             self.entity = entity_name

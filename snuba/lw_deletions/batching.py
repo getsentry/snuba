@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import time
-from typing import Callable, Generic, MutableSequence, Optional, TypeVar, Union
+from typing import Callable, Generic, MutableSequence, Optional, TypeVar, Union, cast
 
 from arroyo.processing.strategies.abstract import ProcessingStrategy
 from arroyo.processing.strategies.buffer import Buffer
-from arroyo.types import BaseValue, FilteredPayload, Message, TStrategyPayload
+from arroyo.types import BaseValue, FilteredPayload, Message, TStrategyPayload, Value
 
 ValuesBatch = MutableSequence[BaseValue[TStrategyPayload]]
 
@@ -46,10 +46,7 @@ class ReduceRowsBuffer(Generic[TPayload, TResult]):
 
     @property
     def is_ready(self) -> bool:
-        return (
-            self._buffer_size >= self.max_batch_size
-            or time.time() >= self._buffer_until
-        )
+        return self._buffer_size >= self.max_batch_size or time.time() >= self._buffer_until
 
     def append(self, message: BaseValue[TPayload]) -> None:
         """
@@ -114,6 +111,32 @@ class ReduceCustom(
         self.__buffer_step.join(timeout)
 
 
+class NoBatchStep(ProcessingStrategy[Union[FilteredPayload, TStrategyPayload]]):
+    def __init__(
+        self,
+        next_step: ProcessingStrategy[ValuesBatch[TStrategyPayload]],
+    ) -> None:
+        self.__next_step = next_step
+
+    def submit(self, message: Message[Union[FilteredPayload, TStrategyPayload]]) -> None:
+        if isinstance(message.payload, FilteredPayload):
+            return
+        value = cast(BaseValue[TStrategyPayload], message.value)
+        self.__next_step.submit(Message(Value([value], value.committable)))
+
+    def poll(self) -> None:
+        self.__next_step.poll()
+
+    def close(self) -> None:
+        self.__next_step.close()
+
+    def terminate(self) -> None:
+        self.__next_step.terminate()
+
+    def join(self, timeout: Optional[float] = None) -> None:
+        self.__next_step.join(timeout)
+
+
 class BatchStepCustom(ProcessingStrategy[Union[FilteredPayload, TStrategyPayload]]):
     def __init__(
         self,
@@ -128,20 +151,18 @@ class BatchStepCustom(ProcessingStrategy[Union[FilteredPayload, TStrategyPayload
             result.append(value)
             return result
 
-        self.__reduce_step: ReduceCustom[
-            TStrategyPayload, ValuesBatch[TStrategyPayload]
-        ] = ReduceCustom(
-            max_batch_size,
-            max_batch_time,
-            accumulator,
-            lambda: [],
-            next_step,
-            increment_by,
+        self.__reduce_step: ReduceCustom[TStrategyPayload, ValuesBatch[TStrategyPayload]] = (
+            ReduceCustom(
+                max_batch_size,
+                max_batch_time,
+                accumulator,
+                lambda: [],
+                next_step,
+                increment_by,
+            )
         )
 
-    def submit(
-        self, message: Message[Union[FilteredPayload, TStrategyPayload]]
-    ) -> None:
+    def submit(self, message: Message[Union[FilteredPayload, TStrategyPayload]]) -> None:
         self.__reduce_step.submit(message)
 
     def poll(self) -> None:

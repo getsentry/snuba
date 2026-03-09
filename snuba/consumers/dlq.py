@@ -161,16 +161,12 @@ class ExitAfterNMessages(ProcessingStrategy[TPayload]):
 
     def close(self) -> None:
         if self.__processed_messages < self.__num_messages_to_process:
-            logger.warning(
-                "Closing DLQ consumer after %d messages", self.__processed_messages
-            )
+            logger.warning("Closing DLQ consumer after %d messages", self.__processed_messages)
         self.__next_step.close()
 
     def terminate(self) -> None:
         if self.__processed_messages < self.__num_messages_to_process:
-            logger.warning(
-                "Closing DLQ consumer after %d messages", self.__processed_messages
-            )
+            logger.warning("Closing DLQ consumer after %d messages", self.__processed_messages)
         self.__next_step.terminate()
 
     def join(self, timeout: Optional[float] = None) -> None:

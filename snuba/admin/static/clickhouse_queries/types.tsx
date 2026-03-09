@@ -17,6 +17,7 @@ type QueryRequest = {
   port: number;
   sql: string;
   sudo: boolean;
+  clusterless?: boolean;
 };
 
 type QueryResultColumnMetadata = [string];

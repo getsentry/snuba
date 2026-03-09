@@ -22,6 +22,7 @@ snuba/
 the files in the subdirectories are absolutely the same except that test_package_auto_import calls
 `import_submodules_in_directory` in the __init__.py file.
 """
+
 import os
 
 import pytest

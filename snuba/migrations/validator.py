@@ -1,8 +1,9 @@
 import re
 from typing import Sequence, Union
 
-from snuba.clickhouse.native import ClickhousePool
-from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
+from snuba.clusters.cluster import UndefinedClickhouseCluster, get_cluster
+from snuba.datasets.schemas.tables import TableSchema
+from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.migrations.migration import (
     ClickhouseNodeMigration,
     ClickhouseNodeMigrationLegacy,
@@ -42,6 +43,14 @@ class DistributedEngineParseError(Exception):
     pass
 
 
+class InvalidDistributedOperation(Exception):
+    """
+    Can't find the local table name for a distributed table on a dist op
+    """
+
+    pass
+
+
 def _conflicts_ops(local_op: SqlOperation, dist_op: SqlOperation) -> bool:
     if isinstance(local_op, CreateTable) and isinstance(dist_op, CreateTable):
         return conflicts_create_table_op(local_op, dist_op)
@@ -68,9 +77,7 @@ def _validate_add_col_or_create_table(
             )
 
 
-def _validate_drop_col(
-    dist_op: SqlOperation, local_ops: Sequence[SqlOperation]
-) -> None:
+def _validate_drop_col(dist_op: SqlOperation, local_ops: Sequence[SqlOperation]) -> None:
     if isinstance(dist_op, (DropColumn)):
         if any(_conflicts_ops(local_op, dist_op) for local_op in local_ops):
             raise InvalidMigrationOrderError(
@@ -103,12 +110,8 @@ def _validate_order_new(
     """
     for ops in [forward_ops, backwards_ops]:
         for i, op in enumerate(ops):
-            local_ops_before = [
-                op for op in ops[:i] if op.target != OperationTarget.DISTRIBUTED
-            ]
-            dist_ops_before = [
-                op for op in ops[:i] if op.target != OperationTarget.LOCAL
-            ]
+            local_ops_before = [op for op in ops[:i] if op.target != OperationTarget.DISTRIBUTED]
+            dist_ops_before = [op for op in ops[:i] if op.target != OperationTarget.LOCAL]
             if isinstance(op, (CreateTable, AddColumn)):
                 if op.target == OperationTarget.LOCAL:
                     _validate_add_col_or_create_table(op, dist_ops_before)
@@ -143,9 +146,7 @@ def validate_migration_order(migration: ClickhouseNodeMigration) -> None:
         _validate_order_new(forward_ops, backward_ops)
 
 
-def conflicts_create_table_op(
-    local_create: CreateTable, dist_create: CreateTable
-) -> bool:
+def conflicts_create_table_op(local_create: CreateTable, dist_create: CreateTable) -> bool:
     """
     Returns True if create table operation and local create table operation
     target same underlying local table.
@@ -171,10 +172,7 @@ def conflicts_add_column_op(local_add: AddColumn, dist_add: AddColumn) -> bool:
     Returns True if distributed add column operation and local add column operation
     target the same column and same underlying local table.
     """
-    if (
-        local_add.column != dist_add.column
-        or local_add._storage_set != dist_add._storage_set
-    ):
+    if local_add.column != dist_add.column or local_add._storage_set != dist_add._storage_set:
         return False
     try:
         if local_add.table_name == _get_local_table_name(dist_add):
@@ -207,31 +205,27 @@ def conflicts_drop_column_op(local_drop: DropColumn, dist_drop: DropColumn) -> b
     return False
 
 
-def _get_dist_connection(dist_op: SqlOperation) -> ClickhousePool:
-    cluster = get_cluster(dist_op._storage_set)
-    nodes = cluster.get_distributed_nodes()
-    if not nodes:
-        raise NoDistClusterNodes(f"No distributed nodes for {dist_op._storage_set}")
-    node = nodes[0]
-    connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
-    return connection
-
-
 def _get_local_table_name(dist_op: Union[CreateTable, AddColumn, DropColumn]) -> str:
     """
     Returns the local table name for a distributed table.
     """
-    clickhouse = _get_dist_connection(dist_op)
-    dist_table_name = dist_op.table_name
-    engine = clickhouse.execute(
-        f"SELECT engine_full FROM system.tables WHERE name = '{dist_table_name}' AND database = '{clickhouse.database}'"
-    ).results
-    if not engine:
-        raise DistributedEngineParseError(
-            f"No engine found for table {dist_table_name}"
-        )
-    engine_str = engine[0][0]
-    return _extract_local_table_name(engine_str)
+    for storage_key in get_all_storage_keys():
+        try:
+            storage = get_storage(storage_key)
+            if storage.get_storage_set_key() != dist_op._storage_set:
+                continue
+            schema = storage.get_schema()
+            if isinstance(schema, TableSchema):
+                # In local mode we want to verify that the pairing of
+                # dist/local tables is correct, so using get_dist_table_name
+                # instead of get_table_name here
+                if schema.get_dist_table_name() == dist_op.table_name:
+                    return schema.get_local_table_name()
+        except UndefinedClickhouseCluster:
+            continue
+    raise InvalidDistributedOperation(
+        f"No storage found for distributed table {dist_op.table_name}"
+    )
 
 
 def _extract_local_table_name(engine_str: str) -> str:

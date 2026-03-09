@@ -44,9 +44,7 @@ def test_mapped_columns_validation() -> None:
 
     query_entity = QueryEntity(entity.entity_key, entity.get_data_model())
     columns = [
-        SelectedExpression(
-            "ip_address", Column("_snuba_ip_address", None, "ip_address")
-        ),
+        SelectedExpression("ip_address", Column("_snuba_ip_address", None, "ip_address")),
         SelectedExpression("email", Column("_snuba_email", None, "email")),
     ]
 
@@ -74,9 +72,7 @@ def test_outcomes_columns_validation() -> None:
         selected_columns=[
             SelectedExpression("asdf", Column("_snuba_asdf", None, "asdf")),
             *[
-                SelectedExpression(
-                    column.name, Column(f"_snuba_{column.name}", None, column.name)
-                )
+                SelectedExpression(column.name, Column(f"_snuba_{column.name}", None, column.name))
                 for column in entity.get_data_model().columns
             ],
         ],
@@ -85,9 +81,7 @@ def test_outcomes_columns_validation() -> None:
     good_query = LogicalQuery(
         query_entity,
         selected_columns=[
-            SelectedExpression(
-                column.name, Column(f"_snuba_{column.name}", None, column.name)
-            )
+            SelectedExpression(column.name, Column(f"_snuba_{column.name}", None, column.name))
             for column in entity.get_data_model().columns
         ],
     )
@@ -107,9 +101,7 @@ def test_in_where_clause_and_function() -> None:
         query_entity,
         selected_columns=[
             *[
-                SelectedExpression(
-                    column.name, Column(f"_snuba_{column.name}", None, column.name)
-                )
+                SelectedExpression(column.name, Column(f"_snuba_{column.name}", None, column.name))
                 for column in entity.get_data_model().columns
             ],
         ],

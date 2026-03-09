@@ -40,15 +40,9 @@ def generate_item_message(start_timestamp: Optional[datetime] = None) -> bytes:
         "op": AnyValue(string_value="http.server"),
         "platform": AnyValue(string_value="python"),
         "sentry.received": AnyValue(double_value=received.seconds),
-        "sentry.start_timestamp_precise": AnyValue(
-            double_value=start_timestamp.timestamp()
-        ),
-        "sentry.end_timestamp_precise": AnyValue(
-            double_value=end_timestamp.timestamp()
-        ),
-        "start_timestamp_ms": AnyValue(
-            double_value=int(start_timestamp.timestamp() * 1000)
-        ),
+        "sentry.start_timestamp_precise": AnyValue(double_value=start_timestamp.timestamp()),
+        "sentry.end_timestamp_precise": AnyValue(double_value=end_timestamp.timestamp()),
+        "start_timestamp_ms": AnyValue(double_value=int(start_timestamp.timestamp() * 1000)),
     }
 
     return TraceItem(

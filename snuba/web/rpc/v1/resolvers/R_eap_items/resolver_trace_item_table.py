@@ -1,7 +1,7 @@
 import uuid
 from dataclasses import replace
 from itertools import islice
-from typing import List, Optional, Sequence
+from typing import Any, Callable, List, Optional, Sequence
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -18,20 +18,31 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
     RequestMeta,
     TraceItemType,
 )
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import ExtrapolationMode
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    AttributeKey,
+    ExtrapolationMode,
+    VirtualColumnContext,
+)
 
+from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
+from snuba.downsampled_storage_tiers import Tier
+from snuba.protos.common import NORMALIZED_COLUMNS_EAP_ITEMS
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond
+from snuba.query.dsl import and_cond, if_cond, in_cond, literal, literals_array, or_cond
 from snuba.query.dsl import column as snuba_column
-from snuba.query.dsl import in_cond, literal, literals_array, or_cond
-from snuba.query.expressions import Expression
+from snuba.query.expressions import (
+    DangerousRawSQL,
+    Expression,
+    FunctionCall,
+    SubscriptableReference,
+)
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -39,15 +50,16 @@ from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
+    attribute_key_to_expression,
     base_conditions_and,
     timestamp_in_range_condition,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
     use_sampling_factor,
+    valid_sampling_factor_conditions,
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
-    setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.common.pagination import FlexibleTimeWindowPageWithFilters
@@ -63,15 +75,12 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_count_column,
 )
 from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
-    get_trace_ids_for_cross_item_query,
+    get_trace_ids_sql_for_cross_item_query,
 )
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
-from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
-    apply_virtual_columns,
-    attribute_key_to_expression,
-)
 
 _DEFAULT_ROW_LIMIT = 10_000
+
 
 OP_TO_EXPR = {
     Column.BinaryFormula.OP_ADD: f.plus,
@@ -79,6 +88,82 @@ OP_TO_EXPR = {
     Column.BinaryFormula.OP_MULTIPLY: f.multiply,
     Column.BinaryFormula.OP_DIVIDE: f.divide,
 }
+
+COMPARISON_OP_TO_EXPR: dict[int, Callable[..., FunctionCall]] = {
+    Column.FormulaCondition.OP_LESS_THAN: f.less,
+    Column.FormulaCondition.OP_GREATER_THAN: f.greater,
+    Column.FormulaCondition.OP_LESS_THAN_OR_EQUALS: f.lessOrEquals,
+    Column.FormulaCondition.OP_GREATER_THAN_OR_EQUALS: f.greaterOrEquals,
+    Column.FormulaCondition.OP_EQUALS: f.equals,
+    Column.FormulaCondition.OP_NOT_EQUALS: f.notEquals,
+}
+
+
+def _apply_virtual_columns(
+    query: Query, virtual_column_contexts: Sequence[VirtualColumnContext]
+) -> None:
+    """Injects virtual column mappings into the clickhouse query. Works with NORMALIZED_COLUMNS on the table or
+    dynamic columns in attr_str
+
+    attr_num not supported because mapping on floats is a bad idea
+
+    Example:
+
+        SELECT
+          project_name AS `project_name`,
+          attr_str['release'] AS `release`,
+          attr_str['sentry.sdk.name'] AS `sentry.sdk.name`,
+        ... rest of query
+
+        contexts:
+            [   {from_column_name: project_id, to_column_name: project_name, value_map: {1: "sentry", 2: "snuba"}} ]
+
+
+        Query will be transformed into:
+
+        SELECT
+        -- see the project name column transformed and the value mapping injected
+          transform( CAST( project_id, 'String'), array( '1', '2'), array( 'sentry', 'snuba'), 'unknown') AS `project_name`,
+        --
+          attr_str['release'] AS `release`,
+          attr_str['sentry.sdk.name'] AS `sentry.sdk.name`,
+        ... rest of query
+
+    """
+
+    if not virtual_column_contexts:
+        return
+
+    mapped_column_to_context = {c.to_column_name: c for c in virtual_column_contexts}
+
+    def transform_expressions(expression: Expression) -> Expression:
+        # virtual columns will show up as `attr_str[virtual_column_name]` or `attr_num[virtual_column_name]`
+        if not isinstance(expression, SubscriptableReference):
+            return expression
+
+        if expression.column.column_name != "attributes_string":
+            return expression
+        context = mapped_column_to_context.get(str(expression.key.value))
+        if context:
+            attribute_expression = attribute_key_to_expression(
+                AttributeKey(
+                    name=context.from_column_name,
+                    type=NORMALIZED_COLUMNS_EAP_ITEMS.get(
+                        context.from_column_name, [AttributeKey.TYPE_STRING]
+                    )[0],
+                )
+            )
+            return f.transform(
+                f.CAST(f.ifNull(attribute_expression, literal("")), "String"),
+                literals_array(None, [literal(k) for k in context.value_map.keys()]),
+                literals_array(None, [literal(v) for v in context.value_map.values()]),
+                literal(context.default_value if context.default_value != "" else "unknown"),
+                alias=context.to_column_name,
+            )
+
+        return expression
+
+    query.transform_expressions(transform_expressions)
 
 
 def aggregation_filter_to_expression(
@@ -240,13 +325,36 @@ def _get_reliability_context_columns(
 
         return context_cols
 
+    if column.HasField("conditional_formula"):
+        context_cols = []
+        conditional = column.conditional_formula
+
+        if conditional.HasField("condition"):
+            for col in [conditional.condition.left, conditional.condition.right]:
+                context_cols.extend(_get_reliability_context_columns(col, request_meta))
+
+        # Note: 'match' is a Python keyword, so use getattr
+        for col in [getattr(conditional, "match"), conditional.default]:
+            if not col.HasField("formula") and not col.HasField("conditional_formula"):
+                if col.label:
+                    context_cols.append(
+                        SelectedExpression(
+                            name=col.label,
+                            expression=_column_to_expression(col, request_meta),
+                        )
+                    )
+            context_cols.extend(_get_reliability_context_columns(col, request_meta))
+
+        return context_cols
+
     if not (column.HasField("conditional_aggregation")):
         return []
 
-    if (
-        column.conditional_aggregation.extrapolation_mode
-        == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
-    ):
+    if column.conditional_aggregation.extrapolation_mode in [
+        ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+        ExtrapolationMode.EXTRAPOLATION_MODE_CLIENT_ONLY,
+        ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY,
+    ]:
         context_columns = []
         confidence_interval_column = get_confidence_interval_column(
             column.conditional_aggregation,
@@ -281,21 +389,66 @@ def _get_reliability_context_columns(
 
 
 def _formula_to_expression(formula: Column.BinaryFormula, request_meta: RequestMeta) -> Expression:
-    formula_expr = OP_TO_EXPR[formula.op](
-        _column_to_expression(formula.left, request_meta),
-        _column_to_expression(formula.right, request_meta),
-    )
+    left_expr = _column_to_expression(formula.left, request_meta)
+    right_expr = _column_to_expression(formula.right, request_meta)
+
+    # Get the default value if specified
+    default_value: float | int | None = None
     match formula.WhichOneof("default_value"):
-        case None:
-            return formula_expr
         case "default_value_double":
-            return f.coalesce(formula_expr, formula.default_value_double)
+            default_value = formula.default_value_double
         case "default_value_int64":
-            return f.coalesce(formula_expr, formula.default_value_int64)
+            default_value = formula.default_value_int64
+        case None:
+            pass
         case default:
             raise BadSnubaRPCRequestException(
                 f"Unknown default_value in formula. Expected default_value_double or default_value_int64 but got {default}"
             )
+
+    # For division operations with a default value, protect against NULL/zero divisors
+    # This handles cases like count / ((now - min(timestamp)) / 3600) where the divisor
+    # may be NULL (if min(timestamp) is NULL) or zero
+    if formula.op == Column.BinaryFormula.OP_DIVIDE and default_value is not None:
+        # if(right IS NULL OR right = 0, default, left / right)
+        return if_cond(
+            or_cond(f.isNull(right_expr), f.equals(right_expr, literal(0))),
+            literal(default_value),
+            f.divide(left_expr, right_expr),
+        )
+
+    formula_expr = OP_TO_EXPR[formula.op](left_expr, right_expr)
+
+    if default_value is not None:
+        return f.coalesce(formula_expr, default_value)
+
+    return formula_expr
+
+
+def _conditional_formula_to_expression(
+    conditional_formula: Any,
+    request_meta: RequestMeta,
+) -> Expression:
+    """
+    Converts a ConditionalFormula proto to a ClickHouse if(condition, match, default) expression.
+    The condition can compare aggregates (e.g., if(min(ts) < X, rate1, rate2)).
+    """
+    condition = conditional_formula.condition
+    left_expr = _column_to_expression(condition.left, request_meta)
+    right_expr = _column_to_expression(condition.right, request_meta)
+
+    if condition.op not in COMPARISON_OP_TO_EXPR:
+        raise BadSnubaRPCRequestException(
+            f"Unsupported comparison operator in ConditionalFormula: {condition.op}"
+        )
+
+    comparison_expr = COMPARISON_OP_TO_EXPR[condition.op](left_expr, right_expr)
+    # 'match' is the value when condition is true, 'default' is when false
+    # Note: 'match' is a Python keyword in 3.10+, but protobuf accesses it as an attribute
+    match_expr = _column_to_expression(getattr(conditional_formula, "match"), request_meta)
+    default_expr = _column_to_expression(conditional_formula.default, request_meta)
+
+    return if_cond(comparison_expr, match_expr, default_expr)
 
 
 def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expression:
@@ -317,11 +470,18 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
         formula_expr = _formula_to_expression(column.formula, request_meta)
         formula_expr = replace(formula_expr, alias=column.label)
         return formula_expr
+    elif column.HasField("conditional_formula"):
+        conditional_expr = _conditional_formula_to_expression(
+            column.conditional_formula,
+            request_meta,
+        )
+        conditional_expr = replace(conditional_expr, alias=column.label)
+        return conditional_expr
     elif column.HasField("literal"):
         return literal(column.literal.val_double)
     else:
         raise BadSnubaRPCRequestException(
-            "Column is not one of: aggregate, attribute key, or formula"
+            "Column is not one of: aggregate, attribute key, formula, or conditional_formula"
         )
 
 
@@ -336,6 +496,7 @@ def _get_offset_from_page_token(page_token: PageToken | None) -> int:
 def build_query(
     request: TraceItemTableRequest,
     time_window: TimeWindow | None = None,
+    sampling_tier: Optional[Tier] = None,
     timer: Optional[Timer] = None,
 ) -> Query:
     entity = Entity(
@@ -361,15 +522,12 @@ def build_query(
 
     # Handle cross item queries by first getting trace IDs
     additional_conditions: List[Expression] = []
-    if request.trace_filters and timer is not None:
-        trace_ids = get_trace_ids_for_cross_item_query(
-            request, request.meta, list(request.trace_filters), timer
+    if request.trace_filters and timer is not None and sampling_tier is not None:
+        trace_ids_sql, _ = get_trace_ids_sql_for_cross_item_query(
+            request, request.meta, list(request.trace_filters), sampling_tier, timer
         )
         additional_conditions.append(
-            in_cond(
-                snuba_column("trace_id"),
-                literals_array(None, [literal(trace_id) for trace_id in trace_ids]),
-            )
+            in_cond(snuba_column("trace_id"), DangerousRawSQL(None, f"({trace_ids_sql})"))
         )
     if time_window is not None:
         additional_conditions.append(
@@ -394,6 +552,7 @@ def build_query(
                 request.filter,
                 attribute_key_to_expression,
             ),
+            valid_sampling_factor_conditions(),
             *item_type_conds,
             *additional_conditions,
         ),
@@ -416,7 +575,7 @@ def build_query(
         ),
     )
     treeify_or_and_conditions(res)
-    apply_virtual_columns(res, request.virtual_column_contexts)
+    _apply_virtual_columns(res, request.virtual_column_contexts)
     add_existence_check_to_subscriptable_references(res)
     return res
 
@@ -460,6 +619,7 @@ def _build_snuba_request(
     request: TraceItemTableRequest,
     query_settings: HTTPQuerySettings,
     time_window: TimeWindow | None = None,
+    sampling_tier: Optional[Tier] = None,
     timer: Optional[Timer] = None,
 ) -> SnubaRequest:
     if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
@@ -474,7 +634,7 @@ def _build_snuba_request(
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
-        query=build_query(request, time_window, timer),
+        query=build_query(request, time_window, sampling_tier, timer),
         query_settings=query_settings,
         attribution_info=AttributionInfo(
             referrer=request.meta.referrer,
@@ -500,17 +660,27 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
         in_msg: TraceItemTableRequest,
         routing_decision: RoutingDecision,
     ) -> TraceItemTableResponse:
-        query_settings = setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
+        query_settings = HTTPQuerySettings(apply_default_subscriptable_mapping=False)
+        if in_msg.meta.debug:
+            query_settings.set_clickhouse_settings(
+                {"send_logs_level": "trace", "log_profile_events": 1}
+            )
         try:
             routing_decision.strategy.merge_clickhouse_settings(routing_decision, query_settings)
-            query_settings.set_sampling_tier(routing_decision.tier)
+            # When trace_filters are present and the feature is enabled, don't use sampling on the outer query
+            # The inner query (getting trace IDs) will use sampling
+            cross_item_queries_no_sample_outer = state.get_int_config(
+                "cross_item_queries_no_sample_outer", 0
+            )
+            if not (in_msg.trace_filters and cross_item_queries_no_sample_outer):
+                query_settings.set_sampling_tier(routing_decision.tier)
         except Exception as e:
             sentry_sdk.capture_message(f"Error merging clickhouse settings: {e}")
         original_time_window = TimeWindow(
             start_timestamp=in_msg.meta.start_timestamp, end_timestamp=in_msg.meta.end_timestamp
         )
         snuba_request = _build_snuba_request(
-            in_msg, query_settings, routing_decision.time_window, self._timer
+            in_msg, query_settings, routing_decision.time_window, routing_decision.tier, self._timer
         )
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),

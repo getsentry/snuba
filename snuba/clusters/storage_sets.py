@@ -28,10 +28,7 @@ _REGISTERED_STORAGE_SET_KEYS: dict[str, str] = {}
 
 class _StorageSetKey(type):
     def __getattr__(self, attr: str) -> "StorageSetKey":
-        if (
-            attr not in _HARDCODED_STORAGE_SET_KEYS
-            and attr not in _REGISTERED_STORAGE_SET_KEYS
-        ):
+        if attr not in _HARDCODED_STORAGE_SET_KEYS and attr not in _REGISTERED_STORAGE_SET_KEYS:
             raise AttributeError(attr)
 
         return StorageSetKey(attr.lower())

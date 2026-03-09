@@ -34,9 +34,7 @@ class TestEventsDataset:
         table_name = schema.get_table_name()
         write_unprocessed_events(storage, [self.event])
 
-        clickhouse = storage.get_cluster().get_query_connection(
-            ClickhouseClientSettings.QUERY
-        )
+        clickhouse = storage.get_cluster().get_query_connection(ClickhouseClientSettings.QUERY)
 
         hashed = clickhouse.execute(
             "SELECT cityHash64('test_tag1=value1'), cityHash64('test_tag\\\\=2=value2')"

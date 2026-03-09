@@ -49,9 +49,7 @@ class TestDangerousMigration:
             " ENGINE = MergeTree ORDER BY name"
         )
 
-    def _make_modify_op(
-        self, column: Column[MigrationModifiers]
-    ) -> Tuple[SqlOperation, Any]:
+    def _make_modify_op(self, column: Column[MigrationModifiers]) -> Tuple[SqlOperation, Any]:
         op = ModifyColumn(
             StorageSetKey.EVENTS, self.table_name, column, target=OperationTarget.LOCAL
         )
@@ -62,9 +60,7 @@ class TestDangerousMigration:
         op, context = self._make_modify_op(column)
         make_migration(op).forwards(context, columns_state_to_check=get_column_states())
 
-    def test_nullable_and_cardinality(
-        self, _mock_execute: Mock, create_table: None
-    ) -> None:
+    def test_nullable_and_cardinality(self, _mock_execute: Mock, create_table: None) -> None:
         col = Column("name", String(Modifiers(low_cardinality=True)))
         self._run_modify_migration(col)
 

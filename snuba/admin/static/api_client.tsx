@@ -15,6 +15,10 @@ import {
   QueryResult,
   PredefinedQuery,
 } from "SnubaAdmin/clickhouse_queries/types";
+
+import {
+  CopyTableRequest,
+} from "SnubaAdmin/copy_tables/types";
 import {
   MigrationGroupResult,
   RunMigrationRequest,
@@ -69,6 +73,7 @@ interface Client {
   debugSnQLQuery: (query: SnQLRequest) => Promise<SnQLResult>;
   getPredefinedQueryOptions: () => Promise<[PredefinedQuery]>;
   executeSystemQuery: (req: QueryRequest) => Promise<QueryResult>;
+  executeCopyTable: (req: CopyTableRequest) => Promise<any>;
   executeTracingQuery: (req: TracingRequest) => Promise<TracingResult>;
   getKafkaData: () => Promise<KafkaTopicData[]>;
   getRpcEndpoints: () => Promise<Array<[string, string]>>;
@@ -300,6 +305,20 @@ function Client(): Client {
     },
     executeSystemQuery: (query: QueryRequest) => {
       const url = baseUrl + "run_clickhouse_system_query";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        body: JSON.stringify(query),
+      }).then((resp) => {
+        if (resp.ok) {
+          return resp.json();
+        } else {
+          return resp.json().then(Promise.reject.bind(Promise));
+        }
+      });
+    },
+    executeCopyTable: (query: CopyTableRequest) => {
+      const url = baseUrl + "run_copy_table_query";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "POST",

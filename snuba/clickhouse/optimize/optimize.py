@@ -32,9 +32,7 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 
 
 # include thread and process info in log messages
-def thread_info_processor(
-    _: WrappedLogger, __: str, event_dict: EventDict
-) -> EventDict:
+def thread_info_processor(_: WrappedLogger, __: str, event_dict: EventDict) -> EventDict:
     event_dict["threadName"] = threading.current_thread().name
     event_dict["thread_id"] = threading.get_ident()
     event_dict["processName"] = multiprocessing.current_process().name
@@ -49,11 +47,7 @@ metrics = MetricsWrapper(environment.metrics, "optimize")
 
 
 def _get_metrics_tags(table: str, clickhouse_host: Optional[str]) -> Mapping[str, str]:
-    return (
-        {"table": table, "host": clickhouse_host}
-        if clickhouse_host
-        else {"table": table}
-    )
+    return {"table": table, "host": clickhouse_host} if clickhouse_host else {"table": table}
 
 
 def run_optimize(
@@ -73,9 +67,7 @@ def run_optimize(
     table = schema.get_local_table_name()
     database = storage.get_cluster().get_database()
 
-    partitions = get_partitions_from_clickhouse(
-        clickhouse, storage, database, table, before
-    )
+    partitions = get_partitions_from_clickhouse(clickhouse, storage, database, table, before)
     partition_names = [partition.name for partition in partitions]
 
     optimize_partitions(
@@ -127,17 +119,13 @@ def run_optimize_cron_job(
     except NoOptimizedStateException:
         # We don't have any recorded state of partitions needing optimization
         # for today. So we need to build it.
-        partitions = get_partitions_from_clickhouse(
-            clickhouse, storage, database, table, before
-        )
+        partitions = get_partitions_from_clickhouse(clickhouse, storage, database, table, before)
 
         if divide_partitions_count > 1:
             partitions = [
                 partition
                 for partition in partitions
-                if should_optimize_partition_today(
-                    partition.name, divide_partitions_count
-                )
+                if should_optimize_partition_today(partition.name, divide_partitions_count)
             ]
 
         if len(partitions) == 0:
@@ -255,15 +243,10 @@ def get_partitions_from_clickhouse(
     partition_format = schema.get_partition_format()
     assert partition_format is not None
 
-    parts = [
-        util.decode_part_str(part, partition_format)
-        for part, count in active_parts.results
-    ]
+    parts = [util.decode_part_str(part, partition_format) for part, count in active_parts.results]
 
     if before:
-        parts = [
-            p for p in parts if (p.date + timedelta(days=6 - p.date.weekday())) < before
-        ]
+        parts = [p for p in parts if (p.date + timedelta(days=6 - p.date.weekday())) < before]
 
     return parts
 
@@ -341,7 +324,11 @@ def optimize_partition_runner(
         pending_futures: set[Future[Any]] = set()
 
         partitions_to_optimize = deque(partitions)
+        partitions_remaining = len(partitions)
+        tags = _get_metrics_tags(table, clickhouse_host)
+
         while partitions_to_optimize:
+            metrics.gauge("partitions_left_to_optimize", partitions_remaining, tags=tags)
             configured_num_threads = get_num_threads(default_parallel_threads)
             schedule = scheduler.get_next_schedule(partitions_to_optimize)
             logger.info(
@@ -349,9 +336,7 @@ def optimize_partition_runner(
                 f"{schedule.cutoff_time} with {configured_num_threads} threads"
             )
 
-            while (
-                partitions_to_optimize and len(pending_futures) < configured_num_threads
-            ):
+            while partitions_to_optimize and len(pending_futures) < configured_num_threads:
                 pending_futures.add(
                     executor.submit(
                         optimize_partitions,
@@ -370,6 +355,7 @@ def optimize_partition_runner(
             )
             for future in completed_futures:
                 future.result()
+                partitions_remaining -= 1
 
 
 def optimize_partitions(
@@ -389,8 +375,7 @@ def optimize_partitions(
     for partition in partitions:
         if cutoff_time is not None and datetime.now(UTC) > cutoff_time:
             logger.info(
-                f"Optimize job is running past provided cutoff time"
-                f" {cutoff_time}. Cancelling.",
+                f"Optimize job is running past provided cutoff time {cutoff_time}. Cancelling.",
             )
             return
 
@@ -454,9 +439,7 @@ def _days_since_epoch(current_time: Optional[datetime] = None) -> int:
     return int(current_time.timestamp() / 86400)
 
 
-def should_optimize_partition_today(
-    partition_name: str, divide_partitions_count: int
-) -> bool:
+def should_optimize_partition_today(partition_name: str, divide_partitions_count: int) -> bool:
     """
     Determines if a partition should be optimized today based on the partition name
     and the current day of year.

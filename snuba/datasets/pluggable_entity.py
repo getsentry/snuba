@@ -49,9 +49,7 @@ class PluggableEntity(Entity):
     storage_selector: QueryStorageSelector
     validate_data_model: ColumnValidationMode | None = None
     join_relationships: Mapping[str, JoinRelationship] = field(default_factory=dict)
-    function_call_validators: Mapping[str, FunctionCallValidator] = field(
-        default_factory=dict
-    )
+    function_call_validators: Mapping[str, FunctionCallValidator] = field(default_factory=dict)
     # partition_key_column_name is used in data slicing (the value in this storage column
     # will be used to "choose" slices)
     partition_key_column_name: Optional[str] = None
@@ -127,9 +125,7 @@ class PluggableEntity(Entity):
         return self.subscription_validators
 
     def __eq__(self, other: Any) -> bool:
-        return (
-            isinstance(other, PluggableEntity) and self.entity_key == other.entity_key
-        )
+        return isinstance(other, PluggableEntity) and self.entity_key == other.entity_key
 
     def __hash__(self) -> int:
         return hash(self.entity_key)

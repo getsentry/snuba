@@ -21,9 +21,7 @@ from snuba.processor import (
 from snuba.utils.serializable_exception import SerializableException
 
 
-def extract_project_id(
-    output: MutableMapping[str, Any], event: Mapping[str, Any]
-) -> None:
+def extract_project_id(output: MutableMapping[str, Any], event: Mapping[str, Any]) -> None:
     output["project_id"] = event["project_id"]
 
 
@@ -108,9 +106,7 @@ def extract_extra_contexts(
     return (context_keys, context_values)
 
 
-def enforce_retention(
-    retention_days: Optional[int], timestamp: Optional[datetime]
-) -> int:
+def enforce_retention(retention_days: Optional[int], timestamp: Optional[datetime]) -> int:
     if not isinstance(retention_days, int):
         retention_days = settings.DEFAULT_RETENTION_DAYS
 

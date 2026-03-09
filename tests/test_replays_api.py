@@ -25,12 +25,12 @@ class TestReplaysApi(BaseApiTest):
         self.event = get_replay_event(replay_id=str(self.replay_id))
         self.project_id = self.event["project_id"]
         self.skew = timedelta(minutes=180)
-        self.base_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0
-        ) - timedelta(minutes=180)
-        self.next_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0
-        ) + timedelta(minutes=180)
+        self.base_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
+            minutes=180
+        )
+        self.next_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0) + timedelta(
+            minutes=180
+        )
 
     def test_default_json_encoder(self) -> None:
         replays_storage = get_entity(EntityKey.REPLAYS).get_writable_storage()
@@ -76,9 +76,7 @@ class TestReplaysApi(BaseApiTest):
 
         payload.pop("user")
         payload.pop("sdk")
-        payload["tags"] = list(
-            filter(lambda tag: tag[0] != "transaction", payload["tags"])
-        )
+        payload["tags"] = list(filter(lambda tag: tag[0] != "transaction", payload["tags"]))
         self.event["payload"] = list(json.dumps(payload).encode())  # type: ignore
 
         replays_storage = get_entity(EntityKey.REPLAYS).get_writable_storage()

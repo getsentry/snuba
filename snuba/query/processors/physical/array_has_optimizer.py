@@ -36,11 +36,7 @@ class ArrayHasOptimizer(ClickhouseQueryProcessor):
                     FunctionCall(
                         String("has"),
                         (
-                            Column(
-                                column_name=Or(
-                                    [String(column) for column in array_columns]
-                                )
-                            ),
+                            Column(column_name=Or([String(column) for column in array_columns])),
                             Literal(Any(str)),
                         ),
                     ),

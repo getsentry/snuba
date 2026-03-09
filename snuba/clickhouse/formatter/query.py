@@ -44,13 +44,9 @@ def format_query(query: FormattableQuery) -> FormattedQuery:
     composite.
     """
     if isinstance(query, Query) and query.is_delete():
-        return FormattedQuery(
-            _format_delete_query_content(query, ClickhouseExpressionFormatter)
-        )
+        return FormattedQuery(_format_delete_query_content(query, ClickhouseExpressionFormatter))
     else:
-        return FormattedQuery(
-            _format_query_content(query, ClickhouseExpressionFormatter)
-        )
+        return FormattedQuery(_format_query_content(query, ClickhouseExpressionFormatter))
 
 
 def format_query_anonymized(query: FormattableQuery) -> FormattedQuery:
@@ -73,25 +69,19 @@ class DataSourceFormatter(DataSourceVisitor[FormattedNode, Table]):
         """
 
         final = " FINAL" if data_source.final else ""
-        sample = (
-            f" SAMPLE {data_source.sampling_rate}" if data_source.sampling_rate else ""
-        )
+        sample = f" SAMPLE {data_source.sampling_rate}" if data_source.sampling_rate else ""
         return StringNode(f"{data_source.table_name}{final}{sample}")
 
     def _visit_join(self, data_source: JoinClause[Table]) -> FormattedNode:
         return data_source.accept(JoinFormatter(self.__expression_formatter_type))
 
-    def _visit_simple_query(
-        self, data_source: ProcessableQuery[Table]
-    ) -> FormattedSubQuery:
+    def _visit_simple_query(self, data_source: ProcessableQuery[Table]) -> FormattedSubQuery:
         assert isinstance(data_source, Query)
         return FormattedSubQuery(
             _format_query_content(data_source, self.__expression_formatter_type),
         )
 
-    def _visit_composite_query(
-        self, data_source: CompositeQuery[Table]
-    ) -> FormattedSubQuery:
+    def _visit_composite_query(self, data_source: CompositeQuery[Table]) -> FormattedSubQuery:
         return FormattedSubQuery(
             _format_query_content(data_source, self.__expression_formatter_type),
         )
@@ -117,15 +107,11 @@ def _format_query_content(
             _format_select(query, formatter),
             PaddingNode(
                 "FROM",
-                DataSourceFormatter(expression_formatter_type).visit(
-                    query.get_from_clause()
-                ),
+                DataSourceFormatter(expression_formatter_type).visit(query.get_from_clause()),
             ),
             _format_arrayjoin(query, formatter),
             (
-                _build_optional_string_node(
-                    "PREWHERE", query.get_prewhere_ast(), formatter
-                )
+                _build_optional_string_node("PREWHERE", query.get_prewhere_ast(), formatter)
                 if isinstance(query, Query)
                 else None
             ),
@@ -150,9 +136,7 @@ def _format_delete_query_content(
             StringNode("DELETE"),
             PaddingNode(
                 "FROM",
-                DataSourceFormatter(expression_formatter_type).visit(
-                    query.get_from_clause()
-                ),
+                DataSourceFormatter(expression_formatter_type).visit(query.get_from_clause()),
             ),
             _format_on_cluster(query, formatter),
             _build_optional_string_node("WHERE", query.get_condition(), formatter),
@@ -170,12 +154,8 @@ def _format_on_cluster(
     return None
 
 
-def _format_select(
-    query: AbstractQuery, formatter: ExpressionVisitor[str]
-) -> StringNode:
-    selected_cols = [
-        e.expression.accept(formatter) for e in query.get_selected_columns()
-    ]
+def _format_select(query: AbstractQuery, formatter: ExpressionVisitor[str]) -> StringNode:
+    selected_cols = [e.expression.accept(formatter) for e in query.get_selected_columns()]
     return StringNode(f"SELECT {', '.join(selected_cols)}")
 
 
@@ -184,11 +164,7 @@ def _build_optional_string_node(
     expression: Optional[Expression],
     formatter: ExpressionVisitor[str],
 ) -> Optional[StringNode]:
-    return (
-        StringNode(f"{name} {expression.accept(formatter)}")
-        if expression is not None
-        else None
-    )
+    return StringNode(f"{name} {expression.accept(formatter)}") if expression is not None else None
 
 
 def _format_groupby(
@@ -210,9 +186,7 @@ def _format_orderby(
 ) -> Optional[StringNode]:
     ast_orderby = query.get_orderby()
     if ast_orderby:
-        orderby = [
-            f"{e.expression.accept(formatter)} {e.direction.value}" for e in ast_orderby
-        ]
+        orderby = [f"{e.expression.accept(formatter)} {e.direction.value}" for e in ast_orderby]
         return StringNode(f"ORDER BY {', '.join(orderby)}")
     else:
         return None
@@ -225,9 +199,7 @@ def _format_limitby(
 
     if ast_limitby is not None:
         columns_accepted = [column.accept(formatter) for column in ast_limitby.columns]
-        return StringNode(
-            "LIMIT {} BY {}".format(ast_limitby.limit, ",".join(columns_accepted))
-        )
+        return StringNode("LIMIT {} BY {}".format(ast_limitby.limit, ",".join(columns_accepted)))
 
     return None
 
@@ -243,9 +215,7 @@ def _format_arrayjoin(
     return None
 
 
-def _format_limit(
-    query: AbstractQuery, formatter: ExpressionVisitor[str]
-) -> Optional[StringNode]:
+def _format_limit(query: AbstractQuery, formatter: ExpressionVisitor[str]) -> Optional[StringNode]:
     ast_limit = query.get_limit()
     return (
         StringNode(f"LIMIT {ast_limit} OFFSET {query.get_offset()}")

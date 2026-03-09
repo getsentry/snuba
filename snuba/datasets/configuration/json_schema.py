@@ -159,6 +159,21 @@ DATETIME64_SCHEMA = make_column_schema(
     },
 )
 
+JSON_SCHEMA = make_column_schema(
+    column_type={"const": "JSON"},
+    args={
+        "type": "object",
+        "properties": {
+            "max_dynamic_paths": {"type": "integer"},
+            "max_dynamic_types": {"type": "integer"},
+            "type_hints": {"type": "object"},
+            "skip_paths": TYPE_STRING_ARRAY,
+            "skip_regexp": TYPE_STRING_ARRAY,
+        },
+        "additionalProperties": False,
+    },
+)
+
 # Get just the type
 _SIMPLE_COLUMN_TYPES = [del_name_field(col_type) for col_type in [NUMBER_SCHEMA, NO_ARG_SCHEMA]]
 
@@ -239,6 +254,7 @@ SIMPLE_COLUMN_SCHEMAS = [
     SIMPLE_AGGREGATE_FUNCTION_SCHEMA,
     ENUM_SCHEMA,
     DATETIME64_SCHEMA,
+    JSON_SCHEMA,
 ]
 
 # Array inner types are the same as normal column types except they don't have a name
@@ -467,7 +483,6 @@ ENTITY_TRANSLATION_MAPPERS = {
         "functions": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
         "curried_functions": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
         "subscriptables": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
-        "columns": ENTITY_TRANSLATION_MAPPER_SUB_LIST,
     },
     "additionalProperties": False,
 }
@@ -599,6 +614,18 @@ DELETION_SETTINGS_SCHEMA = {
             "type": "integer",
         },
         "bulk_delete_only": {"type": "boolean"},
+        "allowed_attributes_by_item_type": {
+            "type": "object",
+            "description": "Mapping of item_type to list of allowed attributes for deletion.",
+            "additionalProperties": {
+                "type": "array",
+                "items": {"type": "string"},
+            },
+        },
+        "partition_column": {
+            "type": "string",
+            "description": "Column used for partition splitting in lightweight deletes. When set, deletes can be split by toMonday(partition_column) to reduce per-mutation CPU.",
+        },
     },
     "required": ["is_enabled", "tables"],
     "additionalProperties": False,

@@ -24,9 +24,7 @@ class Timer:
         self.__name = name
         self.__clock = clock
 
-        self.__marks: MutableSequence[Tuple[str, float]] = [
-            (self.__name, self.__clock.time())
-        ]
+        self.__marks: MutableSequence[Tuple[str, float]] = [(self.__name, self.__clock.time())]
         self.__data: Optional[TimerData] = None
         self.__tags: Dict[str, str] = dict(tags or {})
 
@@ -113,7 +111,5 @@ class Timer:
         merged_tags = {**data["tags"], **tags} if tags else self.__tags
         backend.timing(self.__name, data["duration_ms"], tags=merged_tags)
         for mark, duration in data["marks_ms"].items():
-            merged_mark_tags = (
-                {**data["tags"], **mark_tags} if mark_tags else data["tags"]
-            )
+            merged_mark_tags = {**data["tags"], **mark_tags} if mark_tags else data["tags"]
             backend.timing(f"{self.__name}.{mark}", duration, tags=merged_mark_tags)

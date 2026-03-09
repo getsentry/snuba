@@ -38,9 +38,7 @@ class ValidateAliasVisitor(RequestVisitor):
             if expr.label == "":
                 continue
             if expr.label in self.expression_labels:
-                raise BadSnubaRPCRequestException(
-                    f"Duplicate expression label: {expr.label}"
-                )
+                raise BadSnubaRPCRequestException(f"Duplicate expression label: {expr.label}")
             self.expression_labels.add(expr.label)
 
         for expr in node.expressions:
@@ -71,9 +69,7 @@ class RemoveInnerExpressionLabelsVisitor(RequestVisitor):
     def visit_AttributeAggregation(self, node: AttributeAggregation) -> None:
         node.label = ""
 
-    def visit_AttributeConditionalAggregation(
-        self, node: AttributeConditionalAggregation
-    ) -> None:
+    def visit_AttributeConditionalAggregation(self, node: AttributeConditionalAggregation) -> None:
         node.label = ""
 
     def visit_BinaryFormula(self, node: Expression.BinaryFormula) -> None:
@@ -107,9 +103,7 @@ class AddAggregateLabelsVisitor(RequestVisitor):
     def visit_AttributeAggregation(self, node: AttributeAggregation) -> None:
         node.label = self.current_label
 
-    def visit_AttributeConditionalAggregation(
-        self, node: AttributeConditionalAggregation
-    ) -> None:
+    def visit_AttributeConditionalAggregation(self, node: AttributeConditionalAggregation) -> None:
         node.label = self.current_label
 
 
@@ -160,9 +154,7 @@ class GetSubformulaLabelsVisitor(RequestVisitor):
                 if self.labels[self.curr_formula] == []:
                     del self.labels[self.curr_formula]
 
-    def visit_BinaryFormula(
-        self, node: Expression.BinaryFormula, curr_label: str = ""
-    ) -> None:
+    def visit_BinaryFormula(self, node: Expression.BinaryFormula, curr_label: str = "") -> None:
         self.visit(node.left, curr_label + ".left")
         self.visit(node.right, curr_label + ".right")
 
@@ -171,9 +163,7 @@ class GetSubformulaLabelsVisitor(RequestVisitor):
         assert expr_type is not None
         self.visit(getattr(node, expr_type), curr_label)
 
-    def visit_AttributeAggregation(
-        self, node: AttributeAggregation, curr_label: str = ""
-    ) -> None:
+    def visit_AttributeAggregation(self, node: AttributeAggregation, curr_label: str = "") -> None:
         self.labels[self.curr_formula].append(curr_label)
 
     def visit_AttributeConditionalAggregation(

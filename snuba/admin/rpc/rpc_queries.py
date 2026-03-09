@@ -10,9 +10,7 @@ def _validate_projects_in_query(project_ids: List[int]) -> None:
     allowed_projects: Set[int] = set(settings.ADMIN_ALLOWED_PROD_PROJECTS)
     query_projects: Set[int] = set(project_ids)
     if len(query_projects - allowed_projects) > 0:
-        raise BadSnubaRPCRequestException(
-            f"Project IDs {query_projects} are not allowed"
-        )
+        raise BadSnubaRPCRequestException(f"Project IDs {query_projects} are not allowed")
 
 
 def _validate_org_ids_in_query(org_id: int) -> None:

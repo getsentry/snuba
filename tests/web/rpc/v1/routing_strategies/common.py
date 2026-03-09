@@ -1,12 +1,11 @@
 from datetime import datetime
 from typing import Dict, List, Tuple
 
+from sentry_relay.consts import DataCategory
+
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.rpc.storage_routing.routing_strategies.common import (
-    Outcome,
-    OutcomeCategory,
-)
+from snuba.web.rpc.storage_routing.routing_strategies.common import Outcome
 from tests.helpers import write_raw_unprocessed_events
 
 
@@ -15,7 +14,7 @@ def gen_ingest_outcome(
     num: int,
     project_id: int = 1,
     org_id: int = 1,
-    outcome_category: int = OutcomeCategory.SPAN_INDEXED,
+    outcome_category: int = DataCategory.SPAN_INDEXED,
 ) -> Dict[str, int | str | None]:
     """Generate a single ingest outcome record.
 
@@ -44,7 +43,7 @@ def gen_ingest_outcome(
 
 def store_outcomes_data(
     outcome_data: List[Tuple[datetime, int]],
-    outcome_category: int = OutcomeCategory.SPAN_INDEXED,
+    outcome_category: int = DataCategory.SPAN_INDEXED,
     org_id: int = 1,
     project_id: int = 1,
 ) -> None:
@@ -74,21 +73,21 @@ def store_outcomes_data(
     write_raw_unprocessed_events(outcomes_storage, messages)  # type: ignore
 
 
-# Available outcome categories (from OutcomeCategory class):
-# - OutcomeCategory.SPAN_INDEXED = 16 (for spans)
-# - OutcomeCategory.LOG_ITEM = 23 (for logs)
+# Available outcome categories (from DataCategory class):
+# - DataCategory.SPAN_INDEXED = 16 (for spans)
+# - DataCategory.LOG_ITEM = 23 (for logs)
 
 # Usage examples:
 # 1. Store span outcomes (default):
 #    store_outcomes_data([(datetime1, 1000), (datetime2, 2000)])
 #
 # 2. Store log outcomes:
-#    store_outcomes_data([(datetime1, 1000), (datetime2, 2000)], OutcomeCategory.LOG_ITEM)
+#    store_outcomes_data([(datetime1, 1000), (datetime2, 2000)], DataCategory.LOG_ITEM)
 #
 # 3. Store mixed outcomes:
 #    store_outcomes_data([
-#        (datetime1, 1000, OutcomeCategory.SPAN_INDEXED),
-#        (datetime2, 2000, OutcomeCategory.LOG_ITEM)
+#        (datetime1, 1000, DataCategory.SPAN_INDEXED),
+#        (datetime2, 2000, DataCategory.LOG_ITEM)
 #    ])
 
 # Backward compatibility alias
@@ -99,6 +98,6 @@ __all__ = [
     "store_outcomes_data",
     "gen_ingest_outcome",
     "gen_span_ingest_outcome",
-    "OutcomeCategory",
+    "DataCategory",
     "Outcome",
 ]

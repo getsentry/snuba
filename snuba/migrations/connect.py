@@ -111,9 +111,7 @@ def check_clickhouse(clickhouse: ClickhousePool) -> None:
     """
     ver = clickhouse.execute("SELECT version()").results[0][0]
     ver = re.search(r"(\d+.\d+.\d+.\d+)", ver)
-    if ver is None or version.parse(ver.group()) < version.parse(
-        CLICKHOUSE_SERVER_MIN_VERSION
-    ):
+    if ver is None or version.parse(ver.group()) < version.parse(CLICKHOUSE_SERVER_MIN_VERSION):
         raise InvalidClickhouseVersion(
             f"Snuba requires minimum Clickhouse version {CLICKHOUSE_SERVER_MIN_VERSION} ({clickhouse.host}:{clickhouse.port} - {version.parse(ver.group())})"
         )
@@ -130,9 +128,7 @@ def _get_all_storage_keys() -> Sequence[StorageKey]:
     """
     return [
         storage_key
-        for storage_key in sorted(
-            get_all_storage_keys(), key=lambda storage_key: storage_key.value
-        )
+        for storage_key in sorted(get_all_storage_keys(), key=lambda storage_key: storage_key.value)
         if get_storage(storage_key).get_storage_set_key() not in DEV_STORAGE_SETS
         or ENABLE_DEV_FEATURES
     ]
@@ -195,9 +191,7 @@ def get_column_states() -> ColumnStatesMapType:
     checked_nodes = set()
     for storage_key in storage_keys:
         try:
-            local_nodes, distributed_nodes, query_node = _get_all_nodes_for_storage(
-                storage_key
-            )
+            local_nodes, distributed_nodes, query_node = _get_all_nodes_for_storage(storage_key)
             storage = get_storage(storage_key)
             cluster = storage.get_cluster()
         except UndefinedClickhouseCluster:
@@ -209,8 +203,7 @@ def get_column_states() -> ColumnStatesMapType:
 
             conn = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
             column_types = conn.execute(
-                "SELECT table, name, type FROM system.columns "
-                f"WHERE database='{conn.database}'",
+                f"SELECT table, name, type FROM system.columns WHERE database='{conn.database}'",
             ).results
 
             for row in column_types:

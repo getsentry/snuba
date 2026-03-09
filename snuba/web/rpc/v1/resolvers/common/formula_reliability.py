@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict
 
@@ -9,6 +10,13 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import ExtrapolationContext
 from snuba.web.rpc.v1.visitors.time_series_request_visitor import (
     GetSubformulaLabelsVisitor,
 )
+
+
+@dataclass(frozen=True)
+class FormulaExtrapolationContext:
+    average_sample_rate: float = 0
+    sample_count: int = 0
+    reliability: Reliability.ValueType = Reliability.RELIABILITY_UNSPECIFIED
 
 
 class FormulaReliabilityCalculator:
@@ -46,15 +54,15 @@ class FormulaReliabilityCalculator:
             else:
                 self.contexts.append(None)
 
-    def get(self, label: str) -> list[Reliability.ValueType]:
+    def get(self, label: str) -> list[FormulaExtrapolationContext]:
         """
         Returns:
             a list of reliabilities for the formula for each time bucket
         """
-        res = []
+        res: list[FormulaExtrapolationContext] = []
         for bucket_context in self.contexts:
             if bucket_context is None:
-                res.append(Reliability.RELIABILITY_UNSPECIFIED)
+                res.append(FormulaExtrapolationContext())
             else:
                 res.append(bucket_context.get(label))
         return res
@@ -74,15 +82,15 @@ def reliability_priority(reliablity: Reliability.ValueType) -> int:
 
 class FormulaReliabilityContext:
     # the reliabilities of the formulas for this current row of data
-    formula_reliabilities: dict[str, Reliability.ValueType]
+    formula_extrapolation_contexts: dict[str, FormulaExtrapolationContext]
     bucket: int
 
     def __init__(self) -> None:
-        self.formula_reliabilities = {}
+        self.formula_extrapolation_contexts = {}
         self.bucket = -1
 
-    def get(self, label: str) -> Reliability.ValueType:
-        return self.formula_reliabilities[label]
+    def get(self, label: str) -> FormulaExtrapolationContext:
+        return self.formula_extrapolation_contexts[label]
 
     @staticmethod
     def from_row(
@@ -100,21 +108,49 @@ class FormulaReliabilityContext:
         """
         reliability_context = FormulaReliabilityContext()
 
-        reliability_context.bucket = int(
-            datetime.fromisoformat(row["time"]).timestamp()
-        )
+        reliability_context.bucket = int(datetime.fromisoformat(row["time"]).timestamp())
 
         for formula, children in formulas_to_children.items():
             for child in children:
                 context = ExtrapolationContext.from_row(child, row)
-                if formula not in reliability_context.formula_reliabilities:
-                    reliability_context.formula_reliabilities[
-                        formula
-                    ] = context.reliability
-                else:
-                    reliability_context.formula_reliabilities[formula] = min(
-                        context.reliability,
-                        reliability_context.formula_reliabilities[formula],
-                        key=reliability_priority,
+
+                if formula not in reliability_context.formula_extrapolation_contexts:
+                    reliability_context.formula_extrapolation_contexts[formula] = (
+                        FormulaExtrapolationContext(
+                            average_sample_rate=context.average_sample_rate,
+                            sample_count=context.sample_count,
+                            reliability=context.reliability,
+                        )
                     )
+                else:
+                    reliability_context.formula_extrapolation_contexts[formula] = (
+                        FormulaExtrapolationContext(
+                            # no way to get the true sample rate so we approximate it
+                            # by taking the max sample rate of the parts of the formula
+                            average_sample_rate=max(
+                                context.average_sample_rate,
+                                reliability_context.formula_extrapolation_contexts[
+                                    formula
+                                ].average_sample_rate,
+                            ),
+                            # no way to get the true sample count so we approximate it
+                            # by taking the max sample count of the parts of the formula
+                            sample_count=max(
+                                context.sample_count,
+                                reliability_context.formula_extrapolation_contexts[
+                                    formula
+                                ].sample_count,
+                            ),
+                            # taking the lowest reliability of the parts of the formula
+                            # gives us the reliability of the overall formula
+                            reliability=min(
+                                context.reliability,
+                                reliability_context.formula_extrapolation_contexts[
+                                    formula
+                                ].reliability,
+                                key=reliability_priority,
+                            ),
+                        )
+                    )
+
         return reliability_context

@@ -313,9 +313,7 @@ TEST_CASES = [
                 "events": {
                     CurriedFunctionCall(
                         "_snuba_cf",
-                        FunctionCall(
-                            "_snuba_f", "f", (Column("_snuba_col", None, "column"),)
-                        ),
+                        FunctionCall("_snuba_f", "f", (Column("_snuba_col", None, "column"),)),
                         (Literal(None, "val"),),
                     ),
                 },
@@ -326,15 +324,11 @@ TEST_CASES = [
     pytest.param(
         FunctionCall("_snuba_f", "avg", (Column("_snuba_col", "events", "column"),)),
         MainQueryExpression(
-            FunctionCall(
-                "_snuba_f", "avg", (Column("_snuba_col", "events", "_snuba_col"),)
-            ),
+            FunctionCall("_snuba_f", "avg", (Column("_snuba_col", "events", "_snuba_col"),)),
             {"events": {Column("_snuba_col", None, "column")}},
         ),
         MainQueryExpression(
-            FunctionCall(
-                "_snuba_f", "avg", (Column("_snuba_col", "events", "_snuba_col"),)
-            ),
+            FunctionCall("_snuba_f", "avg", (Column("_snuba_col", "events", "_snuba_col"),)),
             {"events": {Column("_snuba_col", None, "column")}},
         ),
         id="Aggregate function over a column. Do not push down",

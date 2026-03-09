@@ -48,9 +48,9 @@ def create_metrics(
                 host=host,
                 port=port,
                 namespace=prefix,
-                constant_tags=[f"{key}:{value}" for key, value in tags.items()]
-                if tags is not None
-                else None,
+                constant_tags=(
+                    [f"{key}:{value}" for key, value in tags.items()] if tags is not None else None
+                ),
             ),
             sample_rates,
         ),

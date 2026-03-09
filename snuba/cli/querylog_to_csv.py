@@ -23,9 +23,7 @@ class QueryMeasurementResult(NamedTuple):
     read_bytes: int
 
 
-def write_querylog_results_to_csv(
-    results: Sequence[QueryMeasurementResult], filename: str
-) -> None:
+def write_querylog_results_to_csv(results: Sequence[QueryMeasurementResult], filename: str) -> None:
     with open(filename, mode="w") as file:
         writer = csv.writer(file)
         writer.writerow(
@@ -116,9 +114,7 @@ def get_credentials() -> Tuple[str, str]:
 @click.option(
     "--event-type",
     help="Type of event that occured while executing query.",
-    type=click.Choice(
-        ["QueryFinish", "ExceptionBeforeStart", "ExceptionWhileProcessing"]
-    ),
+    type=click.Choice(["QueryFinish", "ExceptionBeforeStart", "ExceptionWhileProcessing"]),
     required=True,
     default="QueryFinish",
 )

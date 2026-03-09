@@ -25,17 +25,13 @@ TEST_CASES = [
                 ConditionFunctions.EQ, column("event_id"), Literal(None, "123123")
             ),
         ),
-        binary_condition(
-            ConditionFunctions.EQ, column("event_id"), Literal(None, "123123")
-        ),
+        binary_condition(ConditionFunctions.EQ, column("event_id"), Literal(None, "123123")),
         id="No tag condition",
     ),
     pytest.param(
         build_query(
             selected_columns=[column("event_id")],
-            condition=nested_condition(
-                "contexts", "my_ctx", ConditionFunctions.EQ, "a"
-            ),
+            condition=nested_condition("contexts", "my_ctx", ConditionFunctions.EQ, "a"),
         ),
         nested_condition("contexts", "my_ctx", ConditionFunctions.EQ, "a"),
         id="Nested condition on the wrong column",

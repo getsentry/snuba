@@ -39,9 +39,7 @@ class SemiJoinOptimizer(CompositeQueryProcessor):
 
     """
 
-    def process_query(
-        self, query: CompositeQuery[Table], query_settings: QuerySettings
-    ) -> None:
+    def process_query(self, query: CompositeQuery[Table], query_settings: QuerySettings) -> None:
         from_clause = query.get_from_clause()
         if isinstance(from_clause, CompositeQuery):
             self.process_query(from_clause, query_settings)
@@ -51,9 +49,7 @@ class SemiJoinOptimizer(CompositeQueryProcessor):
 
         # Now this has to be a join, so we can work with it.
         query.set_from_clause(
-            SemiJoinGenerator(query.get_all_ast_referenced_columns()).visit_join_clause(
-                from_clause
-            )
+            SemiJoinGenerator(query.get_all_ast_referenced_columns()).visit_join_clause(from_clause)
         )
 
 
@@ -61,9 +57,7 @@ class SemiJoinGenerator(JoinVisitor[JoinNode[Table], Table]):
     def __init__(self, referenced_columns: Set[Column]) -> None:
         self.__referenced_columns = referenced_columns
 
-    def visit_individual_node(
-        self, node: IndividualNode[Table]
-    ) -> IndividualNode[Table]:
+    def visit_individual_node(self, node: IndividualNode[Table]) -> IndividualNode[Table]:
         return node
 
     def visit_join_clause(self, node: JoinClause[Table]) -> JoinClause[Table]:
@@ -88,7 +82,7 @@ class SemiJoinGenerator(JoinVisitor[JoinNode[Table], Table]):
             right_node=node.right_node,
             keys=node.keys,
             join_type=node.join_type,
-            join_modifier=JoinModifier.ANY
-            if node.join_type == JoinType.INNER
-            else JoinModifier.SEMI,
+            join_modifier=(
+                JoinModifier.ANY if node.join_type == JoinType.INNER else JoinModifier.SEMI
+            ),
         )

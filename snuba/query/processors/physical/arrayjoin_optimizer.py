@@ -8,11 +8,9 @@ from snuba.query.conditions import (
     in_condition,
 )
 from snuba.query.dsl import arrayJoin, tupleElement
-from snuba.query.expressions import Argument
+from snuba.query.expressions import Argument, Expression, Lambda
 from snuba.query.expressions import Column as ColumnExpr
-from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
-from snuba.query.expressions import Lambda
 from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.matchers import Column, FunctionCall, Or, Param, String
 from snuba.query.processors.physical.abstract_array_join_optimizer import (
@@ -89,9 +87,7 @@ class ArrayJoinOptimizer(AbstractArrayJoinOptimizer):
 
         tuple_alias = self.__get_unused_alias(query)
 
-        single_filtered, multiple_filtered = self.get_filtered_arrays(
-            query, self.key_columns
-        )
+        single_filtered, multiple_filtered = self.get_filtered_arrays(query, self.key_columns)
 
         def replace_expression(expr: Expression) -> Expression:
             match = self.__array_join_pattern.match(expr)
@@ -110,9 +106,7 @@ class ArrayJoinOptimizer(AbstractArrayJoinOptimizer):
                 }
 
                 multiple_indices_filtered = {
-                    tuple(
-                        self.__find_tuple_index(column) for column in column_names
-                    ): filtered
+                    tuple(self.__find_tuple_index(column) for column in column_names): filtered
                     for column_names, filtered in multiple_filtered.items()
                 }
 
@@ -159,9 +153,7 @@ def filtered_mapping_tuples(
         arrayJoin(
             tuple_alias,
             filter_expression(
-                zip_columns(
-                    *[ColumnExpr(None, None, column) for column in column_names]
-                ),
+                zip_columns(*[ColumnExpr(None, None, column) for column in column_names]),
                 single_filtered,
                 multiple_filtered,
             ),
@@ -273,9 +265,7 @@ def zip_columns(*columns: ColumnExpr) -> Expression:
             Lambda(
                 None,
                 arguments,
-                FunctionCallExpr(
-                    None, "tuple", tuple(Argument(None, arg) for arg in arguments)
-                ),
+                FunctionCallExpr(None, "tuple", tuple(Argument(None, arg) for arg in arguments)),
             ),
             *columns,
         ),

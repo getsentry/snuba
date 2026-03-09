@@ -87,13 +87,9 @@ def test_invalid_datetime_column_validation() -> None:
     logger.warning = mock_logger  # type: ignore
     for condition, message in invalid_tests:
         query = LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
-                SelectedExpression(
-                    "time", Column("_snuba_timestamp", None, "timestamp")
-                ),
+                SelectedExpression("time", Column("_snuba_timestamp", None, "timestamp")),
             ],
             condition=condition,
         )

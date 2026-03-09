@@ -22,9 +22,8 @@ from snuba.query.conditions import (
 from snuba.query.expressions import Column, Expression
 from snuba.query.expressions import FunctionCall as FunctionExpr
 from snuba.query.expressions import Literal as LiteralExpr
-from snuba.query.matchers import Any, AnyOptionalString
+from snuba.query.matchers import Any, AnyOptionalString, FunctionCall, Literal, Or, Param, String
 from snuba.query.matchers import Column as ColumnMatcher
-from snuba.query.matchers import FunctionCall, Literal, Or, Param, String
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.state import get_config
@@ -170,14 +169,11 @@ class MappingOptimizer(ClickhouseQueryProcessor):
         # Expects this to be an individual condition
         equals_condition_match = self.__equals_condition_pattern.match(condition)
         in_condition_match = (
-            self.__in_condition_pattern.match(condition)
-            if equals_condition_match is None
-            else None
+            self.__in_condition_pattern.match(condition) if equals_condition_match is None else None
         )
         if (
             equals_condition_match is not None
-            and equals_condition_match.string(KEY_COL_MAPPING_PARAM)
-            == f"{self.__column_name}.key"
+            and equals_condition_match.string(KEY_COL_MAPPING_PARAM) == f"{self.__column_name}.key"
         ):
             rhs = equals_condition_match.expression("right_hand_side")
             assert isinstance(rhs, LiteralExpr)
@@ -189,8 +185,7 @@ class MappingOptimizer(ClickhouseQueryProcessor):
             )
         if (
             in_condition_match is not None
-            and in_condition_match.string(KEY_COL_MAPPING_PARAM)
-            == f"{self.__column_name}.key"
+            and in_condition_match.string(KEY_COL_MAPPING_PARAM) == f"{self.__column_name}.key"
         ):
             rhs = in_condition_match.expression("right_hand_side")
             assert isinstance(rhs, FunctionExpr)
@@ -221,14 +216,11 @@ class MappingOptimizer(ClickhouseQueryProcessor):
     def __replace_with_hash(self, condition: Expression) -> Expression:
         equals_condition_match = self.__equals_condition_pattern.match(condition)
         in_condition_match = (
-            self.__in_condition_pattern.match(condition)
-            if equals_condition_match is None
-            else None
+            self.__in_condition_pattern.match(condition) if equals_condition_match is None else None
         )
         if (
             equals_condition_match is not None
-            and equals_condition_match.string(KEY_COL_MAPPING_PARAM)
-            == f"{self.__column_name}.key"
+            and equals_condition_match.string(KEY_COL_MAPPING_PARAM) == f"{self.__column_name}.key"
         ):
             rhs = equals_condition_match.expression("right_hand_side")
             assert isinstance(rhs, LiteralExpr)
@@ -243,9 +235,7 @@ class MappingOptimizer(ClickhouseQueryProcessor):
                 parameters=(
                     Column(
                         alias=None,
-                        table_name=equals_condition_match.optional_string(
-                            TABLE_MAPPING_PARAM
-                        ),
+                        table_name=equals_condition_match.optional_string(TABLE_MAPPING_PARAM),
                         column_name=self.__hash_map_name,
                     ),
                     FunctionExpr(
@@ -257,8 +247,7 @@ class MappingOptimizer(ClickhouseQueryProcessor):
             )
         elif (
             in_condition_match is not None
-            and in_condition_match.string(KEY_COL_MAPPING_PARAM)
-            == f"{self.__column_name}.key"
+            and in_condition_match.string(KEY_COL_MAPPING_PARAM) == f"{self.__column_name}.key"
         ):
             key = in_condition_match.scalar(KEY_MAPPING_PARAM)
             assert isinstance(key, (str, int))
@@ -277,9 +266,7 @@ class MappingOptimizer(ClickhouseQueryProcessor):
                 parameters=(
                     Column(
                         alias=None,
-                        table_name=in_condition_match.optional_string(
-                            TABLE_MAPPING_PARAM
-                        ),
+                        table_name=in_condition_match.optional_string(TABLE_MAPPING_PARAM),
                         column_name=self.__hash_map_name,
                     ),
                     FunctionExpr(
@@ -290,9 +277,7 @@ class MappingOptimizer(ClickhouseQueryProcessor):
                                 FunctionExpr(
                                     alias=None,
                                     function_name="cityHash64",
-                                    parameters=(
-                                        LiteralExpr(None, f"{key}={lit.value}"),
-                                    ),
+                                    parameters=(LiteralExpr(None, f"{key}={lit.value}"),),
                                 )
                                 for lit in params
                             ]
@@ -340,8 +325,7 @@ class MappingOptimizer(ClickhouseQueryProcessor):
         elif condition.function_name == BooleanFunctions.OR:
             sub_conditions = get_first_level_or_conditions(condition)
             pruned_conditions = [
-                self._get_condition_without_redundant_checks(c, query)
-                for c in sub_conditions
+                self._get_condition_without_redundant_checks(c, query) for c in sub_conditions
             ]
             return combine_or_conditions(pruned_conditions)
         elif condition.function_name == BooleanFunctions.AND:
@@ -367,9 +351,7 @@ class MappingOptimizer(ClickhouseQueryProcessor):
                         # the clause is redundant, thus we continue the loop
                         # and do not add it to useful_conditions
                         continue
-                useful_conditions.append(
-                    self._get_condition_without_redundant_checks(cond, query)
-                )
+                useful_conditions.append(self._get_condition_without_redundant_checks(cond, query))
             return combine_and_conditions(useful_conditions)
         else:
             return condition

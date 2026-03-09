@@ -241,9 +241,7 @@ def test_prewhere(
 
     all_columns = get_storage(StorageKey.ERRORS).get_schema().get_columns()
     query.set_from_clause(
-        Table(
-            "my_table", all_columns, final=final, storage_key=StorageKey("dontmatter")
-        )
+        Table("my_table", all_columns, final=final, storage_key=StorageKey("dontmatter"))
     )
 
     query_settings = HTTPQuerySettings()

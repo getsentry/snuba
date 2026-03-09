@@ -140,7 +140,6 @@ def test_count_columns(
     expected_final: bool,
     expected_sampling: Optional[float],
 ) -> None:
-
     tables_collector = TablesCollector()
     tables_collector.visit(query)
     assert tables_collector.get_tables() == expected_tables

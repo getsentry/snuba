@@ -36,9 +36,7 @@ class MetricsWrapper(MetricsBackend):
         tags: Optional[Tags] = None,
         unit: Optional[str] = None,
     ) -> None:
-        self.__backend.increment(
-            self.__merge_name(name), value, self.__merge_tags(tags), unit
-        )
+        self.__backend.increment(self.__merge_name(name), value, self.__merge_tags(tags), unit)
 
     def gauge(
         self,
@@ -47,9 +45,7 @@ class MetricsWrapper(MetricsBackend):
         tags: Optional[Tags] = None,
         unit: Optional[str] = None,
     ) -> None:
-        self.__backend.gauge(
-            self.__merge_name(name), value, self.__merge_tags(tags), unit
-        )
+        self.__backend.gauge(self.__merge_name(name), value, self.__merge_tags(tags), unit)
 
     def timing(
         self,
@@ -58,9 +54,7 @@ class MetricsWrapper(MetricsBackend):
         tags: Optional[Tags] = None,
         unit: Optional[str] = None,
     ) -> None:
-        self.__backend.timing(
-            self.__merge_name(name), value, self.__merge_tags(tags), unit
-        )
+        self.__backend.timing(self.__merge_name(name), value, self.__merge_tags(tags), unit)
 
     def distribution(
         self,
@@ -69,9 +63,7 @@ class MetricsWrapper(MetricsBackend):
         tags: Optional[Tags] = None,
         unit: Optional[str] = None,
     ) -> None:
-        self.__backend.distribution(
-            self.__merge_name(name), value, self.__merge_tags(tags), unit
-        )
+        self.__backend.distribution(self.__merge_name(name), value, self.__merge_tags(tags), unit)
 
     def events(
         self,
@@ -81,6 +73,4 @@ class MetricsWrapper(MetricsBackend):
         priority: str,
         tags: Optional[Tags] = None,
     ) -> None:
-        self.__backend.events(
-            title, text, alert_type, priority, self.__merge_tags(tags)
-        )
+        self.__backend.events(title, text, alert_type, priority, self.__merge_tags(tags))

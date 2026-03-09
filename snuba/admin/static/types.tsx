@@ -5,7 +5,7 @@ type AllowedTools = {
 type Settings = {
   dsn: string;
   tracesSampleRate: number;
-  profilesSampleRate: number;
+  profileSessionSampleRate: number;
   tracePropagationTargets: string[] | null;
   replaysSessionSampleRate: number;
   replaysOnErrorSampleRate: number;

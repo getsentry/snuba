@@ -71,9 +71,7 @@ def list() -> None:
 @click.option("--force", is_flag=True)
 @click.option("--fake", is_flag=True)
 @click.option("--check-dangerous", is_flag=True)
-@click.option(
-    "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
-)
+@click.option("--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS))
 def migrate(
     group: Optional[str],
     readiness_state: Optional[Sequence[str]],
@@ -91,9 +89,7 @@ def migrate(
     """
 
     readiness_states = (
-        [ReadinessState(state) for state in readiness_state]
-        if readiness_state
-        else None
+        [ReadinessState(state) for state in readiness_state] if readiness_state else None
     )
 
     setup_logging(log_level)
@@ -139,9 +135,7 @@ def migrate(
 @click.option("--force", is_flag=True)
 @click.option("--fake", is_flag=True)
 @click.option("--include-system", is_flag=True)
-@click.option(
-    "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
-)
+@click.option("--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS))
 def revert(
     group: Optional[str],
     readiness_state: Optional[Sequence[str]],
@@ -161,9 +155,7 @@ def revert(
     """
 
     readiness_states = (
-        [ReadinessState(state) for state in readiness_state]
-        if readiness_state
-        else None
+        [ReadinessState(state) for state in readiness_state] if readiness_state else None
     )
 
     setup_logging(log_level)
@@ -206,9 +198,7 @@ def revert(
 @click.option("--dry-run", is_flag=True)
 @click.option("--yes", is_flag=True)
 @click.option("--check-dangerous", is_flag=True)
-@click.option(
-    "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
-)
+@click.option("--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS))
 def run(
     group: str,
     migration_id: str,
@@ -230,17 +220,13 @@ def run(
     migration_group = MigrationGroup(group)
     if not dry_run:
         # just check the connection for the migration that's being run
-        check_clickhouse_connections(
-            get_clickhouse_clusters_for_migration_group(migration_group)
-        )
+        check_clickhouse_connections(get_clickhouse_clusters_for_migration_group(migration_group))
 
     runner = Runner()
     migration_key = MigrationKey(migration_group, migration_id)
 
     if dry_run:
-        runner.run_migration(
-            migration_key, dry_run=True, check_dangerous=check_dangerous
-        )
+        runner.run_migration(migration_key, dry_run=True, check_dangerous=check_dangerous)
         return
 
     try:
@@ -249,9 +235,7 @@ def run(
                 "This will mark the migration as completed without actually running it. Your database may be in an invalid state. Are you sure?",
                 abort=True,
             )
-        runner.run_migration(
-            migration_key, force=force, fake=fake, check_dangerous=check_dangerous
-        )
+        runner.run_migration(migration_key, force=force, fake=fake, check_dangerous=check_dangerous)
     except MigrationError as e:
         raise click.ClickException(str(e))
 
@@ -265,9 +249,7 @@ def run(
 @click.option("--fake", is_flag=True)
 @click.option("--dry-run", is_flag=True)
 @click.option("--yes", is_flag=True)
-@click.option(
-    "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
-)
+@click.option("--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS))
 def reverse(
     group: str,
     migration_id: str,
@@ -286,9 +268,7 @@ def reverse(
     migration_group = MigrationGroup(group)
     setup_logging(log_level)
     if not dry_run:
-        check_clickhouse_connections(
-            get_clickhouse_clusters_for_migration_group(migration_group)
-        )
+        check_clickhouse_connections(get_clickhouse_clusters_for_migration_group(migration_group))
     runner = Runner()
     migration_key = MigrationKey(migration_group, migration_id)
 
@@ -314,9 +294,7 @@ def reverse(
 @click.option("--fake", is_flag=True)
 @click.option("--dry-run", is_flag=True)
 @click.option("--yes", is_flag=True)
-@click.option(
-    "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
-)
+@click.option("--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS))
 def reverse_in_progress(
     fake: bool,
     dry_run: bool,

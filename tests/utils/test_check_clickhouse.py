@@ -159,9 +159,7 @@ def test_all_bad_dataset_fails_thorough_healthcheck(mock1: mock.MagicMock) -> No
     return_value=[StorageKey.ERRORS_RO],
 )
 @mock.patch("snuba.clusters.cluster._get_storage_set_cluster_map", return_value={})
-def test_dataset_undefined_storage_set(
-    mock1: mock.MagicMock, mock2: mock.MagicMock
-) -> None:
+def test_dataset_undefined_storage_set(mock1: mock.MagicMock, mock2: mock.MagicMock) -> None:
     metrics_tags: dict[str, str] = {}
     assert not check_all_tables_present(metric_tags=metrics_tags)
     for v in metrics_tags.values():

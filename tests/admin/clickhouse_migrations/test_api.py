@@ -47,9 +47,7 @@ def generate_migration_test_role(
     else:
         action = ExecuteNoneAction
 
-    resource = (
-        MigrationResource(group) if override_resource else MIGRATIONS_RESOURCES[group]
-    )
+    resource = MigrationResource(group) if override_resource else MIGRATIONS_RESOURCES[group]
 
     return Role(name=name, actions={action([resource])})
 
@@ -62,7 +60,7 @@ def admin_api() -> FlaskClient:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 def test_migration_groups(admin_api: FlaskClient) -> None:
     runner = Runner()
     with patch("snuba.admin.auth.DEFAULT_ROLES", [generate_tool_test_role("all")]):
@@ -75,7 +73,7 @@ def test_migration_groups(admin_api: FlaskClient) -> None:
         "snuba.admin.auth.DEFAULT_ROLES",
         [
             generate_migration_test_role("system", "all"),
-            generate_migration_test_role("generic_metrics", "non_blocking"),
+            generate_migration_test_role("events_analytics_platform", "non_blocking"),
             generate_tool_test_role("all"),
         ],
     ):
@@ -84,7 +82,6 @@ def test_migration_groups(admin_api: FlaskClient) -> None:
         def get_migration_ids(
             group: MigrationGroup, policy_name: str
         ) -> Sequence[Mapping[str, str | bool]]:
-
             _, migrations = run_migration_checks_and_policies(
                 {group.value: {MigrationPolicy.class_from_name(policy_name)()}}, runner
             )[0]
@@ -94,27 +91,27 @@ def test_migration_groups(admin_api: FlaskClient) -> None:
         assert json.loads(response.data) == [
             {
                 "group": "system",
-                "migration_ids": get_migration_ids(
-                    MigrationGroup.SYSTEM, "AllMigrationsPolicy"
-                ),
+                "migration_ids": get_migration_ids(MigrationGroup.SYSTEM, "AllMigrationsPolicy"),
             },
             {
-                "group": "generic_metrics",
+                "group": "events_analytics_platform",
                 "migration_ids": get_migration_ids(
-                    MigrationGroup.GENERIC_METRICS, "NonBlockingMigrationsPolicy"
+                    MigrationGroup.EVENTS_ANALYTICS_PLATFORM, "NonBlockingMigrationsPolicy"
                 ),
             },
         ]
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 def test_list_migration_status(admin_api: FlaskClient) -> None:
+    # Run the migraitons for test_migration checks below
+    Runner().run_all(group=MigrationGroup.TEST_MIGRATION)
     with patch(
         "snuba.admin.auth.DEFAULT_ROLES",
         [
             generate_migration_test_role("system", "non_blocking"),
-            generate_migration_test_role("generic_metrics", "none"),
+            generate_migration_test_role("events_analytics_platform", "none"),
             generate_tool_test_role("all"),
         ],
     ):
@@ -141,7 +138,7 @@ def test_list_migration_status(admin_api: FlaskClient) -> None:
         "snuba.admin.auth.DEFAULT_ROLES",
         [
             generate_migration_test_role("test_migration", "non_blocking"),
-            generate_migration_test_role("generic_metrics", "none"),
+            generate_migration_test_role("events_analytics_platform", "none"),
             generate_tool_test_role("all"),
         ],
     ):
@@ -170,10 +167,9 @@ def test_list_migration_status(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.parametrize("action", ["run", "reverse"])
 def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
-
     method = "run_migration" if action == "run" else "reverse_migration"
 
     with patch(
@@ -191,9 +187,7 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
         assert response.status_code == 404
 
         # invalid migration group
-        response = admin_api.post(
-            f"/migrations/invalid_but_allowed_group/{action}/0001_migrations"
-        )
+        response = admin_api.post(f"/migrations/invalid_but_allowed_group/{action}/0001_migrations")
         assert response.status_code == 403
 
         with patch.object(Runner, method) as mock_run_migration:
@@ -214,19 +208,13 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
             assert mock_run_migration.call_count == 0
 
             # not allowed migration group policy
-            response = admin_api.post(
-                f"/migrations/generic_metrics/{action}/0003_sets_mv"
-            )
+            response = admin_api.post(f"/migrations/generic_metrics/{action}/0003_sets_mv")
             assert response.status_code == 403
-            assert json.loads(response.data) == {
-                "error": f"Group not allowed {action} policy"
-            }
+            assert json.loads(response.data) == {"error": f"Group not allowed {action} policy"}
             assert mock_run_migration.call_count == 0
 
             # forced migration
-            response = admin_api.post(
-                f"/migrations/system/{action}/0001_migrations?force=true"
-            )
+            response = admin_api.post(f"/migrations/system/{action}/0001_migrations?force=true")
             assert response.status_code == 200
             mock_run_migration.assert_called_once_with(
                 migration_key, force=True, fake=False, dry_run=False
@@ -259,20 +247,14 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
 
         with patch.object(Runner, method) as mock_run_migration:
             # not allowed non blocking
-            response = admin_api.post(
-                f"/migrations/querylog/{action}/0006_sorting_key_change"
-            )
+            response = admin_api.post(f"/migrations/querylog/{action}/0006_sorting_key_change")
             assert response.status_code == 403
-            assert json.loads(response.data) == {
-                "error": f"Group not allowed {action} policy"
-            }
+            assert json.loads(response.data) == {"error": f"Group not allowed {action} policy"}
             assert mock_run_migration.call_count == 0
 
             if action == "run":
                 # allowed non blocking
-                response = admin_api.post(
-                    f"/migrations/querylog/{action}/0001_querylog"
-                )
+                response = admin_api.post(f"/migrations/querylog/{action}/0001_querylog")
                 assert response.status_code == 200
                 migration_key = MigrationKey(
                     group=MigrationGroup.QUERYLOG, migration_id="0001_querylog"
@@ -292,9 +274,7 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
                             group=MigrationGroup.QUERYLOG,
                             migration_id="0001_querylog",
                         )
-                        response = admin_api.post(
-                            f"/migrations/querylog/{action}/0001_querylog"
-                        )
+                        response = admin_api.post(f"/migrations/querylog/{action}/0001_querylog")
                         assert response.status_code == 200
                         mock_run_migration.assert_called_once_with(
                             migration_key, force=False, fake=False, dry_run=False
@@ -307,9 +287,7 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
                 print("a dry run")
 
             mock_run_migration.side_effect = print_something
-            response = admin_api.post(
-                f"/migrations/querylog/{action}/0001_querylog?dry_run=true"
-            )
+            response = admin_api.post(f"/migrations/querylog/{action}/0001_querylog?dry_run=true")
             assert response.status_code == 200
             assert json.loads(response.data) == {"stdout": "a dry run\n"}
             assert mock_run_migration.call_count == 1
@@ -365,7 +343,6 @@ def test_get_iam_roles(caplog: Any) -> None:
         iam_file.flush()
 
         with patch("snuba.admin.auth.settings.ADMIN_IAM_POLICY_FILE", iam_file.name):
-
             user1 = AdminUser(email="test_user1@sentry.io", id="unknown")
             _set_roles(user1)
 
@@ -396,16 +373,12 @@ def test_get_iam_roles(caplog: Any) -> None:
 
         iam_file.close()
 
-        with patch(
-            "snuba.admin.auth.settings.ADMIN_IAM_POLICY_FILE", "file_not_exists.json"
-        ):
+        with patch("snuba.admin.auth.settings.ADMIN_IAM_POLICY_FILE", "file_not_exists.json"):
             log = CapturingLogger()
             with patch("snuba.admin.auth.logger", log):
                 user3 = AdminUser(email="test_user3@sentry.io", id="unknown")
                 _set_roles(user3)
-                assert "IAM policy file not found file_not_exists.json" in str(
-                    log.calls
-                )
+                assert "IAM policy file not found file_not_exists.json" in str(log.calls)
 
 
 @pytest.mark.redis_db
@@ -458,7 +431,6 @@ def test_get_iam_roles_cache() -> None:
 
         iam_file.flush()
         with patch("snuba.admin.auth.settings.ADMIN_IAM_POLICY_FILE", iam_file.name):
-
             user1 = AdminUser(email="test_user1@sentry.io", id="unknown")
             _set_roles(user1)
 

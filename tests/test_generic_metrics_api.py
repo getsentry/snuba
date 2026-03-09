@@ -75,7 +75,7 @@ SHARED_MAPPING_META: Mapping[str, Mapping[str, str]] = {
 }
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.genmetrics_db
 @pytest.mark.redis_db
 class TestGenericMetricsApiSets(BaseApiTest):
     @pytest.fixture
@@ -88,7 +88,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
 
     @pytest.fixture(autouse=True)
     def setup_teardown(
-        self, clickhouse_db: None, _build_snql_post_methods: Callable[[str], Any]
+        self, genmetrics_db: None, _build_snql_post_methods: Callable[[str], Any]
     ) -> None:
         self.post = _build_snql_post_methods
 
@@ -106,9 +106,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
         self.set_cycle = itertools.cycle(self.set_values)
         self.use_case_id = "performance"
         self.start_time = self.base_time
-        self.end_time = (
-            self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
-        )
+        self.end_time = self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
         self.generate_sets(self.default_tags, self.mapping_meta, self.set_cycle)
 
     def generate_sets(
@@ -135,8 +133,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
                     "retention_days": RETENTION_DAYS,
                     "mapping_meta": mapping_meta,
                     "use_case_id": self.use_case_id,
-                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp()
-                    + n,
+                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp() + n,
                 },
                 KafkaMessageMetadata(0, 0, self.base_time),
             )
@@ -211,7 +208,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
         assert data["data"][0]["unique_values"] == new_set_unique_count
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.genmetrics_db
 @pytest.mark.redis_db
 class TestGenericMetricsApiDistributions(BaseApiTest):
     @pytest.fixture
@@ -224,7 +221,7 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
 
     @pytest.fixture(autouse=True)
     def setup_teardown(
-        self, clickhouse_db: None, _build_snql_post_methods: Callable[[str], Any]
+        self, genmetrics_db: None, _build_snql_post_methods: Callable[[str], Any]
     ) -> None:
         self.post = _build_snql_post_methods
 
@@ -248,9 +245,7 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
 
         self.use_case_id = "performance"
         self.start_time = self.base_time
-        self.end_time = (
-            self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
-        )
+        self.end_time = self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
         self.hour_before_start_time = self.start_time - timedelta(hours=1)
         self.hour_after_start_time = self.start_time + timedelta(hours=1)
 
@@ -275,8 +270,7 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
                     "retention_days": RETENTION_DAYS,
                     "mapping_meta": self.mapping_meta,
                     "use_case_id": self.use_case_id,
-                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp()
-                    + n,
+                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp() + n,
                 },
                 KafkaMessageMetadata(0, 0, self.base_time),
             )
@@ -445,9 +439,7 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
         assert len(data["data"]) == 1, data
 
         aggregation = data["data"][0]
-        smallest_time_bucket = datetime.strptime(
-            aggregation["min_time"], "%Y-%m-%dT%H:%M:%S+00:00"
-        )
+        smallest_time_bucket = datetime.strptime(aggregation["min_time"], "%Y-%m-%dT%H:%M:%S+00:00")
         assert smallest_time_bucket.hour == 12
         assert smallest_time_bucket.minute == 0
 
@@ -481,7 +473,7 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
         assert "_raw_tags_hash" in data["sql"]
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.genmetrics_db
 @pytest.mark.redis_db
 class TestGenericMetricsApiCounters(BaseApiTest):
     @pytest.fixture
@@ -494,7 +486,7 @@ class TestGenericMetricsApiCounters(BaseApiTest):
 
     @pytest.fixture(autouse=True)
     def setup_post(
-        self, clickhouse_db: None, _build_snql_post_methods: Callable[[str], Any]
+        self, genmetrics_db: None, _build_snql_post_methods: Callable[[str], Any]
     ) -> None:
         self.post = _build_snql_post_methods
 
@@ -510,9 +502,7 @@ class TestGenericMetricsApiCounters(BaseApiTest):
 
         self.use_case_id = "performance"
         self.start_time = self.base_time
-        self.end_time = (
-            self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
-        )
+        self.end_time = self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
         self.hour_before_start_time = self.start_time - timedelta(hours=1)
         self.hour_after_start_time = self.start_time + timedelta(hours=1)
         self.generate_counters()
@@ -536,8 +526,7 @@ class TestGenericMetricsApiCounters(BaseApiTest):
                     "retention_days": RETENTION_DAYS,
                     "mapping_meta": self.mapping_meta,
                     "use_case_id": self.use_case_id,
-                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp()
-                    + n,
+                    "sentry_received_timestamp": self.sentry_received_timestamp.timestamp() + n,
                 },
                 KafkaMessageMetadata(0, 0, self.base_time),
             )
@@ -623,7 +612,7 @@ class TestGenericMetricsApiCounters(BaseApiTest):
         assert len(data["data"]) == 1, data
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.genmetrics_db
 @pytest.mark.redis_db
 class TestOrgGenericMetricsApiCounters(BaseApiTest):
     @pytest.fixture
@@ -636,7 +625,7 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
 
     @pytest.fixture(autouse=True)
     def setup_teardown(
-        self, clickhouse_db: None, _build_snql_post_methods: Callable[[str], Any]
+        self, genmetrics_db: None, _build_snql_post_methods: Callable[[str], Any]
     ) -> None:
         self.post = _build_snql_post_methods
 
@@ -645,9 +634,7 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
         self.sentry_received_timestamp = utc_yesterday_12_15()
 
         self.start_time = self.base_time
-        self.end_time = (
-            self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
-        )
+        self.end_time = self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
         self.hour_before_start_time = self.start_time - timedelta(hours=1)
         self.hour_after_start_time = self.start_time + timedelta(hours=1)
         self.mapping_meta = SHARED_MAPPING_META
@@ -765,7 +752,7 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
         assert first_row["tag_string"] == "placeholder0001"
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.genmetrics_db
 @pytest.mark.redis_db
 class TestOrgGenericMetricsApiGauges(BaseApiTest):
     @pytest.fixture
@@ -778,7 +765,7 @@ class TestOrgGenericMetricsApiGauges(BaseApiTest):
 
     @pytest.fixture(autouse=True)
     def setup_teardown(
-        self, clickhouse_db: None, _build_snql_post_methods: Callable[[str], Any]
+        self, genmetrics_db: None, _build_snql_post_methods: Callable[[str], Any]
     ) -> None:
         self.post = _build_snql_post_methods
 
@@ -787,9 +774,7 @@ class TestOrgGenericMetricsApiGauges(BaseApiTest):
         self.sentry_received_timestamp = utc_yesterday_12_15()
 
         self.start_time = self.base_time
-        self.end_time = (
-            self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
-        )
+        self.end_time = self.base_time + timedelta(seconds=self.count) + timedelta(seconds=10)
         self.hour_before_start_time = self.start_time - timedelta(hours=1)
         self.hour_after_start_time = self.start_time + timedelta(hours=1)
         self.mapping_meta = SHARED_MAPPING_META

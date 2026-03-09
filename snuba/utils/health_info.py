@@ -23,7 +23,7 @@ from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import Storage
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.environment import setup_logging
-from snuba.state import get_float_config
+from snuba.state import get_float_config, get_int_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "api")
@@ -94,11 +94,16 @@ def get_health_info(thorough: Union[bool, str]) -> HealthInfo:
         "thorough": str(thorough),
     }
 
-    clickhouse_health = (
-        check_all_tables_present(metric_tags=metric_tags)
-        if thorough
-        else sanity_check_clickhouse_connections()
-    )
+    if get_int_config("health_check_ignore_clickhouse", 0) == 1:
+        clickhouse_health = True
+        metric_tags["skipped_clickhouse_check"] = "true"
+    else:
+        clickhouse_health = (
+            check_all_tables_present(metric_tags=metric_tags)
+            if thorough
+            else sanity_check_clickhouse_connections()
+        )
+
     metric_tags["clickhouse_ok"] = str(clickhouse_health)
 
     body: Mapping[str, Union[str, bool]]

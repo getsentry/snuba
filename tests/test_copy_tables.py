@@ -1,4 +1,5 @@
 import pytest
+
 from scripts import copy_tables
 
 

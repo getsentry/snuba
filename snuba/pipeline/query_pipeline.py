@@ -46,9 +46,7 @@ class QueryPipelineStage(Generic[Tin, Tout]):
         >>> print("PhysicalQuery: ", stage_2.data)
     """
 
-    def _process_error(
-        self, pipe_input: QueryPipelineError[Tin]
-    ) -> Union[Tout, Exception]:
+    def _process_error(self, pipe_input: QueryPipelineError[Tin]) -> Union[Tout, Exception]:
         """default behaviour is to just pass through to the next stage of the pipeline
         Can be overridden to do something else"""
         logging.exception(pipe_input.error)
@@ -58,9 +56,7 @@ class QueryPipelineStage(Generic[Tin, Tout]):
     def _process_data(self, pipe_input: QueryPipelineData[Tin]) -> Tout:
         raise NotImplementedError
 
-    def execute(
-        self, pipe_input: QueryPipelineResult[Tin]
-    ) -> QueryPipelineResult[Tout]:
+    def execute(self, pipe_input: QueryPipelineResult[Tin]) -> QueryPipelineResult[Tout]:
         if pipe_input.error:
             res = self._process_error(pipe_input.as_error())
             if isinstance(res, Exception):

@@ -50,9 +50,7 @@ def test_handle_error() -> None:
     error_processed = 0
 
     class ErrorStage(QueryPipelineStage[int, int]):
-        def _process_error(
-            self, pipe_input: QueryPipelineError[int]
-        ) -> int | Exception:
+        def _process_error(self, pipe_input: QueryPipelineError[int]) -> int | Exception:
             nonlocal error_processed
             error_processed = 1
             return super()._process_error(pipe_input)
@@ -75,9 +73,7 @@ def test_recover_from_error() -> None:
     ERROR_PROCESSED_RETURN = 42069
 
     class ErrorRecoverStage(QueryPipelineStage[int, int]):
-        def _process_error(
-            self, pipe_input: QueryPipelineError[int]
-        ) -> int | Exception:
+        def _process_error(self, pipe_input: QueryPipelineError[int]) -> int | Exception:
             if isinstance(pipe_input.error, ValueError):
                 return ERROR_PROCESSED_RETURN
             return super()._process_error(pipe_input)
@@ -98,6 +94,4 @@ def test_recover_from_error() -> None:
         query_settings=HTTPQuerySettings(),
         timer=Timer("something"),
     )
-    assert (
-        ErrorRecoverStage().execute(input_expected_error).data == ERROR_PROCESSED_RETURN
-    )
+    assert ErrorRecoverStage().execute(input_expected_error).data == ERROR_PROCESSED_RETURN

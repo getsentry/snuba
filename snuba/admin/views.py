@@ -22,7 +22,8 @@ from snuba.admin.cardinality_analyzer.cardinality_analyzer import run_metrics_qu
 from snuba.admin.clickhouse.capacity_management import (
     get_storages_with_allocation_policies,
 )
-from snuba.admin.clickhouse.common import InvalidCustomQuery
+from snuba.admin.clickhouse.common import InvalidCustomQuery, InvalidNodeError
+from snuba.admin.clickhouse.copy_tables import copy_tables
 from snuba.admin.clickhouse.database_clusters import get_node_info, get_system_settings
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
@@ -165,7 +166,7 @@ def settings_endpoint() -> Response:
             {
                 "dsn": settings.ADMIN_FRONTEND_DSN,
                 "tracesSampleRate": settings.ADMIN_TRACE_SAMPLE_RATE,
-                "profilesSampleRate": settings.ADMIN_PROFILES_SAMPLE_RATE,
+                "profileSessionSampleRate": settings.ADMIN_PROFILES_SAMPLE_RATE,
                 "tracePropagationTargets": settings.ADMIN_FRONTEND_TRACE_PROPAGATION_TARGETS,
                 "replaysSessionSampleRate": settings.ADMIN_REPLAYS_SAMPLE_RATE,
                 "replaysOnErrorSampleRate": settings.ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR,
@@ -417,11 +418,14 @@ def clickhouse_system_query() -> Response:
         storage = req["storage"]
         raw_sql = req["sql"]
         sudo_mode = req.get("sudo", False)
+        clusterless_mode = req.get("clusterless", False)
     except KeyError:
         return make_response(jsonify({"error": "Invalid request"}), 400)
 
     try:
-        result = run_system_query_on_host_with_sql(host, port, storage, raw_sql, sudo_mode, g.user)
+        result = run_system_query_on_host_with_sql(
+            host, port, storage, raw_sql, sudo_mode, clusterless_mode, g.user
+        )
         rows = []
         rows, columns = cast(List[List[str]], result.results), result.meta
 
@@ -441,8 +445,72 @@ def clickhouse_system_query() -> Response:
         logger.error(err, exc_info=True)
         return make_response(jsonify({"error": err.message or "Invalid query"}), 400)
 
+    except InvalidNodeError as err:
+        logger.error(err, exc_info=True)
+        return make_response(jsonify({"error": err.message or "Invalid node"}), 400)
+
     # We should never get here
     return make_response(jsonify({"error": "Something went wrong"}), 400)
+
+
+@application.route("/run_copy_table_query", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.SYSTEM_QUERIES])
+def copy_table_query() -> Response:
+    req = request.get_json() or {}
+    try:
+        storage = req["storage"]
+        source_host = req["source_host"]
+
+        dry_run = req.get("dry_run", True)
+        target_host = req.get("target_host")
+
+        resp = copy_tables(
+            source_host=source_host,
+            storage_name=storage,
+            dry_run=dry_run,
+            target_host=target_host,
+        )
+    except KeyError as err:
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "request",
+                        "message": f"Invalid request, missing key {err.args[0]}",
+                    }
+                }
+            ),
+            400,
+        )
+    except ValueError as err:
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "request",
+                        "message": f"Target host is invalid: {err.args[0]}",
+                    }
+                }
+            ),
+            400,
+        )
+    except ClickhouseError as err:
+        logger.error(err, exc_info=True)
+        details = {
+            "type": "clickhouse",
+            "message": str(err),
+            "code": err.code,
+        }
+        return make_response(jsonify({"error": details}), 400)
+
+    try:
+        return make_response(jsonify(resp), 200)
+    except Exception as err:
+        logger.error(err, exc_info=True)
+        return make_response(
+            jsonify({"error": {"type": "unknown", "message": str(err)}}),
+            500,
+        )
 
 
 # Sample cURL command:
@@ -992,12 +1060,12 @@ def set_configuration() -> Response:
         configurable_component_namespace = data["configurable_component_namespace"]
         configurable_component_class_name = data["configurable_component_class_name"]
         resource_name = data["resource_name"]
-        assert isinstance(
-            configurable_component_namespace, str
-        ), f"Invalid configurable_component_namespace: {configurable_component_namespace}"
-        assert isinstance(
-            configurable_component_class_name, str
-        ), f"Invalid configurable_component_class_name: {configurable_component_class_name}"
+        assert isinstance(configurable_component_namespace, str), (
+            f"Invalid configurable_component_namespace: {configurable_component_namespace}"
+        )
+        assert isinstance(configurable_component_class_name, str), (
+            f"Invalid configurable_component_class_name: {configurable_component_class_name}"
+        )
         assert isinstance(resource_name, str), f"Invalid resource_name {resource_name}"
         configurable_component = (
             ConfigurableComponent.get_component_class(configurable_component_namespace)

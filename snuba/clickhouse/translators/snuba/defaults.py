@@ -66,9 +66,7 @@ class DefaultFunctionMapper(FunctionCallMapper):
         return FunctionCall(
             alias=expression.alias,
             function_name=expression.function_name,
-            parameters=tuple(
-                p.accept(children_translator) for p in expression.parameters
-            ),
+            parameters=tuple(p.accept(children_translator) for p in expression.parameters),
         )
 
 
@@ -83,9 +81,7 @@ class DefaultCurriedFunctionMapper(CurriedFunctionCallMapper):
             internal_function=children_translator.translate_function_strict(
                 expression.internal_function
             ),
-            parameters=tuple(
-                p.accept(children_translator) for p in expression.parameters
-            ),
+            parameters=tuple(p.accept(children_translator) for p in expression.parameters),
         )
 
 

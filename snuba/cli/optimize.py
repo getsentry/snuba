@@ -115,9 +115,7 @@ def optimize(
     elif not storage.get_cluster().is_single_node():
         raise click.ClickException("Provide Clickhouse host and port for optimize")
     else:
-        connection = storage.get_cluster().get_query_connection(
-            ClickhouseClientSettings.OPTIMIZE
-        )
+        connection = storage.get_cluster().get_query_connection(ClickhouseClientSettings.OPTIMIZE)
         clickhouse_host = storage.get_cluster().get_host()
         clickhouse_port = storage.get_cluster().get_port()
 

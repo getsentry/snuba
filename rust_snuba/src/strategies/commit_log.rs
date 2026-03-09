@@ -193,7 +193,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::types::{CogsData, CommitLogEntry, CommitLogOffsets};
+    use crate::types::{CommitLogEntry, CommitLogOffsets};
 
     use super::*;
     use crate::testutils::TestStrategy;
@@ -280,27 +280,19 @@ mod tests {
         }
 
         let payloads = vec![
-            BytesInsertBatch::new(
-                (),
-                Some(Utc::now()),
-                None,
-                None,
-                CommitLogOffsets(BTreeMap::from([(
+            BytesInsertBatch::from_rows(())
+                .with_message_timestamp(Utc::now())
+                .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
                     0,
                     CommitLogEntry {
                         offset: 500,
                         orig_message_ts: Utc::now(),
                         received_p99: Vec::new(),
                     },
-                )])),
-                CogsData::default(),
-            ),
-            BytesInsertBatch::new(
-                (),
-                Some(Utc::now()),
-                None,
-                None,
-                CommitLogOffsets(BTreeMap::from([
+                )]))),
+            BytesInsertBatch::from_rows(())
+                .with_message_timestamp(Utc::now())
+                .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([
                     (
                         0,
                         CommitLogEntry {
@@ -317,9 +309,7 @@ mod tests {
                             received_p99: Vec::new(),
                         },
                     ),
-                ])),
-                CogsData::default(),
-            ),
+                ]))),
         ];
 
         let producer = MockProducer {

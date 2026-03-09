@@ -25,12 +25,9 @@ def test_build_storage_set_to_group_mapping() -> None:
             storage_set_to_group_mapping[StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS]
             == MigrationGroup.GENERIC_METRICS
         )
+        assert storage_set_to_group_mapping[StorageSetKey.EVENTS] == MigrationGroup.EVENTS
         assert (
-            storage_set_to_group_mapping[StorageSetKey.EVENTS] == MigrationGroup.EVENTS
-        )
-        assert (
-            storage_set_to_group_mapping[StorageSetKey.TRANSACTIONS]
-            == MigrationGroup.TRANSACTIONS
+            storage_set_to_group_mapping[StorageSetKey.TRANSACTIONS] == MigrationGroup.TRANSACTIONS
         )
     except DuplicateStorageSetFoundInGroup as e:
         raise e

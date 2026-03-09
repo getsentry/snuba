@@ -83,17 +83,13 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
             config[QUERY_PROCESSORS] if QUERY_PROCESSORS in config else []
         ),
         DELETION_SETTINGS: (
-            DeletionSettings(**config[DELETION_SETTINGS])
-            if DELETION_SETTINGS in config
-            else {}
+            DeletionSettings(**config[DELETION_SETTINGS]) if DELETION_SETTINGS in config else {}
         ),
         DELETION_PROCESSORS: get_query_processors(
             config[DELETION_PROCESSORS] if DELETION_PROCESSORS in config else []
         ),
         MANDATORY_CONDITION_CHECKERS: get_mandatory_condition_checkers(
-            config[MANDATORY_CONDITION_CHECKERS]
-            if MANDATORY_CONDITION_CHECKERS in config
-            else []
+            config[MANDATORY_CONDITION_CHECKERS] if MANDATORY_CONDITION_CHECKERS in config else []
         ),
         ALLOCATION_POLICIES: (
             [
@@ -130,9 +126,9 @@ def __build_writable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
         STREAM_LOADER: build_stream_loader(config[STREAM_LOADER]),
         WRITER_OPTIONS: config[WRITER_OPTIONS] if WRITER_OPTIONS in config else {},
         REPLACER_PROCESSOR: (
-            ReplacerProcessor.get_from_name(
-                config[REPLACER_PROCESSOR]["processor"]
-            ).from_kwargs(**config[REPLACER_PROCESSOR].get("args", {}))
+            ReplacerProcessor.get_from_name(config[REPLACER_PROCESSOR]["processor"]).from_kwargs(
+                **config[REPLACER_PROCESSOR].get("args", {})
+            )
             if REPLACER_PROCESSOR in config
             else {}
         ),
@@ -151,9 +147,7 @@ def __build_cdc_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def __build_storage_schema(config: dict[str, Any]) -> TableSchema:
-    schema_class = (
-        TableSchema if config[KIND] == READABLE_STORAGE else WritableTableSchema
-    )
+    schema_class = TableSchema if config[KIND] == READABLE_STORAGE else WritableTableSchema
     partition_formats = None
     if "partition_format" in config[SCHEMA]:
         partition_formats = []
@@ -196,9 +190,7 @@ def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
         ).from_kwargs(**loader_config[PRE_FILTER].get("args", {}))
     replacement_topic = __get_topic(loader_config, "replacement_topic")
     commit_log_topic = __get_topic(loader_config, "commit_log_topic")
-    subscription_scheduled_topic = __get_topic(
-        loader_config, "subscription_scheduled_topic"
-    )
+    subscription_scheduled_topic = __get_topic(loader_config, "subscription_scheduled_topic")
     subscription_scheduler_mode = (
         SchedulingWatermarkMode(loader_config[SUBCRIPTION_SCHEDULER_MODE])
         if SUBCRIPTION_SCHEDULER_MODE in loader_config

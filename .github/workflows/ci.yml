@@ -15,7 +15,7 @@ jobs:
       api_changes: ${{ steps.changes.outputs.api_changes }}
       devservices_changes: ${{ steps.changes.outputs.devservices_changes }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v2
+      - uses: actions/checkout@v6.0.2
 
       - name: Check for backend file changes
         uses: getsentry/paths-filter@66f7f1844185eb7fb6738ea4ea59d74bb99199e5 # v2
@@ -29,28 +29,27 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6.0.2
         name: Checkout code
 
-      - uses: astral-sh/setup-uv@884ad927a57e558e7a70b92f2bccf9198a4be546 # v6
+      - uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098 # v7.3.1
         with:
-          version: '0.8.2'
           enable-cache: false
 
       - name: Test bump_version.py runs without errors
         run: |
           # Test that the script can be imported and shows help
-          python tools/bump_version.py --help
+          uv run python tools/bump_version.py --help
 
           # Test with a dry run (should fail with appropriate message for non-existent package)
-          python tools/bump_version.py test-package 1.0.0 || echo "Expected failure for non-existent package"
+          uv run python tools/bump_version.py test-package 1.0.0 || echo "Expected failure for non-existent package"
 
   linting:
     name: "pre-commit hooks" # (includes Python formatting + linting)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6.0.2
         name: Checkout code
       - name: Internal github app token
         id: token
@@ -60,20 +59,19 @@ jobs:
           app_id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private_key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
 
-      - uses: astral-sh/setup-uv@884ad927a57e558e7a70b92f2bccf9198a4be546 # v6
+      - uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098 # v7.3.1
         with:
-          version: '0.8.2'
           # we just cache the venv-dir directly in action-setup-venv
           enable-cache: false
 
-      - uses: getsentry/action-setup-venv@3a832a9604b3e1a4202ae559248f26867b467cc7 # v2.1.1
+      - uses: getsentry/action-setup-venv@5a80476d175edf56cb205b08bc58986fa99d1725 # v3.2.0
         with:
-          python-version: 3.11.11
+
           cache-dependency-path: uv.lock
           # NOTE: can't pass --only-dev yet since we're missing some mypy stub packages
           install-cmd: uv sync --frozen --active
 
-      - uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
+      - uses: actions/cache@v5
         with:
           path: ~/.cache/pre-commit
           key: cache-epoch-1|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml', 'uv.lock') }}
@@ -117,7 +115,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6.0.2
         name: Checkout code
       - name: Install protoc
         uses: arduino/setup-protoc@v3
@@ -135,18 +133,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6.0.2
         name: Checkout code
 
-      - uses: astral-sh/setup-uv@884ad927a57e558e7a70b92f2bccf9198a4be546 # v6
+      - uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098 # v7.3.1
         with:
-          version: '0.8.2'
           # we just cache the venv-dir directly in action-setup-venv
           enable-cache: false
 
-      - uses: getsentry/action-setup-venv@3a832a9604b3e1a4202ae559248f26867b467cc7 # v2.1.1
+      - uses: getsentry/action-setup-venv@5a80476d175edf56cb205b08bc58986fa99d1725 # v3.2.0
         with:
-          python-version: 3.11.11
+
           cache-dependency-path: uv.lock
           install-cmd: uv sync --frozen --active
 
@@ -160,10 +157,9 @@ jobs:
     timeout-minutes: 20
     outputs:
       branch: ${{ steps.branch.outputs.branch }}
-      image_tag: ${{ steps.publish.outputs.image_tag }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.2
 
       - name: Get branch name
         id: branch
@@ -171,7 +167,7 @@ jobs:
         # it can be used as a docker tag
         run: echo "branch=$(echo ${GITHUB_REF#refs/heads/} | tr / -)" >> "$GITHUB_OUTPUT"
 
-      - uses: getsentry/action-build-and-push-images@f6e4a98f7ed028edcfb1159f3a2905b30e51f1fd
+      - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
         with:
           image_name: 'snuba-ci'
           platforms: 'linux/amd64'
@@ -182,26 +178,68 @@ jobs:
           tags: 'ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}'
           outputs: 'type=docker,dest=/tmp/snuba-ci.tar'
 
-      - name: Push snuba-ci image to GHCR
-        run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
-          docker load --input /tmp/snuba-ci.tar
-          docker push ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}
-
       - name: Publish snuba-ci image to artifacts
       # we publish to github artifacts separately so that third-party
       # contributions also work, as all the test jobs need this image.
       # otherwise third-party contributors would have to provide a working,
       # authenticated GHCR, which seems impossible to ensure in the general
       # case.
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: snuba-ci
           path: /tmp/snuba-ci.tar
 
 
+  docker-deps:
+    name: Warm Docker dependency image cache
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Restore Docker dependency image cache
+        id: cache-restore
+        uses: actions/cache/restore@v5
+        with:
+          path: /tmp/docker-deps
+          key: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
+          restore-keys: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-
+
+      - name: Load and pull Docker dependency images
+        id: load-pull
+        run: |
+          if [ -f /tmp/docker-deps/deps.tar ]; then
+            docker load --input /tmp/docker-deps/deps.tar
+          fi
+          images=(
+            "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.3.6.10034.altinitystable"
+            "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:6.2.0"
+            "ghcr.io/getsentry/image-mirror-confluentinc-cp-zookeeper:6.2.0"
+            "ghcr.io/getsentry/docker-redis-cluster:7.0.10"
+          )
+          pulled=0
+          for image in "${images[@]}"; do
+            if ! docker image inspect "$image" &>/dev/null; then
+              docker pull "$image"
+              pulled=1
+            fi
+          done
+          if [ "$pulled" -eq 1 ]; then
+            mkdir -p /tmp/docker-deps
+            docker save "${images[@]}" -o /tmp/docker-deps/deps.tar
+          fi
+          echo "pulled=$pulled" >> $GITHUB_OUTPUT
+
+      - name: Save Docker dependency image cache
+        if: steps.load-pull.outputs.pulled == '1'
+        uses: actions/cache/save@v5
+        with:
+          path: /tmp/docker-deps
+          key: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
+
   tests:
-    needs: [linting, snuba-image]
+    needs: [linting, snuba-image, docker-deps]
     name: Tests and code coverage
     runs-on: ubuntu-latest
     timeout-minutes: 40
@@ -216,10 +254,10 @@ jobs:
           ]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.2
 
       - name: Download snuba-ci image from artifacts
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0  # v5.0.0
+        uses: actions/download-artifact@v8
         with:
           name: snuba-ci
           path: /tmp
@@ -228,6 +266,30 @@ jobs:
         run: |
           docker load --input /tmp/snuba-ci.tar
           docker image ls -a
+
+      - name: Restore Docker dependency image cache
+        uses: actions/cache/restore@v5
+        with:
+          path: /tmp/docker-deps
+          key: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
+          restore-keys: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-
+
+      - name: Load Docker dependency images
+        run: |
+          if [ -f /tmp/docker-deps/deps.tar ]; then
+            docker load --input /tmp/docker-deps/deps.tar
+          fi
+          images=(
+            "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.3.6.10034.altinitystable"
+            "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:6.2.0"
+            "ghcr.io/getsentry/image-mirror-confluentinc-cp-zookeeper:6.2.0"
+            "ghcr.io/getsentry/docker-redis-cluster:7.0.10"
+          )
+          for image in "${images[@]}"; do
+            if ! docker image inspect "$image" &>/dev/null; then
+              docker pull "$image"
+            fi
+          done
 
       - name: Docker set up
         run: |
@@ -269,7 +331,7 @@ jobs:
     name: Front end tests for snuba admin
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6.0.2
         name: Checkout code
       - uses: volta-cli/action@v4
       - name: Set up and run tests through yarn
@@ -293,10 +355,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.2
 
       - name: Download snuba-ci image from artifacts
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0  # v5.0.0
+        uses: actions/download-artifact@v8
         with:
           name: snuba-ci
           path: /tmp
@@ -307,7 +369,7 @@ jobs:
           docker image ls -a
 
       - name: Checkout sentry
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.2
         with:
           repository: getsentry/sentry
           path: sentry
@@ -384,7 +446,7 @@ jobs:
         run: pytest -k 'not __In' tests -vv -m snuba_ci
 
   clickhouse-versions:
-    needs: [linting, snuba-image]
+    needs: [linting, snuba-image, docker-deps]
     name: Tests on multiple clickhouse versions
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -393,16 +455,15 @@ jobs:
       matrix:
         version:
           [
-            "24.8.11.51285.altinitystable",
             "25.3.6.10034.altinitystable",
           ]
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.2
 
       - name: Download snuba-ci image from artifacts
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0  # v5.0.0
+        uses: actions/download-artifact@v8
         with:
           name: snuba-ci
           path: /tmp
@@ -411,6 +472,30 @@ jobs:
         run: |
           docker load --input /tmp/snuba-ci.tar
           docker image ls -a
+
+      - name: Restore Docker dependency image cache
+        uses: actions/cache/restore@v5
+        with:
+          path: /tmp/docker-deps
+          key: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
+          restore-keys: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-
+
+      - name: Load Docker dependency images
+        run: |
+          if [ -f /tmp/docker-deps/deps.tar ]; then
+            docker load --input /tmp/docker-deps/deps.tar
+          fi
+          images=(
+            "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:${{ matrix.version }}"
+            "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:6.2.0"
+            "ghcr.io/getsentry/image-mirror-confluentinc-cp-zookeeper:6.2.0"
+            "ghcr.io/getsentry/docker-redis-cluster:7.0.10"
+          )
+          for image in "${images[@]}"; do
+            if ! docker image inspect "$image" &>/dev/null; then
+              docker pull "$image"
+            fi
+          done
 
       - name: Docker set up
         run: |
@@ -425,12 +510,57 @@ jobs:
         run: |
           curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
 
+  distroless-smoke-test:
+    name: Distroless image smoke test
+    needs: [snuba-image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build distroless image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: application-distroless
+          load: true
+          tags: snuba-distroless:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify --help works
+        run: docker run --rm snuba-distroless:test --help
+
+      - name: Verify Python imports
+        run: |
+          docker run --rm --entrypoint python3 snuba-distroless:test \
+            -c "import snuba, rust_snuba, confluent_kafka; print('OK')"
+
+      - name: Verify jemalloc LD_PRELOAD is active
+        run: |
+          docker run --rm --entrypoint python3 snuba-distroless:test \
+            -c "import ctypes; ctypes.CDLL('libjemalloc.so.2'); print('jemalloc OK')"
+
+      - name: Verify no shell available
+        run: |
+          # This should fail — distroless has no /bin/sh
+          if docker run --rm --entrypoint /bin/sh snuba-distroless:test -c "echo hi" 2>/dev/null; then
+            echo "ERROR: /bin/sh should not be available in distroless image"
+            exit 1
+          else
+            echo "OK: /bin/sh is not available"
+          fi
+
   validate-devservices-config:
     runs-on: ubuntu-24.04
     needs: files-changed
     if: ${{ needs.files-changed.outputs.devservices_changes == 'true' }}
     steps:
-    - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+    - uses: actions/checkout@v6.0.2
       name: Checkout repository
 
     - name: Get devservices version
@@ -453,7 +583,7 @@ jobs:
 
     steps:
       - name: Download snuba-ci image from artifacts
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0  # v5.0.0
+        uses: actions/download-artifact@v8
         with:
           name: snuba-ci
           path: /tmp

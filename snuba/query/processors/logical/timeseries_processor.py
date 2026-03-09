@@ -5,11 +5,10 @@ from snuba.query.dsl import multiply
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
-from snuba.query.matchers import Any
+from snuba.query.matchers import Any, Or, Param, String
 from snuba.query.matchers import Column as ColumnMatch
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
-from snuba.query.matchers import Or, Param, String
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.util import parse_datetime
@@ -92,9 +91,7 @@ class TimeSeriesProcessor(LogicalQueryProcessor):
             ),
         )
 
-    def __group_time_column(
-        self, exp: Expression, granularity: Optional[int]
-    ) -> Expression:
+    def __group_time_column(self, exp: Expression, granularity: Optional[int]) -> Expression:
         if isinstance(exp, Column):
             if exp.column_name in self.__time_replace_columns:
                 real_column_name = self.__time_replace_columns[exp.column_name]
@@ -180,9 +177,7 @@ class TimeSeriesProcessor(LogicalQueryProcessor):
         # Use time_group_columns to map the old column names to the new column names, and
         # map the time_group_columns into functions based on the query granularity.
         granularity = query.get_granularity()
-        query.transform_expressions(
-            lambda exp: self.__group_time_column(exp, granularity)
-        )
+        query.transform_expressions(lambda exp: self.__group_time_column(exp, granularity))
 
         # Now that all the column names are correct, search the conditions for time based
         # conditions and make sure the comparison is with a datetime

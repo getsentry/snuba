@@ -28,9 +28,7 @@ logger = logging.getLogger(__name__)
 @click.option(
     "--storage",
     "storage_name",
-    type=click.Choice(
-        [storage_key.value for storage_key in get_writable_storage_keys()]
-    ),
+    type=click.Choice([storage_key.value for storage_key in get_writable_storage_keys()]),
     help="The storage to target",
     required=True,
 )
@@ -144,9 +142,7 @@ logger = logging.getLogger(__name__)
     default=False,
     help="Enforce schema on the raw events topic.",
 )
-@click.option(
-    "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
-)
+@click.option("--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True))
 @click.option(
     "--max-poll-interval-ms",
     type=int,

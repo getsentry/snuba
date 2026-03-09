@@ -63,9 +63,7 @@ def bulk_load(
     setup_sentry()
 
     logger = logging.getLogger("snuba.load-snapshot")
-    logger.info(
-        "Start bulk load process for storage %s, from source %s", storage_name, source
-    )
+    logger.info("Start bulk load process for storage %s, from source %s", storage_name, source)
     storage = get_cdc_storage(StorageKey(storage_name))
     table_writer = storage.get_table_writer()
 
@@ -94,9 +92,7 @@ def bulk_load(
     else:
         progress_func = None
 
-    table_descriptor = snapshot_source.get_descriptor().get_table(
-        storage.get_postgres_table()
-    )
+    table_descriptor = snapshot_source.get_descriptor().get_table(storage.get_postgres_table())
     if pre_processed:
         writer = table_writer.get_bulk_writer(
             metrics=environment.metrics,
@@ -104,9 +100,7 @@ def bulk_load(
             column_names=[c.name for c in table_descriptor.columns or []],
             table_name=dest_table,
         )
-        loader.load_preprocessed(
-            writer, ignore_existing_data, progress_callback=progress_func
-        )
+        loader.load_preprocessed(writer, ignore_existing_data, progress_callback=progress_func)
     else:
         buffer_writer = BufferedWriterWrapper(
             table_writer.get_batch_writer(
@@ -117,6 +111,4 @@ def bulk_load(
             settings.BULK_CLICKHOUSE_BUFFER,
             JSONRowEncoder(),
         )
-        loader.load(
-            buffer_writer, ignore_existing_data, progress_callback=progress_func
-        )
+        loader.load(buffer_writer, ignore_existing_data, progress_callback=progress_func)

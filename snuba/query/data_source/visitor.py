@@ -49,13 +49,9 @@ class DataSourceVisitor(ABC, Generic[TReturn, TSimpleDataSource]):
         raise NotImplementedError
 
     @abstractmethod
-    def _visit_simple_query(
-        self, data_source: ProcessableQuery[TSimpleDataSource]
-    ) -> TReturn:
+    def _visit_simple_query(self, data_source: ProcessableQuery[TSimpleDataSource]) -> TReturn:
         raise NotImplementedError
 
     @abstractmethod
-    def _visit_composite_query(
-        self, data_source: CompositeQuery[TSimpleDataSource]
-    ) -> TReturn:
+    def _visit_composite_query(self, data_source: CompositeQuery[TSimpleDataSource]) -> TReturn:
         raise NotImplementedError

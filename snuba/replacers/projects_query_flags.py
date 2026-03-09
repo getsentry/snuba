@@ -7,8 +7,8 @@ from datetime import datetime
 from typing import Any, List, Mapping, MutableMapping, Optional, Sequence, Set, Tuple
 
 import sentry_sdk
-
 from redis.cluster import ClusterPipeline as StrictClusterPipeline
+
 from snuba import settings
 from snuba.processor import ReplacementType
 from snuba.redis import RedisClientKey, get_redis_client
@@ -79,7 +79,6 @@ class ProjectsQueryFlags:
             project_id, state_name
         )
         with redis_client.pipeline() as p:
-
             # the redis key size limit is defined as 2 times the clickhouse query size
             # limit. there is an explicit check in the query processor for the same
             # limit

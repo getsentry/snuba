@@ -107,7 +107,7 @@ schema:
     ]
   local_table_name: eap_items_1_downsample_512_local
   dist_table_name: eap_items_1_downsample_512_dist
-  partition_format: [date]
+  partition_format: [retention_days, date]
 
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
@@ -129,6 +129,7 @@ query_processors:
       settings:
         max_execution_time: 25
         timeout_before_checking_execution_speed: 0
+        distributed_product_mode: global
 
 mandatory_condition_checkers:
   - condition: OrgIdEnforcer

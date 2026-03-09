@@ -28,11 +28,15 @@ function Nav(props: NavProps) {
   return (
     <nav style={navStyle}>
       <ul style={ulStyle}>
-        {NAV_ITEMS.map((item) =>
-          allowedTools?.includes(item.id) || allowedTools?.includes("all") ? (
+        {NAV_ITEMS.map((item) => {
+          // Shell pages inherit permissions from their parent pages
+          const permissionId = item.id === "tracing-shell" ? "tracing"
+            : item.id === "system-shell" ? "system-queries"
+            : item.id;
+          return allowedTools?.includes(permissionId) || allowedTools?.includes("all") ? (
             item.id === active ? (
               <li key={item.id} >
-                <a style={{ color: COLORS.TEXT_DEFAULT, ...linkStyle }} className="nav-link-active">
+                <a style={{ ...linkStyle, ...activeLinkStyle }} className="nav-link-active">
                   {item.display}
                 </a>
               </li>
@@ -49,16 +53,18 @@ function Nav(props: NavProps) {
             )
           ) : (
             <div key={item.id} />
-          )
-        )}
+          );
+        })}
       </ul>
     </nav>
   );
 }
 
-const navStyle = {
+const navStyle: React.CSSProperties = {
   borderRight: `1px solid ${COLORS.NAV_BORDER}`,
   width: 250,
+  overflowY: "auto",
+  flexShrink: 0,
 };
 
 const ulStyle = {
@@ -72,6 +78,13 @@ const linkStyle = {
   textDecoration: "none",
   cursor: "pointer",
   padding: 20,
+};
+
+const activeLinkStyle = {
+  color: COLORS.TEXT_DEFAULT,
+  backgroundColor: "rgba(59, 130, 246, 0.15)",
+  borderLeft: "3px solid #3b82f6",
+  fontWeight: "bold" as const,
 };
 
 export default Nav;

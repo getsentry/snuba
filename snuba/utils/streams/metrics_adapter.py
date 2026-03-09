@@ -13,12 +13,8 @@ class StreamMetricsAdapter:
     ) -> None:
         self.__wrapper.increment(name, value, tags)
 
-    def gauge(
-        self, name: str, value: Union[int, float], tags: Optional[Tags] = None
-    ) -> None:
+    def gauge(self, name: str, value: Union[int, float], tags: Optional[Tags] = None) -> None:
         self.__wrapper.gauge(name, value, tags)
 
-    def timing(
-        self, name: str, value: Union[int, float], tags: Optional[Tags] = None
-    ) -> None:
+    def timing(self, name: str, value: Union[int, float], tags: Optional[Tags] = None) -> None:
         self.__wrapper.timing(name, value, tags)

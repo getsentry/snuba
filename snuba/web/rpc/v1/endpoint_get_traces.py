@@ -17,6 +17,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import AndFilter, TraceItemFilter
 
+from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
@@ -34,14 +35,14 @@ from snuba.query.dsl import (
     literals_array,
     or_cond,
 )
-from snuba.query.expressions import Expression
+from snuba.query.expressions import DangerousRawSQL, Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.state import get_config
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
+    attribute_key_to_expression,
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
@@ -53,10 +54,7 @@ from snuba.web.rpc.common.debug_info import (
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
     convert_trace_filters_to_trace_item_filter_with_type,
-    get_trace_ids_for_cross_item_query,
-)
-from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
-    attribute_key_to_expression,
+    get_trace_ids_sql_for_cross_item_query,
 )
 
 _DEFAULT_ROW_LIMIT = 10_000
@@ -469,31 +467,83 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     def response_class(cls) -> Type[GetTracesResponse]:
         return GetTracesResponse
 
-    def _execute(self, in_msg: GetTracesRequest) -> GetTracesResponse:
-        _validate_order_by(in_msg)
+    def _execute_with_subquery_optimization(self, in_msg: GetTracesRequest) -> GetTracesResponse:
+        """
+        Execute cross-item query using subquery optimization.
+        Gets SQL from trace IDs query and uses it as a subquery in metadata query.
+        """
+        # Get SQL for trace IDs query (dry run) and its query result
+        trace_ids_sql, trace_ids_query_result = get_trace_ids_sql_for_cross_item_query(
+            in_msg,
+            in_msg.meta,
+            convert_trace_filters_to_trace_item_filter_with_type(list(in_msg.filters)),
+            self.routing_decision.tier,
+            self._timer,
+            limit=in_msg.limit if in_msg.limit > 0 else None,
+        )
+
+        # Get metadata using subquery
+        traces, metadata_query_result = self._get_metadata_for_traces_with_subquery(
+            request=in_msg,
+            trace_ids_sql=trace_ids_sql,
+        )
+        # Build response - include both query results for proper metadata extraction
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,
-            [],
-            [self._timer],
+            [trace_ids_query_result, metadata_query_result],
+            [self._timer, self._timer],
         )
 
+        return GetTracesResponse(
+            traces=traces,
+            page_token=_get_page_token(in_msg, traces),
+            meta=response_meta,
+        )
+
+    def _execute(self, in_msg: GetTracesRequest) -> GetTracesResponse:
+        _validate_order_by(in_msg)
+
+        # Feature flag: Use cross-item query path for all queries (single-item and cross-item)
+        use_cross_item_path = self._is_cross_event_query(in_msg.filters) or state.get_config(
+            "use_cross_item_path_for_single_item_queries", False
+        )
+
+        # Original code path (unchanged)
+        query_results: list[Any] = []
+
         # Get a dict of trace IDs and timestamps.
-        if self._is_cross_event_query(in_msg.filters):
-            trace_ids = get_trace_ids_for_cross_item_query(
-                in_msg,
-                in_msg.meta,
-                convert_trace_filters_to_trace_item_filter_with_type(list(in_msg.filters)),
-                self._timer,
-            )
+        if use_cross_item_path:
+            return self._execute_with_subquery_optimization(in_msg)
         else:
-            trace_ids = self._get_trace_ids_for_single_item_query(request=in_msg)
+            trace_ids, trace_ids_query_result = self._get_trace_ids_for_single_item_query(
+                request=in_msg
+            )
+            query_results.append(trace_ids_query_result)
 
         if len(trace_ids) == 0:
+            response_meta = extract_response_meta(
+                in_msg.meta.request_id,
+                in_msg.meta.debug,
+                query_results,
+                [self._timer] * len(query_results),
+            )
             return GetTracesResponse(meta=response_meta)
 
         # Get metadata for those traces.
-        traces = self._get_metadata_for_traces(request=in_msg, trace_ids=trace_ids)
+        assert isinstance(trace_ids, list), "trace_ids should be a list at this point"
+        traces, metadata_query_result = self._get_metadata_for_traces(
+            request=in_msg, trace_ids=trace_ids
+        )
+        query_results.append(metadata_query_result)
+
+        response_meta = extract_response_meta(
+            in_msg.meta.request_id,
+            in_msg.meta.debug,
+            query_results,
+            [self._timer] * len(query_results),
+        )
+
         return GetTracesResponse(
             traces=traces,
             page_token=_get_page_token(in_msg, traces),
@@ -536,7 +586,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     def _get_trace_ids_for_single_item_query(
         self,
         request: GetTracesRequest,
-    ) -> list[str]:
+    ) -> tuple[list[str], Any]:
         if request.filters:
             item_type = request.filters[0].item_type
         elif request.meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
@@ -597,8 +647,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
 
         treeify_or_and_conditions(query)
         settings = setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
-        if get_config("enable_trace_sampling", False):
-            settings.set_sampling_tier(self.routing_decision.tier)
+        settings.set_sampling_tier(self.routing_decision.tier)
         results = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=_build_snuba_request(request, query, query_settings=settings),
@@ -607,13 +656,13 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         trace_ids: list[str] = []
         for row in results.result.get("data", []):
             trace_ids.append(list(row.values())[0])
-        return trace_ids
+        return trace_ids, results
 
     def _get_metadata_for_traces(
         self,
         request: GetTracesRequest,
         trace_ids: list[str],
-    ) -> list[GetTracesResponse.Trace]:
+    ) -> tuple[list[GetTracesResponse.Trace], Any]:
         # We use the item type specified in the request meta for the trace item filter conditions.
         # If no item type is specified, we use all the filters.
         filter_expressions_by_item_type = self._get_trace_item_filter_expressions(request.filters)
@@ -718,4 +767,121 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             timer=self._timer,
         )
 
-        return _convert_results(request, results.result.get("data", []))
+        return _convert_results(request, results.result.get("data", [])), results
+
+    def _get_metadata_for_traces_with_subquery(
+        self,
+        request: GetTracesRequest,
+        trace_ids_sql: str,
+    ) -> tuple[list[GetTracesResponse.Trace], Any]:
+        """
+        Get metadata for traces identified by a SQL subquery.
+        This method is identical to _get_metadata_for_traces() except it uses
+        a SQL subquery instead of materializing trace IDs into the IN clause.
+        """
+        # We use the item type specified in the request meta for the trace item filter conditions.
+        # If no item type is specified, we use all the filters.
+        filter_expressions_by_item_type = self._get_trace_item_filter_expressions(request.filters)
+        trace_item_filters_expression = None
+        item_type = None
+        if request.meta.trace_item_type in filter_expressions_by_item_type:
+            trace_item_filters_expression = filter_expressions_by_item_type[
+                request.meta.trace_item_type
+            ]
+            item_type = request.meta.trace_item_type
+        elif len(filter_expressions_by_item_type) == 1:
+            trace_item_filters_expression = next(iter(filter_expressions_by_item_type.values()))
+            item_type = next(iter(filter_expressions_by_item_type.keys()))
+        elif len(filter_expressions_by_item_type) > 1:
+            trace_item_filters_expression = or_cond(
+                *[expression for expression in filter_expressions_by_item_type.values()]
+            )
+        else:
+            item_type = TraceItemType.TRACE_ITEM_TYPE_SPAN
+
+        selected_columns: list[SelectedExpression] = []
+        start_timestamp_requested = False
+        for trace_attribute in request.attributes:
+            if trace_attribute.key == TraceAttribute.Key.KEY_START_TIMESTAMP:
+                start_timestamp_requested = True
+            selected_columns.append(
+                SelectedExpression(
+                    name=_ATTRIBUTES[trace_attribute.key][0],
+                    expression=_attribute_to_expression(
+                        trace_attribute,
+                        trace_item_filters_expression,
+                        request_meta=request.meta,
+                    ),
+                )
+            )
+
+        # Since we're always ordering by start_timestamp, we need to request
+        # the field unless it's already been requested.
+        if not start_timestamp_requested:
+            trace_attribute = TraceAttribute(key=TraceAttribute.Key.KEY_START_TIMESTAMP)
+            selected_columns.append(
+                SelectedExpression(
+                    name=_ATTRIBUTES[trace_attribute.key][0],
+                    expression=_attribute_to_expression(
+                        trace_attribute,
+                        trace_item_filters_expression,
+                        request_meta=request.meta,
+                    ),
+                )
+            )
+
+        entity = Entity(
+            key=EntityKey("eap_items"),
+            schema=get_entity(EntityKey("eap_items")).get_data_model(),
+            sample=None,
+        )
+
+        # Use DangerousRawSQL to embed the subquery instead of materializing trace IDs
+        if item_type:
+            condition = base_conditions_and(
+                request.meta,
+                in_cond(
+                    column("trace_id"),
+                    DangerousRawSQL(None, f"({trace_ids_sql})"),
+                ),
+                f.equals(column("item_type"), item_type),
+            )
+        else:
+            condition = base_conditions_and(
+                request.meta,
+                in_cond(
+                    column("trace_id"),
+                    DangerousRawSQL(None, f"({trace_ids_sql})"),
+                ),
+            )
+
+        query = Query(
+            from_clause=entity,
+            selected_columns=selected_columns,
+            condition=condition,
+            groupby=[
+                _attribute_to_expression(
+                    TraceAttribute(
+                        key=TraceAttribute.Key.KEY_TRACE_ID,
+                    ),
+                    None,
+                    request_meta=request.meta,
+                ),
+            ],
+            order_by=[
+                OrderBy(
+                    direction=OrderByDirection.DESC,
+                    expression=column("trace_start_timestamp"),
+                ),
+            ],
+        )
+
+        treeify_or_and_conditions(query)
+
+        results = run_query(
+            dataset=PluggableDataset(name="eap", all_entities=[]),
+            request=_build_snuba_request(request, query),
+            timer=self._timer,
+        )
+
+        return _convert_results(request, results.result.get("data", [])), results

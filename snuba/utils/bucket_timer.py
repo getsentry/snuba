@@ -69,9 +69,7 @@ class Counter:
             self.buckets[start_minute] = {}
             self.buckets[start_minute][project_id] = processing_time
 
-    def record_time_spent(
-        self, project_id: int, start: datetime, end: datetime
-    ) -> None:
+    def record_time_spent(self, project_id: int, start: datetime, end: datetime) -> None:
         start_minute = floor_minute(start)
         left = start
         right = ceil_minute(start)
@@ -94,9 +92,7 @@ class Counter:
         for project_id, total_processing_time in project_groups.items():
             if total_processing_time > self.limit and (
                 len(project_groups) > 1
-                or get_int_config(
-                    "allows_skipping_single_project_replacements", default=0
-                )
+                or get_int_config("allows_skipping_single_project_replacements", default=0)
             ):
                 projects_exceeding_time_limit.append(project_id)
 

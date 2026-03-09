@@ -32,9 +32,7 @@ def test_get_clickhouse_threads(config_val: str | int, expected_threads: int) ->
     ],
 )
 @pytest.mark.redis_db
-def test_get_clickhouse_threads_error(
-    config_val: str | int, error: Type[Exception]
-) -> None:
+def test_get_clickhouse_threads_error(config_val: str | int, error: Type[Exception]) -> None:
     state.set_config("admin.querylog_threads", str(config_val))
     with pytest.raises(error):
         _get_clickhouse_threads()

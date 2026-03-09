@@ -1,6 +1,6 @@
 use crate::config::MessageProcessorConfig;
 
-use crate::types::{BytesInsertBatch, CogsData, CommitLogEntry, CommitLogOffsets, RowData};
+use crate::types::{BytesInsertBatch, CommitLogEntry, CommitLogOffsets, RowData};
 use anyhow::Error;
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
@@ -85,14 +85,16 @@ impl PythonTransformStep {
                 })
                 .collect();
 
-            let payload = BytesInsertBatch::new(
-                RowData::from_encoded_rows(payload),
-                Some(message_timestamp),
-                origin_timestamp,
-                sentry_received_timestamp,
-                CommitLogOffsets(commit_log_offsets),
-                CogsData::default(),
-            );
+            let mut payload = BytesInsertBatch::from_rows(RowData::from_encoded_rows(payload))
+                .with_message_timestamp(message_timestamp)
+                .with_commit_log_offsets(CommitLogOffsets(commit_log_offsets));
+
+            if let Some(ts) = origin_timestamp {
+                payload = payload.with_origin_timestamp(ts);
+            }
+            if let Some(ts) = sentry_received_timestamp {
+                payload = payload.with_sentry_received_timestamp(ts);
+            }
 
             let mut committable: BTreeMap<Partition, u64> = BTreeMap::new();
             for ((t, p), o) in offsets {

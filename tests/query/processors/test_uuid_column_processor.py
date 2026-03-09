@@ -81,12 +81,8 @@ tests = [
                 None,
                 "tuple",
                 (
-                    Literal(
-                        None, str(uuid.UUID("a7d67cf7-9677-4551-a95b-e6543cacd459"))
-                    ),
-                    Literal(
-                        None, str(uuid.UUID("a7d67cf7-9677-4551-a95b-e6543cacd45a"))
-                    ),
+                    Literal(None, str(uuid.UUID("a7d67cf7-9677-4551-a95b-e6543cacd459"))),
+                    Literal(None, str(uuid.UUID("a7d67cf7-9677-4551-a95b-e6543cacd45a"))),
                 ),
             ),
         ),
@@ -230,6 +226,34 @@ tests = [
         ),
         "equals(column2, 'a7d67cf7-9677-4551-a95b-e6543cacd460') AND equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459')",
         id="equals(column2, 'a7d67cf7-9677-4551-a95b-e6543cacd460') AND equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459')",
+    ),
+    pytest.param(
+        binary_condition(
+            ConditionFunctions.EQ,
+            FunctionCall(None, "cast", (Column(None, None, "column1"), Literal(None, "String"))),
+            Literal(None, "a7d67cf796774551a95be6543cacd459"),
+        ),
+        binary_condition(
+            ConditionFunctions.EQ,
+            Column(None, None, "column1"),
+            Literal(None, str(uuid.UUID("a7d67cf7-9677-4551-a95b-e6543cacd459"))),
+        ),
+        "equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459')",
+        id="equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459')",
+    ),
+    pytest.param(
+        binary_condition(
+            ConditionFunctions.IN,
+            FunctionCall(None, "cast", (Column(None, None, "column1"), Literal(None, "String"))),
+            FunctionCall(None, "tuple", (Literal(None, "a7d67cf796774551a95be6543cacd459"),)),
+        ),
+        binary_condition(
+            ConditionFunctions.IN,
+            Column(None, None, "column1"),
+            FunctionCall(None, "tuple", (Literal(None, "a7d67cf7-9677-4551-a95b-e6543cacd459"),)),
+        ),
+        "in(column1, tuple('a7d67cf7-9677-4551-a95b-e6543cacd459'))",
+        id="in(column1, tuple('a7d67cf7-9677-4551-a95b-e6543cacd459'))",
     ),
 ]
 

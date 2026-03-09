@@ -13,11 +13,7 @@ class ToyJob(Job):
 
     def execute(self, logger: JobLogger) -> None:
         logger.info(
-            "executing job "
-            + self.job_spec.job_id
-            + " with query `"
-            + self._build_query()
-            + "`"
+            "executing job " + self.job_spec.job_id + " with query `" + self._build_query() + "`"
         )
 
         if not self.job_spec.params:

@@ -8,9 +8,11 @@ from snuba.query.expressions import (
     Argument,
     Column,
     CurriedFunctionCall,
+    DangerousRawSQL,
     Expression,
     ExpressionVisitor,
     FunctionCall,
+    JsonPath,
     Lambda,
     Literal,
     SubscriptableReference,
@@ -175,15 +177,23 @@ class DSLMapperVisitor(ExpressionVisitor[str]):
             if len(exp.parameters) == 1:
                 raw_parameters += ","
             parameters = f", ({raw_parameters})"
-        return (
-            f"CurriedFunctionCall({repr(exp.alias)}, {internal_function}{parameters})"
-        )
+        return f"CurriedFunctionCall({repr(exp.alias)}, {internal_function}{parameters})"
 
     def visit_argument(self, exp: Argument) -> str:
         return repr(exp)
 
     def visit_lambda(self, exp: Lambda) -> str:
         return repr(exp)
+
+    def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> str:
+        alias_str = f", {repr(exp.alias)}" if exp.alias else ", None"
+        return f"DangerousRawSQL({alias_str}, {repr(exp.sql)})"
+
+    def visit_json_path(self, exp: JsonPath) -> str:
+        alias_str = repr(exp.alias)
+        base_str = exp.base.accept(self)
+        type_str = f", {repr(exp.return_type)}" if exp.return_type else ""
+        return f"JsonPath({alias_str}, {base_str}, {repr(exp.path)}{type_str})"
 
     def visit_selected_expression(self, exp: SelectedExpression) -> str:
         return f"SelectedExpression({repr(exp.name)}, {exp.expression.accept(self)})"
@@ -197,12 +207,7 @@ class DSLMapperVisitor(ExpressionVisitor[str]):
 
 
 def ast_repr(
-    exp: (
-        Expression
-        | LimitBy
-        | Sequence[Expression | SelectedExpression | OrderBy]
-        | None
-    ),
+    exp: Expression | LimitBy | Sequence[Expression | SelectedExpression | OrderBy] | None,
     visitor: DSLMapperVisitor,
 ) -> str:
     if not exp:

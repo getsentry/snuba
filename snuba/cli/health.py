@@ -18,7 +18,6 @@ def health(
     *,
     thorough: bool,
 ) -> int:
-
     health_info = get_health_info(thorough)
     if health_info.status == 200:
         sys.exit(0)

@@ -81,9 +81,7 @@ class Storage(LogicalDataSource):
         """There should be no operations done on a Storage except to get the storage key
         Therefore the columns are empty
         """
-        raise NotImplementedError(
-            "Storage queries do not support entity processing or Joins"
-        )
+        raise NotImplementedError("Storage queries do not support entity processing or Joins")
 
 
 @dataclass(frozen=True)

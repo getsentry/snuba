@@ -126,9 +126,7 @@ def test_tag_translation() -> None:
 
 
 def test_hash_bucket_tag_translation() -> None:
-    translated = SubscriptableHashBucketMapper(
-        None, "tags", None, "tags", 25
-    ).attempt_map(
+    translated = SubscriptableHashBucketMapper(None, "tags", None, "tags", 25).attempt_map(
         SubscriptableReference(
             "tags[release]", Column(None, None, "tags"), Literal(None, "release")
         ),
@@ -234,9 +232,7 @@ test_data = [
         id="simple column",
     ),
     pytest.param(
-        TranslationMappers(
-            subscriptables=[SubscriptableMapper(None, "tags", "table", "tags")]
-        ),
+        TranslationMappers(subscriptables=[SubscriptableMapper(None, "tags", "table", "tags")]),
         SubscriptableReference(
             "tags[release]", Column(None, None, "tags"), Literal(None, "release")
         ),
@@ -256,9 +252,7 @@ test_data = [
     ),
     pytest.param(
         TranslationMappers(
-            subscriptables=[
-                SubscriptableMapper(None, "tags", "table", "tags", "special_value")
-            ]
+            subscriptables=[SubscriptableMapper(None, "tags", "table", "tags", "special_value")]
         ),
         SubscriptableReference(
             "tags[release]", Column(None, None, "tags"), Literal(None, "release")

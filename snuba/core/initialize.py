@@ -6,6 +6,7 @@ is able to run is defined in this file under the `initialize` function
 All imports are hidden behind their respective functions to avoid running any code at initialization time unless explicitly
 directed
 """
+
 import logging
 
 logger = logging.getLogger("snuba_core_init")

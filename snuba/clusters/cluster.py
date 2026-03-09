@@ -54,9 +54,13 @@ class ClickhouseClientSettings(Enum):
             "load_balancing": "in_order",
             "replication_alter_partitions_sync": 2,
             "mutations_sync": 2,
+            "alter_sync": 2,  # Wait for ON CLUSTER DDL on all replicas
             "database_atomic_wait_for_drop_and_detach_synchronously": 1,
         },
-        10000,
+        # 5 minute timeout to allow ON CLUSTER DDL operations to complete
+        # across all replicas. This is needed because alter_sync=2 blocks
+        # until all replicas confirm completion.
+        300000,
     )
     DELETE = ClickhouseClientSettingsType({"mutations_sync": 1}, None)
     OPTIMIZE = ClickhouseClientSettingsType({}, settings.OPTIMIZE_QUERY_TIMEOUT)
@@ -331,9 +335,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             local_node = self.get_local_nodes()[0]
             self.__deleter = NativeDriverReader(
                 cache_partition_id=f"{self.__cache_partition_id}_deletes",
-                client=self.get_node_connection(
-                    ClickhouseClientSettings.DELETE, local_node
-                ),
+                client=self.get_node_connection(ClickhouseClientSettings.DELETE, local_node),
                 query_settings_prefix=self.__query_settings_prefix,
             )
         return self.__deleter
@@ -385,6 +387,9 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
     def get_clickhouse_cluster_name(self) -> Optional[str]:
         return self.__cluster_name
 
+    def get_clickhouse_distributed_cluster_name(self) -> Optional[str]:
+        return self.__distributed_cluster_name
+
     def get_database(self) -> str:
         return self.__database
 
@@ -407,9 +412,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
                 "This is likely a configuration error. Returning empty list."
             )
             return []
-        assert (
-            self.__distributed_cluster_name is not None
-        ), "distributed_cluster_name must be set"
+        assert self.__distributed_cluster_name is not None, "distributed_cluster_name must be set"
         return self.__get_cluster_nodes(self.__distributed_cluster_name)
 
     def get_connection_id(self) -> ConnectionId:
@@ -460,9 +463,7 @@ CLUSTERS = [
         single_node=cluster["single_node"],
         cluster_name=cluster["cluster_name"] if "cluster_name" in cluster else None,
         distributed_cluster_name=(
-            cluster["distributed_cluster_name"]
-            if "distributed_cluster_name" in cluster
-            else None
+            cluster["distributed_cluster_name"] if "distributed_cluster_name" in cluster else None
         ),
         cache_partition_id=cluster.get("cache_partition_id"),
         query_settings_prefix=cluster.get("query_settings_prefix"),
@@ -472,21 +473,17 @@ CLUSTERS = [
 ]
 
 _registered_storage_sets = [
-    storage_set
-    for cluster in CLUSTERS
-    for storage_set in cluster.get_storage_set_keys()
+    storage_set for cluster in CLUSTERS for storage_set in cluster.get_storage_set_keys()
 ]
 
 _unique_registered_storage_sets = set(_registered_storage_sets)
 
-assert len(_registered_storage_sets) == len(
-    _unique_registered_storage_sets
-), "Storage set registered to more than one cluster"
+assert len(_registered_storage_sets) == len(_unique_registered_storage_sets), (
+    "Storage set registered to more than one cluster"
+)
 
 _STORAGE_SET_CLUSTER_MAP: Dict[StorageSetKey, ClickhouseCluster] = {
-    storage_set: cluster
-    for cluster in CLUSTERS
-    for storage_set in cluster.get_storage_set_keys()
+    storage_set: cluster for cluster in CLUSTERS for storage_set in cluster.get_storage_set_keys()
 }
 
 
@@ -505,15 +502,11 @@ def _build_sliced_cluster(cluster: Mapping[str, Any]) -> ClickhouseCluster:
         secure=cluster.get("secure", False),
         ca_certs=cluster.get("ca_certs", None),
         verify=cluster.get("verify", False),
-        storage_sets={
-            storage_tuple[0] for storage_tuple in cluster["storage_set_slices"]
-        },
+        storage_sets={storage_tuple[0] for storage_tuple in cluster["storage_set_slices"]},
         single_node=cluster["single_node"],
         cluster_name=cluster["cluster_name"] if "cluster_name" in cluster else None,
         distributed_cluster_name=(
-            cluster["distributed_cluster_name"]
-            if "distributed_cluster_name" in cluster
-            else None
+            cluster["distributed_cluster_name"] if "distributed_cluster_name" in cluster else None
         ),
         cache_partition_id=cluster.get("cache_partition_id"),
         query_settings_prefix=cluster.get("query_settings_prefix"),
@@ -523,9 +516,7 @@ def _build_sliced_cluster(cluster: Mapping[str, Any]) -> ClickhouseCluster:
 _SLICED_STORAGE_SET_CLUSTER_MAP: Dict[Tuple[StorageSetKey, int], ClickhouseCluster] = {}
 
 
-def _get_sliced_storage_set_cluster_map() -> (
-    Dict[Tuple[StorageSetKey, int], ClickhouseCluster]
-):
+def _get_sliced_storage_set_cluster_map() -> Dict[Tuple[StorageSetKey, int], ClickhouseCluster]:
     if len(_SLICED_STORAGE_SET_CLUSTER_MAP) == 0:
         for cluster in settings.SLICED_CLUSTERS:
             for storage_set_tuple in cluster["storage_set_slices"]:
@@ -555,9 +546,9 @@ def get_cluster(
     SLICED_CLUSTERS, then an UndefinedClickhouseCluster Exception
     will be raised.
     """
-    assert (
-        storage_set_key not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES
-    ), f"Storage set {storage_set_key} is disabled"
+    assert storage_set_key not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES, (
+        f"Storage set {storage_set_key} is disabled"
+    )
 
     if slice_id is not None:
         part_storage_set_cluster_map = _get_sliced_storage_set_cluster_map()

@@ -51,9 +51,7 @@ class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult
 
         if isinstance(request, ProtobufMessage):
             original_body = {
-                "request": base64.b64encode(request.SerializeToString()).decode(
-                    "utf-8"
-                ),
+                "request": base64.b64encode(request.SerializeToString()).decode("utf-8"),
                 "request_name": request.__class__.__name__,
                 "request_version": request.__class__.__module__.split(".", 3)[2],
             }

@@ -41,9 +41,7 @@ TEST_CASES = [
             "group_id": FunctionCall(
                 "group_id",
                 function_name="f",
-                parameters=(
-                    Column(alias=None, table_name=None, column_name="group_id"),
-                ),
+                parameters=(Column(alias=None, table_name=None, column_name="group_id"),),
             )
         },
         False,
@@ -65,9 +63,7 @@ TEST_CASES = [
                     FunctionCall(
                         alias=None,
                         function_name="g",
-                        parameters=(
-                            Column(alias=None, table_name=None, column_name="group_id"),
-                        ),
+                        parameters=(Column(alias=None, table_name=None, column_name="group_id"),),
                     ),
                 ),
             )
@@ -81,9 +77,7 @@ TEST_CASES = [
                 FunctionCall(
                     alias=None,
                     function_name="g",
-                    parameters=(
-                        Column(alias=None, table_name=None, column_name="group_id"),
-                    ),
+                    parameters=(Column(alias=None, table_name=None, column_name="group_id"),),
                 ),
             ),
         ),
@@ -148,9 +142,7 @@ TEST_CASES = [
     pytest.param(
         CurriedFunctionCall(
             alias=None,
-            internal_function=FunctionCall(
-                alias=None, function_name="f", parameters=tuple()
-            ),
+            internal_function=FunctionCall(alias=None, function_name="f", parameters=tuple()),
             parameters=(Column(alias=None, table_name=None, column_name="a"),),
         ),
         {
@@ -163,9 +155,7 @@ TEST_CASES = [
         False,
         CurriedFunctionCall(
             alias=None,
-            internal_function=FunctionCall(
-                alias=None, function_name="f", parameters=tuple()
-            ),
+            internal_function=FunctionCall(alias=None, function_name="f", parameters=tuple()),
             parameters=(
                 FunctionCall(
                     alias="a",
@@ -212,10 +202,7 @@ def test_expand_aliases(
     nested_resolution: bool,
     expected: Expression,
 ) -> None:
-    assert (
-        expression.accept(AliasExpanderVisitor(lookup, [], nested_resolution))
-        == expected
-    )
+    assert expression.accept(AliasExpanderVisitor(lookup, [], nested_resolution)) == expected
 
 
 def test_circular_dependency() -> None:
@@ -226,16 +213,12 @@ def test_circular_dependency() -> None:
                     "a": FunctionCall(
                         alias="a",
                         function_name="f",
-                        parameters=(
-                            Column(alias=None, table_name=None, column_name="b"),
-                        ),
+                        parameters=(Column(alias=None, table_name=None, column_name="b"),),
                     ),
                     "b": FunctionCall(
                         alias="b",
                         function_name="g",
-                        parameters=(
-                            Column(alias=None, table_name=None, column_name="a"),
-                        ),
+                        parameters=(Column(alias=None, table_name=None, column_name="a"),),
                     ),
                 },
                 [],
@@ -254,11 +237,7 @@ def test_circular_dependency() -> None:
                             FunctionCall(
                                 alias="b",
                                 function_name="g",
-                                parameters=(
-                                    Column(
-                                        alias=None, table_name=None, column_name="a"
-                                    ),
-                                ),
+                                parameters=(Column(alias=None, table_name=None, column_name="a"),),
                             ),
                         ),
                     ),

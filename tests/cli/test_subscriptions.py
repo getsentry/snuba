@@ -12,9 +12,7 @@ from snuba.cli.subscriptions_scheduler_executor import subscriptions_scheduler_e
 
 # don't access clickhouse
 @patch.object(snuba.cli.subscriptions_executor, "check_clickhouse_connections")
-@patch.object(
-    snuba.cli.subscriptions_scheduler_executor, "check_clickhouse_connections"
-)
+@patch.object(snuba.cli.subscriptions_scheduler_executor, "check_clickhouse_connections")
 @patch.object(snuba.cli.subscriptions_scheduler, "check_clickhouse_connections")
 # don't set the metrics global state
 @patch.object(snuba.cli.subscriptions_executor, "configure_metrics")
@@ -22,9 +20,7 @@ from snuba.cli.subscriptions_scheduler_executor import subscriptions_scheduler_e
 @patch.object(snuba.cli.subscriptions_scheduler, "configure_metrics")
 # mock the builders, they are tested elsewhere
 @patch.object(snuba.cli.subscriptions_executor, "build_executor_consumer")
-@patch.object(
-    snuba.cli.subscriptions_scheduler_executor, "build_scheduler_executor_consumer"
-)
+@patch.object(snuba.cli.subscriptions_scheduler_executor, "build_scheduler_executor_consumer")
 @patch.object(snuba.cli.subscriptions_scheduler, "SchedulerBuilder")
 # mock signal handlers so other tests don't get affected
 @patch.object(snuba.cli.subscriptions_executor, "signal")

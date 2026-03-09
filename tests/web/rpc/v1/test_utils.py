@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any, Optional
 
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -11,7 +11,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     OrFilter,
     TraceItemFilter,
 )
-from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, TraceItem
+from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue, TraceItem
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -69,7 +69,24 @@ _DEFAULT_ATTRIBUTES = {
     "transaction.method": AnyValue(string_value="POST"),
     "transaction.op": AnyValue(string_value="http.server"),
     "user": AnyValue(string_value="ip:127.0.0.1"),
+    "i_am_an_array": AnyValue(
+        array_value=ArrayValue(
+            values=[
+                AnyValue(int_value=1),
+                AnyValue(bool_value=True),
+                AnyValue(double_value=3.0),
+                AnyValue(string_value="blah"),
+            ]
+        )
+    ),
 }
+
+# current UTC time rounded down to the start of the current hour, then minus 180 minutes.
+BASE_TIME = datetime.now(tz=timezone.utc).replace(
+    minute=0,
+    second=0,
+    microsecond=0,
+) - timedelta(minutes=180)
 
 
 def write_eap_item(
@@ -89,16 +106,24 @@ def write_eap_item(
         count: the number of these spans to write.
     """
 
+    def convert_attribute_value(value: Any) -> AnyValue:
+        if isinstance(value, str):
+            return AnyValue(string_value=value)
+        elif isinstance(value, int):
+            return AnyValue(int_value=value)
+        elif isinstance(value, bool):
+            return AnyValue(bool_value=value)
+        elif isinstance(value, float):
+            return AnyValue(double_value=value)
+        elif isinstance(value, list):
+            return AnyValue(
+                array_value=ArrayValue(values=[convert_attribute_value(v) for v in value])
+            )
+        return AnyValue()
+
     attributes: dict[str, AnyValue] = {}
     for key, value in raw_attributes.items():
-        if isinstance(value, str):
-            attributes[key] = AnyValue(string_value=value)
-        elif isinstance(value, int):
-            attributes[key] = AnyValue(int_value=value)
-        elif isinstance(value, bool):
-            attributes[key] = AnyValue(bool_value=value)
-        else:
-            attributes[key] = AnyValue(double_value=value)
+        attributes[key] = convert_attribute_value(value)
 
     write_raw_unprocessed_events(
         get_storage(StorageKey("eap_items")),  # type: ignore
@@ -301,3 +326,77 @@ def write_cross_item_data_to_storage(items: list[bytes]) -> None:
 
     storage = get_storage(StorageKey("eap_items"))
     write_raw_unprocessed_events(storage, items)  # type: ignore
+
+
+def track_storage_selections() -> tuple[list[StorageKey], Any]:
+    """
+    Context manager that tracks storage selections during query execution.
+    Returns a tuple of (storage_keys list, context manager).
+    """
+    from functools import wraps
+    from unittest.mock import patch
+
+    storage_keys: list[StorageKey] = []
+
+    from snuba.datasets.entities.storage_selectors.eap_items import (
+        EAPItemsStorageSelector,
+    )
+
+    original_select_storage = EAPItemsStorageSelector.select_storage
+
+    @wraps(original_select_storage)
+    def track_storage_selection(
+        self: Any, query: Any, query_settings: Any, storage_connections: Any
+    ) -> Any:
+        selected = original_select_storage(self, query, query_settings, storage_connections)
+        storage_keys.append(selected.storage.get_storage_key())
+        return selected
+
+    return storage_keys, patch.object(
+        EAPItemsStorageSelector,
+        "select_storage",
+        track_storage_selection,
+    )
+
+
+def create_mock_routing_decision(tier: Any, in_msg: Any) -> Any:
+    """
+    Create a real RoutingDecision with a mocked strategy.
+
+    Args:
+        tier: The sampling tier to use (e.g., Tier.TIER_8)
+        in_msg: The protobuf request message
+
+    Returns:
+        RoutingDecision object with mocked strategy
+    """
+    from unittest.mock import Mock
+
+    from snuba.utils.metrics.timer import Timer
+    from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+        RoutingContext,
+        RoutingDecision,
+    )
+
+    # Create a real RoutingContext
+    routing_context = RoutingContext(
+        timer=Timer("test"),
+        in_msg=in_msg,
+        query_id="test-query-id",
+    )
+
+    # Mock the strategy
+    mock_strategy = Mock()
+    mock_strategy.merge_clickhouse_settings = Mock(return_value={})
+    mock_strategy.after_execute = Mock()
+
+    # Create a real RoutingDecision with the mocked strategy
+    routing_decision = RoutingDecision(
+        routing_context=routing_context,
+        strategy=mock_strategy,
+        tier=tier,
+        can_run=True,
+        time_window=None,
+    )
+
+    return routing_decision

@@ -72,6 +72,7 @@ pub fn process_message_with_replacement(
                 rows: RowData::from_rows([row])?,
                 sentry_received_timestamp: None,
                 cogs_data: None,
+                item_type_metrics: None,
             }))
         }
         ("insert", None, _) => {

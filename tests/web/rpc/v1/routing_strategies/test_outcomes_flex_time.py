@@ -6,6 +6,7 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
+from sentry_relay.consts import DataCategory
 
 from snuba.utils.metrics.timer import Timer
 from snuba.web.rpc.common.pagination import FlexibleTimeWindowPageWithFilters
@@ -16,10 +17,7 @@ from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
     TimeWindow,
 )
-from tests.web.rpc.v1.routing_strategies.common import (
-    OutcomeCategory,
-    store_outcomes_data,
-)
+from tests.web.rpc.v1.routing_strategies.common import store_outcomes_data
 
 BASE_TIME = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(
     hours=24
@@ -33,7 +31,6 @@ def _get_request_meta(
     end: datetime,
     downsampled_storage_config: DownsampledStorageConfig | None = None,
 ) -> RequestMeta:
-
     return RequestMeta(
         project_ids=[_PROJECT_ID],
         organization_id=_ORG_ID,
@@ -52,9 +49,7 @@ def store_outcomes() -> None:
         time = BASE_TIME - timedelta(hours=hour)
         outcome_data.append((time, 10_000_000))
 
-    store_outcomes_data(
-        outcome_data, OutcomeCategory.LOG_ITEM, org_id=_ORG_ID, project_id=_PROJECT_ID
-    )
+    store_outcomes_data(outcome_data, DataCategory.LOG_ITEM, org_id=_ORG_ID, project_id=_PROJECT_ID)
 
 
 @pytest.mark.eap

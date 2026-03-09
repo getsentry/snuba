@@ -16,9 +16,7 @@ ConfigChange = TypedDict(
 )
 
 
-def get_config_type_from_value(
-    value: Optional[Union[str, int, float]]
-) -> Optional[str]:
+def get_config_type_from_value(value: Optional[Union[str, int, float]]) -> Optional[str]:
     if value is None:
         return None
 

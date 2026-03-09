@@ -31,13 +31,11 @@ from snuba.subscriptions.data import (
 from snuba.utils.metrics.timer import Timer
 from tests.subscriptions import BaseSubscriptionTest
 
-TESTS = [
+TESTS_EVENTS = [
     pytest.param(
         SnQLSubscriptionData(
             project_id=1,
-            query=(
-                "MATCH (events) SELECT count() AS count WHERE platform IN tuple('a') "
-            ),
+            query=("MATCH (events) SELECT count() AS count WHERE platform IN tuple('a') "),
             time_window_sec=500 * 60,
             resolution_sec=60,
             entity=get_entity(EntityKey.EVENTS),
@@ -62,7 +60,7 @@ TESTS = [
         ),
         10,
         None,
-        id="SnQL subscription",
+        id="SnQL subscription with join",
     ),
     pytest.param(
         SnQLSubscriptionData(
@@ -105,6 +103,9 @@ TESTS = [
         InvalidQueryException,
         id="SnQL subscription with disallowed clause",
     ),
+]
+
+TESTS_EAP = [
     pytest.param(
         RPCSubscriptionData.from_proto(
             CreateSubscriptionRequestProto(
@@ -119,9 +120,7 @@ TESTS = [
                     aggregations=[
                         AttributeAggregation(
                             aggregate=Function.FUNCTION_COUNT,
-                            key=AttributeKey(
-                                type=AttributeKey.TYPE_FLOAT, name="my.float.field"
-                            ),
+                            key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="my.float.field"),
                             label="count",
                             extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                         ),
@@ -150,9 +149,7 @@ TESTS = [
                     aggregations=[
                         AttributeAggregation(
                             aggregate=Function.FUNCTION_COUNT,
-                            key=AttributeKey(
-                                type=AttributeKey.TYPE_FLOAT, name="my.float.field"
-                            ),
+                            key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="my.float.field"),
                             label="count",
                             extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                         ),
@@ -213,10 +210,21 @@ class TestBuildRequestBase:
 
 
 class TestBuildRequest(BaseSubscriptionTest, TestBuildRequestBase):
-    @pytest.mark.parametrize("subscription, expected_value, exception", TESTS)
-    @pytest.mark.clickhouse_db
+    @pytest.mark.parametrize("subscription, expected_value, exception", TESTS_EVENTS)
+    @pytest.mark.events_db
     @pytest.mark.redis_db
     def test_conditions(
+        self,
+        subscription: SubscriptionData,
+        expected_value: Optional[int | float],
+        exception: Optional[Type[Exception]],
+    ) -> None:
+        self.compare_conditions(subscription, exception, "count", expected_value)
+
+    @pytest.mark.parametrize("subscription, expected_value, exception", TESTS_EAP)
+    @pytest.mark.eap
+    @pytest.mark.redis_db
+    def test_conditions_eap(
         self,
         subscription: SubscriptionData,
         expected_value: Optional[int | float],

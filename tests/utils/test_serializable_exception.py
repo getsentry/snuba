@@ -52,9 +52,7 @@ def test_from_standard_exception() -> None:
 
 
 def test_subclass_deserialization() -> None:
-    deserialized_sub_exception = SerializableException.from_dict(
-        MySubException().to_dict()
-    )
+    deserialized_sub_exception = SerializableException.from_dict(MySubException().to_dict())
     assert isinstance(deserialized_sub_exception, MyException)
 
 
@@ -65,14 +63,8 @@ def test_sentry_integration() -> None:
     try:
         raise ex
     except SerializableException as e:
-        assert (
-            single_exception_from_error_tuple(MySubException, e, tb=None)["value"]
-            == "message"
-        )
+        assert single_exception_from_error_tuple(MySubException, e, tb=None)["value"] == "message"
     try:
         raise SerializableException.from_dict(ex.to_dict())
     except SerializableException as e2:
-        assert (
-            single_exception_from_error_tuple(MySubException, e2, tb=None)["value"]
-            == "message"
-        )
+        assert single_exception_from_error_tuple(MySubException, e2, tb=None)["value"] == "message"

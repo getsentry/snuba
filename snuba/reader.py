@@ -70,9 +70,7 @@ T = TypeVar("T")
 R = TypeVar("R")
 
 
-def transform_nullable(
-    function: Callable[[T], R]
-) -> Callable[[Optional[T]], Optional[R]]:
+def transform_nullable(function: Callable[[T], R]) -> Callable[[Optional[T]], Optional[R]]:
     def transform_column(value: Optional[T]) -> Optional[R]:
         if value is None:
             return value

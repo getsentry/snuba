@@ -24,16 +24,18 @@ use crate::config;
 use crate::metrics::global_tags::set_global_tag;
 use crate::processors::{self, get_cogs_label};
 use crate::strategies::accountant::RecordCogs;
+use crate::strategies::clickhouse::row_binary_writer::ClickhouseRowBinaryWriterStep;
 use crate::strategies::clickhouse::writer_v2::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
 use crate::strategies::healthcheck::HealthCheck as SnubaHealthCheck;
 use crate::strategies::join_timeout::SetJoinTimeout;
 use crate::strategies::processor::{
-    get_schema, make_rust_processor, make_rust_processor_with_replacements, validate_schema,
+    get_schema, make_rust_processor, make_rust_processor_row_binary,
+    make_rust_processor_with_replacements, validate_schema,
 };
 use crate::strategies::python::PythonTransformStep;
 use crate::strategies::replacements::ProduceReplacements;
-use crate::types::{BytesInsertBatch, CogsData, RowData};
+use crate::types::{BytesInsertBatch, CogsData, RowData, TypedInsertBatch};
 
 pub struct ConsumerStrategyFactoryV2 {
     pub storage_config: config::StorageConfig,
@@ -59,6 +61,7 @@ pub struct ConsumerStrategyFactoryV2 {
     pub batch_write_timeout: Option<Duration>,
     pub join_timeout_ms: Option<u64>,
     pub health_check: String,
+    pub use_row_binary: bool,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
@@ -82,6 +85,22 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
     }
 
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
+        if self.use_row_binary {
+            return match self
+                .storage_config
+                .message_processor
+                .python_class_name
+                .as_str()
+            {
+                "EAPItemsProcessor" => self.create_row_binary_pipeline(
+                    crate::processors::eap_items::process_message_row_binary,
+                ),
+                name => panic!("RowBinary not supported for processor: {name}"),
+            };
+        }
+
+        // ---- Existing JSONEachRow path (unchanged below this line) ----
+
         // Commit offsets
         let next_step = CommitOffsets::new(Duration::from_secs(1));
 
@@ -148,7 +167,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             }),
             self.max_batch_size,
             self.max_batch_time,
-            BytesInsertBatch::len,
+            |batch: &BytesInsertBatch<RowData>| batch.len(),
             // we need to enable this to deal with storages where we skip 100% of values, such as
             // gen-metrics-gauges in s4s. we still need to commit there
         )
@@ -247,6 +266,118 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                 } else {
                     Box::new(HealthCheck::new(next_step, path))
                 }
+            }
+        } else {
+            Box::new(next_step)
+        }
+    }
+}
+
+impl ConsumerStrategyFactoryV2 {
+    fn create_row_binary_pipeline<
+        T: clickhouse::Row + serde::Serialize + Clone + Send + Sync + 'static,
+    >(
+        &self,
+        func: fn(
+            KafkaPayload,
+            crate::types::KafkaMessageMetadata,
+            &config::ProcessorConfig,
+        ) -> anyhow::Result<TypedInsertBatch<T>>,
+    ) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
+        // Commit offsets
+        let next_step = CommitOffsets::new(Duration::from_secs(1));
+
+        let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<()>>> =
+            if let Some((ref producer, destination)) = self.commit_log_producer {
+                Box::new(ProduceCommitLog::new(
+                    next_step,
+                    producer.clone(),
+                    destination,
+                    self.physical_topic_name,
+                    self.physical_consumer_group.clone(),
+                    &self.commitlog_concurrency,
+                    false,
+                ))
+            } else {
+                Box::new(next_step)
+            };
+
+        let cogs_label = get_cogs_label(&self.storage_config.message_processor.python_class_name);
+
+        let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<()>>> =
+            match (self.env_config.record_cogs, cogs_label) {
+                (true, Some(resource_id)) => Box::new(RecordCogs::new(
+                    next_step,
+                    resource_id,
+                    self.accountant_topic_config.broker_config.clone(),
+                    &self.accountant_topic_config.physical_topic_name,
+                )),
+                _ => Box::new(next_step),
+            };
+
+        let next_step = SetJoinTimeout::new(
+            next_step,
+            Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
+        );
+
+        let next_step = ClickhouseRowBinaryWriterStep::<T, _>::new(
+            next_step,
+            self.storage_config.clickhouse_cluster.clone(),
+            self.storage_config.clickhouse_table_name.clone(),
+            &self.clickhouse_concurrency,
+        );
+
+        let accumulator = Arc::new(
+            |batch: BytesInsertBatch<Vec<T>>, small_batch: Message<BytesInsertBatch<Vec<T>>>| {
+                Ok(batch.merge(small_batch.into_payload()))
+            },
+        );
+
+        let next_step = Reduce::new(
+            next_step,
+            accumulator,
+            Arc::new(move || {
+                BytesInsertBatch::<Vec<T>>::new(
+                    Vec::new(),
+                    None,
+                    None,
+                    None,
+                    Default::default(),
+                    CogsData::default(),
+                )
+            }),
+            self.max_batch_size,
+            self.max_batch_time,
+            |batch: &BytesInsertBatch<Vec<T>>| batch.len(),
+        )
+        .flush_empty_batches(true);
+
+        let next_step = make_rust_processor_row_binary(
+            next_step,
+            func,
+            &self.logical_topic_name,
+            self.enforce_schema,
+            &self.processing_concurrency,
+            config::ProcessorConfig {
+                env_config: self.env_config.clone(),
+            },
+            self.stop_at_timestamp,
+        );
+
+        let next_step = SetJoinTimeout::new(
+            next_step,
+            Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
+        );
+
+        if let Some(path) = &self.health_check_file {
+            if self.health_check == "snuba" {
+                tracing::info!(
+                    "Using Snuba HealthCheck for consumer group: {}",
+                    self.physical_consumer_group
+                );
+                Box::new(SnubaHealthCheck::new(next_step, path))
+            } else {
+                Box::new(HealthCheck::new(next_step, path))
             }
         } else {
             Box::new(next_step)

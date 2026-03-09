@@ -28,9 +28,7 @@ def resolve(value: str, mapping: dict[str, str | int]) -> str | int:
     raise InvalidQueryException(f"Could not resolve {value}")
 
 
-def resolve_tag_column_name(
-    value: str, mapping: dict[str, str | int], dataset: Dataset
-) -> str:
+def resolve_tag_column_name(value: str, mapping: dict[str, str | int], dataset: Dataset) -> str:
     if get_dataset_name(dataset) == "metrics":
         return f"tags[{resolve(value, mapping)}]"
     else:
@@ -44,9 +42,7 @@ def resolve_tag_key_mappings(
 ) -> None:
     def resolve_tag_column(exp: Expression) -> Expression:
         if isinstance(exp, Column) and exp.column_name in indexer_mapping:
-            column_name = resolve_tag_column_name(
-                exp.column_name, indexer_mapping, dataset
-            )
+            column_name = resolve_tag_column_name(exp.column_name, indexer_mapping, dataset)
             return replace(exp, column_name=column_name)
         return exp
 
@@ -64,14 +60,10 @@ def resolve_tag_key_mappings(
             left = join_cond.left
             right = join_cond.right
             if left.column in indexer_mapping:
-                resolved_name = resolve_tag_column_name(
-                    left.column, indexer_mapping, dataset
-                )
+                resolved_name = resolve_tag_column_name(left.column, indexer_mapping, dataset)
                 left = JoinConditionExpression(left.table_alias, resolved_name)
             if right.column in indexer_mapping:
-                resolved_name = resolve_tag_column_name(
-                    right.column, indexer_mapping, dataset
-                )
+                resolved_name = resolve_tag_column_name(right.column, indexer_mapping, dataset)
                 right = JoinConditionExpression(right.table_alias, resolved_name)
             new_join_cond = JoinCondition(left, right)
             keys.append(new_join_cond)

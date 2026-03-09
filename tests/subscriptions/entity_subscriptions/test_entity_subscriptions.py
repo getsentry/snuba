@@ -18,13 +18,9 @@ TESTS = [
     pytest.param(
         EntityKey.EVENTS,
         Query(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
-                SelectedExpression(
-                    "time", Column("_snuba_timestamp", None, "timestamp")
-                ),
+                SelectedExpression("time", Column("_snuba_timestamp", None, "timestamp")),
             ],
             condition=binary_condition(
                 "equals",
@@ -45,9 +41,7 @@ TESTS = [
                 get_entity(EntityKey.TRANSACTIONS).get_data_model(),
             ),
             selected_columns=[
-                SelectedExpression(
-                    "time", Column("_snuba_timestamp", None, "timestamp")
-                ),
+                SelectedExpression("time", Column("_snuba_timestamp", None, "timestamp")),
             ],
             condition=binary_condition(
                 "equals",
@@ -68,9 +62,7 @@ TESTS = [
                 get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
-                SelectedExpression(
-                    "time", Column("_snuba_timestamp", None, "timestamp")
-                ),
+                SelectedExpression("time", Column("_snuba_timestamp", None, "timestamp")),
             ],
             condition=binary_condition(
                 "equals",
@@ -91,9 +83,7 @@ TESTS = [
                 get_entity(EntityKey.METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
-                SelectedExpression(
-                    "time", Column("_snuba_timestamp", None, "timestamp")
-                ),
+                SelectedExpression("time", Column("_snuba_timestamp", None, "timestamp")),
             ],
             condition=binary_condition(
                 "equals",
@@ -114,9 +104,7 @@ TESTS = [
                 get_entity(EntityKey.METRICS_SETS).get_data_model(),
             ),
             selected_columns=[
-                SelectedExpression(
-                    "time", Column("_snuba_timestamp", None, "timestamp")
-                ),
+                SelectedExpression("time", Column("_snuba_timestamp", None, "timestamp")),
             ],
             condition=binary_condition(
                 "equals",
@@ -137,9 +125,7 @@ TESTS = [
                 get_entity(EntityKey.METRICS_SETS).get_data_model(),
             ),
             selected_columns=[
-                SelectedExpression(
-                    "time", Column("_snuba_timestamp", None, "timestamp")
-                ),
+                SelectedExpression("time", Column("_snuba_timestamp", None, "timestamp")),
             ],
             condition=binary_condition(
                 "equals",
@@ -177,9 +163,7 @@ def test_entity_subscription_processors(
                     new_condition = query.get_condition()
                     assert isinstance(new_condition, FunctionCall)
                     assert len(new_condition.parameters) == 2
-                    assert processor.to_dict(metadata) == {
-                        processor.extra_condition_data_key: 1
-                    }
+                    assert processor.to_dict(metadata) == {processor.extra_condition_data_key: 1}
 
 
 @pytest.mark.parametrize("entity_key, query, metadata, exception, offset", TESTS)

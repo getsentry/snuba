@@ -358,6 +358,7 @@ query_processors:
         },
     },
     { processor: BasicFunctionsProcessor },
+    { processor: DummyHandledFunctionsProcessor },
     { processor: ApdexProcessor },
     { processor: FailureRateProcessor },
     {

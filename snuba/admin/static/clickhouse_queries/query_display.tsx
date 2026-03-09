@@ -4,18 +4,10 @@ import { Collapse } from "SnubaAdmin/collapse";
 import QueryEditor from "SnubaAdmin/query_editor";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
 import QueryResultCopier from "SnubaAdmin/utils/query_result_copier";
-
-import { SelectItem, Switch, Alert } from "@mantine/core";
-import { Prism } from "@mantine/prism";
-import { RichTextEditor } from "@mantine/tiptap";
-import { useEditor } from "@tiptap/react";
-import HardBreak from "@tiptap/extension-hard-break";
-import Placeholder from "@tiptap/extension-placeholder";
-import StarterKit from "@tiptap/starter-kit";
+import { Switch } from "@mantine/core";
 import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
 import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
-import { Collapse as MantineCollapse, Group, Text } from '@mantine/core';
-import { IconChevronDown, IconChevronRight } from '@tabler/icons-react';
+import { getHostsForStorage, getErrorDomElement } from "SnubaAdmin/utils/clickhouse_node_utils";
 
 import {
   ClickhouseNodeData,
@@ -73,6 +65,25 @@ function QueryDisplay(props: {
     });
   }
 
+  function setClusterlessHost(value: boolean) {
+    setQuery((prevQuery) => {
+      return {
+        ...prevQuery,
+        clusterless: value,
+      };
+    });
+  }
+
+  function selectHostIp(hostStringIP: string) {
+    setQuery((prevQuery) => {
+      return {
+        ...prevQuery,
+        host: hostStringIP,
+        port: 9000,
+      };
+    });
+  }
+
   function selectHost(hostString: string) {
     const [host, portAsString] = hostString.split(":");
 
@@ -105,65 +116,6 @@ function QueryDisplay(props: {
       });
   }
 
-  function getHosts(nodeData: ClickhouseNodeData[]): SelectItem[] {
-    let node_info = nodeData.find((el) => el.storage_name === query.storage)!;
-    // populate the hosts entries marking distributed hosts that are not also local
-    if (node_info) {
-      let local_hosts = node_info.local_nodes.map((node) => ({
-        value: `${node.host}:${node.port}`,
-        label: `${node.host}:${node.port}`,
-      }));
-      let dist_hosts = node_info.dist_nodes
-        .filter((node) => !node_info.local_nodes.includes(node))
-        .map((node) => ({
-          value: `${node.host}:${node.port}`,
-          label: `${node.host}:${node.port} (distributed)`,
-        }));
-      let hosts = local_hosts.concat(dist_hosts);
-      let query_node = node_info.query_node;
-      if (query_node) {
-        hosts.push({
-          value: `${query_node.host}:${query_node.port}`,
-          label: `${query_node.host}:${query_node.port} (query node)`,
-        });
-      }
-      return hosts;
-    }
-    return [];
-  }
-
-  function getErrorDomElement() {
-    if (queryError !== null) {
-      let title: string;
-      let bodyDOM;
-      if (queryError.name === "Error" && queryError.message.includes("Stack trace:")) {
-        // this puts the stack trace in a collapsible section
-        const split = queryError.message.indexOf("Stack trace:")
-        title = queryError.message.slice(0, split)
-
-        const stackTrace = queryError.message.slice(split + "Stack trace:".length)
-          .split("\n").map((line) => <React.Fragment>{line}< br /></React.Fragment>)
-        bodyDOM = <div>
-          <Group spacing="xs" onClick={() => setCollapseOpened((o) => !o)} style={{ cursor: 'pointer' }}>
-            {collapseOpened ? <IconChevronDown size={16} /> : <IconChevronRight size={16} />}
-            <Text weight={500}>Stack Trace</Text>
-          </Group>
-
-          <MantineCollapse in={collapseOpened}>
-            <Text mt="sm">
-              {stackTrace}
-            </Text>
-          </MantineCollapse>
-        </div>
-      } else {
-        title = queryError.name
-        bodyDOM = queryError.message.split("\n").map((line) => <React.Fragment>{line}< br /></React.Fragment>)
-      }
-      return <Alert title={title} color="red">{bodyDOM}</Alert>;
-    }
-    return "";
-  }
-
   function handleQueryError(error: Error) {
     setQueryError(error);
   }
@@ -183,7 +135,7 @@ function QueryDisplay(props: {
     <div>
       <form style={query.sudo ? sudoForm : standardForm}>
         <h2>Construct a ClickHouse System Query</h2>
-        <div>
+        <div style={switchStyle}>
           <Switch
             checked={query.sudo}
             onChange={(evt: React.ChangeEvent<HTMLInputElement>) =>
@@ -194,6 +146,17 @@ function QueryDisplay(props: {
             size="xl"
           />
         </div>
+        <div style={switchStyle}>
+          <Switch
+            checked={query.clusterless}
+            onChange={(evt: React.ChangeEvent<HTMLInputElement>) =>
+              setClusterlessHost(evt.currentTarget.checked)
+            }
+            onLabel="Manual Host Entry"
+            offLabel="Auto Populate Nodes"
+            size="xl"
+          />
+        </div>
         <QueryEditor
           onQueryUpdate={(sql) => {
             updateQuerySql(sql);
@@ -201,23 +164,42 @@ function QueryDisplay(props: {
           predefinedQueryOptions={props.predefinedQueryOptions}
         />
         <div style={executeActionsStyle}>
-          <div>
-            <CustomSelect
-              value={query.storage || ""}
-              onChange={selectStorage}
-              name="storage"
-              options={nodeData.map((storage) => storage.storage_name)}
-            />
-            <CustomSelect
-              disabled={!query.storage}
-              value={
-                query.host && query.port ? `${query.host}:${query.port}` : ""
-              }
-              onChange={selectHost}
-              name="Host"
-              options={getHosts(nodeData)}
-            />
-          </div>
+          {query.clusterless ?
+            (<div style={hostSelectStyle}>
+              <CustomSelect
+                value={query.storage || ""}
+                onChange={selectStorage}
+                name="storage"
+                options={nodeData.map((storage) => storage.storage_name)}
+              />
+              <input
+                style={inputStyle}
+                id="clusterless"
+                value={query.host || ""}
+                onChange={(evt) => selectHostIp(evt.target.value)}
+                name="host"
+                placeholder="enter host ip..."
+                type="text"
+              />
+            </div>) : (
+              <div style={hostSelectStyle}>
+                <CustomSelect
+                  value={query.storage || ""}
+                  onChange={selectStorage}
+                  name="storage"
+                  options={nodeData.map((storage) => storage.storage_name)}
+                />
+                <CustomSelect
+                  disabled={!query.storage}
+                  value={
+                    query.host && query.port ? `${query.host}:${query.port}` : ""
+                  }
+                  onChange={selectHost}
+                  name="Host"
+                  options={getHostsForStorage(nodeData, query.storage)}
+                />
+              </div>
+            )}
           <div>
             <ExecuteButton
               onError={handleQueryError}
@@ -230,7 +212,7 @@ function QueryDisplay(props: {
         </div>
       </form>
       <div>
-        {getErrorDomElement()}
+        {getErrorDomElement(queryError, collapseOpened, setCollapseOpened)}
       </div>
       <div>
         <h2>Query results</h2>
@@ -271,6 +253,25 @@ const sudoForm = {
 
 const standardForm = {};
 
+const switchStyle = {
+  margin: '8px 0px',
+};
+
+const hostSelectStyle = {
+  width: '20em',
+  height: '4em',
+  margin: '8px 0px',
+  display: 'flex',
+  flexDirection: 'column' as const,
+  justifyContent: 'space-between',
+  // padding: "4px 20px",
+}
+
+const inputStyle = {
+  fontSize: 16,
+  minHeight: '2.25rem',
+}
+
 const executeActionsStyle = {
   display: "flex",
   justifyContent: "space-between",
@@ -286,49 +287,6 @@ const executeButtonStyle = {
 const selectStyle = {
   marginRight: 8,
   height: 30,
-};
-
-function TextArea(props: {
-  value: string;
-  onChange: (nextValue: string) => void;
-}) {
-  const { value, onChange } = props;
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Placeholder.configure({
-        placeholder: "Write your query here.",
-      }),
-      HardBreak.extend({
-        addKeyboardShortcuts() {
-          return {
-            Enter: () => this.editor.commands.setHardBreak(),
-          };
-        },
-      }),
-    ],
-    content: `${value}`,
-    onUpdate({ editor }) {
-      onChange(editor.getText());
-    },
-  });
-  return (
-    <div>
-      <RichTextEditor editor={editor}>
-        <RichTextEditor.Content />
-      </RichTextEditor>
-      <Prism withLineNumbers language="sql">
-        {value || ""}
-      </Prism>
-    </div>
-  );
-}
-
-const queryDescription = {
-  minHeight: 10,
-  width: "auto",
-  fontSize: 16,
-  padding: "10px 5px",
 };
 
 export default QueryDisplay;

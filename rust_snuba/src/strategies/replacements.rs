@@ -126,7 +126,7 @@ impl ProcessingStrategy<InsertOrReplacement<BytesInsertBatch<RowData>>> for Prod
 mod tests {
     use super::*;
     use crate::testutils::{MockProducer, TestStrategy};
-    use crate::types::{CogsData, CommitLogOffsets, RowData};
+    use crate::types::RowData;
     use crate::types::{InsertOrReplacement, ReplacementData};
     use chrono::Utc;
     use std::collections::BTreeMap;
@@ -149,14 +149,10 @@ mod tests {
 
         strategy
             .submit(Message::new_any_message(
-                InsertOrReplacement::Insert(BytesInsertBatch::new(
-                    RowData::from_rows(row_data).unwrap(),
-                    Some(Utc::now()),
-                    None,
-                    None,
-                    CommitLogOffsets::default(),
-                    CogsData::default(),
-                )),
+                InsertOrReplacement::Insert(
+                    BytesInsertBatch::from_rows(RowData::from_rows(row_data).unwrap())
+                        .with_message_timestamp(Utc::now()),
+                ),
                 BTreeMap::new(),
             ))
             .unwrap();

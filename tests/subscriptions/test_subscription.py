@@ -47,9 +47,7 @@ TESTS_CREATE = [
     pytest.param(
         SnQLSubscriptionData(
             project_id=123,
-            query=(
-                "MATCH (events) SELECT count() AS count WHERE platform IN tuple('a')"
-            ),
+            query=("MATCH (events) SELECT count() AS count WHERE platform IN tuple('a')"),
             time_window_sec=10 * 60,
             resolution_sec=60,
             entity=get_entity(EntityKey.EVENTS),
@@ -63,9 +61,7 @@ TESTS_INVALID = [
     pytest.param(
         SnQLSubscriptionData(
             project_id=123,
-            query=(
-                "MATCH (events) SELECT count() AS count WHERE platfo IN tuple('a') "
-            ),
+            query=("MATCH (events) SELECT count() AS count WHERE platfo IN tuple('a') "),
             time_window_sec=10 * 60,
             resolution_sec=60,
             entity=get_entity(EntityKey.EVENTS),
@@ -80,7 +76,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
     timer = Timer("test")
 
     @pytest.mark.parametrize("subscription", TESTS_CREATE)
-    @pytest.mark.clickhouse_db
+    @pytest.mark.events_db
     @pytest.mark.redis_db
     def test(self, subscription: SubscriptionData) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
@@ -98,7 +94,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
         )
 
     @pytest.mark.parametrize("subscription", TESTS_INVALID)
-    @pytest.mark.clickhouse_db
+    @pytest.mark.events_db
     @pytest.mark.redis_db
     def test_invalid_condition_column(self, subscription: SubscriptionData) -> None:
         override_entity_column_validator(EntityKey.EVENTS, ColumnValidationMode.ERROR)
@@ -109,7 +105,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                 self.timer,
             )
 
-    @pytest.mark.clickhouse_db
+    @pytest.mark.events_db
     @pytest.mark.redis_db
     def test_invalid_aggregation(self) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
@@ -126,7 +122,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                 self.timer,
             )
 
-    @pytest.mark.clickhouse_db
+    @pytest.mark.events_db
     def test_invalid_time_window(self) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         with raises(InvalidSubscriptionError):
@@ -173,7 +169,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                 self.timer,
             )
 
-    @pytest.mark.clickhouse_db
+    @pytest.mark.events_db
     def test_invalid_resolution(self) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         with raises(InvalidSubscriptionError):
@@ -295,9 +291,7 @@ class TestMetricsCountersSubscriptionCreator:
 
     @pytest.mark.parametrize("subscription", TESTS_INVALID_METRICS)
     @pytest.mark.clickhouse_db
-    def test_missing_conditions_for_groupby_clause(
-        self, subscription: SubscriptionData
-    ) -> None:
+    def test_missing_conditions_for_groupby_clause(self, subscription: SubscriptionData) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.METRICS_COUNTERS)
         with raises(InvalidQueryException):
             creator.create(
@@ -307,7 +301,7 @@ class TestMetricsCountersSubscriptionCreator:
 
 
 class TestSubscriptionDeleter(BaseSubscriptionTest):
-    @pytest.mark.clickhouse_db
+    @pytest.mark.events_db
     @pytest.mark.redis_db
     def test(self) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
@@ -332,9 +326,7 @@ class TestSubscriptionDeleter(BaseSubscriptionTest):
             == subscription
         )
 
-        SubscriptionDeleter(self.entity_key, identifier.partition).delete(
-            identifier.uuid
-        )
+        SubscriptionDeleter(self.entity_key, identifier.partition).delete(identifier.uuid)
         assert (
             RedisSubscriptionDataStore(
                 get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
@@ -351,7 +343,7 @@ class TestRPCSubscriptionCreator:
     def setup_method(self) -> None:
         self.dataset = get_dataset("events_analytics_platform")
 
-    @pytest.mark.clickhouse_db
+    @pytest.mark.eap
     @pytest.mark.redis_db
     def test_rpc_subscription_creator(self) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.EAP_ITEMS)
@@ -368,9 +360,7 @@ class TestRPCSubscriptionCreator:
                     aggregations=[
                         AttributeAggregation(
                             aggregate=Function.FUNCTION_SUM,
-                            key=AttributeKey(
-                                type=AttributeKey.TYPE_FLOAT, name="test_metric"
-                            ),
+                            key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
                             label="sum",
                             extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                         ),
@@ -400,3 +390,33 @@ class TestRPCSubscriptionCreator:
             )[0][1]
             == subscription
         )
+
+    @pytest.mark.eap
+    @pytest.mark.redis_db
+    def test_rpc_subscription_unspecified_extrapolation_mode(self) -> None:
+        creator = SubscriptionCreator(self.dataset, EntityKey.EAP_ITEMS)
+        subscription = RPCSubscriptionData.from_proto(
+            CreateSubscriptionRequestProto(
+                time_series_request=TimeSeriesRequest(
+                    meta=RequestMeta(
+                        project_ids=[1],
+                        organization_id=1,
+                        cogs_category="something",
+                        referrer="something",
+                        trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    ),
+                    aggregations=[
+                        AttributeAggregation(
+                            aggregate=Function.FUNCTION_SUM,
+                            key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                            label="sum",
+                        ),
+                    ],
+                ),
+                time_window_secs=300,
+                resolution_secs=60,
+            ),
+            EntityKey.EAP_ITEMS,
+        )
+        with raises(InvalidSubscriptionError):
+            creator.create(subscription, self.timer)

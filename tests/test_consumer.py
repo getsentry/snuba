@@ -39,9 +39,7 @@ def test_streaming_consumer_strategy(tmpdir: Path) -> None:
     messages = (
         Message(
             BrokerValue(
-                KafkaPayload(
-                    None, json.dumps(get_raw_error_message()).encode("utf-8"), []
-                ),
+                KafkaPayload(None, json.dumps(get_raw_error_message()).encode("utf-8"), []),
                 Partition(Topic("events"), 0),
                 i,
                 datetime.now(),
@@ -65,9 +63,7 @@ def test_streaming_consumer_strategy(tmpdir: Path) -> None:
 
     def write_step() -> ProcessedMessageBatchWriter:
         return ProcessedMessageBatchWriter(
-            insert_batch_writer=InsertBatchWriter(
-                writer, MetricsWrapper(metrics, "insertions")
-            ),
+            insert_batch_writer=InsertBatchWriter(writer, MetricsWrapper(metrics, "insertions")),
             replacement_batch_writer=ReplacementBatchWriter(
                 replacements_producer, Topic("replacements")
             ),
@@ -76,9 +72,7 @@ def test_streaming_consumer_strategy(tmpdir: Path) -> None:
     health_check_file = tmpdir / "health.txt"
     factory = KafkaConsumerStrategyFactory(
         None,
-        functools.partial(
-            process_message, processor, "consumer_group", SnubaTopic.EVENTS, True
-        ),
+        functools.partial(process_message, processor, "consumer_group", SnubaTopic.EVENTS, True),
         write_step,
         max_batch_size=10,
         max_batch_time=60,

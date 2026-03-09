@@ -15,7 +15,9 @@ class SentryDatadogMetricsBackend(MetricsBackend):
     """
 
     def __init__(
-        self, datadog: DatadogMetricsBackend, sentry: SentryMetricsBackend
+        self,
+        datadog: DatadogMetricsBackend,
+        sentry: SentryMetricsBackend,
     ) -> None:
         self.datadog = datadog
         self.sentry = sentry
@@ -56,7 +58,11 @@ class SentryDatadogMetricsBackend(MetricsBackend):
         tags: Tags | None = None,
         unit: str | None = None,
     ) -> None:
-        self.datadog.timing(name, value, tags, unit)
+        # Note (Volo) 12/15/2025: timing metrics were originally written to veneur which
+        # would then calculate percentiles. These would be saved as histograms in datadog
+        # datadog now supports direct aggregations of percentiles using distribution metrics
+        # so we send our timings using a distribution metric
+        self.datadog.distribution(f"{name}.distribution", value, tags, unit)
         if self._use_sentry():
             self.sentry.timing(name, value, tags, unit)
 

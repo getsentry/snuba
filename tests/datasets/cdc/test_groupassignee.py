@@ -162,9 +162,7 @@ class TestGroupassignee:
     def test_messages(self) -> None:
         processor = GroupAssigneeProcessor()
 
-        metadata = KafkaMessageMetadata(
-            offset=42, partition=0, timestamp=datetime(1970, 1, 1)
-        )
+        metadata = KafkaMessageMetadata(offset=42, partition=0, timestamp=datetime(1970, 1, 1))
 
         ret = processor.process_message(self.INSERT_MSG, metadata)
         assert ret == InsertBatch(
@@ -218,9 +216,7 @@ class TestGroupassignee:
                 "team_id": "",
             }
         )
-        write_processed_messages(
-            self.storage, [InsertBatch([row.to_clickhouse()], None)]
-        )
+        write_processed_messages(self.storage, [InsertBatch([row.to_clickhouse()], None)])
         ret = (
             self.storage.get_cluster()
             .get_query_connection(ClickhouseClientSettings.QUERY)

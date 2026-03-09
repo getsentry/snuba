@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, TypedDict, cast
+from typing import Any, Dict, Mapping, TypedDict, cast
 
 from snuba.reader import Column, Result, Row, transform_rows
 from snuba.utils.serializable_exception import JsonSerializable, SerializableException
 
 
 class QueryExtraData(TypedDict):
-    stats: Mapping[str, Any]
+    stats: Dict[str, Any]
     sql: str
     experiments: Mapping[str, Any]
 
@@ -36,7 +36,6 @@ class QueryException(SerializableException):
     def from_args(
         cls, exception_type: str, message: str, extra: QueryExtraData
     ) -> "QueryException":
-
         return cls(
             exception_type=exception_type,
             message=message,
@@ -70,9 +69,7 @@ class QueryResult:
         return self.extra.get("stats", {}).get("quota_allowance", {})
 
 
-def transform_column_names(
-    result: QueryResult, mapping: Mapping[str, list[str]]
-) -> None:
+def transform_column_names(result: QueryResult, mapping: Mapping[str, list[str]]) -> None:
     """
     Replaces the column names in a ResultSet object in place.
     """

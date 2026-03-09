@@ -69,9 +69,7 @@ test_cases = [
         ],
         join_clause(
             "d",
-            join_clause(
-                "t", join_clause("ev", "events", "t:transactions"), "d:discover"
-            ),
+            join_clause("t", join_clause("ev", "events", "t:transactions"), "d:discover"),
             "or:outcomes_raw",
         ),
         id="depth=3",
@@ -84,9 +82,7 @@ test_cases = [
         ],
         join_clause(
             "d",
-            join_clause(
-                "t", join_clause("ev", "events", "t:transactions"), "d:discover"
-            ),
+            join_clause("t", join_clause("ev", "events", "t:transactions"), "d:discover"),
             "or:outcomes_raw",
         ),
         id="depth=3 bottom-up",
@@ -99,9 +95,7 @@ test_cases = [
         ],
         join_clause(
             "d",
-            join_clause(
-                "t", join_clause("ev", "events", "t:transactions"), "d:discover"
-            ),
+            join_clause("t", join_clause("ev", "events", "t:transactions"), "d:discover"),
             "or:outcomes_raw",
         ),
         id="depth=3 orphan",
@@ -119,9 +113,7 @@ test_cases = [
         ],
         join_clause(
             "ev",
-            join_clause(
-                "ev", join_clause("ev", "events", "or:outcomes_raw"), "d:discover"
-            ),
+            join_clause("ev", join_clause("ev", "events", "or:outcomes_raw"), "d:discover"),
             "t:transactions",
         ),
         id="breadth=3",
@@ -178,9 +170,7 @@ test_cases = [
         ],
         join_clause(
             "d",
-            join_clause(
-                "t", join_clause("ev", "events", "t:transactions"), "d:discover"
-            ),
+            join_clause("t", join_clause("ev", "events", "t:transactions"), "d:discover"),
             "ev:events",
         ),
         id="depth=3 cycle",
@@ -193,9 +183,7 @@ test_cases = [
         ],
         join_clause(
             "ev",
-            join_clause(
-                "d", join_clause("t", "transactions", "d:discover"), "ev:events"
-            ),
+            join_clause("d", join_clause("t", "transactions", "d:discover"), "ev:events"),
             "t:transactions",
         ),
         id="depth=3 cycle",
@@ -204,9 +192,7 @@ test_cases = [
 
 
 @pytest.mark.parametrize("clauses, expected", test_cases)
-def test_joins(
-    clauses: Sequence[Tuple[str, str]], expected: JoinClause[QueryEntity]
-) -> None:
+def test_joins(clauses: Sequence[Tuple[str, str]], expected: JoinClause[QueryEntity]) -> None:
     relationships = []
 
     for clause in clauses:

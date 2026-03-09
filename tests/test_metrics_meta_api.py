@@ -29,7 +29,7 @@ def get_tags() -> Generator[Mapping[str, str], None, None]:
         idx += 1
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.genmetrics_db
 @pytest.mark.redis_db
 class TestGenericMetricsApiSets(BaseApiTest):
     @pytest.fixture
@@ -56,7 +56,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
         self,
         test_storage_set: StorageKey,
         test_metric_type: InputType,
-        clickhouse_db: None,
+        genmetrics_db: None,
         _build_snql_post_methods: Callable[[str], Any],
     ) -> None:
         self.post = _build_snql_post_methods
@@ -96,8 +96,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
                         "metric_id": metric_id,
                         "retention_days": RETENTION_DAYS,
                         "use_case_id": self.use_case_id,
-                        "sentry_received_timestamp": self.sentry_received_timestamp.timestamp()
-                        + n,
+                        "sentry_received_timestamp": self.sentry_received_timestamp.timestamp() + n,
                     },
                     KafkaMessageMetadata(0, 0, self.sentry_received_timestamp),
                 )
@@ -164,7 +163,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
         assert data["data"][1]["tag_key"] == 132134
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.genmetrics_db
 @pytest.mark.redis_db
 class TestGenericMetricsApiCounters(TestGenericMetricsApiSets):
     @pytest.fixture
@@ -183,7 +182,7 @@ class TestGenericMetricsApiCounters(TestGenericMetricsApiSets):
         return 1.0
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.genmetrics_db
 @pytest.mark.redis_db
 class TestGenericMetricsApiGauges(TestGenericMetricsApiSets):
     @pytest.fixture
@@ -208,7 +207,7 @@ class TestGenericMetricsApiGauges(TestGenericMetricsApiSets):
         }
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.genmetrics_db
 @pytest.mark.redis_db
 class TestGenericMetricsApiDistributions(TestGenericMetricsApiSets):
     @pytest.fixture

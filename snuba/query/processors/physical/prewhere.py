@@ -92,9 +92,7 @@ class PrewhereProcessor(ClickhouseQueryProcessor):
         # with Low Cardinality and Nullable columns.
         # https://github.com/ClickHouse/ClickHouse/issues/16171
         if query.get_from_clause().final and self.__omit_if_final:
-            prewhere_keys = [
-                key for key in prewhere_keys if key not in self.__omit_if_final
-            ]
+            prewhere_keys = [key for key in prewhere_keys if key not in self.__omit_if_final]
 
         if not prewhere_keys:
             return
@@ -108,10 +106,7 @@ class PrewhereProcessor(ClickhouseQueryProcessor):
             for cond in get_first_level_and_conditions(ast_condition)
             if isinstance(cond, FunctionCall)
             and cond.function_name in ALLOWED_OPERATORS
-            and any(
-                col.column_name in prewhere_keys
-                for col in get_columns_in_expression(cond)
-            )
+            and any(col.column_name in prewhere_keys for col in get_columns_in_expression(cond))
         ]
         if not prewhere_candidates:
             return
@@ -132,9 +127,7 @@ class PrewhereProcessor(ClickhouseQueryProcessor):
             ],
             key=lambda priority_and_col: priority_and_col[0],
         )
-        prewhere_conditions = [cond for _, cond in sorted_candidates][
-            :max_prewhere_conditions
-        ]
+        prewhere_conditions = [cond for _, cond in sorted_candidates][:max_prewhere_conditions]
 
         new_conditions = [
             cond
@@ -142,9 +135,7 @@ class PrewhereProcessor(ClickhouseQueryProcessor):
             if cond not in prewhere_conditions
         ]
 
-        query.set_ast_condition(
-            combine_and_conditions(new_conditions) if new_conditions else None
-        )
+        query.set_ast_condition(combine_and_conditions(new_conditions) if new_conditions else None)
         query.set_prewhere_ast_condition(
             combine_and_conditions(prewhere_conditions) if prewhere_conditions else None
         )

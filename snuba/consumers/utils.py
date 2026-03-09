@@ -25,9 +25,7 @@ def get_partition_count(topic: Topic, timeout: float = 2.0) -> int:
             topic_metadata = cluster_metadata.topics.get(topic.value)
             break
         except KafkaException as err:
-            logger.debug(
-                "Connection to Kafka failed (attempt %d)", attempts, exc_info=err
-            )
+            logger.debug("Connection to Kafka failed (attempt %d)", attempts, exc_info=err)
             attempts += 1
             # How many attempts is too many?
             if attempts == 3:

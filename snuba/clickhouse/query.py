@@ -1,8 +1,7 @@
 from typing import Callable, Iterable, Optional, Sequence
 
-from snuba.query import LimitBy, OrderBy
+from snuba.query import LimitBy, OrderBy, SelectedExpression
 from snuba.query import ProcessableQuery as AbstractQuery
-from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Expression as SnubaExpression
 from snuba.query.expressions import ExpressionVisitor
@@ -54,9 +53,7 @@ class Query(AbstractQuery[Table]):
     def _get_expressions_impl(self) -> Iterable[Expression]:
         return self.__prewhere or []
 
-    def _transform_expressions_impl(
-        self, func: Callable[[Expression], Expression]
-    ) -> None:
+    def _transform_expressions_impl(self, func: Callable[[Expression], Expression]) -> None:
         self.__prewhere = self.__prewhere.transform(func) if self.__prewhere else None
 
     def _transform_impl(self, visitor: ExpressionVisitor[Expression]) -> None:

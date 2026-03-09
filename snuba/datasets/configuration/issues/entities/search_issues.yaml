@@ -192,6 +192,7 @@ storage_selector:
 
 query_processors:
   - processor: BasicFunctionsProcessor
+  - processor: DummyHandledFunctionsProcessor
 
 validate_data_model: error
 validators:

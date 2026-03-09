@@ -96,11 +96,7 @@ class FakeClickhouseCluster(ClickhouseCluster):
         )
         self.__distributed_cluster_name = distributed_cluster_name
         self.__cluster_name = cluster_name
-        self.__nodes = (
-            {node.host_name: (node, healthy) for node, healthy in nodes}
-            if nodes
-            else {}
-        )
+        self.__nodes = {node.host_name: (node, healthy) for node, healthy in nodes} if nodes else {}
         self.__connections: MutableMapping[
             Tuple[ClickhouseNode, ClickhouseClientSettings], FakeClickhousePool
         ] = {}
@@ -109,8 +105,7 @@ class FakeClickhouseCluster(ClickhouseCluster):
         self,
     ) -> Mapping[str, Sequence[str]]:
         return {
-            key[0].host_name: self.__connections[key].get_queries()
-            for key in self.__connections
+            key[0].host_name: self.__connections[key].get_queries() for key in self.__connections
         }
 
     def clean_connections(self) -> None:
@@ -126,9 +121,7 @@ class FakeClickhouseCluster(ClickhouseCluster):
     def get_distributed_nodes(self) -> Sequence[ClickhouseNode]:
         if self.is_single_node():
             return []
-        assert (
-            self.__distributed_cluster_name is not None
-        ), "distributed_cluster_name must be set"
+        assert self.__distributed_cluster_name is not None, "distributed_cluster_name must be set"
         return [node[0] for node in self.__nodes.values()]
 
     def get_node_connection(

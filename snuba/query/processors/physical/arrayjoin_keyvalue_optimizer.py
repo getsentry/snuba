@@ -10,11 +10,9 @@ from snuba.query.conditions import (
     is_in_condition_pattern,
 )
 from snuba.query.dsl import arrayJoin, tupleElement
-from snuba.query.expressions import Argument
+from snuba.query.expressions import Argument, Expression, Lambda
 from snuba.query.expressions import Column as ColumnExpr
-from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
-from snuba.query.expressions import Lambda
 from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.matchers import Any, Column, FunctionCall, Literal, Or, Param, String
 from snuba.query.processors.physical import ClickhouseQueryProcessor
@@ -36,9 +34,7 @@ def array_join_pattern(column_name: str) -> FunctionCall:
     )
 
 
-def _get_mapping_keys_in_condition(
-    condition: Expression, column_name: str
-) -> Optional[Set[str]]:
+def _get_mapping_keys_in_condition(condition: Expression, column_name: str) -> Optional[Set[str]]:
     """
     Finds the top level conditions that include filter based on the arrayJoin.
     This is meant to be used to find the keys the query is filtering the arrayJoin
@@ -111,9 +107,7 @@ def get_filtered_mapping_keys(query: Query, column_name: str) -> Sequence[str]:
 
     ast_having = query.get_having()
     having_keys = (
-        _get_mapping_keys_in_condition(ast_having, column_name)
-        if ast_having is not None
-        else set()
+        _get_mapping_keys_in_condition(ast_having, column_name) if ast_having is not None else set()
     )
     if having_keys is None:
         # Same as above
@@ -165,8 +159,7 @@ class ArrayJoinKeyValueOptimizer(ClickhouseQueryProcessor):
                 arrayjoins_in_query.add(match.string("col"))
 
         filtered_keys = [
-            LiteralExpr(None, key)
-            for key in get_filtered_mapping_keys(query, self.__column_name)
+            LiteralExpr(None, key) for key in get_filtered_mapping_keys(query, self.__column_name)
         ]
 
         # Ensures the alias we apply to the arrayJoin is not already taken.
@@ -216,9 +209,7 @@ class ArrayJoinKeyValueOptimizer(ClickhouseQueryProcessor):
                 # Only one between arrayJoin(col.key) and arrayJoin(col.value)
                 # is present, and it is arrayJoin(col.key) since we found
                 # filtered keys.
-                return _filtered_mapping_keys(
-                    expr.alias, self.__column_name, filtered_keys
-                )
+                return _filtered_mapping_keys(expr.alias, self.__column_name, filtered_keys)
             else:
                 # No viable optimization
                 return expr
@@ -311,9 +302,7 @@ def zip_columns(column1: ColumnExpr, column2: ColumnExpr) -> Expression:
     )
 
 
-def filter_key_values(
-    key_values: Expression, keys: Sequence[LiteralExpr]
-) -> Expression:
+def filter_key_values(key_values: Expression, keys: Sequence[LiteralExpr]) -> Expression:
     """
     Filter an array of key value pairs based on a sequence of keys
     (tag keys in this case).

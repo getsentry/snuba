@@ -71,9 +71,7 @@ class TableSchema(Schema):
         # table name we need to load the cluster. The storage
         # initialization needs to work whether or not the cluster can
         # be loaded (as the cluster could be in DEV mode).
-        return TableSource(
-            self.get_table_name(), self.__columns, self.__mandatory_conditions
-        )
+        return TableSource(self.get_table_name(), self.__columns, self.__mandatory_conditions)
 
     def get_local_table_name(self) -> str:
         """
@@ -81,6 +79,13 @@ class TableSchema(Schema):
         It is supposed to be used in maintenance.
         """
         return self.__local_table_name
+
+    def get_dist_table_name(self) -> str:
+        """
+        This returns the distributed table name. Used to get the name of the distributed
+        table even in local mode.
+        """
+        return self.__dist_table_name
 
     def get_table_name(self) -> str:
         """

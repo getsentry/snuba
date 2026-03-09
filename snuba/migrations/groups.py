@@ -203,9 +203,9 @@ def build_storage_set_to_group_mapping() -> Dict[StorageSetKey, MigrationGroup]:
     return result
 
 
-_STORAGE_SET_TO_MIGRATION_GROUP_MAPPING: Dict[
-    StorageSetKey, MigrationGroup
-] = build_storage_set_to_group_mapping()
+_STORAGE_SET_TO_MIGRATION_GROUP_MAPPING: Dict[StorageSetKey, MigrationGroup] = (
+    build_storage_set_to_group_mapping()
+)
 
 
 def get_group_loader(group: MigrationGroup) -> GroupLoader:

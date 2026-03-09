@@ -478,7 +478,8 @@ def _raw_query(
             status = get_query_status_from_error_codes(error_code)
             if error_code == ErrorCodes.TOO_MANY_BYTES:
                 calculated_cause = RateLimitExceeded(
-                    "Query scanned more than the allocated amount of bytes"
+                    "Query scanned more than the allocated amount of bytes",
+                    quota_allowance=stats["quota_allowance"],
                 )
 
             with configure_scope() as scope:
@@ -507,7 +508,7 @@ def _raw_query(
             cause.__class__.__name__,
             cause.message if isinstance(cause, ClickhouseError) else str(cause),
             {
-                "stats": stats,
+                "stats": dict(stats),
                 "sql": sql,
                 "experiments": clickhouse_query.get_experiments(),
             },
@@ -521,7 +522,7 @@ def _raw_query(
         return QueryResult(
             result,
             {
-                "stats": stats,
+                "stats": dict(stats),
                 "sql": sql,
                 "experiments": clickhouse_query.get_experiments(),
             },
@@ -575,7 +576,8 @@ def _record_bytes_scanned(
     custom_metrics = MetricsWrapper(environment.metrics, "allocation_policy")
 
     if result_or_error.query_result:
-        progress_bytes_scanned = cast(int, result_or_error.query_result.result.get("profile", {}).get("progress_bytes", 0))  # type: ignore
+        profile = result_or_error.query_result.result.get("profile") or {}
+        progress_bytes_scanned = cast(int, profile.get("progress_bytes", 0))
         custom_metrics.increment(
             "bytes_scanned",
             progress_bytes_scanned,
@@ -684,7 +686,7 @@ def db_query(
             AllocationPolicyViolations.__name__,
             "Query cannot be run due to allocation policies",
             extra={
-                "stats": stats,
+                "stats": dict(stats),
                 "sql": "no sql run",
                 "experiments": {},
             },
@@ -699,7 +701,7 @@ def db_query(
             e.__class__.__name__,
             str(e),
             {
-                "stats": stats,
+                "stats": dict(stats),
                 "sql": "",
                 "experiments": clickhouse_query.get_experiments(),
             },
@@ -751,7 +753,6 @@ def _add_quota_info(
     action: str,
     quota_and_policy: _QuotaAndPolicy | None = None,
 ) -> None:
-
     quota_info: dict[str, Any] = {}
     summary[action] = quota_info
 
@@ -822,33 +823,25 @@ def _apply_allocation_policies_quota(
         op="allocation_policy", description="_apply_allocation_policies_quota"
     ) as span:
         for allocation_policy in allocation_policies:
-            with sentry_sdk.start_span(
-                op="allocation_policy.get_quota_allowance",
-                description=str(allocation_policy.__class__),
-            ) as span:
-                allowance = allocation_policy.get_quota_allowance(
-                    attribution_info.tenant_ids, query_id
+            allowance = allocation_policy.get_quota_allowance(attribution_info.tenant_ids, query_id)
+            can_run &= allowance.can_run
+            quota_allowances[allocation_policy.class_name()] = allowance
+            span.set_data(
+                "quota_allowance",
+                quota_allowances[allocation_policy.class_name()],
+            )
+            if allowance.is_throttled and allowance.max_threads < min_threads_across_policies:
+                throttle_quota_and_policy = _QuotaAndPolicy(
+                    quota_allowance=allowance,
+                    policy=allocation_policy,
                 )
-                can_run &= allowance.can_run
-                quota_allowances[allocation_policy.class_name()] = allowance
-                span.set_data(
-                    "quota_allowance",
-                    quota_allowances[allocation_policy.class_name()],
+            min_threads_across_policies = min(min_threads_across_policies, allowance.max_threads)
+            if not can_run:
+                rejection_quota_and_policy = _QuotaAndPolicy(
+                    quota_allowance=allowance,
+                    policy=allocation_policy,
                 )
-                if allowance.is_throttled and allowance.max_threads < min_threads_across_policies:
-                    throttle_quota_and_policy = _QuotaAndPolicy(
-                        quota_allowance=allowance,
-                        policy=allocation_policy,
-                    )
-                min_threads_across_policies = min(
-                    min_threads_across_policies, allowance.max_threads
-                )
-                if not can_run:
-                    rejection_quota_and_policy = _QuotaAndPolicy(
-                        quota_allowance=allowance,
-                        policy=allocation_policy,
-                    )
-                    break
+                break
 
         allowance_dicts = {
             key: quota_allowance.to_dict() for key, quota_allowance in quota_allowances.items()

@@ -45,9 +45,7 @@ AND metric_id IN [{IndexedIDs.SPAN_DURATION_METRIC.value}, {IndexedIDs.SPAN_EXCL
     return SQL(query)
 
 
-def span_grouping_cardinality_query(
-    span_category: str, time_window_hrs: int, limit: int
-) -> SQL:
+def span_grouping_cardinality_query(span_category: str, time_window_hrs: int, limit: int) -> SQL:
     """
     Form the clickhouse query to analyze the cardinality of metrics extracted from spans.
     The result of this query informs how high the cardinality of a given span module is.

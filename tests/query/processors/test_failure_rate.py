@@ -56,9 +56,7 @@ def test_failure_rate_format_expressions() -> None:
     FailureRateProcessor().process_query(unprocessed, HTTPQuerySettings())
     assert expected.get_selected_columns() == unprocessed.get_selected_columns()
 
-    ret = unprocessed.get_selected_columns()[1].expression.accept(
-        ClickhouseExpressionFormatter()
-    )
+    ret = unprocessed.get_selected_columns()[1].expression.accept(ClickhouseExpressionFormatter())
     assert ret == (
         "(divide(countIf(notEquals(transaction_status, 0) AND notEquals(transaction_status, 1) AND notEquals(transaction_status, 2)), count()) AS perf)"
     )

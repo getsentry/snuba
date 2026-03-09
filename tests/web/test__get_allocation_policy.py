@@ -35,9 +35,7 @@ class PermissiveJoinClause(JoinClause[Table]):
 events_table = Table(
     "errors",
     ColumnSet([]),
-    allocation_policies=[
-        PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")), [], {})
-    ],
+    allocation_policies=[PassthroughPolicy(ResourceIdentifier(StorageKey("flimflam")), [], {})],
     storage_key=StorageKey("errors"),
     final=False,
     sampling_rate=None,
@@ -47,9 +45,7 @@ events_table = Table(
 groups_table = Table(
     "groups",
     ColumnSet([]),
-    allocation_policies=[
-        PassthroughPolicy(ResourceIdentifier(StorageKey("jimjam")), [], {})
-    ],
+    allocation_policies=[PassthroughPolicy(ResourceIdentifier(StorageKey("jimjam")), [], {})],
     storage_key=StorageKey("groups"),
     final=False,
     sampling_rate=None,
@@ -111,9 +107,7 @@ join_query = CompositeQuery(
                 selected_columns=[
                     SelectedExpression(
                         "average",
-                        FunctionCall(
-                            "average", "avg", (Column(None, None, "project_id"),)
-                        ),
+                        FunctionCall("average", "avg", (Column(None, None, "project_id"),)),
                     ),
                 ],
             ),

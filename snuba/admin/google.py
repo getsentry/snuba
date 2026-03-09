@@ -48,9 +48,7 @@ class CloudIdentityAPI:
 
         return None
 
-    def _check_transitive_membership(
-        self, group_resource_name: str, member: str
-    ) -> bool:
+    def _check_transitive_membership(self, group_resource_name: str, member: str) -> bool:
         if not self.initialized:
             return False
 

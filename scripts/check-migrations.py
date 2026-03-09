@@ -37,11 +37,7 @@ class CoupledMigrations(Exception):
 
 
 def _get_head_sha(workdir: str) -> str:
-    return (
-        subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=workdir)
-        .decode()
-        .strip()
-    )
+    return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=workdir).decode().strip()
 
 
 def _pr_has_skip_label(commit_sha: str) -> bool:
@@ -133,7 +129,5 @@ if __name__ == "__main__":
     parser.add_argument("--workdir", default=".")
     parser.add_argument("--labels", nargs="*")
     args = parser.parse_args()
-    print(
-        f"migrations changes: to: {args.to}, workdir: {args.workdir}, labels: {args.labels}"
-    )
+    print(f"migrations changes: to: {args.to}, workdir: {args.workdir}, labels: {args.labels}")
     main(args.to, args.workdir, args.labels)

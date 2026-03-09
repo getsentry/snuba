@@ -43,8 +43,7 @@ def test_build_stream_loader() -> None:
     scheduled_topic_spec = loader.get_subscription_scheduled_topic_spec()
     assert (
         scheduled_topic_spec is not None
-        and scheduled_topic_spec.topic
-        == Topic.SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_SETS
+        and scheduled_topic_spec.topic == Topic.SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_SETS
     )
     result_topic_spec = loader.get_subscription_result_topic_spec()
     assert (
@@ -52,10 +51,7 @@ def test_build_stream_loader() -> None:
         and result_topic_spec.topic == Topic.SUBSCRIPTION_RESULTS_GENERIC_METRICS
     )
     dlq_topic_spec = loader.get_dlq_topic_spec()
-    assert (
-        dlq_topic_spec is not None
-        and dlq_topic_spec.topic == Topic.DEAD_LETTER_GENERIC_METRICS
-    )
+    assert dlq_topic_spec is not None and dlq_topic_spec.topic == Topic.DEAD_LETTER_GENERIC_METRICS
 
 
 def test_invalid_storage() -> None:

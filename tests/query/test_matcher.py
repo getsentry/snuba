@@ -356,9 +356,7 @@ test_cases = [
             column=ColumnExpr(None, "table_name", "notstuff"),
             key=LiteralExpr(None, "things"),
         ),
-        MatchResult(
-            {"p_table_name": "table_name", "col_name": "notstuff", "key": "things"}
-        ),
+        MatchResult({"p_table_name": "table_name", "col_name": "notstuff", "key": "things"}),
     ),
 ]
 
@@ -398,7 +396,5 @@ def test_accessors() -> None:
     )
 
     assert result is not None
-    assert result.expression("second_function") == FunctionCallExpr(
-        None, "second_name", tuple()
-    )
+    assert result.expression("second_function") == FunctionCallExpr(None, "second_name", tuple())
     assert result.scalar("second_function_name") == "second_name"

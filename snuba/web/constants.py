@@ -21,6 +21,14 @@ ACCEPTABLE_CLICKHOUSE_ERROR_CODES = {
 NON_RETRYABLE_CLICKHOUSE_ERROR_CODES = {
     ErrorCodes.MEMORY_LIMIT_EXCEEDED,
     ErrorCodes.TOO_SLOW,
+    ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES,
+}
+
+LW_DELETE_NON_RETRYABLE_CLICKHOUSE_ERROR_CODES = {
+    # Code: 159. DB::Exception: Distributed DDL task <task> is not finished
+    ErrorCodes.TIMEOUT_EXCEEDED,
+    ErrorCodes.MEMORY_LIMIT_EXCEEDED,
+    ErrorCodes.TOO_SLOW,
 }
 
 

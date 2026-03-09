@@ -92,9 +92,7 @@ class TestPostgresSnapshot:
                 ColumnConfig("id"),
                 ColumnConfig(
                     "a_date",
-                    formatter=DateTimeFormatterConfig(
-                        precision=DateFormatPrecision.SECOND
-                    ),
+                    formatter=DateTimeFormatterConfig(precision=DateFormatPrecision.SECOND),
                 ),
             ],
             True,

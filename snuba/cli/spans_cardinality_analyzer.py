@@ -55,9 +55,7 @@ def spans_cardinality_analyzer(
     setup_logging(log_level)
     setup_sentry()
 
-    slack_client = SlackClient(
-        settings.STARFISH_SLACK_CHANNEL_ID, settings.SLACK_API_TOKEN
-    )
+    slack_client = SlackClient(settings.STARFISH_SLACK_CHANNEL_ID, settings.SLACK_API_TOKEN)
 
     storage_key = StorageKey("generic_metrics_distributions")
     storage = get_storage(storage_key)

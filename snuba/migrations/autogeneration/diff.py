@@ -11,9 +11,7 @@ This file is for autogenerating the migration for adding a column to your storag
 """
 
 
-def generate_python_migration(
-    oldstorage: dict[str, Any], newstorage: dict[str, Any]
-) -> str:
+def generate_python_migration(oldstorage: dict[str, Any], newstorage: dict[str, Any]) -> str:
     """
     Input:
         2 storage.yaml files in yaml.safe_load format.

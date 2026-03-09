@@ -8,6 +8,4 @@ def test_get_local_and_distributed_nodes() -> None:
         {"host": "clickhouse-02", "port": 9000},
         {"host": "clickhouse-03", "port": 9000},
     ]
-    assert _get_dist_nodes(StorageKey("errors")) == [
-        {"host": "clickhouse-query", "port": 9000}
-    ]
+    assert _get_dist_nodes(StorageKey("errors")) == [{"host": "clickhouse-query", "port": 9000}]

@@ -38,11 +38,7 @@ class RustCompatProcessor(DatasetMessageProcessor):
         if insert_payload is not None:
             assert replacement_payload is None
 
-            rows = [
-                json.loads(line)
-                for line in insert_payload.rstrip(b"\n").split(b"\n")
-                if line
-            ]
+            rows = [json.loads(line) for line in insert_payload.rstrip(b"\n").split(b"\n") if line]
 
             return InsertBatch(
                 rows=rows,
@@ -53,11 +49,7 @@ class RustCompatProcessor(DatasetMessageProcessor):
             assert insert_payload is None
             key, values_bytes = replacement_payload
 
-            values = [
-                json.loads(line)
-                for line in values_bytes.rstrip(b"\n").split(b"\n")
-                if line
-            ]
+            values = [json.loads(line) for line in values_bytes.rstrip(b"\n").split(b"\n") if line]
             return ReplacementBatch(key=key.decode("utf8"), values=values)
         else:
             raise ValueError("unsupported return value from snuba_rust")

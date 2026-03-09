@@ -5,6 +5,7 @@ import tempfile
 from typing import Any
 
 from snuba.clickhouse.columns import (
+    JSON,
     Array,
     Bool,
     Column,
@@ -196,6 +197,13 @@ delete_allocation_policies:
                     "schema_modifiers": ["nullable"],
                 },
             },
+            {
+                "name": "json_col",
+                "type": "JSON",
+                "args": {
+                    "max_dynamic_paths": 128,
+                },
+            },
         ]
 
         expected_python_columns = [
@@ -221,6 +229,10 @@ delete_allocation_policies:
                     [("success", 0), ("error", 1), ("pending", 2)],
                     SchemaModifiers(nullable=True, readonly=False),
                 ),
+            ),
+            Column(
+                "json_col",
+                JSON(max_dynamic_paths=128),
             ),
         ]
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import _strptime  # NOQA fixes _strptime deferred import issue
 import re
 from datetime import UTC, datetime, timedelta
 from enum import Enum
@@ -16,7 +17,6 @@ from typing import (
     cast,
 )
 
-import _strptime  # NOQA fixes _strptime deferred import issue
 from dateutil.parser import parse as dateutil_parse
 
 from snuba.query.schema import CONDITION_OPERATORS

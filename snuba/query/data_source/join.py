@@ -90,11 +90,7 @@ class IndividualNode(JoinNode[TSimpleDataSource], Generic[TSimpleDataSource]):
         return {self.alias: self}
 
     def get_column_sets(self) -> Mapping[str, ColumnSet]:
-        return (
-            {self.alias: self.data_source.get_columns()}
-            if self.alias is not None
-            else {}
-        )
+        return {self.alias: self.data_source.get_columns()} if self.alias is not None else {}
 
     def accept(self, visitor: JoinVisitor[TReturn, TSimpleDataSource]) -> TReturn:
         return visitor.visit_individual_node(self)
@@ -193,9 +189,7 @@ class QualifiedColumnSet(ColumnSet):
         for alias, column_set in column_sets.items():
             for column in column_set.columns:
                 if isinstance(column, WildcardColumn):
-                    columns.append(
-                        WildcardColumn(f"{alias}.{column.name}", column.type)
-                    )
+                    columns.append(WildcardColumn(f"{alias}.{column.name}", column.type))
                 else:
                     columns.append(Column(f"{alias}.{column.name}", column.type))
 

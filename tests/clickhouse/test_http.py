@@ -20,9 +20,7 @@ def test_encode_preserves_column_order(values_encoder: ValuesRowEncoder) -> None
             "col1": FunctionCall(
                 None,
                 "test",
-                tuple(
-                    [FunctionCall(None, "inner", tuple([Literal(None, "inner_arg")]))]
-                ),
+                tuple([FunctionCall(None, "inner", tuple([Literal(None, "inner_arg")]))]),
             ),
         }
     )
@@ -30,7 +28,7 @@ def test_encode_preserves_column_order(values_encoder: ValuesRowEncoder) -> None
 
 
 def test_encode_fails_on_non_expression(values_encoder: ValuesRowEncoder) -> None:
-    with (pytest.raises(TypeError)):
+    with pytest.raises(TypeError):
         values_encoder.encode({"col1": "string not wrapped by a literal object"})
 
 

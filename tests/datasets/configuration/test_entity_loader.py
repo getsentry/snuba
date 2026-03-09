@@ -53,9 +53,7 @@ class TestEntityConfiguration(ConfigurationTest):
         ].translation_mappers.columns
 
         # Check that ColumnToIpAdress mapper was successfully loaded from config
-        column_to_ip_address = get_object_in_list_by_class(
-            column_mappers, ColumnToIPAddress
-        )
+        column_to_ip_address = get_object_in_list_by_class(column_mappers, ColumnToIPAddress)
         assert isinstance(column_to_ip_address, ColumnToFunction)
 
         # Check that nested expressions were loaded correctly in ColumnToIPAddress
@@ -64,8 +62,7 @@ class TestEntityConfiguration(ConfigurationTest):
             (
                 fc
                 for fc in column_to_ip_address.to_function_params
-                if isinstance(fc, FunctionCall)
-                and fc.function_name == "IPv4NumToString"
+                if isinstance(fc, FunctionCall) and fc.function_name == "IPv4NumToString"
             ),
             None,
         )
@@ -74,20 +71,14 @@ class TestEntityConfiguration(ConfigurationTest):
         assert any(isinstance(param, Column) for param in function_call.parameters)
 
         # Check that ColumnToNullIf mapper was successfully loaded from config
-        column_to_user_null_if = get_object_in_list_by_class(
-            column_mappers, ColumnToNullIf
-        )
+        column_to_user_null_if = get_object_in_list_by_class(column_mappers, ColumnToNullIf)
         assert isinstance(column_to_user_null_if, ColumnToFunction)
 
         # Check that expressions were loaded correctly in ColumnToNullIf
         assert len(column_to_user_null_if.to_function_params) == 2
+        assert any(isinstance(param, Column) for param in column_to_user_null_if.to_function_params)
         assert any(
-            isinstance(param, Column)
-            for param in column_to_user_null_if.to_function_params
-        )
-        assert any(
-            isinstance(param, Literal)
-            for param in column_to_user_null_if.to_function_params
+            isinstance(param, Literal) for param in column_to_user_null_if.to_function_params
         )
 
         # Check that other column mappers (which do not contain expressions) were loaded correctly

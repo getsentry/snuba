@@ -99,8 +99,7 @@ class OptimizeScheduler:
 
         if current_time >= self.__full_job_end_time:
             raise OptimizedSchedulerTimeout(
-                f"Optimize job cutoff time exceeded "
-                f"{self.__full_job_end_time}. Abandoning"
+                f"Optimize job cutoff time exceeded {self.__full_job_end_time}. Abandoning"
             )
 
         if num_threads == 1:
@@ -117,9 +116,7 @@ class OptimizeScheduler:
                 )
             elif current_time < self.__parallel_end_time:
                 return OptimizationSchedule(
-                    partitions_groups=self._subdivide_partitions(
-                        partitions, num_threads
-                    ),
+                    partitions_groups=self._subdivide_partitions(partitions, num_threads),
                     cutoff_time=self.__parallel_end_time,
                 )
             else:

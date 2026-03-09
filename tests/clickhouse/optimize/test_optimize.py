@@ -25,9 +25,7 @@ from tests.helpers import write_processed_messages
 
 redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 
-last_midnight = (
-    datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(UTC)
-)
+last_midnight = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(UTC)
 
 test_data = [
     pytest.param(
@@ -111,7 +109,7 @@ test_data = [
     reason="This test still is flaky sometimes and then completely blocks CI / deployment"
 )
 class TestOptimize:
-    @pytest.mark.clickhouse_db
+    @pytest.mark.events_db
     @pytest.mark.redis_db
     @pytest.mark.parametrize(
         "storage_key, create_event_row_for_date, current_time",
@@ -130,9 +128,7 @@ class TestOptimize:
         database = cluster.get_database()
 
         # no data, 0 partitions to optimize
-        partitions = optimize.get_partitions_from_clickhouse(
-            clickhouse, storage, database, table
-        )
+        partitions = optimize.get_partitions_from_clickhouse(clickhouse, storage, database, table)
         assert partitions == []
 
         base = datetime(1999, 12, 26)  # a sunday
@@ -140,39 +136,25 @@ class TestOptimize:
 
         # 1 event, 0 unoptimized partitions
         write_processed_messages(storage, [create_event_row_for_date(base)])
-        partitions = optimize.get_partitions_from_clickhouse(
-            clickhouse, storage, database, table
-        )
+        partitions = optimize.get_partitions_from_clickhouse(clickhouse, storage, database, table)
         assert partitions == []
 
         # 2 events in the same part, 1 unoptimized part
         write_processed_messages(storage, [create_event_row_for_date(base)])
-        partitions = optimize.get_partitions_from_clickhouse(
-            clickhouse, storage, database, table
-        )
+        partitions = optimize.get_partitions_from_clickhouse(clickhouse, storage, database, table)
         assert [(p.date, p.retention_days) for p in partitions] == [(base_monday, 90)]
 
         # 3 events in the same part, 1 unoptimized part
         write_processed_messages(storage, [create_event_row_for_date(base)])
-        partitions = optimize.get_partitions_from_clickhouse(
-            clickhouse, storage, database, table
-        )
+        partitions = optimize.get_partitions_from_clickhouse(clickhouse, storage, database, table)
         assert [(p.date, p.retention_days) for p in partitions] == [(base_monday, 90)]
 
         # 3 events in one part, 2 in another, 2 unoptimized partitions
         a_month_earlier = base_monday - timedelta(days=31)
-        a_month_earlier_monday = a_month_earlier - timedelta(
-            days=a_month_earlier.weekday()
-        )
-        write_processed_messages(
-            storage, [create_event_row_for_date(a_month_earlier_monday)]
-        )
-        write_processed_messages(
-            storage, [create_event_row_for_date(a_month_earlier_monday)]
-        )
-        partitions = optimize.get_partitions_from_clickhouse(
-            clickhouse, storage, database, table
-        )
+        a_month_earlier_monday = a_month_earlier - timedelta(days=a_month_earlier.weekday())
+        write_processed_messages(storage, [create_event_row_for_date(a_month_earlier_monday)])
+        write_processed_messages(storage, [create_event_row_for_date(a_month_earlier_monday)])
+        partitions = optimize.get_partitions_from_clickhouse(clickhouse, storage, database, table)
         assert sorted([(p.date, p.retention_days) for p in partitions]) == sorted(
             [
                 (base_monday, 90),
@@ -212,9 +194,7 @@ class TestOptimize:
             )
 
         # all partitions should be optimized
-        partitions = optimize.get_partitions_from_clickhouse(
-            clickhouse, storage, database, table
-        )
+        partitions = optimize.get_partitions_from_clickhouse(clickhouse, storage, database, table)
         assert partitions == []
 
         tracker.delete_all_states()
@@ -237,9 +217,7 @@ class TestOptimize:
             ),
         ],
     )
-    def test_metrics_tags(
-        self, table: str, host: str, expected: Mapping[str, str]
-    ) -> None:
+    def test_metrics_tags(self, table: str, host: str, expected: Mapping[str, str]) -> None:
         assert _get_metrics_tags(table, host) == expected
 
 
@@ -255,7 +233,7 @@ test_data = [
 
 
 class TestOptimizeError:
-    @pytest.mark.clickhouse_db
+    @pytest.mark.events_db
     @pytest.mark.redis_db
     @pytest.mark.parametrize(
         "storage_key, current_time",
@@ -303,7 +281,7 @@ class TestOptimizeError:
 
 
 class TestOptimizeFrequency:
-    @pytest.mark.clickhouse_db
+    @pytest.mark.events_db
     @pytest.mark.redis_db
     @pytest.mark.parametrize(
         "storage_key, current_time",
@@ -316,7 +294,6 @@ class TestOptimizeFrequency:
         storage_key: StorageKey,
         current_time: datetime,
     ) -> None:
-
         storage = get_writable_storage(storage_key)
         cluster = storage.get_cluster()
         clickhouse = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)
@@ -349,7 +326,7 @@ class TestOptimizeFrequency:
         clickhouse.execute(f"DROP TABLE IF EXISTS {database}.{table} SYNC")
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
     """
     Tests that a JobTimeoutException is raised when a cutoff time is reached.
@@ -375,9 +352,7 @@ def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
     tracker.update_all_partitions([dummy_partition])
 
     with time_machine.travel(
-        last_midnight
-        + timedelta(hours=settings.OPTIMIZE_JOB_CUTOFF_TIME)
-        + timedelta(minutes=15),
+        last_midnight + timedelta(hours=settings.OPTIMIZE_JOB_CUTOFF_TIME) + timedelta(minutes=15),
         tick=False,
     ):
         with pytest.raises(OptimizedSchedulerTimeout):

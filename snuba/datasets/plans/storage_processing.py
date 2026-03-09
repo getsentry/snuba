@@ -110,9 +110,7 @@ def transform_subscriptables(expression: Expression) -> Expression:
             expression.column.table_name,
             expression.column.column_name,
             "value",
-        ).attempt_map(
-            expression, SnubaClickhouseMappingTranslator(TranslationMappers())
-        )
+        ).attempt_map(expression, SnubaClickhouseMappingTranslator(TranslationMappers()))
         if res is None:
             raise ValueError(f"Could not map subscriptable reference: {expression}")
         return res
@@ -147,9 +145,7 @@ def apply_storage_processors(
         )
     assert isinstance(query_plan.query, Query)
     for processor in query_plan.db_query_processors:
-        with sentry_sdk.start_span(
-            description=type(processor).__name__, op="processor"
-        ):
+        with sentry_sdk.start_span(description=type(processor).__name__, op="processor"):
             if settings.get_dry_run():
                 with explain_meta.with_query_differ(
                     "storage_processor", type(processor).__name__, query_plan.query

@@ -7,14 +7,14 @@ from typing import Any, Callable, Dict, Iterable, Optional
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
-from sentry_protos.snuba.v1.endpoint_time_series_pb2 import DataPoint
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
-    Expression as ProtoExpression,
-)
-from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
+    DataPoint,
     TimeSeries,
     TimeSeriesRequest,
     TimeSeriesResponse,
+)
+from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
+    Expression as ProtoExpression,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
@@ -22,16 +22,18 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     ExtrapolationMode,
 )
 
+from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
+from snuba.downsampled_storage_tiers import Tier
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column, in_cond, literal, literals_array
-from snuba.query.expressions import Expression
+from snuba.query.dsl import column, in_cond, literal
+from snuba.query.expressions import DangerousRawSQL, Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -39,10 +41,12 @@ from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
+    attribute_key_to_expression,
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
     use_sampling_factor,
+    valid_sampling_factor_conditions,
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
@@ -61,13 +65,10 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_count_column,
 )
 from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
-    get_trace_ids_for_cross_item_query,
+    get_trace_ids_sql_for_cross_item_query,
 )
 from snuba.web.rpc.v1.resolvers.common.formula_reliability import (
     FormulaReliabilityCalculator,
-)
-from snuba.web.rpc.v1.resolvers.R_eap_items.common.common import (
-    attribute_key_to_expression,
 )
 
 OP_TO_EXPR = {
@@ -200,9 +201,13 @@ def _convert_result_timeseries(
     frc = FormulaReliabilityCalculator(request, data, time_buckets)
     for timeseries in result_timeseries.values():
         if timeseries.label in frc:
-            reliabilities = frc.get(timeseries.label)
+            extrapolation_contexts = frc.get(timeseries.label)
+
             for i in range(len(timeseries.data_points)):
-                timeseries.data_points[i].reliability = reliabilities[i]
+                context = extrapolation_contexts[i]
+                timeseries.data_points[i].avg_sampling_rate = context.average_sample_rate
+                timeseries.data_points[i].sample_count = context.sample_count
+                timeseries.data_points[i].reliability = context.reliability
     _remove_non_requested_expressions(request.expressions, result_timeseries)
 
     return result_timeseries.values()
@@ -235,7 +240,11 @@ def _get_reliability_context_columns(
         which_oneof = expr.WhichOneof("expression")
         assert which_oneof in ["conditional_aggregation", "aggregation"]
         aggregation = getattr(expr, which_oneof)
-        if aggregation.extrapolation_mode == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED:
+        if aggregation.extrapolation_mode in [
+            ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+            ExtrapolationMode.EXTRAPOLATION_MODE_CLIENT_ONLY,
+            ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY,
+        ]:
             confidence_interval_column = get_confidence_interval_column(
                 aggregation, _get_attribute_key_to_expression_function(request_meta)
             )
@@ -311,7 +320,9 @@ def _proto_expression_to_ast_expression(
             raise ValueError(f"Unknown expression type: {default}")
 
 
-def build_query(request: TimeSeriesRequest, timer: Optional[Timer] = None) -> Query:
+def build_query(
+    request: TimeSeriesRequest, sampling_tier: Optional[Tier] = None, timer: Optional[Timer] = None
+) -> Query:
     entity = Entity(
         key=EntityKey("eap_items"),
         schema=get_entity(EntityKey("eap_items")).get_data_model(),
@@ -341,14 +352,14 @@ def build_query(request: TimeSeriesRequest, timer: Optional[Timer] = None) -> Qu
 
     # Handle cross item queries by first getting trace IDs
     additional_conditions = []
-    if request.trace_filters and timer is not None:
-        trace_ids = get_trace_ids_for_cross_item_query(
-            request, request.meta, list(request.trace_filters), timer
+    if request.trace_filters and timer is not None and sampling_tier is not None:
+        trace_ids_sql, _ = get_trace_ids_sql_for_cross_item_query(
+            request, request.meta, list(request.trace_filters), sampling_tier, timer
         )
         additional_conditions.append(
             in_cond(
                 column("trace_id"),
-                literals_array(None, [literal(trace_id) for trace_id in trace_ids]),
+                DangerousRawSQL(None, f"({trace_ids_sql})"),
             )
         )
 
@@ -392,6 +403,7 @@ def build_query(request: TimeSeriesRequest, timer: Optional[Timer] = None) -> Qu
             trace_item_filters_to_expression(
                 request.filter, _get_attribute_key_to_expression_function(request.meta)
             ),
+            valid_sampling_factor_conditions(),
             *item_type_conds,
             *additional_conditions,
         ),
@@ -410,7 +422,10 @@ def build_query(request: TimeSeriesRequest, timer: Optional[Timer] = None) -> Qu
 
 
 def _build_snuba_request(
-    request: TimeSeriesRequest, query_settings: HTTPQuerySettings, timer: Optional[Timer] = None
+    request: TimeSeriesRequest,
+    query_settings: HTTPQuerySettings,
+    sampling_tier: Optional[Tier] = None,
+    timer: Optional[Timer] = None,
 ) -> SnubaRequest:
     if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
         team = "ourlogs"
@@ -424,7 +439,7 @@ def _build_snuba_request(
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
-        query=build_query(request, timer),
+        query=build_query(request, sampling_tier, timer),
         query_settings=query_settings,
         attribution_info=AttributionInfo(
             referrer=request.meta.referrer,
@@ -454,14 +469,30 @@ class ResolverTimeSeriesEAPItems(ResolverTimeSeries):
         # if the user passes it in
         assert len(in_msg.aggregations) == 0
 
+        # aggregation is deprecated, it gets converted to conditional_aggregation
+        if state.get_int_config("aggregation_deprecation_enabled", 1):
+            for expr in in_msg.expressions:
+                if expr.WhichOneof("expression") == "aggregation":
+                    raise RuntimeError(
+                        "Unexpected state: aggregation is deprecated and should have been converted to conditional_aggregation"
+                    )
+
         query_settings = setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
         try:
             routing_decision.strategy.merge_clickhouse_settings(routing_decision, query_settings)
-            query_settings.set_sampling_tier(routing_decision.tier)
+            # When trace_filters are present and the feature is enabled, don't use sampling on the outer query
+            # The inner query (getting trace IDs) will use sampling
+            cross_item_queries_no_sample_outer = state.get_int_config(
+                "cross_item_queries_no_sample_outer", 0
+            )
+            if not (in_msg.trace_filters and cross_item_queries_no_sample_outer):
+                query_settings.set_sampling_tier(routing_decision.tier)
         except Exception as e:
             sentry_sdk.capture_message(f"Error merging clickhouse settings: {e}")
 
-        snuba_request = _build_snuba_request(in_msg, query_settings, self._timer)
+        snuba_request = _build_snuba_request(
+            in_msg, query_settings, routing_decision.tier, self._timer
+        )
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,

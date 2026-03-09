@@ -128,9 +128,7 @@ class PostgresSnapshot(BulkLoadSource):
                     % (json_desc["product"], product)
                 )
 
-            desc_content = [
-                TableConfig.from_dict(table) for table in json_desc["content"]
-            ]
+            desc_content = [TableConfig.from_dict(table) for table in json_desc["content"]]
 
             descriptor = PostgresSnapshotDescriptor(
                 id=json_desc["snapshot_id"],
@@ -149,9 +147,7 @@ class PostgresSnapshot(BulkLoadSource):
 
     def __get_table_path(self, table_name: str) -> str:
         table_desc = self.__descriptor.get_table(table_name)
-        table_file_name = (
-            f"{table_name}.csv" if not table_desc.zip else f"{table_name}.csv.gz"
-        )
+        table_file_name = f"{table_name}.csv" if not table_desc.zip else f"{table_name}.csv.gz"
         return os.path.join(self.__path, "tables", table_file_name)
 
     def get_table_file_size(self, table_name: str) -> int:
@@ -173,9 +169,9 @@ class PostgresSnapshot(BulkLoadSource):
                 columns = csv_file.fieldnames
 
                 descriptor_columns = self.__descriptor.get_table(table).columns
-                assert (
-                    descriptor_columns is not None
-                ), "Cannot import a snapshot that does not provide a columns list"
+                assert descriptor_columns is not None, (
+                    "Cannot import a snapshot that does not provide a columns list"
+                )
                 expected_columns = [c.name for c in descriptor_columns]
                 if expected_columns:
                     expected_set = set(expected_columns)
@@ -209,9 +205,7 @@ class PostgresSnapshot(BulkLoadSource):
             )
 
     @contextmanager
-    def get_preprocessed_table_file(
-        self, table: str
-    ) -> Generator[Iterator[bytes], None, None]:
+    def get_preprocessed_table_file(self, table: str) -> Generator[Iterator[bytes], None, None]:
         table_path = self.__get_table_path(table)
 
         try:

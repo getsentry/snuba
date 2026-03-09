@@ -26,9 +26,7 @@ class ClickhouseSettingsOverride(ClickhouseQueryProcessor):
 
     """
 
-    def __init__(
-        self, settings: MutableMapping[str, Any], overwrite_existing: bool = True
-    ) -> None:
+    def __init__(self, settings: MutableMapping[str, Any], overwrite_existing: bool = True) -> None:
         self.__settings = settings
         self.__overwrite_existing = overwrite_existing
 

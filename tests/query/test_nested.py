@@ -22,29 +22,21 @@ def test_nested_query() -> None:
     nested = LogicalQuery(
         Entity(EntityKey.EVENTS, ColumnSet([("event_id", String())])),
         selected_columns=[
-            SelectedExpression(
-                "string_evt_id", Column("string_evt_id", None, "event_id")
-            )
+            SelectedExpression("string_evt_id", Column("string_evt_id", None, "event_id"))
         ],
     )
 
     composite = CompositeQuery(
         from_clause=nested,
-        selected_columns=[
-            SelectedExpression("output", Column("output", None, "string_evt_id"))
-        ],
+        selected_columns=[SelectedExpression("output", Column("output", None, "string_evt_id"))],
     )
 
     # The iterator methods on the composite query do not descend into
     # the nested query
-    assert composite.get_all_ast_referenced_columns() == {
-        Column("output", None, "string_evt_id")
-    }
+    assert composite.get_all_ast_referenced_columns() == {Column("output", None, "string_evt_id")}
 
     # The schema of the nested query is the selected clause of that query.
-    assert composite.get_from_clause().get_columns() == ColumnSet(
-        [("string_evt_id", Any())]
-    )
+    assert composite.get_from_clause().get_columns() == ColumnSet([("string_evt_id", Any())])
 
 
 def test_join_query() -> None:
@@ -55,9 +47,7 @@ def test_join_query() -> None:
         ),
         selected_columns=[
             SelectedExpression("group_id", Column("group_id", None, "group_id")),
-            SelectedExpression(
-                "string_evt_id", Column("string_evt_id", None, "event_id")
-            ),
+            SelectedExpression("string_evt_id", Column("string_evt_id", None, "event_id")),
         ],
     )
 
@@ -66,9 +56,7 @@ def test_join_query() -> None:
             EntityKey.GROUPEDMESSAGE,
             ColumnSet([("id", UInt(32)), ("message", String())]),
         ),
-        selected_columns=[
-            SelectedExpression("group_id", Column("group_id", None, "id"))
-        ],
+        selected_columns=[SelectedExpression("group_id", Column("group_id", None, "id"))],
     )
 
     join_query = CompositeQuery(

@@ -14,7 +14,7 @@ from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import write_unprocessed_events
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 class TestDiscoverApi(BaseApiTest):
     @pytest.fixture
@@ -34,7 +34,7 @@ class TestDiscoverApi(BaseApiTest):
         self.post = _build_snql_post_methods
 
     @pytest.fixture(scope="function", autouse=True)
-    def _setup_method(self, request: Any, clickhouse_db: None) -> None:
+    def _setup_method(self, request: Any, events_db: None) -> None:
         super().setup_method(request.function)
         self.trace_id = "7400045b25c443b885914600aa83ad04"
         self.event = get_raw_event()
@@ -1448,7 +1448,7 @@ class TestDiscoverApi(BaseApiTest):
             == 1.0
         )
 
-    def test_zero_literal_caching(self, disable_query_cache: Callable[..., Any]) -> None:
+    def test_zero_literal_caching(self) -> None:
         response = self.post(
             json.dumps(
                 {
