@@ -15,6 +15,7 @@ pub struct ConsumerConfig {
     pub raw_topic: TopicConfig,
     pub commit_log_topic: Option<TopicConfig>,
     pub replacements_topic: Option<TopicConfig>,
+    pub accepted_outcomes_topic: Option<TopicConfig>,
     pub dlq_topic: Option<TopicConfig>,
     pub accountant_topic: TopicConfig,
     pub max_batch_size: usize,
