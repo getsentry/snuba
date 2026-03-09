@@ -577,7 +577,7 @@ jobs:
         devservices-version: ${{ steps.get-devservices-version.outputs.version }}
 
   self-hosted-end-to-end:
-    needs: [snuba-image, files-changed]
+    needs: [snuba-image]
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 30
