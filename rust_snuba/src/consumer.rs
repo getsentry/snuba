@@ -145,6 +145,13 @@ pub fn consumer_impl(
             .map(|s| s.name.clone())
             .collect::<Vec<_>>()
             .join(",");
+
+        // Set tags on Sentry scope for error observability
+        sentry::configure_scope(|scope| {
+            scope.set_tag("storage", &storage_name);
+            scope.set_tag("consumer_group", consumer_group);
+        });
+
         let tags = [
             ("storage", storage_name.clone()),
             ("consumer_group", consumer_group.to_owned()),
