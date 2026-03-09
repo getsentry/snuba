@@ -181,3 +181,16 @@ jobs:
             --tag ghcr.io/getsentry/snuba:nightly-debug \
             ghcr.io/getsentry/snuba:${{ github.sha }}-debug-amd64 \
             ghcr.io/getsentry/snuba:${{ github.sha }}-debug-arm64
+
+  self-hosted-end-to-end:
+    needs: [build-multiplatform, assemble]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Run Sentry self-hosted e2e CI
+        uses: getsentry/self-hosted@master
+        with:
+          project_name: snuba
+          image_url: ghcr.io/getsentry/snuba:${{ github.sha }}
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

@@ -578,6 +578,7 @@ jobs:
 
   self-hosted-end-to-end:
     needs: [snuba-image, files-changed]
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
