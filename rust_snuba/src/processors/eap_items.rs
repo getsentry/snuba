@@ -148,7 +148,7 @@ impl TryFrom<TraceItem> for EAPItem {
             project_id: from.project_id,
             item_type: from.item_type as u8,
             trace_id: Uuid::parse_str(&from.trace_id)?,
-            item_id: read_item_id(from.item_id),
+            item_id: read_item_id(from.item_id)?,
             timestamp: timestamp.seconds as u32,
             attributes: Default::default(),
             retention_days: Default::default(),
@@ -211,9 +211,12 @@ fn fnv_1a(input: &[u8]) -> u32 {
     res
 }
 
-fn read_item_id(from: Vec<u8>) -> u128 {
+fn read_item_id(from: Vec<u8>) -> anyhow::Result<u128> {
     let (item_id_bytes, _) = from.split_at(std::mem::size_of::<u128>());
-    u128::from_le_bytes(item_id_bytes.try_into().unwrap())
+    let bytes: [u8; 16] = item_id_bytes
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("item_id bytes has wrong length: {}", item_id_bytes.len()))?;
+    Ok(u128::from_le_bytes(bytes))
 }
 
 macro_rules! seq_attrs {
@@ -378,6 +381,7 @@ impl TryFrom<EAPItem> for EAPItemRow {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use std::time::SystemTime;
 
