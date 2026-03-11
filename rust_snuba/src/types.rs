@@ -580,8 +580,7 @@ mod tests {
 /// A single accepted outcome to be produced to the outcomes-billing topic.
 #[derive(Debug, Clone, Serialize)]
 pub struct TrackOutcome {
-    /// Bucket timestamp in seconds: offset * bucket_interval
-    pub timestamp: DateTime<Utc>,
+    pub timestamp: String,
     pub org_id: u64,
     pub project_id: u64,
     pub key_id: u64,
