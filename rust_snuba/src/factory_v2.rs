@@ -225,7 +225,10 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                 false,
                 Some(processors::ProcessingFunctionType::ProcessingFunctionWithReplacements(_)),
             ) => {
-                panic!("Consumer with replacements cannot be run in hybrid-mode");
+                tracing::error!(
+                    "Consumer with replacements cannot be run in hybrid-mode, shutting down"
+                );
+                std::process::exit(1);
             }
             _ => {
                 let schema = get_schema(&self.logical_topic_name, self.enforce_schema);

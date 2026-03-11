@@ -258,7 +258,8 @@ pub fn get_schema(schema_name: &str, enforce_schema: bool) -> Option<Arc<Schema>
         Ok(s) => Some(Arc::new(s)),
         Err(error) => {
             if enforce_schema {
-                panic!("Schema error: {error}");
+                tracing::error!(%error, "Fatal schema error, shutting down");
+                std::process::exit(1);
             } else {
                 let error: &dyn std::error::Error = &error;
                 tracing::error!(error, "Schema error");
