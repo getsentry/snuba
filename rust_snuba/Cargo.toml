@@ -90,12 +90,6 @@ tikv-jemallocator = "0.5"
 name = "processors"
 harness = false
 
-[lints.clippy]
-panic = "deny"
-todo = "deny"
-unimplemented = "deny"
-unreachable = "deny"
-
 [[bin]]
 # this is not a proper benchmark since it runs forever.
 name = "python-processor-infinite"

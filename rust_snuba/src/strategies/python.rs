@@ -153,7 +153,6 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
         let mut apply_backpressure = false;
         let mut invalid_message: Option<InvalidMessage> = None;
-        let mut any_message_error = false;
 
         Python::with_gil(|py| -> PyResult<()> {
             let python_strategy = self.python_strategy.lock();
@@ -161,9 +160,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                 InnerMessage::AnyMessage(..) => {
                     // Snuba message processors, as their interface is defined in Python, expect a
                     // single, specific partition/offset combination for every payload.
-                    tracing::error!("AnyMessage cannot be processed by a message processor");
-                    any_message_error = true;
-                    return Ok(());
+                    panic!("AnyMessage cannot be processed by a message processor");
                 }
                 InnerMessage::BrokerMessage(BrokerMessage {
                     payload,
@@ -209,13 +206,6 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
             Ok(())
         })
         .unwrap();
-
-        if any_message_error {
-            return Err(SubmitError::InvalidMessage(InvalidMessage {
-                partition: Partition::new(Topic::new("unknown"), 0),
-                offset: 0,
-            }));
-        }
 
         if let Some(msg) = invalid_message {
             return Err(SubmitError::InvalidMessage(msg));

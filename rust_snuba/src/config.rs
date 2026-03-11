@@ -36,19 +36,17 @@ where
                 None
             } else if v.is_number() {
                 // Numeric types are valid in confluent-kafka-python config but not in the Rust library
-                Some(Ok((k.to_string(), v.as_number().unwrap().to_string())))
+                Some((k.to_string(), v.as_number().unwrap().to_string()))
             } else if v.is_string() {
                 if v.as_str().unwrap().is_empty() {
                     return None;
                 }
-                Some(Ok((k.to_string(), v.as_str().unwrap().to_string())))
+                Some((k.to_string(), v.as_str().unwrap().to_string()))
             } else {
-                Some(Err(serde::de::Error::custom(format!(
-                    "unsupported type for broker config key '{k}'"
-                ))))
+                panic!("Unsupported type");
             }
         })
-        .collect::<Result<_, D::Error>>()?;
+        .collect();
 
     Ok(data)
 }

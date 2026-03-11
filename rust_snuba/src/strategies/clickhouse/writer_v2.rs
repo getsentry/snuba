@@ -264,7 +264,7 @@ impl ClickhouseClient {
             }
         }
 
-        anyhow::bail!("Loop should always return or bail before reaching here");
+        unreachable!("Loop should always return or bail before reaching here");
     }
 }
 
