@@ -282,4 +282,13 @@ mod tests {
         let produced = produced_payloads.lock().unwrap();
         assert_eq!(produced.len(), 0);
     }
+
+    #[test]
+    fn test_timestamp_formatting() {
+        let timestamp = DateTime::from_timestamp(1_700_000_000, 0).expect("expect timestamp");
+        assert_eq!(
+            timestamp.to_rfc3339_opts(SecondsFormat::Micros, true),
+            "2023-11-14T22:13:20.000000Z"
+        );
+    }
 }
