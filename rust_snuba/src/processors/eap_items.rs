@@ -212,10 +212,11 @@ fn fnv_1a(input: &[u8]) -> u32 {
 }
 
 fn read_item_id(from: Vec<u8>) -> anyhow::Result<u128> {
-    let (item_id_bytes, _) = from.split_at(std::mem::size_of::<u128>());
-    let bytes: [u8; 16] = item_id_bytes
+    let bytes: [u8; 16] = from
+        .get(..std::mem::size_of::<u128>())
+        .ok_or_else(|| anyhow::anyhow!("item_id too short: {} bytes, expected 16", from.len()))?
         .try_into()
-        .map_err(|_| anyhow::anyhow!("item_id bytes has wrong length: {}", item_id_bytes.len()))?;
+        .map_err(|_| anyhow::anyhow!("item_id bytes has wrong length"))?;
     Ok(u128::from_le_bytes(bytes))
 }
 
@@ -604,6 +605,27 @@ mod tests {
                 .unwrap()[0],
             EAPValue::Int(1234567890)
         );
+    }
+
+    #[test]
+    fn test_received_none() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.received = None;
+
+        let mut payload = Vec::new();
+        trace_item.encode(&mut payload).unwrap();
+
+        let payload = KafkaPayload::new(None, None, Some(payload));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        let batch = process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed when received is None");
+
+        assert!(batch.origin_timestamp.is_none());
     }
 
     #[test]

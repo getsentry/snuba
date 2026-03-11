@@ -318,8 +318,8 @@ impl Parse for CountersRawRow {
             retention_days,
             tags_key: tag_keys
                 .iter()
-                .filter_map(|k| k.parse::<u64>().ok())
-                .collect(),
+                .map(|k| k.parse::<u64>())
+                .collect::<Result<Vec<_>, _>>()?,
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
             materialization_version: 3,
@@ -496,8 +496,8 @@ impl Parse for SetsRawRow {
             retention_days,
             tags_key: tag_keys
                 .iter()
-                .filter_map(|k| k.parse::<u64>().ok())
-                .collect(),
+                .map(|k| k.parse::<u64>())
+                .collect::<Result<Vec<_>, _>>()?,
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
             materialization_version: 2,
@@ -590,8 +590,8 @@ impl Parse for DistributionsRawRow {
             retention_days,
             tags_key: tag_keys
                 .iter()
-                .filter_map(|k| k.parse::<u64>().ok())
-                .collect(),
+                .map(|k| k.parse::<u64>())
+                .collect::<Result<Vec<_>, _>>()?,
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
             materialization_version: 4,
@@ -698,8 +698,8 @@ impl Parse for GaugesRawRow {
             retention_days,
             tags_key: tag_keys
                 .iter()
-                .filter_map(|k| k.parse::<u64>().ok())
-                .collect(),
+                .map(|k| k.parse::<u64>())
+                .collect::<Result<Vec<_>, _>>()?,
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
             materialization_version: 3,

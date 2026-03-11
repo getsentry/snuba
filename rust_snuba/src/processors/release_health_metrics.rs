@@ -125,8 +125,8 @@ impl Parse for MetricsRawRow {
             retention_days,
             tags_key: tag_keys
                 .into_iter()
-                .filter_map(|e| e.parse().ok())
-                .collect(),
+                .map(|e| e.parse())
+                .collect::<Result<Vec<_>, _>>()?,
             tags_value: tag_values,
             materialization_version: 4,
             timeseries_id,
