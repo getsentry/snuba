@@ -10,10 +10,12 @@ use sentry_arroyo::types::Message;
 use sentry_arroyo::{counter, timer};
 
 use crate::config::ClickhouseConfig;
+use crate::runtime_config::get_load_balancing_config;
 use crate::types::BytesInsertBatch;
 
 struct RowBinaryTaskRunner<T> {
     client: clickhouse::Client,
+    storage_name: String,
     table: String,
     _phantom: std::marker::PhantomData<T>,
 }
@@ -22,6 +24,7 @@ impl<T> Clone for RowBinaryTaskRunner<T> {
     fn clone(&self) -> Self {
         Self {
             client: self.client.clone(),
+            storage_name: self.storage_name.clone(),
             table: self.table.clone(),
             _phantom: std::marker::PhantomData,
         }
@@ -34,14 +37,13 @@ where
     // across threads via RunTaskInThreads.
     T: clickhouse::Row + serde::Serialize + Send + Sync + 'static,
 {
-    fn new(config: &ClickhouseConfig, table: String) -> Self {
+    fn new(config: &ClickhouseConfig, table: String, storage_name: String) -> Self {
         let scheme = if config.secure { "https" } else { "http" };
         let client = clickhouse::Client::default()
             .with_url(format!("{}://{}:{}", scheme, config.host, config.http_port))
             .with_user(&config.user)
             .with_password(&config.password)
             .with_database(&config.database)
-            .with_option("load_balancing", "in_order")
             // Wait for data to be written to all shards before returning success.
             // Without this, inserts return immediately after writing to the local
             // node and data is forwarded asynchronously, risking data loss on failure.
@@ -50,6 +52,7 @@ where
 
         Self {
             client,
+            storage_name,
             table,
             _phantom: std::marker::PhantomData,
         }
@@ -71,6 +74,7 @@ where
     ) -> RunTaskFunc<BytesInsertBatch<()>, anyhow::Error> {
         let client = self.client.clone();
         let table = self.table.clone();
+        let lb_config = get_load_balancing_config(&self.storage_name);
 
         Box::pin(async move {
             let (empty_message, insert_batch) = message.take();
@@ -85,7 +89,7 @@ where
                 tracing::debug!("performing row binary write");
 
                 for attempt in 0..=MAX_RETRIES {
-                    match write_rows(&client, &table, &rows).await {
+                    match write_rows(&client, &table, &rows, &lb_config).await {
                         Ok(()) => break,
                         Err(e) => {
                             if attempt == MAX_RETRIES {
@@ -135,8 +139,14 @@ async fn write_rows<T: clickhouse::Row + serde::Serialize>(
     client: &clickhouse::Client,
     table: &str,
     rows: &[T],
+    lb_config: &crate::runtime_config::LoadBalancingConfig,
 ) -> Result<(), clickhouse::error::Error> {
-    let mut insert = client.insert(table)?;
+    let mut insert = client
+        .insert(table)?
+        .with_option("load_balancing", &lb_config.load_balancing);
+    if let Some(offset) = &lb_config.first_offset {
+        insert = insert.with_option("load_balancing_first_offset", offset);
+    }
     for row in rows {
         insert.write(row).await?;
     }
@@ -158,8 +168,9 @@ where
         cluster_config: ClickhouseConfig,
         table: String,
         concurrency: &ConcurrencyConfig,
+        storage_name: String,
     ) -> Self {
-        let task_runner = RowBinaryTaskRunner::<T>::new(&cluster_config, table);
+        let task_runner = RowBinaryTaskRunner::<T>::new(&cluster_config, table, storage_name);
 
         let inner = RunTaskInThreads::new(
             next_step,
