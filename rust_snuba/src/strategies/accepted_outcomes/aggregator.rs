@@ -4,9 +4,11 @@ use std::time::{Duration, Instant};
 use prost::Message as ProstMessage;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::processing::strategies::{
-    CommitRequest, InvalidMessage, ProcessingStrategy, StrategyError, SubmitError,
+    merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
+    StrategyError, SubmitError,
 };
 use sentry_arroyo::types::{InnerMessage, Message, Partition};
+use sentry_arroyo::utils::timing::Deadline;
 use sentry_protos::snuba::v1::TraceItem;
 
 use crate::types::{AggregatedOutcomesBatch, BucketKey};
@@ -51,6 +53,10 @@ pub struct OutcomesAggregator<TNext> {
     batch: AggregatedOutcomesBatch,
     /// Latest broker offset seen per partition across all buckets.
     latest_offsets: HashMap<Partition, u64>,
+    /// A message rejected by the next step, to be retried on the next poll.
+    message_carried_over: Option<Message<AggregatedOutcomesBatch>>,
+    /// Commit request carried over from a poll where we had a message to retry.
+    commit_request_carried_over: Option<CommitRequest>,
 }
 
 impl<TNext> OutcomesAggregator<TNext> {
@@ -68,6 +74,8 @@ impl<TNext> OutcomesAggregator<TNext> {
             last_flush: Instant::now(),
             batch: AggregatedOutcomesBatch::new(bucket_interval),
             latest_offsets: HashMap::new(),
+            message_carried_over: None,
+            commit_request_carried_over: None,
         }
     }
 
@@ -75,6 +83,7 @@ impl<TNext> OutcomesAggregator<TNext> {
     where
         TNext: ProcessingStrategy<AggregatedOutcomesBatch>,
     {
+        let num_buckets = self.batch.num_buckets();
         let batch = std::mem::replace(
             &mut self.batch,
             AggregatedOutcomesBatch::new(self.bucket_interval),
@@ -87,25 +96,26 @@ impl<TNext> OutcomesAggregator<TNext> {
             .map(|(partition, offset)| (*partition, offset + 1))
             .collect();
 
-        let message = Message::new_any_message(batch.clone(), committable);
+        let message = Message::new_any_message(batch, committable);
 
         match self.next_step.submit(message) {
             Ok(()) => {
-                // Keep the batch cleared only after a successful forward to next_step.
-                self.last_flush = Instant::now();
+                let now = Instant::now();
+                let seconds = (now - self.last_flush).as_secs_f64();
+                tracing::debug!(
+                    "flushed {} buckets after {} seconds, with committable {:?}",
+                    num_buckets,
+                    seconds,
+                    latest_offsets
+                );
+                self.last_flush = now;
                 Ok(())
             }
-            Err(SubmitError::MessageRejected(_)) => {
-                tracing::warn!("Message rejected by CommitOutcomes during flush");
-                self.batch = batch;
-                self.latest_offsets = latest_offsets;
+            Err(SubmitError::MessageRejected(rejected)) => {
+                self.message_carried_over = Some(rejected.message);
                 Ok(())
             }
-            Err(SubmitError::InvalidMessage(e)) => {
-                self.batch = batch;
-                self.latest_offsets = latest_offsets;
-                Err(StrategyError::InvalidMessage(e))
-            }
+            Err(SubmitError::InvalidMessage(e)) => Err(StrategyError::InvalidMessage(e)),
         }
     }
 }
@@ -114,15 +124,40 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
     for OutcomesAggregator<TNext>
 {
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
-        if self.batch.num_buckets() >= self.max_batch_size
-            || self.last_flush.elapsed() >= self.max_batch_time_ms
-        {
-            self.flush()?;
+        let commit_request = self.next_step.poll()?;
+        self.commit_request_carried_over =
+            merge_commit_request(self.commit_request_carried_over.take(), commit_request);
+
+        if let Some(msg) = self.message_carried_over.take() {
+            match self.next_step.submit(msg) {
+                Ok(()) => {}
+                Err(SubmitError::MessageRejected(MessageRejected {
+                    message: carried_message,
+                })) => {
+                    self.message_carried_over = Some(carried_message);
+                }
+                Err(SubmitError::InvalidMessage(e)) => {
+                    return Err(StrategyError::InvalidMessage(e));
+                }
+            }
         }
-        self.next_step.poll()
+
+        if self.message_carried_over.is_none() {
+            if self.batch.num_buckets() >= self.max_batch_size
+                || self.last_flush.elapsed() >= self.max_batch_time_ms
+            {
+                self.flush()?;
+            }
+        }
+
+        Ok(self.commit_request_carried_over.take())
     }
 
     fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), SubmitError<KafkaPayload>> {
+        if self.message_carried_over.is_some() {
+            return Err(SubmitError::MessageRejected(MessageRejected { message }));
+        }
+
         let InnerMessage::BrokerMessage(ref broker_msg) = message.inner_message else {
             unreachable!("Unexpected message type");
         };
@@ -183,8 +218,28 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
     }
 
     fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
-        self.flush()?;
-        self.next_step.join(timeout)
+        let deadline = timeout.map(Deadline::new);
+
+        if self.message_carried_over.is_none() {
+            self.flush()?;
+        }
+
+        while self.message_carried_over.is_some() {
+            if deadline.map_or(false, |d| d.has_elapsed()) {
+                tracing::warn!("Timeout reached while waiting for carried-over outcomes");
+                break;
+            }
+
+            let commit_request = self.poll()?;
+            self.commit_request_carried_over =
+                merge_commit_request(self.commit_request_carried_over.take(), commit_request);
+        }
+
+        let next_commit = self.next_step.join(deadline.map(|d| d.remaining()))?;
+        Ok(merge_commit_request(
+            self.commit_request_carried_over.take(),
+            next_commit,
+        ))
     }
 }
 
@@ -406,5 +461,113 @@ mod tests {
         assert_eq!(aggregator.batch.num_buckets(), 0);
         // make sure new batch retains bucket_interval
         assert_eq!(aggregator.batch.bucket_interval, 60);
+    }
+
+    #[test]
+    fn submit_returns_backpressure_when_message_carried_over() {
+        struct RejectOnce {
+            rejected: bool,
+        }
+        impl ProcessingStrategy<AggregatedOutcomesBatch> for RejectOnce {
+            fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
+                Ok(None)
+            }
+            fn submit(
+                &mut self,
+                message: Message<AggregatedOutcomesBatch>,
+            ) -> Result<(), SubmitError<AggregatedOutcomesBatch>> {
+                if !self.rejected {
+                    self.rejected = true;
+                    Err(SubmitError::MessageRejected(MessageRejected { message }))
+                } else {
+                    Ok(())
+                }
+            }
+            fn terminate(&mut self) {}
+            fn join(
+                &mut self,
+                _: Option<Duration>,
+            ) -> Result<Option<CommitRequest>, StrategyError> {
+                Ok(None)
+            }
+        }
+
+        let mut aggregator = OutcomesAggregator::new(
+            RejectOnce { rejected: false },
+            1, // flush after 1 bucket
+            Duration::from_millis(30_000),
+            60,
+        );
+
+        let partition = Partition::new(Topic::new("test"), 0);
+        let payload = make_payload(6_000, 1, 2, 3, &[(4, 1)]);
+
+        // First submit accumulates into batch
+        aggregator
+            .submit(Message::new_broker_message(
+                payload.clone(),
+                partition,
+                0,
+                Utc::now(),
+            ))
+            .unwrap();
+
+        // poll triggers flush; next_step rejects → message_carried_over is set
+        aggregator.poll().unwrap();
+        assert!(aggregator.message_carried_over.is_some());
+
+        // While carrying over, submit should return MessageRejected
+        let result = aggregator.submit(Message::new_broker_message(
+            payload.clone(),
+            partition,
+            1,
+            Utc::now(),
+        ));
+        assert!(matches!(result, Err(SubmitError::MessageRejected(_))));
+
+        // Next poll retries and succeeds; carried-over message clears
+        aggregator.poll().unwrap();
+        assert!(aggregator.message_carried_over.is_none());
+    }
+
+    #[test]
+    fn join_honors_timeout_when_message_stays_carried_over() {
+        struct AlwaysReject;
+        impl ProcessingStrategy<AggregatedOutcomesBatch> for AlwaysReject {
+            fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
+                Ok(None)
+            }
+            fn submit(
+                &mut self,
+                message: Message<AggregatedOutcomesBatch>,
+            ) -> Result<(), SubmitError<AggregatedOutcomesBatch>> {
+                Err(SubmitError::MessageRejected(MessageRejected { message }))
+            }
+            fn terminate(&mut self) {}
+            fn join(
+                &mut self,
+                _: Option<Duration>,
+            ) -> Result<Option<CommitRequest>, StrategyError> {
+                Ok(None)
+            }
+        }
+
+        let mut aggregator =
+            OutcomesAggregator::new(AlwaysReject, 1, Duration::from_millis(30_000), 60);
+        let partition = Partition::new(Topic::new("test"), 0);
+        let payload = make_payload(6_000, 1, 2, 3, &[(4, 1)]);
+
+        aggregator
+            .submit(Message::new_broker_message(
+                payload,
+                partition,
+                0,
+                Utc::now(),
+            ))
+            .unwrap();
+
+        let commit = aggregator.join(Some(Duration::from_millis(0))).unwrap();
+        assert!(commit.is_none());
+        assert!(aggregator.message_carried_over.is_some());
     }
 }

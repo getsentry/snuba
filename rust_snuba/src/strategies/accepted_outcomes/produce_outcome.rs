@@ -2,7 +2,6 @@ use crate::types::{AggregatedOutcomesBatch, TrackOutcome};
 use chrono::{DateTime, Utc};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::backends::Producer;
-use sentry_arroyo::counter;
 use sentry_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
@@ -10,9 +9,10 @@ use sentry_arroyo::processing::strategies::{
     CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
 use sentry_arroyo::types::{Message, Topic, TopicOrPartition};
+use sentry_arroyo::{counter, timer};
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 struct ProduceOutcome {
     producer: Arc<dyn Producer<KafkaPayload>>,
@@ -46,6 +46,7 @@ impl TaskRunner<AggregatedOutcomesBatch, AggregatedOutcomesBatch, anyhow::Error>
         let skip_produce = self.skip_produce;
 
         Box::pin(async move {
+            let produce_start = SystemTime::now();
             let mut category_metrics: BTreeMap<u32, (u64, u64)> = BTreeMap::new();
 
             let bucket_interval = message.payload().bucket_interval;
@@ -83,6 +84,11 @@ impl TaskRunner<AggregatedOutcomesBatch, AggregatedOutcomesBatch, anyhow::Error>
                     tracing::error!(error, "Error producing outcome");
                     return Err(RunTaskError::RetryableError);
                 }
+            }
+
+            let produce_finish = SystemTime::now();
+            if let Ok(elapsed) = produce_finish.duration_since(produce_start) {
+                timer!("accepted_outcomes.batch_produce_ms", elapsed);
             }
 
             for (category, (bucket_count, total_quantity)) in &category_metrics {
