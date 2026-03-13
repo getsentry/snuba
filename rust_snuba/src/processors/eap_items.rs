@@ -68,7 +68,7 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
         TraceItemType::UptimeResult => "uptime",
         TraceItemType::Replay => "replays",
         TraceItemType::Occurrence => "issueplatform",
-        TraceItemType::Metric => "sessions",
+        TraceItemType::Metric => "trace_metrics",
         TraceItemType::ProfileFunction => "profiles",
         TraceItemType::Attachment => "attachments",
         TraceItemType::Preprod => "preprod",
