@@ -142,12 +142,11 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
             }
         }
 
-        if self.message_carried_over.is_none() {
-            if self.batch.num_buckets() >= self.max_batch_size
-                || self.last_flush.elapsed() >= self.max_batch_time_ms
-            {
-                self.flush()?;
-            }
+        if self.message_carried_over.is_none()
+            && (self.batch.num_buckets() >= self.max_batch_size
+                || self.last_flush.elapsed() >= self.max_batch_time_ms)
+        {
+            self.flush()?;
         }
 
         Ok(self.commit_request_carried_over.take())
@@ -225,7 +224,7 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
         }
 
         while self.message_carried_over.is_some() {
-            if deadline.map_or(false, |d| d.has_elapsed()) {
+            if deadline.is_some_and(|d| d.has_elapsed()) {
                 tracing::warn!("Timeout reached while waiting for carried-over outcomes");
                 break;
             }
