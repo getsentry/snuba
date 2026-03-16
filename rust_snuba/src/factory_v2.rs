@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use sentry::{Hub, SentryFutureExt};
@@ -62,6 +62,7 @@ pub struct ConsumerStrategyFactoryV2 {
     pub join_timeout_ms: Option<u64>,
     pub health_check: String,
     pub use_row_binary: bool,
+    pub assigned_partitions: Arc<Mutex<Vec<u16>>>,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
@@ -82,6 +83,8 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             Some(min) => set_global_tag("min_partition".to_owned(), min.to_string()),
             None => set_global_tag("min_partition".to_owned(), "none".to_owned()),
         }
+
+        *self.assigned_partitions.lock().unwrap() = assigned_partitions;
     }
 
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
@@ -106,6 +109,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
 
         let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<()>>> =
             if let Some((ref producer, destination)) = self.commit_log_producer {
+                let partitions = self.assigned_partitions.lock().unwrap().clone();
                 Box::new(ProduceCommitLog::new(
                     next_step,
                     producer.clone(),
@@ -114,6 +118,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     self.physical_consumer_group.clone(),
                     &self.commitlog_concurrency,
                     false,
+                    partitions,
                 ))
             } else {
                 Box::new(next_step)
@@ -290,6 +295,7 @@ impl ConsumerStrategyFactoryV2 {
 
         let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<()>>> =
             if let Some((ref producer, destination)) = self.commit_log_producer {
+                let partitions = self.assigned_partitions.lock().unwrap().clone();
                 Box::new(ProduceCommitLog::new(
                     next_step,
                     producer.clone(),
@@ -298,6 +304,7 @@ impl ConsumerStrategyFactoryV2 {
                     self.physical_consumer_group.clone(),
                     &self.commitlog_concurrency,
                     false,
+                    partitions,
                 ))
             } else {
                 Box::new(next_step)

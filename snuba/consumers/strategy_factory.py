@@ -19,7 +19,11 @@ from arroyo.processing.strategies.run_task_with_multiprocessing import (
 )
 from arroyo.types import BaseValue, Commit, FilteredPayload, Message, Partition
 
-from snuba.consumers.consumer import BytesInsertBatch, ProcessedMessageBatchWriter
+from snuba.consumers.consumer import (
+    BytesInsertBatch,
+    CommitLogHeartbeatState,
+    ProcessedMessageBatchWriter,
+)
 from snuba.consumers.dlq import ExitAfterNMessages
 from snuba.processor import ReplacementBatch
 
@@ -76,11 +80,13 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         max_messages_to_process: Optional[int] = None,
         initialize_parallel_transform: Optional[Callable[[], None]] = None,
         health_check_file: Optional[str] = None,
+        heartbeat_state: Optional[CommitLogHeartbeatState] = None,
     ) -> None:
         self.__prefilter = prefilter
         self.__process_message = process_message
         self.__collector = collector
         self.__max_messages_to_process = max_messages_to_process
+        self.__heartbeat_state = heartbeat_state
 
         self.__max_batch_size = max_batch_size
         self.__max_batch_time = max_batch_time
@@ -116,6 +122,9 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             self.__metrics_tags["min_partition"] = str(min(x.index for x in partitions))
         else:
             self.__metrics_tags.pop("min_partition", None)
+
+        if self.__heartbeat_state is not None:
+            self.__heartbeat_state.update_partitions(partitions)
 
         def accumulator(
             batch_writer: ProcessedMessageBatchWriter,

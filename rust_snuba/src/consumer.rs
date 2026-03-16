@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
@@ -270,6 +270,7 @@ pub fn consumer_impl(
         join_timeout_ms,
         health_check: health_check.to_string(),
         use_row_binary,
+        assigned_partitions: Arc::new(Mutex::new(Vec::new())),
     };
 
     let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);

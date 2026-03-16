@@ -21,6 +21,7 @@ from sentry_sdk.api import configure_scope
 
 from snuba.consumers.consumer import (
     CommitLogConfig,
+    CommitLogHeartbeatState,
     build_batch_writer,
     process_message,
 )
@@ -218,8 +219,10 @@ class ConsumerBuilder:
             commit_log_config = CommitLogConfig(
                 self.commit_log_producer, self.commit_log_topic, self.group_id
             )
+            heartbeat_state: Optional[CommitLogHeartbeatState] = CommitLogHeartbeatState()
         else:
             commit_log_config = None
+            heartbeat_state = None
 
         strategy_factory: ProcessingStrategyFactory[KafkaPayload] = KafkaConsumerStrategyFactory(
             prefilter=stream_loader.get_pre_filter(),
@@ -237,6 +240,7 @@ class ConsumerBuilder:
                 replacements_topic=self.replacements_topic,
                 slice_id=self.slice_id,
                 commit_log_config=commit_log_config,
+                heartbeat_state=heartbeat_state,
             ),
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms / 1000.0,
@@ -249,6 +253,7 @@ class ConsumerBuilder:
             initialize_parallel_transform=setup_sentry,
             health_check_file=self.health_check_file,
             metrics_tags=self.metrics_tags,
+            heartbeat_state=heartbeat_state,
         )
 
         if self.__profile_path is not None:

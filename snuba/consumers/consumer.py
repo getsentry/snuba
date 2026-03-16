@@ -62,6 +62,28 @@ class CommitLogConfig(NamedTuple):
     group_id: str
 
 
+class CommitLogHeartbeatState:
+    """
+    Shared mutable state that persists across batch writer instances to enable
+    commit log heartbeats for idle partitions.
+
+    When a partition has no messages in a batch window, the post-process-forwarder
+    stalls waiting for a commit log entry. This state tracks last known offsets so
+    we can re-emit them as heartbeats for idle partitions.
+    """
+
+    def __init__(self) -> None:
+        self.assigned_partitions: Set[Partition] = set()
+        self.last_produced_offsets: MutableMapping[Partition, Tuple[int, datetime]] = {}
+
+    def update_partitions(self, partitions: Mapping[Partition, int]) -> None:
+        self.assigned_partitions = set(partitions.keys())
+        # Clean up offsets for partitions we no longer own
+        for p in list(self.last_produced_offsets.keys()):
+            if p not in self.assigned_partitions:
+                del self.last_produced_offsets[p]
+
+
 class BytesInsertBatch(NamedTuple):
     rows: Sequence[bytes]
 
@@ -239,10 +261,12 @@ class ProcessedMessageBatchWriter:
         # upon closing each batch.
         commit_log_config: Optional[CommitLogConfig] = None,
         metrics: Optional[MetricsBackend] = None,
+        heartbeat_state: Optional[CommitLogHeartbeatState] = None,
     ) -> None:
         self.__insert_batch_writer = insert_batch_writer
         self.__replacement_batch_writer = replacement_batch_writer
         self.__commit_log_config = commit_log_config
+        self.__heartbeat_state = heartbeat_state
         self.__offsets_to_produce: MutableMapping[Partition, Tuple[int, datetime]] = {}
         self.__received_timestamps: MutableMapping[Partition, List[float]] = defaultdict(list)
 
@@ -282,6 +306,32 @@ class ProcessedMessageBatchWriter:
         if error is not None:
             raise Exception(error.str())
 
+    def __produce_commit_log_entry(
+        self,
+        partition: Partition,
+        offset: int,
+        timestamp: datetime,
+        received_p99: Optional[float],
+    ) -> None:
+        assert self.__commit_log_config is not None
+        payload = commit_codec.encode(
+            CommitLogCommit(
+                self.__commit_log_config.group_id,
+                partition,
+                offset,
+                datetime.timestamp(timestamp),
+                received_p99,
+            )
+        )
+        self.__commit_log_config.producer.produce(
+            self.__commit_log_config.topic.name,
+            key=payload.key,
+            value=payload.value,
+            headers=payload.headers,
+            on_delivery=self.__commit_message_delivery_callback,
+        )
+        self.__commit_log_config.producer.poll(0.0)
+
     def close(self) -> None:
         self.__closed = True
 
@@ -302,23 +352,20 @@ class ProcessedMessageBatchWriter:
                 else:
                     received_p99 = None
 
-                payload = commit_codec.encode(
-                    CommitLogCommit(
-                        self.__commit_log_config.group_id,
-                        partition,
-                        offset,
-                        datetime.timestamp(timestamp),
-                        received_p99,
-                    )
-                )
-                self.__commit_log_config.producer.produce(
-                    self.__commit_log_config.topic.name,
-                    key=payload.key,
-                    value=payload.value,
-                    headers=payload.headers,
-                    on_delivery=self.__commit_message_delivery_callback,
-                )
-                self.__commit_log_config.producer.poll(0.0)
+                self.__produce_commit_log_entry(partition, offset, timestamp, received_p99)
+
+            # Produce heartbeat entries for idle assigned partitions
+            if self.__heartbeat_state is not None:
+                # Update shared state with offsets from this batch
+                self.__heartbeat_state.last_produced_offsets.update(self.__offsets_to_produce)
+                # Emit heartbeats for assigned partitions that had no messages
+                for partition in self.__heartbeat_state.assigned_partitions:
+                    if partition not in self.__offsets_to_produce:
+                        last = self.__heartbeat_state.last_produced_offsets.get(partition)
+                        if last is not None:
+                            offset, timestamp = last
+                            self.__produce_commit_log_entry(partition, offset, timestamp, None)
+
         self.__offsets_to_produce.clear()
         self.__received_timestamps.clear()
 
@@ -345,6 +392,7 @@ def build_batch_writer(
     replacements_topic: Optional[Topic] = None,
     commit_log_config: Optional[CommitLogConfig] = None,
     slice_id: Optional[int] = None,
+    heartbeat_state: Optional[CommitLogHeartbeatState] = None,
 ) -> Callable[[], ProcessedMessageBatchWriter]:
     assert not (replacements_producer is None) ^ (replacements_topic is None)
     supports_replacements = replacements_producer is not None
@@ -373,6 +421,7 @@ def build_batch_writer(
             replacement_batch_writer,
             commit_log_config,
             metrics=insert_metrics,
+            heartbeat_state=heartbeat_state,
         )
 
     return build_writer
@@ -385,10 +434,12 @@ class MultistorageCollector:
         # If passed, produces to the commit log after each batch is closed
         commit_log_config: Optional[CommitLogConfig],
         ignore_errors: Optional[Set[StorageKey]] = None,
+        heartbeat_state: Optional[CommitLogHeartbeatState] = None,
     ):
         self.__steps = steps
         self.__closed = False
         self.__commit_log_config = commit_log_config
+        self.__heartbeat_state = heartbeat_state
         self.__messages: MutableMapping[
             StorageKey,
             List[Message[Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]]],
@@ -420,6 +471,31 @@ class MultistorageCollector:
                 message.value.timestamp,
             )
 
+    def __produce_commit_log_entry(
+        self,
+        partition: Partition,
+        offset: int,
+        timestamp: datetime,
+    ) -> None:
+        assert self.__commit_log_config is not None
+        payload = commit_codec.encode(
+            CommitLogCommit(
+                self.__commit_log_config.group_id,
+                partition,
+                offset,
+                datetime.timestamp(timestamp),
+                None,
+            )
+        )
+        self.__commit_log_config.producer.produce(
+            self.__commit_log_config.topic.name,
+            key=payload.key,
+            value=payload.value,
+            headers=payload.headers,
+            on_delivery=self.__commit_message_delivery_callback,
+        )
+        self.__commit_log_config.producer.poll(0.0)
+
     def close(self) -> None:
         self.__closed = True
 
@@ -428,23 +504,17 @@ class MultistorageCollector:
 
         if self.__commit_log_config is not None:
             for partition, (offset, timestamp) in self.__offsets_to_produce.items():
-                payload = commit_codec.encode(
-                    CommitLogCommit(
-                        self.__commit_log_config.group_id,
-                        partition,
-                        offset,
-                        datetime.timestamp(timestamp),
-                        None,
-                    )
-                )
-                self.__commit_log_config.producer.produce(
-                    self.__commit_log_config.topic.name,
-                    key=payload.key,
-                    value=payload.value,
-                    headers=payload.headers,
-                    on_delivery=self.__commit_message_delivery_callback,
-                )
-                self.__commit_log_config.producer.poll(0.0)
+                self.__produce_commit_log_entry(partition, offset, timestamp)
+
+            # Produce heartbeat entries for idle assigned partitions
+            if self.__heartbeat_state is not None:
+                self.__heartbeat_state.last_produced_offsets.update(self.__offsets_to_produce)
+                for partition in self.__heartbeat_state.assigned_partitions:
+                    if partition not in self.__offsets_to_produce:
+                        last = self.__heartbeat_state.last_produced_offsets.get(partition)
+                        if last is not None:
+                            offset, timestamp = last
+                            self.__produce_commit_log_entry(partition, offset, timestamp)
 
             self.__commit_log_config.producer.flush()
 
