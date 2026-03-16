@@ -115,6 +115,7 @@ select = [
 ignore = [
     "E501", # line too long (handled by formatter)
     "E402", # module level import not at top of file
+    "E712", # comparisons to True/False are common in tests
 ]
 
 [tool.mypy]
