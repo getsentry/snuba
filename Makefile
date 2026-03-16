@@ -116,3 +116,7 @@ install-proto-dev:
 	uv pip install -e ../sentry-protos/py --config-settings editable_mode=compat && \
 	echo "Installed local sentry-protos, please restart the vscode language server. Run 'uv pip uninstall sentry-protos && uv sync' to go back to the original version."
 .PHONY: install-proto-dev
+
+listen-metrics:
+	sudo tcpdump -i lo0 -l -A udp port 8125
+.PHONY: listen-metrics

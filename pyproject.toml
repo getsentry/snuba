@@ -105,21 +105,16 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = [
+    # todo: eventually we should get this enabled
     # "B",     flake8-bugbear
-    # was not actually being used in the codebase when we intended to.
-    # I will enable it as a follow up to apply to new files.
     "E", # pycodestyle errors
     "F", # pyflakes
     "W", # pycodestyle warnings
     "I", # isort
 ]
 ignore = [
-    "E203", # whitespace before ':'
-    "E266", # too many leading '#' for block comment
-    "E302", # expected 2 blank lines, found N
     "E501", # line too long (handled by formatter)
     "E402", # module level import not at top of file
-    "E712", # comparison to True/False
 ]
 
 [tool.mypy]
