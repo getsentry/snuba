@@ -150,16 +150,16 @@ USER snuba
 # --- Distroless stages (additive, no changes to existing stages above) ---
 
 # Prepare artifacts for distroless: fix venv symlinks and verify shared libs.
-# The build image has Python at /usr/local/bin/python3, but the distroless
-# runtime has it at /usr/bin/python3.
+# The build image has Python at /usr/local/bin/python3, but the DHI
+# runtime has it at /opt/python/bin/python3.
 FROM application_base AS distroless_prep
 USER 0
-RUN ln -sf /usr/bin/python3 /.venv/bin/python3 && \
-    ln -sf /usr/bin/python3 /.venv/bin/python
+RUN ln -sf /opt/python/bin/python3 /.venv/bin/python3 && \
+    ln -sf /opt/python/bin/python3 /.venv/bin/python
 RUN find /.venv -name "*.so" -exec ldd {} \; 2>&1 | grep "not found" && exit 1 || true
 
 # Distroless production image — minimal attack surface, no shell
-FROM gcr.io/distroless/python3-debian13 AS application-distroless
+FROM us-docker.pkg.dev/sentryio/dhi/python:3.13-debian13 AS application-distroless
 
 COPY --from=distroless_prep /.venv /.venv
 COPY --from=distroless_prep /usr/src/snuba /usr/src/snuba
@@ -182,7 +182,7 @@ ENTRYPOINT ["python3", "/usr/src/snuba/docker_entrypoint.py"]
 CMD ["api"]
 
 # Debug distroless image — includes busybox (sh, ls, cat, wget, env, etc.)
-FROM gcr.io/distroless/python3-debian13:debug AS application-distroless-debug
+FROM us-docker.pkg.dev/sentryio/dhi/python:3.13-debian13-dev AS application-distroless-debug
 
 COPY --from=distroless_prep /.venv /.venv
 COPY --from=distroless_prep /usr/src/snuba /usr/src/snuba
