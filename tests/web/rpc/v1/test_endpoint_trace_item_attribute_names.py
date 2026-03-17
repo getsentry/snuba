@@ -50,6 +50,7 @@ def populate_eap_spans_storage(num_rows: int) -> None:
             id * NUM_ATTR_PER_SPAN_PER_TYPE + NUM_ATTR_PER_SPAN_PER_TYPE,
         ):
             attributes[f"a_tag_{i:03}"] = AnyValue(string_value="blah")
+            attributes[f"a_tag_{i:03}"] = AnyValue(double_value="blah")
             attributes[f"c_tag_{i:03}"] = AnyValue(string_value="blah")
             attributes[f"b_measurement_{i:03}"] = AnyValue(double_value=10)
             attributes[f"d_bool_{i:03}"] = AnyValue(bool_value=i % 2 == 0)

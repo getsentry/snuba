@@ -177,6 +177,15 @@ def _disable_max_query_size_check_for_clusters() -> set[str]:
     )
 
 
+def format_sql(sql: str) -> str:
+    return (
+        sql.replace("FROM", "\nFROM")
+        .replace("WHERE", "\nWHERE")
+        .replace("GROUP", "\nGROUP")
+        .replace("ORDER", "\nORDER")
+    )
+
+
 def _format_storage_query_and_run(
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
@@ -201,6 +210,12 @@ def _format_storage_query_and_run(
         formatted_query = format_query(clickhouse_query)
 
         formatted_sql = formatted_query.get_sql()
+        print()
+        print(format_sql(formatted_sql))
+        print()
+        import time
+
+        time.sleep(0.1)
         query_size_bytes = len(formatted_sql.encode("utf-8"))
         span.set_data(
             "query", textwrap.wrap(formatted_sql, 100, break_long_words=False)

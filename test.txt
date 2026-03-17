@@ -1,0 +1,9 @@
+SELECT (transform(CAST(ifNull((if(mapContains(attributes_string_8, 'sentry.device.class'), arrayElement(attributes_string_8, 'sentry.device.class'), NULL) AS `sentry.device.class_TYPE_STRING`), ''), 'String'), ['3', '', '1', '2'], ['high', 'Unknown', 'low', 'medium'], 'unknown') AS `device.class`), (round(sumIfOrNull(divide(1, sampling_fact
+or), mapContains(attributes_float_5, 'sentry.duration_ms') AND true)) AS `count()`), (multiply(1.96, sqrt(sumIf(minus(multiply(sampling_weight, sampling_weight), sampling_weight), mapContains(attributes_float_5, 'sentry.duration_ms') AND true))) AS `__snuba_custom_column__confidence_interval$count()$function_type:count`), (divide(countIf((i
+f(mapContains(attributes_float_5, 'sentry.duration_ms'), arrayElement(attributes_float_5, 'sentry.duration_ms'), NULL) AS `sentry.duration_ms_TYPE_DOUBLE`), mapContains(attributes_float_5, 'sentry.duration_ms') AND true), sumIf(sampling_weight, mapContains(attributes_float_5, 'sentry.duration_ms') AND true)) AS `__snuba_custom_column__avera
+ge_sample_rate$count()`), (countIf(`sentry.duration_ms_TYPE_DOUBLE`, mapContains(attributes_float_5, 'sentry.duration_ms') AND true) AS `__snuba_custom_column__count$count()`)
+FROM eap_items_1_local
+WHERE in(project_id, [4556671211732993]) AND equals(organization_id, 4556671211667456) AND less(timestamp, toDateTime(1756406512)) AND greaterOrEquals(timestamp, toDateTime(1748630512)) AND (equals(`sentry.device.class_TYPE_STRING`, '') OR isNull(`sentry.device.class_TYPE_STRING`) AND isNull('')) AND mapContains(attributes_float_5, 'sentry.
+duration_ms') AND equals(item_type, 1)
+GROUP BY `device.class`
+ORDER BY `count()` ASC LIMIT 101 OFFSET 0
