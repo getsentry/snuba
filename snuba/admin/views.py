@@ -463,12 +463,16 @@ def copy_table_query() -> Response:
 
         dry_run = req.get("dry_run", True)
         target_host = req.get("target_host")
+        skip_on_cluster = req.get("skip_on_cluster", False)
+        cluster_name_override = req.get("cluster_name")
 
         resp = copy_tables(
             source_host=source_host,
             storage_name=storage,
             dry_run=dry_run,
             target_host=target_host,
+            skip_on_cluster=skip_on_cluster,
+            cluster_name_override=cluster_name_override,
         )
     except KeyError as err:
         return make_response(
