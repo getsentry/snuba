@@ -102,7 +102,7 @@ impl<TNext> OutcomesAggregator<TNext> {
             Ok(()) => {
                 let now = Instant::now();
                 let seconds = (now - self.last_flush).as_secs_f64();
-                tracing::debug!(
+                tracing::info!(
                     "flushed {} buckets after {} seconds, with committable {:?}",
                     num_buckets,
                     seconds,
