@@ -41,6 +41,8 @@ from snuba.web import (
     transform_column_names,
 )
 from snuba.web.db_query import db_query, update_query_metadata_and_stats
+from pygments import highlight, lexers, formatters
+from pygments_pprint_sql import SqlFilter
 
 metrics = MetricsWrapper(environment.metrics, "api")
 logger = logging.getLogger("snuba.pipeline.stages.query_execution")
@@ -178,12 +180,15 @@ def _disable_max_query_size_check_for_clusters() -> set[str]:
 
 
 def format_sql(sql: str) -> str:
-    return (
+    lexer = lexers.MySqlLexer()
+    lexer.add_filter(SqlFilter())
+    text = (
         sql.replace("FROM", "\nFROM")
         .replace("WHERE", "\nWHERE")
         .replace("GROUP", "\nGROUP")
         .replace("ORDER", "\nORDER")
     )
+    return highlight(text, lexer, formatters.TerminalFormatter())
 
 
 def _format_storage_query_and_run(

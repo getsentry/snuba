@@ -45,6 +45,7 @@ dependencies = [
     "urllib3>=2.2.3",
     "werkzeug>=3.0.6",
     "rust_snuba>=0.0.0",
+    "pygments-pprint-sql==0.1.0",
 ]
 
 [tool.uv.sources]
