@@ -136,7 +136,7 @@ jobs:
 
   assemble-distroless:
     needs: [build-distroless-multiplatform]
-    if: ${{ (github.ref_name == 'master' || startsWith(github.ref_name, 'release/')) && github.event_name != 'pull_request' }}
+    if: ${{ github.repository_owner == 'getsentry' && (github.ref_name == 'master' || startsWith(github.ref_name, 'release/') || github.ref_name == 'test/nightly-distroless') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
