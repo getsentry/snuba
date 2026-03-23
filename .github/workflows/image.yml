@@ -4,6 +4,7 @@ on:
     branches:
       - master
       - release/**
+      - test/nightly-distroless
 
 jobs:
   build-multiplatform:
@@ -136,7 +137,7 @@ jobs:
 
   assemble-distroless:
     needs: [build-distroless-multiplatform]
-    if: ${{ github.repository_owner == 'getsentry' && (github.ref_name == 'master' || startsWith(github.ref_name, 'release/') || github.ref_name == 'test/nightly-distroless') }}
+    if: ${{ github.repository_owner == 'getsentry' && (github.ref_name == 'master' || startsWith(github.ref_name, 'release/') || github.ref_name == 'test/nightly-distroless' || github.head_ref == 'test/nightly-distroless') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
