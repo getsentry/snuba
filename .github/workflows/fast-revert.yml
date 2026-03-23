@@ -25,7 +25,7 @@ jobs:
       with:
         app_id: ${{ secrets.FAST_REVERT_BOT_APP_ID }}
         private_key: ${{ secrets.GH_FAST_REVERT_PRIVATE_KEY }}
-    - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
+    - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v3.1.0
       with:
         token: ${{ steps.token.outputs.token }}
     - uses: getsentry/action-fast-revert@35b4b6c1f8f91b5911159568b3b15e531b5b8174 # v2.0.1
@@ -37,11 +37,17 @@ jobs:
         committer_email: 257653817+sentry-snuba-fast-revert-bot[bot]@users.noreply.github.com
         token: ${{ steps.token.outputs.token }}
     - name: comment on failure
+      env:
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+        REPOSITORY_ID: ${{ github.event.repository.id }}
+        PR_NUMBER: ${{ github.event.number || github.event.inputs.pr }}
+        GITHUB_TOKEN: ${{ secrets.GETSENTRY_BOT_REVERT_TOKEN }}
       run: |
         curl \
             --silent \
             -X POST \
-            -H 'Authorization: token ${{ secrets.GETSENTRY_BOT_REVERT_TOKEN }}' \
-            -d'{"body": "revert failed (conflict? already reverted?) -- [check the logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"}' \
-            https://api.github.com/repositories/${{ github.event.repository.id }}/issues/${{ github.event.number || github.event.inputs.pr }}/comments
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -d"{\"body\": \"revert failed (conflict? already reverted?) -- [check the logs](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)\"}" \
+            "https://api.github.com/repositories/$REPOSITORY_ID/issues/$PR_NUMBER/comments"
       if: failure()

@@ -123,7 +123,10 @@ impl Parse for MetricsRawRow {
             metric_id: from.metric_id,
             timestamp: from.timestamp as u32,
             retention_days,
-            tags_key: tag_keys.into_iter().map(|e| e.parse().unwrap()).collect(),
+            tags_key: tag_keys
+                .into_iter()
+                .map(|e| e.parse())
+                .collect::<Result<Vec<_>, _>>()?,
             tags_value: tag_values,
             materialization_version: 4,
             timeseries_id,
@@ -185,6 +188,7 @@ pub fn process_metrics_message(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use crate::processors::ProcessingFunction;
 

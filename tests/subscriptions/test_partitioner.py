@@ -36,7 +36,7 @@ TESTS = [
 
 class TestBuildRequest(BaseSubscriptionTest):
     @pytest.mark.parametrize("subscription", TESTS)
-    @pytest.mark.clickhouse_db
+    @pytest.mark.events_db
     def test(self, subscription: SubscriptionData) -> None:
         kafka_topic_spec = KafkaTopicSpec(Topic.EVENTS)
         kafka_topic_spec.partitions_number = 64

@@ -75,7 +75,7 @@ SHARED_MAPPING_META: Mapping[str, Mapping[str, str]] = {
 }
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.genmetrics_db
 @pytest.mark.redis_db
 class TestGenericMetricsApiSets(BaseApiTest):
     @pytest.fixture
@@ -88,7 +88,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
 
     @pytest.fixture(autouse=True)
     def setup_teardown(
-        self, clickhouse_db: None, _build_snql_post_methods: Callable[[str], Any]
+        self, genmetrics_db: None, _build_snql_post_methods: Callable[[str], Any]
     ) -> None:
         self.post = _build_snql_post_methods
 
@@ -208,7 +208,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
         assert data["data"][0]["unique_values"] == new_set_unique_count
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.genmetrics_db
 @pytest.mark.redis_db
 class TestGenericMetricsApiDistributions(BaseApiTest):
     @pytest.fixture
@@ -221,7 +221,7 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
 
     @pytest.fixture(autouse=True)
     def setup_teardown(
-        self, clickhouse_db: None, _build_snql_post_methods: Callable[[str], Any]
+        self, genmetrics_db: None, _build_snql_post_methods: Callable[[str], Any]
     ) -> None:
         self.post = _build_snql_post_methods
 
@@ -473,7 +473,7 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
         assert "_raw_tags_hash" in data["sql"]
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.genmetrics_db
 @pytest.mark.redis_db
 class TestGenericMetricsApiCounters(BaseApiTest):
     @pytest.fixture
@@ -486,7 +486,7 @@ class TestGenericMetricsApiCounters(BaseApiTest):
 
     @pytest.fixture(autouse=True)
     def setup_post(
-        self, clickhouse_db: None, _build_snql_post_methods: Callable[[str], Any]
+        self, genmetrics_db: None, _build_snql_post_methods: Callable[[str], Any]
     ) -> None:
         self.post = _build_snql_post_methods
 
@@ -612,7 +612,7 @@ class TestGenericMetricsApiCounters(BaseApiTest):
         assert len(data["data"]) == 1, data
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.genmetrics_db
 @pytest.mark.redis_db
 class TestOrgGenericMetricsApiCounters(BaseApiTest):
     @pytest.fixture
@@ -625,7 +625,7 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
 
     @pytest.fixture(autouse=True)
     def setup_teardown(
-        self, clickhouse_db: None, _build_snql_post_methods: Callable[[str], Any]
+        self, genmetrics_db: None, _build_snql_post_methods: Callable[[str], Any]
     ) -> None:
         self.post = _build_snql_post_methods
 
@@ -752,7 +752,7 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
         assert first_row["tag_string"] == "placeholder0001"
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.genmetrics_db
 @pytest.mark.redis_db
 class TestOrgGenericMetricsApiGauges(BaseApiTest):
     @pytest.fixture
@@ -765,7 +765,7 @@ class TestOrgGenericMetricsApiGauges(BaseApiTest):
 
     @pytest.fixture(autouse=True)
     def setup_teardown(
-        self, clickhouse_db: None, _build_snql_post_methods: Callable[[str], Any]
+        self, genmetrics_db: None, _build_snql_post_methods: Callable[[str], Any]
     ) -> None:
         self.post = _build_snql_post_methods
 

@@ -1,6 +1,7 @@
 import re
 from abc import ABC, abstractmethod
 from datetime import date, datetime
+from functools import lru_cache
 from typing import Optional, Sequence, cast
 
 from snuba.clickhouse.escaping import escape_alias, escape_identifier, escape_string
@@ -17,6 +18,7 @@ from snuba.query.expressions import (
     Expression,
     ExpressionVisitor,
     FunctionCall,
+    JsonPath,
     Lambda,
     Literal,
     SubscriptableReference,
@@ -24,6 +26,12 @@ from snuba.query.expressions import (
 from snuba.query.parsing import ParsingContext
 
 _BETWEEN_SQUARE_BRACKETS_REGEX = re.compile(r"(?<=\[)(.*?)(?=\])")
+_SIMPLE_TYPE_RE = re.compile(r"^[a-zA-Z0-9_()\s,]+$")
+
+
+@lru_cache(maxsize=128)
+def _is_simple_type(type_str: str) -> bool:
+    return bool(_SIMPLE_TYPE_RE.match(type_str))
 
 
 class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
@@ -187,6 +195,18 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
         for pre-validated SQL in query optimization scenarios.
         """
         return self._alias(exp.sql, exp.alias)
+
+    def visit_json_path(self, exp: JsonPath) -> str:
+        base_sql = exp.base.accept(self)
+        safe_path = exp.path.replace("`", "\\`")
+        if exp.return_type is None:
+            formatted = f"{base_sql}.`{safe_path}`"
+        elif _is_simple_type(exp.return_type):
+            formatted = f"{base_sql}.`{safe_path}`::{exp.return_type}"
+        else:
+            safe_type = exp.return_type.replace("`", "\\`")
+            formatted = f"{base_sql}.`{safe_path}`.:`{safe_type}`"
+        return self._alias(formatted, exp.alias)
 
 
 class ClickhouseExpressionFormatter(ExpressionFormatterBase):

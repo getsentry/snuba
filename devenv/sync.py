@@ -1,37 +1,13 @@
-import importlib.metadata
+import os
 import shutil
 
-from devenv.lib import brew, config, proc, uv
+from devenv.lib import brew, proc
 
 from devenv import constants
 
 
-def check_minimum_version(minimum_version: str) -> bool:
-    version = importlib.metadata.version("sentry-devenv")
-
-    parsed_version = tuple(map(int, version.split(".")))
-    parsed_minimum_version = tuple(map(int, minimum_version.split(".")))
-
-    return parsed_version >= parsed_minimum_version
-
-
 def main(context: dict[str, str]) -> int:
-    minimum_version = "1.22.1"
-    if not check_minimum_version(minimum_version):
-        raise SystemExit(
-            f"""
-In order to use uv, devenv must be at least version {minimum_version}.
-
-Please run the following to update your global devenv:
-devenv update
-
-Then, use it to run sync:
-{constants.root}/bin/devenv sync
-"""
-        )
-
     reporoot = context["reporoot"]
-    cfg = config.get_repo(reporoot)
 
     brew.install()
 
@@ -43,17 +19,20 @@ Then, use it to run sync:
     if not shutil.which("rustup"):
         raise SystemExit("rustup not on PATH. Did you run `direnv allow`?")
 
-    uv.install(
-        cfg["uv"]["version"],
-        cfg["uv"][constants.SYSTEM_MACHINE],
-        cfg["uv"][f"{constants.SYSTEM_MACHINE}_sha256"],
-        reporoot,
-    )
+    if os.path.exists(f"{reporoot}/.devenv/bin/uv"):
+        os.remove(f"{reporoot}/.devenv/bin/uv")
+
+    if os.path.exists(f"{reporoot}/.devenv/bin/uvx"):
+        os.remove(f"{reporoot}/.devenv/bin/uvx")
+
+    if not shutil.which("uv"):
+        print("\n\n\ndevenv is no longer managing uv; please run `brew install uv`.\n\n\n")
+        return 1
 
     print("syncing .venv ...")
     proc.run(
         (
-            f"{reporoot}/.devenv/bin/uv",
+            "uv",
             "sync",
             "--frozen",
             "--active",

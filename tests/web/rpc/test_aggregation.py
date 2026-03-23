@@ -1,20 +1,28 @@
 from typing import Any
 
 import pytest
+from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
+    AttributeConditionalAggregation,
+)
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
-    AttributeAggregation,
     AttributeKey,
     ExtrapolationMode,
     Function,
     Reliability,
 )
 
-from snuba.web.rpc.common.common import attribute_key_to_expression
+from snuba.query.expressions import FunctionCall
+from snuba.web.rpc.common.common import (
+    attribute_key_to_expression,
+    get_field_existence_expression,
+)
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.common.aggregation import (
     CUSTOM_COLUMN_PREFIX,
     CustomColumnInformation,
     ExtrapolationContext,
     _get_closest_percentile_index,
+    aggregation_to_expression,
     get_confidence_interval_column,
 )
 
@@ -71,7 +79,7 @@ def test_get_custom_column_information() -> None:
 def test_get_confidence_interval_column_for_non_extrapolatable_column() -> None:
     assert (
         get_confidence_interval_column(
-            AttributeAggregation(
+            AttributeConditionalAggregation(
                 aggregate=Function.FUNCTION_MIN,
                 key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test"),
                 label="min(test)",
@@ -238,3 +246,54 @@ def test_get_closest_percentile_index(
     expected_index: int,
 ) -> None:
     assert _get_closest_percentile_index(value, percentile, granularity, width) == expected_index
+
+
+def test_attribute_key_to_expression_type_array() -> None:
+    from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
+
+    attr_key = AttributeKey(type=AttributeKey.TYPE_ARRAY, name="user_ids")
+    expr = attribute_key_to_expression(attr_key)
+    assert isinstance(expr, FunctionCall)
+    assert expr.function_name == "arrayMap"
+    assert expr.alias == "user_ids_TYPE_ARRAY"
+    fmt = ClickhouseExpressionFormatter()
+    sql = expr.accept(fmt)
+    assert (
+        sql
+        == "(arrayMap(x -> coalesce(x.`String`::Nullable(String), toString(x.`Int`::Nullable(Int64)), toString(x.`Double`::Nullable(Float64)), x.`Bool`::Nullable(String)), attributes_array.`user_ids`::Array(JSON)) AS user_ids_TYPE_ARRAY)"
+    )
+
+
+def test_get_field_existence_expression_array_map() -> None:
+    """arrayMap expressions (used for TYPE_ARRAY) should use notEmpty for existence checks."""
+    field = FunctionCall(alias="test", function_name="arrayMap", parameters=())
+    expr = get_field_existence_expression(field)
+    assert isinstance(expr, FunctionCall)
+    assert expr.function_name == "notEmpty"
+
+
+def test_aggregation_to_expression_uniq_type_array() -> None:
+    agg = AttributeConditionalAggregation(
+        aggregate=Function.FUNCTION_UNIQ,
+        key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="user_ids"),
+        label="uniq_users",
+        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+    )
+    expr = aggregation_to_expression(agg, attribute_key_to_expression)
+    assert isinstance(expr, FunctionCall)
+    assert expr.function_name == "round"
+    assert expr.alias == "uniq_users"
+    inner = expr.parameters[0]
+    assert isinstance(inner, FunctionCall)
+    assert inner.function_name == "uniqArrayIfOrNull"
+
+
+def test_aggregation_to_expression_sum_type_array_raises() -> None:
+    agg = AttributeConditionalAggregation(
+        aggregate=Function.FUNCTION_SUM,
+        key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="user_ids"),
+        label="sum_users",
+        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+    )
+    with pytest.raises(BadSnubaRPCRequestException, match="not supported for array attribute"):
+        aggregation_to_expression(agg, attribute_key_to_expression)

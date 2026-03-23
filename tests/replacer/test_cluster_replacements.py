@@ -79,7 +79,7 @@ def _build_cluster(healthy: bool = True) -> FakeClickhouseCluster:
 @pytest.fixture
 def override_cluster(
     monkeypatch: pytest.MonkeyPatch,
-    clickhouse_db: None,
+    events_db: None,
     redis_db: None,
 ) -> Generator[Callable[[bool], FakeClickhouseCluster], None, None]:
     with monkeypatch.context() as m:
@@ -178,7 +178,7 @@ class DummyReplacement(Replacement):
     "override_fixture, write_node_replacements_global, expected_queries", TEST_CASES
 )
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_write_each_node(
     override_fixture: Callable[[bool], FakeClickhouseCluster],
     write_node_replacements_global: float,
@@ -206,7 +206,7 @@ def test_write_each_node(
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_failing_query(override_cluster: Callable[[bool], FakeClickhouseCluster]) -> None:
     """
     Test the execution of replacement queries on single node
@@ -225,7 +225,7 @@ def test_failing_query(override_cluster: Callable[[bool], FakeClickhouseCluster]
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_load_balancing(override_cluster: Callable[[bool], FakeClickhouseCluster]) -> None:
     """
     Test running two replacements in a row and verify the queries
@@ -344,7 +344,7 @@ TEST_LOCAL_EXECUTOR = [
 
 @pytest.mark.parametrize("nodes, backup_connection, expected_queries", TEST_LOCAL_EXECUTOR)
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_local_executor(
     nodes: Mapping[int, Sequence[Tuple[ClickhouseNode, bool]]],
     backup_connection: ClickhousePool,

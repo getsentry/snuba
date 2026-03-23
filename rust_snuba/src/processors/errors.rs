@@ -769,7 +769,9 @@ impl ErrorRow {
 fn to_uuid(uuid_string: String) -> Uuid {
     match Uuid::parse_str(&uuid_string) {
         Ok(uuid) => uuid,
-        Err(_) => Uuid::from_slice(md5::compute(uuid_string.as_bytes()).as_slice()).unwrap(),
+        // md5 always produces 16 bytes, so from_slice will always succeed
+        Err(_) => Uuid::from_slice(md5::compute(uuid_string.as_bytes()).as_slice())
+            .unwrap_or_else(|_| Uuid::nil()),
     }
 }
 
@@ -889,6 +891,7 @@ impl<'de> Deserialize<'de> for ContextStringify {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
 

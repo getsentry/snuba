@@ -1,3 +1,4 @@
+pub mod accepted_outcomes;
 pub mod accountant;
 pub mod clickhouse;
 pub mod commit_log;

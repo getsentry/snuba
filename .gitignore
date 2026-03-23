@@ -17,3 +17,4 @@ tmp/
 gocd/templates/vendor/
 gocd/generated-pipelines/
 Brewfile.lock.json
+.zed/

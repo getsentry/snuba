@@ -32,11 +32,11 @@ from tests.conftest import SnubaSetConfig
 from tests.helpers import write_processed_messages
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 class SimpleAPITest(BaseApiTest):
     @pytest.fixture(autouse=True)
-    def setup_teardown(self, clickhouse_db: None, redis_db: None) -> Generator[None, None, None]:
+    def setup_teardown(self, events_db: None, redis_db: None) -> Generator[None, None, None]:
         # values for test data
         self.project_ids = [1, 2, 3]  # 3 projects
         self.environments = ["prød", "test"]  # 2 environments
@@ -157,7 +157,7 @@ class SimpleAPITest(BaseApiTest):
             return dbsize
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 class TestApi(SimpleAPITest):
     @pytest.fixture
@@ -1674,7 +1674,7 @@ class TestApi(SimpleAPITest):
         assert metadata["request"]["referrer"] == "test"
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 class TestCreateSubscriptionApi(BaseApiTest):
     dataset_name = "events"
@@ -1753,7 +1753,8 @@ class TestCreateSubscriptionApi(BaseApiTest):
         assert data.tenant_ids == dict()  # not saved to the redis store
         assert "tenant_ids" not in data.to_dict()  # doesn't show up in dictified data
 
-    def test_selected_entity_is_used(self) -> None:
+    @pytest.mark.clickhouse_db
+    def test_selected_entity_is_used(self, clickhouse_db: Any) -> None:
         """
         Test that ensures that the passed entity is the selected one, not the dataset's default
         entity
@@ -1877,7 +1878,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
         }
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 class TestDeleteSubscriptionApi(BaseApiTest):
     dataset_name = "events"
@@ -1951,7 +1952,7 @@ class TestDeleteSubscriptionApi(BaseApiTest):
         }
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 class TestAPIErrorsRO(TestApi):
     """

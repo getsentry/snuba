@@ -1,5 +1,8 @@
-minVersion: "0.27.2"
-changelogPolicy: auto
+minVersion: "2.21.4"
+changelog:
+  policy: auto
+versioning:
+  policy: calver
 artifactProvider:
   name: none
 statusProvider:
@@ -10,15 +13,13 @@ statusProvider:
     - 'build-arm64'
     - 'assemble'
 targets:
-- id: release
-  name: docker
-  source: ghcr.io/getsentry/snuba
-  target: getsentry/snuba
-- id: latest
-  name: docker
-  source: ghcr.io/getsentry/snuba
-  target: getsentry/snuba
-  targetFormat: '{{{target}}}:latest'
-- name: github
-versioning:
-  policy: calver
+  - id: release
+    name: docker
+    source: ghcr.io/getsentry/snuba
+    target: ghcr.io/getsentry/snuba
+  - id: latest
+    name: docker
+    source: ghcr.io/getsentry/snuba
+    target: ghcr.io/getsentry/snuba
+    targetFormat: '{{{target}}}:latest'
+  - name: github

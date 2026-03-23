@@ -114,7 +114,7 @@ class TestExportTraceItems(BaseApiTest):
             limit=20,
         )
         items: list[TraceItem] = []
-        while True:
+        for _ in range(1, 100):
             response = EndpointExportTraceItems().execute(message)
             items.extend(response.trace_items)
             if len(response.trace_items) == 20:
@@ -127,6 +127,51 @@ class TestExportTraceItems(BaseApiTest):
         _assert_attributes_keys(items)
 
         assert len(items) == _SPAN_COUNT + _LOG_COUNT
+
+    def test_pagination_with_128_bit_item_id(self, eap: Any, redis_db: Any) -> None:
+        num_items = 120
+        trace_id = uuid.uuid4().hex
+        items_data = [
+            gen_item_message(
+                start_timestamp=BASE_TIME,
+                trace_id=trace_id,
+                item_id=uuid.uuid4().int.to_bytes(16, byteorder="little"),
+                project_id=1,
+            )
+            for _ in range(num_items)
+        ]
+        items_storage = get_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(items_storage, items_data)  # type: ignore
+
+        message = ExportTraceItemsRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int((BASE_TIME + timedelta(seconds=1)).timestamp())
+                ),
+            ),
+            limit=1,
+        )
+        items: list[TraceItem] = []
+        seen_item_ids: set[bytes] = set()
+        for _ in range(1, num_items + 2):
+            response = EndpointExportTraceItems().execute(message)
+            for item in response.trace_items:
+                assert item.item_id not in seen_item_ids, (
+                    f"item_id {item.item_id.hex()} returned more than once, "
+                    f"pagination is not making progress"
+                )
+                seen_item_ids.add(item.item_id)
+            items.extend(response.trace_items)
+            if response.page_token.end_pagination:
+                break
+            message.page_token.CopyFrom(response.page_token)
+
+        assert len(items) == num_items
 
     def test_no_transformation_on_order_by(self, setup_teardown: Any, monkeypatch: Any) -> None:
         # Wrap the real run_query to capture the actual QueryResult while still hitting ClickHouse.

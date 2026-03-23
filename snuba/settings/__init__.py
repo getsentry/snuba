@@ -70,6 +70,19 @@ ADMIN_REGIONS: Sequence[str] = []
 # End Admin Settings #
 ######################
 
+################
+# Api Settings #
+################
+
+API_WORKERS = 1
+API_THREADS = None
+API_WORKERS_LIFETIME = None
+API_WORKERS_MAX_RSS = None
+
+####################
+# End Api Settings #
+####################
+
 MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS = 24
 
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
@@ -128,6 +141,7 @@ DOGSTATSD_HOST, DOGSTATSD_PORT = get_statsd_addr()
 DOGSTATSD_SAMPLING_RATES = {
     "metrics.processor.set.size": 0.1,
     "metrics.processor.distribution.size": 0.1,
+    "off_peak_rejected": 0.01,
 }
 DDM_METRICS_SAMPLE_RATE = float(os.environ.get("SNUBA_DDM_METRICS_SAMPLE_RATE", 0.01))
 
@@ -456,6 +470,8 @@ SLICED_KAFKA_BROKER_CONFIG: Mapping[Tuple[str, int], Mapping[str, Any]] = {}
 VALIDATE_DATASET_YAMLS_ON_STARTUP = False
 
 MAX_ONGOING_MUTATIONS_FOR_DELETE = 5
+MAX_PARTS_MUTATING_FOR_DELETE = 20
+LW_DELETES_PARTITION_TRACKING_TTL = 86400
 SNQL_DISABLED_DATASETS: set[str] = set([])
 
 ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS: int = 0  # 0 means no limit

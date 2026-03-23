@@ -212,6 +212,18 @@ function SQLShell({ api, mode }: SQLShellProps) {
           });
           break;
 
+        case "format":
+          setState((prev) => ({
+            ...prev,
+            outputFormat: parsed.format,
+          }));
+          addHistoryEntry({
+            type: "info",
+            content: `Output format set to: ${parsed.format.toUpperCase()}`,
+            timestamp: Date.now(),
+          });
+          break;
+
         case "sql":
           if (!state.currentStorage) {
             addHistoryEntry({
@@ -451,6 +463,7 @@ function SQLShell({ api, mode }: SQLShellProps) {
         entries={state.history}
         traceFormatted={state.traceFormatted}
         mode={mode}
+        outputFormat={state.outputFormat}
         isExecuting={state.isExecuting}
       />
       {suggestions.length > 0 && (
@@ -550,6 +563,12 @@ function SQLShell({ api, mode }: SQLShellProps) {
               </div>
             </>
           )}
+          <div className={classes.statusItem}>
+            <span>FORMAT:</span>
+            <span className={classes.statusActive}>
+              {state.outputFormat.toUpperCase()}
+            </span>
+          </div>
           <div style={{ color: "#6e7681" }}>Tab: Autocomplete | Enter: Execute | Shift+Enter: New line | ↑↓: History</div>
         </div>
       </div>

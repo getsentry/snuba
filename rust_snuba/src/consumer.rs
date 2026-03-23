@@ -46,6 +46,7 @@ pub fn consumer(
     batch_write_timeout_ms: Option<u64>,
     max_dlq_buffer_length: Option<usize>,
     join_timeout_ms: Option<u64>,
+    use_row_binary: bool,
 ) -> usize {
     py.allow_threads(|| {
         consumer_impl(
@@ -66,6 +67,7 @@ pub fn consumer(
             max_dlq_buffer_length,
             join_timeout_ms,
             health_check,
+            use_row_binary,
         )
     })
 }
@@ -89,6 +91,7 @@ pub fn consumer_impl(
     max_dlq_buffer_length: Option<usize>,
     join_timeout_ms: Option<u64>,
     health_check: &str,
+    use_row_binary: bool,
 ) -> usize {
     setup_logging();
 
@@ -266,6 +269,7 @@ pub fn consumer_impl(
         batch_write_timeout,
         join_timeout_ms,
         health_check: health_check.to_string(),
+        use_row_binary,
     };
 
     let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);

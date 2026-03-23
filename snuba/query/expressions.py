@@ -132,6 +132,10 @@ class ExpressionVisitor(ABC, Generic[TVisited]):
     def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> TVisited:
         raise NotImplementedError
 
+    @abstractmethod
+    def visit_json_path(self, exp: JsonPath) -> TVisited:
+        raise NotImplementedError
+
 
 class NoopVisitor(ExpressionVisitor[None]):
     """A noop visitor that will traverse every node but will not
@@ -165,6 +169,9 @@ class NoopVisitor(ExpressionVisitor[None]):
 
     def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> None:
         return None
+
+    def visit_json_path(self, exp: JsonPath) -> None:
+        return exp.base.accept(self)
 
 
 class StringifyVisitor(ExpressionVisitor[str]):
@@ -265,6 +272,13 @@ class StringifyVisitor(ExpressionVisitor[str]):
         sql_repr = repr(exp.sql)
         return f"{self._get_line_prefix()}DangerousRawSQL({sql_repr}){self._get_alias_str(exp)}"
 
+    def visit_json_path(self, exp: JsonPath) -> str:
+        base_str = exp.base.accept(self)[len(self._get_line_prefix()) :]
+        type_str = f"::{exp.return_type}" if exp.return_type else ""
+        return (
+            f"{self._get_line_prefix()}{base_str}.`{exp.path}`{type_str}{self._get_alias_str(exp)}"
+        )
+
 
 class ColumnVisitor(ExpressionVisitor[set[str]]):
     def __init__(self) -> None:
@@ -298,6 +312,9 @@ class ColumnVisitor(ExpressionVisitor[set[str]]):
 
     def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> set[str]:
         return self.columns
+
+    def visit_json_path(self, exp: JsonPath) -> set[str]:
+        return exp.base.accept(self)
 
 
 OptionalScalarType = Union[None, bool, str, float, int, date, datetime]
@@ -607,3 +624,40 @@ class DangerousRawSQL(Expression):
         if not isinstance(other, self.__class__):
             return False
         return self.sql == other.sql
+
+
+@dataclass(frozen=True, repr=_AUTO_REPR)
+class JsonPath(Expression):
+    """
+    Represents ClickHouse JSON sub-column access with an optional type cast.
+
+    Produces SQL like:
+      col.`path`                 (no return type)
+      col.`path`::Type           (simple return type)
+      col.`path`.:`Type`         (complex return type, e.g. Array(JSON))
+    """
+
+    base: Expression
+    path: str
+    return_type: Optional[str] = None
+
+    def transform(self, func: Callable[[Expression], Expression]) -> Expression:
+        transformed = replace(self, base=self.base.transform(func))
+        return func(transformed)
+
+    def __iter__(self) -> Iterator[Expression]:
+        for sub in self.base:
+            yield sub
+        yield self
+
+    def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
+        return visitor.visit_json_path(self)
+
+    def functional_eq(self, other: Expression) -> bool:
+        if not isinstance(other, self.__class__):
+            return False
+        return (
+            self.base.functional_eq(other.base)
+            and self.path == other.path
+            and self.return_type == other.return_type
+        )

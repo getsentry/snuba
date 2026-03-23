@@ -1,6 +1,6 @@
 import typing
 import uuid
-from typing import Any, Mapping, MutableMapping, Optional, Sequence
+from typing import Any, Dict, Mapping, Optional, Sequence
 
 from snuba import settings
 from snuba.attribution import get_app_id
@@ -203,6 +203,25 @@ FROM (
     )
 
 
+def _num_parts_currently_mutating(cluster: ClickhouseCluster) -> int:
+    """
+    Returns the number of parts currently being mutated across the cluster.
+    Uses the PartMutation metric from system.metrics, which directly correlates
+    with CPU usage from ongoing mutations.
+    """
+    if cluster.is_single_node():
+        query = "SELECT value FROM system.metrics WHERE metric = 'PartMutation'"
+    else:
+        query = f"""
+SELECT max(value)
+FROM clusterAllReplicas('{cluster.get_clickhouse_cluster_name()}', 'system', metrics)
+WHERE metric = 'PartMutation'
+"""
+    return int(
+        cluster.get_query_connection(ClickhouseClientSettings.QUERY).execute(query).results[0][0]
+    )
+
+
 def deletes_are_enabled() -> bool:
     return bool(get_config("storage_deletes_enabled", 1))
 
@@ -259,7 +278,10 @@ def _enforce_max_rows(delete_query: Query) -> int:
     if rows_to_delete == 0:
         raise NoRowsToDeleteException
     max_rows_allowed = get_storage(storage_key).get_deletion_settings().max_rows_to_delete
-    if rows_to_delete > max_rows_allowed:
+    if (
+        get_int_config("enforce_max_rows_to_delete", default=1)
+        and rows_to_delete > max_rows_allowed
+    ):
         raise TooManyDeleteRowsException(
             f"Too many rows to delete ({rows_to_delete}), maximum allowed is {max_rows_allowed}"
         )
@@ -302,7 +324,7 @@ def _execute_query(
     result = None
     error = None
 
-    stats: MutableMapping[str, Any] = {
+    stats: Dict[str, Any] = {
         "clickhouse_table": table,
         "referrer": attribution_info.referrer,
         "cluster_name": cluster_name or "<unknown>",

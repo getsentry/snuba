@@ -62,7 +62,7 @@ class ExportTraceItemsPageToken:
         self.last_seen_item_type = last_seen_item_type
         self.last_seen_timestamp = last_seen_timestamp
         self.last_seen_trace_id = last_seen_trace_id
-        self.last_seen_item_id = int(last_seen_item_id, 16)
+        self.last_seen_item_id = last_seen_item_id
 
     @classmethod
     def from_protobuf(cls, page_token: PageToken) -> Optional["ExportTraceItemsPageToken"]:
@@ -160,7 +160,7 @@ class ExportTraceItemsPageToken:
                                 name="last_seen_item_id", type=AttributeKey.Type.TYPE_STRING
                             ),
                             op=ComparisonFilter.OP_EQUALS,
-                            value=AttributeValue(val_str=hex(self.last_seen_item_id)),
+                            value=AttributeValue(val_str=self.last_seen_item_id),
                         )
                     ),
                 ]
@@ -233,7 +233,7 @@ def _build_query(
                     column("item_type"),
                     column("timestamp"),
                     column("trace_id"),
-                    f.reinterpretAsUInt128(f.reverse(f.unhex(column("item_id")))),
+                    column("item_id"),
                 ),
                 f.tuple(
                     literal(page_token.last_seen_project_id),

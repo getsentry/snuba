@@ -469,12 +469,13 @@ class ResolverTimeSeriesEAPItems(ResolverTimeSeries):
         # if the user passes it in
         assert len(in_msg.aggregations) == 0
 
-        # This metric is expected to be 0, aggregation is deprecated and should be converted to
-        # conditional aggregation. This metric is to verify before deprecating in the protobuf.
-        # @kylemumma 01/27/2026
-        for expr in in_msg.expressions:
-            if expr.WhichOneof("expression") == "aggregation":
-                self._metrics_backend.increment("aggregation_expression")
+        # aggregation is deprecated, it gets converted to conditional_aggregation
+        if state.get_int_config("aggregation_deprecation_enabled", 1):
+            for expr in in_msg.expressions:
+                if expr.WhichOneof("expression") == "aggregation":
+                    raise RuntimeError(
+                        "Unexpected state: aggregation is deprecated and should have been converted to conditional_aggregation"
+                    )
 
         query_settings = setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
         try:

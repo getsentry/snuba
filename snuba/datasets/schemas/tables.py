@@ -80,6 +80,13 @@ class TableSchema(Schema):
         """
         return self.__local_table_name
 
+    def get_dist_table_name(self) -> str:
+        """
+        This returns the distributed table name. Used to get the name of the distributed
+        table even in local mode.
+        """
+        return self.__dist_table_name
+
     def get_table_name(self) -> str:
         """
         This represents the table we interact with to send queries to Clickhouse.

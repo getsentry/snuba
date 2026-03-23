@@ -62,7 +62,10 @@ class SearchIssuesFormatter(Formatter):
 
         return [
             ConditionsBag(
-                column_conditions={"project_id": [project_id], "group_id": list(group_ids)}
+                column_conditions={
+                    "project_id": [project_id],
+                    "group_id": list(group_ids),
+                }
             )
             for project_id, group_ids in mapping.items()
         ]
@@ -109,7 +112,5 @@ class EAPItemsFormatter(Formatter):
 
 STORAGE_FORMATTER: Mapping[str, Type[Formatter]] = {
     StorageKey.SEARCH_ISSUES.value: SearchIssuesFormatter,
-    # TODO: We will probably do something more sophisticated here in the future
-    # but it won't make much of a difference until we support delete by attribute
     StorageKey.EAP_ITEMS.value: EAPItemsFormatter,
 }

@@ -67,6 +67,16 @@ def _add_converter(column: Column, converters: Dict[str, Callable[[Any], Attribu
         converters[column.label] = _get_double_converter()
         _add_converter(column.formula.left, converters)
         _add_converter(column.formula.right, converters)
+    elif column.HasField("conditional_formula"):
+        converters[column.label] = _get_double_converter()
+        conditional = column.conditional_formula
+        if conditional.HasField("condition"):
+            _add_converter(conditional.condition.left, converters)
+            _add_converter(conditional.condition.right, converters)
+        if conditional.HasField("match"):
+            _add_converter(getattr(conditional, "match"), converters)
+        if conditional.HasField("default"):
+            _add_converter(conditional.default, converters)
     elif column.HasField("literal"):
         converters[column.label] = _get_double_converter()
     else:
