@@ -25,7 +25,7 @@ jobs:
       packages: write
     if: github.repository_owner == 'getsentry'
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
     - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
       with:
         image_name: 'snuba'
@@ -44,7 +44,7 @@ jobs:
       id-token: write
     if: ${{ github.ref_name == 'master' }}
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
         with:
           image_name: 'snuba'
@@ -74,7 +74,7 @@ jobs:
       packages: write
     if: github.repository_owner == 'getsentry'
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
     - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
       with:
         image_name: 'snuba'
@@ -102,7 +102,7 @@ jobs:
       packages: write
     if: github.repository_owner == 'getsentry'
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
     - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
       with:
         image_name: 'snuba'
@@ -128,7 +128,7 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Create multiplatform manifests
         run: |
@@ -152,7 +152,7 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Create distroless multiplatform manifests
         run: |
@@ -176,7 +176,7 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Create debug multiplatform manifests
         run: |
@@ -193,7 +193,7 @@ jobs:
 
     steps:
       - name: Run Sentry self-hosted e2e CI
-        uses: getsentry/self-hosted@master
+        uses: getsentry/self-hosted@871c182cb0a99dc1fad72cc7ce7889b514b0c5f0 # master
         with:
           project_name: snuba
           image_url: ghcr.io/getsentry/snuba:${{ github.sha }}
