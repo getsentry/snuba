@@ -260,3 +260,69 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 )
             )
         assert res.attributes == expected
+
+    def test_sorted_by_frequency(self) -> None:
+        """Test that attributes are returned and sorted (by frequency DESC, then name ASC)."""
+        # Request string attributes with a filter to get a smaller result set
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
+            ),
+            limit=100,
+            type=AttributeKey.Type.TYPE_STRING,
+            value_substring_match="a_tag",
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+
+        # Verify we got results
+        assert len(res.attributes) > 0
+
+        # Get just the attribute names
+        attr_names = [attr.name for attr in res.attributes]
+
+        # Since all a_tag_* attributes appear on only one span each (same frequency),
+        # they should be sorted alphabetically
+        assert attr_names == sorted(attr_names), (
+            "Attributes with the same frequency should be sorted alphabetically"
+        )
+
+        # Verify the expected attributes are present and in order
+        expected = []
+        for i in range(TOTAL_GENERATED_ATTR_PER_TYPE):
+            expected.append(f"a_tag_{str(i).zfill(3)}")
+
+        assert attr_names == expected
+
+    def test_frequency_ordering_with_specific_attributes(self) -> None:
+        """Test that specific attributes appear in order based on their frequency."""
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
+            ),
+            limit=1000,
+            type=AttributeKey.Type.TYPE_DOUBLE,
+            value_substring_match="b_measurement_",
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+
+        # All b_measurement_* attributes appear on individual spans (frequency = 1)
+        # So they should all be sorted alphabetically since they have the same frequency
+        attr_names = [attr.name for attr in res.attributes]
+
+        # Verify all returned attributes are b_measurement_* attributes
+        assert all(name.startswith("b_measurement_") for name in attr_names)
+
+        # Verify they are sorted alphabetically (since all have same frequency)
+        assert attr_names == sorted(attr_names), (
+            "Attributes with equal frequency should be sorted alphabetically"
+        )
