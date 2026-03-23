@@ -153,12 +153,14 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Create distroless multiplatform manifests
+        env:
+          IMAGE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           docker buildx imagetools create \
-            --tag ghcr.io/getsentry/snuba:${{ github.sha }}-distroless \
+            --tag ghcr.io/getsentry/snuba:${IMAGE_SHA}-distroless \
             --tag ghcr.io/getsentry/snuba:nightly-distroless \
-            ghcr.io/getsentry/snuba:${{ github.sha }}-distroless-amd64 \
-            ghcr.io/getsentry/snuba:${{ github.sha }}-distroless-arm64
+            ghcr.io/getsentry/snuba:${IMAGE_SHA}-distroless-amd64 \
+            ghcr.io/getsentry/snuba:${IMAGE_SHA}-distroless-arm64
 
   assemble-debug:
     needs: [build-debug-multiplatform]
