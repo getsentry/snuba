@@ -1,4 +1,6 @@
-mod eap_items;
+#![deny(clippy::unwrap_used, clippy::expect_used)]
+
+pub mod eap_items;
 mod errors;
 mod functions;
 mod generic_metrics;
@@ -79,6 +81,7 @@ pub fn get_cogs_label(processor_name: &str) -> Option<String> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use std::time::SystemTime;
 

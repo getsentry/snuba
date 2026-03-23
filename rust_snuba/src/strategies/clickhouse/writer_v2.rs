@@ -13,6 +13,7 @@ use sentry_arroyo::types::Message;
 use sentry_arroyo::{counter, timer};
 
 use crate::config::ClickhouseConfig;
+use crate::runtime_config::get_load_balancing_config;
 use crate::types::{BytesInsertBatch, RowData};
 
 fn clickhouse_task_runner(
@@ -83,11 +84,16 @@ where
         table: String,
         skip_write: bool,
         concurrency: &ConcurrencyConfig,
+        storage_name: String,
     ) -> Self {
         let inner = RunTaskInThreads::new(
             next_step,
             clickhouse_task_runner(
-                Arc::new(ClickhouseClient::new(&cluster_config.clone(), &table)),
+                Arc::new(ClickhouseClient::new(
+                    &cluster_config.clone(),
+                    &table,
+                    storage_name,
+                )),
                 skip_write,
             ),
             concurrency,
@@ -142,12 +148,13 @@ impl Default for RetryConfig {
 pub struct ClickhouseClient {
     client: Client,
     headers: HeaderMap<HeaderValue>,
-    url: String,
+    base_url: String,
+    storage_name: String,
     query: String,
 }
 
 impl ClickhouseClient {
-    pub fn new(config: &ClickhouseConfig, table: &str) -> ClickhouseClient {
+    pub fn new(config: &ClickhouseConfig, table: &str, storage_name: String) -> ClickhouseClient {
         let mut headers = HeaderMap::with_capacity(6);
         headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
         headers.insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip,deflate"));
@@ -168,16 +175,28 @@ impl ClickhouseClient {
         let host = &config.host;
         let port = &config.http_port;
 
-        let query_params = "load_balancing=in_order&insert_distributed_sync=1".to_string();
-        let url = format!("{scheme}://{host}:{port}?{query_params}");
+        let base_url = format!("{scheme}://{host}:{port}?insert_distributed_sync=1");
         let query = format!("INSERT INTO {table} FORMAT JSONEachRow");
 
         ClickhouseClient {
             client: Client::new(),
             headers,
-            url,
+            base_url,
+            storage_name,
             query,
         }
+    }
+
+    fn build_url(&self) -> String {
+        let lb_config = get_load_balancing_config(&self.storage_name);
+        let mut url = format!(
+            "{}&load_balancing={}",
+            self.base_url, lb_config.load_balancing
+        );
+        if let Some(offset) = lb_config.first_offset {
+            url.push_str(&format!("&load_balancing_first_offset={offset}"));
+        }
+        url
     }
 
     pub async fn send(&self, body: Vec<u8>, retry_config: RetryConfig) -> anyhow::Result<Response> {
@@ -186,9 +205,10 @@ impl ClickhouseClient {
         let body_bytes = bytes::Bytes::from(body);
 
         for attempt in 0..=retry_config.max_retries {
+            let url = self.build_url();
             let res = self
                 .client
-                .post(&self.url)
+                .post(&url)
                 .headers(self.headers.clone())
                 .query(&[("query", &self.query)])
                 .body(reqwest::Body::from(body_bytes.clone()))
@@ -273,9 +293,8 @@ mod tests {
     use super::*;
     use tokio::time::Instant;
 
-    #[tokio::test]
-    async fn it_works() -> Result<(), reqwest::Error> {
-        let config = ClickhouseConfig {
+    fn make_test_config() -> ClickhouseConfig {
+        ClickhouseConfig {
             host: std::env::var("CLICKHOUSE_HOST").unwrap_or("127.0.0.1".to_string()),
             port: std::env::var("CLICKHOUSE_PORT")
                 .unwrap_or("9000".to_string())
@@ -292,20 +311,54 @@ mod tests {
             user: std::env::var("CLICKHOUSE_USER").unwrap_or("default".to_string()),
             password: std::env::var("CLICKHOUSE_PASSWORD").unwrap_or("".to_string()),
             database: std::env::var("CLICKHOUSE_DATABASE").unwrap_or("default".to_string()),
-        };
-        println!("config: {:?}", config);
-        let client: ClickhouseClient = ClickhouseClient::new(&config, "querylog_local");
+        }
+    }
 
-        assert!(client.url.contains("load_balancing"));
-        assert!(client.url.contains("insert_distributed_sync"));
+    #[tokio::test]
+    async fn it_works() -> Result<(), reqwest::Error> {
+        crate::testutils::initialize_python();
+        let config = make_test_config();
+        println!("config: {:?}", config);
+        let client = ClickhouseClient::new(&config, "querylog_local", "test_storage".to_string());
+
+        let url = client.build_url();
+        assert!(url.contains("load_balancing=in_order"));
+        assert!(url.contains("insert_distributed_sync"));
         println!("running test");
         let res = client.send(b"[]".to_vec(), RetryConfig::default()).await;
         println!("Response status {}", res.unwrap().status());
         Ok(())
     }
 
+    #[test]
+    fn test_url_with_runtime_config_override() {
+        crate::testutils::initialize_python();
+        let config = make_test_config();
+        let client = ClickhouseClient::new(&config, "test_table", "writer_v2_lb_test".to_string());
+
+        // Default: in_order
+        let url = client.build_url();
+        assert!(url.contains("load_balancing=in_order"));
+        assert!(!url.contains("load_balancing_first_offset"));
+
+        // Override to first_or_random with offset
+        crate::runtime_config::patch_str_config_for_test(
+            "clickhouse_load_balancing:writer_v2_lb_test",
+            Some("first_or_random"),
+        );
+        crate::runtime_config::patch_str_config_for_test(
+            "clickhouse_load_balancing_first_offset:writer_v2_lb_test",
+            Some("1"),
+        );
+
+        let url = client.build_url();
+        assert!(url.contains("load_balancing=first_or_random"));
+        assert!(url.contains("load_balancing_first_offset=1"));
+    }
+
     #[tokio::test]
     async fn test_retry_with_exponential_backoff() {
+        crate::testutils::initialize_python();
         // Test that retry logic works by using a non-existent server
         // This will trigger network errors that should be retried
         let config = ClickhouseConfig {
@@ -318,7 +371,7 @@ mod tests {
             database: "default".to_string(),
         };
 
-        let client = ClickhouseClient::new(&config, "test_table");
+        let client = ClickhouseClient::new(&config, "test_table", "test_storage".to_string());
 
         let start_time = Instant::now();
         let result = client

@@ -12,6 +12,26 @@ from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.migrations import table_engines
 from snuba.migrations.groups import MigrationGroup
 
+OUTCOMES_DAILY_TABLE_NO_CLUSTER = """
+CREATE TABLE IF NOT EXISTS {db}.outcomes_daily_local_v2
+(
+    `org_id` UInt64,
+    `project_id` UInt64,
+    `key_id` UInt64,
+    `timestamp` DateTime,
+    `outcome` UInt8,
+    `reason` LowCardinality(String),
+    `category` UInt8,
+    `quantity` UInt64,
+    `times_seen` UInt64
+)
+ENGINE = {engine}
+PARTITION BY toStartOfMonth(timestamp)
+ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp, category)
+TTL timestamp + toIntervalMonth(13)
+SETTINGS index_granularity = 8192
+"""
+
 OUTCOMES_DAILY_TABLE = """
 CREATE TABLE IF NOT EXISTS {db}.outcomes_daily_local_v2 ON CLUSTER 'test_cluster'
 (
@@ -117,6 +137,43 @@ def test_get_table_statements(
 
 @pytest.mark.redis_db
 @pytest.mark.custom_clickhouse_db
+def test_get_table_statement_without_cluster() -> None:
+    """
+    The create statements should not have ON CLUSTER if
+    skip_on_cluster was set to True
+    """
+    run_migrations()
+    table = "outcomes_daily_local_v2"
+    cluster_name = None
+    host = os.environ.get("CLICKHOUSE_HOST", "127.0.0.1")
+    statement = OUTCOMES_DAILY_TABLE_NO_CLUSTER
+    storage_name = "outcomes_daily"
+    settings = ClickhouseClientSettings.QUERY
+    storage = _get_storage(storage_name)
+    cluster = storage.get_cluster()
+    database_name = cluster.get_database()
+    if cluster.is_single_node():
+        engine = "SummingMergeTree"
+    else:
+        engine = table_engines.SummingMergeTree(
+            storage_set=storage.get_storage_set_key(),
+            order_by="",
+        )._get_engine_type(cluster, table)
+    table_statements = get_create_table_statements(
+        tables=[table],
+        source_connection=get_clusterless_node_connection(
+            host, 9000, storage_name, client_settings=settings
+        ),
+        source_database=database_name,
+        cluster_name=cluster_name,
+    )
+    ts = table_statements[0]
+    assert ts.is_mergetree
+    assert ts.statement == statement.format(db=database_name, engine=engine).strip()
+
+
+@pytest.mark.redis_db
+@pytest.mark.custom_clickhouse_db
 def test_create_tables_order() -> None:
     """
     Make sure the order in which we create tables is correct.
@@ -147,6 +204,43 @@ def test_create_tables_order() -> None:
     non_local_tables = all_tables.split(",")[4:]
     assert local_tables == expected_local_tables
     assert all(table in expected_non_local_tables for table in non_local_tables)
+
+
+@pytest.mark.redis_db
+@pytest.mark.custom_clickhouse_db
+def test_copy_tables_skip_on_cluster() -> None:
+    """
+    When skip_on_cluster=True, the response cluster_name should be 'no cluster'
+    and no ON CLUSTER clause should appear in the generated statements.
+    """
+    run_migrations()
+    host = os.environ.get("CLICKHOUSE_HOST", "127.0.0.1")
+    result = copy_tables(
+        source_host=host,
+        storage_name="outcomes_raw",
+        dry_run=True,
+        skip_on_cluster=True,
+    )
+    assert result["cluster_name"] == "no cluster"
+
+
+@pytest.mark.redis_db
+@pytest.mark.custom_clickhouse_db
+def test_copy_tables_cluster_name_override() -> None:
+    """
+    When cluster_name_override is provided, the response cluster_name should
+    reflect the override value regardless of the storage's actual cluster name.
+    """
+    run_migrations()
+    host = os.environ.get("CLICKHOUSE_HOST", "127.0.0.1")
+    override = "my_custom_cluster"
+    result = copy_tables(
+        source_host=host,
+        storage_name="outcomes_raw",
+        dry_run=True,
+        cluster_name_override=override,
+    )
+    assert result["cluster_name"] == override
 
 
 @pytest.mark.redis_db
