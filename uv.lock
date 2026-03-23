@@ -417,14 +417,6 @@ wheels = [
 ]
 
 [[package]]
-name = "honcho"
-version = "1.1.0"
-source = { registry = "https://pypi.devinfra.sentry.io/simple" }
-wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/honcho-1.1.0-py2.py3-none-any.whl", hash = "sha256:a4d6e3a88a7b51b66351ecfc6e9d79d8f4b87351db9ad7e923f5632cc498122f" },
-]
-
-[[package]]
 name = "httplib2"
 version = "0.22.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
@@ -1069,7 +1061,6 @@ dependencies = [
     { name = "google-cloud-storage", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "googleapis-common-protos", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "granian", extra = ["pname"], marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
-    { name = "honcho", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "jsonschema", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "packaging", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "parsimonious", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -1140,7 +1131,6 @@ requires-dist = [
     { name = "google-cloud-storage", specifier = ">=2.18.0" },
     { name = "googleapis-common-protos", specifier = ">=1.63.2" },
     { name = "granian", extras = ["pname"], specifier = ">=2.7" },
-    { name = "honcho", specifier = ">=1.1.0" },
     { name = "jsonschema", specifier = ">=4.23.0" },
     { name = "packaging", specifier = ">=24.1" },
     { name = "parsimonious", specifier = ">=0.10.0" },
