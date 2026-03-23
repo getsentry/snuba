@@ -82,6 +82,7 @@ jobs:
         ghcr: true
         tag_nightly: false
         tag_latest: false
+        publish_on_pr: ${{ github.head_ref == 'test/nightly-distroless' }}
 
   # Debug distroless image — with busybox for troubleshooting
   build-debug-multiplatform:
@@ -137,7 +138,7 @@ jobs:
 
   assemble-distroless:
     needs: [build-distroless-multiplatform]
-    if: ${{ github.repository_owner == 'getsentry' && (github.ref_name == 'master' || startsWith(github.ref_name, 'release/') || github.ref_name == 'test/nightly-distroless' || github.head_ref == 'test/nightly-distroless') }}
+    if: ${{ needs.build-distroless-multiplatform.result == 'success' && github.repository_owner == 'getsentry' && (github.ref_name == 'master' || startsWith(github.ref_name, 'release/') || github.ref_name == 'test/nightly-distroless' || github.head_ref == 'test/nightly-distroless') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
