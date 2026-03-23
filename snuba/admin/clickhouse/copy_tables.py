@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 from typing import MutableMapping, Optional, Sequence, Tuple, TypedDict
 
@@ -140,6 +141,12 @@ def copy_tables(
     if skip_on_cluster:
         cluster_name = None
     elif cluster_name_override:
+        # Validate cluster_name_override to prevent SQL injection
+        # Only allow alphanumeric characters, underscores, and hyphens
+        if not re.match(r"^[a-zA-Z0-9_-]+$", cluster_name_override):
+            raise ValueError(
+                "Invalid cluster name: only alphanumeric characters, underscores, and hyphens are allowed"
+            )
         cluster_name = cluster_name_override
     elif not cluster.is_single_node():
         cluster_name = storage.get_cluster().get_clickhouse_cluster_name()

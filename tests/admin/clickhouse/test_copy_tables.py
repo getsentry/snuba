@@ -245,6 +245,39 @@ def test_copy_tables_cluster_name_override() -> None:
 
 @pytest.mark.redis_db
 @pytest.mark.custom_clickhouse_db
+def test_copy_tables_cluster_name_override_sql_injection_prevention() -> None:
+    """
+    Test that cluster_name_override rejects invalid characters to prevent SQL injection.
+    Only alphanumeric characters, underscores, and hyphens should be allowed.
+    """
+    run_migrations()
+    host = os.environ.get("CLICKHOUSE_HOST", "127.0.0.1")
+
+    # Test various SQL injection attempts
+    invalid_cluster_names = [
+        "'; DROP TABLE users; --",
+        "cluster'; DROP TABLE users; --",
+        "cluster' OR '1'='1",
+        'cluster"; DROP TABLE users; --',
+        "cluster name with spaces",
+        "cluster;name",
+        "cluster'name",
+        "cluster(name)",
+        "cluster.name",
+    ]
+
+    for invalid_name in invalid_cluster_names:
+        with pytest.raises(ValueError, match="Invalid cluster name"):
+            copy_tables(
+                source_host=host,
+                storage_name="outcomes_raw",
+                dry_run=True,
+                cluster_name_override=invalid_name,
+            )
+
+
+@pytest.mark.redis_db
+@pytest.mark.custom_clickhouse_db
 def test_verify_tables_on_replicas() -> None:
     """
     Test that verify_tables_on_replicas correctly identifies missing tables.
