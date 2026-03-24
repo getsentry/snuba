@@ -44,7 +44,8 @@ pub fn process_message_with_replacement(
         })?;
 
     let (version, msg_type, error_event, replacement_event) = match msg {
-        Message::FourTrain(FourTrain(version, msg_type, event, _state)) => {
+        Message::FourTrain(boxed) => {
+            let FourTrain(version, msg_type, event, _state) = *boxed;
             (version, msg_type, Some(event), None)
         }
         Message::ThreeTrain(ThreeTrain(version, msg_type, event)) => {
@@ -91,7 +92,7 @@ pub fn process_message_with_replacement(
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(untagged)]
 enum Message {
-    FourTrain(FourTrain),
+    FourTrain(Box<FourTrain>),
     ThreeTrain(ThreeTrain),
 }
 
@@ -548,7 +549,7 @@ impl ErrorRow {
             for (key, value) in container.unwrap_or_default() {
                 if let Some(v) = value.0 {
                     if key != "type" {
-                        contexts_keys.push(format!("{}.{}", container_name, key));
+                        contexts_keys.push(format!("{container_name}.{key}"));
                         contexts_values.push(v);
                     }
                 }
