@@ -44,8 +44,7 @@ pub fn process_message_with_replacement(
         })?;
 
     let (version, msg_type, error_event, replacement_event) = match msg {
-        Message::FourTrain(boxed) => {
-            let FourTrain(version, msg_type, event, _state) = *boxed;
+        Message::FourTrain(FourTrain(version, msg_type, event, _state)) => {
             (version, msg_type, Some(event), None)
         }
         Message::ThreeTrain(ThreeTrain(version, msg_type, event)) => {
@@ -91,8 +90,9 @@ pub fn process_message_with_replacement(
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(untagged)]
+#[allow(clippy::large_enum_variant)]
 enum Message {
-    FourTrain(Box<FourTrain>),
+    FourTrain(FourTrain),
     ThreeTrain(ThreeTrain),
 }
 
