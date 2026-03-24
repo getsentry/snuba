@@ -56,8 +56,11 @@ impl TaskRunner<AggregatedOutcomesBatch, AggregatedOutcomesBatch, anyhow::Error>
                 entry.1 += stats.quantity;
 
                 let ts_secs = key.time_offset * bucket_interval;
-                let timestamp =
-                    DateTime::from_timestamp(ts_secs as i64, 0).unwrap_or_else(Utc::now);
+                let timestamp = if ts_secs == 0 {
+                    Utc::now()
+                } else {
+                    DateTime::from_timestamp(ts_secs as i64, 0).unwrap_or_else(Utc::now)
+                };
                 // convert to string with fractional seconds e.g.  "2019-09-29T09:46:40.000000Z"
                 let timestamp_str = timestamp.to_rfc3339_opts(SecondsFormat::Micros, true);
                 let outcome = TrackOutcome {
