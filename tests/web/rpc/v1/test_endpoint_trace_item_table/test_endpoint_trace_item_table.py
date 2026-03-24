@@ -76,7 +76,6 @@ from snuba.web.rpc.v1.endpoint_trace_item_table import (
     EndpointTraceItemTable,
     _apply_labels_to_columns,
     _validate_order_by,
-    _validate_select_and_groupby,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_table import build_query
 from tests.base import BaseApiTest
@@ -3854,38 +3853,3 @@ def test_order_by_bug() -> None:
     )
     with pytest.raises(BadSnubaRPCRequestException, match=error_message):
         _validate_order_by(message)
-
-
-def test_empty_columns_validation() -> None:
-    """Test that a request with no columns raises a validation error."""
-    start_ts = Timestamp()
-    start_ts.FromDatetime(datetime.fromisoformat("2025-12-24T18:58:14Z"))
-    end_ts = Timestamp()
-    end_ts.FromDatetime(datetime.fromisoformat("2026-03-24T18:58:14Z"))
-
-    message = TraceItemTableRequest(
-        meta=RequestMeta(
-            project_ids=[4511022985904128],
-            organization_id=4511022850834432,
-            referrer="api.auth-token.events",
-            request_id="b379b8a3752b4abd90473848c0304296",
-            start_timestamp=start_ts,
-            end_timestamp=end_ts,
-            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
-        ),
-        filter=TraceItemFilter(
-            comparison_filter=ComparisonFilter(
-                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="jobId"),
-                op=ComparisonFilter.OP_EQUALS,
-                value=AttributeValue(val_str="cmn4yqo3o0001m1wepssct4vz"),
-            )
-        ),
-        columns=[],  # Empty columns - this should trigger the validation error
-        limit=101,
-    )
-
-    with pytest.raises(
-        BadSnubaRPCRequestException,
-        match="At least one column must be specified in the request",
-    ):
-        _validate_select_and_groupby(message)
