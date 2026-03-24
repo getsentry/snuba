@@ -223,5 +223,9 @@ RUN set -ex; \
     rm -rf /tmp/rust_wheels/; \
     snuba --help
 
+# set up sentry options schemas and default path
+COPY sentry-options/schemas /etc/sentry-options/schemas
+ENV SENTRY_OPTIONS_DIR=/etc/sentry-options
+
 ENV PATH="${PATH}:/root/.cargo/bin/"
 USER snuba

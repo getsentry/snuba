@@ -1,0 +1,11 @@
+{
+    "version": "1.0",
+    "type": "object",
+    "properties": {
+      "consumer.use_item_timestamp": {
+        "type": "boolean",
+        "default": false,
+        "description": "whether or not to use received or timestamp on an item event"
+      }
+    }
+  }
