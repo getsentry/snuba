@@ -264,21 +264,28 @@ def _set_snql_api_error_tags(body: Dict[str, Any], http_referrer: str | None) ->
     - source: snql_api
     - referrer: from HTTP header or request body
     - tenant_ids: as context and individual tags
+
+    This function is wrapped in a try-except to ensure that any failure
+    in setting tags does not crash the API request.
     """
-    sentry_sdk.set_tag("source", "snql_api")
+    try:
+        sentry_sdk.set_tag("source", "snql_api")
 
-    # Extract and tag referrer
-    referrer = http_referrer or body.get("tenant_ids", {}).get("referrer", "<unknown>")
-    sentry_sdk.set_tag("referrer", referrer)
+        # Extract and tag referrer
+        referrer = http_referrer or body.get("tenant_ids", {}).get("referrer", "<unknown>")
+        sentry_sdk.set_tag("referrer", referrer)
 
-    # Extract and set tenant_ids as context for better error tracking
-    tenant_ids = body.get("tenant_ids", {})
-    if tenant_ids:
-        sentry_sdk.set_context("tenant_ids", tenant_ids)
-        # Also set individual tenant_id tags for easier filtering
-        for key, value in tenant_ids.items():
-            if key != "referrer":  # Skip referrer as it's already a tag
-                sentry_sdk.set_tag(f"tenant_id.{key}", str(value))
+        # Extract and set tenant_ids as context for better error tracking
+        tenant_ids = body.get("tenant_ids", {})
+        if tenant_ids:
+            sentry_sdk.set_context("tenant_ids", tenant_ids)
+            # Also set individual tenant_id tags for easier filtering
+            for key, value in tenant_ids.items():
+                if key != "referrer":  # Skip referrer as it's already a tag
+                    sentry_sdk.set_tag(f"tenant_id.{key}", str(value))
+    except Exception as e:
+        # Log the error but don't let it crash the API request
+        logger.warning("Failed to set Sentry tags for SnQL API", exc_info=e)
 
 
 @application.route("/query", methods=["GET", "POST"])
