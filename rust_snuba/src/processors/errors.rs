@@ -53,7 +53,7 @@ pub fn process_message_with_replacement(
     };
 
     if version != 2 {
-        anyhow::bail!("Unsupported message version: {}", version);
+        anyhow::bail!("Unsupported message version: {version}");
     }
 
     match (msg_type.as_str(), error_event, replacement_event) {
@@ -83,7 +83,7 @@ pub fn process_message_with_replacement(
             value: payload_bytes.clone(),
         })),
         _ => {
-            anyhow::bail!("unsupported message format: {:?}", msg_type);
+            anyhow::bail!("unsupported message format: {msg_type:?}");
         }
     }
 }

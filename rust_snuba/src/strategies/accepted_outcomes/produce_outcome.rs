@@ -76,7 +76,7 @@ impl TaskRunner<AggregatedOutcomesBatch, AggregatedOutcomesBatch, anyhow::Error>
                 }
 
                 let payload_bytes = serde_json::to_vec(&outcome).map_err(|e| {
-                    RunTaskError::Other(anyhow::anyhow!("serialization error: {}", e))
+                    RunTaskError::Other(anyhow::anyhow!("serialization error: {e}"))
                 })?;
                 let payload = KafkaPayload::new(None, None, Some(payload_bytes));
 
