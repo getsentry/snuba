@@ -1007,7 +1007,7 @@ mod tests {
         // Verify bucketed string attributes have the same content
         // "str_attr" should be in one of the string buckets
         let str_bucket = (fnv_1a("str_attr".as_bytes()) as usize) % 40;
-        let json_field = format!("attributes_string_{}", str_bucket);
+        let json_field = format!("attributes_string_{str_bucket}");
         let json_str_map: HashMap<String, String> = json_row
             .get(&json_field)
             .map(|v| serde_json::from_value(v.clone()).unwrap())
@@ -1070,8 +1070,7 @@ mod tests {
         assert_eq!(
             rb_str_val,
             Some(&"hello".to_string()),
-            "str_attr not found in RowBinary output bucket {}",
-            str_bucket
+            "str_attr not found in RowBinary output bucket {str_bucket}"
         );
         assert_eq!(
             json_str_map.get("str_attr"),
@@ -1082,7 +1081,7 @@ mod tests {
         // Verify float attribute is in the correct bucket (int_attr and bool_attr are
         // double-written as floats)
         let float_bucket = (fnv_1a("float_attr".as_bytes()) as usize) % 40;
-        let json_float_field = format!("attributes_float_{}", float_bucket);
+        let json_float_field = format!("attributes_float_{float_bucket}");
         let json_float_map: HashMap<String, f64> = json_row
             .get(&json_float_field)
             .map(|v| serde_json::from_value(v.clone()).unwrap())
@@ -1127,7 +1126,7 @@ mod tests {
         let database = std::env::var("CLICKHOUSE_DATABASE").unwrap_or("default".to_string());
 
         let client = clickhouse::Client::default()
-            .with_url(format!("http://{}:{}", host, http_port))
+            .with_url(format!("http://{host}:{http_port}"))
             .with_database(&database)
             .with_option("input_format_binary_read_json_as_string", "1")
             .with_option("insert_deduplicate", "0");
@@ -1193,8 +1192,7 @@ mod tests {
         // Read it back using organization_id (primary key prefix) for reliable lookup
         let count: u64 = client
             .query(&format!(
-                "SELECT count() FROM eap_items_1_local WHERE organization_id = {}",
-                unique_org_id
+                "SELECT count() FROM eap_items_1_local WHERE organization_id = {unique_org_id}"
             ))
             .fetch_one()
             .await
@@ -1208,9 +1206,8 @@ mod tests {
             .query(&format!(
                 "SELECT organization_id, project_id, item_type, sampling_weight \
                  FROM eap_items_1_local \
-                 WHERE organization_id = {} \
-                 LIMIT 1",
-                unique_org_id
+                 WHERE organization_id = {unique_org_id} \
+                 LIMIT 1"
             ))
             .fetch_one::<(u64, u64, u8, u64)>()
             .await
@@ -1224,8 +1221,7 @@ mod tests {
         // Clean up
         client
             .query(&format!(
-                "ALTER TABLE eap_items_1_local DELETE WHERE organization_id = {}",
-                unique_org_id
+                "ALTER TABLE eap_items_1_local DELETE WHERE organization_id = {unique_org_id}"
             ))
             .execute()
             .await

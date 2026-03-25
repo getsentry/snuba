@@ -52,6 +52,9 @@ def _apply_labels_to_columns(in_msg: TraceItemTableRequest) -> TraceItemTableReq
 
 
 def _validate_select_and_groupby(in_msg: TraceItemTableRequest) -> None:
+    if not in_msg.columns:
+        raise BadSnubaRPCRequestException("At least one column must be specified in the request")
+
     non_aggregted_columns = set([c.key.name for c in in_msg.columns if c.HasField("key")])
     grouped_by_columns = set([c.name for c in in_msg.group_by])
 
