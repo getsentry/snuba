@@ -26,7 +26,6 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
 )
 @click.option(
     "--auto-offset-reset",
-    default="earliest",
     type=click.Choice(["error", "earliest", "latest"]),
     help="Kafka consumer auto offset reset.",
 )
@@ -37,13 +36,11 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
 )
 @click.option(
     "--queued-max-messages-kbytes",
-    default=settings.DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
     type=int,
     help="Maximum number of kilobytes per topic+partition in the local consumer queue.",
 )
 @click.option(
     "--queued-min-messages",
-    default=settings.DEFAULT_QUEUED_MIN_MESSAGES,
     type=int,
     help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
@@ -76,13 +73,11 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
 )
 @click.option(
     "--max-batch-size",
-    default=settings.DEFAULT_MAX_BATCH_SIZE,
     type=int,
     help="Max number of messages to batch in memory before writing to Kafka.",
 )
 @click.option(
     "--max-batch-time-ms",
-    default=settings.DEFAULT_MAX_BATCH_TIME_MS,
     type=int,
     help="Max length of time to buffer messages in memory before writing to Kafka.",
 )
@@ -91,7 +86,6 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     "log_level",
     type=click.Choice(["error", "warn", "info", "debug", "trace"], False),
     help="Logging level to use.",
-    default="info",
 )
 @click.option(
     "--concurrency",
@@ -107,40 +101,33 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     "use_rust_processor",
     is_flag=True,
     help="Use the Rust (if available) or Python message processor",
-    default=True,
 )
 @click.option(
     "--group-instance-id",
     type=str,
-    default=None,
     help="Kafka group instance id. passing a value here will run kafka with static membership.",
 )
 @click.option(
     "--python-max-queue-depth",
     type=int,
-    default=None,
     help="How many messages should be queued up in the Python message processor before backpressure kicks in. Defaults to the number of processes.",
 )
 @click.option(
     "--max-poll-interval-ms",
     type=int,
-    default=30000,
 )
 @click.option(
     "--async-inserts",
     is_flag=True,
-    default=False,
     help="Enable async inserts for ClickHouse",
 )
 @click.option(
     "--max-dlq-buffer-length",
     type=int,
-    default=25000,
     help="Set a per-partition limit to the length of the DLQ buffer",
 )
 @click.option(
     "--health-check-file",
-    default=None,
     type=str,
     help="Arroyo will touch this file at intervals to indicate health. If not provided, no health check is performed.",
 )
@@ -148,7 +135,6 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     "--enforce-schema",
     type=bool,
     is_flag=True,
-    default=False,
     help="Enforce schema on the raw events topic.",
 )
 @click.option(
@@ -159,36 +145,30 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
 @click.option(
     "--batch-write-timeout-ms",
     type=int,
-    default=None,
     help="Optional timeout for batch writer client connecting and sending request to Clickhouse",
 )
 @click.option(
     "--quantized-rebalance-consumer-group-delay-secs",
     type=int,
-    default=None,
     help="Quantized rebalancing means that during deploys, rebalancing is triggered across all pods within a consumer group at the same time. The value is used by the pods to align their group join/leave activity to some multiple of the delay",
 )
 @click.option(
     "--join-timeout-ms",
     type=int,
-    default=1000,
     help="number of milliseconds to wait for the current batch to be flushed by the consumer in case of rebalance",
 )
 @click.option(
     "--health-check",
-    default="arroyo",
     type=click.Choice(["snuba", "arroyo"]),
     help="Specify which health check to use for the consumer. If not specified, the default Arroyo health check is used.",
 )
 @click.option(
     "--use-row-binary",
     is_flag=True,
-    default=False,
     help="Use RowBinary format for ClickHouse inserts instead of JSONEachRow. Currently only supported for EAPItemsProcessor.",
 )
 @click.option(
     "--consumer-version",
-    default="v2",
     type=click.Choice(["v1", "v2"]),
     help="DEPRECATED: value is ignored.",
 )
