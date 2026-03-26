@@ -461,6 +461,7 @@ def dataset_query(
         request, result = parse_and_run_query(body, timer, is_mql, dataset_name, referrer)
         assert result.extra["stats"]
     except InvalidQueryException as exception:
+        sentry_sdk.capture_exception(exception)
         details: Mapping[str, Any]
         details = {
             "type": "invalid_query",
@@ -474,6 +475,7 @@ def dataset_query(
             {"Content-Type": "application/json"},
         )
     except QueryException as exception:
+        sentry_sdk.capture_exception(exception)
         status = 500
         cause = exception.__cause__
         if isinstance(cause, (RateLimitExceeded, AllocationPolicyViolations)):
@@ -513,6 +515,7 @@ def dataset_query(
             {"Content-Type": "application/json"},
         )
     except QueryPlanException as exception:
+        sentry_sdk.capture_exception(exception)
         if isinstance(exception, StorageNotAvailable):
             status = 400
             details = {
