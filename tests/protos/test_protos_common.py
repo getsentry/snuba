@@ -7,7 +7,7 @@ from snuba.protos.common import (
     attribute_key_to_expression,
 )
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import arrayElement, column, literal
+from snuba.query.dsl import arrayElement, column, if_cond, literal
 from snuba.query.expressions import SubscriptableReference
 
 
@@ -72,14 +72,18 @@ class TestAttributeKeyToExpression:
     def test_coalesce(self) -> None:
         new_attribute = list(ATTRIBUTES_TO_COALESCE.keys())[0]
         old_attributes = ATTRIBUTES_TO_COALESCE[new_attribute]
-        references = [
-            SubscriptableReference(
-                alias=None,
-                column=column("attributes_string"),
-                key=literal(old_attribute),
+        ordered_names = list(dict.fromkeys([new_attribute] + list(old_attributes)))
+        coalesce_args = []
+        for name in ordered_names:
+            attr_col = column("attributes_string")
+            key_lit = literal(name)
+            coalesce_args.append(
+                if_cond(
+                    f.mapContains(attr_col, key_lit),
+                    SubscriptableReference(None, attr_col, key_lit),
+                    literal(None),
+                )
             )
-            for old_attribute in old_attributes
-        ]
 
         assert attribute_key_to_expression(
             AttributeKey(
@@ -87,12 +91,7 @@ class TestAttributeKeyToExpression:
                 name=new_attribute,
             ),
         ) == f.coalesce(
-            SubscriptableReference(
-                alias=None,
-                column=column("attributes_string"),
-                key=literal(new_attribute),
-            ),
-            *references,
+            *coalesce_args,
             alias=f"{new_attribute}_TYPE_STRING",
         )
 

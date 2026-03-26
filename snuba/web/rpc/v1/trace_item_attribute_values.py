@@ -18,8 +18,10 @@ from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
+from snuba.protos.common import ATTRIBUTES_TO_COALESCE, PROTO_TYPE_TO_ATTRIBUTE_COLUMN
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
+from snuba.query.conditions import combine_or_conditions
 from snuba.query.data_source.simple import Entity, LogicalDataSource
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column
@@ -40,12 +42,30 @@ from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
 )
 
 
+def _map_key_names_for_existence_check(request_key: AttributeKey) -> list[str]:
+    """Map key names that may hold values (canonical plus deprecated/alias names)."""
+    names = [request_key.name]
+    for alt in ATTRIBUTES_TO_COALESCE.get(request_key.name, ()):
+        if alt not in names:
+            names.append(alt)
+    return names
+
+
 def _build_conditions(request: TraceItemAttributeValuesRequest) -> Expression:
     attribute_key = attribute_key_to_expression(request.key)
 
-    conditions: list[Expression] = [
-        f.has(column("attributes_string"), getattr(attribute_key, "key", request.key.name)),
-    ]
+    attr_column = PROTO_TYPE_TO_ATTRIBUTE_COLUMN.get(
+        request.key.type,
+        "attributes_string",
+    )
+    key_existence = combine_or_conditions(
+        [
+            f.has(column(attr_column), name)
+            for name in _map_key_names_for_existence_check(request.key)
+        ]
+    )
+
+    conditions: list[Expression] = [key_existence]
     if request.meta.trace_item_type:
         conditions.append(f.equals(column("item_type"), request.meta.trace_item_type))
 

@@ -5,7 +5,7 @@ from sentry_conventions.attributes import ATTRIBUTE_METADATA
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import arrayElement, column, literal
+from snuba.query.dsl import arrayElement, column, if_cond, literal
 from snuba.query.expressions import (
     Argument,
     Expression,
@@ -120,6 +120,17 @@ def _generate_subscriptable_reference(
     )
 
 
+def _string_map_value_if_key_present(attribute_name: str) -> Expression:
+    """Map lookup that is NULL when the key is absent (not default '')."""
+    attr_col = column("attributes_string")
+    key_lit = literal(attribute_name)
+    return if_cond(
+        f.mapContains(attr_col, key_lit),
+        SubscriptableReference(None, attr_col, key_lit),
+        literal(None),
+    )
+
+
 def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
     """Convert an AttributeKey proto to a Snuba Expression.
 
@@ -156,16 +167,19 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
 
     if attr_key.type in PROTO_TYPE_TO_ATTRIBUTE_COLUMN:
         if attr_key.name in ATTRIBUTES_TO_COALESCE:
-            expressions = [
-                _generate_subscriptable_reference(
-                    attribute_name,
-                    attr_key.type,
-                )
-                for attribute_name in [
-                    attr_key.name,
-                ]
-                + list(ATTRIBUTES_TO_COALESCE[attr_key.name])
-            ]
+            ordered_names = list(
+                dict.fromkeys([attr_key.name] + list(ATTRIBUTES_TO_COALESCE[attr_key.name]))
+            )
+            expressions: list[Expression] = []
+            for attribute_name in ordered_names:
+                if attr_key.type == AttributeKey.Type.TYPE_STRING:
+                    ref: Expression = _string_map_value_if_key_present(attribute_name)
+                else:
+                    ref = _generate_subscriptable_reference(
+                        attribute_name,
+                        attr_key.type,
+                    )
+                expressions.append(ref)
             return f.coalesce(
                 *expressions,
                 alias=alias,
