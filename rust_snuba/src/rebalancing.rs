@@ -30,11 +30,7 @@ pub fn delay_kafka_rebalance(configured_delay_secs: u64) {
 
 pub fn get_rebalance_delay_secs(consumer_group: &str) -> Option<u64> {
     runtime_config::get_str_config(
-        format!(
-            "quantized_rebalance_consumer_group_delay_secs__{}",
-            consumer_group
-        )
-        .as_str(),
+        format!("quantized_rebalance_consumer_group_delay_secs__{consumer_group}").as_str(),
     )
     .ok()??
     .parse()

@@ -318,7 +318,7 @@ mod tests {
     async fn it_works() -> Result<(), reqwest::Error> {
         crate::testutils::initialize_python();
         let config = make_test_config();
-        println!("config: {:?}", config);
+        println!("config: {config:?}");
         let client = ClickhouseClient::new(&config, "querylog_local", "test_storage".to_string());
 
         let url = client.build_url();
