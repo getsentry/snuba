@@ -184,19 +184,12 @@ class TestTraceItemAttributes(BaseApiTest):
         assert res.values == [item_id]
 
     def test_deprecated_alias_attribute(self) -> None:
-        """AttributeValuesRequest for db.system.name must return values ingested
-        under the deprecated alias db.system (reproduces the bug from ISSUE-XXXX).
-
-        Before fix: returns [] (has() filter only checks db.system.name bucket,
-        missing rows stored under db.system).
-        After fix: returns ["postgresql", "redis"].
-        """
+        """db.system.name request returns values stored only under deprecated key db.system."""
 
         items_storage = get_storage(StorageKey("eap_items"))
         write_raw_unprocessed_events(
             items_storage,  # type: ignore
             [
-                # Simulates old spans ingested before db.system was renamed to db.system.name
                 gen_item_message(
                     start_timestamp=BASE_TIME,
                     attributes={"db.system": AnyValue(string_value="redis")},
@@ -225,4 +218,3 @@ class TestTraceItemAttributes(BaseApiTest):
         )
         response = AttributeValuesRequest().execute(message)
         assert sorted(response.values) == ["postgresql", "redis"]
-        assert False
