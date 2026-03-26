@@ -4249,9 +4249,9 @@ dependencies = [
 
 [[package]]
 name = "sentry-options"
-version = "1.0.3"
+version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9599ed03f9ca504ee87808e955e05bf42901bb2e1242476c6c5d6dd20a2134b"
+checksum = "05bf55c8da80fbf20bf76981b47b5233dc0f84135ba1a135e16879e0bdaa57a9"
 dependencies = [
  "num",
  "sentry-options-validation",
@@ -4262,9 +4262,9 @@ dependencies = [
 
 [[package]]
 name = "sentry-options-validation"
-version = "1.0.3"
+version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "825f906edf04e9dee86e14bd5192d8b53faf8cd49fcef1e804c082833a16ebca"
+checksum = "581da526c25f7afd6509ca6df9905b190c19ff2c018e9ead176aa23954865ddc"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4369,7 +4369,7 @@ dependencies = [
  "parking_lot",
  "rand 0.8.5",
  "rdkafka",
- "sentry-core 0.41.0",
+ "sentry-core 0.46.2",
  "serde",
  "serde_json",
  "thiserror 1.0.58",
