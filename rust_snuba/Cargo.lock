@@ -4369,7 +4369,7 @@ dependencies = [
  "parking_lot",
  "rand 0.8.5",
  "rdkafka",
- "sentry-core 0.46.2",
+ "sentry-core 0.41.0",
  "serde",
  "serde_json",
  "thiserror 1.0.58",
