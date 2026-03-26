@@ -649,9 +649,6 @@ mod tests {
         trace_item.encode(&mut buf).unwrap();
         let payload = KafkaPayload::new(None, None, Some(buf));
 
-        // we need to poll first to get the overridden value
-        aggregator.poll().unwrap();
-
         aggregator
             .submit(Message::new_broker_message(
                 payload,
