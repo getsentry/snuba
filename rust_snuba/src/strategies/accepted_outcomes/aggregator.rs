@@ -329,9 +329,6 @@ mod tests {
 
     #[test]
     fn submit_tracks_max_offset_per_partition() {
-        init().unwrap();
-        let _guard =
-            override_options(&[("snuba", "consumer.use_item_timestamp", json!(false))]).unwrap();
         let mut aggregator = OutcomesAggregator::new(
             Noop { last_message: None },
             500,
@@ -379,9 +376,6 @@ mod tests {
 
     #[test]
     fn submit_multiple_messages_accumulates_batch() {
-        init().unwrap();
-        let _guard =
-            override_options(&[("snuba", "consumer.use_item_timestamp", json!(false))]).unwrap();
         let mut aggregator = OutcomesAggregator::new(
             Noop { last_message: None },
             500,
@@ -471,8 +465,6 @@ mod tests {
     #[test]
     fn poll_flushes_when_max_batch_size_reached() {
         init().unwrap();
-        let _guard =
-            override_options(&[("snuba", "consumer.use_item_timestamp", json!(false))]).unwrap();
         let mut aggregator = OutcomesAggregator::new(
             Noop { last_message: None },
             1,
@@ -499,8 +491,6 @@ mod tests {
     #[test]
     fn submit_returns_backpressure_when_message_carried_over() {
         init().unwrap();
-        let _guard =
-            override_options(&[("snuba", "consumer.use_item_timestamp", json!(false))]).unwrap();
         struct RejectOnce {
             rejected: bool,
         }
@@ -569,8 +559,6 @@ mod tests {
     #[test]
     fn join_honors_timeout_when_message_stays_carried_over() {
         init().unwrap();
-        let _guard =
-            override_options(&[("snuba", "consumer.use_item_timestamp", json!(false))]).unwrap();
         struct AlwaysReject;
         impl ProcessingStrategy<AggregatedOutcomesBatch> for AlwaysReject {
             fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
@@ -649,6 +637,9 @@ mod tests {
         trace_item.encode(&mut buf).unwrap();
         let payload = KafkaPayload::new(None, None, Some(buf));
 
+        // we need to poll first in order to get the new value (true)
+        aggregator.poll().unwrap();
+
         aggregator
             .submit(Message::new_broker_message(
                 payload,
@@ -669,5 +660,83 @@ mod tests {
             aggregator.batch.buckets.get(&key).map(|s| s.quantity),
             Some(1)
         );
+    }
+
+    #[test]
+    fn poll_updates_use_item_timestamp_dynamically() {
+        init().unwrap();
+        let mut aggregator = OutcomesAggregator::new(
+            Noop { last_message: None },
+            500,
+            Duration::from_millis(30_000),
+            60,
+        );
+
+        let partition = Partition::new(Topic::new("snuba-items"), 0);
+
+        let mut buf = Vec::new();
+        TraceItem {
+            organization_id: 1,
+            project_id: 2,
+            received: Some(Timestamp {
+                seconds: 1_700_000_000,
+                nanos: 0,
+            }),
+            timestamp: Some(Timestamp {
+                seconds: 1_700_000_060,
+                nanos: 0,
+            }),
+            outcomes: Some(Outcomes {
+                key_id: 3,
+                category_count: vec![CategoryCount {
+                    data_category: 4,
+                    quantity: 1,
+                }],
+            }),
+            ..Default::default()
+        }
+        .encode(&mut buf)
+        .unwrap();
+        let payload = KafkaPayload::new(None, None, Some(buf));
+
+        let bucket_quantity = |aggregator: &OutcomesAggregator<Noop>, offset: u64| {
+            let key = BucketKey {
+                time_offset: offset,
+                org_id: 1,
+                project_id: 2,
+                key_id: 3,
+                category: 4,
+            };
+            aggregator.batch.buckets.get(&key).map(|s| s.quantity)
+        };
+
+        let mut offset = 0;
+        let mut do_submit = |aggregator: &mut OutcomesAggregator<Noop>| {
+            aggregator.poll().unwrap();
+            aggregator
+                .submit(Message::new_broker_message(
+                    payload.clone(),
+                    partition,
+                    offset,
+                    Utc::now(),
+                ))
+                .unwrap();
+            offset += 1;
+        };
+
+        // Enable item timestamp
+        let guard =
+            override_options(&[("snuba", "consumer.use_item_timestamp", json!(true))]).unwrap();
+        do_submit(&mut aggregator);
+        assert_eq!(bucket_quantity(&aggregator, 28_333_334), Some(1));
+        assert_eq!(bucket_quantity(&aggregator, 28_333_333), None);
+
+        // Disable item timestamp
+        drop(guard);
+        let _guard =
+            override_options(&[("snuba", "consumer.use_item_timestamp", json!(false))]).unwrap();
+        do_submit(&mut aggregator);
+        assert_eq!(bucket_quantity(&aggregator, 28_333_333), Some(1));
+        assert_eq!(bucket_quantity(&aggregator, 28_333_334), Some(1)); // still present from first submit
     }
 }
