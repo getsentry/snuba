@@ -33,7 +33,6 @@
                 "--no-strict-offset-reset",
                 "--use-rust-processor",
                 "--enforce-schema",
-                "--blq-stale-age-mins=30"
             ],
             "cwd": "${workspaceFolder}",
             "sourceLanguages": ["rust"],
@@ -55,7 +54,6 @@
                 "--no-strict-offset-reset",
                 "--use-rust-processor",
                 "--enforce-schema",
-                "--blq-stale-age-mins=30"
             ],
             "cwd": "${workspaceFolder}",
             "justMyCode": false
