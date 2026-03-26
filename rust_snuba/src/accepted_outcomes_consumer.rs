@@ -120,7 +120,7 @@ pub fn accepted_outcomes_consumer_impl(
     commit_frequency_sec: u64,
 ) -> usize {
     setup_logging();
-    let _ = init();
+    init().expect("failed to initialize sentry-options");
 
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
 

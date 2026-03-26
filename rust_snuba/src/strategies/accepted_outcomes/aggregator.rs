@@ -130,9 +130,10 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
 {
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         self.use_item_timestamp = options("snuba")
+            .expect("sentry-options not initialized")
             .get("consumer.use_item_timestamp")
-            .ok()
-            .and_then(|v| v.as_bool())
+            .expect("consumer.use_item_timestamp not found in schema")
+            .as_bool()
             .unwrap_or(false);
 
         let commit_request = self.next_step.poll()?;
@@ -328,7 +329,7 @@ mod tests {
 
     #[test]
     fn submit_tracks_max_offset_per_partition() {
-        let _ = init().unwrap();
+        init().unwrap();
         let _guard =
             override_options(&[("snuba", "consumer.use_item_timestamp", json!(false))]).unwrap();
         let mut aggregator = OutcomesAggregator::new(
@@ -378,7 +379,7 @@ mod tests {
 
     #[test]
     fn submit_multiple_messages_accumulates_batch() {
-        let _ = init().unwrap();
+        init().unwrap();
         let _guard =
             override_options(&[("snuba", "consumer.use_item_timestamp", json!(false))]).unwrap();
         let mut aggregator = OutcomesAggregator::new(
@@ -469,7 +470,7 @@ mod tests {
 
     #[test]
     fn poll_flushes_when_max_batch_size_reached() {
-        let _ = init().unwrap();
+        init().unwrap();
         let _guard =
             override_options(&[("snuba", "consumer.use_item_timestamp", json!(false))]).unwrap();
         let mut aggregator = OutcomesAggregator::new(
@@ -497,7 +498,7 @@ mod tests {
 
     #[test]
     fn submit_returns_backpressure_when_message_carried_over() {
-        let _ = init().unwrap();
+        init().unwrap();
         let _guard =
             override_options(&[("snuba", "consumer.use_item_timestamp", json!(false))]).unwrap();
         struct RejectOnce {
@@ -567,7 +568,7 @@ mod tests {
 
     #[test]
     fn join_honors_timeout_when_message_stays_carried_over() {
-        let _ = init().unwrap();
+        init().unwrap();
         let _guard =
             override_options(&[("snuba", "consumer.use_item_timestamp", json!(false))]).unwrap();
         struct AlwaysReject;
@@ -611,7 +612,7 @@ mod tests {
 
     #[test]
     fn submit_uses_item_timestamp_when_enabled() {
-        let _ = init().unwrap();
+        init().unwrap();
         let _guard =
             override_options(&[("snuba", "consumer.use_item_timestamp", json!(true))]).unwrap();
         let mut aggregator = OutcomesAggregator::new(
