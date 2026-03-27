@@ -535,8 +535,7 @@ mod tests {
             assert_eq!(
                 IP_REGEX.is_match(address),
                 is_ipv4,
-                "{} failed IPv4 validation",
-                address
+                "{address} failed IPv4 validation"
             );
         }
     }

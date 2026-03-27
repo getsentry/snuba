@@ -33,6 +33,7 @@ pub struct AcceptedOutcomesStrategyFactory {
     producer: Arc<KafkaProducer>,
     concurrency: ConcurrencyConfig,
     skip_produce: bool,
+    use_item_timestamp: bool,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for AcceptedOutcomesStrategyFactory {
@@ -54,6 +55,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for AcceptedOutcomesStrategyFactory
             self.max_batch_size,
             self.max_batch_time_ms,
             self.bucket_interval,
+            self.use_item_timestamp,
         ))
     }
 }
@@ -202,6 +204,11 @@ pub fn accepted_outcomes_consumer_impl(
         .flatten()
         .unwrap_or("1".to_string())
         == "1";
+    let use_item_timestamp = get_str_config("accepted_outcomes_use_item_timestamp")
+        .ok()
+        .flatten()
+        .unwrap_or("0".to_string())
+        == "1";
 
     let factory = AcceptedOutcomesStrategyFactory {
         bucket_interval,
@@ -212,6 +219,7 @@ pub fn accepted_outcomes_consumer_impl(
         producer,
         concurrency: ConcurrencyConfig::new(concurrency),
         skip_produce,
+        use_item_timestamp,
     };
     let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);
 

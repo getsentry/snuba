@@ -134,6 +134,10 @@ ENV LD_PRELOAD=/usr/src/snuba/libjemalloc.so.2 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
+# set up sentry options schemas and default path
+COPY sentry-options/schemas /etc/sentry-options/schemas
+ENV SENTRY_OPTIONS_DIR=/etc/sentry-options
+
 USER snuba
 EXPOSE 1218 1219
 ENTRYPOINT [ "./docker_entrypoint.sh" ]
@@ -163,6 +167,7 @@ FROM ghcr.io/getsentry/dhi/python:3.13-debian13 AS application-distroless
 
 COPY --from=distroless_prep /.venv /.venv
 COPY --from=distroless_prep /usr/src/snuba /usr/src/snuba
+COPY --from=distroless_prep /etc/sentry-options /etc/sentry-options
 COPY --from=distroless_prep /usr/lib/*/libjemalloc.so.2 /usr/lib/libjemalloc.so.2
 COPY --from=distroless_prep /etc/passwd /etc/passwd
 COPY --from=distroless_prep /etc/group /etc/group
@@ -174,7 +179,8 @@ ENV PATH="/.venv/bin:/opt/python/bin:$PATH" \
     SNUBA_RELEASE=$SOURCE_COMMIT \
     FLASK_DEBUG=0 \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    SENTRY_OPTIONS_DIR=/etc/sentry-options
 
 USER 1000
 EXPOSE 1218 1219
@@ -186,6 +192,7 @@ FROM ghcr.io/getsentry/dhi/python:3.13-debian13-dev AS application-distroless-de
 
 COPY --from=distroless_prep /.venv /.venv
 COPY --from=distroless_prep /usr/src/snuba /usr/src/snuba
+COPY --from=distroless_prep /etc/sentry-options /etc/sentry-options
 COPY --from=distroless_prep /usr/lib/*/libjemalloc.so.2 /usr/lib/libjemalloc.so.2
 COPY --from=distroless_prep /etc/passwd /etc/passwd
 COPY --from=distroless_prep /etc/group /etc/group
@@ -197,7 +204,8 @@ ENV PATH="/.venv/bin:/opt/python/bin:$PATH" \
     SNUBA_RELEASE=$SOURCE_COMMIT \
     FLASK_DEBUG=0 \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    SENTRY_OPTIONS_DIR=/etc/sentry-options
 
 USER 1000
 EXPOSE 1218 1219

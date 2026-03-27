@@ -1420,6 +1420,27 @@ class TestTraceItemTable(BaseApiTest):
         with pytest.raises(BadSnubaRPCRequestException):
             EndpointTraceItemTable().execute(message)
 
+    def test_table_with_no_columns(self, setup_teardown: Any) -> None:
+        """Test that a request with no columns raises a validation error."""
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[],  # Empty columns - should trigger validation error
+            limit=5,
+        )
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="At least one column must be specified in the request",
+        ):
+            EndpointTraceItemTable().execute(message)
+
     def test_aggregation_filter_basic_backward_compat(self) -> None:
         """
         This test ensures that aggregates are properly filtered out
