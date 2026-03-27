@@ -90,7 +90,7 @@ impl<TNext> OutcomesAggregator<TNext> {
         TNext: ProcessingStrategy<AggregatedOutcomesBatch>,
     {
         let num_buckets = self.batch.num_buckets();
-        let mut batch = std::mem::replace(
+        let batch = std::mem::replace(
             &mut self.batch,
             AggregatedOutcomesBatch::new(self.bucket_interval),
         );
