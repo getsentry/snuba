@@ -103,6 +103,8 @@ def _set_rpc_error_tags(in_msg: ProtobufMessage) -> None:
 
         if hasattr(meta, "organization_id") and meta.organization_id:
             sentry_sdk.set_tag("organization_id", str(meta.organization_id))
+        if hasattr(meta, "request_id") and meta.request_id:
+            sentry_sdk.set_tag("request_id", str(meta.request_id))
 
 
 class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
