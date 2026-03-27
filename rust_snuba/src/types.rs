@@ -616,6 +616,14 @@ impl BucketStats {
     }
 }
 
+/// Per-category metrics accumulated within a batch
+#[derive(Clone, Debug, Default)]
+pub struct CategoryMetrics {
+    pub messages_seen: u64,
+    pub total_quantity: u64,
+    pub bucket_count: u64,
+}
+
 /// Batch type for aggregated outcomes data
 /// Stores bucketed counts instead of raw row data
 #[derive(Clone, Debug)]
@@ -623,6 +631,8 @@ pub struct AggregatedOutcomesBatch {
     /// Map from bucket key to aggregated statistics
     pub buckets: HashMap<BucketKey, BucketStats>,
     pub bucket_interval: u64,
+    /// Per-category metrics for the current batch
+    pub category_metrics: BTreeMap<u32, CategoryMetrics>,
 }
 
 impl Default for AggregatedOutcomesBatch {
@@ -630,6 +640,7 @@ impl Default for AggregatedOutcomesBatch {
         Self {
             buckets: HashMap::new(),
             bucket_interval: 60,
+            category_metrics: BTreeMap::new(),
         }
     }
 }
@@ -643,14 +654,21 @@ impl AggregatedOutcomesBatch {
         }
     }
 
-    /// Add or update a bucket with a count and quantity
+    /// Add or update a bucket with a count and quantity, updating per-category metrics
     pub fn add_to_bucket(&mut self, key: BucketKey, quantity: u64) {
-        self.buckets
+        let is_new = !self.buckets.contains_key(&key);
+        let stats = self
+            .buckets
             .entry(key)
-            .and_modify(|stats| {
-                stats.quantity += quantity;
-            })
-            .or_insert_with(|| BucketStats::new(quantity));
+            .or_insert_with(|| BucketStats::new(0));
+        stats.quantity += quantity;
+
+        let m = self.category_metrics.entry(key.category).or_default();
+        m.messages_seen += 1;
+        m.total_quantity += quantity;
+        if is_new {
+            m.bucket_count += 1;
+        }
     }
 
     /// Get the total number of buckets
