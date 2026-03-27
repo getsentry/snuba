@@ -57,6 +57,9 @@ pub struct OutcomesAggregator<TNext> {
     message_carried_over: Option<Message<AggregatedOutcomesBatch>>,
     /// Commit request carried over from a poll where we had a message to retry.
     commit_request_carried_over: Option<CommitRequest>,
+    /// Temporary option to change the timestamp source from
+    /// `received` to `timestamp` on the item event.
+    use_item_timestamp: bool,
 }
 
 impl<TNext> OutcomesAggregator<TNext> {
@@ -65,6 +68,7 @@ impl<TNext> OutcomesAggregator<TNext> {
         max_batch_size: usize,
         max_batch_time_ms: Duration,
         bucket_interval: u64,
+        use_item_timestamp: bool,
     ) -> Self {
         Self {
             next_step,
@@ -76,6 +80,7 @@ impl<TNext> OutcomesAggregator<TNext> {
             latest_offsets: HashMap::new(),
             message_carried_over: None,
             commit_request_carried_over: None,
+            use_item_timestamp,
         }
     }
 
@@ -189,11 +194,20 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
             }
         };
 
-        let ts_secs = trace_item
-            .received
-            .as_ref()
-            .map(|t| t.seconds as u64)
-            .unwrap_or(0);
+        let ts_secs = if self.use_item_timestamp {
+            trace_item
+                .timestamp
+                .as_ref()
+                .or(trace_item.received.as_ref())
+                .map(|t| t.seconds as u64)
+                .unwrap_or(0)
+        } else {
+            trace_item
+                .received
+                .as_ref()
+                .map(|t| t.seconds as u64)
+                .unwrap_or(0)
+        };
         let org_id = trace_item.organization_id;
         let project_id = trace_item.project_id;
 
@@ -309,6 +323,7 @@ mod tests {
             500,
             Duration::from_millis(5_000),
             60,
+            false,
         );
 
         let topic = Topic::new("accepted-outcomes");
@@ -356,6 +371,7 @@ mod tests {
             500,
             Duration::from_millis(2_000),
             60,
+            false,
         );
 
         let topic = Topic::new("snuba-items");
@@ -444,6 +460,7 @@ mod tests {
             1,
             Duration::from_millis(30_000),
             60,
+            false,
         );
 
         let partition = Partition::new(Topic::new("accepted-outcomes"), 0);
@@ -496,6 +513,7 @@ mod tests {
             1, // flush after 1 bucket
             Duration::from_millis(30_000),
             60,
+            false,
         );
 
         let partition = Partition::new(Topic::new("test"), 0);
@@ -552,7 +570,7 @@ mod tests {
         }
 
         let mut aggregator =
-            OutcomesAggregator::new(AlwaysReject, 1, Duration::from_millis(30_000), 60);
+            OutcomesAggregator::new(AlwaysReject, 1, Duration::from_millis(30_000), 60, false);
         let partition = Partition::new(Topic::new("test"), 0);
         let payload = make_payload(6_000, 1, 2, 3, &[(4, 1)]);
 
@@ -568,5 +586,64 @@ mod tests {
         let commit = aggregator.join(Some(Duration::from_millis(0))).unwrap();
         assert!(commit.is_none());
         assert!(aggregator.message_carried_over.is_some());
+    }
+
+    #[test]
+    fn submit_uses_item_timestamp_when_enabled() {
+        let mut aggregator = OutcomesAggregator::new(
+            Noop { last_message: None },
+            500,
+            Duration::from_millis(2_000),
+            60,
+            true,
+        );
+
+        let topic = Topic::new("snuba-items");
+        let partition = Partition::new(topic, 0);
+
+        let trace_item = TraceItem {
+            organization_id: 1,
+            project_id: 2,
+            received: Some(Timestamp {
+                seconds: 1_700_000_000,
+                nanos: 0,
+            }),
+            timestamp: Some(Timestamp {
+                seconds: 1_700_000_060,
+                nanos: 0,
+            }),
+            outcomes: Some(Outcomes {
+                key_id: 3,
+                category_count: vec![CategoryCount {
+                    data_category: 4,
+                    quantity: 1,
+                }],
+            }),
+            ..Default::default()
+        };
+        let mut buf = Vec::new();
+        trace_item.encode(&mut buf).unwrap();
+        let payload = KafkaPayload::new(None, None, Some(buf));
+
+        aggregator
+            .submit(Message::new_broker_message(
+                payload,
+                partition,
+                0,
+                Utc::now(),
+            ))
+            .unwrap();
+
+        let key = BucketKey {
+            time_offset: 28_333_334, // 1_700_000_060 / 60
+            org_id: 1,
+            project_id: 2,
+            key_id: 3,
+            category: 4,
+        };
+        assert_eq!(
+            aggregator.batch.buckets.get(&key).map(|s| s.quantity),
+            Some(1)
+        );
     }
 }
