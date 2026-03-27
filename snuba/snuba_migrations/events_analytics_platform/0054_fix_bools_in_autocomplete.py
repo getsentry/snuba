@@ -3,7 +3,7 @@ from typing import Sequence
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
-from snuba.migrations.operations import SqlOperation
+from snuba.migrations.operations import OperationTarget, SqlOperation
 from snuba.utils.schemas import Column, UInt
 
 
@@ -22,10 +22,11 @@ class Migration(migration.ClickhouseNodeMigration):
                         64,
                         # changing the materialized column value to DEFAULT such that materialized views can provide it
                         Modifiers(
-                            default="cityHash64(arraySort(arrayConcat(attributes_string, attributes_float, atributes_bool))"
+                            default="cityHash64(arraySort(arrayConcat(attributes_string, attributes_float, attributes_bool)))"
                         ),
                     ),
                 ),
+                target=OperationTarget.LOCAL,
             )
         ]
 
@@ -39,9 +40,10 @@ class Migration(migration.ClickhouseNodeMigration):
                     UInt(
                         64,
                         Modifiers(
-                            materialized="cityHash64(arraySort(arrayConcat(attributes_string, attributes_float, atributes_bool))"
+                            materialized="cityHash64(arraySort(arrayConcat(attributes_string, attributes_float)))"
                         ),
                     ),
                 ),
+                target=OperationTarget.LOCAL,
             )
         ]
