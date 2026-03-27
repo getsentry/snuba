@@ -38,9 +38,9 @@ columns: List[Column[Modifiers]] = [
         "key_hash",
         UInt(
             64,
-            # Modifiers(
-            #     materialized="cityHash64(arraySort(arrayDistinct(arrayConcat(attributes_string, attributes_float, attributes_bool))))"
-            # ),
+            Modifiers(
+                materialized="cityHash64(arraySort(arrayDistinct(arrayConcat(attributes_string, attributes_float, attributes_bool))))"
+            ),
         ),
     ),
 ]
@@ -57,8 +57,7 @@ SELECT
     retention_days as retention_days,
     arrayConcat({_attr_str_names}) AS attributes_string,
     mapKeys(attributes_bool) AS attributes_bool,
-    arrayConcat({_attr_num_names}) AS attributes_float,
-    cityHash64(arraySort(arrayDistinct(arrayConcat(attributes_string, attributes_float, attributes_bool)))) AS key_hash
+    arrayConcat({_attr_num_names}) AS attributes_float
 FROM eap_items_1_local
 """
 
