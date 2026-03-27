@@ -102,7 +102,7 @@ impl<TNext> OutcomesAggregator<TNext> {
             .map(|(partition, offset)| (*partition, offset + 1))
             .collect();
 
-        let category_metrics = std::mem::take(&mut batch.category_metrics);
+        let category_metrics = batch.category_metrics.clone();
         let message = Message::new_any_message(batch, committable);
         match self.next_step.submit(message) {
             Ok(()) => {
