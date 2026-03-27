@@ -85,13 +85,6 @@ def _flush_logs() -> None:
 
 
 def _set_rpc_error_tags(in_msg: ProtobufMessage) -> None:
-    """Set Sentry tags for RPC error tracking.
-
-    Tags all errors in the RPC API with:
-    - source: rpc_api
-    - referrer: from request meta
-    - organization_id: from request meta
-    """
     sentry_sdk.set_tag("source", "rpc_api")
 
     # Extract and tag fields from meta if available
