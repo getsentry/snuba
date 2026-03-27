@@ -8,9 +8,8 @@ use sentry_arroyo::processing::strategies::run_task_in_threads::{
 use sentry_arroyo::processing::strategies::{
     CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
+use sentry_arroyo::timer;
 use sentry_arroyo::types::{Message, Topic, TopicOrPartition};
-use sentry_arroyo::{counter, timer};
-use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
