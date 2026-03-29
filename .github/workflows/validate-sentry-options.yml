@@ -28,7 +28,7 @@ jobs:
     if: needs.files-changed.outputs.schemas == 'true'
     needs: files-changed
     name: Validate Schema Evolution
-    uses: getsentry/sentry-options/.github/workflows/validate-schema.yml@fa066c1d3ef0849153092a0272c17fc0bcce14c8
+    uses: getsentry/sentry-options/.github/workflows/validate-schema.yml@8d02c3f3d05eef0c9c1e87d8fb6862cf812cfd75
     secrets: inherit
     with:
       schemas-path: sentry-options/schemas
