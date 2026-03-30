@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.13"
 resolution-markers = [
     "sys_platform == 'darwin'",
@@ -123,13 +123,15 @@ wheels = [
 
 [[package]]
 name = "confluent-kafka"
-version = "2.7.0"
+version = "2.13.2"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/confluent_kafka-2.7.0-cp313-cp313-macosx_13_0_arm64.whl", hash = "sha256:b907b98daba9b5710a8b20e486d5da38c15d73aaa6475f19ddc51f6307d0747b" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/confluent_kafka-2.7.0-cp313-cp313-macosx_13_0_x86_64.whl", hash = "sha256:33606ec063407fad33e04eae8bf066fbe6ced2130c4d58b0a9d244c7fb347332" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/confluent_kafka-2.7.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:9c3afbec1845d95ccd0cd5e5b986f68d8107b45425e10f1fedeffa908c498f64" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/confluent_kafka-2.7.0-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:81a985d1ba1d0e66e99cb4bca7bfe302f3bbf06dd6e20be07dfe9661a1eedae3" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/confluent_kafka-2.13.2-cp313-cp313-macosx_13_0_arm64.whl", hash = "sha256:02702808dd3cfd91f117fbf17181da2a95392967e9f946b1cbdc5589b36e39d1" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/confluent_kafka-2.13.2-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:f3e6d010ad38447a48e0f9fab81edd4d2fd0b5f5a79ab475c30347689e35c6e6" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/confluent_kafka-2.13.2-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:9161865d8246eb77d1c30233a315bdad96145af783981877664532fa212f56be" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/confluent_kafka-2.13.2-cp314-cp314-macosx_13_0_arm64.whl", hash = "sha256:9cb0d6820107deca1823d68b96831bd982d0a11c4e6bcf0a12e8040192c48a8f" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/confluent_kafka-2.13.2-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:f09adb42fb898a0b3a88b02e77bee472e93f758258945386c77864016b4e4efc" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/confluent_kafka-2.13.2-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:fa3be1fe231e06b2c7501fa3641b30ea90ea17be79ca89806eef22ff34ed106c" },
 ]
 
 [[package]]
@@ -901,13 +903,13 @@ source = { editable = "rust_snuba" }
 
 [[package]]
 name = "sentry-arroyo"
-version = "2.35.0"
+version = "2.38.5"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
     { name = "confluent-kafka", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_arroyo-2.35.0-py3-none-any.whl", hash = "sha256:a403fe4ea1f371e4582c8934efc7abff71c18d4c911dd9ede2b6b7956aa0558a" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_arroyo-2.38.5-py3-none-any.whl", hash = "sha256:add69f320b7065d675aa9f8caae65e03d35d1241534871caeff70de54ed4f33e" },
 ]
 
 [[package]]
@@ -1153,7 +1155,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "redis", specifier = ">=4.5.4" },
     { name = "rust-snuba", editable = "rust_snuba" },
-    { name = "sentry-arroyo", specifier = ">=2.35.0" },
+    { name = "sentry-arroyo", specifier = ">=2.38.5" },
     { name = "sentry-conventions", specifier = ">=0.3.0" },
     { name = "sentry-kafka-schemas", specifier = ">=2.1.24" },
     { name = "sentry-protos", specifier = ">=0.7.0" },
