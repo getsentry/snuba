@@ -177,8 +177,6 @@ def execute_query(
     # Apply clickhouse query setting overrides
     clickhouse_query_settings.update(query_settings.get_clickhouse_settings())
 
-    print("kljadfldjfla", formatted_query)
-
     result = reader.execute(
         formatted_query,
         clickhouse_query_settings,
