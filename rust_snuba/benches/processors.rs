@@ -79,6 +79,7 @@ fn create_factory(
         logical_topic_name: schema.into(),
         max_batch_size: 1_000,
         max_batch_time: Duration::from_millis(10),
+        max_batch_size_bytes: None,
         processing_concurrency,
         clickhouse_concurrency,
         commitlog_concurrency,
