@@ -271,7 +271,7 @@ mod tests {
     use prost::Message as ProstMessage;
     use prost_types::Timestamp;
     use sentry_arroyo::types::{Partition, Topic};
-    use sentry_options::init;
+    use sentry_options::init_with_schemas;
     use sentry_options::testing::override_options;
     use sentry_protos::snuba::v1::{CategoryCount, Outcomes};
     use serde_json::json;
@@ -464,7 +464,7 @@ mod tests {
 
     #[test]
     fn poll_flushes_when_max_batch_size_reached() {
-        init().unwrap();
+        init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap();
         let mut aggregator = OutcomesAggregator::new(
             Noop { last_message: None },
             1,
@@ -490,7 +490,7 @@ mod tests {
 
     #[test]
     fn submit_returns_backpressure_when_message_carried_over() {
-        init().unwrap();
+        init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap();
         struct RejectOnce {
             rejected: bool,
         }
@@ -558,7 +558,7 @@ mod tests {
 
     #[test]
     fn join_honors_timeout_when_message_stays_carried_over() {
-        init().unwrap();
+        init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap();
         struct AlwaysReject;
         impl ProcessingStrategy<AggregatedOutcomesBatch> for AlwaysReject {
             fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
@@ -600,7 +600,7 @@ mod tests {
 
     #[test]
     fn submit_uses_item_timestamp_when_enabled() {
-        init().unwrap();
+        init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap();
         let _guard =
             override_options(&[("snuba", "consumer.use_item_timestamp", json!(true))]).unwrap();
         let mut aggregator = OutcomesAggregator::new(
@@ -664,7 +664,7 @@ mod tests {
 
     #[test]
     fn poll_updates_use_item_timestamp_dynamically() {
-        init().unwrap();
+        init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap();
         let mut aggregator = OutcomesAggregator::new(
             Noop { last_message: None },
             500,

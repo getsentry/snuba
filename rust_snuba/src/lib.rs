@@ -1,3 +1,6 @@
+pub(crate) const SNUBA_SCHEMA: &str =
+    include_str!("../../sentry-options/schemas/snuba/schema.json");
+
 mod accepted_outcomes_consumer;
 mod config;
 mod consumer;

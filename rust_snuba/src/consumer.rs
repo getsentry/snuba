@@ -96,11 +96,8 @@ pub fn consumer_impl(
     use_row_binary: bool,
 ) -> usize {
     setup_logging();
-    init_with_schemas(&[(
-        "snuba",
-        include_str!("../../sentry-options/schemas/snuba/schema.json"),
-    )])
-    .expect("failed to initialize sentry-options");
+    init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)])
+        .expect("failed to initialize sentry-options");
 
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
     let max_batch_size = consumer_config.max_batch_size;

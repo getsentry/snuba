@@ -120,11 +120,8 @@ pub fn accepted_outcomes_consumer_impl(
     commit_frequency_sec: u64,
 ) -> usize {
     setup_logging();
-    init_with_schemas(&[(
-        "snuba",
-        include_str!("../../sentry-options/schemas/snuba/schema.json"),
-    )])
-    .expect("failed to initialize sentry-options");
+    init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)])
+        .expect("failed to initialize sentry-options");
 
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
 
