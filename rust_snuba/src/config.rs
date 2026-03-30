@@ -20,6 +20,7 @@ pub struct ConsumerConfig {
     pub accountant_topic: TopicConfig,
     pub max_batch_size: usize,
     pub max_batch_time_ms: u64,
+    pub max_batch_size_bytes: Option<usize>,
     pub env: EnvConfig,
 }
 

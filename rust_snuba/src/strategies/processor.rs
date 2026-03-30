@@ -49,7 +49,9 @@ pub fn make_rust_processor(
             }
         }
 
+        let num_bytes = transformed.rows.encoded_rows.len();
         let mut payload = BytesInsertBatch::from_rows(transformed.rows)
+            .with_num_bytes(num_bytes)
             .with_message_timestamp(timestamp)
             .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
                 partition.index,
@@ -126,7 +128,9 @@ pub fn make_rust_processor_with_replacements(
 
         let payload = match transformed {
             InsertOrReplacement::Insert(transformed) => {
+                let num_bytes = transformed.rows.encoded_rows.len();
                 let mut batch = BytesInsertBatch::from_rows(transformed.rows)
+                    .with_num_bytes(num_bytes)
                     .with_message_timestamp(timestamp)
                     .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
                         partition.index,

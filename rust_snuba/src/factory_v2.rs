@@ -43,6 +43,7 @@ pub struct ConsumerStrategyFactoryV2 {
     pub logical_topic_name: String,
     pub max_batch_size: usize,
     pub max_batch_time: Duration,
+    pub max_batch_size_bytes: Option<usize>,
     pub processing_concurrency: ConcurrencyConfig,
     pub clickhouse_concurrency: ConcurrencyConfig,
     pub commitlog_concurrency: ConcurrencyConfig,
@@ -153,6 +154,19 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             },
         );
 
+        let (reduce_max_batch_size, reduce_compute_batch_size): (
+            usize,
+            fn(&BytesInsertBatch<RowData>) -> usize,
+        ) = if let Some(max_bytes) = self.max_batch_size_bytes {
+            (max_bytes, |batch: &BytesInsertBatch<RowData>| {
+                batch.num_bytes()
+            })
+        } else {
+            (self.max_batch_size, |batch: &BytesInsertBatch<RowData>| {
+                batch.len()
+            })
+        };
+
         let next_step = Reduce::new(
             next_step,
             accumulator,
@@ -166,9 +180,9 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     CogsData::default(),
                 )
             }),
-            self.max_batch_size,
+            reduce_max_batch_size,
             self.max_batch_time,
-            |batch: &BytesInsertBatch<RowData>| batch.len(),
+            reduce_compute_batch_size,
             // we need to enable this to deal with storages where we skip 100% of values, such as
             // gen-metrics-gauges in s4s. we still need to commit there
         )
@@ -335,6 +349,19 @@ impl ConsumerStrategyFactoryV2 {
             },
         );
 
+        let (reduce_max_batch_size, reduce_compute_batch_size): (
+            usize,
+            fn(&BytesInsertBatch<Vec<T>>) -> usize,
+        ) = if let Some(max_bytes) = self.max_batch_size_bytes {
+            (max_bytes, |batch: &BytesInsertBatch<Vec<T>>| {
+                batch.num_bytes()
+            })
+        } else {
+            (self.max_batch_size, |batch: &BytesInsertBatch<Vec<T>>| {
+                batch.len()
+            })
+        };
+
         let next_step = Reduce::new(
             next_step,
             accumulator,
@@ -348,9 +375,9 @@ impl ConsumerStrategyFactoryV2 {
                     CogsData::default(),
                 )
             }),
-            self.max_batch_size,
+            reduce_max_batch_size,
             self.max_batch_time,
-            |batch: &BytesInsertBatch<Vec<T>>| batch.len(),
+            reduce_compute_batch_size,
         )
         .flush_empty_batches(true);
 
