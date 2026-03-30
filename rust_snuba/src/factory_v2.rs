@@ -349,18 +349,13 @@ impl ConsumerStrategyFactoryV2 {
             },
         );
 
-        let (reduce_max_batch_size, reduce_compute_batch_size): (
-            usize,
-            fn(&BytesInsertBatch<Vec<T>>) -> usize,
-        ) = if let Some(max_bytes) = self.max_batch_size_bytes {
-            (max_bytes, |batch: &BytesInsertBatch<Vec<T>>| {
-                batch.num_bytes()
-            })
-        } else {
-            (self.max_batch_size, |batch: &BytesInsertBatch<Vec<T>>| {
-                batch.len()
-            })
-        };
+        type BatchSizeFn<T> = fn(&BytesInsertBatch<Vec<T>>) -> usize;
+        let (reduce_max_batch_size, reduce_compute_batch_size): (usize, BatchSizeFn<T>) =
+            if let Some(max_bytes) = self.max_batch_size_bytes {
+                (max_bytes, |batch| batch.num_bytes())
+            } else {
+                (self.max_batch_size, |batch| batch.len())
+            };
 
         let next_step = Reduce::new(
             next_step,
