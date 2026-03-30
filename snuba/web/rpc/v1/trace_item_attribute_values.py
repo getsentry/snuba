@@ -18,7 +18,7 @@ from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
-from snuba.protos.common import ATTRIBUTES_TO_COALESCE, PROTO_TYPE_TO_ATTRIBUTE_COLUMN
+from snuba.protos.common import ATTRIBUTES_TO_COALESCE
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import combine_or_conditions
@@ -55,13 +55,9 @@ def _map_key_names_for_existence_check(request_key: AttributeKey) -> list[str]:
 def _build_conditions(request: TraceItemAttributeValuesRequest) -> Expression:
     attribute_key = attribute_key_to_expression(request.key)
 
-    attr_column = PROTO_TYPE_TO_ATTRIBUTE_COLUMN.get(
-        request.key.type,
-        "attributes_string",
-    )
     key_existence = combine_or_conditions(
         [
-            f.has(column(attr_column), name)
+            f.has(column("attributes_string"), name)
             for name in _map_key_names_for_existence_check(request.key)
         ]
     )
