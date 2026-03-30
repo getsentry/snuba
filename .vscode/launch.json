@@ -17,6 +17,48 @@
                 "${file}"
             ],
             "console": "integratedTerminal",
+        },
+        // will only debug the rust (second half)
+        {
+            "name": "Debug Rust Consumer (eap_items)",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/.venv/bin/python",
+            "args": [
+                "${workspaceFolder}/.venv/bin/snuba",
+                "rust-consumer",
+                "--storage=eap_items",
+                "--consumer-group=eap_items_group",
+                "--auto-offset-reset=latest",
+                "--no-strict-offset-reset",
+                "--use-rust-processor",
+                "--enforce-schema",
+                "--blq-stale-age-mins=30"
+            ],
+            "cwd": "${workspaceFolder}",
+            "sourceLanguages": ["rust"],
+            "env": {
+                "DOGSTATSD_HOST": "localhost"
+            }
+        },
+        // will only debug the python (first half)
+        {
+            "name": "python - Debug Rust Consumer (eap_items)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/.venv/bin/snuba",
+            "args": [
+                "rust-consumer",
+                "--storage=eap_items",
+                "--consumer-group=eap_items_group",
+                "--auto-offset-reset=latest",
+                "--no-strict-offset-reset",
+                "--use-rust-processor",
+                "--enforce-schema",
+                "--blq-stale-age-mins=30"
+            ],
+            "cwd": "${workspaceFolder}",
+            "justMyCode": false
         }
     ]
 }

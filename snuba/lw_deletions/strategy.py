@@ -78,36 +78,40 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
     def poll(self) -> None:
         self.__next_step.poll()
 
-    # TODO: _is_execute_enabled is for EAP testing purposes, this should be removed after launch
-    def _is_execute_enabled(self, conditions: Sequence[ConditionsBag]) -> bool:
+    # TODO: _filter_allowed_conditions is for EAP testing purposes, this should be removed after launch
+    def _filter_allowed_conditions(
+        self, conditions: Sequence[ConditionsBag]
+    ) -> Sequence[ConditionsBag]:
         if self.__storage.get_storage_key() != StorageKey.EAP_ITEMS:
-            return True
+            return conditions
 
-        query_org_ids: list[int] = [
-            int(org_id)
-            for cond in conditions
-            for org_id in cond.column_conditions.get("organization_id", [])
-        ]
-        assert len(query_org_ids) > 0, "No organization IDs found in conditions"
-        # allowlist not being set implicitly allows all
-        if get_str_config("org_ids_delete_allowlist", "") == "":
-            return True
-        else:
-            str_config = get_str_config("org_ids_delete_allowlist", "")
-            assert str_config
-            org_ids_delete_allowlist = set([int(org_id) for org_id in str_config.split(",")])
-            logger.info(f"query conditions: {conditions}, allowlist: {org_ids_delete_allowlist}")
-            return org_ids_delete_allowlist.issuperset(query_org_ids)
+        str_config = get_str_config("org_ids_delete_allowlist", "")
+        if not str_config:
+            return conditions  # allowlist not set → allow all
+
+        org_ids_delete_allowlist = set(int(org_id) for org_id in str_config.split(","))
+
+        allowed = []
+        for cond in conditions:
+            query_org_ids = [
+                int(org_id) for org_id in cond.column_conditions.get("organization_id", [])
+            ]
+            assert len(query_org_ids) > 0, "No organization IDs found in conditions"
+            if org_ids_delete_allowlist.issuperset(query_org_ids):
+                allowed.append(cond)
+            else:
+                self.__metrics.increment("delete_skipped")
+        return allowed
 
     def submit(self, message: Message[ValuesBatch[KafkaPayload]]) -> None:
         decode_messages = [rapidjson.loads(m.payload.value) for m in message.value.payload]
         conditions = self.__formatter.format(decode_messages)
 
+        allowed_conditions = self._filter_allowed_conditions(conditions)
+
         try:
-            if self._is_execute_enabled(conditions):
-                self._execute_delete(conditions)
-            else:
-                self.__metrics.increment("delete_skipped")
+            if allowed_conditions:
+                self._execute_delete(allowed_conditions)
         except TooManyOngoingMutationsError:
             # backpressure is applied while we wait for the
             # currently ongoing mutations to finish

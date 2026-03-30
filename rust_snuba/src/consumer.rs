@@ -324,7 +324,7 @@ pub fn process_message(
     // XXX: Currently only takes the message payload and metadata. This assumes
     // key and headers are not used for message processing
     let func = processors::get_processing_function(name).ok_or(SnubaRustError::new_err(
-        format!("processor '{}' not found", name),
+        format!("processor '{name}' not found"),
     ))?;
 
     let payload = KafkaPayload::new(None, None, Some(value));
@@ -338,7 +338,7 @@ pub fn process_message(
     match func {
         processors::ProcessingFunctionType::ProcessingFunction(f) => {
             let res = f(payload, meta, &config::ProcessorConfig::default())
-                .map_err(|e| SnubaRustError::new_err(format!("invalid message: {:?}", e)))?;
+                .map_err(|e| SnubaRustError::new_err(format!("invalid message: {e:?}")))?;
 
             let payload = PyBytes::new(py, &res.rows.into_encoded_rows()).into();
 
@@ -346,7 +346,7 @@ pub fn process_message(
         }
         processors::ProcessingFunctionType::ProcessingFunctionWithReplacements(f) => {
             let res = f(payload, meta, &config::ProcessorConfig::default())
-                .map_err(|e| SnubaRustError::new_err(format!("invalid message: {:?}", e)))?;
+                .map_err(|e| SnubaRustError::new_err(format!("invalid message: {e:?}")))?;
 
             match res {
                 InsertOrReplacement::Insert(r) => {

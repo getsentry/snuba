@@ -9,7 +9,7 @@ ENV PATH="/.venv/bin:$PATH" UV_PROJECT_ENVIRONMENT=/.venv \
     UV_COMPILE_BYTECODE=1 UV_NO_CACHE=1
 
 RUN python3 -m pip install \
-		--index-url 'https://pypi.devinfra.sentry.io/simple' 'uv==0.8.2'
+		--index-url 'https://pypi.devinfra.sentry.io/simple' 'uv'
 
 # We don't want uv-managed python, we want to use python from the image.
 # We only want to use uv to manage dependencies.
@@ -134,6 +134,10 @@ ENV LD_PRELOAD=/usr/src/snuba/libjemalloc.so.2 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
+# set up sentry options schemas and default path
+COPY sentry-options/schemas /etc/sentry-options/schemas
+ENV SENTRY_OPTIONS_DIR=/etc/sentry-options
+
 USER snuba
 EXPOSE 1218 1219
 ENTRYPOINT [ "./docker_entrypoint.sh" ]
@@ -150,31 +154,33 @@ USER snuba
 # --- Distroless stages (additive, no changes to existing stages above) ---
 
 # Prepare artifacts for distroless: fix venv symlinks and verify shared libs.
-# The build image has Python at /usr/local/bin/python3, but the distroless
-# runtime has it at /usr/bin/python3.
+# The build image has Python at /usr/local/bin/python3, but the DHI
+# runtime has it at /opt/python/bin/python3.
 FROM application_base AS distroless_prep
 USER 0
-RUN ln -sf /usr/bin/python3 /.venv/bin/python3 && \
-    ln -sf /usr/bin/python3 /.venv/bin/python
+RUN ln -sf /opt/python/bin/python3 /.venv/bin/python3 && \
+    ln -sf /opt/python/bin/python3 /.venv/bin/python
 RUN find /.venv -name "*.so" -exec ldd {} \; 2>&1 | grep "not found" && exit 1 || true
 
 # Distroless production image — minimal attack surface, no shell
-FROM gcr.io/distroless/python3-debian13 AS application-distroless
+FROM ghcr.io/getsentry/dhi/python:3.13-debian13 AS application-distroless
 
 COPY --from=distroless_prep /.venv /.venv
 COPY --from=distroless_prep /usr/src/snuba /usr/src/snuba
+COPY --from=distroless_prep /etc/sentry-options /etc/sentry-options
 COPY --from=distroless_prep /usr/lib/*/libjemalloc.so.2 /usr/lib/libjemalloc.so.2
 COPY --from=distroless_prep /etc/passwd /etc/passwd
 COPY --from=distroless_prep /etc/group /etc/group
 
 WORKDIR /usr/src/snuba
 ARG SOURCE_COMMIT
-ENV PATH="/.venv/bin:/usr/bin:$PATH" \
+ENV PATH="/.venv/bin:/opt/python/bin:$PATH" \
     LD_PRELOAD=/usr/lib/libjemalloc.so.2 \
     SNUBA_RELEASE=$SOURCE_COMMIT \
     FLASK_DEBUG=0 \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    SENTRY_OPTIONS_DIR=/etc/sentry-options
 
 USER 1000
 EXPOSE 1218 1219
@@ -182,22 +188,24 @@ ENTRYPOINT ["python3", "/usr/src/snuba/docker_entrypoint.py"]
 CMD ["api"]
 
 # Debug distroless image — includes busybox (sh, ls, cat, wget, env, etc.)
-FROM gcr.io/distroless/python3-debian13:debug AS application-distroless-debug
+FROM ghcr.io/getsentry/dhi/python:3.13-debian13-dev AS application-distroless-debug
 
 COPY --from=distroless_prep /.venv /.venv
 COPY --from=distroless_prep /usr/src/snuba /usr/src/snuba
+COPY --from=distroless_prep /etc/sentry-options /etc/sentry-options
 COPY --from=distroless_prep /usr/lib/*/libjemalloc.so.2 /usr/lib/libjemalloc.so.2
 COPY --from=distroless_prep /etc/passwd /etc/passwd
 COPY --from=distroless_prep /etc/group /etc/group
 
 WORKDIR /usr/src/snuba
 ARG SOURCE_COMMIT
-ENV PATH="/.venv/bin:/usr/bin:$PATH" \
+ENV PATH="/.venv/bin:/opt/python/bin:$PATH" \
     LD_PRELOAD=/usr/lib/libjemalloc.so.2 \
     SNUBA_RELEASE=$SOURCE_COMMIT \
     FLASK_DEBUG=0 \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    SENTRY_OPTIONS_DIR=/etc/sentry-options
 
 USER 1000
 EXPOSE 1218 1219

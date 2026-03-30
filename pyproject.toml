@@ -1,6 +1,6 @@
 [project]
 name = "snuba"
-version = "26.3.0.dev0"
+version = "26.4.0.dev0"
 dependencies = [
     "blinker>=1.9",
     "click>=8.1.7",
@@ -33,7 +33,7 @@ dependencies = [
     "sentry-kafka-schemas>=2.1.24",
     "sentry-protos>=0.7.0",
     "sentry-redis-tools>=0.5.1",
-    "sentry-relay>=0.9.19",
+    "sentry-relay>=0.9.25",
     "sentry-sdk>=2.35.0",
     "sentry-usage-accountant>=0.0.11",
     "simplejson>=3.17.6",
@@ -105,21 +105,16 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = [
+    # todo: eventually we should get this enabled
     # "B",     flake8-bugbear
-    # was not actually being used in the codebase when we intended to.
-    # I will enable it as a follow up to apply to new files.
     "E", # pycodestyle errors
     "F", # pyflakes
     "W", # pycodestyle warnings
     "I", # isort
 ]
 ignore = [
-    "E203", # whitespace before ':'
-    "E266", # too many leading '#' for block comment
-    "E302", # expected 2 blank lines, found N
     "E501", # line too long (handled by formatter)
     "E402", # module level import not at top of file
-    "E712", # comparison to True/False
 ]
 
 [tool.mypy]

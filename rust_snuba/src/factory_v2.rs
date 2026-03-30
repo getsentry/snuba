@@ -144,6 +144,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             self.storage_config.clickhouse_table_name.clone(),
             false,
             &self.clickhouse_concurrency,
+            self.storage_config.name.clone(),
         );
 
         let accumulator = Arc::new(
@@ -325,6 +326,7 @@ impl ConsumerStrategyFactoryV2 {
             self.storage_config.clickhouse_cluster.clone(),
             self.storage_config.clickhouse_table_name.clone(),
             &self.clickhouse_concurrency,
+            self.storage_config.name.clone(),
         );
 
         let accumulator = Arc::new(

@@ -125,6 +125,8 @@ def copy_tables(
     storage_name: str,
     dry_run: bool,
     target_host: Optional[str] = None,
+    skip_on_cluster: bool = False,
+    cluster_name_override: Optional[str] = None,
 ) -> CopyTablesResponse:
     settings = ClickhouseClientSettings.QUERY
     source_connection = get_clusterless_node_connection(
@@ -135,10 +137,13 @@ def copy_tables(
     cluster = storage.get_cluster()
     database_name = cluster.get_database()
 
-    if not cluster.is_single_node():
+    if skip_on_cluster:
+        cluster_name = None
+    elif cluster_name_override:
+        cluster_name = cluster_name_override
+    elif not cluster.is_single_node():
         cluster_name = storage.get_cluster().get_clickhouse_cluster_name()
-
-        assert cluster_name, "Missing cluster name for ON CLUSTER create statement "
+        assert cluster_name, "Missing cluster name for ON CLUSTER create statement"
     else:
         cluster_name = None
 

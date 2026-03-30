@@ -316,7 +316,10 @@ impl Parse for CountersRawRow {
             metric_id: from.metric_id,
             timestamp: from.timestamp as u32,
             retention_days,
-            tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
+            tags_key: tag_keys
+                .iter()
+                .map(|k| k.parse::<u64>())
+                .collect::<Result<Vec<_>, _>>()?,
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
             materialization_version: 3,
@@ -491,7 +494,10 @@ impl Parse for SetsRawRow {
             metric_id: from.metric_id,
             timestamp: from.timestamp as u32,
             retention_days,
-            tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
+            tags_key: tag_keys
+                .iter()
+                .map(|k| k.parse::<u64>())
+                .collect::<Result<Vec<_>, _>>()?,
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
             materialization_version: 2,
@@ -582,7 +588,10 @@ impl Parse for DistributionsRawRow {
             metric_id: from.metric_id,
             timestamp: from.timestamp as u32,
             retention_days,
-            tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
+            tags_key: tag_keys
+                .iter()
+                .map(|k| k.parse::<u64>())
+                .collect::<Result<Vec<_>, _>>()?,
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
             materialization_version: 4,
@@ -687,7 +696,10 @@ impl Parse for GaugesRawRow {
             metric_id: from.metric_id,
             timestamp: from.timestamp as u32,
             retention_days,
-            tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
+            tags_key: tag_keys
+                .iter()
+                .map(|k| k.parse::<u64>())
+                .collect::<Result<Vec<_>, _>>()?,
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
             materialization_version: 3,
@@ -726,6 +738,7 @@ pub fn process_gauge_message(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use crate::processors::ProcessingFunction;
 
