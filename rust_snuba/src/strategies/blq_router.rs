@@ -10,20 +10,26 @@ use sentry_arroyo::processing::strategies::{
     CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
 use sentry_arroyo::types::{Message, Topic, TopicOrPartition};
-
-#[derive(PartialEq)]
-
-enum State {
-    Empty,
-    BatchingStale,
-    BatchingFresh,
-}
-
 // todo: config params
 // concurrency config
 // commit offset frequency
 
+// Once we enter stale routing mode (at STALE_THRESHOLD),
+// we keep routing messages that are at least (STALE_THRESHOLD - STATIC_FRICTION_SECS) seconds old.
+// This is because we want a higher threshold to enter the stale routing state
+// but a lower threshold to stay in it, so we don't flip-flop at the boundary.
+const STATIC_FRICTION_SECS: i64 = 180;
+
+#[derive(PartialEq)]
+
+enum State {
+    Idle,         // no messages have gone through the router yet
+    RoutingStale, // router is directing stale messages to the backlog-queue (BLQ)
+    Forwarding,   // router is forwarding non-stale messages along to the next strategy
+}
+
 pub struct BLQConfig {
+    // if message timestamp is older than stale_threshold its routed to the backlog-queue
     pub stale_threshold: TimeDelta,
     pub blq_producer: KafkaProducer,
     pub blq_topic: Topic,
@@ -42,6 +48,7 @@ where
     Next: ProcessingStrategy<KafkaPayload> + 'static,
 {
     pub fn new(next_step: Next, config: BLQConfig) -> Self {
+        // next_step: where fresh messages get forwarded to
         let concurrency = ConcurrencyConfig::new(10);
         let producer = Produce::new(
             CommitOffsets::new(Duration::from_millis(250)),
@@ -52,7 +59,7 @@ where
         Self {
             next_step,
             stale_threshold: config.stale_threshold,
-            state: State::Empty,
+            state: State::Idle,
             producer,
             _concurrency: concurrency,
         }
@@ -67,8 +74,8 @@ where
         let producer_result = self.producer.poll();
         let next_step_result = self.next_step.poll();
         match self.state {
-            State::BatchingStale => producer_result,
-            State::BatchingFresh | State::Empty => next_step_result,
+            State::RoutingStale => producer_result,
+            State::Forwarding | State::Idle => next_step_result,
         }
     }
 
@@ -77,41 +84,42 @@ where
             .timestamp()
             .expect("Expected kafka message to always have a timestamp, but there wasn't one");
         let elapsed = Utc::now() - msg_ts;
-        let is_stale = elapsed > self.stale_threshold;
+        let is_stale = match &self.state {
+            State::RoutingStale => {
+                // see STATIC_FRICTION_SECS
+                elapsed > (self.stale_threshold - TimeDelta::seconds(STATIC_FRICTION_SECS))
+            }
+            _ => elapsed > self.stale_threshold,
+        };
         match (is_stale, &self.state) {
-            (true, State::BatchingFresh) => {
-                // we want the consumer to crash
-                // this is the only way for us to drop the batch of fresh messages without commiting
-                // when the consumer restarts it will get the stale message again in State::Empty
+            (true, State::Forwarding) => {
+                // When we transition from Forwarding to RoutingStale, there may be
+                // state in memory held downstream. We crash the consumer to get rid of internal state
+                // when it restarts it will have no internal state (State::Empty) and the first message in
+                // the topic will be stale.
                 panic!("Resetting consumer state to begin processing the stale backlog")
             }
-            (true, State::Empty) | (true, State::BatchingStale) => {
-                // batch stale messages
-                if self.state == State::Empty {
-                    self.state = State::BatchingStale;
+            (true, State::Idle) | (true, State::RoutingStale) => {
+                // route the stale message to the BLQ
+                if self.state == State::Idle {
+                    self.state = State::RoutingStale;
                 }
-                println!("batch stale");
                 self.producer.submit(message)
             }
-            (false, State::Empty) | (false, State::BatchingFresh) => {
-                // batch fresh messages
-                println!("batch fresh");
-                if self.state == State::Empty {
-                    self.state = State::BatchingFresh;
+            (false, State::Idle) | (false, State::Forwarding) => {
+                // Forward the fresh message along to the next step
+                if self.state == State::Idle {
+                    self.state = State::Forwarding;
                 }
                 self.next_step.submit(message)
             }
-            (false, State::BatchingStale) => {
-                // we hit a fresh message, so we commit our stale batch
-                // and start batching the fresh messages
-
-                // the producer should finish writing and committing everything
-                // if  it doesnt finish all commits we cant move on to the next offsets
-                println!("joining the stale batch");
+            (false, State::RoutingStale) => {
+                // We hit a fresh message, so we are done routing the backlog.
+                // Call join on the producer so all writes to the BLQ are committed.
                 self.producer.join(Some(Duration::from_secs(5))).unwrap();
 
-                println!("batch fresh");
-                self.state = State::BatchingFresh;
+                // Now go back to forwarding non-stale messages as usual.
+                self.state = State::Forwarding;
                 self.next_step.submit(message)
             }
         }
@@ -126,8 +134,8 @@ where
         let producer_result = self.producer.join(timeout);
         let next_step_result = self.next_step.join(timeout);
         match self.state {
-            State::BatchingStale => producer_result,
-            State::BatchingFresh | State::Empty => next_step_result,
+            State::RoutingStale => producer_result,
+            State::Forwarding | State::Idle => next_step_result,
         }
     }
 }
