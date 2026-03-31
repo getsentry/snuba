@@ -130,10 +130,9 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
 {
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         self.use_item_timestamp = options("snuba")
-            .expect("sentry-options not initialized")
-            .get("consumer.use_item_timestamp")
-            .expect("consumer.use_item_timestamp not found in schema")
-            .as_bool()
+            .ok()
+            .and_then(|o| o.get("consumer.use_item_timestamp").ok())
+            .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
         let commit_request = self.next_step.poll()?;
