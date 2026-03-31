@@ -76,9 +76,13 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
         TraceItemType::Unspecified => "null",
     }
     .to_string();
-
+    let retention_days_multiplier =
+        eap_item.retention_days / config.env_config.lower_retention_days;
     let cogs_data = CogsData {
-        data: BTreeMap::from([(app_feature, payload.len() as u64)]),
+        data: BTreeMap::from([(
+            app_feature,
+            (retention_days_multiplier * payload.len()) as u64,
+        )]),
     };
 
     Ok(ProcessedItem {
