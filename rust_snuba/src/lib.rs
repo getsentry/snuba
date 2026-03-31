@@ -28,8 +28,8 @@ fn rust_snuba(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 // Ideally, we would have a normal rust crate we can use in examples and benchmarks,
 // plus a pyo3 specific crate as `cdylib`.
 pub use config::{
-    BrokerConfig, ClickhouseConfig, EnvConfig, MessageProcessorConfig, ProcessorConfig,
-    StorageConfig, TopicConfig,
+    BatchSizeCalculation, BrokerConfig, ClickhouseConfig, EnvConfig, MessageProcessorConfig,
+    ProcessorConfig, StorageConfig, TopicConfig,
 };
 pub use factory_v2::ConsumerStrategyFactoryV2;
 pub use metrics::statsd::StatsDBackend;

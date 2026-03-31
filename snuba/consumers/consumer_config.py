@@ -70,7 +70,7 @@ class ConsumerConfig:
     dlq_topic: Optional[TopicConfig]
     max_batch_size: int
     max_batch_time_ms: int
-    max_batch_size_bytes: Optional[int]
+    max_batch_size_calculation: str
     env: Optional[EnvConfig]
     accountant_topic: TopicConfig
 
@@ -153,7 +153,7 @@ def resolve_consumer_config(
     slice_id: Optional[int],
     max_batch_size: int,
     max_batch_time_ms: int,
-    max_batch_size_bytes: Optional[int] = None,
+    max_batch_size_calculation: str = "rows",
     accepted_outcomes_topic: Optional[str] = None,
     accepted_outcomes_bootstrap_servers: Sequence[str] = (),
     queued_max_messages_kbytes: Optional[int] = None,
@@ -278,7 +278,7 @@ def resolve_consumer_config(
         dlq_topic=resolved_dlq_topic,
         max_batch_size=max_batch_size,
         max_batch_time_ms=max_batch_time_ms,
-        max_batch_size_bytes=max_batch_size_bytes,
+        max_batch_size_calculation=max_batch_size_calculation,
         env=resolved_env_config,
         accountant_topic=accountant_topic,
     )

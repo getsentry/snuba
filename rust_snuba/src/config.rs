@@ -8,6 +8,13 @@ pub struct ProcessorConfig {
     pub env_config: EnvConfig,
 }
 
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum BatchSizeCalculation {
+    Rows,
+    Bytes,
+}
+
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct ConsumerConfig {
@@ -20,7 +27,7 @@ pub struct ConsumerConfig {
     pub accountant_topic: TopicConfig,
     pub max_batch_size: usize,
     pub max_batch_time_ms: u64,
-    pub max_batch_size_bytes: Option<usize>,
+    pub max_batch_size_calculation: BatchSizeCalculation,
     pub env: EnvConfig,
 }
 
