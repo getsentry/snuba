@@ -283,7 +283,13 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
 
 impl ConsumerStrategyFactoryV2 {
     fn create_row_binary_pipeline<
-        T: clickhouse::Row + serde::Serialize + Clone + Send + Sync + 'static,
+        T: clickhouse::Row
+            + serde::Serialize
+            + Clone
+            + Send
+            + Sync
+            + crate::types::EstimatedSize
+            + 'static,
     >(
         &self,
         func: fn(

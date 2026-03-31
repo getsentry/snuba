@@ -8,6 +8,12 @@ use sentry_arroyo::timer;
 use sentry_protos::snuba::v1::TraceItemType;
 use serde::{Deserialize, Serialize};
 
+/// Trait for row types that can estimate their in-memory byte size.
+/// Used by byte-based batch size calculation in the Reduce step.
+pub trait EstimatedSize {
+    fn estimated_size(&self) -> usize;
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct CommitLogEntry {
     pub offset: u64,

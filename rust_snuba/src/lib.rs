@@ -36,7 +36,7 @@ pub use metrics::statsd::StatsDBackend;
 pub use processors::{ProcessingFunction, ProcessingFunctionType, PROCESSORS};
 pub use strategies::noop::Noop;
 pub use strategies::python::PythonTransformStep;
-pub use types::KafkaMessageMetadata;
+pub use types::{EstimatedSize, KafkaMessageMetadata};
 
 #[cfg(test)]
 mod testutils;
