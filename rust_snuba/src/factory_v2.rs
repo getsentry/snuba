@@ -25,7 +25,10 @@ use crate::config;
 use crate::metrics::global_tags::set_global_tag;
 use crate::processors::{self, get_cogs_label};
 use crate::strategies::accountant::RecordCogs;
-use crate::strategies::blq_router::{BLQConfig, BLQRouter};
+use sentry_arroyo::processing::strategies::produce::Produce;
+use sentry_arroyo::types::TopicOrPartition;
+
+use crate::strategies::blq_router::BLQRouter;
 use crate::strategies::clickhouse::row_binary_writer::ClickhouseRowBinaryWriterStep;
 use crate::strategies::clickhouse::writer_v2::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
@@ -273,20 +276,30 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             if let (Some(blq_producer_config), Some(blq_topic)) =
                 (&self.blq_producer_config, self.blq_topic)
             {
-                let stale_threshold = TimeDelta::seconds(10);
+                let stale_threshold = TimeDelta::minutes(30);
+                let static_friction = TimeDelta::minutes(2);
                 tracing::info!(
-                    "Routing all messages older than {:?} to the topic {:?}",
-                    stale_threshold,
-                    blq_topic
+                "Routing all messages older than {:?} to the topic {:?} with static_friction {:?}",
+                stale_threshold,
+                blq_topic,
+                static_friction
+            );
+                let concurrency = ConcurrencyConfig::new(10);
+                let blq_producer = Produce::new(
+                    CommitOffsets::new(Duration::from_millis(250)),
+                    KafkaProducer::new(blq_producer_config.clone()),
+                    &concurrency,
+                    TopicOrPartition::Topic(blq_topic),
                 );
-                Box::new(BLQRouter::new(
-                    next_step,
-                    BLQConfig {
+                Box::new(
+                    BLQRouter::new(
+                        next_step,
+                        blq_producer,
                         stale_threshold,
-                        blq_producer: KafkaProducer::new(blq_producer_config.clone()),
-                        blq_topic,
-                    },
-                ))
+                        Some(static_friction),
+                    )
+                    .expect("invalid BLQRouter config"),
+                )
             } else {
                 tracing::info!("Not using a backlog-queue",);
                 Box::new(next_step)

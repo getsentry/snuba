@@ -1,80 +1,83 @@
 use std::time::Duration;
 
 use chrono::{TimeDelta, Utc};
-use sentry_arroyo::backends::kafka::producer::KafkaProducer;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
-use sentry_arroyo::processing::strategies::commit_offsets::CommitOffsets;
-use sentry_arroyo::processing::strategies::produce::Produce;
-use sentry_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use sentry_arroyo::processing::strategies::{
     CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
-use sentry_arroyo::types::{Message, Topic, TopicOrPartition};
-// todo: config params
-// concurrency config
-// commit offset frequency
+use sentry_arroyo::types::Message;
 
-// Once we enter stale routing mode (at STALE_THRESHOLD),
-// we keep routing messages that are at least (STALE_THRESHOLD - STATIC_FRICTION_SECS) seconds old.
-// This is because we want a higher threshold to enter the stale routing state
-// but a lower threshold to stay in it, so we don't flip-flop at the boundary.
-const STATIC_FRICTION_SECS: i64 = 180;
-
-#[derive(PartialEq)]
-
+#[derive(Debug, PartialEq)]
 enum State {
     Idle,         // no messages have gone through the router yet
     RoutingStale, // router is directing stale messages to the backlog-queue (BLQ)
     Forwarding,   // router is forwarding non-stale messages along to the next strategy
 }
 
-pub struct BLQConfig {
-    // if message timestamp is older than stale_threshold its routed to the backlog-queue
-    pub stale_threshold: TimeDelta,
-    pub blq_producer: KafkaProducer,
-    pub blq_topic: Topic,
-}
-
-pub struct BLQRouter<Next> {
+pub struct BLQRouter<Next, ProduceStrategy> {
     next_step: Next,
     stale_threshold: TimeDelta,
     state: State,
-    producer: Produce<CommitOffsets>,
-    _concurrency: ConcurrencyConfig, // you should never have to deal w this, its just needed for lifetimes
+    producer: ProduceStrategy,
+    static_friction: Option<TimeDelta>,
 }
 
-impl<Next> BLQRouter<Next>
+impl<Next, ProduceStrategy> BLQRouter<Next, ProduceStrategy>
 where
     Next: ProcessingStrategy<KafkaPayload> + 'static,
+    ProduceStrategy: ProcessingStrategy<KafkaPayload> + 'static,
 {
-    pub fn new(next_step: Next, config: BLQConfig) -> Self {
-        // next_step: where fresh messages get forwarded to
-        let concurrency = ConcurrencyConfig::new(10);
-        let producer = Produce::new(
-            CommitOffsets::new(Duration::from_millis(250)),
-            config.blq_producer,
-            &concurrency,
-            TopicOrPartition::Topic(config.blq_topic),
-        );
-        Self {
+    pub fn new(
+        next_step: Next,
+        blq_producer: ProduceStrategy,
+        stale_threshold: TimeDelta,
+        static_friction: Option<TimeDelta>,
+    ) -> Result<Self, &'static str> {
+        /*
             next_step,
-            stale_threshold: config.stale_threshold,
-            state: State::Idle,
+                is where fresh messages get forwarded to
             producer,
-            _concurrency: concurrency,
+                ProcessingStrategy that submits messages to the BLQ,
+                stale messages will get submitted to it.
+            stale_threshold,
+                messages older than the stale_threshold will get sent to the producer
+            static_friction,
+                Once we enter stale routing mode (at STALE_THRESHOLD),
+                we keep routing messages that are at least (STALE_THRESHOLD - STATIC_FRICTION_SECS) seconds old.
+                This is because we want a higher threshold to enter the stale routing state
+                but a lower threshold to stay in it, so we don't flip-flop at the boundary.
+                Best practice would be no greater than a small percent of stable_threshold like 10%
+                ex: stale_threshold=10m, static_friction=1m
+                and the implication is 9m old messages will now be sent to the BLQ in some cases
+        */
+        if stale_threshold <= TimeDelta::zero() {
+            return Err("stale_threshold must be positive");
         }
+        if let Some(friction) = static_friction {
+            if friction >= stale_threshold {
+                return Err("static_friction must be less than stale_threshold");
+            }
+        }
+        Ok(Self {
+            next_step,
+            stale_threshold,
+            state: State::Idle,
+            producer: blq_producer,
+            static_friction,
+        })
     }
 }
 
-impl<Next> ProcessingStrategy<KafkaPayload> for BLQRouter<Next>
+impl<Next, ProduceStrategy> ProcessingStrategy<KafkaPayload> for BLQRouter<Next, ProduceStrategy>
 where
     Next: ProcessingStrategy<KafkaPayload> + 'static,
+    ProduceStrategy: ProcessingStrategy<KafkaPayload> + 'static,
 {
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
-        let producer_result = self.producer.poll();
+        let produce_result = self.producer.poll();
         let next_step_result = self.next_step.poll();
         match self.state {
-            State::RoutingStale => producer_result,
+            State::RoutingStale => produce_result,
             State::Forwarding | State::Idle => next_step_result,
         }
     }
@@ -84,13 +87,12 @@ where
             .timestamp()
             .expect("Expected kafka message to always have a timestamp, but there wasn't one");
         let elapsed = Utc::now() - msg_ts;
-        let is_stale = match &self.state {
-            State::RoutingStale => {
-                // see STATIC_FRICTION_SECS
-                elapsed > (self.stale_threshold - TimeDelta::seconds(STATIC_FRICTION_SECS))
-            }
-            _ => elapsed > self.stale_threshold,
+
+        let threshold = match (&self.state, self.static_friction) {
+            (State::RoutingStale, Some(friction)) => self.stale_threshold - friction,
+            _ => self.stale_threshold,
         };
+        let is_stale = elapsed > threshold;
         match (is_stale, &self.state) {
             (true, State::Forwarding) => {
                 // When we transition from Forwarding to RoutingStale, there may be
@@ -137,5 +139,117 @@ where
             State::RoutingStale => producer_result,
             State::Forwarding | State::Idle => next_step_result,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::DateTime;
+    use sentry_arroyo::types::{Partition, Topic};
+
+    struct MockStrategy {
+        submitted: Vec<Message<KafkaPayload>>,
+        join_called: bool,
+        terminate_called: bool,
+    }
+
+    impl MockStrategy {
+        fn new() -> Self {
+            Self {
+                submitted: vec![],
+                join_called: false,
+                terminate_called: false,
+            }
+        }
+    }
+
+    impl ProcessingStrategy<KafkaPayload> for MockStrategy {
+        fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
+            Ok(None)
+        }
+
+        fn submit(
+            &mut self,
+            message: Message<KafkaPayload>,
+        ) -> Result<(), SubmitError<KafkaPayload>> {
+            self.submitted.push(message);
+            Ok(())
+        }
+
+        fn terminate(&mut self) {
+            self.terminate_called = true;
+        }
+
+        fn join(
+            &mut self,
+            _timeout: Option<Duration>,
+        ) -> Result<Option<CommitRequest>, StrategyError> {
+            self.join_called = true;
+            Ok(None)
+        }
+    }
+
+    fn make_message(timestamp: DateTime<Utc>) -> Message<KafkaPayload> {
+        Message::new_broker_message(
+            KafkaPayload::new(None, None, Some(b"test".to_vec())),
+            Partition::new(Topic::new("test"), 0),
+            0,
+            timestamp,
+        )
+    }
+
+    #[test]
+    #[should_panic(expected = "Resetting consumer state to begin processing the stale backlog")]
+    fn test_fresh_to_stale() {
+        /*
+        This tests that the BLQRouter forwards business-as-usual fresh messages through it
+        and crashes when it hits its first stale message
+         */
+        let mut router = BLQRouter::new(
+            MockStrategy::new(),
+            MockStrategy::new(),
+            TimeDelta::seconds(10),
+            None,
+        )
+        .unwrap();
+        // consuming messages as normal
+        for _ in 0..10 {
+            router.submit(make_message(Utc::now())).unwrap();
+        }
+        assert_eq!(router.state, State::Forwarding);
+        // now theres a stale message, consumer should crash
+        _ = router.submit(make_message(Utc::now() - TimeDelta::seconds(20)));
+    }
+
+    #[test]
+    fn test_stale_to_fresh() {
+        /*
+        This tests that the BLQRouter properly routes stale messages to the BLQ
+        and then switches back to forwarding fresh messages once the backlog is burned
+         */
+        let mut router = BLQRouter::new(
+            MockStrategy::new(),
+            MockStrategy::new(),
+            TimeDelta::seconds(10),
+            Some(TimeDelta::seconds(1)),
+        )
+        .unwrap();
+        // backlog of 10 stale messages
+        for _ in 0..10 {
+            router
+                .submit(make_message(Utc::now() - TimeDelta::minutes(1)))
+                .unwrap();
+        }
+        assert_eq!(router.state, State::RoutingStale);
+        assert!(!router.producer.join_called);
+        // now we are back to fresh messages
+        for _ in 0..5 {
+            router.submit(make_message(Utc::now())).unwrap();
+        }
+        assert_eq!(router.state, State::Forwarding);
+        assert!(router.producer.join_called);
+        assert_eq!(router.producer.submitted.len(), 10);
+        assert_eq!(router.next_step.submitted.len(), 5);
     }
 }
