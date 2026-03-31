@@ -76,8 +76,10 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
         TraceItemType::Unspecified => "null",
     }
     .to_string();
-    let retention_days_multiplier =
-        eap_item.retention_days / config.env_config.lower_retention_days;
+    // Depending on retention days, a trace item is more expensive.
+    // The default retention is 30 days, a 90day retention for an
+    // item would effectively mean that we are storing 3 times the payload size
+    let retention_days_multiplier = eap_item.retention_days / 30;
     let cogs_data = CogsData {
         data: BTreeMap::from([(
             app_feature,
