@@ -6,6 +6,11 @@
       "type": "boolean",
       "default": false,
       "description": "true to use the item timestamp, false for the received timestamp"
+    },
+    "consumer.blq_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "enable backlog queue in snuba consumers"
     }
   }
 }

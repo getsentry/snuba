@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use sentry_options::options;
+
 use chrono::TimeDelta;
 use sentry::{Hub, SentryFutureExt};
 use sentry_arroyo::backends::kafka::config::KafkaConfig;
@@ -272,16 +274,21 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
         );
 
+        let blq_enabled_flag = options("snuba")
+            .ok()
+            .and_then(|o| o.get("consumer.blq_enabled").ok())
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         let next_step: Box<dyn ProcessingStrategy<KafkaPayload>> =
-            if let (Some(blq_producer_config), Some(blq_topic)) =
-                (&self.blq_producer_config, self.blq_topic)
+            if let (true, Some(blq_producer_config), Some(blq_topic)) =
+                (blq_enabled_flag, &self.blq_producer_config, self.blq_topic)
             {
                 let stale_threshold = TimeDelta::minutes(30);
                 let static_friction = TimeDelta::minutes(2);
                 tracing::info!(
                 "Routing all messages older than {:?} to the topic {:?} with static_friction {:?}",
                 stale_threshold,
-                blq_topic,
+                self.blq_topic,
                 static_friction
             );
                 let concurrency = ConcurrencyConfig::new(10);

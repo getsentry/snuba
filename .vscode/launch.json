@@ -38,7 +38,8 @@
             "sourceLanguages": ["rust"],
             "env": {
                 "DOGSTATSD_HOST": "localhost"
-            }
+            },
+            "preLaunchTask": "uvx maturin develop"
         },
         // will only debug the python (first half)
         {
