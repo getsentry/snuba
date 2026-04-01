@@ -288,7 +288,7 @@ pub fn consumer_impl(
         health_check: health_check.to_string(),
         use_row_binary,
         blq_producer_config: dlq_producer_config.clone(),
-        blq_topic: dlq_topic.clone(),
+        blq_topic: dlq_topic,
     };
 
     let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);
