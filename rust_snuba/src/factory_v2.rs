@@ -439,6 +439,44 @@ impl ConsumerStrategyFactoryV2 {
             Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
         );
 
+        let blq_enabled_flag = options("snuba")
+            .ok()
+            .and_then(|o| o.get("consumer.blq_enabled").ok())
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let next_step: Box<dyn ProcessingStrategy<KafkaPayload>> =
+            if let (true, Some(blq_producer_config), Some(blq_topic)) =
+                (blq_enabled_flag, &self.blq_producer_config, self.blq_topic)
+            {
+                let stale_threshold = TimeDelta::minutes(30);
+                let static_friction = TimeDelta::minutes(2);
+                tracing::info!(
+                "Routing all messages older than {:?} to the topic {:?} with static_friction {:?}",
+                stale_threshold,
+                self.blq_topic,
+                static_friction
+            );
+                let concurrency = ConcurrencyConfig::new(10);
+                let blq_producer = Produce::new(
+                    CommitOffsets::new(Duration::from_millis(250)),
+                    KafkaProducer::new(blq_producer_config.clone()),
+                    &concurrency,
+                    TopicOrPartition::Topic(blq_topic),
+                );
+                Box::new(
+                    BLQRouter::new(
+                        next_step,
+                        blq_producer,
+                        stale_threshold,
+                        Some(static_friction),
+                    )
+                    .expect("invalid BLQRouter config"),
+                )
+            } else {
+                tracing::info!("Not using a backlog-queue",);
+                Box::new(next_step)
+            };
+
         if let Some(path) = &self.health_check_file {
             if self.health_check == "snuba" {
                 tracing::info!(
