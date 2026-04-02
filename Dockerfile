@@ -88,6 +88,7 @@ RUN set -ex; \
 
 FROM build_rust_snuba_deps AS build_rust_snuba
 COPY ./rust_snuba/ ./rust_snuba/
+COPY ./sentry-options/schemas/ ./sentry-options/schemas/
 COPY --from=build_rust_snuba_deps /usr/src/snuba/rust_snuba/target/ ./rust_snuba/target/
 COPY --from=build_rust_snuba_deps /root/.cargo/ /root/.cargo/
 RUN set -ex; \
@@ -134,8 +135,7 @@ ENV LD_PRELOAD=/usr/src/snuba/libjemalloc.so.2 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# set up sentry options schemas and default path
-COPY sentry-options/schemas /etc/sentry-options/schemas
+# set default path for sentry options values
 ENV SENTRY_OPTIONS_DIR=/etc/sentry-options
 
 USER snuba
@@ -167,7 +167,6 @@ FROM ghcr.io/getsentry/dhi/python:3.13-debian13 AS application-distroless
 
 COPY --from=distroless_prep /.venv /.venv
 COPY --from=distroless_prep /usr/src/snuba /usr/src/snuba
-COPY --from=distroless_prep /etc/sentry-options /etc/sentry-options
 COPY --from=distroless_prep /usr/lib/*/libjemalloc.so.2 /usr/lib/libjemalloc.so.2
 COPY --from=distroless_prep /etc/passwd /etc/passwd
 COPY --from=distroless_prep /etc/group /etc/group
@@ -192,7 +191,6 @@ FROM ghcr.io/getsentry/dhi/python:3.13-debian13-dev AS application-distroless-de
 
 COPY --from=distroless_prep /.venv /.venv
 COPY --from=distroless_prep /usr/src/snuba /usr/src/snuba
-COPY --from=distroless_prep /etc/sentry-options /etc/sentry-options
 COPY --from=distroless_prep /usr/lib/*/libjemalloc.so.2 /usr/lib/libjemalloc.so.2
 COPY --from=distroless_prep /etc/passwd /etc/passwd
 COPY --from=distroless_prep /etc/group /etc/group

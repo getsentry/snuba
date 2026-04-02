@@ -12,6 +12,8 @@ use sentry_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrate
 use sentry_arroyo::processing::StreamProcessor;
 use sentry_arroyo::types::{Partition, Topic};
 
+use sentry_options::init_with_schemas;
+
 use pyo3::prelude::*;
 
 use crate::config;
@@ -33,7 +35,6 @@ pub struct AcceptedOutcomesStrategyFactory {
     producer: Arc<KafkaProducer>,
     concurrency: ConcurrencyConfig,
     skip_produce: bool,
-    use_item_timestamp: bool,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for AcceptedOutcomesStrategyFactory {
@@ -55,7 +56,6 @@ impl ProcessingStrategyFactory<KafkaPayload> for AcceptedOutcomesStrategyFactory
             self.max_batch_size,
             self.max_batch_time_ms,
             self.bucket_interval,
-            self.use_item_timestamp,
         ))
     }
 }
@@ -120,6 +120,8 @@ pub fn accepted_outcomes_consumer_impl(
     commit_frequency_sec: u64,
 ) -> usize {
     setup_logging();
+    init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)])
+        .expect("failed to initialize sentry-options");
 
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
 
@@ -204,11 +206,6 @@ pub fn accepted_outcomes_consumer_impl(
         .flatten()
         .unwrap_or("1".to_string())
         == "1";
-    let use_item_timestamp = get_str_config("accepted_outcomes_use_item_timestamp")
-        .ok()
-        .flatten()
-        .unwrap_or("0".to_string())
-        == "1";
 
     let factory = AcceptedOutcomesStrategyFactory {
         bucket_interval,
@@ -219,7 +216,6 @@ pub fn accepted_outcomes_consumer_impl(
         producer,
         concurrency: ConcurrencyConfig::new(concurrency),
         skip_produce,
-        use_item_timestamp,
     };
     let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);
 

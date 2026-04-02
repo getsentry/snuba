@@ -16,8 +16,8 @@ use sentry_kafka_schemas::{Schema, SchemaError, SchemaType};
 use crate::config::ProcessorConfig;
 use crate::processors::{ProcessingFunction, ProcessingFunctionWithReplacements};
 use crate::types::{
-    BytesInsertBatch, CommitLogEntry, CommitLogOffsets, InsertBatch, InsertOrReplacement,
-    KafkaMessageMetadata, RowData, TypedInsertBatch,
+    BytesInsertBatch, CommitLogEntry, CommitLogOffsets, EstimatedSize, InsertBatch,
+    InsertOrReplacement, KafkaMessageMetadata, RowData, TypedInsertBatch,
 };
 use tokio::time::Instant;
 
@@ -49,7 +49,9 @@ pub fn make_rust_processor(
             }
         }
 
+        let num_bytes = transformed.rows.encoded_rows.len();
         let mut payload = BytesInsertBatch::from_rows(transformed.rows)
+            .with_num_bytes(num_bytes)
             .with_message_timestamp(timestamp)
             .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
                 partition.index,
@@ -126,7 +128,9 @@ pub fn make_rust_processor_with_replacements(
 
         let payload = match transformed {
             InsertOrReplacement::Insert(transformed) => {
+                let num_bytes = transformed.rows.encoded_rows.len();
                 let mut batch = BytesInsertBatch::from_rows(transformed.rows)
+                    .with_num_bytes(num_bytes)
                     .with_message_timestamp(timestamp)
                     .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
                         partition.index,
@@ -175,7 +179,7 @@ pub fn make_rust_processor_with_replacements(
     ))
 }
 
-pub fn make_rust_processor_row_binary<T: Clone + Send + Sync + 'static>(
+pub fn make_rust_processor_row_binary<T: Clone + Send + Sync + EstimatedSize + 'static>(
     next_step: impl ProcessingStrategy<BytesInsertBatch<Vec<T>>> + 'static,
     func: fn(
         KafkaPayload,
@@ -190,7 +194,7 @@ pub fn make_rust_processor_row_binary<T: Clone + Send + Sync + 'static>(
 ) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
     let schema = get_schema(schema_name, enforce_schema);
 
-    fn result_to_next_msg<T>(
+    fn result_to_next_msg<T: EstimatedSize>(
         transformed: TypedInsertBatch<T>,
         partition: Partition,
         offset: u64,
@@ -209,7 +213,9 @@ pub fn make_rust_processor_row_binary<T: Clone + Send + Sync + 'static>(
             }
         }
 
+        let num_bytes: usize = transformed.rows.iter().map(|r| r.estimated_size()).sum();
         let mut payload = BytesInsertBatch::from_rows(transformed.rows)
+            .with_num_bytes(num_bytes)
             .with_message_timestamp(timestamp)
             .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
                 partition.index,

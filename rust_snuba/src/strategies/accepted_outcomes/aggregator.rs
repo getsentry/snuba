@@ -3,6 +3,7 @@ use std::time::{Duration, Instant};
 
 use prost::Message as ProstMessage;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::counter;
 use sentry_arroyo::processing::strategies::{
     merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
     StrategyError, SubmitError,
@@ -10,6 +11,8 @@ use sentry_arroyo::processing::strategies::{
 use sentry_arroyo::types::{InnerMessage, Message, Partition};
 use sentry_arroyo::utils::timing::Deadline;
 use sentry_protos::snuba::v1::TraceItem;
+
+use sentry_options::options;
 
 use crate::types::{AggregatedOutcomesBatch, BucketKey};
 
@@ -57,8 +60,7 @@ pub struct OutcomesAggregator<TNext> {
     message_carried_over: Option<Message<AggregatedOutcomesBatch>>,
     /// Commit request carried over from a poll where we had a message to retry.
     commit_request_carried_over: Option<CommitRequest>,
-    /// Temporary option to change the timestamp source from
-    /// `received` to `timestamp` on the item event.
+    /// Cached value of the `consumer.use_item_timestamp` option, refreshed on each poll.
     use_item_timestamp: bool,
 }
 
@@ -68,7 +70,6 @@ impl<TNext> OutcomesAggregator<TNext> {
         max_batch_size: usize,
         max_batch_time_ms: Duration,
         bucket_interval: u64,
-        use_item_timestamp: bool,
     ) -> Self {
         Self {
             next_step,
@@ -80,7 +81,7 @@ impl<TNext> OutcomesAggregator<TNext> {
             latest_offsets: HashMap::new(),
             message_carried_over: None,
             commit_request_carried_over: None,
-            use_item_timestamp,
+            use_item_timestamp: false,
         }
     }
 
@@ -101,19 +102,21 @@ impl<TNext> OutcomesAggregator<TNext> {
             .map(|(partition, offset)| (*partition, offset + 1))
             .collect();
 
+        let category_metrics = batch.category_metrics.clone();
         let message = Message::new_any_message(batch, committable);
-
         match self.next_step.submit(message) {
             Ok(()) => {
                 let now = Instant::now();
                 let seconds = (now - self.last_flush).as_secs_f64();
-                tracing::info!(
-                    "flushed {} buckets after {} seconds, with committable {:?}",
-                    num_buckets,
-                    seconds,
-                    latest_offsets
-                );
                 self.last_flush = now;
+
+                tracing::info!("flushed {} buckets after {} seconds", num_buckets, seconds);
+                for (category, m) in category_metrics {
+                    let cat_str = category.to_string();
+                    counter!("accepted_outcomes.messages_seen", m.messages_seen, "data_category" => cat_str.as_str());
+                    counter!("accepted_outcomes.total_quantity", m.total_quantity, "data_category" => cat_str.as_str());
+                    counter!("accepted_outcomes.bucket_count", m.bucket_count, "data_category" => cat_str.as_str());
+                }
                 Ok(())
             }
             Err(SubmitError::MessageRejected(rejected)) => {
@@ -129,6 +132,12 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
     for OutcomesAggregator<TNext>
 {
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
+        self.use_item_timestamp = options("snuba")
+            .ok()
+            .and_then(|o| o.get("consumer.use_item_timestamp").ok())
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
         let commit_request = self.next_step.poll()?;
         self.commit_request_carried_over =
             merge_commit_request(self.commit_request_carried_over.take(), commit_request);
@@ -139,6 +148,7 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
                 Err(SubmitError::MessageRejected(MessageRejected {
                     message: carried_message,
                 })) => {
+                    counter!("accepted_outcomes.got_backpressure", 1, "strategy_name" => "outcomes_aggregator");
                     self.message_carried_over = Some(carried_message);
                 }
                 Err(SubmitError::InvalidMessage(e)) => {
@@ -208,6 +218,7 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
                 .map(|t| t.seconds as u64)
                 .unwrap_or(0)
         };
+
         let org_id = trace_item.organization_id;
         let project_id = trace_item.project_id;
 
@@ -263,7 +274,10 @@ mod tests {
     use prost::Message as ProstMessage;
     use prost_types::Timestamp;
     use sentry_arroyo::types::{Partition, Topic};
+    use sentry_options::init_with_schemas;
+    use sentry_options::testing::override_options;
     use sentry_protos::snuba::v1::{CategoryCount, Outcomes};
+    use serde_json::json;
 
     struct Noop {
         last_message: Option<Message<AggregatedOutcomesBatch>>,
@@ -323,7 +337,6 @@ mod tests {
             500,
             Duration::from_millis(5_000),
             60,
-            false,
         );
 
         let topic = Topic::new("accepted-outcomes");
@@ -371,7 +384,6 @@ mod tests {
             500,
             Duration::from_millis(2_000),
             60,
-            false,
         );
 
         let topic = Topic::new("snuba-items");
@@ -455,12 +467,12 @@ mod tests {
 
     #[test]
     fn poll_flushes_when_max_batch_size_reached() {
+        init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap();
         let mut aggregator = OutcomesAggregator::new(
             Noop { last_message: None },
             1,
             Duration::from_millis(30_000),
             60,
-            false,
         );
 
         let partition = Partition::new(Topic::new("accepted-outcomes"), 0);
@@ -481,6 +493,7 @@ mod tests {
 
     #[test]
     fn submit_returns_backpressure_when_message_carried_over() {
+        init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap();
         struct RejectOnce {
             rejected: bool,
         }
@@ -513,7 +526,6 @@ mod tests {
             1, // flush after 1 bucket
             Duration::from_millis(30_000),
             60,
-            false,
         );
 
         let partition = Partition::new(Topic::new("test"), 0);
@@ -549,6 +561,7 @@ mod tests {
 
     #[test]
     fn join_honors_timeout_when_message_stays_carried_over() {
+        init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap();
         struct AlwaysReject;
         impl ProcessingStrategy<AggregatedOutcomesBatch> for AlwaysReject {
             fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
@@ -570,7 +583,7 @@ mod tests {
         }
 
         let mut aggregator =
-            OutcomesAggregator::new(AlwaysReject, 1, Duration::from_millis(30_000), 60, false);
+            OutcomesAggregator::new(AlwaysReject, 1, Duration::from_millis(30_000), 60);
         let partition = Partition::new(Topic::new("test"), 0);
         let payload = make_payload(6_000, 1, 2, 3, &[(4, 1)]);
 
@@ -590,12 +603,14 @@ mod tests {
 
     #[test]
     fn submit_uses_item_timestamp_when_enabled() {
+        init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap();
+        let _guard =
+            override_options(&[("snuba", "consumer.use_item_timestamp", json!(true))]).unwrap();
         let mut aggregator = OutcomesAggregator::new(
             Noop { last_message: None },
             500,
             Duration::from_millis(2_000),
             60,
-            true,
         );
 
         let topic = Topic::new("snuba-items");
@@ -625,6 +640,9 @@ mod tests {
         trace_item.encode(&mut buf).unwrap();
         let payload = KafkaPayload::new(None, None, Some(buf));
 
+        // we need to poll first in order to get the new value (true)
+        aggregator.poll().unwrap();
+
         aggregator
             .submit(Message::new_broker_message(
                 payload,
@@ -645,5 +663,83 @@ mod tests {
             aggregator.batch.buckets.get(&key).map(|s| s.quantity),
             Some(1)
         );
+    }
+
+    #[test]
+    fn poll_updates_use_item_timestamp_dynamically() {
+        init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap();
+        let mut aggregator = OutcomesAggregator::new(
+            Noop { last_message: None },
+            500,
+            Duration::from_millis(30_000),
+            60,
+        );
+
+        let partition = Partition::new(Topic::new("snuba-items"), 0);
+
+        let mut buf = Vec::new();
+        TraceItem {
+            organization_id: 1,
+            project_id: 2,
+            received: Some(Timestamp {
+                seconds: 1_700_000_000,
+                nanos: 0,
+            }),
+            timestamp: Some(Timestamp {
+                seconds: 1_700_000_060,
+                nanos: 0,
+            }),
+            outcomes: Some(Outcomes {
+                key_id: 3,
+                category_count: vec![CategoryCount {
+                    data_category: 4,
+                    quantity: 1,
+                }],
+            }),
+            ..Default::default()
+        }
+        .encode(&mut buf)
+        .unwrap();
+        let payload = KafkaPayload::new(None, None, Some(buf));
+
+        let bucket_quantity = |aggregator: &OutcomesAggregator<Noop>, offset: u64| {
+            let key = BucketKey {
+                time_offset: offset,
+                org_id: 1,
+                project_id: 2,
+                key_id: 3,
+                category: 4,
+            };
+            aggregator.batch.buckets.get(&key).map(|s| s.quantity)
+        };
+
+        let mut offset = 0;
+        let mut do_submit = |aggregator: &mut OutcomesAggregator<Noop>| {
+            aggregator.poll().unwrap();
+            aggregator
+                .submit(Message::new_broker_message(
+                    payload.clone(),
+                    partition,
+                    offset,
+                    Utc::now(),
+                ))
+                .unwrap();
+            offset += 1;
+        };
+
+        // Enable item timestamp
+        let guard =
+            override_options(&[("snuba", "consumer.use_item_timestamp", json!(true))]).unwrap();
+        do_submit(&mut aggregator);
+        assert_eq!(bucket_quantity(&aggregator, 28_333_334), Some(1));
+        assert_eq!(bucket_quantity(&aggregator, 28_333_333), None);
+
+        // Disable item timestamp
+        drop(guard);
+        let _guard =
+            override_options(&[("snuba", "consumer.use_item_timestamp", json!(false))]).unwrap();
+        do_submit(&mut aggregator);
+        assert_eq!(bucket_quantity(&aggregator, 28_333_333), Some(1));
+        assert_eq!(bucket_quantity(&aggregator, 28_333_334), Some(1)); // still present from first submit
     }
 }

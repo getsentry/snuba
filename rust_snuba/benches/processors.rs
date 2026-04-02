@@ -7,9 +7,9 @@ use criterion::{black_box, BenchmarkGroup, BenchmarkId, Criterion, Throughput};
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use rust_snuba::{
-    BrokerConfig, ClickhouseConfig, ConsumerStrategyFactoryV2, EnvConfig, KafkaMessageMetadata,
-    MessageProcessorConfig, ProcessingFunction, ProcessingFunctionType, ProcessorConfig,
-    StatsDBackend, StorageConfig, TopicConfig, PROCESSORS,
+    BatchSizeCalculation, BrokerConfig, ClickhouseConfig, ConsumerStrategyFactoryV2, EnvConfig,
+    KafkaMessageMetadata, MessageProcessorConfig, ProcessingFunction, ProcessingFunctionType,
+    ProcessorConfig, StatsDBackend, StorageConfig, TopicConfig, PROCESSORS,
 };
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::backends::local::broker::LocalBroker;
@@ -79,6 +79,7 @@ fn create_factory(
         logical_topic_name: schema.into(),
         max_batch_size: 1_000,
         max_batch_time: Duration::from_millis(10),
+        max_batch_size_calculation: BatchSizeCalculation::Rows,
         processing_concurrency,
         clickhouse_concurrency,
         commitlog_concurrency,

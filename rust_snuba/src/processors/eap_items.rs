@@ -346,6 +346,31 @@ pub struct EAPItemRow {
 }
 }
 
+fn vec_string_pair_size<B>(v: &[(String, B)]) -> usize {
+    let heap: usize = v.iter().map(|(s, _)| s.len()).sum();
+    std::mem::size_of_val(v) + heap
+}
+
+fn vec_string_string_pair_size(v: &[(String, String)]) -> usize {
+    let heap: usize = v.iter().map(|(k, v)| k.len() + v.len()).sum();
+    std::mem::size_of_val(v) + heap
+}
+
+seq_attrs! {
+impl crate::types::EstimatedSize for EAPItemRow {
+    fn estimated_size(&self) -> usize {
+        std::mem::size_of::<Self>()
+            + vec_string_pair_size(&self.attributes_bool)
+            + vec_string_pair_size(&self.attributes_int)
+            + self.attributes_array.len()
+            #(
+            + vec_string_string_pair_size(&self.attributes_string_~N)
+            + vec_string_pair_size(&self.attributes_float_~N)
+            )*
+    }
+}
+}
+
 impl TryFrom<EAPItem> for EAPItemRow {
     type Error = anyhow::Error;
 
