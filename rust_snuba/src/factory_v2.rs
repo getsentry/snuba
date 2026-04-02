@@ -511,12 +511,18 @@ impl TaskRunner<KafkaPayload, KafkaPayload, anyhow::Error> for SchemaValidator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sentry_arroyo::backends::kafka::config::KafkaConfig;
     use sentry_arroyo::processing::strategies::{
         CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
     };
     use sentry_arroyo::types::{BrokerMessage, InnerMessage, Partition, Topic};
+    use sentry_options::init_with_schemas;
+    use sentry_options::testing::set_override;
+    use serde_json::json;
+    use std::sync::Once;
     use std::sync::{Arc, Mutex};
 
+    // ----------- BYTES_INSERT_BATCH ------------------
     /// A next-step that records every batch it receives.
     struct RecordingStep {
         batches: Arc<Mutex<Vec<BytesInsertBatch<RowData>>>>,
@@ -742,19 +748,8 @@ mod tests {
         assert_eq!(batches[0].len(), 5);
         assert_eq!(batches[0].num_bytes(), 200_000); // 5 * 40KB accumulated but didn't trigger flush
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use std::sync::Once;
-
-    use super::*;
-    use sentry_arroyo::backends::kafka::config::KafkaConfig;
-    use sentry_arroyo::types::Topic;
-    use sentry_options::init_with_schemas;
-    use sentry_options::testing::set_override;
-    use serde_json::json;
-
+    // --------- BLQ -------------
     fn make_factory(
         blq_producer_config: Option<KafkaConfig>,
         blq_topic: Option<Topic>,
@@ -807,6 +802,7 @@ mod tests {
             use_row_binary: false,
             blq_producer_config,
             blq_topic,
+            max_batch_size_calculation: config::BatchSizeCalculation::Rows,
         }
     }
 
