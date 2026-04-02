@@ -211,9 +211,9 @@ where
                 Ok(())
             }
             (true, State::Flushing(_)) | (false, State::Flushing(_)) => {
-                return Err(SubmitError::MessageRejected(
+                Err(SubmitError::MessageRejected(
                     sentry_arroyo::processing::strategies::MessageRejected { message },
-                ));
+                ))
             }
         }
     }

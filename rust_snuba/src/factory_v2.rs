@@ -517,7 +517,7 @@ mod tests {
     };
     use sentry_arroyo::types::{BrokerMessage, InnerMessage, Partition, Topic};
     use sentry_options::init_with_schemas;
-    use sentry_options::testing::set_override;
+    use sentry_options::testing::override_options;
     use serde_json::json;
     use std::sync::Once;
     use std::sync::{Arc, Mutex};
@@ -825,7 +825,7 @@ mod tests {
     #[test]
     fn test_should_not_use_blq_when_flag_disabled() {
         init_config();
-        let _guard = set_override("snuba", "consumer.blq_enabled", json!(false));
+        let _guard = override_options(&[("snuba", "consumer.blq_enabled", json!(false))]).unwrap();
         let factory = make_factory(Some(blq_kafka_config()), Some(Topic::new("blq")));
         assert!(!factory.should_use_blq());
     }
@@ -833,7 +833,7 @@ mod tests {
     #[test]
     fn test_should_not_use_blq_when_no_producer_config() {
         init_config();
-        let _guard = set_override("snuba", "consumer.blq_enabled", json!(true));
+        let _guard = override_options(&[("snuba", "consumer.blq_enabled", json!(true))]).unwrap();
         let factory = make_factory(None, Some(Topic::new("blq")));
         assert!(!factory.should_use_blq());
     }
@@ -841,7 +841,7 @@ mod tests {
     #[test]
     fn test_should_not_use_blq_when_no_topic() {
         init_config();
-        let _guard = set_override("snuba", "consumer.blq_enabled", json!(true));
+        let _guard = override_options(&[("snuba", "consumer.blq_enabled", json!(true))]).unwrap();
         let factory = make_factory(Some(blq_kafka_config()), None);
         assert!(!factory.should_use_blq());
     }
@@ -849,7 +849,7 @@ mod tests {
     #[test]
     fn test_should_use_blq_when_all_conditions_met() {
         init_config();
-        let _guard = set_override("snuba", "consumer.blq_enabled", json!(true));
+        let _guard = override_options(&[("snuba", "consumer.blq_enabled", json!(true))]).unwrap();
         let factory = make_factory(Some(blq_kafka_config()), Some(Topic::new("blq")));
         assert!(factory.should_use_blq());
     }
