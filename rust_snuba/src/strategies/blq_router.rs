@@ -47,7 +47,11 @@ use sentry_arroyo::types::{Message, Topic, TopicOrPartition};
 enum State {
     Idle,         // no messages have gone through the router yet
     RoutingStale, // router is directing stale messages to the backlog-queue (BLQ)
-    Forwarding,   // router is forwarding non-stale messages along to the next strategy
+    // we have processed all stale messages and are now flushing (finishing producing to BLQ)
+    // when we transition to this state we will have CommitRequest for what was flushed, and poll
+    // will be responsible for returning it
+    Flushing(Option<CommitRequest>),
+    Forwarding, // router is forwarding non-stale messages along to the next strategy
 }
 
 pub struct BLQRouter<Next, ProduceStrategy> {
@@ -151,9 +155,14 @@ where
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         let produce_result = self.producer.poll();
         let next_step_result = self.next_step.poll();
-        match self.state {
+        match &mut self.state {
             State::RoutingStale => produce_result,
             State::Forwarding | State::Idle => next_step_result,
+            State::Flushing(commits) => {
+                let commits = commits.take();
+                self.state = State::Forwarding;
+                Ok(commits)
+            }
         }
     }
 
@@ -192,12 +201,19 @@ where
             }
             (false, State::RoutingStale) => {
                 // We hit a fresh message, so we are done routing the backlog.
-                // Call join on the producer so all writes to the BLQ are committed.
-                self.producer.join(Some(Duration::from_secs(5))).unwrap();
+                // Finish producing and committing all the state messages and
+                // then switch back to forwarding fresh.
 
-                // Now go back to forwarding non-stale messages as usual.
-                self.state = State::Forwarding;
-                self.next_step.submit(message)
+                // i know i shouldnt be blocking in submit but there was no better way to do it
+                // the pipeline cant make progress until this completes anyways so it should be fine
+                let flush_results = self.producer.join(Some(Duration::from_secs(5))).unwrap();
+                self.state = State::Flushing(flush_results);
+                Ok(())
+            }
+            (true, State::Flushing(_)) | (false, State::Flushing(_)) => {
+                return Err(SubmitError::MessageRejected(
+                    sentry_arroyo::processing::strategies::MessageRejected { message },
+                ));
             }
         }
     }
@@ -210,9 +226,10 @@ where
     fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         let producer_result = self.producer.join(timeout);
         let next_step_result = self.next_step.join(timeout);
-        match self.state {
+        match &self.state {
             State::RoutingStale => producer_result,
             State::Forwarding | State::Idle => next_step_result,
+            State::Flushing(commits) => Ok(commits.clone()),
         }
     }
 }

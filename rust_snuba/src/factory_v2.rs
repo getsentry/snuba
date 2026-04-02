@@ -43,8 +43,9 @@ use crate::strategies::replacements::ProduceReplacements;
 use crate::types::{BytesInsertBatch, CogsData, RowData, TypedInsertBatch};
 
 // BLQ configuration
-const STALE_THRESHOLD: TimeDelta = TimeDelta::minutes(30);
-const STATIC_FRICTION: Option<TimeDelta> = Some(TimeDelta::minutes(2));
+const BLQ_STALE_THRESHOLD: TimeDelta = TimeDelta::minutes(30);
+const BLQ_STATIC_FRICTION: Option<TimeDelta> = Some(TimeDelta::minutes(2));
+
 pub struct ConsumerStrategyFactoryV2 {
     pub storage_config: config::StorageConfig,
     pub env_config: config::EnvConfig,
@@ -283,17 +284,17 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             ) {
                 tracing::info!(
                 "Routing all messages older than {:?} to the topic {:?} with static_friction {:?}",
-                STALE_THRESHOLD,
+                BLQ_STALE_THRESHOLD,
                 self.blq_topic,
-                STATIC_FRICTION
+                BLQ_STATIC_FRICTION
             );
                 Box::new(
                     BLQRouter::new(
                         next_step,
                         blq_producer_config.clone(),
                         blq_topic,
-                        STALE_THRESHOLD,
-                        STATIC_FRICTION,
+                        BLQ_STALE_THRESHOLD,
+                        BLQ_STATIC_FRICTION,
                     )
                     .expect("invalid BLQRouter config"),
                 )
@@ -446,17 +447,17 @@ impl ConsumerStrategyFactoryV2 {
             ) {
                 tracing::info!(
                 "Routing all messages older than {:?} to the topic {:?} with static_friction {:?}",
-                STALE_THRESHOLD,
+                BLQ_STALE_THRESHOLD,
                 self.blq_topic,
-                STATIC_FRICTION,
+                BLQ_STATIC_FRICTION,
                 );
                 Box::new(
                     BLQRouter::new(
                         next_step,
                         blq_producer_config.clone(),
                         blq_topic,
-                        STALE_THRESHOLD,
-                        STATIC_FRICTION,
+                        BLQ_STALE_THRESHOLD,
+                        BLQ_STATIC_FRICTION,
                     )
                     .expect("invalid BLQRouter config"),
                 )
