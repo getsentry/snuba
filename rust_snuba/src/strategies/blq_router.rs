@@ -6,6 +6,7 @@
 //! ## Implementation
 //! its essentially a FSM
 //!
+//! ```text
 //!                        > forward to next step
 //!                              ┌fresh─┐
 //!                              │      ▼
@@ -22,6 +23,7 @@
 //!                             │        ▲
 //!                             └─stale──┘
 //!                          > redirect to blq
+//! ```
 //!
 //! the reason for the panic is that there may be accumulated data downstream that needs to be flushed before we start
 //! redirecting to backlog and committing those messages. The most reliable way to do this is crashing the consumer,
@@ -30,11 +32,16 @@
 use std::time::Duration;
 
 use chrono::{TimeDelta, Utc};
+use sentry_arroyo::backends::kafka::config::KafkaConfig;
+use sentry_arroyo::backends::kafka::producer::KafkaProducer;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::processing::strategies::commit_offsets::CommitOffsets;
+use sentry_arroyo::processing::strategies::produce::Produce;
+use sentry_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use sentry_arroyo::processing::strategies::{
     CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
-use sentry_arroyo::types::Message;
+use sentry_arroyo::types::{Message, Topic, TopicOrPartition};
 
 #[derive(Debug, PartialEq)]
 enum State {
@@ -49,6 +56,46 @@ pub struct BLQRouter<Next, ProduceStrategy> {
     state: State,
     producer: ProduceStrategy,
     static_friction: Option<TimeDelta>,
+
+    // We have to keep this around ourself bc strategies::produce::Produce didn't define their lifetimes well
+    _concurrency: Option<ConcurrencyConfig>,
+}
+
+impl<Next> BLQRouter<Next, Produce<CommitOffsets>>
+where
+    Next: ProcessingStrategy<KafkaPayload> + 'static,
+{
+    /// next_step,
+    ///     is where fresh messages get forwarded to
+    /// stale_threshold,
+    ///     messages older than the stale_threshold will get sent to the producer
+    /// static_friction,
+    ///     Once we enter stale routing mode (at STALE_THRESHOLD),
+    ///     we keep routing messages that are at least (STALE_THRESHOLD - STATIC_FRICTION_SECS) seconds old.
+    ///     This is because we want a higher threshold to enter the stale routing state
+    ///     but a lower threshold to stay in it, so we don't flip-flop at the boundary.
+    ///     Best practice would be no greater than a small percent of stable_threshold like 10%
+    ///     ex: stale_threshold=10m, static_friction=1m
+    ///     and the implication is 9m old messages will now be sent to the BLQ in some cases
+    pub fn new(
+        next_step: Next,
+        blq_producer_config: KafkaConfig,
+        blq_topic: Topic,
+        stale_threshold: TimeDelta,
+        static_friction: Option<TimeDelta>,
+    ) -> Result<Self, &'static str> {
+        let concurrency = ConcurrencyConfig::new(10);
+        let blq_producer = Produce::new(
+            CommitOffsets::new(Duration::from_millis(250)),
+            KafkaProducer::new(blq_producer_config),
+            &concurrency,
+            TopicOrPartition::Topic(blq_topic),
+        );
+        let mut router =
+            Self::new_with_strategy(next_step, blq_producer, stale_threshold, static_friction)?;
+        router._concurrency = Some(concurrency);
+        Ok(router)
+    }
 }
 
 impl<Next, ProduceStrategy> BLQRouter<Next, ProduceStrategy>
@@ -56,29 +103,27 @@ where
     Next: ProcessingStrategy<KafkaPayload> + 'static,
     ProduceStrategy: ProcessingStrategy<KafkaPayload> + 'static,
 {
-    pub fn new(
+    /// next_step,
+    ///     is where fresh messages get forwarded to
+    /// producer,
+    ///     ProcessingStrategy that submits messages to the BLQ,
+    ///     stale messages will get submitted to it.
+    /// stale_threshold,
+    ///     messages older than the stale_threshold will get sent to the producer
+    /// static_friction,
+    ///     Once we enter stale routing mode (at STALE_THRESHOLD),
+    ///     we keep routing messages that are at least (STALE_THRESHOLD - STATIC_FRICTION_SECS) seconds old.
+    ///     This is because we want a higher threshold to enter the stale routing state
+    ///     but a lower threshold to stay in it, so we don't flip-flop at the boundary.
+    ///     Best practice would be no greater than a small percent of stable_threshold like 10%
+    ///     ex: stale_threshold=10m, static_friction=1m
+    ///     and the implication is 9m old messages will now be sent to the BLQ in some cases
+    fn new_with_strategy(
         next_step: Next,
         blq_producer: ProduceStrategy,
         stale_threshold: TimeDelta,
         static_friction: Option<TimeDelta>,
     ) -> Result<Self, &'static str> {
-        /*
-            next_step,
-                is where fresh messages get forwarded to
-            producer,
-                ProcessingStrategy that submits messages to the BLQ,
-                stale messages will get submitted to it.
-            stale_threshold,
-                messages older than the stale_threshold will get sent to the producer
-            static_friction,
-                Once we enter stale routing mode (at STALE_THRESHOLD),
-                we keep routing messages that are at least (STALE_THRESHOLD - STATIC_FRICTION_SECS) seconds old.
-                This is because we want a higher threshold to enter the stale routing state
-                but a lower threshold to stay in it, so we don't flip-flop at the boundary.
-                Best practice would be no greater than a small percent of stable_threshold like 10%
-                ex: stale_threshold=10m, static_friction=1m
-                and the implication is 9m old messages will now be sent to the BLQ in some cases
-        */
         if stale_threshold <= TimeDelta::zero() {
             return Err("stale_threshold must be positive");
         }
@@ -93,6 +138,7 @@ where
             state: State::Idle,
             producer: blq_producer,
             static_friction,
+            _concurrency: None,
         })
     }
 }
@@ -235,7 +281,7 @@ mod tests {
         This tests that the BLQRouter forwards business-as-usual fresh messages through it
         and crashes when it hits its first stale message
          */
-        let mut router = BLQRouter::new(
+        let mut router = BLQRouter::new_with_strategy(
             MockStrategy::new(),
             MockStrategy::new(),
             TimeDelta::seconds(10),
@@ -257,7 +303,7 @@ mod tests {
         This tests that the BLQRouter properly routes stale messages to the BLQ
         and then switches back to forwarding fresh messages once the backlog is burned
          */
-        let mut router = BLQRouter::new(
+        let mut router = BLQRouter::new_with_strategy(
             MockStrategy::new(),
             MockStrategy::new(),
             TimeDelta::seconds(10),
