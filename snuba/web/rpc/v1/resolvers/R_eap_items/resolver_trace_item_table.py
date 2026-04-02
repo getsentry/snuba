@@ -145,16 +145,28 @@ def _apply_virtual_columns(
             return expression
         context = mapped_column_to_context.get(str(expression.key.value))
         if context:
+            source_type = (
+                context.from_column_type
+                or NORMALIZED_COLUMNS_EAP_ITEMS.get(
+                    context.from_column_name, [AttributeKey.TYPE_STRING]
+                )[0]
+            )
             attribute_expression = attribute_key_to_expression(
                 AttributeKey(
                     name=context.from_column_name,
-                    type=NORMALIZED_COLUMNS_EAP_ITEMS.get(
-                        context.from_column_name, [AttributeKey.TYPE_STRING]
-                    )[0],
+                    type=source_type,
                 )
             )
+            # ifNull default must match the numeric/string type of the source column;
+            # mismatching types (e.g. Int64 vs '') causes a ClickHouse type error.
+            numeric_types = (
+                AttributeKey.TYPE_INT,
+                AttributeKey.TYPE_DOUBLE,
+                AttributeKey.TYPE_BOOLEAN,
+            )
+            ifnull_default = literal(0) if source_type in numeric_types else literal("")
             return f.transform(
-                f.CAST(f.ifNull(attribute_expression, literal("")), "String"),
+                f.CAST(f.ifNull(attribute_expression, ifnull_default), "String"),
                 literals_array(None, [literal(k) for k in context.value_map.keys()]),
                 literals_array(None, [literal(v) for v in context.value_map.values()]),
                 literal(context.default_value if context.default_value != "" else "unknown"),

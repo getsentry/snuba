@@ -1,6 +1,6 @@
 import random
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from math import isclose
 from typing import Any
 from unittest.mock import MagicMock, call, patch
@@ -3470,6 +3470,105 @@ class TestTraceItemTable(BaseApiTest):
         assert res.attribute_name == "avg(game_size * game_size_unit_mult)"
         assert len(res.results) == 1
         assert isclose(res.results[0].val_double, expected_avg)
+
+    def test_occurrence_virtual_column_mapping(self) -> None:
+        """
+        Reproduces the request shape sent by api.organization-events for the issues
+        view: OCCURRENCE items with virtual column contexts that remap group_id ->
+        issue and sentry.project_id -> project / project.name.
+        """
+        org_id = 4557819828305920
+        project_id = 4557819828633600
+        item_ts = datetime.fromtimestamp(1773929000, tz=timezone.utc)
+
+        items_storage = get_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,  # type: ignore
+            [
+                gen_item_message(
+                    start_timestamp=item_ts,
+                    type=TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE,
+                    attributes={"group_id": AnyValue(int_value=1)},
+                    project_id=project_id,
+                    organization_id=org_id,
+                    remove_default_attributes=True,
+                )
+            ],
+        )
+
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                organization_id=org_id,
+                referrer="api.organization-events",
+                project_ids=[project_id],
+                start_timestamp=Timestamp(seconds=1773925780),
+                end_timestamp=Timestamp(seconds=1773933040),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_NORMAL,
+                ),
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="issue"),
+                    label="issue",
+                ),
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_INT, name="group_id"),
+                    label="group_id",
+                ),
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="project"),
+                    label="project",
+                ),
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id"),
+                    label="id",
+                ),
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="project.name"),
+                    label="project.name",
+                ),
+            ],
+            limit=101,
+            page_token=PageToken(offset=0),
+            virtual_column_contexts=[
+                VirtualColumnContext(
+                    from_column_name="group_id",
+                    to_column_name="issue",
+                    value_map={"1": "BAR-1"},
+                    from_column_type=AttributeKey.TYPE_INT,
+                ),
+                VirtualColumnContext(
+                    from_column_name="sentry.project_id",
+                    to_column_name="project",
+                    value_map={str(project_id): "bar"},
+                ),
+                VirtualColumnContext(
+                    from_column_name="sentry.project_id",
+                    to_column_name="project.name",
+                    value_map={str(project_id): "bar"},
+                ),
+            ],
+        )
+
+        response = EndpointTraceItemTable().execute(message)
+
+        assert [c.attribute_name for c in response.column_values] == [
+            "issue",
+            "group_id",
+            "project",
+            "id",
+            "project.name",
+        ]
+
+        col = {c.attribute_name: c for c in response.column_values}
+        assert col["issue"].results == [AttributeValue(val_str="BAR-1")]
+        assert col["group_id"].results == [AttributeValue(val_int=1)]
+        assert col["project"].results == [AttributeValue(val_str="bar")]
+        assert col["project.name"].results == [AttributeValue(val_str="bar")]
+        assert len(col["id"].results) == 1
+        assert col["id"].results[0].val_str != ""
 
 
 def _str_array(*values: str) -> AnyValue:
