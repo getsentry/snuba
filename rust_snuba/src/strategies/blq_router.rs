@@ -1,3 +1,32 @@
+//! # BLQ Router
+//!
+//! BLQ Router is an arroyo strategy that re-directs stale messages (by timestamp) to a configured backlog-queue topic.
+//! Non-stale messages will be passively forwarded along to the next step in the arroyo strategy pipeline.
+//!
+//! ## Implementation
+//! its essentially a FSM
+//!
+//!                        > forward to next step
+//!                              ┌fresh─┐
+//!                              │      ▼
+//!                           ┌──┴─────────┐
+//!                   ┌fresh─►│ Forwarding ├──stale──► PANIC
+//!                   │       └────────────┘
+//!                   │              ▲
+//!          ┌──────┐ │              │
+//!     ────►│ Idle ├─┤            fresh
+//!          └──────┘ │              │
+//!                   │       ┌──────┴───────┐
+//!                   └stale─►│ RoutingStale │
+//!                           └─┬────────────┘
+//!                             │        ▲
+//!                             └─stale──┘
+//!                          > redirect to blq
+//!
+//! the reason for the panic is that there may be accumulated data downstream that needs to be flushed before we start
+//! redirecting to backlog and committing those messages. The most reliable way to do this is crashing the consumer,
+//! when it comes back alive the first messages it gets will be stale so it will go straight from idle to RoutingStale.
+
 use std::time::Duration;
 
 use chrono::{TimeDelta, Utc};
