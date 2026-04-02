@@ -208,7 +208,9 @@ where
                 // the pipeline cant make progress until this completes anyways so it should be fine
                 let flush_results = self.producer.join(Some(Duration::from_secs(5))).unwrap();
                 self.state = State::Flushing(flush_results);
-                Ok(())
+                Err(SubmitError::MessageRejected(
+                    sentry_arroyo::processing::strategies::MessageRejected { message },
+                ))
             }
             (true, State::Flushing(_)) | (false, State::Flushing(_)) => {
                 Err(SubmitError::MessageRejected(
