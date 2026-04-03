@@ -310,10 +310,32 @@ mod tests {
         // consuming messages as normal
         for _ in 0..10 {
             router.submit(make_message(Utc::now())).unwrap();
+            _ = router.poll();
         }
         assert_eq!(router.state, State::Forwarding);
         // now theres a stale message, consumer should crash
         _ = router.submit(make_message(Utc::now() - TimeDelta::seconds(20)));
+    }
+
+    fn submit_with_retry(
+        router: &mut BLQRouter<MockStrategy, MockStrategy>,
+        message: Message<KafkaPayload>,
+        max_retries: usize,
+    ) -> Result<(), SubmitError<KafkaPayload>> {
+        let mut msg = message;
+        for _ in 0..max_retries {
+            match router.submit(msg) {
+                Ok(()) => return Ok(()),
+                Err(SubmitError::MessageRejected(rejected)) => {
+                    _ = router.poll();
+                    msg = rejected.message;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        Err(SubmitError::MessageRejected(
+            sentry_arroyo::processing::strategies::MessageRejected { message: msg },
+        ))
     }
 
     #[test]
@@ -334,12 +356,14 @@ mod tests {
             router
                 .submit(make_message(Utc::now() - TimeDelta::minutes(1)))
                 .unwrap();
+            _ = router.poll();
         }
         assert_eq!(router.state, State::RoutingStale);
         assert!(!router.producer.join_called);
         // now we are back to fresh messages
         for _ in 0..5 {
-            router.submit(make_message(Utc::now())).unwrap();
+            submit_with_retry(&mut router, make_message(Utc::now()), 3).unwrap();
+            _ = router.poll();
         }
         assert_eq!(router.state, State::Forwarding);
         assert!(router.producer.join_called);
