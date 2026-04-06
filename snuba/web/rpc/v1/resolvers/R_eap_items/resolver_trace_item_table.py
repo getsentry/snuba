@@ -158,12 +158,10 @@ def _apply_virtual_columns(
                 )
             )
             return f.transform(
-                f.CAST(
-                    f.ifNull(
-                        attribute_expression,
-                        literal("") if source_type == AttributeKey.TYPE_STRING else literal(0),
-                    ),
-                    "String",
+                if_cond(
+                    f.isNull(attribute_expression),
+                    literal(""),
+                    f.toString(attribute_expression),
                 ),
                 literals_array(None, [literal(k) for k in context.value_map.keys()]),
                 literals_array(None, [literal(v) for v in context.value_map.values()]),
@@ -618,7 +616,10 @@ def _get_page_token(
                 # the routing strategy will properly truncate the time window of the next request
                 return FlexibleTimeWindowPageWithFilters.create(
                     request,
-                    TimeWindow(original_time_window.start_timestamp, time_window.start_timestamp),
+                    TimeWindow(
+                        original_time_window.start_timestamp,
+                        time_window.start_timestamp,
+                    ),
                     response,
                 ).page_token
     else:
@@ -687,10 +688,15 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
         except Exception as e:
             sentry_sdk.capture_message(f"Error merging clickhouse settings: {e}")
         original_time_window = TimeWindow(
-            start_timestamp=in_msg.meta.start_timestamp, end_timestamp=in_msg.meta.end_timestamp
+            start_timestamp=in_msg.meta.start_timestamp,
+            end_timestamp=in_msg.meta.end_timestamp,
         )
         snuba_request = _build_snuba_request(
-            in_msg, query_settings, routing_decision.time_window, routing_decision.tier, self._timer
+            in_msg,
+            query_settings,
+            routing_decision.time_window,
+            routing_decision.tier,
+            self._timer,
         )
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
