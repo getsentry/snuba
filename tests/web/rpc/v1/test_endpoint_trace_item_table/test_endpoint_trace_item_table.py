@@ -3477,8 +3477,8 @@ class TestTraceItemTable(BaseApiTest):
         view: OCCURRENCE items with virtual column contexts that remap group_id ->
         issue and sentry.project_id -> project / project.name.
         """
-        org_id = 4557819828305920
-        project_id = 4557819828633600
+        org_id = 1
+        project_id = 1
         item_ts = datetime.fromtimestamp(1773929000, tz=timezone.utc)
 
         items_storage = get_storage(StorageKey("eap_items"))
