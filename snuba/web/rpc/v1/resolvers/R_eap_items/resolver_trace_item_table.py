@@ -157,16 +157,14 @@ def _apply_virtual_columns(
                     type=source_type,
                 )
             )
-            # ifNull default must match the numeric/string type of the source column;
-            # mismatching types (e.g. Int64 vs '') causes a ClickHouse type error.
-            numeric_types = (
-                AttributeKey.TYPE_INT,
-                AttributeKey.TYPE_DOUBLE,
-                AttributeKey.TYPE_BOOLEAN,
-            )
-            ifnull_default = literal(0) if source_type in numeric_types else literal("")
             return f.transform(
-                f.CAST(f.ifNull(attribute_expression, ifnull_default), "String"),
+                f.CAST(
+                    f.ifNull(
+                        attribute_expression,
+                        literal("") if source_type == AttributeKey.TYPE_STRING else literal(0),
+                    ),
+                    "String",
+                ),
                 literals_array(None, [literal(k) for k in context.value_map.keys()]),
                 literals_array(None, [literal(v) for v in context.value_map.values()]),
                 literal(context.default_value if context.default_value != "" else "unknown"),
