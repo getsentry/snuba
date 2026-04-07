@@ -31,7 +31,7 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.downsampled_storage_tiers import Tier
-from snuba.protos.common import NORMALIZED_COLUMNS_EAP_ITEMS
+from snuba.protos.common import NORMALIZED_COLUMNS_EAP_ITEMS, MalformedAttributeException
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
@@ -151,10 +151,11 @@ def _apply_virtual_columns(
                     context.from_column_name, [AttributeKey.TYPE_STRING]
                 )[0]
             )
-            assert source_type in (
+            if source_type not in (
                 AttributeKey.Type.TYPE_STRING,
                 AttributeKey.Type.TYPE_INT,
-            ), "VCC can only map string or int attributes"
+            ):
+                raise MalformedAttributeException("VCC can only map string or int attributes")
             attribute_expression = attribute_key_to_expression(
                 AttributeKey(
                     name=context.from_column_name,
