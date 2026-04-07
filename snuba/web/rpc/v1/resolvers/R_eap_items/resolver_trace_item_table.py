@@ -151,6 +151,10 @@ def _apply_virtual_columns(
                     context.from_column_name, [AttributeKey.TYPE_STRING]
                 )[0]
             )
+            assert source_type in (
+                AttributeKey.Type.TYPE_STRING,
+                AttributeKey.Type.TYPE_INT,
+            ), "VCC can only map string or int attributes"
             attribute_expression = attribute_key_to_expression(
                 AttributeKey(
                     name=context.from_column_name,
