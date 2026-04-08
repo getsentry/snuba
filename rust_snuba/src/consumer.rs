@@ -16,6 +16,8 @@ use sentry_arroyo::types::Topic;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
+use sentry_options::init_with_schemas;
+
 use crate::config;
 use crate::factory_v2::ConsumerStrategyFactoryV2;
 use crate::logging::{setup_logging, setup_sentry};
@@ -94,10 +96,13 @@ pub fn consumer_impl(
     use_row_binary: bool,
 ) -> usize {
     setup_logging();
+    init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)])
+        .expect("failed to initialize sentry-options");
 
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
     let max_batch_size = consumer_config.max_batch_size;
     let max_batch_time = Duration::from_millis(consumer_config.max_batch_time_ms);
+    let max_batch_size_calculation = consumer_config.max_batch_size_calculation;
 
     let batch_write_timeout = match batch_write_timeout_ms {
         Some(timeout_ms) => {
@@ -251,6 +256,7 @@ pub fn consumer_impl(
         logical_topic_name,
         max_batch_size,
         max_batch_time,
+        max_batch_size_calculation,
         processing_concurrency: ConcurrencyConfig::new(concurrency),
         clickhouse_concurrency: ConcurrencyConfig::new(clickhouse_concurrency),
         commitlog_concurrency: ConcurrencyConfig::new(2),
@@ -324,7 +330,7 @@ pub fn process_message(
     // XXX: Currently only takes the message payload and metadata. This assumes
     // key and headers are not used for message processing
     let func = processors::get_processing_function(name).ok_or(SnubaRustError::new_err(
-        format!("processor '{}' not found", name),
+        format!("processor '{name}' not found"),
     ))?;
 
     let payload = KafkaPayload::new(None, None, Some(value));
@@ -338,7 +344,7 @@ pub fn process_message(
     match func {
         processors::ProcessingFunctionType::ProcessingFunction(f) => {
             let res = f(payload, meta, &config::ProcessorConfig::default())
-                .map_err(|e| SnubaRustError::new_err(format!("invalid message: {:?}", e)))?;
+                .map_err(|e| SnubaRustError::new_err(format!("invalid message: {e:?}")))?;
 
             let payload = PyBytes::new(py, &res.rows.into_encoded_rows()).into();
 
@@ -346,7 +352,7 @@ pub fn process_message(
         }
         processors::ProcessingFunctionType::ProcessingFunctionWithReplacements(f) => {
             let res = f(payload, meta, &config::ProcessorConfig::default())
-                .map_err(|e| SnubaRustError::new_err(format!("invalid message: {:?}", e)))?;
+                .map_err(|e| SnubaRustError::new_err(format!("invalid message: {e:?}")))?;
 
             match res {
                 InsertOrReplacement::Insert(r) => {

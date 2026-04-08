@@ -312,6 +312,7 @@ struct QuerylogMessage {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use crate::processors::tests::run_schema_type_test;
 

@@ -68,7 +68,7 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
         TraceItemType::UptimeResult => "uptime",
         TraceItemType::Replay => "replays",
         TraceItemType::Occurrence => "issueplatform",
-        TraceItemType::Metric => "sessions",
+        TraceItemType::Metric => "trace_metrics",
         TraceItemType::ProfileFunction => "profiles",
         TraceItemType::Attachment => "attachments",
         TraceItemType::Preprod => "preprod",
@@ -148,7 +148,7 @@ impl TryFrom<TraceItem> for EAPItem {
             project_id: from.project_id,
             item_type: from.item_type as u8,
             trace_id: Uuid::parse_str(&from.trace_id)?,
-            item_id: read_item_id(from.item_id),
+            item_id: read_item_id(from.item_id)?,
             timestamp: timestamp.seconds as u32,
             attributes: Default::default(),
             retention_days: Default::default(),
@@ -211,9 +211,13 @@ fn fnv_1a(input: &[u8]) -> u32 {
     res
 }
 
-fn read_item_id(from: Vec<u8>) -> u128 {
-    let (item_id_bytes, _) = from.split_at(std::mem::size_of::<u128>());
-    u128::from_le_bytes(item_id_bytes.try_into().unwrap())
+fn read_item_id(from: Vec<u8>) -> anyhow::Result<u128> {
+    let bytes: [u8; 16] = from
+        .get(..std::mem::size_of::<u128>())
+        .ok_or_else(|| anyhow::anyhow!("item_id too short: {} bytes, expected 16", from.len()))?
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("item_id bytes has wrong length"))?;
+    Ok(u128::from_le_bytes(bytes))
 }
 
 macro_rules! seq_attrs {
@@ -342,6 +346,31 @@ pub struct EAPItemRow {
 }
 }
 
+fn vec_string_pair_size<B>(v: &[(String, B)]) -> usize {
+    let heap: usize = v.iter().map(|(s, _)| s.len()).sum();
+    std::mem::size_of_val(v) + heap
+}
+
+fn vec_string_string_pair_size(v: &[(String, String)]) -> usize {
+    let heap: usize = v.iter().map(|(k, v)| k.len() + v.len()).sum();
+    std::mem::size_of_val(v) + heap
+}
+
+seq_attrs! {
+impl crate::types::EstimatedSize for EAPItemRow {
+    fn estimated_size(&self) -> usize {
+        std::mem::size_of::<Self>()
+            + vec_string_pair_size(&self.attributes_bool)
+            + vec_string_pair_size(&self.attributes_int)
+            + self.attributes_array.len()
+            #(
+            + vec_string_string_pair_size(&self.attributes_string_~N)
+            + vec_string_pair_size(&self.attributes_float_~N)
+            )*
+    }
+}
+}
+
 impl TryFrom<EAPItem> for EAPItemRow {
     type Error = anyhow::Error;
 
@@ -378,6 +407,7 @@ impl TryFrom<EAPItem> for EAPItemRow {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use std::time::SystemTime;
 
@@ -600,6 +630,27 @@ mod tests {
                 .unwrap()[0],
             EAPValue::Int(1234567890)
         );
+    }
+
+    #[test]
+    fn test_received_none() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.received = None;
+
+        let mut payload = Vec::new();
+        trace_item.encode(&mut payload).unwrap();
+
+        let payload = KafkaPayload::new(None, None, Some(payload));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        let batch = process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed when received is None");
+
+        assert!(batch.origin_timestamp.is_none());
     }
 
     #[test]
@@ -981,7 +1032,7 @@ mod tests {
         // Verify bucketed string attributes have the same content
         // "str_attr" should be in one of the string buckets
         let str_bucket = (fnv_1a("str_attr".as_bytes()) as usize) % 40;
-        let json_field = format!("attributes_string_{}", str_bucket);
+        let json_field = format!("attributes_string_{str_bucket}");
         let json_str_map: HashMap<String, String> = json_row
             .get(&json_field)
             .map(|v| serde_json::from_value(v.clone()).unwrap())
@@ -1044,8 +1095,7 @@ mod tests {
         assert_eq!(
             rb_str_val,
             Some(&"hello".to_string()),
-            "str_attr not found in RowBinary output bucket {}",
-            str_bucket
+            "str_attr not found in RowBinary output bucket {str_bucket}"
         );
         assert_eq!(
             json_str_map.get("str_attr"),
@@ -1056,7 +1106,7 @@ mod tests {
         // Verify float attribute is in the correct bucket (int_attr and bool_attr are
         // double-written as floats)
         let float_bucket = (fnv_1a("float_attr".as_bytes()) as usize) % 40;
-        let json_float_field = format!("attributes_float_{}", float_bucket);
+        let json_float_field = format!("attributes_float_{float_bucket}");
         let json_float_map: HashMap<String, f64> = json_row
             .get(&json_float_field)
             .map(|v| serde_json::from_value(v.clone()).unwrap())
@@ -1101,7 +1151,7 @@ mod tests {
         let database = std::env::var("CLICKHOUSE_DATABASE").unwrap_or("default".to_string());
 
         let client = clickhouse::Client::default()
-            .with_url(format!("http://{}:{}", host, http_port))
+            .with_url(format!("http://{host}:{http_port}"))
             .with_database(&database)
             .with_option("input_format_binary_read_json_as_string", "1")
             .with_option("insert_deduplicate", "0");
@@ -1167,8 +1217,7 @@ mod tests {
         // Read it back using organization_id (primary key prefix) for reliable lookup
         let count: u64 = client
             .query(&format!(
-                "SELECT count() FROM eap_items_1_local WHERE organization_id = {}",
-                unique_org_id
+                "SELECT count() FROM eap_items_1_local WHERE organization_id = {unique_org_id}"
             ))
             .fetch_one()
             .await
@@ -1182,9 +1231,8 @@ mod tests {
             .query(&format!(
                 "SELECT organization_id, project_id, item_type, sampling_weight \
                  FROM eap_items_1_local \
-                 WHERE organization_id = {} \
-                 LIMIT 1",
-                unique_org_id
+                 WHERE organization_id = {unique_org_id} \
+                 LIMIT 1"
             ))
             .fetch_one::<(u64, u64, u8, u64)>()
             .await
@@ -1198,8 +1246,7 @@ mod tests {
         // Clean up
         client
             .query(&format!(
-                "ALTER TABLE eap_items_1_local DELETE WHERE organization_id = {}",
-                unique_org_id
+                "ALTER TABLE eap_items_1_local DELETE WHERE organization_id = {unique_org_id}"
             ))
             .execute()
             .await

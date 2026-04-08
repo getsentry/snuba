@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, MutableSequence, Optional, Set, cast
+from typing import Any, Dict, Mapping, MutableSequence, Optional, Set, cast
 
 from clickhouse_driver.errors import ErrorCodes
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
@@ -125,7 +125,9 @@ ERROR_CODE_MAPPINGS = {
 }
 
 
-def get_request_status(cause: Exception | None = None) -> Status:
+def get_request_status(
+    cause: Exception | None = None, context: Optional[Mapping[str, Any]] = None
+) -> Status:
     slo_status: RequestStatus
     if cause is None:
         slo_status = RequestStatus.SUCCESS
@@ -136,7 +138,15 @@ def get_request_status(cause: Exception | None = None) -> Status:
         else:
             slo_status = RequestStatus.RATE_LIMITED
     elif isinstance(cause, ClickhouseError):
-        slo_status = ERROR_CODE_MAPPINGS.get(cause.code, RequestStatus.ERROR)
+        # Check if TOO_MANY_BYTES was from allocation policy
+        if (
+            cause.code == ErrorCodes.TOO_MANY_BYTES
+            and context
+            and context.get("max_bytes_to_read_set_by_policy", False)
+        ):
+            slo_status = RequestStatus.RATE_LIMITED
+        else:
+            slo_status = ERROR_CODE_MAPPINGS.get(cause.code, RequestStatus.ERROR)
     elif isinstance(cause, TimeoutError):
         slo_status = RequestStatus.QUERY_TIMEOUT
     elif isinstance(cause, ExecutionTimeoutError):

@@ -84,6 +84,22 @@ def _flush_logs() -> None:
         pass
 
 
+def _set_rpc_error_tags(in_msg: ProtobufMessage) -> None:
+    sentry_sdk.set_tag("source", "rpc_api")
+
+    # Extract and tag fields from meta if available
+    if hasattr(in_msg, "meta"):
+        meta = in_msg.meta
+
+        if hasattr(meta, "referrer") and meta.referrer:
+            sentry_sdk.set_tag("referrer", meta.referrer)
+
+        if hasattr(meta, "organization_id") and meta.organization_id:
+            sentry_sdk.set_tag("organization_id", str(meta.organization_id))
+        if hasattr(meta, "request_id") and meta.request_id:
+            sentry_sdk.set_tag("request_id", str(meta.request_id))
+
+
 class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
     def __init__(
         self, timer: Timer | None = None, metrics_backend: MetricsBackend | None = None
@@ -196,6 +212,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             in_msg=in_msg,
             query_id=uuid.uuid4().hex,
         )
+        _set_rpc_error_tags(in_msg)
 
         self.__before_execute(in_msg)
         error: Exception | None = None

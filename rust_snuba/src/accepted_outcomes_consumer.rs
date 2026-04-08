@@ -12,6 +12,8 @@ use sentry_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrate
 use sentry_arroyo::processing::StreamProcessor;
 use sentry_arroyo::types::{Partition, Topic};
 
+use sentry_options::init_with_schemas;
+
 use pyo3::prelude::*;
 
 use crate::config;
@@ -28,6 +30,7 @@ pub struct AcceptedOutcomesStrategyFactory {
     bucket_interval: u64,
     max_batch_size: usize,
     max_batch_time_ms: Duration,
+    commit_frequency: Duration,
     produce_topic: Topic,
     producer: Arc<KafkaProducer>,
     concurrency: ConcurrencyConfig,
@@ -47,7 +50,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for AcceptedOutcomesStrategyFactory
             &self.concurrency,
             self.skip_produce,
         );
-        let commit = CommitOutcomes::new(produce);
+        let commit = CommitOutcomes::new(produce, Some(self.commit_frequency));
         Box::new(OutcomesAggregator::new(
             commit,
             self.max_batch_size,
@@ -75,6 +78,7 @@ pub fn accepted_outcomes_consumer(
     max_batch_size: usize,
     max_batch_time_ms: u64,
     bucket_interval: u64,
+    commit_frequency_sec: u64,
 ) -> usize {
     py.allow_threads(|| {
         accepted_outcomes_consumer_impl(
@@ -92,6 +96,7 @@ pub fn accepted_outcomes_consumer(
             max_batch_size,
             max_batch_time_ms,
             bucket_interval,
+            commit_frequency_sec,
         )
     })
 }
@@ -112,8 +117,11 @@ pub fn accepted_outcomes_consumer_impl(
     max_batch_size: usize,
     max_batch_time_ms: u64,
     bucket_interval: u64,
+    commit_frequency_sec: u64,
 ) -> usize {
     setup_logging();
+    init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)])
+        .expect("failed to initialize sentry-options");
 
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
 
@@ -203,6 +211,7 @@ pub fn accepted_outcomes_consumer_impl(
         bucket_interval,
         max_batch_size,
         max_batch_time_ms: Duration::from_millis(max_batch_time_ms),
+        commit_frequency: Duration::from_secs(commit_frequency_sec),
         produce_topic,
         producer,
         concurrency: ConcurrencyConfig::new(concurrency),

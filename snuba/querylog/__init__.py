@@ -30,7 +30,7 @@ _ITEM_TYPE_TO_APP_FEATURE: dict[str, str] = {
     "TRACE_ITEM_TYPE_UPTIME_RESULT": "uptime",
     "TRACE_ITEM_TYPE_REPLAY": "replays",
     "TRACE_ITEM_TYPE_OCCURRENCE": "issueplatform",
-    "TRACE_ITEM_TYPE_METRIC": "sessions",
+    "TRACE_ITEM_TYPE_METRIC": "trace_metrics",
     "TRACE_ITEM_TYPE_PROFILE_FUNCTION": "profiles",
     "TRACE_ITEM_TYPE_ATTACHMENT": "attachments",
     "TRACE_ITEM_TYPE_PREPROD": "preprod",
