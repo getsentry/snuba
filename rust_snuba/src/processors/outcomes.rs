@@ -25,8 +25,6 @@ const CLIENT_DISCARD_REASONS: &[&str] = &[
     "event_processor",
     // an event was dropped by an SDK ignore config (e.g. an `ignore_spans` deny list)
     "ignored",
-    // a span was dropped or not started by an SDK due to a missing parent span
-    "no_parent_span",
     // an event was dropped due to a lack of data in the event (eg: not enough samples in a profile)
     "insufficient_data",
     // an event was dropped due to an internal SDK error (eg: web worker crash)
@@ -35,6 +33,8 @@ const CLIENT_DISCARD_REASONS: &[&str] = &[
     "invalid",
     // events were dropped because of network errors and were not retried.
     "network_error",
+    // a span was dropped or not started by an SDK due to a missing parent span
+    "no_parent_span",
     // a SDK internal queue (eg: transport queue) overflowed
     "queue_overflow",
     // the SDK dropped events because an earlier rate limit instructed the SDK to back off.
