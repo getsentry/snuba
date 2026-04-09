@@ -42,6 +42,7 @@ use sentry_arroyo::processing::strategies::{
     CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
 use sentry_arroyo::types::{Message, Topic, TopicOrPartition};
+use sentry_options::options;
 
 #[derive(Debug, PartialEq)]
 enum State {
@@ -122,6 +123,14 @@ where
     ///     Best practice would be no greater than a small percent of stable_threshold like 10%
     ///     ex: stale_threshold=10m, static_friction=1m
     ///     and the implication is 9m old messages will now be sent to the BLQ in some cases
+    fn is_enabled(&self) -> bool {
+        options("snuba")
+            .ok()
+            .and_then(|o| o.get("consumer.blq_enabled").ok())
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    }
+
     fn new_with_strategy(
         next_step: Next,
         blq_producer: ProduceStrategy,
@@ -153,6 +162,10 @@ where
     ProduceStrategy: ProcessingStrategy<KafkaPayload> + 'static,
 {
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
+        if !self.is_enabled() {
+            return self.next_step.poll();
+        }
+
         let produce_result = self.producer.poll();
         let next_step_result = self.next_step.poll();
         match &mut self.state {
@@ -167,6 +180,10 @@ where
     }
 
     fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), SubmitError<KafkaPayload>> {
+        if !self.is_enabled() {
+            return self.next_step.submit(message);
+        }
+
         let msg_ts = message
             .timestamp()
             .expect("Expected kafka message to always have a timestamp, but there wasn't one");
@@ -241,6 +258,15 @@ mod tests {
     use super::*;
     use chrono::DateTime;
     use sentry_arroyo::types::{Partition, Topic};
+    use sentry_options::init_with_schemas;
+    use sentry_options::testing::override_options;
+    use serde_json::json;
+    use std::sync::Once;
+
+    static INIT: Once = Once::new();
+    fn init_config() {
+        INIT.call_once(|| init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap());
+    }
 
     struct MockStrategy {
         submitted: Vec<Message<KafkaPayload>>,
@@ -300,6 +326,8 @@ mod tests {
         This tests that the BLQRouter forwards business-as-usual fresh messages through it
         and crashes when it hits its first stale message
          */
+        init_config();
+        let _guard = override_options(&[("snuba", "consumer.blq_enabled", json!(true))]).unwrap();
         let mut router = BLQRouter::new_with_strategy(
             MockStrategy::new(),
             MockStrategy::new(),
@@ -344,6 +372,8 @@ mod tests {
         This tests that the BLQRouter properly routes stale messages to the BLQ
         and then switches back to forwarding fresh messages once the backlog is burned
          */
+        init_config();
+        let _guard = override_options(&[("snuba", "consumer.blq_enabled", json!(true))]).unwrap();
         let mut router = BLQRouter::new_with_strategy(
             MockStrategy::new(),
             MockStrategy::new(),
@@ -369,5 +399,57 @@ mod tests {
         assert!(router.producer.join_called);
         assert_eq!(router.producer.submitted.len(), 10);
         assert_eq!(router.next_step.submitted.len(), 5);
+    }
+
+    #[test]
+    fn test_passthrough_when_no_flag() {
+        // When the feature flag is not set, stale messages should pass through
+        // to next_step instead of being routed to BLQ
+        init_config();
+        let mut router = BLQRouter::new_with_strategy(
+            MockStrategy::new(),
+            MockStrategy::new(),
+            TimeDelta::seconds(10),
+            None,
+        )
+        .unwrap();
+
+        for _ in 0..5 {
+            router
+                .submit(make_message(Utc::now() - TimeDelta::minutes(1)))
+                .unwrap();
+            _ = router.poll();
+        }
+
+        // All stale messages went to next_step, none to producer
+        assert_eq!(router.next_step.submitted.len(), 5);
+        assert_eq!(router.producer.submitted.len(), 0);
+        assert_eq!(router.state, State::Idle);
+    }
+
+    #[test]
+    fn test_passthrough_when_flag_disabled() {
+        // When the feature flag is explicitly false, stale messages should pass through
+        init_config();
+        let _guard = override_options(&[("snuba", "consumer.blq_enabled", json!(false))]).unwrap();
+        let mut router = BLQRouter::new_with_strategy(
+            MockStrategy::new(),
+            MockStrategy::new(),
+            TimeDelta::seconds(10),
+            None,
+        )
+        .unwrap();
+
+        for _ in 0..5 {
+            router
+                .submit(make_message(Utc::now() - TimeDelta::minutes(1)))
+                .unwrap();
+            _ = router.poll();
+        }
+
+        // All stale messages went to next_step, none to producer
+        assert_eq!(router.next_step.submitted.len(), 5);
+        assert_eq!(router.producer.submitted.len(), 0);
+        assert_eq!(router.state, State::Idle);
     }
 }
