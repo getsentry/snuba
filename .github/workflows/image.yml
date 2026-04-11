@@ -6,16 +6,9 @@ on:
       - release/**
 
 jobs:
-  build-multiplatform:
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-24.04
-            platform: amd64
-          - os: ubuntu-24.04-arm
-            platform: arm64
-    runs-on: ${{ matrix.os }}
-    name: build-${{ matrix.platform }}
+  build:
+    runs-on: ubuntu-24.04
+    name: build
     permissions:
       contents: read
       packages: write
@@ -25,9 +18,9 @@ jobs:
     - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
       with:
         image_name: 'snuba'
-        platforms: linux/${{ matrix.platform }}
+        platforms: linux/amd64
         dockerfile_path: 'Dockerfile'
-        tag_suffix: -${{ matrix.platform }}
+        tag_suffix: -amd64
         ghcr: true
         tag_nightly: false
         tag_latest: false
@@ -54,17 +47,9 @@ jobs:
           google_workload_identity_provider: projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool
           google_service_account: gha-gcr-push@sac-prod-sa.iam.gserviceaccount.com
 
-  # Distroless image — for testing before switching production
-  build-distroless-multiplatform:
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-24.04
-            platform: amd64
-          - os: ubuntu-24.04-arm
-            platform: arm64
-    runs-on: ${{ matrix.os }}
-    name: build-distroless-${{ matrix.platform }}
+  build-distroless:
+    runs-on: ubuntu-24.04
+    name: build-distroless
     permissions:
       contents: read
       packages: write
@@ -74,25 +59,17 @@ jobs:
     - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
       with:
         image_name: 'snuba'
-        platforms: linux/${{ matrix.platform }}
+        platforms: linux/amd64
         dockerfile_path: 'Dockerfile'
         build_target: 'application-distroless'
-        tag_suffix: -distroless-${{ matrix.platform }}
+        tag_suffix: -distroless-amd64
         ghcr: true
         tag_nightly: false
         tag_latest: false
 
-  # Debug distroless image — with busybox for troubleshooting
-  build-debug-multiplatform:
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-24.04
-            platform: amd64
-          - os: ubuntu-24.04-arm
-            platform: arm64
-    runs-on: ${{ matrix.os }}
-    name: build-debug-${{ matrix.platform }}
+  build-debug:
+    runs-on: ubuntu-24.04
+    name: build-debug
     permissions:
       contents: read
       packages: write
@@ -102,17 +79,19 @@ jobs:
     - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
       with:
         image_name: 'snuba'
-        platforms: linux/${{ matrix.platform }}
+        platforms: linux/amd64
         dockerfile_path: 'Dockerfile'
         build_target: 'application-distroless-debug'
-        tag_suffix: -debug-${{ matrix.platform }}
+        tag_suffix: -debug-amd64
         ghcr: true
         tag_nightly: false
         tag_latest: false
 
   assemble:
-    needs: [build-multiplatform]
-    if: ${{ (github.ref_name == 'master' || startsWith(github.ref_name, 'release/')) && github.event_name != 'pull_request' }}
+    needs: [build]
+    # Run on PRs too so that ghcr.io/getsentry/snuba:{sha} is available for
+    # Sentry's devservices to reference in CI and local development.
+    if: github.repository_owner == 'getsentry'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -126,16 +105,21 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Create multiplatform manifests
+      - name: Tag SHA image
         run: |
           docker buildx imagetools create \
             --tag ghcr.io/getsentry/snuba:${{ github.sha }} \
+            ghcr.io/getsentry/snuba:${{ github.sha }}-amd64
+
+      - name: Tag nightly
+        if: github.ref_name == 'master' && github.event_name != 'pull_request'
+        run: |
+          docker buildx imagetools create \
             --tag ghcr.io/getsentry/snuba:nightly \
-            ghcr.io/getsentry/snuba:${{ github.sha }}-amd64 \
-            ghcr.io/getsentry/snuba:${{ github.sha }}-arm64
+            ghcr.io/getsentry/snuba:${{ github.sha }}-amd64
 
   assemble-distroless:
-    needs: [build-distroless-multiplatform]
+    needs: [build-distroless]
     if: ${{ (github.ref_name == 'master' || startsWith(github.ref_name, 'release/')) && github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
     permissions:
@@ -150,16 +134,15 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Create distroless multiplatform manifests
+      - name: Create distroless manifest
         run: |
           docker buildx imagetools create \
             --tag ghcr.io/getsentry/snuba:${{ github.sha }}-distroless \
             --tag ghcr.io/getsentry/snuba:nightly-distroless \
-            ghcr.io/getsentry/snuba:${{ github.sha }}-distroless-amd64 \
-            ghcr.io/getsentry/snuba:${{ github.sha }}-distroless-arm64
+            ghcr.io/getsentry/snuba:${{ github.sha }}-distroless-amd64
 
   assemble-debug:
-    needs: [build-debug-multiplatform]
+    needs: [build-debug]
     if: ${{ (github.ref_name == 'master' || startsWith(github.ref_name, 'release/')) && github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
     permissions:
@@ -174,16 +157,15 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Create debug multiplatform manifests
+      - name: Create debug manifest
         run: |
           docker buildx imagetools create \
             --tag ghcr.io/getsentry/snuba:${{ github.sha }}-debug \
             --tag ghcr.io/getsentry/snuba:nightly-debug \
-            ghcr.io/getsentry/snuba:${{ github.sha }}-debug-amd64 \
-            ghcr.io/getsentry/snuba:${{ github.sha }}-debug-arm64
+            ghcr.io/getsentry/snuba:${{ github.sha }}-debug-amd64
 
   self-hosted-end-to-end:
-    needs: [build-multiplatform, assemble]
+    needs: [build, assemble]
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
