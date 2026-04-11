@@ -51,4 +51,3 @@ jobs:
           docker buildx imagetools create \
             --tag ghcr.io/getsentry/snuba:${{ github.sha }} \
             ghcr.io/getsentry/snuba:${{ github.sha }}-amd64
-
