@@ -27,6 +27,7 @@ jobs:
         dockerfile_path: 'Dockerfile'
         tag_suffix: -amd64
         ghcr: true
+        publish_on_pr: true
         tag_nightly: false
         tag_latest: false
 
