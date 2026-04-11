@@ -719,6 +719,37 @@ if application.debug or application.testing:
 
         return ("ok", 200, {"Content-Type": "text/plain"})
 
+    @application.route("/tests/<dataset:dataset>/optimize", methods=["POST"])
+    def optimize(*, dataset: Dataset) -> RespTuple:
+        """
+        Force ClickHouse to immediately deduplicate ReplacingMergeTree rows for
+        every table in this dataset.
+
+        Under normal operation ClickHouse merges parts in the background, so
+        tombstones and replacement rows (e.g. from merge/unmerge/delete_groups
+        operations) are not immediately visible in subsequent SELECT queries.
+        Calling OPTIMIZE TABLE … FINAL forces a synchronous deduplication so
+        test assertions see consistent state right away.
+
+        Usage from tests:
+            requests.post(f"{SENTRY_SNUBA}/tests/events/optimize")
+            requests.post(f"{SENTRY_SNUBA}/tests/groupedmessage/optimize")
+        """
+        for entity in dataset.get_all_entities():
+            for storage in entity.get_all_storages():
+                cluster = storage.get_cluster()
+                nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
+                for node in nodes:
+                    clickhouse = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
+                    database = cluster.get_database()
+                    schema = storage.get_schema()
+                    if not isinstance(schema, TableSchema):
+                        continue
+                    table = schema.get_local_table_name()
+                    clickhouse.execute(f"OPTIMIZE TABLE {database}.{table} FINAL")
+
+        return ("ok", 200, {"Content-Type": "text/plain"})
+
     @application.route("/tests/error")
     def error() -> RespTuple:
         1 / 0
