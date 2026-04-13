@@ -162,10 +162,6 @@ where
     ProduceStrategy: ProcessingStrategy<KafkaPayload> + 'static,
 {
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
-        if !self.is_enabled() {
-            return self.next_step.poll();
-        }
-
         let produce_result = self.producer.poll();
         let next_step_result = self.next_step.poll();
         match &mut self.state {
