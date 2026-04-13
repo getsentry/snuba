@@ -50,6 +50,7 @@ fn clickhouse_task_runner(
                     .send(encoded_rows, RetryConfig::default())
                     .await
                     .map_err(RunTaskError::Other)?;
+                counter!("insertions", 1);
 
                 tracing::debug!(?response);
                 tracing::info!("Inserted {} rows", batch_len);
