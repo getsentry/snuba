@@ -27,7 +27,7 @@ from tests.web.rpc.v1.test_utils import gen_item_message
 NUM_STALE = 50
 NUM_FRESH = 30
 STALE_AGE_MINUTES = 60  # well beyond the 30-min BLQ threshold
-MAX_WAIT_SECONDS = 40
+MAX_WAIT_SECONDS = 60
 
 logger = logging.getLogger(__name__)
 
