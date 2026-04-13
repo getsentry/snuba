@@ -2,6 +2,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use sentry_options::options;
+
+use chrono::TimeDelta;
 use sentry::{Hub, SentryFutureExt};
 use sentry_arroyo::backends::kafka::config::KafkaConfig;
 use sentry_arroyo::backends::kafka::producer::KafkaProducer;
@@ -24,6 +27,8 @@ use crate::config;
 use crate::metrics::global_tags::set_global_tag;
 use crate::processors::{self, get_cogs_label};
 use crate::strategies::accountant::RecordCogs;
+
+use crate::strategies::blq_router::BLQRouter;
 use crate::strategies::clickhouse::row_binary_writer::ClickhouseRowBinaryWriterStep;
 use crate::strategies::clickhouse::writer_v2::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
@@ -36,6 +41,10 @@ use crate::strategies::processor::{
 use crate::strategies::python::PythonTransformStep;
 use crate::strategies::replacements::ProduceReplacements;
 use crate::types::{BytesInsertBatch, CogsData, RowData, TypedInsertBatch};
+
+// BLQ configuration
+const BLQ_STALE_THRESHOLD: TimeDelta = TimeDelta::minutes(30);
+const BLQ_STATIC_FRICTION: Option<TimeDelta> = Some(TimeDelta::minutes(2));
 
 pub struct ConsumerStrategyFactoryV2 {
     pub storage_config: config::StorageConfig,
@@ -63,6 +72,8 @@ pub struct ConsumerStrategyFactoryV2 {
     pub join_timeout_ms: Option<u64>,
     pub health_check: String,
     pub use_row_binary: bool,
+    pub blq_producer_config: Option<KafkaConfig>,
+    pub blq_topic: Option<Topic>,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
@@ -87,6 +98,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
 
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
         if self.use_row_binary {
+            tracing::info!("Using row_binary pipeline");
             return match self
                 .storage_config
                 .message_processor
@@ -263,6 +275,34 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             next_step,
             Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
         );
+
+        let next_step: Box<dyn ProcessingStrategy<KafkaPayload>> =
+            if let (true, Some(blq_producer_config), Some(blq_topic)) = (
+                self.should_use_blq(),
+                &self.blq_producer_config,
+                self.blq_topic,
+            ) {
+                tracing::info!(
+                "Routing all messages older than {:?} to the topic {:?} with static_friction {:?}",
+                BLQ_STALE_THRESHOLD,
+                self.blq_topic,
+                BLQ_STATIC_FRICTION
+            );
+                Box::new(
+                    BLQRouter::new(
+                        next_step,
+                        blq_producer_config.clone(),
+                        blq_topic,
+                        BLQ_STALE_THRESHOLD,
+                        BLQ_STATIC_FRICTION,
+                    )
+                    .expect("invalid BLQRouter config"),
+                )
+            } else {
+                tracing::info!("Not using a backlog-queue",);
+                Box::new(next_step)
+            };
+
         if let Some(path) = &self.health_check_file {
             {
                 if self.health_check == "snuba" {
@@ -282,6 +322,15 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
 }
 
 impl ConsumerStrategyFactoryV2 {
+    fn should_use_blq(&self) -> bool {
+        let flag = options("snuba")
+            .ok()
+            .and_then(|o| o.get("consumer.blq_enabled").ok())
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        flag && self.blq_producer_config.is_some() && self.blq_topic.is_some()
+    }
+
     fn create_row_binary_pipeline<
         T: clickhouse::Row
             + serde::Serialize
@@ -390,6 +439,33 @@ impl ConsumerStrategyFactoryV2 {
             Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
         );
 
+        let next_step: Box<dyn ProcessingStrategy<KafkaPayload>> =
+            if let (true, Some(blq_producer_config), Some(blq_topic)) = (
+                self.should_use_blq(),
+                &self.blq_producer_config,
+                self.blq_topic,
+            ) {
+                tracing::info!(
+                "Routing all messages older than {:?} to the topic {:?} with static_friction {:?}",
+                BLQ_STALE_THRESHOLD,
+                self.blq_topic,
+                BLQ_STATIC_FRICTION,
+                );
+                Box::new(
+                    BLQRouter::new(
+                        next_step,
+                        blq_producer_config.clone(),
+                        blq_topic,
+                        BLQ_STALE_THRESHOLD,
+                        BLQ_STATIC_FRICTION,
+                    )
+                    .expect("invalid BLQRouter config"),
+                )
+            } else {
+                tracing::info!("Not using a backlog-queue",);
+                Box::new(next_step)
+            };
+
         if let Some(path) = &self.health_check_file {
             if self.health_check == "snuba" {
                 tracing::info!(
@@ -435,12 +511,18 @@ impl TaskRunner<KafkaPayload, KafkaPayload, anyhow::Error> for SchemaValidator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sentry_arroyo::backends::kafka::config::KafkaConfig;
     use sentry_arroyo::processing::strategies::{
         CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
     };
     use sentry_arroyo::types::{BrokerMessage, InnerMessage, Partition, Topic};
+    use sentry_options::init_with_schemas;
+    use sentry_options::testing::override_options;
+    use serde_json::json;
+    use std::sync::Once;
     use std::sync::{Arc, Mutex};
 
+    // ----------- BYTES_INSERT_BATCH ------------------
     /// A next-step that records every batch it receives.
     struct RecordingStep {
         batches: Arc<Mutex<Vec<BytesInsertBatch<RowData>>>>,
@@ -665,5 +747,110 @@ mod tests {
         assert_eq!(batches.len(), 1);
         assert_eq!(batches[0].len(), 5);
         assert_eq!(batches[0].num_bytes(), 200_000); // 5 * 40KB accumulated but didn't trigger flush
+    }
+
+    // --------- BLQ -------------
+    fn make_factory(
+        blq_producer_config: Option<KafkaConfig>,
+        blq_topic: Option<Topic>,
+    ) -> ConsumerStrategyFactoryV2 {
+        ConsumerStrategyFactoryV2 {
+            storage_config: config::StorageConfig {
+                name: "test".to_string(),
+                clickhouse_table_name: "test".to_string(),
+                clickhouse_cluster: config::ClickhouseConfig {
+                    host: "localhost".to_string(),
+                    port: 9000,
+                    secure: false,
+                    http_port: 8123,
+                    user: "default".to_string(),
+                    password: "".to_string(),
+                    database: "default".to_string(),
+                },
+                message_processor: config::MessageProcessorConfig {
+                    python_class_name: "Test".to_string(),
+                    python_module: "test".to_string(),
+                },
+            },
+            env_config: config::EnvConfig::default(),
+            logical_topic_name: "test".to_string(),
+            max_batch_size: 100,
+            max_batch_time: Duration::from_secs(1),
+            processing_concurrency: ConcurrencyConfig::new(1),
+            clickhouse_concurrency: ConcurrencyConfig::new(1),
+            commitlog_concurrency: ConcurrencyConfig::new(1),
+            replacements_concurrency: ConcurrencyConfig::new(1),
+            async_inserts: false,
+            python_max_queue_depth: None,
+            use_rust_processor: false,
+            health_check_file: None,
+            enforce_schema: false,
+            commit_log_producer: None,
+            replacements_config: None,
+            physical_consumer_group: "test".to_string(),
+            physical_topic_name: Topic::new("test"),
+            accountant_topic_config: config::TopicConfig {
+                physical_topic_name: "test".to_string(),
+                logical_topic_name: "test".to_string(),
+                broker_config: HashMap::new(),
+                quantized_rebalance_consumer_group_delay_secs: None,
+            },
+            stop_at_timestamp: None,
+            batch_write_timeout: None,
+            join_timeout_ms: None,
+            health_check: "arroyo".to_string(),
+            use_row_binary: false,
+            blq_producer_config,
+            blq_topic,
+            max_batch_size_calculation: config::BatchSizeCalculation::Rows,
+        }
+    }
+
+    static INIT: Once = Once::new();
+    fn init_config() {
+        INIT.call_once(|| init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap());
+    }
+
+    fn blq_kafka_config() -> KafkaConfig {
+        KafkaConfig::new_config(vec!["localhost:9092".to_string()], None)
+    }
+
+    #[test]
+    fn test_should_not_use_blq_when_no_flag() {
+        init_config();
+        let factory = make_factory(Some(blq_kafka_config()), Some(Topic::new("blq")));
+        assert!(!factory.should_use_blq());
+    }
+
+    #[test]
+    fn test_should_not_use_blq_when_flag_disabled() {
+        init_config();
+        let _guard = override_options(&[("snuba", "consumer.blq_enabled", json!(false))]).unwrap();
+        let factory = make_factory(Some(blq_kafka_config()), Some(Topic::new("blq")));
+        assert!(!factory.should_use_blq());
+    }
+
+    #[test]
+    fn test_should_not_use_blq_when_no_producer_config() {
+        init_config();
+        let _guard = override_options(&[("snuba", "consumer.blq_enabled", json!(true))]).unwrap();
+        let factory = make_factory(None, Some(Topic::new("blq")));
+        assert!(!factory.should_use_blq());
+    }
+
+    #[test]
+    fn test_should_not_use_blq_when_no_topic() {
+        init_config();
+        let _guard = override_options(&[("snuba", "consumer.blq_enabled", json!(true))]).unwrap();
+        let factory = make_factory(Some(blq_kafka_config()), None);
+        assert!(!factory.should_use_blq());
+    }
+
+    #[test]
+    fn test_should_use_blq_when_all_conditions_met() {
+        init_config();
+        let _guard = override_options(&[("snuba", "consumer.blq_enabled", json!(true))]).unwrap();
+        let factory = make_factory(Some(blq_kafka_config()), Some(Topic::new("blq")));
+        assert!(factory.should_use_blq());
     }
 }
