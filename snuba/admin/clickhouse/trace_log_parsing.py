@@ -89,7 +89,7 @@ class StreamSummary:
         )
 
 
-# [ snuba-st-1-2.c.mattrobenolt-kube.internal ] [ 848231 ] {f3fb112a-583f-4125-a424-bd1d21b6ecf2} <Trace> AggregatingTransform: Aggregated. 1 to 1 rows (from 17.00 B) in 0.024679052 sec. (40.520 rows/sec., 688.84 B/sec.)
+# [ snuba-host-1-2 ] [ 848231 ] {f3fb112a-583f-4125-a424-bd1d21b6ecf2} <Trace> AggregatingTransform: Aggregated. 1 to 1 rows (from 17.00 B) in 0.024679052 sec. (40.520 rows/sec., 688.84 B/sec.)
 AGGREGATION_MATCHER_RE = re.compile(
     r"AggregatingTransform: Aggregated. (?P<before_row_count>\d+) to (?P<after_row_count>\d+) rows \(from (?P<memory_size>.*)\) in (?P<seconds>[0-9.]+) sec. \((?P<rows_per_second>[0-9.]+) rows/sec., (?P<bytes_per_second>.+)/sec.\)"
 )
