@@ -66,6 +66,16 @@ NO_TIMESTAMP_CASES = [
         HOURLY,
         id="no_timestamp_non_billing_hourly",
     ),
+    pytest.param(
+        HTTPQuerySettings(referrer="billing.usage_service.clickhouse"),
+        DAILY,
+        id="no_timestamp_billing_referrer_daily",
+    ),
+    pytest.param(
+        HTTPQuerySettings(referrer="billing.anything"),
+        DAILY,
+        id="no_timestamp_billing_prefix_daily",
+    ),
 ]
 
 
@@ -78,6 +88,7 @@ def test_storage_selector_no_timestamp(
     Routing without timestamp conditions in the query.
 
     - OutcomesQuerySettings with use_daily=True -> daily.
+    - Referrers starting with "billing." -> daily (13-month retention).
     - Everything else -> hourly.
     """
     query = Query(from_clause=OUTCOMES_ENTITY)
@@ -87,7 +98,7 @@ def test_storage_selector_no_timestamp(
     assert selected.storage == expected_storage
 
 
-# --- Test cases with timestamp conditions (time-range routing) ----------------
+# --- Test cases with timestamp conditions (hybrid routing) ------------------
 
 TIMESTAMP_CASES = [
     # >90 days ago -> daily, regardless of referrer
@@ -99,22 +110,22 @@ TIMESTAMP_CASES = [
     ),
     pytest.param(
         _query_with_timestamps(_OLD_START, _OLD_END),
-        HTTPQuerySettings(),
+        HTTPQuerySettings(referrer="billing.anything"),
         DAILY,
-        id="old_range_default_daily",
+        id="old_range_billing_daily",
     ),
-    # <90 days ago -> hourly
+    # <90 days ago -> referrer fallback
+    pytest.param(
+        _query_with_timestamps(_RECENT_START, _RECENT_END),
+        HTTPQuerySettings(referrer="billing.anything"),
+        DAILY,
+        id="recent_range_billing_daily",
+    ),
     pytest.param(
         _query_with_timestamps(_RECENT_START, _RECENT_END),
         HTTPQuerySettings(referrer="outcomes.timeseries"),
         HOURLY,
         id="recent_range_non_billing_hourly",
-    ),
-    pytest.param(
-        _query_with_timestamps(_RECENT_START, _RECENT_END),
-        HTTPQuerySettings(),
-        HOURLY,
-        id="recent_range_default_hourly",
     ),
 ]
 
@@ -126,11 +137,11 @@ def test_storage_selector_with_timestamps(
     expected_storage: Storage,
 ) -> None:
     """
-    Time-range routing: queries reaching beyond the hourly table's 90-day
-    retention are routed to the daily table.
+    Hybrid routing: time-range check takes priority over referrer.
 
     - Query start >90 days ago -> daily (hourly table lacks the data).
-    - Query start <90 days ago -> hourly.
+    - Query start <90 days ago + billing referrer -> daily (referrer fallback).
+    - Query start <90 days ago + non-billing referrer -> hourly.
     """
     connections = get_entity(EntityKey.OUTCOMES).get_all_storage_connections()
 

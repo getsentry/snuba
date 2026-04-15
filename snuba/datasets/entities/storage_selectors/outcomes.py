@@ -24,7 +24,10 @@ class OutcomesStorageSelector(QueryStorageSelector):
     2. Time-range — if the query's lower timestamp bound is older than 90
        days, route to daily (the hourly table does not retain data that far
        back).
-    3. Default — hourly.
+    3. Referrer — if the referrer starts with "billing.", route to daily
+       (billing queries need 13-month retention only available in the daily
+       table).
+    4. Default — hourly.
     """
 
     def __init__(self) -> None:
@@ -42,7 +45,7 @@ class OutcomesStorageSelector(QueryStorageSelector):
                 self.daily_storage if query_settings.get_use_daily() else self.hourly_storage
             )
         else:
-            outcomes_key = self._route_by_time_range(query)
+            outcomes_key = self._route_by_time_and_referrer(query, query_settings)
 
         for storage_connection in storage_connections:
             assert isinstance(storage_connection.storage, ReadableTableStorage)
@@ -53,7 +56,9 @@ class OutcomesStorageSelector(QueryStorageSelector):
             "The specified storage in selector does not exist in storage list."
         )
 
-    def _route_by_time_range(self, query: Query) -> StorageKey:
+    def _route_by_time_and_referrer(
+        self, query: Query, query_settings: QuerySettings
+    ) -> StorageKey:
         # Route to daily if the query reaches beyond the hourly table's
         # retention window (~90 days).
         lower_bound, _ = get_time_range(query, "timestamp")
@@ -61,5 +66,10 @@ class OutcomesStorageSelector(QueryStorageSelector):
             cutoff = datetime.now(timezone.utc) - _DAILY_THRESHOLD
             if lower_bound < cutoff:
                 return self.daily_storage
+
+        # Billing queries need 13-month retention available only in the
+        # daily table. The referrer is set by sentry's UsageService.
+        if hasattr(query_settings, "referrer") and query_settings.referrer.startswith("billing."):
+            return self.daily_storage
 
         return self.hourly_storage
