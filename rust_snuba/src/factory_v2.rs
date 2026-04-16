@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use chrono::TimeDelta;
 use sentry::{Hub, SentryFutureExt};
 use sentry_arroyo::backends::kafka::config::KafkaConfig;
 use sentry_arroyo::backends::kafka::producer::KafkaProducer;
@@ -39,10 +38,6 @@ use crate::strategies::processor::{
 use crate::strategies::python::PythonTransformStep;
 use crate::strategies::replacements::ProduceReplacements;
 use crate::types::{BytesInsertBatch, CogsData, RowData, TypedInsertBatch};
-
-// BLQ configuration
-const BLQ_STALE_THRESHOLD: TimeDelta = TimeDelta::minutes(30);
-const BLQ_STATIC_FRICTION: Option<TimeDelta> = Some(TimeDelta::minutes(2));
 
 pub struct ConsumerStrategyFactoryV2 {
     pub storage_config: config::StorageConfig,
@@ -279,21 +274,15 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                 (&self.blq_producer_config, self.blq_topic)
             {
                 tracing::info!(
-                "Routing all messages older than {:?} to the topic {:?} with static_friction {:?}",
-                BLQ_STALE_THRESHOLD,
-                self.blq_topic,
-                BLQ_STATIC_FRICTION
-            );
-                Box::new(
-                    BLQRouter::new(
-                        next_step,
-                        blq_producer_config.clone(),
-                        blq_topic,
-                        BLQ_STALE_THRESHOLD,
-                        BLQ_STATIC_FRICTION,
-                    )
-                    .expect("invalid BLQRouter config"),
-                )
+                    "Routing stale messages to the backlog-queue topic {:?} \
+                     (thresholds configured via sentry-options)",
+                    self.blq_topic,
+                );
+                Box::new(BLQRouter::new(
+                    next_step,
+                    blq_producer_config.clone(),
+                    blq_topic,
+                ))
             } else {
                 tracing::info!("Not using a backlog-queue",);
                 Box::new(next_step)
@@ -431,21 +420,15 @@ impl ConsumerStrategyFactoryV2 {
                 (&self.blq_producer_config, self.blq_topic)
             {
                 tracing::info!(
-                "Routing all messages older than {:?} to the topic {:?} with static_friction {:?}",
-                BLQ_STALE_THRESHOLD,
-                self.blq_topic,
-                BLQ_STATIC_FRICTION,
+                    "Routing stale messages to the backlog-queue topic {:?} \
+                     (thresholds configured via sentry-options)",
+                    self.blq_topic,
                 );
-                Box::new(
-                    BLQRouter::new(
-                        next_step,
-                        blq_producer_config.clone(),
-                        blq_topic,
-                        BLQ_STALE_THRESHOLD,
-                        BLQ_STATIC_FRICTION,
-                    )
-                    .expect("invalid BLQRouter config"),
-                )
+                Box::new(BLQRouter::new(
+                    next_step,
+                    blq_producer_config.clone(),
+                    blq_topic,
+                ))
             } else {
                 tracing::info!("Not using a backlog-queue",);
                 Box::new(next_step)

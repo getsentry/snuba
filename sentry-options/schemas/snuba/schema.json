@@ -12,6 +12,16 @@
       "default": false,
       "description": "enable backlog queue in snuba consumers"
     },
+    "consumer.blq_stale_threshold_seconds": {
+      "type": "integer",
+      "default": 1800,
+      "description": "BLQ stale threshold in seconds. Messages older than this are routed to the backlog queue."
+    },
+    "consumer.blq_static_friction_seconds": {
+      "type": "integer",
+      "default": 120,
+      "description": "BLQ hysteresis in seconds. Once routing stale, keep routing messages at least (stale_threshold - static_friction) old. Set to 0 to disable friction."
+    },
     "consumer.commit_log_use_next_offset": {
       "type": "boolean",
       "default": false,
