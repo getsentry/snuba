@@ -311,8 +311,8 @@ mod tests {
         init_config();
         let _guard = override_options(&[
             ("snuba", "consumer.blq_enabled", json!(true)),
-            ("snuba", "consumer.blq_stale_threshold_seconds", json!(1200)),
-            ("snuba", "consumer.blq_static_friction_seconds", json!(120)),
+            ("snuba", "consumer.blq_stale_threshold_seconds", json!(10)),
+            ("snuba", "consumer.blq_static_friction_seconds", json!(0)),
         ])
         .unwrap();
         let mut router = BLQRouter::new_with_strategy(MockStrategy::new(), MockStrategy::new());
@@ -354,7 +354,12 @@ mod tests {
         and then switches back to forwarding fresh messages once the backlog is burned
          */
         init_config();
-        let _guard = override_options(&[("snuba", "consumer.blq_enabled", json!(true))]).unwrap();
+        let _guard = override_options(&[
+            ("snuba", "consumer.blq_enabled", json!(true)),
+            ("snuba", "consumer.blq_stale_threshold_seconds", json!(10)),
+            ("snuba", "consumer.blq_static_friction_seconds", json!(0)),
+        ])
+        .unwrap();
         let mut router = BLQRouter::new_with_strategy(MockStrategy::new(), MockStrategy::new());
         // backlog of 10 stale messages
         for _ in 0..10 {
@@ -400,7 +405,12 @@ mod tests {
     fn test_passthrough_when_flag_disabled() {
         // When the feature flag is explicitly false, stale messages should pass through
         init_config();
-        let _guard = override_options(&[("snuba", "consumer.blq_enabled", json!(false))]).unwrap();
+        let _guard = override_options(&[
+            ("snuba", "consumer.blq_enabled", json!(false)),
+            ("snuba", "consumer.blq_stale_threshold_seconds", json!(10)),
+            ("snuba", "consumer.blq_static_friction_seconds", json!(0)),
+        ])
+        .unwrap();
         let mut router = BLQRouter::new_with_strategy(MockStrategy::new(), MockStrategy::new());
 
         for _ in 0..5 {
