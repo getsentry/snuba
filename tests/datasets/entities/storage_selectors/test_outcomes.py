@@ -10,7 +10,7 @@ from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.conditions import BooleanFunctions, ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Entity
-from snuba.query.expressions import Column, Literal
+from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings, OutcomesQuerySettings
 
@@ -23,7 +23,7 @@ DAILY = get_storage(StorageKey.OUTCOMES_DAILY)
 HOURLY = get_storage(StorageKey.OUTCOMES_HOURLY)
 
 
-def _make_timestamp_condition(start: datetime, end: datetime):
+def _make_timestamp_condition(start: datetime, end: datetime) -> FunctionCall:
     """Build a ``timestamp >= start AND timestamp < end`` condition node."""
     return binary_condition(
         BooleanFunctions.AND,
