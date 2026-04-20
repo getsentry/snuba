@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Final, Mapping, Sequence, cast
+from typing import Final, Mapping, Sequence
 
 from sentry_conventions.attributes import ATTRIBUTE_METADATA
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
@@ -65,8 +65,8 @@ PROTO_TYPE_TO_ATTRIBUTE_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]]
 def _build_deprecated_attributes() -> dict[str, set[str]]:
     current_to_deprecated: dict[str, set[str]] = defaultdict(set)
     for name, metadata in ATTRIBUTE_METADATA.items():
-        if metadata.deprecation:
-            replacement = cast(str, metadata.deprecation.replacement)
+        if metadata.deprecation and metadata.deprecation.replacement:
+            replacement = metadata.deprecation.replacement
             deprecated = {name}
             if metadata.aliases:
                 deprecated.update(metadata.aliases)
