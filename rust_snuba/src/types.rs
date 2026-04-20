@@ -671,6 +671,8 @@ pub struct AggregatedOutcomesBatch {
     pub category_metrics: BTreeMap<u32, CategoryMetrics>,
     /// Set of items already processed in this batch, used for deduplication
     pub seen_items: HashSet<ItemDedupKey>,
+    /// Count of items skipped due to deduplication within this batch
+    pub duplicate_item_count: u64,
 }
 
 impl Default for AggregatedOutcomesBatch {
@@ -680,6 +682,7 @@ impl Default for AggregatedOutcomesBatch {
             bucket_interval: 60,
             category_metrics: BTreeMap::new(),
             seen_items: HashSet::new(),
+            duplicate_item_count: 0,
         }
     }
 }
