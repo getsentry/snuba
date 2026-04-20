@@ -2731,6 +2731,123 @@ class TestTraceItemTable(BaseApiTest):
             ),
         ]
 
+    def test_formula_with_null_value(self, setup_teardown: Any) -> None:
+        """
+        ensures formulas of aggregates work
+        ex sum(my_attribute) / count(my_attribute)
+        """
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_item(span_ts, {"metric_1": 6}, 10)
+
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    formula=Column.BinaryFormula(
+                        op=Column.BinaryFormula.OP_ADD,
+                        left=Column(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_DOUBLE,
+                                    name="metric_1",
+                                ),
+                            ),
+                            label="sum(metric_1)",
+                        ),
+                        right=Column(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_COUNT,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_DOUBLE,
+                                    name="metric_2",
+                                ),
+                            ),
+                            label="count(metric_2)",
+                        ),
+                    ),
+                    label="sum(metric_1) + count(metric_2)",
+                ),
+            ],
+            limit=1,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="sum(metric_1) + count(metric_2)",
+                results=[
+                    AttributeValue(is_null=True),
+                ],
+            ),
+        ]
+
+    def test_formula_with_default_value(self, setup_teardown: Any) -> None:
+        """
+        ensures formulas of aggregates work
+        ex sum(my_attribute) / count(my_attribute)
+        """
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_item(span_ts, {"metric_1": 6}, 10)
+
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    formula=Column.BinaryFormula(
+                        op=Column.BinaryFormula.OP_ADD,
+                        left=Column(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_DOUBLE,
+                                    name="metric_1",
+                                ),
+                            ),
+                            label="sum(metric_1)",
+                        ),
+                        right=Column(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_COUNT,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_DOUBLE,
+                                    name="metric_2",
+                                ),
+                                default_value_int64=1337,
+                            ),
+                            label="count(metric_2)",
+                        ),
+                    ),
+                    label="sum(metric_1) + count(metric_2)",
+                ),
+            ],
+            limit=1,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="sum(metric_1) + count(metric_2)",
+                results=[
+                    AttributeValue(val_double=1397),
+                ],
+            ),
+        ]
+
     def test_non_agg_formula(self, setup_teardown: Any) -> None:
         """
         ensures formulas of non-aggregates work
