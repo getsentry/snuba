@@ -473,6 +473,7 @@ jobs:
           [
             "25.3.6.10034.altinitystable",
           ]
+        test_type: [snuba-test, snuba-test-migrations]
 
     steps:
       - name: Checkout code
@@ -520,7 +521,7 @@ jobs:
       - name: Docker Snuba Test other ClickHouse versions
         run: |
           export CLICKHOUSE_IMAGE=ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:${{matrix.version}}
-          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm snuba-test
+          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm ${{ matrix.test_type }}
 
       - name: Upload to codecov
         run: |
