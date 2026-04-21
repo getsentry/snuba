@@ -1,5 +1,5 @@
 import uuid
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Type
+from typing import Any, Dict, Iterable, Tuple, Type
 
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -9,7 +9,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_details_pb2 import (
     TraceItemDetailsResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeValue, Array
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import Array, AttributeValue
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -31,8 +31,9 @@ from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
     attribute_key_to_expression,
     base_conditions_and,
+    process_arrays,
     trace_item_filters_to_expression,
-    treeify_or_and_conditions, process_arrays,
+    treeify_or_and_conditions,
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
@@ -91,7 +92,7 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
                     "toJSONString",
                     (column("attributes_array"),),
                 ),
-            )
+            ),
         ],
         condition=base_conditions_and(
             request.meta,
@@ -133,6 +134,7 @@ def _build_snuba_request(request: TraceItemDetailsRequest) -> SnubaRequest:
             parent_api="eap_trace_item_table",
         ),
     )
+
 
 def _convert_results(
     data: Iterable[Dict[str, Any]],
@@ -187,7 +189,6 @@ def _convert_results(
             # the original type, and ignore the float duplicate
             continue
         attrs.append(TraceItemDetailsAttribute(name=k, value=AttributeValue(val_double=v)))
-
 
     raw_array = row.get("attributes_array")
     if raw_array:

@@ -85,14 +85,11 @@ def setup_spans_in_db(eap: None, redis_db: None) -> None:
 
 
 def _str_tags_array(*values: str) -> AnyValue:
-    return AnyValue(
-        array_value=ArrayValue(values=[AnyValue(string_value=v) for v in values])
-    )
+    return AnyValue(array_value=ArrayValue(values=[AnyValue(string_value=v) for v in values]))
+
 
 def _int_vals_array(*values: int) -> AnyValue:
-    return AnyValue(
-        array_value=ArrayValue(values=[AnyValue(int_value=v) for v in values])
-    )
+    return AnyValue(array_value=ArrayValue(values=[AnyValue(int_value=v) for v in values]))
 
 
 @pytest.mark.eap
@@ -271,8 +268,7 @@ class TestTraceItemDetails(BaseApiTest):
                     span_ts,
                     attributes={
                         "tags": _str_tags_array("gamma", "delta"),
-                        "cols": _int_vals_array(1, 3)
-
+                        "cols": _int_vals_array(1, 3),
                     },
                 ),
             ],

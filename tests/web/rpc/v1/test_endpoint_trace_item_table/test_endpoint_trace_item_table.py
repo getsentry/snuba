@@ -3582,7 +3582,10 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
                     span_ts,
                     attributes={
                         "tags": _str_array("alpha", "beta"),
-                        "cols": AnyValue(array_value=ArrayValue(values=[AnyValue(int_value=v) for v in [1, 3]]))},
+                        "cols": AnyValue(
+                            array_value=ArrayValue(values=[AnyValue(int_value=v) for v in [1, 3]])
+                        ),
+                    },
                 ),
             ],
         )
@@ -3614,8 +3617,6 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
             "1",
             "3",
         ]
-
-
 
 
 class TestUtils:

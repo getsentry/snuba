@@ -3,7 +3,7 @@ import os
 import random
 import uuid
 from bisect import bisect_left
-from typing import Generic, List, Tuple, Type, cast, final, Optional, Any
+from typing import Any, Generic, List, Optional, Tuple, Type, cast, final
 
 import sentry_sdk
 from clickhouse_driver.errors import ErrorCodes as clickhouse_errors
@@ -116,9 +116,8 @@ def _scalar_to_attribute_value(elem: Any) -> Optional[AttributeValue]:
 
 
 def convert_array_elements(values: List[Any]) -> list[AttributeValue]:
-    return [
-        av for e in values if (av := _scalar_to_attribute_value(e)) is not None
-    ]
+    return [av for e in values if (av := _scalar_to_attribute_value(e)) is not None]
+
 
 class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
     def __init__(
