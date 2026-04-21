@@ -104,6 +104,8 @@ fn create_factory(
         join_timeout_ms: None,
         health_check: "arroyo".to_string(),
         use_row_binary: false,
+        blq_producer_config: None,
+        blq_topic: None,
     };
     Box::new(factory)
 }

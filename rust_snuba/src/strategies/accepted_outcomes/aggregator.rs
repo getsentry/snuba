@@ -14,7 +14,7 @@ use sentry_protos::snuba::v1::TraceItem;
 
 use sentry_options::options;
 
-use crate::types::{AggregatedOutcomesBatch, BucketKey};
+use crate::types::{AggregatedOutcomesBatch, BucketKey, ItemDedupKey};
 
 #[derive(Debug, Default)]
 struct TraceItemOutcome {
@@ -221,6 +221,17 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
 
         let org_id = trace_item.organization_id;
         let project_id = trace_item.project_id;
+
+        if let Ok(item_id) = <[u8; 16]>::try_from(trace_item.item_id.as_slice()) {
+            let dedup_key = ItemDedupKey {
+                org_id,
+                project_id,
+                item_id,
+            };
+            if !self.batch.seen_items.insert(dedup_key) {
+                return Ok(());
+            }
+        }
 
         let TraceItemOutcomes(outcomes) = TraceItemOutcomes::from_trace_item(trace_item);
         for item in outcomes {
@@ -741,5 +752,133 @@ mod tests {
         do_submit(&mut aggregator);
         assert_eq!(bucket_quantity(&aggregator, 28_333_333), Some(1));
         assert_eq!(bucket_quantity(&aggregator, 28_333_334), Some(1)); // still present from first submit
+    }
+
+    fn make_payload_with_item_id(
+        ts_secs: i64,
+        org_id: u64,
+        project_id: u64,
+        key_id: u64,
+        item_id: [u8; 16],
+        category_counts: &[(u32, u64)],
+    ) -> KafkaPayload {
+        let trace_item = TraceItem {
+            organization_id: org_id,
+            project_id,
+            item_id: item_id.to_vec(),
+            received: Some(Timestamp {
+                seconds: ts_secs,
+                nanos: 0,
+            }),
+            outcomes: Some(Outcomes {
+                key_id,
+                category_count: category_counts
+                    .iter()
+                    .map(|(data_category, quantity)| CategoryCount {
+                        data_category: *data_category,
+                        quantity: *quantity,
+                    })
+                    .collect(),
+            }),
+            ..Default::default()
+        };
+        let mut buf = Vec::new();
+        trace_item.encode(&mut buf).unwrap();
+        KafkaPayload::new(None, None, Some(buf))
+    }
+
+    #[test]
+    fn submit_deduplicates_same_item_id() {
+        let mut aggregator = OutcomesAggregator::new(
+            Noop { last_message: None },
+            500,
+            Duration::from_millis(5_000),
+            60,
+        );
+
+        let topic = Topic::new("snuba-items");
+        let partition = Partition::new(topic, 0);
+        let item_id: [u8; 16] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+
+        // Submit same item twice with quantity=5 each
+        for offset in [0, 1] {
+            aggregator
+                .submit(Message::new_broker_message(
+                    make_payload_with_item_id(1_700_000_000, 1, 2, 3, item_id, &[(4, 5)]),
+                    partition,
+                    offset,
+                    Utc::now(),
+                ))
+                .unwrap();
+        }
+
+        let key = BucketKey {
+            time_offset: 28_333_333,
+            org_id: 1,
+            project_id: 2,
+            key_id: 3,
+            category: 4,
+        };
+        // Should only count once (quantity=5), not twice (quantity=10)
+        assert_eq!(
+            aggregator.batch.buckets.get(&key).map(|s| s.quantity),
+            Some(5)
+        );
+    }
+
+    #[test]
+    fn submit_does_not_deduplicate_different_orgs() {
+        let mut aggregator = OutcomesAggregator::new(
+            Noop { last_message: None },
+            500,
+            Duration::from_millis(5_000),
+            60,
+        );
+
+        let topic = Topic::new("snuba-items");
+        let partition = Partition::new(topic, 0);
+        let item_id: [u8; 16] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+
+        // Submit same item_id but for different orgs
+        aggregator
+            .submit(Message::new_broker_message(
+                make_payload_with_item_id(1_700_000_000, 1, 2, 3, item_id, &[(4, 5)]),
+                partition,
+                0,
+                Utc::now(),
+            ))
+            .unwrap();
+        aggregator
+            .submit(Message::new_broker_message(
+                make_payload_with_item_id(1_700_000_000, 99, 2, 3, item_id, &[(4, 5)]),
+                partition,
+                1,
+                Utc::now(),
+            ))
+            .unwrap();
+
+        // Should have two separate buckets
+        let key_org1 = BucketKey {
+            time_offset: 28_333_333,
+            org_id: 1,
+            project_id: 2,
+            key_id: 3,
+            category: 4,
+        };
+        let key_org99 = BucketKey {
+            time_offset: 28_333_333,
+            org_id: 99,
+            project_id: 2,
+            key_id: 3,
+            category: 4,
+        };
+        assert_eq!(
+            aggregator.batch.buckets.get(&key_org1).map(|s| s.quantity),
+            Some(5)
+        );
+        assert_eq!(
+            aggregator.batch.buckets.get(&key_org99).map(|s| s.quantity),
+            Some(5)
+        );
     }
 }

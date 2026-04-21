@@ -13,6 +13,8 @@ use sentry_arroyo::processing::strategies::{InvalidMessage, ProcessingStrategy};
 use sentry_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition};
 use sentry_kafka_schemas::{Schema, SchemaError, SchemaType};
 
+use sentry_options::options;
+
 use crate::config::ProcessorConfig;
 use crate::processors::{ProcessingFunction, ProcessingFunctionWithReplacements};
 use crate::types::{
@@ -20,6 +22,20 @@ use crate::types::{
     InsertOrReplacement, KafkaMessageMetadata, RowData, TypedInsertBatch,
 };
 use tokio::time::Instant;
+
+fn commit_log_offset(raw_offset: u64) -> u64 {
+    let use_next_offset = options("snuba")
+        .ok()
+        .and_then(|o| o.get("consumer.commit_log_use_next_offset").ok())
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    if use_next_offset {
+        raw_offset + 1
+    } else {
+        raw_offset
+    }
+}
 
 pub fn make_rust_processor(
     next_step: impl ProcessingStrategy<BytesInsertBatch<RowData>> + 'static,
@@ -56,7 +72,7 @@ pub fn make_rust_processor(
             .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
                 partition.index,
                 CommitLogEntry {
-                    offset,
+                    offset: commit_log_offset(offset),
                     orig_message_ts: timestamp,
                     received_p99: transformed.origin_timestamp.into_iter().collect(),
                 },
@@ -135,7 +151,7 @@ pub fn make_rust_processor_with_replacements(
                     .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
                         partition.index,
                         CommitLogEntry {
-                            offset,
+                            offset: commit_log_offset(offset),
                             orig_message_ts: timestamp,
                             received_p99: transformed.origin_timestamp.into_iter().collect(),
                         },
@@ -220,7 +236,7 @@ pub fn make_rust_processor_row_binary<T: Clone + Send + Sync + EstimatedSize + '
             .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
                 partition.index,
                 CommitLogEntry {
-                    offset,
+                    offset: commit_log_offset(offset),
                     orig_message_ts: timestamp,
                     received_p99: transformed.origin_timestamp.into_iter().collect(),
                 },
@@ -480,8 +496,17 @@ mod tests {
     use sentry_arroyo::backends::kafka::types::KafkaPayload;
     use sentry_arroyo::types::{Message, Partition, Topic};
 
+    use sentry_options::init_with_schemas;
+    use sentry_options::testing::override_options;
+    use serde_json::json;
+
     use crate::types::InsertBatch;
     use crate::Noop;
+
+    static INIT: std::sync::Once = std::sync::Once::new();
+    fn init_config() {
+        INIT.call_once(|| init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap());
+    }
 
     #[test]
     fn validate_schema() {
@@ -522,6 +547,26 @@ mod tests {
 
         strategy.submit(message).unwrap(); // Does not error
         let _ = strategy.join(None);
+    }
+
+    #[test]
+    fn commit_log_offset_returns_raw_when_option_disabled() {
+        init_config();
+        let _guard =
+            override_options(&[("snuba", "consumer.commit_log_use_next_offset", json!(false))])
+                .unwrap();
+
+        assert_eq!(commit_log_offset(42), 42);
+    }
+
+    #[test]
+    fn commit_log_offset_returns_next_when_option_enabled() {
+        init_config();
+        let _guard =
+            override_options(&[("snuba", "consumer.commit_log_use_next_offset", json!(true))])
+                .unwrap();
+
+        assert_eq!(commit_log_offset(42), 43);
     }
 
     #[test]

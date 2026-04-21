@@ -1,5 +1,67 @@
 # Changelog
 
+## 26.4.0
+
+### New Features ✨
+
+#### Consumer
+
+- Emit batch_write_bytes metric from RowBinary writer by @onewland in [#7863](https://github.com/getsentry/snuba/pull/7863)
+- Add memory-based batching limit to Rust consumer by @onewland in [#7854](https://github.com/getsentry/snuba/pull/7854)
+
+#### Other
+
+- (cross-item) Prepare settings for production by @volokluev in [#7706](https://github.com/getsentry/snuba/pull/7706)
+- (docker) Switch distroless images to DHI by @oioki in [#7821](https://github.com/getsentry/snuba/pull/7821)
+- (manual-jobs) Add job to rerun completed idempotent migrations by @onewland in [#7859](https://github.com/getsentry/snuba/pull/7859)
+- (observability) Add baseline tags to RPC sourced sentry errors by @volokluev in [#7845](https://github.com/getsentry/snuba/pull/7845)
+- (options) Sentry options scaffolding by @kenzoengineer in [#7836](https://github.com/getsentry/snuba/pull/7836)
+- (outcomes) Add `no_parent_span` outcome by @Lms24 in [#7866](https://github.com/getsentry/snuba/pull/7866)
+- (snql) Add Sentry error tags for SnQL API requests by @volokluev in [#7839](https://github.com/getsentry/snuba/pull/7839)
+- (timeseries) Add 6h interval by @wmak in [#7867](https://github.com/getsentry/snuba/pull/7867)
+- Blq feature flag can be updated without restart by @kylemumma in [#7871](https://github.com/getsentry/snuba/pull/7871)
+- Add a backlog-queue to the snuba consumers by @kylemumma in [#7856](https://github.com/getsentry/snuba/pull/7856)
+- Debugger support for consumers, local metrics support, bugbear by @kylemumma in [#7818](https://github.com/getsentry/snuba/pull/7818)
+
+### Bug Fixes 🐛
+
+#### Rpc
+
+- Honor deprecated attribute keys in trace item attribute values by @xurui-c in [#7853](https://github.com/getsentry/snuba/pull/7853)
+- Validate that TraceItemTable requests have at least one column by @volokluev in [#7837](https://github.com/getsentry/snuba/pull/7837)
+
+#### Other
+
+- (ci) Bump timeout and use --no-project on bump_version test by @kenzoengineer in [#7841](https://github.com/getsentry/snuba/pull/7841)
+- (COGS) Label metrics correctly for query side by @xurui-c in [#7826](https://github.com/getsentry/snuba/pull/7826)
+- (slo) Correctly report TOO_MANY_BYTES from allocation policy as rate-limited by @volokluev in [#7846](https://github.com/getsentry/snuba/pull/7846)
+- (snuba commit log) Modify Rust consumer to produce next message offset to Snuba commit log by @shashjar in [#7852](https://github.com/getsentry/snuba/pull/7852)
+
+### Internal Changes 🔧
+
+#### Eap Outcomes
+
+- Use sentry-options to change which timestamp to use by @kenzoengineer in [#7838](https://github.com/getsentry/snuba/pull/7838)
+- Add category_metrics by @MeredithAnya in [#7847](https://github.com/getsentry/snuba/pull/7847)
+- Add config to change which timestamp to use by @MeredithAnya in [#7834](https://github.com/getsentry/snuba/pull/7834)
+- Debug -> info by @MeredithAnya in [#7824](https://github.com/getsentry/snuba/pull/7824)
+
+#### Other
+
+- (admin) Add skip_on_cluster and cluster_name option for target host by @MeredithAnya in [#7823](https://github.com/getsentry/snuba/pull/7823)
+- (ci) Add cancel-in-progress to pull_request prs by @joshuarli in [#7873](https://github.com/getsentry/snuba/pull/7873)
+- (deps) Bump picomatch from 2.3.1 to 2.3.2 in /snuba/admin by @dependabot in [#7840](https://github.com/getsentry/snuba/pull/7840)
+- (eap) Add arrayExists filter for attribute name queries by @volokluev in [#7832](https://github.com/getsentry/snuba/pull/7832)
+- (INC-2103) Increase distributed_ddl_task_timeout to 300 by @MeredithAnya in [#7862](https://github.com/getsentry/snuba/pull/7862)
+- (metrics) Bump sentry-relay version 0.9.25 by @k-fish in [#7825](https://github.com/getsentry/snuba/pull/7825)
+- Bump sentry-arroyo to 2.38.7 by @getsentry-bot in [#7857](https://github.com/getsentry/snuba/pull/7857)
+- Bump sentry-arroyo to 2.38.5 by @getsentry-bot in [#7851](https://github.com/getsentry/snuba/pull/7851)
+- Bump rust-toolchain to 1.88.0 by @MeredithAnya in [#7835](https://github.com/getsentry/snuba/pull/7835)
+
+### Other
+
+- Volo/fix bools autocomplete by @volokluev in [#7848](https://github.com/getsentry/snuba/pull/7848)
+
 ## 26.1.0
 
 ### New Features ✨

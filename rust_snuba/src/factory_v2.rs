@@ -24,6 +24,8 @@ use crate::config;
 use crate::metrics::global_tags::set_global_tag;
 use crate::processors::{self, get_cogs_label};
 use crate::strategies::accountant::RecordCogs;
+
+use crate::strategies::blq_router::BLQRouter;
 use crate::strategies::clickhouse::row_binary_writer::ClickhouseRowBinaryWriterStep;
 use crate::strategies::clickhouse::writer_v2::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
@@ -63,6 +65,8 @@ pub struct ConsumerStrategyFactoryV2 {
     pub join_timeout_ms: Option<u64>,
     pub health_check: String,
     pub use_row_binary: bool,
+    pub blq_producer_config: Option<KafkaConfig>,
+    pub blq_topic: Option<Topic>,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
@@ -87,6 +91,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
 
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
         if self.use_row_binary {
+            tracing::info!("Using row_binary pipeline");
             return match self
                 .storage_config
                 .message_processor
@@ -263,6 +268,26 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             next_step,
             Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
         );
+
+        let next_step: Box<dyn ProcessingStrategy<KafkaPayload>> =
+            if let (Some(blq_producer_config), Some(blq_topic)) =
+                (&self.blq_producer_config, self.blq_topic)
+            {
+                tracing::info!(
+                    "Routing stale messages to the backlog-queue topic {:?} \
+                     (thresholds configured via sentry-options)",
+                    self.blq_topic,
+                );
+                Box::new(BLQRouter::new(
+                    next_step,
+                    blq_producer_config.clone(),
+                    blq_topic,
+                ))
+            } else {
+                tracing::info!("Not using a backlog-queue",);
+                Box::new(next_step)
+            };
+
         if let Some(path) = &self.health_check_file {
             {
                 if self.health_check == "snuba" {
@@ -390,6 +415,25 @@ impl ConsumerStrategyFactoryV2 {
             Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
         );
 
+        let next_step: Box<dyn ProcessingStrategy<KafkaPayload>> =
+            if let (Some(blq_producer_config), Some(blq_topic)) =
+                (&self.blq_producer_config, self.blq_topic)
+            {
+                tracing::info!(
+                    "Routing stale messages to the backlog-queue topic {:?} \
+                     (thresholds configured via sentry-options)",
+                    self.blq_topic,
+                );
+                Box::new(BLQRouter::new(
+                    next_step,
+                    blq_producer_config.clone(),
+                    blq_topic,
+                ))
+            } else {
+                tracing::info!("Not using a backlog-queue",);
+                Box::new(next_step)
+            };
+
         if let Some(path) = &self.health_check_file {
             if self.health_check == "snuba" {
                 tracing::info!(
@@ -441,6 +485,7 @@ mod tests {
     use sentry_arroyo::types::{BrokerMessage, InnerMessage, Partition, Topic};
     use std::sync::{Arc, Mutex};
 
+    // ----------- BYTES_INSERT_BATCH ------------------
     /// A next-step that records every batch it receives.
     struct RecordingStep {
         batches: Arc<Mutex<Vec<BytesInsertBatch<RowData>>>>,

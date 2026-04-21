@@ -192,10 +192,21 @@ pub fn consumer_impl(
 
     // DLQ policy applies only if we are not skipping writes, otherwise we don't want to be
     // writing to the DLQ topics in prod.
+
+    let dlq_producer_config = consumer_config.dlq_topic.as_ref().map(|dlq_topic_config| {
+        KafkaConfig::new_producer_config(vec![], Some(dlq_topic_config.broker_config.clone()))
+    });
+
+    let dlq_topic = consumer_config
+        .dlq_topic
+        .as_ref()
+        .map(|dlq_topic_config| Topic::new(&dlq_topic_config.physical_topic_name));
+
     let dlq_policy = consumer_config.dlq_topic.map(|dlq_topic_config| {
-        let producer_config =
-            KafkaConfig::new_producer_config(vec![], Some(dlq_topic_config.broker_config));
-        let producer = KafkaProducer::new(producer_config);
+        let producer = KafkaProducer::new(KafkaConfig::new_producer_config(
+            vec![],
+            Some(dlq_topic_config.broker_config),
+        ));
 
         let kafka_dlq_producer = Box::new(KafkaDlqProducer::new(
             producer,
@@ -276,6 +287,8 @@ pub fn consumer_impl(
         join_timeout_ms,
         health_check: health_check.to_string(),
         use_row_binary,
+        blq_producer_config: dlq_producer_config.clone(),
+        blq_topic: dlq_topic,
     };
 
     let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);
