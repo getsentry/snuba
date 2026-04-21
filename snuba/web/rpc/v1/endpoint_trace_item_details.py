@@ -20,6 +20,7 @@ from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
+from snuba.query.expressions import FunctionCall
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -84,7 +85,12 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
                 "attributes_bool", column("attributes_bool", alias="attributes_bool")
             ),
             SelectedExpression(
-                "attributes_array", column("attributes_array", alias="attributes_array")
+                "attributes_array",
+                FunctionCall(
+                    "attributes_array",
+                    "toJSONString",
+                    (column("attributes_array"),),
+                ),
             )
         ],
         condition=base_conditions_and(
