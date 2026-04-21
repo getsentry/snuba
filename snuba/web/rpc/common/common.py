@@ -670,6 +670,11 @@ def get_field_existence_expression(field: Expression) -> Expression:
 
         return None
 
+    if isinstance(field, FunctionCall) and field.function_name == "coalesce":
+        return combine_or_conditions(
+            [get_field_existence_expression(param) for param in field.parameters]
+        )
+
     subscriptable_field = get_subscriptable_field(field)
     if subscriptable_field is not None:
         return f.mapContains(subscriptable_field.column, subscriptable_field.key)
