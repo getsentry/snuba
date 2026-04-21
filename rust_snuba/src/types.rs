@@ -1,6 +1,7 @@
 use std::cmp::min;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use chrono::{DateTime, Utc};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
@@ -617,6 +618,15 @@ pub struct TrackOutcome {
     pub quantity: u64,
 }
 
+/// Key used to deduplicate items within an outcomes batch.
+/// Uses the relevant fields from the eap_items table sorting key.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ItemDedupKey {
+    pub org_id: u64,
+    pub project_id: u64,
+    pub item_id: [u8; 16],
+}
+
 /// Key used to bucket accepted outcomes by time slot, organization, project, key, and data category.
 /// Outcome type is omitted because this consumer only processes accepted outcomes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -659,6 +669,10 @@ pub struct AggregatedOutcomesBatch {
     pub bucket_interval: u64,
     /// Per-category metrics for the current batch
     pub category_metrics: BTreeMap<u32, CategoryMetrics>,
+    /// Set of items already processed in this batch, used for deduplication
+    pub seen_items: HashSet<ItemDedupKey>,
+    /// Count of items skipped due to deduplication within this batch
+    pub duplicate_item_count: u64,
 }
 
 impl Default for AggregatedOutcomesBatch {
@@ -667,6 +681,8 @@ impl Default for AggregatedOutcomesBatch {
             buckets: HashMap::new(),
             bucket_interval: 60,
             category_metrics: BTreeMap::new(),
+            seen_items: HashSet::new(),
+            duplicate_item_count: 0,
         }
     }
 }
