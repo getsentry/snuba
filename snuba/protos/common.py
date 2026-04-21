@@ -178,7 +178,6 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
             )
 
     if attr_key.type == AttributeKey.Type.TYPE_ARRAY:
-        alias = _build_label_mapping_key(attr_key)
         # Array values are stored as tagged variants (e.g. {"String": "alice"},
         # {"Int": "123"}) in the JSON column. Cast to Array(JSON), then extract
         # the value from whichever variant tag is present. We coalesce across

@@ -1,5 +1,5 @@
 import uuid
-from typing import Any, Dict, Iterable, Tuple, Type
+from typing import Any, Dict, Iterable, Tuple, Type, List
 
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -9,7 +9,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_details_pb2 import (
     TraceItemDetailsResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeValue
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeValue, Array
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -31,7 +31,7 @@ from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     base_conditions_and,
     trace_item_filters_to_expression,
-    treeify_or_and_conditions,
+    treeify_or_and_conditions, process_arrays,
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
@@ -83,6 +83,9 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
             SelectedExpression(
                 "attributes_bool", column("attributes_bool", alias="attributes_bool")
             ),
+            SelectedExpression(
+                "attributes_array", column("attributes_array", alias="attributes_array")
+            )
         ],
         condition=base_conditions_and(
             request.meta,
@@ -124,6 +127,23 @@ def _build_snuba_request(request: TraceItemDetailsRequest) -> SnubaRequest:
             parent_api="eap_trace_item_table",
         ),
     )
+
+def _convert_array_elements(values: List[Any]) -> List[Any]:
+    elements = []
+    for elem in values:
+        if elem is None:
+            elements.append(AttributeValue(is_null=True))
+        elif isinstance(elem, bool):
+            elements.append(AttributeValue(val_bool=elem))
+        elif isinstance(elem, int):
+            elements.append(AttributeValue(val_int=elem))
+        elif isinstance(elem, float):
+            elements.append(AttributeValue(val_double=elem))
+        elif isinstance(elem, str):
+            elements.append(AttributeValue(val_str=elem))
+        else:
+            continue
+    return elements
 
 
 def _convert_results(
@@ -179,6 +199,18 @@ def _convert_results(
             # the original type, and ignore the float duplicate
             continue
         attrs.append(TraceItemDetailsAttribute(name=k, value=AttributeValue(val_double=v)))
+
+
+    raw_array = row.get("attributes_array")
+    if raw_array:
+        for k, values in process_arrays(raw_array).items():
+            attrs.append(
+                TraceItemDetailsAttribute(
+                    name=k,
+                    value=AttributeValue(val_array=Array(values=_convert_array_elements(values))),
+                )
+            )
+
     return item_id, timestamp, attrs
 
 
