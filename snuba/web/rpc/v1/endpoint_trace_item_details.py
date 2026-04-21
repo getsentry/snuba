@@ -1,5 +1,5 @@
 import uuid
-from typing import Any, Dict, Iterable, Tuple, Type, List
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Type
 
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -24,7 +24,7 @@ from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
-from snuba.web.rpc import RPCEndpoint
+from snuba.web.rpc import RPCEndpoint, convert_array_elements
 from snuba.web.rpc.common.common import (
     BUCKET_COUNT,
     add_existence_check_to_subscriptable_references,
@@ -128,24 +128,6 @@ def _build_snuba_request(request: TraceItemDetailsRequest) -> SnubaRequest:
         ),
     )
 
-def _convert_array_elements(values: List[Any]) -> List[Any]:
-    elements = []
-    for elem in values:
-        if elem is None:
-            elements.append(AttributeValue(is_null=True))
-        elif isinstance(elem, bool):
-            elements.append(AttributeValue(val_bool=elem))
-        elif isinstance(elem, int):
-            elements.append(AttributeValue(val_int=elem))
-        elif isinstance(elem, float):
-            elements.append(AttributeValue(val_double=elem))
-        elif isinstance(elem, str):
-            elements.append(AttributeValue(val_str=elem))
-        else:
-            continue
-    return elements
-
-
 def _convert_results(
     data: Iterable[Dict[str, Any]],
 ) -> Tuple[str, Timestamp, list[TraceItemDetailsAttribute]]:
@@ -207,7 +189,7 @@ def _convert_results(
             attrs.append(
                 TraceItemDetailsAttribute(
                     name=k,
-                    value=AttributeValue(val_array=Array(values=_convert_array_elements(values))),
+                    value=AttributeValue(val_array=Array(values=convert_array_elements(values))),
                 )
             )
 

@@ -14,20 +14,13 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Reliability, Array,
 )
 
+from snuba.web.rpc import convert_array_elements
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.common.aggregation import ExtrapolationContext
 
 
 def _array_raw_to_attribute_value(raw: Any) -> AttributeValue:
-    if raw is None:
-        return AttributeValue(is_null=True)
-    elements = [
-        AttributeValue(val_str=str(elem)) if elem is not None else AttributeValue(is_null=True)
-        for elem in raw
-    ]
-    return AttributeValue(val_array=Array(values=elements))
-
-
+    return AttributeValue(val_array=Array(values=convert_array_elements(raw)))
 
 def _get_converter_for_type(
     key_type: "AttributeKey.Type.ValueType",
