@@ -368,7 +368,6 @@ class TestTimeSeriesApi(BaseApiTest):
             Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
             for secs in range(0, query_duration, granularity_secs)
         ]
-        print(response.result_timeseries)
         assert sorted(response.result_timeseries, key=lambda x: x.label) == [
             TimeSeries(
                 label="metric + metric2",
@@ -894,7 +893,6 @@ class TestTimeSeriesApi(BaseApiTest):
             granularity_secs=granularity_secs,
         )
         response = EndpointTimeSeries().execute(message)
-        # print(response)
         expected_buckets = [
             Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
             for secs in range(0, query_duration, granularity_secs)
