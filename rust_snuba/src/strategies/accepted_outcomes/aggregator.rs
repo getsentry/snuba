@@ -10,7 +10,7 @@ use sentry_arroyo::processing::strategies::{
 };
 use sentry_arroyo::types::{InnerMessage, Message, Partition};
 use sentry_arroyo::utils::timing::Deadline;
-use sentry_protos::snuba::v1::TraceItem;
+use sentry_protos::snuba::v1::{TraceItem, TraceItemType};
 
 use sentry_options::options;
 
@@ -85,6 +85,25 @@ impl<TNext> OutcomesAggregator<TNext> {
         }
     }
 
+    fn is_duplicate(&mut self, trace_item: &TraceItem) -> bool {
+        let org_id = trace_item.organization_id;
+        let project_id = trace_item.project_id;
+        let item_type = trace_item.item_type;
+
+        if [TraceItemType::Log.into(), TraceItemType::Metric.into()].contains(&item_type) {
+            return false;
+        }
+        if let Ok(item_id) = <[u8; 16]>::try_from(trace_item.item_id.as_slice()) {
+            let dedup_key = ItemDedupKey {
+                org_id,
+                project_id,
+                item_id,
+            };
+            return self.batch.record_if_duplicate(item_type, dedup_key);
+        }
+        false
+    }
+
     fn flush(&mut self) -> Result<(), StrategyError>
     where
         TNext: ProcessingStrategy<AggregatedOutcomesBatch>,
@@ -103,7 +122,7 @@ impl<TNext> OutcomesAggregator<TNext> {
             .collect();
 
         let category_metrics = batch.category_metrics.clone();
-        let duplicate_item_count = batch.duplicate_item_count;
+        let duplicate_item_counts = batch.duplicate_item_count.clone();
         let message = Message::new_any_message(batch, committable);
         match self.next_step.submit(message) {
             Ok(()) => {
@@ -112,7 +131,10 @@ impl<TNext> OutcomesAggregator<TNext> {
                 self.last_flush = now;
 
                 tracing::info!("flushed {} buckets after {} seconds", num_buckets, seconds);
-                counter!("accepted_outcomes.duplicate_items", duplicate_item_count);
+                for (item_type, count) in duplicate_item_counts {
+                    let item_type_str = item_type.to_string();
+                    counter!("accepted_outcomes.duplicate_items", count, "item_type" => item_type_str.as_str());
+                }
                 for (category, m) in category_metrics {
                     let cat_str = category.to_string();
                     counter!("accepted_outcomes.messages_seen", m.messages_seen, "data_category" => cat_str.as_str());
@@ -224,16 +246,8 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
         let org_id = trace_item.organization_id;
         let project_id = trace_item.project_id;
 
-        if let Ok(item_id) = <[u8; 16]>::try_from(trace_item.item_id.as_slice()) {
-            let dedup_key = ItemDedupKey {
-                org_id,
-                project_id,
-                item_id,
-            };
-            if !self.batch.seen_items.insert(dedup_key) {
-                self.batch.duplicate_item_count += 1;
-                return Ok(());
-            }
+        if self.is_duplicate(&trace_item) {
+            return Ok(());
         }
 
         let TraceItemOutcomes(outcomes) = TraceItemOutcomes::from_trace_item(trace_item);
@@ -882,6 +896,55 @@ mod tests {
         assert_eq!(
             aggregator.batch.buckets.get(&key_org99).map(|s| s.quantity),
             Some(5)
+        );
+    }
+
+    #[test]
+    fn is_duplicate_per_item_type() {
+        let mut aggregator = OutcomesAggregator::new(
+            Noop { last_message: None },
+            500,
+            Duration::from_millis(5_000),
+            60,
+        );
+
+        let item_id: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+        let span_item = TraceItem {
+            organization_id: 1,
+            project_id: 2,
+            item_id: item_id.clone(),
+            item_type: TraceItemType::Span.into(),
+            ..Default::default()
+        };
+
+        // First time: not a duplicate
+        assert!(!aggregator.is_duplicate(&span_item));
+        // Second time: duplicate, count incremented for this item type
+        assert!(aggregator.is_duplicate(&span_item));
+        assert_eq!(
+            aggregator
+                .batch
+                .duplicate_item_count
+                .get(&TraceItemType::Span.into()),
+            Some(&1)
+        );
+
+        // Log items are never deduplicated, even with the same item_id
+        let log_item = TraceItem {
+            organization_id: 1,
+            project_id: 2,
+            item_id: item_id.clone(),
+            item_type: TraceItemType::Log.into(),
+            ..Default::default()
+        };
+        assert!(!aggregator.is_duplicate(&log_item));
+        assert!(!aggregator.is_duplicate(&log_item));
+        assert_eq!(
+            aggregator
+                .batch
+                .duplicate_item_count
+                .get(&TraceItemType::Log.into()),
+            None
         );
     }
 }
