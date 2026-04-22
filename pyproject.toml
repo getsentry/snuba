@@ -45,11 +45,13 @@ dependencies = [
     "urllib3>=2.2.3",
     "werkzeug>=3.0.6",
     "rust_snuba>=0.0.0",
-    "pygments-pprint-sql==0.1.0",
+    "pygments>=2.19.2",
+    "pygments-pprint-sql",
 ]
 
 [tool.uv.sources]
 rust_snuba = { workspace = true }
+pygments-pprint-sql = { url = "https://files.pythonhosted.org/packages/75/7a/38b17da0718d6cd0e6e4fa02f758d663c73a045c489f690e937b94f80dda/pygments-pprint-sql-0.1.0.tar.gz" }
 
 [tool.uv.workspace]
 members = ["rust_snuba"]

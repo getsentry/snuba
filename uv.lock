@@ -682,6 +682,26 @@ wheels = [
 ]
 
 [[package]]
+name = "pygments"
+version = "2.19.2"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/pygments-2.19.2-py3-none-any.whl", hash = "sha256:86540386c03d588bb81d44bc3928634ff26449851e99741617ecb9037ee5ec0b" },
+]
+
+[[package]]
+name = "pygments-pprint-sql"
+version = "0.1.0"
+source = { url = "https://files.pythonhosted.org/packages/75/7a/38b17da0718d6cd0e6e4fa02f758d663c73a045c489f690e937b94f80dda/pygments-pprint-sql-0.1.0.tar.gz" }
+dependencies = [
+    { name = "pygments", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
+]
+sdist = { hash = "sha256:741dc47408ea7b1279b3272f4deb10074ea952a94418b6490f20ed187beba498" }
+
+[package.metadata]
+requires-dist = [{ name = "pygments" }]
+
+[[package]]
 name = "pyparsing"
 version = "3.1.4"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
@@ -1078,6 +1098,8 @@ dependencies = [
     { name = "proto-plus", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "protobuf", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "pyasn1", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
+    { name = "pygments", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
+    { name = "pygments-pprint-sql", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "python-dateutil", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "python-jose", extra = ["cryptography"], marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "python-rapidjson", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -1149,6 +1171,8 @@ requires-dist = [
     { name = "proto-plus", specifier = ">=1.24.0" },
     { name = "protobuf", specifier = ">=5.29.5" },
     { name = "pyasn1", specifier = ">=0.6.2" },
+    { name = "pygments", specifier = ">=2.19.2" },
+    { name = "pygments-pprint-sql", url = "https://files.pythonhosted.org/packages/75/7a/38b17da0718d6cd0e6e4fa02f758d663c73a045c489f690e937b94f80dda/pygments-pprint-sql-0.1.0.tar.gz" },
     { name = "python-dateutil", specifier = ">=2.8.2" },
     { name = "python-jose", extras = ["cryptography"], specifier = ">=3.5.0" },
     { name = "python-rapidjson", specifier = ">=1.8" },
