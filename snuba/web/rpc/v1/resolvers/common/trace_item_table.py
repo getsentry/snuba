@@ -8,20 +8,19 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableRequest,
 )
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
-    Array,
     AttributeKey,
     AttributeValue,
     Function,
     Reliability,
 )
 
-from snuba.web.rpc import convert_array_elements
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.v1.endpoint_get_trace import convert_to_attribute_value
 from snuba.web.rpc.v1.resolvers.common.aggregation import ExtrapolationContext
 
 
 def _array_raw_to_attribute_value(raw: Any) -> AttributeValue:
-    return AttributeValue(val_array=Array(values=convert_array_elements(raw)))
+    return convert_to_attribute_value(raw)
 
 
 def _get_converter_for_type(

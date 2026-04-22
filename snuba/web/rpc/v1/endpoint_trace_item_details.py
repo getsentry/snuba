@@ -9,7 +9,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_details_pb2 import (
     TraceItemDetailsResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import Array, AttributeValue
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeValue
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -25,7 +25,7 @@ from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
-from snuba.web.rpc import RPCEndpoint, convert_array_elements
+from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     BUCKET_COUNT,
     add_existence_check_to_subscriptable_references,
@@ -43,6 +43,7 @@ from snuba.web.rpc.common.exceptions import (
     BadSnubaRPCRequestException,
     RPCRequestException,
 )
+from snuba.web.rpc.v1.endpoint_get_trace import convert_to_attribute_value
 
 
 def _build_query(request: TraceItemDetailsRequest) -> Query:
@@ -196,7 +197,7 @@ def _convert_results(
             attrs.append(
                 TraceItemDetailsAttribute(
                     name=k,
-                    value=AttributeValue(val_array=Array(values=convert_array_elements(values))),
+                    value=convert_to_attribute_value(values),
                 )
             )
 

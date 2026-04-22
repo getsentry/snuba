@@ -3,7 +3,7 @@ import os
 import random
 import uuid
 from bisect import bisect_left
-from typing import Any, Generic, List, Optional, Tuple, Type, cast, final
+from typing import Generic, List, Tuple, Type, cast, final
 
 import sentry_sdk
 from clickhouse_driver.errors import ErrorCodes as clickhouse_errors
@@ -12,7 +12,6 @@ from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeValue
 
 from snuba import environment, state
 from snuba.query.allocation_policies import AllocationPolicyViolations
@@ -99,24 +98,6 @@ def _set_rpc_error_tags(in_msg: ProtobufMessage) -> None:
             sentry_sdk.set_tag("organization_id", str(meta.organization_id))
         if hasattr(meta, "request_id") and meta.request_id:
             sentry_sdk.set_tag("request_id", str(meta.request_id))
-
-
-def _scalar_to_attribute_value(elem: Any) -> Optional[AttributeValue]:
-    if elem is None:
-        return AttributeValue(is_null=True)
-    if isinstance(elem, bool):
-        return AttributeValue(val_bool=elem)
-    if isinstance(elem, int):
-        return AttributeValue(val_int=elem)
-    if isinstance(elem, float):
-        return AttributeValue(val_double=elem)
-    if isinstance(elem, str):
-        return AttributeValue(val_str=elem)
-    return None
-
-
-def convert_array_elements(values: List[Any]) -> list[AttributeValue]:
-    return [av for e in values if (av := _scalar_to_attribute_value(e)) is not None]
 
 
 class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
