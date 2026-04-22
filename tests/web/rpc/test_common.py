@@ -246,8 +246,8 @@ class TestExistsFilterCoalesced:
         assert isinstance(expr, FunctionCall)
         assert expr.function_name == "or"
         checked_keys = self._collect_map_contains_keys(expr)
-        assert canonical in checked_keys
-        assert deprecated_keys <= checked_keys
+        expected_keys = {canonical, *deprecated_keys}
+        assert checked_keys == expected_keys
 
     def test_exists_filter_on_non_coalesced_attribute_unchanged(self) -> None:
         """Non-coalesced attributes should still produce a single mapContains."""
