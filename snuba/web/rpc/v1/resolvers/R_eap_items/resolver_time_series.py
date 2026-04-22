@@ -292,11 +292,29 @@ def _proto_expression_to_ast_expression(
 ) -> Expression:
     match expr.WhichOneof("expression"):
         case "conditional_aggregation":
-            return aggregation_to_expression(
+            aggregate_expr = aggregation_to_expression(
                 expr.conditional_aggregation,
                 (attribute_key_to_expression),
                 use_sampling_factor(request_meta),
             )
+            match expr.conditional_aggregation.WhichOneof("default_value"):
+                case None:
+                    pass
+                case "default_value_double":
+                    aggregate_expr = f.coalesce(
+                        replace(aggregate_expr, alias=None),
+                        expr.conditional_aggregation.default_value_double,
+                    )
+                case "default_value_int64":
+                    aggregate_expr = f.coalesce(
+                        replace(aggregate_expr, alias=None),
+                        expr.conditional_aggregation.default_value_int64,
+                    )
+                case default:
+                    raise BadSnubaRPCRequestException(
+                        f"Unknown default_value in formula. Expected default_value_double or default_value_int64 but got {default}"
+                    )
+            return replace(aggregate_expr, alias=expr.label)
         case "formula":
             formula_expr = OP_TO_EXPR[expr.formula.op](
                 _proto_expression_to_ast_expression(expr.formula.left, request_meta),

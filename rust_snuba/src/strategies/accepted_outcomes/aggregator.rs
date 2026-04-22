@@ -103,6 +103,7 @@ impl<TNext> OutcomesAggregator<TNext> {
             .collect();
 
         let category_metrics = batch.category_metrics.clone();
+        let duplicate_item_count = batch.duplicate_item_count;
         let message = Message::new_any_message(batch, committable);
         match self.next_step.submit(message) {
             Ok(()) => {
@@ -111,6 +112,7 @@ impl<TNext> OutcomesAggregator<TNext> {
                 self.last_flush = now;
 
                 tracing::info!("flushed {} buckets after {} seconds", num_buckets, seconds);
+                counter!("accepted_outcomes.duplicate_items", duplicate_item_count);
                 for (category, m) in category_metrics {
                     let cat_str = category.to_string();
                     counter!("accepted_outcomes.messages_seen", m.messages_seen, "data_category" => cat_str.as_str());
@@ -229,6 +231,7 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
                 item_id,
             };
             if !self.batch.seen_items.insert(dedup_key) {
+                self.batch.duplicate_item_count += 1;
                 return Ok(());
             }
         }
