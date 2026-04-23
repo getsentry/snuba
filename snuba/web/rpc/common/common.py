@@ -12,7 +12,10 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 
 from snuba import settings, state
-from snuba.protos.common import MalformedAttributeException
+from snuba.protos.common import (
+    MalformedAttributeException,
+    type_array_to_membership_array_expression,
+)
 from snuba.protos.common import (
     attribute_key_to_expression as _attribute_key_to_expression,
 )
@@ -52,6 +55,21 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
         return _attribute_key_to_expression(attr_key)
     except MalformedAttributeException as e:
         raise BadSnubaRPCRequestException(str(e)) from e
+
+
+def _trace_item_filter_key_expression(
+    attr_to_key_expression_callable: Callable[[AttributeKey], Expression], key: AttributeKey
+) -> Expression:
+    """predicates must use the normalized
+    ``arrayMap`` (``type_array_to_membership_array_expression``) so
+    ``arrayExists`` compares per element. It is different from SELECT predicate.
+    """
+    if key.type == AttributeKey.Type.TYPE_ARRAY:
+        try:
+            return type_array_to_membership_array_expression(key)
+        except MalformedAttributeException as e:
+            raise BadSnubaRPCRequestException(str(e)) from e
+    return attr_to_key_expression_callable(key)
 
 
 Tin = TypeVar("Tin", bound=ProtobufMessage)
@@ -498,7 +516,9 @@ def trace_item_filters_to_expression(
         if k.type == AttributeKey.Type.TYPE_ARRAY:
             _validate_comparison_filter_type_array(op, v)
 
-        k_expression = attribute_key_to_expression(k)
+        k_expression = _trace_item_filter_key_expression(
+            attr_to_key_expression_callable=attribute_key_to_expression, key=k
+        )
 
         value_type = v.WhichOneof("value")
         if value_type is None and not v.is_null:
@@ -654,7 +674,10 @@ def trace_item_filters_to_expression(
 
     if item_filter.HasField("exists_filter"):
         return get_field_existence_expression(
-            attribute_key_to_expression(item_filter.exists_filter.key)
+            _trace_item_filter_key_expression(
+                attr_to_key_expression_callable=attribute_key_to_expression,
+                key=item_filter.exists_filter.key,
+            )
         )
 
     if item_filter.HasField("any_attribute_filter"):

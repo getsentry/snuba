@@ -1,3 +1,4 @@
+import json
 import re
 from collections import defaultdict
 from typing import Any, Callable, Dict, Iterable
@@ -8,6 +9,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableRequest,
 )
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    Array,
     AttributeKey,
     AttributeValue,
     Function,
@@ -19,7 +21,48 @@ from snuba.web.rpc.v1.endpoint_get_trace import convert_to_attribute_value
 from snuba.web.rpc.v1.resolvers.common.aggregation import ExtrapolationContext
 
 
+def _json_array_element_to_scalar(obj: Any) -> Any:
+    if not isinstance(obj, dict) or len(obj) != 1:
+        return obj
+    (tag, val) = next(iter(obj.items()))
+    if tag == "String":
+        return str(val)
+    if tag == "Int":
+        return int(val)
+    if tag in ("Double", "Float"):
+        return float(val)
+    if tag == "Bool":
+        if isinstance(val, bool):
+            return val
+        return str(val).lower() == "true"
+    return obj
+
+
 def _array_raw_to_attribute_value(raw: Any) -> AttributeValue:
+    """
+    Array values will be JSON String
+    """
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as e:
+            raise BadSnubaRPCRequestException(
+                f"TYPE_ARRAY column value is not valid JSON: {e}"
+            ) from e
+        if not isinstance(parsed, list):
+            raise BadSnubaRPCRequestException(
+                f"TYPE_ARRAY column JSON must decode to a list, got {type(parsed)}"
+            )
+        return AttributeValue(
+            val_array=Array(
+                values=[
+                    convert_to_attribute_value(_json_array_element_to_scalar(elem))
+                    for elem in parsed
+                ]
+            )
+        )
+    if isinstance(raw, (list, tuple)):
+        return convert_to_attribute_value(list(raw))
     return convert_to_attribute_value(raw)
 
 

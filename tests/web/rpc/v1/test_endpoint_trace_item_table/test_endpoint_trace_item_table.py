@@ -3783,15 +3783,15 @@ class TestArrayWildcardSearch(BaseApiTest):
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
     def test_trace_item_table_array_op_equals_includes_int(self) -> None:
-        """OP_EQUALS on TYPE_ARRAY with val_int matches an array element; SELECT preserves val_int."""
+        """OP_EQUALS on TYPE_ARRAY with val_int=45 returns rows where some element is 45."""
         span_ts = BASE_TIME - timedelta(minutes=1)
         items_storage = get_storage(StorageKey("eap_items"))
         write_raw_unprocessed_events(
             items_storage,  # type: ignore
             [
-                gen_item_message(span_ts, attributes={"group_ids": _int_array(1, 2, 3)}),
-                gen_item_message(span_ts, attributes={"group_ids": _int_array(10, 20)}),
-                gen_item_message(span_ts, attributes={"group_ids": _int_array(3, 99)}),
+                gen_item_message(span_ts, attributes={"frame_linenos": _int_array(1, 45, 200)}),
+                gen_item_message(span_ts, attributes={"frame_linenos": _int_array(10, 20)}),
+                gen_item_message(span_ts, attributes={"frame_linenos": _int_array(45, 99)}),
             ],
         )
         message = TraceItemTableRequest(
@@ -3808,23 +3808,26 @@ class TestArrayWildcardSearch(BaseApiTest):
                 comparison_filter=ComparisonFilter(
                     key=AttributeKey(
                         type=AttributeKey.TYPE_ARRAY,
-                        name="group_ids",
+                        name="frame_linenos",
                     ),
                     op=ComparisonFilter.OP_EQUALS,
-                    value=AttributeValue(val_int=3),
+                    value=AttributeValue(val_int=45),
                 )
             ),
             columns=[
                 Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
-                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="group_ids")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="frame_linenos")),
             ],
         )
         response = EndpointTraceItemTable().execute(message)
         assert len(response.column_values[0].results) == 2
         by_name = {cv.attribute_name: cv for cv in response.column_values}
-        for row in by_name["group_ids"].results:
-            vals = [e.val_str for e in row.val_array.values if e.WhichOneof("value") == "val_str"]
-            assert "3" in vals
+        assert by_name["frame_linenos"].results[0].WhichOneof("value") == "val_array"
+        for row in by_name["frame_linenos"].results:
+            int_vals = [
+                e.val_int for e in row.val_array.values if e.WhichOneof("value") == "val_int"
+            ]
+            assert 45 in int_vals
 
 
 class TestTraceItemTableArrayColumn(BaseApiTest):
@@ -3872,10 +3875,7 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
             "beta",
         ]
         assert by_name["cols"].results[0].WhichOneof("value") == "val_array"
-        assert [e.val_str for e in by_name["cols"].results[0].val_array.values] == [
-            "1",
-            "3",
-        ]
+        assert [e.val_int for e in by_name["cols"].results[0].val_array.values] == [1, 3]
 
 
 class TestUtils:
