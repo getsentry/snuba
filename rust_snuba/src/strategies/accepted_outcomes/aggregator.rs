@@ -10,7 +10,7 @@ use sentry_arroyo::processing::strategies::{
 };
 use sentry_arroyo::types::{InnerMessage, Message, Partition};
 use sentry_arroyo::utils::timing::Deadline;
-use sentry_protos::snuba::v1::{TraceItem, TraceItemType};
+use sentry_protos::snuba::v1::TraceItem;
 
 use sentry_options::options;
 
@@ -301,6 +301,7 @@ mod tests {
     use sentry_arroyo::types::{Partition, Topic};
     use sentry_options::init_with_schemas;
     use sentry_options::testing::override_options;
+    use sentry_protos::snuba::v1::TraceItemType;
     use sentry_protos::snuba::v1::{CategoryCount, Outcomes};
     use serde_json::json;
 
