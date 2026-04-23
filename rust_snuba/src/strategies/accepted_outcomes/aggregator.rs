@@ -90,9 +90,6 @@ impl<TNext> OutcomesAggregator<TNext> {
         let project_id = trace_item.project_id;
         let item_type = trace_item.item_type;
 
-        if [TraceItemType::Log.into(), TraceItemType::Metric.into()].contains(&item_type) {
-            return false;
-        }
         if let Ok(item_id) = <[u8; 16]>::try_from(trace_item.item_id.as_slice()) {
             let dedup_key = ItemDedupKey {
                 org_id,
@@ -927,24 +924,6 @@ mod tests {
                 .duplicate_item_count
                 .get(&TraceItemType::Span.into()),
             Some(&1)
-        );
-
-        // Log items are never deduplicated, even with the same item_id
-        let log_item = TraceItem {
-            organization_id: 1,
-            project_id: 2,
-            item_id: item_id.clone(),
-            item_type: TraceItemType::Log.into(),
-            ..Default::default()
-        };
-        assert!(!aggregator.is_duplicate(&log_item));
-        assert!(!aggregator.is_duplicate(&log_item));
-        assert_eq!(
-            aggregator
-                .batch
-                .duplicate_item_count
-                .get(&TraceItemType::Log.into()),
-            None
         );
     }
 }
