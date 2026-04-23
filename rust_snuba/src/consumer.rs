@@ -194,7 +194,9 @@ pub fn consumer_impl(
     // writing to the DLQ topics in prod.
 
     let dlq_producer_config = consumer_config.dlq_topic.as_ref().map(|dlq_topic_config| {
-        KafkaConfig::new_producer_config(vec![], Some(dlq_topic_config.broker_config.clone()))
+        let mut overrides = dlq_topic_config.broker_config.clone();
+        overrides.insert("message.max.bytes".to_string(), "10000000".to_string()); // 10 MB, broker max
+        KafkaConfig::new_producer_config(vec![], Some(overrides))
     });
 
     let dlq_topic = consumer_config
