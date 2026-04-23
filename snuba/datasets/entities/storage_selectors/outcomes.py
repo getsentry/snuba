@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Sequence
 
 from snuba.clickhouse.query_dsl.accessors import get_time_range
@@ -63,8 +63,11 @@ class OutcomesStorageSelector(QueryStorageSelector):
         # retention window (~90 days).
         lower_bound, _ = get_time_range(query, "timestamp")
         if lower_bound is not None:
-            cutoff = datetime.now(timezone.utc) - _DAILY_THRESHOLD
-            if lower_bound < cutoff:
+            lower_bound_tz = (
+                lower_bound if lower_bound.tzinfo is not None else lower_bound.replace(tzinfo=UTC)
+            )
+            cutoff = datetime.now(UTC) - _DAILY_THRESHOLD
+            if lower_bound_tz < cutoff:
                 return self.daily_storage
 
         # Billing queries need 13-month retention available only in the
