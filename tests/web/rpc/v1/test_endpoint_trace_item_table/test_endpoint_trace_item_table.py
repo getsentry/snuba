@@ -3636,6 +3636,10 @@ def _str_array(*values: str) -> AnyValue:
     return AnyValue(array_value=ArrayValue(values=[AnyValue(string_value=v) for v in values]))
 
 
+def _int_array(*values: int) -> AnyValue:
+    return AnyValue(array_value=ArrayValue(values=[AnyValue(int_value=v) for v in values]))
+
+
 class TestArrayWildcardSearch(BaseApiTest):
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
@@ -3726,6 +3730,101 @@ class TestArrayWildcardSearch(BaseApiTest):
         response = EndpointTraceItemTable().execute(message)
         # Only the item with ["success", "cached"] should match (no "error" elements)
         assert len(response.column_values[0].results) == 1
+
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    def test_trace_item_table_array_op_equals_includes_string_ignore_case(self) -> None:
+        """OP_EQUALS with ignore_case matches a string in a TYPE_ARRAY (element-wise)."""
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        items_storage = get_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,  # type: ignore
+            [
+                gen_item_message(span_ts, attributes={"tags": _str_array("ERROR", "other")}),
+                gen_item_message(
+                    span_ts, attributes={"tags": _str_array("success", "cached", "http-error")}
+                ),
+                gen_item_message(span_ts, attributes={"tags": _str_array("Error", "timeout")}),
+            ],
+        )
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_ARRAY,
+                        name="tags",
+                    ),
+                    op=ComparisonFilter.OP_EQUALS,
+                    value=AttributeValue(val_str="error"),
+                    ignore_case=True,
+                )
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags")),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert len(response.column_values[0].results) == 2
+        by_name = {cv.attribute_name: cv for cv in response.column_values}
+        for row in by_name["tags"].results:
+            vals = [e.val_str for e in row.val_array.values if e.WhichOneof("value") == "val_str"]
+            assert "error" in [val.lower() for val in vals]
+
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    def test_trace_item_table_array_op_equals_includes_int(self) -> None:
+        """OP_EQUALS on TYPE_ARRAY with val_int matches an array element; SELECT preserves val_int."""
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        items_storage = get_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,  # type: ignore
+            [
+                gen_item_message(span_ts, attributes={"group_ids": _int_array(1, 2, 3)}),
+                gen_item_message(span_ts, attributes={"group_ids": _int_array(10, 20)}),
+                gen_item_message(span_ts, attributes={"group_ids": _int_array(3, 99)}),
+            ],
+        )
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_ARRAY,
+                        name="group_ids",
+                    ),
+                    op=ComparisonFilter.OP_EQUALS,
+                    value=AttributeValue(val_int=3),
+                )
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="group_ids")),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert len(response.column_values[0].results) == 2
+        by_name = {cv.attribute_name: cv for cv in response.column_values}
+        for row in by_name["group_ids"].results:
+            vals = [e.val_str for e in row.val_array.values if e.WhichOneof("value") == "val_str"]
+            assert "3" in vals
 
 
 class TestTraceItemTableArrayColumn(BaseApiTest):
