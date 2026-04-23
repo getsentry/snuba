@@ -3685,6 +3685,57 @@ class TestArrayWildcardSearch(BaseApiTest):
         assert len(response.column_values[0].results) == 1
 
 
+class TestTraceItemTableArrayColumn(BaseApiTest):
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    def test_select_array_column_returns_val_array(self) -> None:
+        """TYPE_ARRAY columns are returned as val_array on TraceItemTable."""
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        items_storage = get_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,  # type: ignore
+            [
+                gen_item_message(
+                    span_ts,
+                    attributes={
+                        "tags": _str_array("alpha", "beta"),
+                        "cols": AnyValue(
+                            array_value=ArrayValue(values=[AnyValue(int_value=v) for v in [1, 3]])
+                        ),
+                    },
+                ),
+            ],
+        )
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="cols")),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        by_name = {cv.attribute_name: cv for cv in response.column_values}
+        assert by_name["tags"].results[0].WhichOneof("value") == "val_array"
+        assert [e.val_str for e in by_name["tags"].results[0].val_array.values] == [
+            "alpha",
+            "beta",
+        ]
+        assert by_name["cols"].results[0].WhichOneof("value") == "val_array"
+        assert [e.val_str for e in by_name["cols"].results[0].val_array.values] == [
+            "1",
+            "3",
+        ]
+
+
 class TestUtils:
     def test_apply_labels_to_columns_backward_compat(self) -> None:
         message = TraceItemTableRequest(

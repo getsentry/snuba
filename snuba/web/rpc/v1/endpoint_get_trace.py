@@ -397,7 +397,7 @@ def convert_to_attribute_value(value: Any) -> AttributeValue:
         return AttributeValue(
             val_str=value,
         )
-    elif isinstance(value, list):
+    elif isinstance(value, (list, tuple)):
         return AttributeValue(
             val_array=Array(values=[convert_to_attribute_value(v) for v in value])
         )
