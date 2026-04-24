@@ -2731,6 +2731,123 @@ class TestTraceItemTable(BaseApiTest):
             ),
         ]
 
+    def test_formula_with_null_value(self, setup_teardown: Any) -> None:
+        """
+        ensures formulas of aggregates work
+        ex sum(my_attribute) / count(my_attribute)
+        """
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_item(span_ts, {"metric_1": 6}, 10)
+
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    formula=Column.BinaryFormula(
+                        op=Column.BinaryFormula.OP_ADD,
+                        left=Column(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_DOUBLE,
+                                    name="metric_1",
+                                ),
+                            ),
+                            label="sum(metric_1)",
+                        ),
+                        right=Column(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_COUNT,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_DOUBLE,
+                                    name="metric_2",
+                                ),
+                            ),
+                            label="count(metric_2)",
+                        ),
+                    ),
+                    label="sum(metric_1) + count(metric_2)",
+                ),
+            ],
+            limit=1,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="sum(metric_1) + count(metric_2)",
+                results=[
+                    AttributeValue(is_null=True),
+                ],
+            ),
+        ]
+
+    def test_formula_with_default_value(self, setup_teardown: Any) -> None:
+        """
+        ensures formulas of aggregates work
+        ex sum(my_attribute) / count(my_attribute)
+        """
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_item(span_ts, {"metric_1": 6}, 10)
+
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    formula=Column.BinaryFormula(
+                        op=Column.BinaryFormula.OP_ADD,
+                        left=Column(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_DOUBLE,
+                                    name="metric_1",
+                                ),
+                            ),
+                            label="sum(metric_1)",
+                        ),
+                        right=Column(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_COUNT,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_DOUBLE,
+                                    name="metric_2",
+                                ),
+                                default_value_int64=1337,
+                            ),
+                            label="count(metric_2)",
+                        ),
+                    ),
+                    label="sum(metric_1) + count(metric_2)",
+                ),
+            ],
+            limit=1,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="sum(metric_1) + count(metric_2)",
+                results=[
+                    AttributeValue(val_double=1397),
+                ],
+            ),
+        ]
+
     def test_non_agg_formula(self, setup_teardown: Any) -> None:
         """
         ensures formulas of non-aggregates work
@@ -3384,6 +3501,49 @@ class TestTraceItemTable(BaseApiTest):
             ),
         ]
 
+    def test_exists_filter_on_coalesced_deprecated_key(self) -> None:
+        """exists_filter on a canonical key must match spans that only have the deprecated key."""
+        span_ts = BASE_TIME + timedelta(minutes=1)
+        write_eap_item(span_ts, {"ai.model_id": "sentaur"})
+
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING,
+                        name="gen_ai.response.model",
+                    ),
+                )
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING,
+                        name="gen_ai.response.model",
+                    )
+                ),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="gen_ai.response.model",
+                results=[
+                    AttributeValue(val_str="sentaur"),
+                ],
+            ),
+        ]
+
     def test_multiply_attribute_aggregation(self) -> None:
         """
         Tests avg(game_size * game_size_unit_mult) using AttributeKeyExpression formulas.
@@ -3566,6 +3726,57 @@ class TestArrayWildcardSearch(BaseApiTest):
         response = EndpointTraceItemTable().execute(message)
         # Only the item with ["success", "cached"] should match (no "error" elements)
         assert len(response.column_values[0].results) == 1
+
+
+class TestTraceItemTableArrayColumn(BaseApiTest):
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    def test_select_array_column_returns_val_array(self) -> None:
+        """TYPE_ARRAY columns are returned as val_array on TraceItemTable."""
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        items_storage = get_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,  # type: ignore
+            [
+                gen_item_message(
+                    span_ts,
+                    attributes={
+                        "tags": _str_array("alpha", "beta"),
+                        "cols": AnyValue(
+                            array_value=ArrayValue(values=[AnyValue(int_value=v) for v in [1, 3]])
+                        ),
+                    },
+                ),
+            ],
+        )
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="cols")),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        by_name = {cv.attribute_name: cv for cv in response.column_values}
+        assert by_name["tags"].results[0].WhichOneof("value") == "val_array"
+        assert [e.val_str for e in by_name["tags"].results[0].val_array.values] == [
+            "alpha",
+            "beta",
+        ]
+        assert by_name["cols"].results[0].WhichOneof("value") == "val_array"
+        assert [e.val_str for e in by_name["cols"].results[0].val_array.values] == [
+            "1",
+            "3",
+        ]
 
 
 class TestUtils:

@@ -20,6 +20,7 @@ from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
+from snuba.query.expressions import FunctionCall
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -30,6 +31,7 @@ from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
     attribute_key_to_expression,
     base_conditions_and,
+    process_arrays,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
@@ -41,6 +43,7 @@ from snuba.web.rpc.common.exceptions import (
     BadSnubaRPCRequestException,
     RPCRequestException,
 )
+from snuba.web.rpc.v1.endpoint_get_trace import convert_to_attribute_value
 
 
 def _build_query(request: TraceItemDetailsRequest) -> Query:
@@ -82,6 +85,14 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
             SelectedExpression("attributes_int", column("attributes_int", alias="attributes_int")),
             SelectedExpression(
                 "attributes_bool", column("attributes_bool", alias="attributes_bool")
+            ),
+            SelectedExpression(
+                "attributes_array",
+                FunctionCall(
+                    "attributes_array",
+                    "toJSONString",
+                    (column("attributes_array"),),
+                ),
             ),
         ],
         condition=base_conditions_and(
@@ -179,6 +190,17 @@ def _convert_results(
             # the original type, and ignore the float duplicate
             continue
         attrs.append(TraceItemDetailsAttribute(name=k, value=AttributeValue(val_double=v)))
+
+    raw_array = row.get("attributes_array")
+    if raw_array:
+        for k, values in process_arrays(raw_array).items():
+            attrs.append(
+                TraceItemDetailsAttribute(
+                    name=k,
+                    value=convert_to_attribute_value(values),
+                )
+            )
+
     return item_id, timestamp, attrs
 
 

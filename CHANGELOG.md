@@ -1,5 +1,31 @@
 # Changelog
 
+## 26.4.1
+
+### New Features ✨
+
+- Add default value to attribute aggregations by @wmak in [#7888](https://github.com/getsentry/snuba/pull/7888)
+- Make BLQ stale threshold and static friction runtime-configurable by @kylemumma in [#7880](https://github.com/getsentry/snuba/pull/7880)
+
+### Bug Fixes 🐛
+
+- (admin) Allow ClickHouse replace* functions in read-only query validation by @xurui-c in [#7876](https://github.com/getsentry/snuba/pull/7876)
+- (COGS) Unique labels for resource_ids by @xurui-c in [#7864](https://github.com/getsentry/snuba/pull/7864)
+- (outcomes) Deduplicate outcomes by item_id within batch by @untitaker in [#7885](https://github.com/getsentry/snuba/pull/7885)
+
+### Internal Changes 🔧
+
+#### Eap Outcomes
+
+- Add min_partition tag by @MeredithAnya in [#7891](https://github.com/getsentry/snuba/pull/7891)
+- Add duplicate_item_count metric by @MeredithAnya in [#7887](https://github.com/getsentry/snuba/pull/7887)
+
+#### Other
+
+- (ci) Pull out migrations tests maybe lets see by @MeredithAnya in [#7881](https://github.com/getsentry/snuba/pull/7881)
+- (gocd) Bump gocd-jsonnet to v3.0.0 (grouped pipedream) by @mchen-sentry in [#7878](https://github.com/getsentry/snuba/pull/7878)
+- Bump new development version by @sentry-release-bot[bot] in [41fe9b16](https://github.com/getsentry/snuba/commit/41fe9b16faa55aee5e066c3e990a244d5761cbdc)
+
 ## 26.4.0
 
 ### New Features ✨

@@ -38,8 +38,11 @@ pub struct AcceptedOutcomesStrategyFactory {
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for AcceptedOutcomesStrategyFactory {
-    fn update_partitions(&self, _partitions: &HashMap<Partition, u64>) {
-        // No-op for now
+    fn update_partitions(&self, partitions: &HashMap<Partition, u64>) {
+        match partitions.keys().map(|partition| partition.index).min() {
+            Some(min) => set_global_tag("min_partition".to_owned(), min.to_string()),
+            None => set_global_tag("min_partition".to_owned(), "none".to_owned()),
+        }
     }
 
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {

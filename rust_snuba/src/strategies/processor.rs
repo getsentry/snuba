@@ -13,8 +13,6 @@ use sentry_arroyo::processing::strategies::{InvalidMessage, ProcessingStrategy};
 use sentry_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition};
 use sentry_kafka_schemas::{Schema, SchemaError, SchemaType};
 
-use sentry_options::options;
-
 use crate::config::ProcessorConfig;
 use crate::processors::{ProcessingFunction, ProcessingFunctionWithReplacements};
 use crate::types::{
@@ -22,20 +20,6 @@ use crate::types::{
     InsertOrReplacement, KafkaMessageMetadata, RowData, TypedInsertBatch,
 };
 use tokio::time::Instant;
-
-fn commit_log_offset(raw_offset: u64) -> u64 {
-    let use_next_offset = options("snuba")
-        .ok()
-        .and_then(|o| o.get("consumer.commit_log_use_next_offset").ok())
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-
-    if use_next_offset {
-        raw_offset + 1
-    } else {
-        raw_offset
-    }
-}
 
 pub fn make_rust_processor(
     next_step: impl ProcessingStrategy<BytesInsertBatch<RowData>> + 'static,
@@ -72,7 +56,7 @@ pub fn make_rust_processor(
             .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
                 partition.index,
                 CommitLogEntry {
-                    offset: commit_log_offset(offset),
+                    offset: offset + 1,
                     orig_message_ts: timestamp,
                     received_p99: transformed.origin_timestamp.into_iter().collect(),
                 },
@@ -151,7 +135,7 @@ pub fn make_rust_processor_with_replacements(
                     .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
                         partition.index,
                         CommitLogEntry {
-                            offset: commit_log_offset(offset),
+                            offset: offset + 1,
                             orig_message_ts: timestamp,
                             received_p99: transformed.origin_timestamp.into_iter().collect(),
                         },
@@ -236,7 +220,7 @@ pub fn make_rust_processor_row_binary<T: Clone + Send + Sync + EstimatedSize + '
             .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
                 partition.index,
                 CommitLogEntry {
-                    offset: commit_log_offset(offset),
+                    offset: offset + 1,
                     orig_message_ts: timestamp,
                     received_p99: transformed.origin_timestamp.into_iter().collect(),
                 },
@@ -492,21 +476,18 @@ fn record_message_stats(payload: &[u8]) {
 mod tests {
     use super::*;
 
+    use std::sync::Arc;
+    use std::time::Duration;
+
     use chrono::Utc;
     use sentry_arroyo::backends::kafka::types::KafkaPayload;
+    use sentry_arroyo::processing::strategies::{
+        CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
+    };
     use sentry_arroyo::types::{Message, Partition, Topic};
 
-    use sentry_options::init_with_schemas;
-    use sentry_options::testing::override_options;
-    use serde_json::json;
-
-    use crate::types::InsertBatch;
+    use crate::types::{InsertBatch, RowData};
     use crate::Noop;
-
-    static INIT: std::sync::Once = std::sync::Once::new();
-    fn init_config() {
-        INIT.call_once(|| init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap());
-    }
 
     #[test]
     fn validate_schema() {
@@ -549,24 +530,74 @@ mod tests {
         let _ = strategy.join(None);
     }
 
+    /// The commit log offset produced by the processor must use next-to-consume
+    /// semantics (raw offset + 1).
     #[test]
-    fn commit_log_offset_returns_raw_when_option_disabled() {
-        init_config();
-        let _guard =
-            override_options(&[("snuba", "consumer.commit_log_use_next_offset", json!(false))])
-                .unwrap();
+    fn commit_log_entry_uses_next_offset() {
+        let captured: Arc<std::sync::Mutex<Vec<BytesInsertBatch<RowData>>>> =
+            Arc::new(std::sync::Mutex::new(Vec::new()));
+        let captured_clone = captured.clone();
 
-        assert_eq!(commit_log_offset(42), 42);
-    }
+        struct Capture(Arc<std::sync::Mutex<Vec<BytesInsertBatch<RowData>>>>);
+        impl ProcessingStrategy<BytesInsertBatch<RowData>> for Capture {
+            fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
+                Ok(None)
+            }
+            fn submit(
+                &mut self,
+                message: Message<BytesInsertBatch<RowData>>,
+            ) -> Result<(), SubmitError<BytesInsertBatch<RowData>>> {
+                self.0.lock().unwrap().push(message.into_payload());
+                Ok(())
+            }
+            fn terminate(&mut self) {}
+            fn join(
+                &mut self,
+                _timeout: Option<Duration>,
+            ) -> Result<Option<CommitRequest>, StrategyError> {
+                Ok(None)
+            }
+        }
 
-    #[test]
-    fn commit_log_offset_returns_next_when_option_enabled() {
-        init_config();
-        let _guard =
-            override_options(&[("snuba", "consumer.commit_log_use_next_offset", json!(true))])
-                .unwrap();
+        fn noop_processor(
+            _payload: KafkaPayload,
+            _metadata: KafkaMessageMetadata,
+            _config: &ProcessorConfig,
+        ) -> anyhow::Result<InsertBatch> {
+            Ok(InsertBatch::default())
+        }
 
-        assert_eq!(commit_log_offset(42), 43);
+        let partition = Partition::new(Topic::new("events-small"), 7);
+        let raw_offset: u64 = 42;
+        let concurrency = ConcurrencyConfig::new(1);
+
+        let mut strategy = make_rust_processor(
+            Capture(captured_clone),
+            noop_processor,
+            "outcomes",
+            false,
+            &concurrency,
+            ProcessorConfig::default(),
+            None,
+        );
+
+        let payload = KafkaPayload::new(None, None, Some(b"{}".to_vec()));
+        let message = Message::new_broker_message(payload, partition, raw_offset, Utc::now());
+
+        strategy.submit(message).unwrap();
+        strategy.poll().unwrap();
+        let _ = strategy.join(None);
+
+        let batches = captured.lock().unwrap();
+        assert_eq!(batches.len(), 1);
+
+        let offsets = batches[0].commit_log_offsets();
+        let entry = offsets
+            .0
+            .get(&partition.index)
+            .expect("commit log entry missing for partition");
+
+        assert_eq!(entry.offset, raw_offset + 1);
     }
 
     #[test]

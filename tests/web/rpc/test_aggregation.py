@@ -11,7 +11,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Reliability,
 )
 
-from snuba.query.expressions import FunctionCall
+from snuba.query.expressions import Column, FunctionCall, Literal, SubscriptableReference
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     get_field_existence_expression,
@@ -270,6 +270,35 @@ def test_get_field_existence_expression_array_map() -> None:
     expr = get_field_existence_expression(field)
     assert isinstance(expr, FunctionCall)
     assert expr.function_name == "notEmpty"
+
+
+def test_get_field_existence_expression_coalesce() -> None:
+    """Coalesced attributes should check existence for all underlying keys with OR."""
+    attr_col = Column(alias=None, table_name=None, column_name="attributes_string")
+    canonical_ref = SubscriptableReference(
+        column=attr_col,
+        key=Literal(alias=None, value="http.response.body.size"),
+        alias=None,
+    )
+    deprecated_ref = SubscriptableReference(
+        column=attr_col,
+        key=Literal(alias=None, value="http.response_content_length"),
+        alias=None,
+    )
+    coalesce_field = FunctionCall(
+        alias="test",
+        function_name="coalesce",
+        parameters=(canonical_ref, deprecated_ref),
+    )
+    expr = get_field_existence_expression(coalesce_field)
+    assert isinstance(expr, FunctionCall)
+    assert expr.function_name == "or"
+    assert len(expr.parameters) == 2
+    lhs, rhs = expr.parameters
+    assert isinstance(lhs, FunctionCall) and lhs.function_name == "mapContains"
+    assert isinstance(rhs, FunctionCall) and rhs.function_name == "mapContains"
+    assert lhs.parameters[1] == Literal(alias=None, value="http.response.body.size")
+    assert rhs.parameters[1] == Literal(alias=None, value="http.response_content_length")
 
 
 def test_aggregation_to_expression_uniq_type_array() -> None:

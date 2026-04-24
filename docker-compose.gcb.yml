@@ -42,12 +42,25 @@ services:
       - "-m"
       - "pytest"
       - "-x"
+      - "--ignore"
+      - "tests/migrations"
       - "-vv"
       - "${TEST_LOCATION:-tests}"
       - "--cov"
       - "."
       - "--cov-report"
       - "xml:/.artifacts/${TEST_LOCATION:-tests}/${SNUBA_SETTINGS}/coverage.xml"
+      - "--junit-xml"
+      - "/.artifacts/${TEST_LOCATION:-tests}/${SNUBA_SETTINGS}/pytest.junit.xml"
+  snuba-test-migrations:
+    <<: *test-common
+    entrypoint: python
+    command:
+      - "-m"
+      - "pytest"
+      - "-x"
+      - "-vv"
+      - "tests/migrations"
       - "--junit-xml"
       - "/.artifacts/${TEST_LOCATION:-tests}/${SNUBA_SETTINGS}/pytest.junit.xml"
   zookeeper:

@@ -1,6 +1,7 @@
 use std::cmp::min;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use chrono::{DateTime, Utc};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
@@ -617,6 +618,15 @@ pub struct TrackOutcome {
     pub quantity: u64,
 }
 
+/// Key used to deduplicate items within an outcomes batch.
+/// Uses the relevant fields from the eap_items table sorting key.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ItemDedupKey {
+    pub org_id: u64,
+    pub project_id: u64,
+    pub item_id: [u8; 16],
+}
+
 /// Key used to bucket accepted outcomes by time slot, organization, project, key, and data category.
 /// Outcome type is omitted because this consumer only processes accepted outcomes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -659,6 +669,10 @@ pub struct AggregatedOutcomesBatch {
     pub bucket_interval: u64,
     /// Per-category metrics for the current batch
     pub category_metrics: BTreeMap<u32, CategoryMetrics>,
+    /// Set of items already processed in this batch, used for deduplication, keyed by item type
+    pub seen_items: HashMap<i32, HashSet<ItemDedupKey>>,
+    /// Count of items skipped due to deduplication within this batch, keyed by item type
+    pub duplicate_item_count: HashMap<i32, u64>,
 }
 
 impl Default for AggregatedOutcomesBatch {
@@ -667,6 +681,8 @@ impl Default for AggregatedOutcomesBatch {
             buckets: HashMap::new(),
             bucket_interval: 60,
             category_metrics: BTreeMap::new(),
+            seen_items: HashMap::new(),
+            duplicate_item_count: HashMap::new(),
         }
     }
 }
@@ -678,6 +694,14 @@ impl AggregatedOutcomesBatch {
             bucket_interval,
             ..Default::default()
         }
+    }
+
+    pub fn record_if_duplicate(&mut self, item_type: i32, key: ItemDedupKey) -> bool {
+        let is_dup = !self.seen_items.entry(item_type).or_default().insert(key);
+        if is_dup {
+            *self.duplicate_item_count.entry(item_type).or_insert(0) += 1;
+        }
+        is_dup
     }
 
     /// Add or update a bucket with a count and quantity, updating per-category metrics

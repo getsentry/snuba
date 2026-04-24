@@ -21,11 +21,6 @@
       "type": "integer",
       "default": 120,
       "description": "BLQ hysteresis in seconds. Once routing stale, keep routing messages at least (stale_threshold - static_friction) old. Set to 0 to disable friction."
-    },
-    "consumer.commit_log_use_next_offset": {
-      "type": "boolean",
-      "default": false,
-      "description": "When true, the Rust consumer writes offset+1 (next-to-consume) to the commit log instead of the raw offset."
     }
   }
 }

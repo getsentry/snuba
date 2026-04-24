@@ -96,6 +96,9 @@ class TestAttributeKeyToExpression:
             alias=f"{new_attribute}_TYPE_STRING",
         )
 
+    def test_coalesce_map_does_not_include_none_key(self) -> None:
+        assert None not in ATTRIBUTES_TO_COALESCE
+
     def test_unspecified_type_raises_exception(self) -> None:
         with pytest.raises(MalformedAttributeException) as exc_info:
             attribute_key_to_expression(
