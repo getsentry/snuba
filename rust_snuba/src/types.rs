@@ -57,7 +57,7 @@ impl CogsData {
 }
 
 /// Returns the friendly name for a TraceItemType, e.g. "span" instead of "TRACE_ITEM_TYPE_SPAN".
-fn item_type_name(item_type: TraceItemType) -> String {
+pub fn item_type_name(item_type: TraceItemType) -> String {
     item_type
         .as_str_name()
         .strip_prefix("TRACE_ITEM_TYPE_")
@@ -670,9 +670,9 @@ pub struct AggregatedOutcomesBatch {
     /// Per-category metrics for the current batch
     pub category_metrics: BTreeMap<u32, CategoryMetrics>,
     /// Set of items already processed in this batch, used for deduplication, keyed by item type
-    pub seen_items: HashMap<i32, HashSet<ItemDedupKey>>,
+    pub seen_items: HashMap<TraceItemType, HashSet<ItemDedupKey>>,
     /// Count of items skipped due to deduplication within this batch, keyed by item type
-    pub duplicate_item_count: HashMap<i32, u64>,
+    pub duplicate_item_count: HashMap<TraceItemType, u64>,
 }
 
 impl Default for AggregatedOutcomesBatch {
@@ -696,7 +696,7 @@ impl AggregatedOutcomesBatch {
         }
     }
 
-    pub fn record_if_duplicate(&mut self, item_type: i32, key: ItemDedupKey) -> bool {
+    pub fn record_if_duplicate(&mut self, item_type: TraceItemType, key: ItemDedupKey) -> bool {
         let is_dup = !self.seen_items.entry(item_type).or_default().insert(key);
         if is_dup {
             *self.duplicate_item_count.entry(item_type).or_insert(0) += 1;

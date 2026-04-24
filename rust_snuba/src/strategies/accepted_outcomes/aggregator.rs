@@ -10,11 +10,11 @@ use sentry_arroyo::processing::strategies::{
 };
 use sentry_arroyo::types::{InnerMessage, Message, Partition};
 use sentry_arroyo::utils::timing::Deadline;
-use sentry_protos::snuba::v1::TraceItem;
+use sentry_protos::snuba::v1::{TraceItem, TraceItemType};
 
 use sentry_options::options;
 
-use crate::types::{AggregatedOutcomesBatch, BucketKey, ItemDedupKey};
+use crate::types::{item_type_name, AggregatedOutcomesBatch, BucketKey, ItemDedupKey};
 
 #[derive(Debug, Default)]
 struct TraceItemOutcome {
@@ -88,7 +88,8 @@ impl<TNext> OutcomesAggregator<TNext> {
     fn is_duplicate(&mut self, trace_item: &TraceItem) -> bool {
         let org_id = trace_item.organization_id;
         let project_id = trace_item.project_id;
-        let item_type = trace_item.item_type;
+        let item_type =
+            TraceItemType::try_from(trace_item.item_type).unwrap_or(TraceItemType::Unspecified);
 
         if let Ok(item_id) = <[u8; 16]>::try_from(trace_item.item_id.as_slice()) {
             let dedup_key = ItemDedupKey {
@@ -129,7 +130,7 @@ impl<TNext> OutcomesAggregator<TNext> {
 
                 tracing::info!("flushed {} buckets after {} seconds", num_buckets, seconds);
                 for (item_type, count) in duplicate_item_counts {
-                    let item_type_str = item_type.to_string();
+                    let item_type_str = item_type_name(item_type);
                     counter!("accepted_outcomes.duplicate_items", count, "item_type" => item_type_str.as_str());
                 }
                 for (category, m) in category_metrics {
@@ -923,7 +924,7 @@ mod tests {
             aggregator
                 .batch
                 .duplicate_item_count
-                .get(&TraceItemType::Span.into()),
+                .get(&TraceItemType::Span),
             Some(&1)
         );
     }
