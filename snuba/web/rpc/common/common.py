@@ -524,7 +524,8 @@ def trace_item_filters_to_expression(
         if value_type is None and not v.is_null:
             raise BadSnubaRPCRequestException("comparison does not have a right hand side")
 
-        if v.is_null:
+        # is_null and val_null both mean a null RHS;
+        if v.is_null or value_type == "val_null":
             v_expression: Expression = literal(None)
         else:
             v_expression = _attribute_value_to_expression(v)

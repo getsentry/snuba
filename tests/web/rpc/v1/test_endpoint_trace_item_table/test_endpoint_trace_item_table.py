@@ -3640,6 +3640,14 @@ def _int_array(*values: int) -> AnyValue:
     return AnyValue(array_value=ArrayValue(values=[AnyValue(int_value=v) for v in values]))
 
 
+def _double_array(*values: float) -> AnyValue:
+    return AnyValue(array_value=ArrayValue(values=[AnyValue(double_value=v) for v in values]))
+
+
+def _bool_array(*values: bool) -> AnyValue:
+    return AnyValue(array_value=ArrayValue(values=[AnyValue(bool_value=v) for v in values]))
+
+
 class TestArrayWildcardSearch(BaseApiTest):
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
@@ -3828,6 +3836,100 @@ class TestArrayWildcardSearch(BaseApiTest):
                 e.val_int for e in row.val_array.values if e.WhichOneof("value") == "val_int"
             ]
             assert 45 in int_vals
+
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    @pytest.mark.parametrize(
+        "attr_name,match_attrs,no_match_attrs,filter_value,check_row",
+        [
+            pytest.param(
+                "arr_eq_flt",
+                {"arr_eq_flt": _double_array(0.0, 1.5, 2.0)},
+                {"arr_eq_flt": _double_array(0.1, 0.2)},
+                AttributeValue(val_float=1.5),
+                lambda row: any(
+                    isclose(e.val_double, 1.5)
+                    for e in row.val_array.values
+                    if e.WhichOneof("value") == "val_double"
+                )
+                or any(
+                    isclose(e.val_float, 1.5)
+                    for e in row.val_array.values
+                    if e.WhichOneof("value") == "val_float"
+                ),
+                id="val_float",
+            ),
+            pytest.param(
+                "arr_eq_dbl",
+                {"arr_eq_dbl": _double_array(9.9, 1.0)},
+                {"arr_eq_dbl": _double_array(0.0, 0.0)},
+                AttributeValue(val_double=9.9),
+                lambda row: any(
+                    e.WhichOneof("value") == "val_double" and e.val_double == 9.9
+                    for e in row.val_array.values
+                ),
+                id="val_double",
+            ),
+            pytest.param(
+                "arr_eq_bool",
+                {"arr_eq_bool": _bool_array(False, True)},
+                {"arr_eq_bool": _bool_array(False, False)},
+                AttributeValue(val_bool=True),
+                lambda row: any(
+                    e.WhichOneof("value") == "val_bool" and e.val_bool is True
+                    for e in row.val_array.values
+                ),
+                id="val_bool",
+            ),
+        ],
+    )
+    def test_trace_item_table_array_op_equals_all_scalar_rhs_types(
+        self,
+        attr_name: str,
+        match_attrs: dict[str, AnyValue],
+        no_match_attrs: dict[str, AnyValue],
+        filter_value: AttributeValue,
+        check_row: Any,
+    ) -> None:
+        """OP_EQUALS on TYPE_ARRAY: each scalar AttributeValue type matches a stored element"""
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        items_storage = get_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,  # type: ignore
+            [
+                gen_item_message(span_ts, attributes=match_attrs),
+                gen_item_message(span_ts, attributes=no_match_attrs),
+            ],
+        )
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_ARRAY,
+                        name=attr_name,
+                    ),
+                    op=ComparisonFilter.OP_EQUALS,
+                    value=filter_value,
+                )
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name=attr_name)),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        by_name = {cv.attribute_name: cv for cv in response.column_values}
+        assert len(by_name[attr_name].results) == 1
+        assert check_row(by_name[attr_name].results[0])
 
 
 class TestTraceItemTableArrayColumn(BaseApiTest):
