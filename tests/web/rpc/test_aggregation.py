@@ -254,14 +254,11 @@ def test_attribute_key_to_expression_type_array() -> None:
     attr_key = AttributeKey(type=AttributeKey.TYPE_ARRAY, name="user_ids")
     expr = attribute_key_to_expression(attr_key)
     assert isinstance(expr, FunctionCall)
-    assert expr.function_name == "arrayMap"
+    assert expr.function_name == "toJSONString"
     assert expr.alias == "user_ids_TYPE_ARRAY"
     fmt = ClickhouseExpressionFormatter()
     sql = expr.accept(fmt)
-    assert (
-        sql
-        == "(arrayMap(x -> coalesce(x.`String`::Nullable(String), toString(x.`Int`::Nullable(Int64)), toString(x.`Double`::Nullable(Float64)), x.`Bool`::Nullable(String)), attributes_array.`user_ids`::Array(JSON)) AS user_ids_TYPE_ARRAY)"
-    )
+    assert sql == "(toJSONString(attributes_array.`user_ids`::Array(JSON)) AS user_ids_TYPE_ARRAY)"
 
 
 def test_get_field_existence_expression_array_map() -> None:
