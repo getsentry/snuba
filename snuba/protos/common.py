@@ -166,6 +166,15 @@ def type_array_to_membership_array_expression(attr_key: AttributeKey) -> Functio
     )
 
 
+def type_array_to_stored_array_json_path(attr_key: AttributeKey) -> JsonPath:
+    return JsonPath(
+        alias=None,
+        base=column("attributes_array"),
+        path=attr_key.name,
+        return_type="Array(JSON)",
+    )
+
+
 def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
     """Convert an AttributeKey proto to a Snuba Expression.
 
@@ -230,14 +239,7 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
         return FunctionCall(
             alias=alias,
             function_name="toJSONString",
-            parameters=(
-                JsonPath(
-                    alias=None,
-                    base=column("attributes_array"),
-                    path=attr_key.name,
-                    return_type="Array(JSON)",
-                ),
-            ),
+            parameters=(type_array_to_stored_array_json_path(attr_key),),
         )
 
     raise MalformedAttributeException(

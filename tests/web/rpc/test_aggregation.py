@@ -11,7 +11,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Reliability,
 )
 
-from snuba.query.expressions import Column, FunctionCall, Literal, SubscriptableReference
+from snuba.query.expressions import Column, FunctionCall, JsonPath, Literal, SubscriptableReference
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     get_field_existence_expression,
@@ -312,6 +312,11 @@ def test_aggregation_to_expression_uniq_type_array() -> None:
     inner = expr.parameters[0]
     assert isinstance(inner, FunctionCall)
     assert inner.function_name == "uniqArrayIfOrNull"
+    # Must be the stored Array(JSON) path, not toJSONString (String) from attribute_key_to_expression
+    first = inner.parameters[0]
+    assert isinstance(first, JsonPath)
+    assert first.path == "user_ids"
+    assert first.return_type == "Array(JSON)"
 
 
 def test_aggregation_to_expression_sum_type_array_raises() -> None:

@@ -17,6 +17,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Array,
     AttributeKey,
     AttributeValue,
+    StrArray,
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     AnyAttributeFilter,
@@ -176,17 +177,17 @@ class TestTraceItemFiltersArrayLike:
         ):
             trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
 
-    def test_equals_on_array_key_raises(self) -> None:
+    def test_equals_on_array_key_with_str_array_value_raises(self) -> None:
         item_filter = TraceItemFilter(
             comparison_filter=ComparisonFilter(
                 key=AttributeKey(type=AttributeKey.Type.TYPE_ARRAY, name="my_tags"),
                 op=ComparisonFilter.OP_EQUALS,
-                value=AttributeValue(val_str="something"),
+                value=AttributeValue(val_str_array=StrArray(values=["a", "b"])),
             )
         )
         with pytest.raises(
             BadSnubaRPCRequestException,
-            match="only LIKE and NOT_LIKE comparisons are supported on array keys",
+            match="OP_EQUALS/OP_NOT_EQUALS on array keys require a scalar value",
         ):
             trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
 
