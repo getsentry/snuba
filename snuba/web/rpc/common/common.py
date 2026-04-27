@@ -344,8 +344,6 @@ def _type_array_includes_scalar_expression(
     if v.WhichOneof("value") == "val_null" or v.is_null:
         raise BadSnubaRPCRequestException("Arrays can't be NULL or cannot have NULL elements")
     x = Argument(None, "x")
-    if v.is_null or v.WhichOneof("value") == "val_null":
-        return f.arrayExists(Lambda(None, ("x",), f.isNull(x)), array_expr)
     rhs = _type_array_membership_rhs_expression(v)
     if ignore_case and v.WhichOneof("value") == "val_str":
         return f.arrayExists(
