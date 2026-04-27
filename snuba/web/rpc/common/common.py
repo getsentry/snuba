@@ -91,10 +91,29 @@ def transform_array_value(value: dict[str, str]) -> Any:
     raise BadSnubaRPCRequestException(f"array value type unknown: {type(v)}")
 
 
+def _flatten_nested_json(obj: dict[str, Any], prefix: str = "") -> dict[str, list[Any]]:
+    """Recursively flatten a nested JSON object into dot-separated keys mapped to lists.
+
+    OTel SDKs store namespaced array attributes as deeply nested JSON objects
+    (e.g. ``{"resource": {"aws": {"log": {"group": {"arns": [{"String": "..."}]}}}}}``).
+    This helper walks the hierarchy and produces flat entries like
+    ``{"resource.aws.log.group.arns": [{"String": "..."}]}``.
+    """
+    result: dict[str, list[Any]] = {}
+    for key, value in obj.items():
+        full_key = f"{prefix}.{key}" if prefix else key
+        if isinstance(value, list):
+            result[full_key] = value
+        elif isinstance(value, dict):
+            result.update(_flatten_nested_json(value, full_key))
+    return result
+
+
 def process_arrays(raw: str) -> dict[str, list[Any]]:
     parsed = json.loads(raw) or {}
+    flattened = _flatten_nested_json(parsed)
     arrays = {}
-    for key, values in parsed.items():
+    for key, values in flattened.items():
         arrays[key] = [transform_array_value(v) for v in values]
     return arrays
 
