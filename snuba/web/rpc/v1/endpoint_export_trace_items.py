@@ -140,13 +140,9 @@ def _parse_last_seen_tuple(
 class ExportTraceItemsPageToken:
     """Page token: always encodes the active [start,end) in unix seconds, shared with flex routing.
 
-    * **2 filters:** that window only — move to the next time slice (flex) with no keyset cursor.
-    * **7 filters:** same 2 time-window fields plus 5 equality fields — continue after the
+    2 filters: that window only — move to the next time slice (flex) with no keyset cursor.
+    7 filters: same 2 time-window fields plus 5 equality fields — continue after the
       last row within that window (keyset / tuple seek).
-
-    The first request has an empty `page_token`. Every continuation request must resend
-    `RequestMeta` (user range) and send a token so routing can read
-    `sentry__time_window.*` and align with the slice being scanned.
     """
 
     def __init__(
