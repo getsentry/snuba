@@ -523,7 +523,7 @@ def trace_item_filters_to_expression(
         )
 
         value_type = v.WhichOneof("value")
-        if value_type is None or not v.is_null:
+        if value_type is None:
             raise BadSnubaRPCRequestException("comparison does not have a right hand side")
 
         if v.is_null or value_type == "val_null":
