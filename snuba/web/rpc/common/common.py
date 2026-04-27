@@ -293,11 +293,11 @@ def _validate_comparison_filter_type_array(
             )
         return
     if op in (ComparisonFilter.OP_EQUALS, ComparisonFilter.OP_NOT_EQUALS):
-        if v.is_null or v.WhichOneof("value") == "val_null":
-            return
+        # Array can be empty or non-empty. It can never be null, or can never have null elements.
         vt = v.WhichOneof("value")
         if vt in (
             None,
+            "val_null",
             "val_array",
             "val_str_array",
             "val_int_array",
@@ -340,7 +340,9 @@ def _type_array_includes_scalar_expression(
     v: AttributeValue,
     ignore_case: bool,
 ) -> Expression:
-    """Any element equals scalar (includes / [*]); null means any element is null."""
+    """Any element equals scalar (includes / [*])"""
+    if v.WhichOneof("value") == "val_null" or v.is_null:
+        raise BadSnubaRPCRequestException("Arrays can't be NULL or cannot have NULL elements")
     x = Argument(None, "x")
     if v.is_null or v.WhichOneof("value") == "val_null":
         return f.arrayExists(Lambda(None, ("x",), f.isNull(x)), array_expr)
@@ -521,10 +523,9 @@ def trace_item_filters_to_expression(
         )
 
         value_type = v.WhichOneof("value")
-        if value_type is None and not v.is_null:
+        if value_type is None or not v.is_null:
             raise BadSnubaRPCRequestException("comparison does not have a right hand side")
 
-        # is_null and val_null both mean a null RHS;
         if v.is_null or value_type == "val_null":
             v_expression: Expression = literal(None)
         else:
