@@ -25,7 +25,7 @@ from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array
 from snuba.query.logical import Query
 from snuba.query.query_settings import OutcomesQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.settings import LOWER_RETENTION_DAYS
+from snuba.settings import LOWER_RETENTION_DAYS, VALID_RETENTION_DAYS
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     timestamp_in_range_condition,
@@ -219,7 +219,10 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
 
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
 
-        if in_msg_meta.HasField("retention_days"):
+        if (
+            in_msg_meta.HasField("retention_days")
+            and in_msg_meta.retention_days in VALID_RETENTION_DAYS
+        ):
             full_fidelity_retention_days = in_msg_meta.retention_days
         else:
             full_fidelity_retention_days = LOWER_RETENTION_DAYS
