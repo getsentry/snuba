@@ -382,7 +382,6 @@ class TestTraceItemDetails(BaseApiTest):
             )
             .column_values
         )
-        # Do not use results[0]: other rows may sort ahead of our span; find this trace's row.
         idx = next(
             i
             for i, tr in enumerate(spans[1].results)

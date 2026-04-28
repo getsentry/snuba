@@ -79,7 +79,7 @@ BUCKET_COUNT = 40
 
 
 def transform_array_value(value: Any) -> Any:
-    """Decode one array element: a small JSON object with a String, Int, Double, or Bool tag."""
+    """Decode one array element: with a String, Int, Double, or Bool tag."""
     if not isinstance(value, dict):
         raise BadSnubaRPCRequestException(
             f"array element must be an object with a String/Int/Double/Bool tag, got {type(value).__name__}"
