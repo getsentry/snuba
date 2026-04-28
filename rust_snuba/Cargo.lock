@@ -4359,9 +4359,9 @@ dependencies = [
 
 [[package]]
 name = "sentry_arroyo"
-version = "2.38.7"
+version = "2.39.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ec82d51631c9f4b7105912c97d74a4616969221a7207628f411325110b4c7a3"
+checksum = "a486039f96398e2dc4d51ac198590b8b7503233309dc038002ab1f83878b43d2"
 dependencies = [
  "chrono",
  "coarsetime",
