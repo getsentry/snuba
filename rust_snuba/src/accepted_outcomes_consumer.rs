@@ -12,6 +12,8 @@ use sentry_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrate
 use sentry_arroyo::processing::StreamProcessor;
 use sentry_arroyo::types::{Partition, Topic};
 
+use sentry_options::init_with_schemas;
+
 use pyo3::prelude::*;
 
 use crate::config;
@@ -36,8 +38,11 @@ pub struct AcceptedOutcomesStrategyFactory {
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for AcceptedOutcomesStrategyFactory {
-    fn update_partitions(&self, _partitions: &HashMap<Partition, u64>) {
-        // No-op for now
+    fn update_partitions(&self, partitions: &HashMap<Partition, u64>) {
+        match partitions.keys().map(|partition| partition.index).min() {
+            Some(min) => set_global_tag("min_partition".to_owned(), min.to_string()),
+            None => set_global_tag("min_partition".to_owned(), "none".to_owned()),
+        }
     }
 
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
@@ -118,6 +123,8 @@ pub fn accepted_outcomes_consumer_impl(
     commit_frequency_sec: u64,
 ) -> usize {
     setup_logging();
+    init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)])
+        .expect("failed to initialize sentry-options");
 
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
 

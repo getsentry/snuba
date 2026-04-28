@@ -53,7 +53,7 @@ pub fn process_message_with_replacement(
     };
 
     if version != 2 {
-        anyhow::bail!("Unsupported message version: {}", version);
+        anyhow::bail!("Unsupported message version: {version}");
     }
 
     match (msg_type.as_str(), error_event, replacement_event) {
@@ -83,13 +83,14 @@ pub fn process_message_with_replacement(
             value: payload_bytes.clone(),
         })),
         _ => {
-            anyhow::bail!("unsupported message format: {:?}", msg_type);
+            anyhow::bail!("unsupported message format: {msg_type:?}");
         }
     }
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(untagged)]
+#[allow(clippy::large_enum_variant)]
 enum Message {
     FourTrain(FourTrain),
     ThreeTrain(ThreeTrain),
@@ -548,7 +549,7 @@ impl ErrorRow {
             for (key, value) in container.unwrap_or_default() {
                 if let Some(v) = value.0 {
                     if key != "type" {
-                        contexts_keys.push(format!("{}.{}", container_name, key));
+                        contexts_keys.push(format!("{container_name}.{key}"));
                         contexts_values.push(v);
                     }
                 }

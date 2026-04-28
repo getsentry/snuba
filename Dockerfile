@@ -88,6 +88,7 @@ RUN set -ex; \
 
 FROM build_rust_snuba_deps AS build_rust_snuba
 COPY ./rust_snuba/ ./rust_snuba/
+COPY ./sentry-options/schemas/ ./sentry-options/schemas/
 COPY --from=build_rust_snuba_deps /usr/src/snuba/rust_snuba/target/ ./rust_snuba/target/
 COPY --from=build_rust_snuba_deps /root/.cargo/ /root/.cargo/
 RUN set -ex; \
@@ -134,6 +135,9 @@ ENV LD_PRELOAD=/usr/src/snuba/libjemalloc.so.2 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
+# set default path for sentry options values
+ENV SENTRY_OPTIONS_DIR=/etc/sentry-options
+
 USER snuba
 EXPOSE 1218 1219
 ENTRYPOINT [ "./docker_entrypoint.sh" ]
@@ -174,7 +178,8 @@ ENV PATH="/.venv/bin:/opt/python/bin:$PATH" \
     SNUBA_RELEASE=$SOURCE_COMMIT \
     FLASK_DEBUG=0 \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    SENTRY_OPTIONS_DIR=/etc/sentry-options
 
 USER 1000
 EXPOSE 1218 1219
@@ -197,7 +202,8 @@ ENV PATH="/.venv/bin:/opt/python/bin:$PATH" \
     SNUBA_RELEASE=$SOURCE_COMMIT \
     FLASK_DEBUG=0 \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    SENTRY_OPTIONS_DIR=/etc/sentry-options
 
 USER 1000
 EXPOSE 1218 1219

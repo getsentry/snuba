@@ -139,6 +139,9 @@ class TestTimeSeriesCrossItemSampling(BaseApiTest):
         Test that when cross_item_queries_no_sample_outer is disabled (default):
         - Both queries use the same storage tier
         """
+        # Explicitly disable the feature flag
+        state.set_config("cross_item_queries_no_sample_outer", 0)
+
         trace_ids, all_items, start_time, end_time = create_cross_item_test_data()
         write_cross_item_data_to_storage(all_items)
 

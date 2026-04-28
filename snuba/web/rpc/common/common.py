@@ -12,7 +12,10 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 
 from snuba import settings, state
-from snuba.protos.common import MalformedAttributeException
+from snuba.protos.common import (
+    MalformedAttributeException,
+    type_array_to_membership_array_expression,
+)
 from snuba.protos.common import (
     attribute_key_to_expression as _attribute_key_to_expression,
 )
@@ -52,6 +55,21 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
         return _attribute_key_to_expression(attr_key)
     except MalformedAttributeException as e:
         raise BadSnubaRPCRequestException(str(e)) from e
+
+
+def _trace_item_filter_key_expression(
+    attr_to_key_expression_callable: Callable[[AttributeKey], Expression], key: AttributeKey
+) -> Expression:
+    """predicates must use the normalized
+    ``arrayMap`` (``type_array_to_membership_array_expression``) so
+    ``arrayExists`` compares per element. It is different from SELECT predicate.
+    """
+    if key.type == AttributeKey.Type.TYPE_ARRAY:
+        try:
+            return type_array_to_membership_array_expression(key)
+        except MalformedAttributeException as e:
+            raise BadSnubaRPCRequestException(str(e)) from e
+    return attr_to_key_expression_callable(key)
 
 
 Tin = TypeVar("Tin", bound=ProtobufMessage)
@@ -265,6 +283,76 @@ _ARRAY_VALUE_TYPES = {
 }
 
 
+def _validate_comparison_filter_type_array(
+    op: ComparisonFilter.Op.ValueType, v: AttributeValue
+) -> None:
+    if op in (ComparisonFilter.OP_LIKE, ComparisonFilter.OP_NOT_LIKE):
+        if v.WhichOneof("value") != "val_str":
+            raise BadSnubaRPCRequestException(
+                "LIKE/NOT_LIKE on array keys requires a string pattern"
+            )
+        return
+    if op in (ComparisonFilter.OP_EQUALS, ComparisonFilter.OP_NOT_EQUALS):
+        # Array can be empty or non-empty. It can never be null, or can never have null elements.
+        vt = v.WhichOneof("value")
+        if vt in (
+            None,
+            "val_null",
+            "val_array",
+            "val_str_array",
+            "val_int_array",
+            "val_float_array",
+            "val_double_array",
+        ):
+            raise BadSnubaRPCRequestException(
+                "OP_EQUALS/OP_NOT_EQUALS on array keys require a scalar value "
+                "(e.g. val_str, val_int) or null (is_null / val_null) to match null elements"
+            )
+        return
+    raise BadSnubaRPCRequestException(
+        f"{ComparisonFilter.Op.Name(op)} is not supported on array keys "
+        "(supported: LIKE, NOT_LIKE, OP_EQUALS, OP_NOT_EQUALS)"
+    )
+
+
+def _type_array_membership_rhs_expression(v: AttributeValue) -> Expression:
+    """RHS as String, comparable to TYPE_ARRAY arrayMap output (Array(String) in CH)."""
+    value_type = v.WhichOneof("value")
+    match value_type:
+        case "val_str":
+            return literal(v.val_str)
+        case "val_int":
+            return f.toString(literal(v.val_int))
+        case "val_double":
+            return f.toString(literal(v.val_double))
+        case "val_float":
+            return f.toString(literal(v.val_float))
+        case "val_bool":
+            return literal(str(v.val_bool).lower())
+        case _:
+            raise BadSnubaRPCRequestException(
+                f"unsupported AttributeValue for array membership: {value_type}"
+            )
+
+
+def _type_array_includes_scalar_expression(
+    array_expr: Expression,
+    v: AttributeValue,
+    ignore_case: bool,
+) -> Expression:
+    """Any element equals scalar (includes / [*])"""
+    if v.WhichOneof("value") == "val_null" or v.is_null:
+        raise BadSnubaRPCRequestException("Arrays can't be NULL or cannot have NULL elements")
+    x = Argument(None, "x")
+    rhs = _type_array_membership_rhs_expression(v)
+    if ignore_case and v.WhichOneof("value") == "val_str":
+        return f.arrayExists(
+            Lambda(None, ("x",), f.equals(f.lower(x), f.lower(rhs))),
+            array_expr,
+        )
+    return f.arrayExists(Lambda(None, ("x",), f.equals(x, rhs)), array_expr)
+
+
 def _any_attribute_filter_to_expression(
     filt: AnyAttributeFilter,
 ) -> Expression:
@@ -425,53 +513,61 @@ def trace_item_filters_to_expression(
         op = item_filter.comparison_filter.op
         v = item_filter.comparison_filter.value
 
-        # TYPE_ARRAY only supports LIKE/NOT_LIKE with string patterns — validate early.
         if k.type == AttributeKey.Type.TYPE_ARRAY:
-            if op not in (
-                ComparisonFilter.OP_LIKE,
-                ComparisonFilter.OP_NOT_LIKE,
-            ):
-                raise BadSnubaRPCRequestException(
-                    "only LIKE and NOT_LIKE comparisons are supported on array keys"
-                )
-            if v.WhichOneof("value") != "val_str":
-                raise BadSnubaRPCRequestException(
-                    "LIKE/NOT_LIKE on array keys requires a string pattern"
-                )
+            _validate_comparison_filter_type_array(op, v)
 
-        k_expression = attribute_key_to_expression(k)
+        k_expression = _trace_item_filter_key_expression(
+            attr_to_key_expression_callable=attribute_key_to_expression, key=k
+        )
 
         value_type = v.WhichOneof("value")
         if value_type is None:
             raise BadSnubaRPCRequestException("comparison does not have a right hand side")
 
-        if v.is_null:
+        if v.is_null or value_type == "val_null":
             v_expression: Expression = literal(None)
         else:
             v_expression = _attribute_value_to_expression(v)
 
         if op == ComparisonFilter.OP_EQUALS:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
-            expr = (
-                f.equals(f.lower(k_expression), f.lower(v_expression))
-                if item_filter.comparison_filter.ignore_case
-                else f.equals(k_expression, v_expression)
-            )
-            # we redefine the way equals works for nulls
-            # now null=null is true
-            expr_with_null = or_cond(expr, and_cond(f.isNull(k_expression), f.isNull(v_expression)))
-            return expr_with_null
+
+            if k.type == AttributeKey.Type.TYPE_ARRAY:
+                return _type_array_includes_scalar_expression(
+                    k_expression, v, item_filter.comparison_filter.ignore_case
+                )
+            else:
+                expr = (
+                    f.equals(f.lower(k_expression), f.lower(v_expression))
+                    if item_filter.comparison_filter.ignore_case
+                    else f.equals(k_expression, v_expression)
+                )
+                # we redefine the way equals works for nulls
+                # now null=null is true
+                expr_with_null = or_cond(
+                    expr, and_cond(f.isNull(k_expression), f.isNull(v_expression))
+                )
+                return expr_with_null
         if op == ComparisonFilter.OP_NOT_EQUALS:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
-            expr = (
-                f.notEquals(f.lower(k_expression), f.lower(v_expression))
-                if item_filter.comparison_filter.ignore_case
-                else f.notEquals(k_expression, v_expression)
-            )
-            # we redefine the way not equals works for nulls
-            # now null!=null is true
-            expr_with_null = or_cond(expr, f.xor(f.isNull(k_expression), f.isNull(v_expression)))
-            return expr_with_null
+            if k.type == AttributeKey.Type.TYPE_ARRAY:
+                return not_cond(
+                    _type_array_includes_scalar_expression(
+                        k_expression, v, item_filter.comparison_filter.ignore_case
+                    )
+                )
+            else:
+                expr = (
+                    f.notEquals(f.lower(k_expression), f.lower(v_expression))
+                    if item_filter.comparison_filter.ignore_case
+                    else f.notEquals(k_expression, v_expression)
+                )
+                # we redefine the way not equals works for nulls
+                # now null!=null is true
+                expr_with_null = or_cond(
+                    expr, f.xor(f.isNull(k_expression), f.isNull(v_expression))
+                )
+                return expr_with_null
         if op == ComparisonFilter.OP_LIKE:
             if k.type == AttributeKey.Type.TYPE_ARRAY:
                 like_fn = f.ilike if item_filter.comparison_filter.ignore_case else f.like
@@ -578,7 +674,10 @@ def trace_item_filters_to_expression(
 
     if item_filter.HasField("exists_filter"):
         return get_field_existence_expression(
-            attribute_key_to_expression(item_filter.exists_filter.key)
+            _trace_item_filter_key_expression(
+                attr_to_key_expression_callable=attribute_key_to_expression,
+                key=item_filter.exists_filter.key,
+            )
         )
 
     if item_filter.HasField("any_attribute_filter"):
@@ -669,6 +768,11 @@ def get_field_existence_expression(field: Expression) -> Expression:
                 return field.parameters[0]
 
         return None
+
+    if isinstance(field, FunctionCall) and field.function_name == "coalesce":
+        return combine_or_conditions(
+            [get_field_existence_expression(param) for param in field.parameters]
+        )
 
     subscriptable_field = get_subscriptable_field(field)
     if subscriptable_field is not None:

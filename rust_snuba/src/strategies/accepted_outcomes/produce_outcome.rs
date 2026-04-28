@@ -8,9 +8,8 @@ use sentry_arroyo::processing::strategies::run_task_in_threads::{
 use sentry_arroyo::processing::strategies::{
     CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
+use sentry_arroyo::timer;
 use sentry_arroyo::types::{Message, Topic, TopicOrPartition};
-use sentry_arroyo::{counter, timer};
-use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
@@ -47,17 +46,15 @@ impl TaskRunner<AggregatedOutcomesBatch, AggregatedOutcomesBatch, anyhow::Error>
 
         Box::pin(async move {
             let produce_start = SystemTime::now();
-            let mut category_metrics: BTreeMap<u32, (u64, u64)> = BTreeMap::new();
 
             let bucket_interval = message.payload().bucket_interval;
             for (key, stats) in &message.payload().buckets {
-                let entry = category_metrics.entry(key.category).or_insert((0, 0));
-                entry.0 += 1;
-                entry.1 += stats.quantity;
-
                 let ts_secs = key.time_offset * bucket_interval;
-                let timestamp =
-                    DateTime::from_timestamp(ts_secs as i64, 0).unwrap_or_else(Utc::now);
+                let timestamp = if ts_secs == 0 {
+                    Utc::now()
+                } else {
+                    DateTime::from_timestamp(ts_secs as i64, 0).unwrap_or_else(Utc::now)
+                };
                 // convert to string with fractional seconds e.g.  "2019-09-29T09:46:40.000000Z"
                 let timestamp_str = timestamp.to_rfc3339_opts(SecondsFormat::Micros, true);
                 let outcome = TrackOutcome {
@@ -76,7 +73,7 @@ impl TaskRunner<AggregatedOutcomesBatch, AggregatedOutcomesBatch, anyhow::Error>
                 }
 
                 let payload_bytes = serde_json::to_vec(&outcome).map_err(|e| {
-                    RunTaskError::Other(anyhow::anyhow!("serialization error: {}", e))
+                    RunTaskError::Other(anyhow::anyhow!("serialization error: {e}"))
                 })?;
                 let payload = KafkaPayload::new(None, None, Some(payload_bytes));
 
@@ -91,20 +88,6 @@ impl TaskRunner<AggregatedOutcomesBatch, AggregatedOutcomesBatch, anyhow::Error>
             if let Ok(elapsed) = produce_finish.duration_since(produce_start) {
                 timer!("accepted_outcomes.batch_produce_ms", elapsed);
             }
-
-            for (category, (bucket_count, total_quantity)) in &category_metrics {
-                counter!(
-                    "accepted_outcomes.bucket_count",
-                    *bucket_count as i64,
-                    "data_category" => category.to_string()
-                );
-                counter!(
-                    "accepted_outcomes.total_quantity",
-                    *total_quantity as i64,
-                    "data_category" => category.to_string()
-                );
-            }
-
             Ok(message)
         })
     }

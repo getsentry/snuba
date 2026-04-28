@@ -1,0 +1,2 @@
+[env]
+SENTRY_OPTIONS_DIR = { value = "../sentry-options", relative = true }
