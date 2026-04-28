@@ -527,6 +527,14 @@ def _run_daemons(daemons: list[tuple[str, list[str]]]) -> int:
     first_failure: list[int] = []
     done = threading.Event()
 
+    def shutdown(signum: int, frame: object) -> None:
+        for proc in procs.values():
+            if proc.poll() is None:
+                proc.terminate()
+
+    signal.signal(signal.SIGINT, shutdown)
+    signal.signal(signal.SIGTERM, shutdown)
+
     def stream(name: str, proc: subprocess.Popen[bytes]) -> None:
         assert proc.stdout is not None
         for line in proc.stdout:
@@ -541,14 +549,6 @@ def _run_daemons(daemons: list[tuple[str, list[str]]]) -> int:
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         procs[name] = proc
         threading.Thread(target=stream, args=(name, proc), daemon=True).start()
-
-    def shutdown(signum: int, frame: object) -> None:
-        for proc in procs.values():
-            if proc.poll() is None:
-                proc.terminate()
-
-    signal.signal(signal.SIGINT, shutdown)
-    signal.signal(signal.SIGTERM, shutdown)
 
     done.wait()
     # Any daemon exit ends the supervisor; terminate the rest (honcho parity).
