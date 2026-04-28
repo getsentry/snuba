@@ -78,7 +78,12 @@ Tout = TypeVar("Tout", bound=ProtobufMessage)
 BUCKET_COUNT = 40
 
 
-def transform_array_value(value: dict[str, str]) -> Any:
+def transform_array_value(value: Any) -> Any:
+    """Decode one tagged JSON object from an attributes_array element (e.g. ``{\"String\": \"x\"}``)."""
+    if not isinstance(value, dict):
+        raise BadSnubaRPCRequestException(
+            f"array element must be an object with a String/Int/Double/Bool tag, got {type(value).__name__}"
+        )
     for t, v in value.items():
         if t == "Int":
             return int(v)
@@ -87,15 +92,82 @@ def transform_array_value(value: dict[str, str]) -> Any:
         if t == "Bool":
             return str(v).lower() == "true"
         if t == "String":
-            return v
-    raise BadSnubaRPCRequestException(f"array value type unknown: {type(v)}")
+            return str(v)
+    raise BadSnubaRPCRequestException(
+        f"array value has no recognized tag, keys={list(value.keys())}"
+    )
+
+
+def _flatten_attributes_array_json(node: dict[str, Any], prefix: str = "") -> dict[str, list[Any]]:
+    """
+    Normalize ClickHouse ``attributes_array`` JSON to a flat map ``name -> list``.
+
+    Ingestion stores dotted keys as a single path (e.g. ``resource.process.command_args``). After
+    ``toJSONString`` on the JSON column, ClickHouse may emit nested objects instead of a single
+    top-level key; we flatten those back to dotted names so each value remains an array of tagged
+    objects.
+    """
+    out: dict[str, list[Any]] = {}
+    for k, v in node.items():
+        full_key = f"{prefix}.{k}" if prefix else k
+        if isinstance(v, list):
+            if full_key in out:
+                raise BadSnubaRPCRequestException(
+                    f"duplicate attributes_array key after normalization: {full_key!r}"
+                )
+            out[full_key] = v
+        elif isinstance(v, dict):
+            nested = _flatten_attributes_array_json(v, full_key)
+            for nk, nv in nested.items():
+                if nk in out:
+                    raise BadSnubaRPCRequestException(
+                        f"duplicate attributes_array key after normalization: {nk!r}"
+                    )
+                out[nk] = nv
+        else:
+            raise BadSnubaRPCRequestException(
+                f"attributes_array value at {full_key!r} must be a list or object, got {type(v).__name__}"
+            )
+    return out
 
 
 def process_arrays(raw: str) -> dict[str, list[Any]]:
-    parsed = json.loads(raw) or {}
-    arrays = {}
-    for key, values in parsed.items():
-        arrays[key] = [transform_array_value(v) for v in values]
+    """
+    Parse ``toJSONString(attributes_array)`` into ``attribute_name -> list`` of Python scalars.
+    """
+    if raw is None or (isinstance(raw, str) and raw.strip() == ""):
+        parsed: Any = {}
+    else:
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as e:
+            raise BadSnubaRPCRequestException(f"attributes_array is not valid JSON: {e}") from e
+
+    if parsed is None:
+        parsed = {}
+    if not isinstance(parsed, dict):
+        raise BadSnubaRPCRequestException(
+            f"attributes_array JSON must be an object, got {type(parsed).__name__}"
+        )
+
+    collected = _flatten_attributes_array_json(parsed)
+    arrays: dict[str, list[Any]] = {}
+    for key, values in collected.items():
+        if not isinstance(values, list):
+            raise BadSnubaRPCRequestException(
+                f"attributes_array key {key!r} must map to a list, got {type(values).__name__}"
+            )
+        parsed_elements: list[Any] = []
+        for i, elem in enumerate(values):
+            try:
+                parsed_elements.append(transform_array_value(elem))
+            except BadSnubaRPCRequestException:
+                raise
+            except Exception as e:
+                raise BadSnubaRPCRequestException(
+                    f"invalid attributes_array element at {key!r}[{i}]: {e}"
+                ) from e
+        arrays[key] = parsed_elements
     return arrays
 
 
