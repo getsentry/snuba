@@ -79,7 +79,7 @@ BUCKET_COUNT = 40
 
 
 def transform_array_value(value: Any) -> Any:
-    """Decode one tagged JSON object from an attributes_array element (e.g. ``{\"String\": \"x\"}``)."""
+    """Decode one array element: a small JSON object with a String, Int, Double, or Bool tag."""
     if not isinstance(value, dict):
         raise BadSnubaRPCRequestException(
             f"array element must be an object with a String/Int/Double/Bool tag, got {type(value).__name__}"
@@ -99,14 +99,7 @@ def transform_array_value(value: Any) -> Any:
 
 
 def _flatten_attributes_array_json(node: dict[str, Any], prefix: str = "") -> dict[str, list[Any]]:
-    """
-    Normalize ClickHouse ``attributes_array`` JSON to a flat map ``name -> list``.
-
-    Ingestion stores dotted keys as a single path (e.g. ``resource.process.command_args``). After
-    ``toJSONString`` on the JSON column, ClickHouse may emit nested objects instead of a single
-    top-level key; we flatten those back to dotted names so each value remains an array of tagged
-    objects.
-    """
+    """Flatten nested dicts into dotted keys (name -> list). ClickHouse often nests dotted paths."""
     out: dict[str, list[Any]] = {}
     for k, v in node.items():
         full_key = f"{prefix}.{k}" if prefix else k
@@ -132,9 +125,7 @@ def _flatten_attributes_array_json(node: dict[str, Any], prefix: str = "") -> di
 
 
 def process_arrays(raw: str) -> dict[str, list[Any]]:
-    """
-    Parse ``toJSONString(attributes_array)`` into ``attribute_name -> list`` of Python scalars.
-    """
+    """Parse attributes_array JSON into attribute name -> list of decoded values."""
     if raw is None or (isinstance(raw, str) and raw.strip() == ""):
         parsed: Any = {}
     else:
