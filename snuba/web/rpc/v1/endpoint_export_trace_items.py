@@ -140,8 +140,8 @@ def _parse_last_seen_tuple(
 class ExportTraceItemsPageToken:
     """Page token: always encodes the active [start,end) in unix seconds, shared with flex routing.
 
-    2 filters: that window only — move to the next time slice (flex) with no keyset cursor.
-    7 filters: same 2 time-window fields plus 5 equality fields — continue after the
+    2 filters: window only; move to the next time slice (flex) with no keyset cursor.
+    7 filters: same 2 time-window fields plus 5 equality fields; continue after the
       last row within that window (keyset / tuple seek).
     """
 
@@ -155,7 +155,6 @@ class ExportTraceItemsPageToken:
         last_seen_timestamp: float = 0.0,
         last_seen_trace_id: str = "",
         last_seen_item_id: str = "",
-        include_last_seen: bool = False,
     ):
         self.window_start_sec = window_start_sec
         self.window_end_sec = window_end_sec
@@ -164,11 +163,10 @@ class ExportTraceItemsPageToken:
         self.last_seen_timestamp = last_seen_timestamp
         self.last_seen_trace_id = last_seen_trace_id
         self.last_seen_item_id = last_seen_item_id
-        self.include_last_seen = include_last_seen
 
     @property
     def has_last_seen(self) -> bool:
-        return self.include_last_seen
+        return self.last_seen_item_id != ""
 
     @classmethod
     def from_protobuf(cls, page_token: PageToken) -> Optional["ExportTraceItemsPageToken"]:
@@ -186,7 +184,6 @@ class ExportTraceItemsPageToken:
             return cls(
                 window_start_sec=w0,
                 window_end_sec=w1,
-                include_last_seen=False,
             )
         if n == 7:
             win = _parse_flex_window_from_filters(filters[:2])
@@ -202,7 +199,6 @@ class ExportTraceItemsPageToken:
                 last_seen_timestamp=lsts,
                 last_seen_trace_id=ltr,
                 last_seen_item_id=lid,
-                include_last_seen=True,
             )
         raise ValueError("Invalid page token: expected 2 or 7 filter clauses")
 
@@ -584,7 +580,6 @@ class EndpointExportTraceItems(RPCEndpoint[ExportTraceItemsRequest, ExportTraceI
             next_token = ExportTraceItemsPageToken(
                 window_start_sec=w_start,
                 window_end_sec=w_end,
-                include_last_seen=True,
                 last_seen_project_id=processed_results.last_seen_project_id,
                 last_seen_item_type=processed_results.last_seen_item_type,
                 last_seen_trace_id=processed_results.last_seen_trace_id,
@@ -595,7 +590,6 @@ class EndpointExportTraceItems(RPCEndpoint[ExportTraceItemsRequest, ExportTraceI
             next_token = ExportTraceItemsPageToken(
                 window_start_sec=orig_start,
                 window_end_sec=routed.start_timestamp.seconds,
-                include_last_seen=False,
             ).to_protobuf()
         else:
             next_token = PageToken(end_pagination=True)
