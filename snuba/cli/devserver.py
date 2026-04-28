@@ -1,6 +1,9 @@
 import os
+import signal
+import subprocess
 import sys
-from subprocess import call, list2cmdline
+import threading
+from subprocess import call
 
 import click
 
@@ -20,8 +23,6 @@ COMMON_RUST_CONSUMER_DEV_OPTIONS = [
 @click.option("--log-level", default="info", help="Logging level to use for all processes")
 def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
     "Starts all Snuba processes for local development."
-
-    from honcho.manager import Manager
 
     os.environ["PYTHONUNBUFFERED"] = "1"
 
@@ -518,13 +519,44 @@ def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
             ),
         ]
 
-    manager = Manager()
-    for name, cmd in daemons:
-        manager.add_process(
-            name,
-            list2cmdline(cmd),
-            quiet=False,
-        )
+    sys.exit(_run_daemons(daemons))
 
-    manager.loop()
-    sys.exit(manager.returncode)
+
+def _run_daemons(daemons: list[tuple[str, list[str]]]) -> int:
+    procs: dict[str, subprocess.Popen[bytes]] = {}
+    first_failure: list[int] = []
+    done = threading.Event()
+
+    def stream(name: str, proc: subprocess.Popen[bytes]) -> None:
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            sys.stdout.write(f"{name} | {line.decode(errors='replace')}")
+            sys.stdout.flush()
+        rc = proc.wait()
+        if rc != 0 and not first_failure:
+            first_failure.append(rc)
+        done.set()
+
+    for name, cmd in daemons:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        procs[name] = proc
+        threading.Thread(target=stream, args=(name, proc), daemon=True).start()
+
+    def shutdown(signum: int, frame: object) -> None:
+        for proc in procs.values():
+            if proc.poll() is None:
+                proc.terminate()
+
+    signal.signal(signal.SIGINT, shutdown)
+    signal.signal(signal.SIGTERM, shutdown)
+
+    done.wait()
+    if first_failure:
+        for proc in procs.values():
+            if proc.poll() is None:
+                proc.terminate()
+
+    for proc in procs.values():
+        proc.wait()
+
+    return first_failure[0] if first_failure else 0

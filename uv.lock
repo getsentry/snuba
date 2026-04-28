@@ -419,14 +419,6 @@ wheels = [
 ]
 
 [[package]]
-name = "honcho"
-version = "1.1.0"
-source = { registry = "https://pypi.devinfra.sentry.io/simple" }
-wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/honcho-1.1.0-py2.py3-none-any.whl", hash = "sha256:a4d6e3a88a7b51b66351ecfc6e9d79d8f4b87351db9ad7e923f5632cc498122f" },
-]
-
-[[package]]
 name = "httplib2"
 version = "0.22.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
@@ -1106,7 +1098,6 @@ dependencies = [
 dev = [
     { name = "devservices", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "freezegun", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
-    { name = "honcho", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "mypy", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "pre-commit", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "pytest", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -1177,7 +1168,6 @@ requires-dist = [
 dev = [
     { name = "devservices", specifier = ">=1.2.1" },
     { name = "freezegun", specifier = ">=1.5.5" },
-    { name = "honcho", specifier = ">=1.1.0" },
     { name = "mypy", specifier = ">=1.1.1" },
     { name = "pre-commit", specifier = ">=4.2.0" },
     { name = "pytest", specifier = ">=8.3.3" },
