@@ -526,11 +526,20 @@ def _run_daemons(daemons: list[tuple[str, list[str]]]) -> int:
     procs: dict[str, subprocess.Popen[bytes]] = {}
     first_failure: list[int] = []
     done = threading.Event()
+    cleanup_started = threading.Event()
+    failure_lock = threading.Lock()
+    supervisor_signal: list[int] = []
 
     def shutdown(signum: int, frame: object) -> None:
+        # Mark cleanup before terminate so stream threads do not treat SIGTERM as a
+        # natural crash (honcho parity when one daemon exits or user interrupts).
+        cleanup_started.set()
+        if not supervisor_signal:
+            supervisor_signal.append(signum)
         for proc in procs.values():
             if proc.poll() is None:
                 proc.terminate()
+        done.set()
 
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
@@ -541,8 +550,10 @@ def _run_daemons(daemons: list[tuple[str, list[str]]]) -> int:
             sys.stdout.write(f"{name} | {line.decode(errors='replace')}")
             sys.stdout.flush()
         rc = proc.wait()
-        if rc != 0 and not first_failure:
-            first_failure.append(rc)
+        with failure_lock:
+            if rc != 0 and not cleanup_started.is_set():
+                if not first_failure:
+                    first_failure.append(rc)
         done.set()
 
     for name, cmd in daemons:
@@ -551,6 +562,7 @@ def _run_daemons(daemons: list[tuple[str, list[str]]]) -> int:
         threading.Thread(target=stream, args=(name, proc), daemon=True).start()
 
     done.wait()
+    cleanup_started.set()
     # Any daemon exit ends the supervisor; terminate the rest (honcho parity).
     for proc in procs.values():
         if proc.poll() is None:
@@ -559,4 +571,8 @@ def _run_daemons(daemons: list[tuple[str, list[str]]]) -> int:
     for proc in procs.values():
         proc.wait()
 
-    return first_failure[0] if first_failure else 0
+    if first_failure:
+        return first_failure[0]
+    if supervisor_signal:
+        return 128 + supervisor_signal[0]
+    return 0
