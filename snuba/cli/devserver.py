@@ -551,10 +551,10 @@ def _run_daemons(daemons: list[tuple[str, list[str]]]) -> int:
     signal.signal(signal.SIGTERM, shutdown)
 
     done.wait()
-    if first_failure:
-        for proc in procs.values():
-            if proc.poll() is None:
-                proc.terminate()
+    # Any daemon exit ends the supervisor; terminate the rest (honcho parity).
+    for proc in procs.values():
+        if proc.poll() is None:
+            proc.terminate()
 
     for proc in procs.values():
         proc.wait()
