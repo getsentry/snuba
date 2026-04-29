@@ -539,6 +539,7 @@ def devserver(*, bootstrap: bool, workers: bool, log_level: str) -> None:
 
 def _run_daemons(daemons: list[tuple[str, list[str]]]) -> int:
     procs: dict[str, subprocess.Popen[bytes]] = {}
+    threads: list[threading.Thread] = []
     first_failure: list[int] = []
     done = threading.Event()
     cleanup_started = threading.Event()
@@ -580,9 +581,16 @@ def _run_daemons(daemons: list[tuple[str, list[str]]]) -> int:
             done.set()
 
     for name, cmd in daemons:
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
         procs[name] = proc
-        threading.Thread(target=stream, args=(name, proc), daemon=True).start()
+        t = threading.Thread(target=stream, args=(name, proc), daemon=True)
+        t.start()
+        threads.append(t)
 
     done.wait()
     cleanup_started.set()
@@ -596,6 +604,9 @@ def _run_daemons(daemons: list[tuple[str, list[str]]]) -> int:
             _reap_after_terminate(proc, _SUBPROCESS_TERM_GRACE_SEC)
         else:
             proc.wait()
+
+    for t in threads:
+        t.join()
 
     if first_failure:
         return first_failure[0]
