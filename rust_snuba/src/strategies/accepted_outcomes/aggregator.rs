@@ -91,6 +91,10 @@ impl<TNext> OutcomesAggregator<TNext> {
         let item_type =
             TraceItemType::try_from(trace_item.item_type).unwrap_or(TraceItemType::Unspecified);
 
+        if item_type != TraceItemType::Span {
+            return false;
+        }
+
         let timestamp = trace_item
             .timestamp
             .as_ref()
