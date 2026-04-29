@@ -91,10 +91,22 @@ impl<TNext> OutcomesAggregator<TNext> {
         let item_type =
             TraceItemType::try_from(trace_item.item_type).unwrap_or(TraceItemType::Unspecified);
 
+        let timestamp = trace_item
+            .timestamp
+            .as_ref()
+            .map(|t| t.seconds as u32)
+            .unwrap_or(0);
+
+        let trace_id = uuid::Uuid::try_parse(&trace_item.trace_id)
+            .map(|u| *u.as_bytes())
+            .unwrap_or([0u8; 16]);
+
         if let Ok(item_id) = <[u8; 16]>::try_from(trace_item.item_id.as_slice()) {
             let dedup_key = ItemDedupKey {
                 org_id,
                 project_id,
+                timestamp,
+                trace_id,
                 item_id,
             };
             return self.batch.record_if_duplicate(item_type, dedup_key);
