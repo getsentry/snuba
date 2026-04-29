@@ -99,7 +99,10 @@ def transform_array_value(value: Any) -> Any:
 
 
 def _flatten_attributes_array_json(node: dict[str, Any], prefix: str = "") -> dict[str, list[Any]]:
-    """Flatten nested dicts into dotted keys (name -> list). ClickHouse often nests dotted paths."""
+    """Flatten nested dicts into dotted keys (name -> list).
+    ClickHouse stores all JSON objects as flat and interprets dotted paths in a special way to support nesting
+    Docs: https://clickhouse.com/docs/sql-reference/data-types/newjson#handling-json-keys-with-dots
+    """
     out: dict[str, list[Any]] = {}
     for k, v in node.items():
         full_key = f"{prefix}.{k}" if prefix else k
