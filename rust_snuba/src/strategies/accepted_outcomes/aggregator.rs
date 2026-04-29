@@ -798,6 +798,7 @@ mod tests {
             organization_id: org_id,
             project_id,
             item_id: item_id.to_vec(),
+            item_type: TraceItemType::Span.into(),
             received: Some(Timestamp {
                 seconds: ts_secs,
                 nanos: 0,
