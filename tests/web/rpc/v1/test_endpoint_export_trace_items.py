@@ -63,6 +63,7 @@ def _assert_attributes_keys(trace_items: list[TraceItem]) -> None:
                 "sentry.start_timestamp_precise",
                 "start_timestamp_ms",
                 "sentry._internal.ingested_at",
+                "sentry._internal.received_at",
             }
         )
         assert actual_keys == expected_keys
@@ -118,9 +119,9 @@ class TestExportTraceItems(BaseApiTest):
             response = EndpointExportTraceItems().execute(message)
             items.extend(response.trace_items)
             if len(response.trace_items) == 20:
-                assert response.page_token.end_pagination == False
+                assert not response.page_token.end_pagination
             else:
-                assert response.page_token.end_pagination == True
+                assert response.page_token.end_pagination
                 break
             message.page_token.CopyFrom(response.page_token)
 
