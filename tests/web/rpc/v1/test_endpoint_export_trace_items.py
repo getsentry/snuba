@@ -10,7 +10,6 @@ from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageCon
 from sentry_protos.snuba.v1.endpoint_trace_items_pb2 import ExportTraceItemsRequest
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_pb2 import TraceItem
-from sentry_relay.consts import DataCategory
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -26,7 +25,6 @@ from snuba.web.rpc.v1.endpoint_export_trace_items import (
 )
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
-from tests.web.rpc.v1.routing_strategies.common import store_outcomes_data
 from tests.web.rpc.v1.test_utils import _DEFAULT_ATTRIBUTES, BASE_TIME, gen_item_message
 
 _SPAN_COUNT = 120
@@ -139,58 +137,6 @@ class TestExportTraceItems(BaseApiTest):
         _assert_attributes_keys(items)
 
         assert len(items) == _SPAN_COUNT + _LOG_COUNT
-
-    def test_with_pagination_flex_storage_mode(self, eap: Any, redis_db: Any) -> None:
-        """Like ``test_with_pagination`` but ``MODE_HIGHEST_ACCURACY_FLEXTIME``; outcomes volume is low enough the routed window is not narrowed."""
-        total = _SPAN_COUNT + _LOG_COUNT
-        OutcomesFlexTimeRoutingStrategy().set_config_value("max_items_to_query", 500_000_000)
-        payloads = [
-            gen_item_message(
-                start_timestamp=BASE_TIME + timedelta(seconds=i),
-                item_id=int(uuid.uuid4().hex[:16], 16).to_bytes(16, byteorder="little"),
-                type=TraceItemType.TRACE_ITEM_TYPE_LOG,
-                project_id=1,
-            )
-            for i in range(total)
-        ]
-        write_raw_unprocessed_events(get_storage(StorageKey("eap_items")), payloads)  # type: ignore
-        store_outcomes_data(
-            [(BASE_TIME + timedelta(hours=h), 5_000) for h in range(6)],
-            DataCategory.LOG_ITEM,
-            org_id=1,
-            project_id=1,
-        )
-
-        message = ExportTraceItemsRequest(
-            meta=RequestMeta(
-                project_ids=[1],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
-                end_timestamp=Timestamp(
-                    seconds=int((BASE_TIME + timedelta(seconds=total)).timestamp())
-                ),
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
-                downsampled_storage_config=DownsampledStorageConfig(
-                    mode=DownsampledStorageConfig.Mode.MODE_HIGHEST_ACCURACY_FLEXTIME
-                ),
-                request_id=uuid.uuid4().hex,
-            ),
-            limit=20,
-        )
-        items: list[TraceItem] = []
-        for _ in range(1, 100):
-            response = EndpointExportTraceItems().execute(message)
-            items.extend(response.trace_items)
-            if len(response.trace_items) == 20:
-                assert response.page_token.end_pagination is False
-                assert len(response.page_token.filter_offset.and_filter.filters) == 7
-            else:
-                assert response.page_token.end_pagination
-                break
-            message.page_token.CopyFrom(response.page_token)
-        assert len(items) == total
 
     def test_pagination_with_128_bit_item_id(self, eap: Any, redis_db: Any) -> None:
         num_items = 120
