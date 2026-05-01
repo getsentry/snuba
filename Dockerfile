@@ -181,8 +181,8 @@ ENV PATH="/.venv/bin:/opt/python/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     SENTRY_OPTIONS_DIR=/etc/sentry-options
 
+RUN install -d -o 1000 -g 1000 "${SENTRY_OPTIONS_DIR}"
 USER 1000
-RUN mkdir -p "${SENTRY_OPTIONS_DIR}"
 EXPOSE 1218 1219
 ENTRYPOINT ["python3", "/usr/src/snuba/docker_entrypoint.py"]
 CMD ["api"]
@@ -206,8 +206,8 @@ ENV PATH="/.venv/bin:/opt/python/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     SENTRY_OPTIONS_DIR=/etc/sentry-options
 
+RUN install -d -o 1000 -g 1000 "${SENTRY_OPTIONS_DIR}"
 USER 1000
-RUN mkdir -p "${SENTRY_OPTIONS_DIR}"
 EXPOSE 1218 1219
 ENTRYPOINT ["python3", "/usr/src/snuba/docker_entrypoint.py"]
 CMD ["api"]
