@@ -56,7 +56,7 @@ FLEX_WIN_END = "sentry__time_window.end_timestamp"
 _KEYSET_CURSOR_SCHEMA = [
     ("last_seen_project_id", AttributeKey.Type.TYPE_INT, "val_int"),
     ("last_seen_item_type", AttributeKey.Type.TYPE_INT, "val_int"),
-    ("last_seen_timestamp", AttributeKey.Type.TYPE_DOUBLE, "val_double"),
+    ("last_seen_timestamp", AttributeKey.Type.TYPE_INT, "val_int"),
     ("last_seen_trace_id", AttributeKey.Type.TYPE_STRING, "val_str"),
     ("last_seen_item_id", AttributeKey.Type.TYPE_STRING, "val_str"),
 ]
@@ -109,7 +109,7 @@ class FlexWindow(NamedTuple):
 class KeysetCursor(NamedTuple):
     last_seen_project_id: int
     last_seen_item_type: TraceItemType.ValueType
-    last_seen_timestamp: float
+    last_seen_timestamp: int
     last_seen_trace_id: str
     last_seen_item_id: str
 
@@ -409,7 +409,7 @@ def _convert_rows(rows: Iterable[Dict[str, Any]]) -> ProcessedResults:
     items: list[TraceItem] = []
     last_seen_project_id = 0
     last_seen_item_type = TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
-    last_seen_timestamp = 0.0
+    last_seen_timestamp = 0
     last_seen_trace_id = ""
     last_seen_item_id = ""
 
@@ -460,7 +460,7 @@ def _convert_rows(rows: Iterable[Dict[str, Any]]) -> ProcessedResults:
 
         last_seen_project_id = int(proj_id)
         last_seen_item_type = item_type
-        last_seen_timestamp = float(ts)
+        last_seen_timestamp = int(ts)
         last_seen_trace_id = trace_id
         last_seen_item_id = item_id
 
