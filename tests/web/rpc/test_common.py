@@ -37,6 +37,7 @@ from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     next_monday,
     prev_monday,
+    process_arrays,
     trace_item_filters_to_expression,
     use_sampling_factor,
 )
@@ -49,6 +50,38 @@ from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import gen_item_message
+
+
+class TestProcessArrays:
+    def test_flat_json(self) -> None:
+        raw = '{"tags":[{"String":"a"},{"String":"b"}]}'
+        assert process_arrays(raw) == {"tags": ["a", "b"]}
+
+    def test_nested_json_from_dotted_key_roundtrip(self) -> None:
+        """Simulates ClickHouse toJSONString when dotted keys become nested objects."""
+        nested = '{"resource":{"process":{"command_args":[{"String":"node"},{"String":"--enable-source-maps"}]}}}'
+        assert process_arrays(nested) == {
+            "resource.process.command_args": ["node", "--enable-source-maps"],
+        }
+
+    def test_mixed_flat_and_nested(self) -> None:
+        raw = '{"tags":[{"String":"x"}],"resource":{"process":{"command_args":[{"Int":"1"}]}}}'
+        assert process_arrays(raw) == {
+            "tags": ["x"],
+            "resource.process.command_args": [1],
+        }
+
+    def test_invalid_json_raises(self) -> None:
+        with pytest.raises(BadSnubaRPCRequestException, match="not valid JSON"):
+            process_arrays("not json")
+
+    def test_non_object_root_raises(self) -> None:
+        with pytest.raises(BadSnubaRPCRequestException, match="must be an object"):
+            process_arrays("[1]")
+
+    def test_scalar_leaf_raises(self) -> None:
+        with pytest.raises(BadSnubaRPCRequestException, match="must be a list or object"):
+            process_arrays('{"a":{"b":"bad"}}')
 
 
 class TestCommon:
