@@ -906,10 +906,10 @@ wheels = [
 
 [[package]]
 name = "sentry-conventions"
-version = "0.5.0"
+version = "0.6.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_conventions-0.5.0-py3-none-any.whl", hash = "sha256:6dac1f8dd0499a2e347ca179f3118645cc1aea60fa16a0936c805de3599ca440" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_conventions-0.6.0-py3-none-any.whl", hash = "sha256:672604d689a5e1e7833fe3ef9508550fd826e06c57ba0aab95086a973abf9bba" },
 ]
 
 [[package]]
