@@ -161,6 +161,10 @@ mod tests {
                         ".*.*[\"sentry._internal.ingested_at\"]",
                         "<ingestion timestamp>",
                     );
+                    settings.add_redaction(
+                        ".*.*[\"sentry._internal.received_at\"]",
+                        "<received timestamp>",
+                    );
                 }
 
                 // This payload is protobuf (so binary), not JSON (so text).

@@ -619,11 +619,15 @@ pub struct TrackOutcome {
 }
 
 /// Key used to deduplicate items within an outcomes batch.
-/// Uses the relevant fields from the eap_items table sorting key.
+/// Uses the relevant fields from the eap_items table sorting key:
+/// (organization_id, project_id, item_type, timestamp, trace_id, item_id)
+/// Note: item_type is handled separately via the HashMap in seen_items.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ItemDedupKey {
     pub org_id: u64,
     pub project_id: u64,
+    pub timestamp: u32,
+    pub trace_id: [u8; 16],
     pub item_id: [u8; 16],
 }
 

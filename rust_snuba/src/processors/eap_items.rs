@@ -55,6 +55,13 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
         "sentry._internal.ingested_at".into(),
         Utc::now().timestamp_millis(),
     );
+    // we are using this to compare to outcomes which stores the timestamp as seconds
+    if let Some(received_at) = origin_timestamp {
+        eap_item.attributes.insert_int(
+            "sentry._internal.received_at".into(),
+            received_at.timestamp(),
+        );
+    }
 
     let mut item_type_metrics = ItemTypeMetrics::new();
     item_type_metrics.record_item(item_type, payload.len());
@@ -651,6 +658,107 @@ mod tests {
             .expect("The message should be processed when received is None");
 
         assert!(batch.origin_timestamp.is_none());
+    }
+
+    #[test]
+    fn test_received_at_attribute_is_set() {
+        let item_id = Uuid::new_v4();
+        let trace_item = generate_trace_item(item_id);
+        // generate_trace_item sets received.seconds = 1745562493
+        let expected_s: i64 = 1745562493;
+
+        let mut payload_bytes = Vec::new();
+        trace_item.encode(&mut payload_bytes).unwrap();
+
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+
+        // JSON path
+        let json_batch = process_message(
+            KafkaPayload::new(None, None, Some(payload_bytes.clone())),
+            meta.clone(),
+            &ProcessorConfig::default(),
+        )
+        .expect("The message should be processed");
+
+        #[derive(Deserialize)]
+        struct Item {
+            #[serde(default)]
+            attributes_int: HashMap<String, i64>,
+        }
+        let item: Item = serde_json::from_slice(&json_batch.rows.encoded_rows).unwrap();
+        assert_eq!(
+            item.attributes_int.get("sentry._internal.received_at"),
+            Some(&expected_s)
+        );
+
+        // RowBinary path
+        let rb_batch = process_message_row_binary(
+            KafkaPayload::new(None, None, Some(payload_bytes)),
+            meta,
+            &ProcessorConfig::default(),
+        )
+        .expect("The message should be processed");
+
+        let row = &rb_batch.rows[0];
+        let received_at = row
+            .attributes_int
+            .iter()
+            .find(|(k, _)| k == "sentry._internal.received_at")
+            .map(|(_, v)| *v);
+        assert_eq!(received_at, Some(expected_s));
+    }
+
+    #[test]
+    fn test_received_at_attribute_absent_when_received_none() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.received = None;
+
+        let mut payload_bytes = Vec::new();
+        trace_item.encode(&mut payload_bytes).unwrap();
+
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+
+        // JSON path
+        let json_batch = process_message(
+            KafkaPayload::new(None, None, Some(payload_bytes.clone())),
+            meta.clone(),
+            &ProcessorConfig::default(),
+        )
+        .expect("The message should be processed");
+
+        #[derive(Deserialize)]
+        struct Item {
+            #[serde(default)]
+            attributes_int: HashMap<String, i64>,
+        }
+        let item: Item = serde_json::from_slice(&json_batch.rows.encoded_rows).unwrap();
+        assert!(!item
+            .attributes_int
+            .contains_key("sentry._internal.received_at"));
+
+        // RowBinary path
+        let rb_batch = process_message_row_binary(
+            KafkaPayload::new(None, None, Some(payload_bytes)),
+            meta,
+            &ProcessorConfig::default(),
+        )
+        .expect("The message should be processed");
+
+        let row = &rb_batch.rows[0];
+        let has_received_at = row
+            .attributes_int
+            .iter()
+            .any(|(k, _)| k == "sentry._internal.received_at");
+        assert!(!has_received_at);
     }
 
     #[test]
