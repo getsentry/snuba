@@ -324,10 +324,17 @@ def _build_query(
         else []
     )
     meta = query_meta if query_meta is not None else in_msg.meta
+    item_type_filter = []
+    if meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
+        item_type_filter.append(
+            f.equals(
+                column("item_type"),
+                literal(meta.trace_item_type)
+            ))
     query = Query(
         from_clause=entity,
         selected_columns=selected_columns,
-        condition=base_conditions_and(meta, *page_token_filter),
+        condition=base_conditions_and(meta, *page_token_filter, *item_type_filter),
         order_by=[
             # we add organization_id and project_id to the order by to optimize data reading
             # https://clickhouse.com/docs/sql-reference/statements/select/order-by#optimization-of-data-reading
