@@ -17,7 +17,7 @@ TResult = TypeVar("TResult")
 Accumulator = Callable[[TResult, BaseValue[TPayload]], TResult]
 # https://clickhouse.com/docs/operations/settings/settings#max_ast_elements
 # max_ast_elements defaults to 50000
-MAX_BUFFERED_MESSAGES = 10000
+MAX_BUFFERED_MESSAGES = 2000
 
 
 class ReduceRowsBuffer(Generic[TPayload, TResult]):
