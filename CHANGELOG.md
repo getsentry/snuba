@@ -1,5 +1,51 @@
 # Changelog
 
+## 26.4.2
+
+### New Features ✨
+
+- (data-explore) Add support in EAP to filter Array by elements by @manessaraj in [#7898](https://github.com/getsentry/snuba/pull/7898)
+- (devservices) Use distroless image in devservices by @oioki in [#7909](https://github.com/getsentry/snuba/pull/7909)
+- (explore) Add support for array in TraceItemDetail and TraceItemTable Endpoints by @manessaraj in [#7890](https://github.com/getsentry/snuba/pull/7890)
+
+### Bug Fixes 🐛
+
+#### Eap
+
+- Flatten nested attributes_array JSON for dotted keys by @manessaraj in [#7911](https://github.com/getsentry/snuba/pull/7911)
+- Fix coalesced attribute handling for deprecated keys by @buenaflor in [#7886](https://github.com/getsentry/snuba/pull/7886)
+
+#### Other
+
+- (eap-outcomes) Add trace ID and timestamp to dedup key by @untitaker in [#7915](https://github.com/getsentry/snuba/pull/7915)
+
+### Internal Changes 🔧
+
+#### Eap Outcomes
+
+- Add sentry._internal.received_at attribute by @MeredithAnya in [#7916](https://github.com/getsentry/snuba/pull/7916)
+- Family friendly metric name by @MeredithAnya in [#7899](https://github.com/getsentry/snuba/pull/7899)
+- Dedupe by item_type by @MeredithAnya in [#7896](https://github.com/getsentry/snuba/pull/7896)
+
+#### Snuba Commit Log
+
+- Remove commit log next offset option from `sentry-options` schema by @shashjar in [#7894](https://github.com/getsentry/snuba/pull/7894)
+- Remove the option gating next offset production to the commit log by @shashjar in [#7893](https://github.com/getsentry/snuba/pull/7893)
+
+#### Other
+
+- (consumer) Set message.max.bytes for DLQ/BLQ producers by @kylemumma in [#7897](https://github.com/getsentry/snuba/pull/7897)
+- (referrer) Register supergroups_backfill_lightweight.get_latest_events by @yuvmen in [#7889](https://github.com/getsentry/snuba/pull/7889)
+- Bump sentry-arroyo to 2.39.1 by @getsentry-bot in [#7910](https://github.com/getsentry/snuba/pull/7910)
+- Bump sentry-conventions to 0.6.0 by @buenaflor in [#7918](https://github.com/getsentry/snuba/pull/7918)
+- Bump sentry-conventions to 0.5.0 by @buenaflor in [#7884](https://github.com/getsentry/snuba/pull/7884)
+- Pin GitHub Actions to full-length commit SHAs by @joshuarli in [#7831](https://github.com/getsentry/snuba/pull/7831)
+
+### Other
+
+- feat(logs) : Update export items endpoint to respect sampling & routing decision by @manessaraj in [#7907](https://github.com/getsentry/snuba/pull/7907)
+- dep: upgrade granian to 2.7.4 by @gi0baro in [#7914](https://github.com/getsentry/snuba/pull/7914)
+
 ## 26.4.1
 
 ### New Features ✨

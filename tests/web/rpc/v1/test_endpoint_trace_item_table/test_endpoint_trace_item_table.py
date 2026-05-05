@@ -3949,6 +3949,14 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
                         "cols": AnyValue(
                             array_value=ArrayValue(values=[AnyValue(int_value=v) for v in [1, 3]])
                         ),
+                        "resource.process.command_args": AnyValue(
+                            array_value=ArrayValue(
+                                values=[
+                                    AnyValue(string_value="node"),
+                                    AnyValue(string_value="--enable-source-maps"),
+                                ]
+                            )
+                        ),
                     },
                 ),
             ],
@@ -3967,6 +3975,11 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
                 Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
                 Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags")),
                 Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="cols")),
+                Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_ARRAY, name="resource.process.command_args"
+                    )
+                ),
             ],
         )
         response = EndpointTraceItemTable().execute(message)
@@ -3978,6 +3991,12 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
         ]
         assert by_name["cols"].results[0].WhichOneof("value") == "val_array"
         assert [e.val_int for e in by_name["cols"].results[0].val_array.values] == [1, 3]
+        assert (
+            by_name["resource.process.command_args"].results[0].WhichOneof("value") == "val_array"
+        )
+        assert [
+            e.val_str for e in by_name["resource.process.command_args"].results[0].val_array.values
+        ] == ["node", "--enable-source-maps"]
 
 
 class TestUtils:

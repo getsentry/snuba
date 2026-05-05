@@ -75,7 +75,7 @@ services:
     restart: unless-stopped
 
   snuba:
-    image: ghcr.io/getsentry/snuba:nightly
+    image: ghcr.io/getsentry/snuba:nightly-distroless
     ports:
       - 127.0.0.1:1218:1218
       - 127.0.0.1:1219:1219
@@ -83,7 +83,7 @@ services:
       - devserver
       - --${SNUBA_NO_WORKERS:+no-workers}
     healthcheck:
-      test: curl -f http://localhost:1218/health_envoy
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:1218/health_envoy')"]
       interval: 5s
       timeout: 5s
       retries: 3
@@ -114,7 +114,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   profiles-consumer:
-    image: ghcr.io/getsentry/snuba:nightly
+    image: ghcr.io/getsentry/snuba:nightly-distroless
     command: [
           rust-consumer,
           --storage=profiles,
@@ -143,7 +143,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   profile-chunks-consumer:
-    image: ghcr.io/getsentry/snuba:nightly
+    image: ghcr.io/getsentry/snuba:nightly-distroless
     command: [
           rust-consumer,
           --storage=profile_chunks,
@@ -172,7 +172,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   functions-consumer:
-    image: ghcr.io/getsentry/snuba:nightly
+    image: ghcr.io/getsentry/snuba:nightly-distroless
     command: [
           rust-consumer,
           --storage=functions_raw,
@@ -201,7 +201,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   metrics-consumer:
-    image: ghcr.io/getsentry/snuba:nightly
+    image: ghcr.io/getsentry/snuba:nightly-distroless
     command: [
           rust-consumer,
           --storage=metrics_raw,
@@ -230,7 +230,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   generic-metrics-distributions-consumer:
-    image: ghcr.io/getsentry/snuba:nightly
+    image: ghcr.io/getsentry/snuba:nightly-distroless
     command: [
           rust-consumer,
           --storage=generic_metrics_distributions_raw,
@@ -259,7 +259,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   generic-metrics-sets-consumer:
-    image: ghcr.io/getsentry/snuba:nightly
+    image: ghcr.io/getsentry/snuba:nightly-distroless
     command: [
           rust-consumer,
           --storage=generic_metrics_sets_raw,
@@ -288,7 +288,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   generic-metrics-counters-consumer:
-    image: ghcr.io/getsentry/snuba:nightly
+    image: ghcr.io/getsentry/snuba:nightly-distroless
     command: [
           rust-consumer,
           --storage=generic_metrics_counters_raw,
@@ -317,7 +317,7 @@ services:
       - orchestrator=devservices
     restart: unless-stopped
   generic-metrics-gauges-consumer:
-    image: ghcr.io/getsentry/snuba:nightly
+    image: ghcr.io/getsentry/snuba:nightly-distroless
     command: [
           rust-consumer,
           --storage=generic_metrics_gauges_raw,
