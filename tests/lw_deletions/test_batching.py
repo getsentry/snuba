@@ -30,7 +30,7 @@ def _lw_deletion_kafka_message(offset: int) -> Message[KafkaPayload]:
     )
 
 
-@patch("snuba.lw_deletions.batching.MAX_BUFFERED_MESSAGES", 2)
+@patch("snuba.lw_deletions.batching.MAX_BUFFERED_MESSAGES", 3)
 def test_reduce_rows_buffer_is_ready_after_buffered_messages_exceeds_max() -> None:
     def accumulator(acc: list[object], msg: object) -> list[object]:
         acc.append(msg)

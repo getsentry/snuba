@@ -54,7 +54,7 @@ class ReduceRowsBuffer(Generic[TPayload, TResult]):
         return (
             self._buffer_size >= self.max_batch_size
             or time.time() >= self._buffer_until
-            or self._buffered_messages > MAX_BUFFERED_MESSAGES
+            or self._buffered_messages >= MAX_BUFFERED_MESSAGES
         )
 
     def append(self, message: BaseValue[TPayload]) -> None:
