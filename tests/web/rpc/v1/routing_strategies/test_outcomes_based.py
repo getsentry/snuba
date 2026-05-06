@@ -301,6 +301,46 @@ def test_outcomes_based_routing_downsample(store_outcomes_fixture: Any) -> None:
 
 @pytest.mark.eap
 @pytest.mark.redis_db
+def test_outcomes_based_routing_per_org_override(store_outcomes_fixture: Any) -> None:
+    # global says no downsampling; per-org override forces TIER_64
+    state.set_config("OutcomesBasedRoutingStrategy.max_items_before_downsampling", 1_000_000_000)
+    strategy = OutcomesBasedRoutingStrategy()
+    strategy.set_config_value(
+        "max_items_before_downsampling",
+        500_000,
+        params={"organization_id": _ORG_ID},
+    )
+
+    request = TraceItemTableRequest(meta=_get_request_meta())
+    request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
+
+    routing_decision = strategy.get_routing_decision(
+        RoutingContext(
+            in_msg=request,
+            timer=Timer("test"),
+            query_id=uuid.uuid4().hex,
+        )
+    )
+    assert routing_decision.tier == Tier.TIER_64
+    assert routing_decision.can_run
+
+    # different org with no override falls back to the global config
+    other_org_request = TraceItemTableRequest(meta=_get_request_meta())
+    other_org_request.meta.organization_id = _ORG_ID + 1
+    other_org_request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
+
+    other_routing_decision = strategy.get_routing_decision(
+        RoutingContext(
+            in_msg=other_org_request,
+            timer=Timer("test"),
+            query_id=uuid.uuid4().hex,
+        )
+    )
+    assert other_routing_decision.tier == Tier.TIER_1
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
 def test_outcomes_based_routing_highest_accuracy_mode(store_outcomes_fixture: Any) -> None:
     strategy = OutcomesBasedRoutingStrategy()
 
