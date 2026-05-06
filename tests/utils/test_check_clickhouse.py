@@ -134,12 +134,36 @@ def test_bad_dataset_fails_thorough_healthcheck(mock1: mock.MagicMock) -> None:
     return_value=[StorageKey.ERRORS_RO, FakeStorageKey("fake_storage_key")],
 )
 @pytest.mark.clickhouse_db
-def test_single_bad_dataset_passes_healthcheck(mock1: mock.MagicMock) -> None:
-    # a bad dataset is enabled and not operable, but at least a single
-    # clickhouse query node is still operable. We still want to pass the
-    # regular healthcheck in this case so that we can continue to serve request
-    # despite outage in a single cluster.
+def test_non_essential_bad_storage_ignored(mock1: mock.MagicMock) -> None:
+    # A non-essential broken storage (fake_storage_key) is filtered out before
+    # the cluster check, so as long as the essential clusters are reachable,
+    # the regular healthcheck still passes.
     assert sanity_check_clickhouse_connections()
+
+
+@mock.patch(
+    "snuba.utils.health_info.get_all_storage_keys",
+    return_value=[FakeStorageKey("fake_storage_key")],
+)
+def test_no_essential_storages_fails(mock1: mock.MagicMock) -> None:
+    # If no essential storages are enabled, the healthcheck fails defensively —
+    # we have nothing to verify connectivity against.
+    assert not sanity_check_clickhouse_connections()
+
+
+@mock.patch(
+    "snuba.utils.health_info.get_all_storage_keys",
+    return_value=[StorageKey.ERRORS_RO],
+)
+@mock.patch("snuba.utils.health_info._execute_show_tables")
+@pytest.mark.clickhouse_db
+def test_unreachable_essential_cluster_fails_healthcheck(
+    mock_execute: mock.MagicMock, mock_keys: mock.MagicMock
+) -> None:
+    # Per INC-2141: if an essential cluster is unreachable, the healthcheck must
+    # fail (we can no longer short-circuit to True via another healthy cluster).
+    mock_execute.side_effect = Exception("connection refused")
+    assert not sanity_check_clickhouse_connections()
 
 
 @mock.patch(

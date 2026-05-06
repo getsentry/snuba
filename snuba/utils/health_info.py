@@ -30,6 +30,17 @@ setup_logging(None)
 logger = logging.getLogger("snuba.health")
 
 
+# INC-2141: clusters whose connectivity is required for Snuba to be considered
+# healthy. Identified by storage_set_key, which maps 1:1 to a cluster in
+# settings.CLUSTERS. Failing any of these will fail the health check so the
+# pod can be recycled promptly.
+ESSENTIAL_STORAGE_SET_KEYS = {
+    "events",  # errors storage
+    "events_ro",  # errors_ro storage
+    "events_analytics_platform",
+}
+
+
 def _execute_show_tables(cluster: ClickhouseCluster) -> bool:
     clickhouse = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
     clickhouse.execute("show tables").results
@@ -97,29 +108,44 @@ def filter_checked_storages(filtered_storages: List[Storage]) -> None:
 
 def sanity_check_clickhouse_connections(timeout_seconds: float = 0.5) -> bool:
     """
-    Check if at least a single clickhouse query node is operable,
-    returns True if so, False otherwise.
+    Check that every essential ClickHouse cluster (see ESSENTIAL_STORAGE_SET_KEYS)
+    is operable. Returns True only if all essential clusters respond
+    successfully within the timeout, False otherwise.
+
+    Per INC-2141: previously this short-circuited to True if *any* cluster
+    responded, which delayed pod recycling when a high-traffic cluster (EAP)
+    held stalled connections while other clusters answered fine. We now fail
+    health if any essential cluster is unreachable.
 
     Every individual query node check is limited to a `timeout_seconds` timeout
     (default 0.5 or 500ms).
     """
-    storages: List[Storage] = []
     timeout_seconds = get_float_config("health_check.timeout_override_seconds", timeout_seconds)  # type: ignore
 
+    storages: List[Storage] = []
     try:
         filter_checked_storages(storages)
     except KeyError:
         pass
 
-    unique_clusters: dict[ConnectionId, ClickhouseCluster] = {}
+    essential_storages = [
+        s for s in storages if s.get_storage_set_key().value in ESSENTIAL_STORAGE_SET_KEYS
+    ]
 
-    for storage in storages:
+    unique_clusters: dict[ConnectionId, ClickhouseCluster] = {}
+    for storage in essential_storages:
         try:
-            unique_clusters[storage.get_cluster().get_connection_id()] = storage.get_cluster()
+            cluster = storage.get_cluster()
+            unique_clusters[cluster.get_connection_id()] = cluster
         except UndefinedClickhouseCluster as err:
             logger.error(err)
-            continue
+            return False
 
+    if not unique_clusters:
+        logger.error("No essential ClickHouse clusters found for health check")
+        return False
+
+    healthy = True
     with ThreadPoolExecutor(
         max_workers=len(unique_clusters), thread_name_prefix="health-check"
     ) as executor:
@@ -128,22 +154,30 @@ def sanity_check_clickhouse_connections(timeout_seconds: float = 0.5) -> bool:
             for cluster in unique_clusters.values()
         }
 
+        completed: Set[ConnectionId] = set()
         try:
             for future in as_completed(future_to_cluster, timeout=timeout_seconds):
                 cluster = future_to_cluster[future]
+                completed.add(cluster.get_connection_id())
                 try:
-                    result = future.result()
-                    if result:
-                        return True
+                    future.result()
                 except Exception as err:
                     with sentry_sdk.new_scope() as scope:
                         scope.set_tag("health_cluster_name", cluster.get_clickhouse_cluster_name())
                         logger.error(err)
-                    continue
+                    healthy = False
         except TimeoutError:
-            logger.info(f"No ClickHouse clusters responded within {timeout_seconds}s timeout")
+            unfinished = [
+                cluster.get_clickhouse_cluster_name()
+                for connection_id, cluster in unique_clusters.items()
+                if connection_id not in completed
+            ]
+            logger.info(
+                f"Essential ClickHouse clusters did not respond within {timeout_seconds}s: {unfinished}"
+            )
+            healthy = False
 
-    return False
+    return healthy
 
 
 def check_all_tables_present(metric_tags: dict[str, Any] | None = None) -> bool:
