@@ -12,10 +12,8 @@ from snuba.datasets.readiness_state import ReadinessState
 from snuba.datasets.storage import ReadableTableStorage, Storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.utils.health_info import (
-    _set_shutdown,
     check_all_tables_present,
     filter_checked_storages,
-    get_shutdown,
     sanity_check_clickhouse_connections,
 )
 
@@ -189,12 +187,3 @@ def test_filter_checked_storages(mock1: mock.MagicMock, temp_settings: Any) -> N
 
     # check that the storage with a non-supported readiness state is excluded in list
     assert MockStorage() not in storages
-
-
-def test_get_shutdown() -> None:
-    assert not get_shutdown()
-    _set_shutdown(True)
-    assert get_shutdown()
-
-    _set_shutdown(False)
-    assert not get_shutdown()

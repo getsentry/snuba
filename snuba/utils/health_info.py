@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import logging
-import os
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, TimeoutError, as_completed
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, MutableMapping, Optional, Set, Union, cast
+from typing import Any, Dict, List, Mapping, MutableMapping, Set, Union, cast
 
 import sentry_sdk
 import simplejson as json
@@ -31,46 +30,6 @@ setup_logging(None)
 logger = logging.getLogger("snuba.health")
 
 
-def shutdown_time() -> Optional[float]:
-    try:
-        return os.stat("/tmp/snuba.down").st_mtime
-    except OSError:
-        return None
-
-
-_IS_SHUTTING_DOWN = False
-
-try:
-    import uwsgi
-except ImportError:
-
-    def check_down_file_exists() -> bool:
-        return False
-
-else:
-
-    def check_down_file_exists() -> bool:
-        try:
-            m_time = shutdown_time()
-            if m_time is None:
-                return False
-
-            start_time: float = uwsgi.started_on
-            _set_shutdown(m_time > start_time)
-            return get_shutdown()
-        except OSError:
-            return False
-
-
-def _set_shutdown(is_shutting_down: bool) -> None:
-    global _IS_SHUTTING_DOWN
-    _IS_SHUTTING_DOWN = is_shutting_down
-
-
-def get_shutdown() -> bool:
-    return _IS_SHUTTING_DOWN
-
-
 def _execute_show_tables(cluster: ClickhouseCluster) -> bool:
     clickhouse = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
     clickhouse.execute("show tables").results
@@ -85,14 +44,8 @@ class HealthInfo:
 
 
 def get_health_info(thorough: Union[bool, str]) -> HealthInfo:
-
     start = time.time()
-    down_file_exists = check_down_file_exists()
-
-    metric_tags = {
-        "down_file_exists": str(down_file_exists),
-        "thorough": str(thorough),
-    }
+    metric_tags = {"thorough": str(thorough)}
 
     if get_int_config("health_check_ignore_clickhouse", 0) == 1:
         clickhouse_health = True
@@ -108,12 +61,10 @@ def get_health_info(thorough: Union[bool, str]) -> HealthInfo:
 
     body: Mapping[str, Union[str, bool]]
     if clickhouse_health:
-        body = {"status": "ok", "down_file_exists": down_file_exists}
+        body = {"status": "ok"}
         status = 200
     else:
-        body = {
-            "down_file_exists": down_file_exists,
-        }
+        body = {}
         if thorough:
             body["clickhouse_ok"] = clickhouse_health
         status = 502
@@ -121,15 +72,12 @@ def get_health_info(thorough: Union[bool, str]) -> HealthInfo:
     payload = json.dumps(body)
     if status != 200:
         metrics.increment("healthcheck_failed", tags=metric_tags)
-        if down_file_exists:
-            logger.error("Snuba health check failed! Tags: %s", metric_tags)
-        else:
-            logger.info("Snuba health check failed! Tags: %s", metric_tags)
+        logger.info("Snuba health check failed! Tags: %s", metric_tags)
 
     metrics.timing(
         "healthcheck.latency",
         time.time() - start,
-        tags={"thorough": str(thorough), "down_file_exists": str(down_file_exists)},
+        tags={"thorough": str(thorough)},
     )
 
     return HealthInfo(
