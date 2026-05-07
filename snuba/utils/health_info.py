@@ -18,6 +18,7 @@ from snuba.clusters.cluster import (
     ConnectionId,
     UndefinedClickhouseCluster,
 )
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import Storage
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
@@ -35,9 +36,9 @@ logger = logging.getLogger("snuba.health")
 # settings.CLUSTERS. Failing any of these will fail the health check so the
 # pod can be recycled promptly.
 ESSENTIAL_STORAGE_SET_KEYS = {
-    "events",  # errors storage
-    "events_ro",  # errors_ro storage
-    "events_analytics_platform",
+    StorageSetKey.EVENTS,  # errors storage
+    StorageSetKey.EVENTS_RO,  # errors_ro storage
+    StorageSetKey.EVENTS_ANALYTICS_PLATFORM,
 }
 
 
@@ -129,7 +130,7 @@ def sanity_check_clickhouse_connections(timeout_seconds: float = 0.5) -> bool:
         pass
 
     essential_storages = [
-        s for s in storages if s.get_storage_set_key().value in ESSENTIAL_STORAGE_SET_KEYS
+        s for s in storages if s.get_storage_set_key() in ESSENTIAL_STORAGE_SET_KEYS
     ]
 
     unique_clusters: dict[ConnectionId, ClickhouseCluster] = {}
