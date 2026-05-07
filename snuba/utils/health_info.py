@@ -145,15 +145,22 @@ def sanity_check_clickhouse_connections(timeout_seconds: float = 0.5) -> bool:
         logger.error("No essential ClickHouse clusters found for health check")
         return False
 
-    healthy = True
-    with ThreadPoolExecutor(
+    # Don't use `with ThreadPoolExecutor(...)` — its __exit__ calls
+    # shutdown(wait=True), which blocks on stalled futures and defeats the
+    # timeout (the exact INC-2141 scenario). Instead, shutdown(wait=False) on
+    # the way out so a stalled connection can't keep the health check pinned.
+    # Stalled worker threads will run to completion in the background; that's
+    # acceptable because the pod is failing health and will be recycled.
+    executor = ThreadPoolExecutor(
         max_workers=len(unique_clusters), thread_name_prefix="health-check"
-    ) as executor:
+    )
+    try:
         future_to_cluster = {
             executor.submit(_execute_show_tables, cluster): cluster
             for cluster in unique_clusters.values()
         }
 
+        healthy = True
         completed: Set[ConnectionId] = set()
         try:
             for future in as_completed(future_to_cluster, timeout=timeout_seconds):
@@ -176,6 +183,8 @@ def sanity_check_clickhouse_connections(timeout_seconds: float = 0.5) -> bool:
                 f"Essential ClickHouse clusters did not respond within {timeout_seconds}s: {unfinished}"
             )
             healthy = False
+    finally:
+        executor.shutdown(wait=False)
 
     return healthy
 

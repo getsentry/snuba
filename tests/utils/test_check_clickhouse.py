@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import threading
 from typing import Any, List, Sequence
 from unittest import mock
 
@@ -164,6 +165,43 @@ def test_unreachable_essential_cluster_fails_healthcheck(
     # fail (we can no longer short-circuit to True via another healthy cluster).
     mock_execute.side_effect = Exception("connection refused")
     assert not sanity_check_clickhouse_connections()
+
+
+@mock.patch(
+    "snuba.utils.health_info.get_all_storage_keys",
+    return_value=[StorageKey.ERRORS_RO],
+)
+@mock.patch("snuba.utils.health_info._execute_show_tables")
+@pytest.mark.clickhouse_db
+def test_stalled_cluster_does_not_block_healthcheck(
+    mock_execute: mock.MagicMock, mock_keys: mock.MagicMock
+) -> None:
+    # Per INC-2141: a stalled connection (e.g. EAP holding broken sockets) must
+    # not keep sanity_check_clickhouse_connections from returning. The function
+    # should respect its timeout and return False well before the stalled
+    # worker finishes — not block until shutdown(wait=True) joins it.
+    import time as _time
+
+    stall_started = threading.Event()
+
+    def stall(_cluster: object) -> bool:
+        stall_started.set()
+        _time.sleep(30)  # far longer than the timeout
+        return True
+
+    mock_execute.side_effect = stall
+
+    timeout = 0.2
+    start = _time.monotonic()
+    result = sanity_check_clickhouse_connections(timeout_seconds=timeout)
+    elapsed = _time.monotonic() - start
+
+    assert stall_started.wait(timeout=2.0), "stalled worker never started"
+    assert not result
+    # Generous bound: timeout + executor teardown + test scheduler jitter, but
+    # still well short of the 30s sleep. Without shutdown(wait=False) this
+    # would wait ~30s.
+    assert elapsed < 5.0, f"healthcheck blocked on stalled worker for {elapsed:.2f}s"
 
 
 @mock.patch(
