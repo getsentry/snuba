@@ -129,12 +129,10 @@ def sanity_check_clickhouse_connections(timeout_seconds: float = 0.5) -> bool:
     except KeyError:
         pass
 
-    essential_storages = [
-        s for s in storages if s.get_storage_set_key() in ESSENTIAL_STORAGE_SET_KEYS
-    ]
-
     unique_clusters: dict[ConnectionId, ClickhouseCluster] = {}
-    for storage in essential_storages:
+    for storage in storages:
+        if storage.get_storage_set_key() not in ESSENTIAL_STORAGE_SET_KEYS:
+            continue
         try:
             cluster = storage.get_cluster()
             unique_clusters[cluster.get_connection_id()] = cluster
