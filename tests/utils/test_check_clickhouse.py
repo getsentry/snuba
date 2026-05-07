@@ -186,7 +186,7 @@ def test_stalled_cluster_does_not_block_healthcheck(
 
     def stall(_cluster: object) -> bool:
         stall_started.set()
-        _time.sleep(30)  # far longer than the timeout
+        _time.sleep(10)  # far longer than the timeout
         return True
 
     mock_execute.side_effect = stall
@@ -199,8 +199,8 @@ def test_stalled_cluster_does_not_block_healthcheck(
     assert stall_started.wait(timeout=2.0), "stalled worker never started"
     assert not result
     # Generous bound: timeout + executor teardown + test scheduler jitter, but
-    # still well short of the 30s sleep. Without shutdown(wait=False) this
-    # would wait ~30s.
+    # still well short of the 10s sleep. Without shutdown(wait=False) this
+    # would wait ~10s.
     assert elapsed < 5.0, f"healthcheck blocked on stalled worker for {elapsed:.2f}s"
 
 
