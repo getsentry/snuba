@@ -150,3 +150,11 @@ allocation_policies:
       default_config_overrides:
         is_enforced: 0
         is_active: 0
+query_processors:
+  - processor: ClickhouseSettingsOverride
+    args:
+      overwrite_existing: false
+      settings:
+        max_execution_time: 25
+        timeout_before_checking_execution_speed: 0
+        distributed_product_mode: global
