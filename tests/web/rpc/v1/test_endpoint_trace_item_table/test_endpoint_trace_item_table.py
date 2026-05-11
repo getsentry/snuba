@@ -3931,6 +3931,102 @@ class TestArrayWildcardSearch(BaseApiTest):
         assert len(by_name[attr_name].results) == 1
         assert check_row(by_name[attr_name].results[0])
 
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    def test_trace_item_table_array_op_greater_than_int(self) -> None:
+        """OP_GREATER_THAN on TYPE_ARRAY returns rows where some int element > 50."""
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        items_storage = get_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,  # type: ignore
+            [
+                # matches: contains 200 (> 50)
+                gen_item_message(span_ts, attributes={"frame_linenos": _int_array(1, 9, 200)}),
+                # no match: all elements <= 50 (the lex-compare gotcha: "9" > "50" is true)
+                gen_item_message(span_ts, attributes={"frame_linenos": _int_array(9, 20)}),
+                # matches: 99 > 50
+                gen_item_message(span_ts, attributes={"frame_linenos": _int_array(99)}),
+            ],
+        )
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="frame_linenos"),
+                    op=ComparisonFilter.OP_GREATER_THAN,
+                    value=AttributeValue(val_int=50),
+                )
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="frame_linenos")),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        by_name = {cv.attribute_name: cv for cv in response.column_values}
+        assert len(by_name["frame_linenos"].results) == 2
+        for row in by_name["frame_linenos"].results:
+            int_vals = [
+                e.val_int for e in row.val_array.values if e.WhichOneof("value") == "val_int"
+            ]
+            assert any(v > 50 for v in int_vals)
+
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    def test_trace_item_table_array_op_less_than_or_equals_double(self) -> None:
+        """OP_LESS_THAN_OR_EQUALS on TYPE_ARRAY with a double RHS."""
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        items_storage = get_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,  # type: ignore
+            [
+                # matches: 1.0 <= 1.5
+                gen_item_message(span_ts, attributes={"measurements": _double_array(1.0, 9.9)}),
+                # no match: smallest element 2.0 > 1.5
+                gen_item_message(span_ts, attributes={"measurements": _double_array(2.0, 3.0)}),
+                # matches: 0.5 <= 1.5
+                gen_item_message(span_ts, attributes={"measurements": _double_array(0.5)}),
+            ],
+        )
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="measurements"),
+                    op=ComparisonFilter.OP_LESS_THAN_OR_EQUALS,
+                    value=AttributeValue(val_double=1.5),
+                )
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="measurements")),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        by_name = {cv.attribute_name: cv for cv in response.column_values}
+        assert len(by_name["measurements"].results) == 2
+        for row in by_name["measurements"].results:
+            double_vals = [
+                e.val_double for e in row.val_array.values if e.WhichOneof("value") == "val_double"
+            ]
+            assert any(v <= 1.5 for v in double_vals)
+
 
 class TestTraceItemTableArrayColumn(BaseApiTest):
     @pytest.mark.clickhouse_db
