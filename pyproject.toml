@@ -42,7 +42,7 @@ dependencies = [
     "sqlparse>=0.5.0",
     "structlog>=22.3.0",
     "structlog-sentry>=2.0.0",
-    "urllib3>=2.2.3",
+    "urllib3>=2.7.0",
     "werkzeug>=3.0.6",
     "rust_snuba>=0.0.0",
 ]
