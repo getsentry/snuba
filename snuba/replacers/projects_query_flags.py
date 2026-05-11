@@ -31,7 +31,7 @@ class ProjectsQueryFlags:
     excluded from the data a Query looks through.
     - replacement_types: A set of all replacement types across replacements for the
     set of project ids.
-    - latest_replacement_time: The latest timestamp any replacement occured.
+    - latest_replacement_time: The latest timestamp any replacement occurred.
     """
 
     needs_final: bool
@@ -285,7 +285,7 @@ class ProjectsQueryFlags:
     ) -> Optional[datetime]:
         """
         Process the relevant replacements data to look for the latest timestamp
-        any replacement occured.
+        any replacement occurred.
         """
         latest_replacements = set()
         if needs_final:
