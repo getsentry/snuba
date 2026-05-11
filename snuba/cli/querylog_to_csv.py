@@ -113,7 +113,7 @@ def get_credentials() -> Tuple[str, str]:
 )
 @click.option(
     "--event-type",
-    help="Type of event that occured while executing query.",
+    help="Type of event that occurred while executing query.",
     type=click.Choice(["QueryFinish", "ExceptionBeforeStart", "ExceptionWhileProcessing"]),
     required=True,
     default="QueryFinish",
