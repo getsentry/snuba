@@ -37,7 +37,7 @@ class CloudIdentityAPI:
             response = request.execute()
             if "error" in response:
                 logger.exception(
-                    f"An HTTP error occured when fetching group id for email {group_email}.",
+                    f"An HTTP error occurred when fetching group id for email {group_email}.",
                     google_api_error=response["error"],
                 )
                 return None
@@ -63,7 +63,7 @@ class CloudIdentityAPI:
             response = request.execute()
             if "error" in response:
                 logger.exception(
-                    f"An HTTP error occured when checking if user {member} is a member of group {group_resource_name}",
+                    f"An HTTP error occurred when checking if user {member} is a member of group {group_resource_name}",
                     google_api_error=response["error"],
                 )
             return bool(response.get("hasMembership", False))
