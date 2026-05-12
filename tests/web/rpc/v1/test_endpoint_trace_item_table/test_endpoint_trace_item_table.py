@@ -4095,6 +4095,64 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
         ] == ["node", "--enable-source-maps"]
 
 
+class TestArrayLegacyStringBackwardCompat(BaseApiTest):
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    def test_like_matches_legacy_json_string_and_array_items(self) -> None:
+        attr = "errors"
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_raw_unprocessed_events(
+            get_storage(StorageKey("eap_items")),  # type: ignore
+            [
+                gen_item_message(
+                    span_ts,
+                    attributes={attr: AnyValue(string_value='["auth-error","timeout"]')},
+                ),
+                gen_item_message(
+                    span_ts,
+                    attributes={attr: _str_array("auth-error", "timeout")},
+                ),
+                gen_item_message(
+                    span_ts,
+                    attributes={attr: AnyValue(string_value='["success","cached"]')},
+                ),
+            ],
+        )
+
+        def branch(attr_type: "AttributeKey.Type.ValueType") -> TraceItemFilter:
+            return TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=attr_type, name=attr),
+                    op=ComparisonFilter.OP_LIKE,
+                    value=AttributeValue(val_str="%error%"),
+                )
+            )
+
+        response = EndpointTraceItemTable().execute(
+            TraceItemTableRequest(
+                meta=RequestMeta(
+                    project_ids=[1, 2, 3],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    start_timestamp=START_TIMESTAMP,
+                    end_timestamp=END_TIMESTAMP,
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                ),
+                filter=TraceItemFilter(
+                    or_filter=OrFilter(
+                        filters=[branch(AttributeKey.TYPE_STRING), branch(AttributeKey.TYPE_ARRAY)]
+                    )
+                ),
+                columns=[
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+                ],
+            )
+        )
+        matched_ids = {r.val_str for r in response.column_values[0].results}
+        assert len(matched_ids) == 2
+
+
 class TestUtils:
     def test_apply_labels_to_columns_backward_compat(self) -> None:
         message = TraceItemTableRequest(
