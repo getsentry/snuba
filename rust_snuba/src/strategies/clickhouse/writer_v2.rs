@@ -373,13 +373,13 @@ mod tests {
         let url = client.build_url();
         assert!(!url.contains("max_insert_block_size"));
 
-        // Per-storage override sets the suffix.
+        // Per-storage override at or above the ClickHouse default sets the suffix.
         crate::runtime_config::patch_str_config_for_test(
             "clickhouse_max_insert_block_size:writer_v2_block_size_test",
-            Some("1000000"),
+            Some("2000000"),
         );
         let url = client.build_url();
-        assert!(url.contains("&max_insert_block_size=1000000"));
+        assert!(url.contains("&max_insert_block_size=2000000"));
 
         // A different storage isn't affected.
         let other_client =
@@ -387,13 +387,21 @@ mod tests {
         let url = other_client.build_url();
         assert!(!url.contains("max_insert_block_size"));
 
-        // 0 means "leave unset".
+        // Values below the ClickHouse default (1_048_449) are rejected.
         crate::runtime_config::patch_str_config_for_test(
             "clickhouse_max_insert_block_size:writer_v2_block_size_test",
-            Some("0"),
+            Some("1000000"),
         );
         let url = client.build_url();
         assert!(!url.contains("max_insert_block_size"));
+
+        // Exactly the default is accepted.
+        crate::runtime_config::patch_str_config_for_test(
+            "clickhouse_max_insert_block_size:writer_v2_block_size_test",
+            Some("1048449"),
+        );
+        let url = client.build_url();
+        assert!(url.contains("&max_insert_block_size=1048449"));
     }
 
     #[tokio::test]
