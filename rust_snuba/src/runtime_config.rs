@@ -71,6 +71,17 @@ pub fn get_load_balancing_config(storage_name: &str) -> LoadBalancingConfig {
     }
 }
 
+/// Returns Some(n) if `clickhouse_max_insert_block_size:<storage_name>` is set
+/// to a positive integer in snuba.state, otherwise None. Callers should append
+/// `&max_insert_block_size=<n>` to the INSERT URL when Some.
+pub fn get_max_insert_block_size(storage_name: &str) -> Option<u64> {
+    get_str_config(&format!("clickhouse_max_insert_block_size:{storage_name}"))
+        .ok()
+        .flatten()
+        .and_then(|s| s.parse::<u64>().ok())
+        .filter(|&n| n > 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
