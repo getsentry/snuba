@@ -260,29 +260,62 @@ class TestTraceItemDetails(BaseApiTest):
 
     def test_endpoint_returns_array_attribute(self, eap: None, redis_db: None) -> None:
         """attributes_array from storage is exposed as val_array on TraceItemDetails."""
-        span_ts = BASE_TIME - timedelta(minutes=1)
-        storage = get_storage(StorageKey("eap_items"))
-        write_raw_unprocessed_events(
-            storage,  # type: ignore
-            [
-                gen_item_message(
-                    span_ts,
-                    attributes={
-                        "tags": _str_tags_array("gamma", "delta"),
-                        "cols": _int_vals_array(1, 3),
-                    },
-                ),
-            ],
-        )
-        start = Timestamp()
-        end = Timestamp()
-        start.FromDatetime(BASE_TIME - timedelta(hours=4))
-        end.GetCurrentTime()
+        state.set_config("trace_item_details_include_arrays", 1)
+        try:
+            span_ts = BASE_TIME - timedelta(minutes=1)
+            storage = get_storage(StorageKey("eap_items"))
+            write_raw_unprocessed_events(
+                storage,  # type: ignore
+                [
+                    gen_item_message(
+                        span_ts,
+                        attributes={
+                            "tags": _str_tags_array("gamma", "delta"),
+                            "cols": _int_vals_array(1, 3),
+                        },
+                    ),
+                ],
+            )
+            start = Timestamp()
+            end = Timestamp()
+            start.FromDatetime(BASE_TIME - timedelta(hours=4))
+            end.GetCurrentTime()
 
-        spans = (
-            EndpointTraceItemTable()
-            .execute(
-                TraceItemTableRequest(
+            spans = (
+                EndpointTraceItemTable()
+                .execute(
+                    TraceItemTableRequest(
+                        meta=RequestMeta(
+                            project_ids=[1],
+                            organization_id=1,
+                            cogs_category="something",
+                            referrer="something",
+                            start_timestamp=start,
+                            end_timestamp=end,
+                            request_id=_REQUEST_ID,
+                            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                        ),
+                        columns=[
+                            Column(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING, name="sentry.item_id"
+                                )
+                            ),
+                            Column(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING, name="sentry.trace_id"
+                                )
+                            ),
+                        ],
+                    )
+                )
+                .column_values
+            )
+            item_id = spans[0].results[0].val_str
+            trace_id = spans[1].results[0].val_str
+
+            res = EndpointTraceItemDetails().execute(
+                TraceItemDetailsRequest(
                     meta=RequestMeta(
                         project_ids=[1],
                         organization_id=1,
@@ -293,45 +326,20 @@ class TestTraceItemDetails(BaseApiTest):
                         request_id=_REQUEST_ID,
                         trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                     ),
-                    columns=[
-                        Column(
-                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
-                        ),
-                        Column(
-                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.trace_id")
-                        ),
-                    ],
+                    item_id=item_id,
+                    trace_id=trace_id,
                 )
             )
-            .column_values
-        )
-        item_id = spans[0].results[0].val_str
-        trace_id = spans[1].results[0].val_str
-
-        res = EndpointTraceItemDetails().execute(
-            TraceItemDetailsRequest(
-                meta=RequestMeta(
-                    project_ids=[1],
-                    organization_id=1,
-                    cogs_category="something",
-                    referrer="something",
-                    start_timestamp=start,
-                    end_timestamp=end,
-                    request_id=_REQUEST_ID,
-                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                ),
-                item_id=item_id,
-                trace_id=trace_id,
-            )
-        )
-        tags_attr = next((a for a in res.attributes if a.name == "tags"), None)
-        assert tags_attr is not None
-        assert tags_attr.value.WhichOneof("value") == "val_array"
-        assert [e.val_str for e in tags_attr.value.val_array.values] == ["gamma", "delta"]
-        cols_attr = next((a for a in res.attributes if a.name == "cols"), None)
-        assert cols_attr is not None
-        assert cols_attr.value.WhichOneof("value") == "val_array"
-        assert [e.val_int for e in cols_attr.value.val_array.values] == [1, 3]
+            tags_attr = next((a for a in res.attributes if a.name == "tags"), None)
+            assert tags_attr is not None
+            assert tags_attr.value.WhichOneof("value") == "val_array"
+            assert [e.val_str for e in tags_attr.value.val_array.values] == ["gamma", "delta"]
+            cols_attr = next((a for a in res.attributes if a.name == "cols"), None)
+            assert cols_attr is not None
+            assert cols_attr.value.WhichOneof("value") == "val_array"
+            assert [e.val_int for e in cols_attr.value.val_array.values] == [1, 3]
+        finally:
+            state.delete_config("trace_item_details_include_arrays")
 
     def test_kill_switch_omits_array_attributes(self, eap: None, redis_db: None) -> None:
         """Setting trace_item_details_include_arrays=0 drops attributes_array from the SELECT."""
@@ -415,33 +423,71 @@ class TestTraceItemDetails(BaseApiTest):
             state.delete_config("trace_item_details_include_arrays")
 
     def test_dotted_key_array_attribute_parsed_properly(self, eap: None, redis_db: None) -> None:
-        trace_id = uuid.uuid4().hex
-        span_ts = BASE_TIME - timedelta(minutes=1)
-        storage = get_storage(StorageKey("eap_items"))
-        write_raw_unprocessed_events(
-            storage,  # type: ignore
-            [
-                gen_item_message(
-                    span_ts,
-                    trace_id=trace_id,
-                    remove_default_attributes=True,
-                    attributes={
-                        "resource.process.command_args": _str_tags_array(
-                            "node", "--enable-source-maps"
-                        ),
-                    },
-                ),
-            ],
-        )
-        start = Timestamp()
-        end = Timestamp()
-        start.FromDatetime(BASE_TIME - timedelta(hours=4))
-        end.GetCurrentTime()
+        state.set_config("trace_item_details_include_arrays", 1)
+        try:
+            trace_id = uuid.uuid4().hex
+            span_ts = BASE_TIME - timedelta(minutes=1)
+            storage = get_storage(StorageKey("eap_items"))
+            write_raw_unprocessed_events(
+                storage,  # type: ignore
+                [
+                    gen_item_message(
+                        span_ts,
+                        trace_id=trace_id,
+                        remove_default_attributes=True,
+                        attributes={
+                            "resource.process.command_args": _str_tags_array(
+                                "node", "--enable-source-maps"
+                            ),
+                        },
+                    ),
+                ],
+            )
+            start = Timestamp()
+            end = Timestamp()
+            start.FromDatetime(BASE_TIME - timedelta(hours=4))
+            end.GetCurrentTime()
 
-        spans = (
-            EndpointTraceItemTable()
-            .execute(
-                TraceItemTableRequest(
+            spans = (
+                EndpointTraceItemTable()
+                .execute(
+                    TraceItemTableRequest(
+                        meta=RequestMeta(
+                            project_ids=[1],
+                            organization_id=1,
+                            cogs_category="something",
+                            referrer="something",
+                            start_timestamp=start,
+                            end_timestamp=end,
+                            request_id=_REQUEST_ID,
+                            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                        ),
+                        columns=[
+                            Column(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING, name="sentry.item_id"
+                                )
+                            ),
+                            Column(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING, name="sentry.trace_id"
+                                )
+                            ),
+                        ],
+                    )
+                )
+                .column_values
+            )
+            idx = next(
+                i
+                for i, tr in enumerate(spans[1].results)
+                if tr.val_str.replace("-", "").lower() == trace_id.replace("-", "").lower()
+            )
+            item_id = spans[0].results[idx].val_str
+            trace_id_for_details = spans[1].results[idx].val_str
+
+            res = EndpointTraceItemDetails().execute(
+                TraceItemDetailsRequest(
                     meta=RequestMeta(
                         project_ids=[1],
                         organization_id=1,
@@ -452,46 +498,21 @@ class TestTraceItemDetails(BaseApiTest):
                         request_id=_REQUEST_ID,
                         trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                     ),
-                    columns=[
-                        Column(
-                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
-                        ),
-                        Column(
-                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.trace_id")
-                        ),
-                    ],
+                    item_id=item_id,
+                    trace_id=trace_id_for_details,
                 )
             )
-            .column_values
-        )
-        idx = next(
-            i
-            for i, tr in enumerate(spans[1].results)
-            if tr.val_str.replace("-", "").lower() == trace_id.replace("-", "").lower()
-        )
-        item_id = spans[0].results[idx].val_str
-        trace_id_for_details = spans[1].results[idx].val_str
-
-        res = EndpointTraceItemDetails().execute(
-            TraceItemDetailsRequest(
-                meta=RequestMeta(
-                    project_ids=[1],
-                    organization_id=1,
-                    cogs_category="something",
-                    referrer="something",
-                    start_timestamp=start,
-                    end_timestamp=end,
-                    request_id=_REQUEST_ID,
-                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                ),
-                item_id=item_id,
-                trace_id=trace_id_for_details,
+            attr = next(
+                (a for a in res.attributes if a.name == "resource.process.command_args"), None
             )
-        )
-        attr = next((a for a in res.attributes if a.name == "resource.process.command_args"), None)
-        assert attr is not None
-        assert attr.value.WhichOneof("value") == "val_array"
-        assert [e.val_str for e in attr.value.val_array.values] == ["node", "--enable-source-maps"]
+            assert attr is not None
+            assert attr.value.WhichOneof("value") == "val_array"
+            assert [e.val_str for e in attr.value.val_array.values] == [
+                "node",
+                "--enable-source-maps",
+            ]
+        finally:
+            state.delete_config("trace_item_details_include_arrays")
 
     def test_endpoint_on_spans(self, setup_spans_in_db: Any) -> None:
         end = Timestamp()

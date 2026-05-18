@@ -83,8 +83,8 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
     # Reading the JSON attributes_array column forces ClickHouse to materialize
     # every dynamic subcolumn per granule and re-serialize as a string, which
     # dominates this endpoint's latency. Gate behind a runtime config so SRE
-    # can disable on the fly without a deploy. Default 1 preserves behavior.
-    if state.get_int_config("trace_item_details_include_arrays", 1):
+    # can enable on the fly without a deploy. Default 0 skips the column.
+    if state.get_int_config("trace_item_details_include_arrays", 0):
         selected_columns.append(
             SelectedExpression(
                 "attributes_array",
