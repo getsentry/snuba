@@ -19,10 +19,15 @@ use crate::types::CogsData;
 use crate::types::{InsertBatch, ItemTypeMetrics, KafkaMessageMetadata, TypedInsertBatch};
 
 /// Runtime config key. When set to a positive integer N, the eap-items
-/// consumer drops any message whose `received` timestamp is older than N
+/// consumer drops any message whose event `timestamp` is older than N
 /// seconds relative to now (e.g. N=3600 drops anything more than an hour
 /// stale). Unset / non-positive disables the killswitch.
-const DROP_STALE_THRESHOLD_KEY: &str = "eap_items_drop_stale_threshold_sec";
+///
+/// We key on `timestamp` (not `received`) because the eap_items table is
+/// partitioned by `(retention_days, toMonday(timestamp))`. Inserts that
+/// straddle the weekly partition boundary tax the system, and dropping by
+/// `timestamp` is what prevents writes into a prior partition.
+const DROP_OLD_TIMESTAMP_KEY: &str = "eap_items_drop_old_timestamp_threshold_sec";
 
 /// Precision factor for sampling_factor calculations to compensate for floating point errors
 const SAMPLING_FACTOR_PRECISION: f64 = 1e9;
@@ -43,13 +48,17 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
         .received
         .as_ref()
         .and_then(|received| DateTime::from_timestamp(received.seconds, 0));
+    let event_timestamp = trace_item
+        .timestamp
+        .as_ref()
+        .and_then(|ts| DateTime::from_timestamp(ts.seconds, 0));
 
-    if let Some(received_at) = origin_timestamp {
-        if let Some(threshold_sec) = get_drop_stale_threshold_sec() {
-            if let Some(age_sec) = stale_age_secs(received_at, Utc::now(), threshold_sec) {
-                counter!("eap_items.messages.dropped_stale", 1);
+    if let Some(event_ts) = event_timestamp {
+        if let Some(threshold_sec) = get_drop_old_timestamp_threshold_sec() {
+            if let Some(age_sec) = stale_age_secs(event_ts, Utc::now(), threshold_sec) {
+                counter!("eap_items.messages.dropped_old_timestamp", 1);
                 anyhow::bail!(
-                    "eap-items message dropped as stale (age {age_sec}s > threshold {threshold_sec}s); routed to DLQ"
+                    "eap-items message dropped: event timestamp {age_sec}s old > threshold {threshold_sec}s; routed to DLQ"
                 );
             }
         }
@@ -116,20 +125,20 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
     })
 }
 
-fn get_drop_stale_threshold_sec() -> Option<i64> {
-    get_str_config(DROP_STALE_THRESHOLD_KEY)
+fn get_drop_old_timestamp_threshold_sec() -> Option<i64> {
+    get_str_config(DROP_OLD_TIMESTAMP_KEY)
         .ok()
         .flatten()
         .and_then(|s| s.parse::<i64>().ok())
         .filter(|&n| n > 0)
 }
 
-/// Returns Some(age_in_seconds) if `received` is more than `threshold_sec`
-/// older than `now`. Returns None when the message is within the threshold
-/// (or arrived from the future, indicating clock skew on the producer side
+/// Returns Some(age_in_seconds) if `ts` is more than `threshold_sec` older
+/// than `now`. Returns None when the message is within the threshold (or
+/// arrived from the future, indicating clock skew on the producer side
 /// rather than staleness).
-fn stale_age_secs(received: DateTime<Utc>, now: DateTime<Utc>, threshold_sec: i64) -> Option<i64> {
-    let age_sec = now.signed_duration_since(received).num_seconds();
+fn stale_age_secs(ts: DateTime<Utc>, now: DateTime<Utc>, threshold_sec: i64) -> Option<i64> {
+    let age_sec = now.signed_duration_since(ts).num_seconds();
     (age_sec > threshold_sec).then_some(age_sec)
 }
 
