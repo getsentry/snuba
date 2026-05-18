@@ -522,12 +522,6 @@ def build_query(
         sample=None,
     )
 
-    # Reading the JSON attributes_array column forces ClickHouse to materialize
-    # every dynamic subcolumn per granule and re-serialize as a string, which
-    # dominates this endpoint's latency. Gate behind a runtime config so SRE
-    # can disable on the fly without a deploy. Default 1 preserves behavior.
-    # When 0, TYPE_ARRAY key columns return NULL instead of the JSON-decoded
-    # array so the response shape is preserved.
     include_arrays = state.get_int_config("trace_item_table_include_arrays", 1)
 
     selected_columns = []
