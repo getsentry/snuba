@@ -18,6 +18,7 @@ const DESCRIPTIONS: { [key: string]: string } = {
   "read_through_cache.short_circuit": "First stage of removing the readthrough cache entirely is disabling and monitoring - Rahul",
   "retry_duplicate_query_id": "Whether to retry clickhouse queries with a random query id (exactly once) if clickhouse rejected the query before due to the query id already being used. This can be useful in case of redis failover scenarios when we lose query cache.",
   "snuba_api_cogs_probability": "Sample rate for logging COGS in the API",
+  "trace_item_details_include_arrays": "If 1 (default), EndpointTraceItemDetails selects and decodes the attributes_array JSON column so array-typed attributes are returned. If 0, the column is skipped (fast path, no array attributes in the response). Use as a kill switch when the JSON column read is causing latency on the trace-item-details hot path.",
 }
 
 function getDescription(key: string): [string, string] | undefined {

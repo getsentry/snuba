@@ -16,6 +16,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
 
+from snuba import state
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_trace_item_details import (
@@ -331,6 +332,87 @@ class TestTraceItemDetails(BaseApiTest):
         assert cols_attr is not None
         assert cols_attr.value.WhichOneof("value") == "val_array"
         assert [e.val_int for e in cols_attr.value.val_array.values] == [1, 3]
+
+    def test_kill_switch_omits_array_attributes(self, eap: None, redis_db: None) -> None:
+        """Setting trace_item_details_include_arrays=0 drops attributes_array from the SELECT."""
+        state.set_config("trace_item_details_include_arrays", 0)
+        try:
+            span_ts = BASE_TIME - timedelta(minutes=1)
+            storage = get_storage(StorageKey("eap_items"))
+            write_raw_unprocessed_events(
+                storage,  # type: ignore
+                [
+                    gen_item_message(
+                        span_ts,
+                        attributes={
+                            "tags": _str_tags_array("gamma", "delta"),
+                            "cols": _int_vals_array(1, 3),
+                        },
+                    ),
+                ],
+            )
+            start = Timestamp()
+            end = Timestamp()
+            start.FromDatetime(BASE_TIME - timedelta(hours=4))
+            end.GetCurrentTime()
+
+            spans = (
+                EndpointTraceItemTable()
+                .execute(
+                    TraceItemTableRequest(
+                        meta=RequestMeta(
+                            project_ids=[1],
+                            organization_id=1,
+                            cogs_category="something",
+                            referrer="something",
+                            start_timestamp=start,
+                            end_timestamp=end,
+                            request_id=_REQUEST_ID,
+                            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                        ),
+                        columns=[
+                            Column(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING, name="sentry.item_id"
+                                )
+                            ),
+                            Column(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING, name="sentry.trace_id"
+                                )
+                            ),
+                        ],
+                    )
+                )
+                .column_values
+            )
+            item_id = spans[0].results[0].val_str
+            trace_id = spans[1].results[0].val_str
+
+            res = EndpointTraceItemDetails().execute(
+                TraceItemDetailsRequest(
+                    meta=RequestMeta(
+                        project_ids=[1],
+                        organization_id=1,
+                        cogs_category="something",
+                        referrer="something",
+                        start_timestamp=start,
+                        end_timestamp=end,
+                        request_id=_REQUEST_ID,
+                        trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    ),
+                    item_id=item_id,
+                    trace_id=trace_id,
+                )
+            )
+            # No attributes should be of array type when the kill switch is off.
+            assert all(a.value.WhichOneof("value") != "val_array" for a in res.attributes), [
+                a.name for a in res.attributes if a.value.WhichOneof("value") == "val_array"
+            ]
+            # Array-typed attributes specifically are absent.
+            assert not any(a.name in ("tags", "cols") for a in res.attributes)
+        finally:
+            state.delete_config("trace_item_details_include_arrays")
 
     def test_dotted_key_array_attribute_parsed_properly(self, eap: None, redis_db: None) -> None:
         trace_id = uuid.uuid4().hex

@@ -11,6 +11,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_details_pb2 import (
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeValue
 
+from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
@@ -52,40 +53,39 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
         schema=get_entity(EntityKey("eap_items")).get_data_model(),
         sample=None,
     )
-    res = Query(
-        from_clause=entity,
-        selected_columns=[
-            SelectedExpression(
-                "timestamp", f.toUnixTimestamp(column("timestamp"), alias="timestamp")
+    selected_columns = [
+        SelectedExpression("timestamp", f.toUnixTimestamp(column("timestamp"), alias="timestamp")),
+        SelectedExpression("hex_item_id", column("item_id", alias="hex_item_id")),
+        SelectedExpression(
+            "trace_id",
+            column("trace_id", alias="selected_trace_id"),
+        ),
+        SelectedExpression("organization_id", column("organization_id", alias="organization_id")),
+        SelectedExpression("project_id", column("project_id", alias="project_id")),
+        SelectedExpression("item_type", column("item_type", alias="item_type")),
+        SelectedExpression(
+            "attributes_string",
+            f.mapConcat(
+                *[column(f"attributes_string_{n}") for n in range(BUCKET_COUNT)],
+                alias="attributes_string",
             ),
-            SelectedExpression("hex_item_id", column("item_id", alias="hex_item_id")),
-            SelectedExpression(
-                "trace_id",
-                column("trace_id", alias="selected_trace_id"),
+        ),
+        SelectedExpression(
+            "attributes_float",
+            f.mapConcat(
+                *[column(f"attributes_float_{n}") for n in range(BUCKET_COUNT)],
+                alias="attributes_float",
             ),
-            SelectedExpression(
-                "organization_id", column("organization_id", alias="organization_id")
-            ),
-            SelectedExpression("project_id", column("project_id", alias="project_id")),
-            SelectedExpression("item_type", column("item_type", alias="item_type")),
-            SelectedExpression(
-                "attributes_string",
-                f.mapConcat(
-                    *[column(f"attributes_string_{n}") for n in range(BUCKET_COUNT)],
-                    alias="attributes_string",
-                ),
-            ),
-            SelectedExpression(
-                "attributes_float",
-                f.mapConcat(
-                    *[column(f"attributes_float_{n}") for n in range(BUCKET_COUNT)],
-                    alias="attributes_float",
-                ),
-            ),
-            SelectedExpression("attributes_int", column("attributes_int", alias="attributes_int")),
-            SelectedExpression(
-                "attributes_bool", column("attributes_bool", alias="attributes_bool")
-            ),
+        ),
+        SelectedExpression("attributes_int", column("attributes_int", alias="attributes_int")),
+        SelectedExpression("attributes_bool", column("attributes_bool", alias="attributes_bool")),
+    ]
+    # Reading the JSON attributes_array column forces ClickHouse to materialize
+    # every dynamic subcolumn per granule and re-serialize as a string, which
+    # dominates this endpoint's latency. Gate behind a runtime config so SRE
+    # can disable on the fly without a deploy. Default 1 preserves behavior.
+    if state.get_int_config("trace_item_details_include_arrays", 1):
+        selected_columns.append(
             SelectedExpression(
                 "attributes_array",
                 FunctionCall(
@@ -93,8 +93,11 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
                     "toJSONString",
                     (column("attributes_array"),),
                 ),
-            ),
-        ],
+            )
+        )
+    res = Query(
+        from_clause=entity,
+        selected_columns=selected_columns,
         condition=base_conditions_and(
             request.meta,
             f.equals(column("item_type"), request.meta.trace_item_type),
