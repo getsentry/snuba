@@ -1,5 +1,30 @@
 # Changelog
 
+## 26.5.0
+
+### New Features ✨
+
+- (clickhouse) Add timeout for ClickHouse pool connection acquisition by @onewland in [#7920](https://github.com/getsentry/snuba/pull/7920)
+
+### Bug Fixes 🐛
+
+- (ci) Set build_target to 'application' to reduce Docker image size by @aldy505 in [#7913](https://github.com/getsentry/snuba/pull/7913)
+- (inc-2141) Only check essential clusters in liveness healthcheck by @onewland in [#7925](https://github.com/getsentry/snuba/pull/7925)
+
+### Internal Changes 🔧
+
+- (eap-outcomes) Option to log duplicates by @MeredithAnya in [#7929](https://github.com/getsentry/snuba/pull/7929)
+- (inc-2150) Hard limit of MAX_BUFFERED_MESSAGES for batched deletes by @MeredithAnya in [#7922](https://github.com/getsentry/snuba/pull/7922)
+- Bump sentry-arroyo to 2.39.2 by @getsentry-bot in [#7930](https://github.com/getsentry/snuba/pull/7930)
+- Drop dead down-file shutdown signaling path by @onewland in [#7924](https://github.com/getsentry/snuba/pull/7924)
+- Bump ddl-changes job timeout to 10 minutes by @onewland in [#7921](https://github.com/getsentry/snuba/pull/7921)
+- Bump new development version by @sentry-release-bot[bot] in [9746d626](https://github.com/getsentry/snuba/commit/9746d6260f5a71a129b006c42d3e2b018c8d2aab)
+
+### Other
+
+- functions dataset: add max_execution_time by @xurui-c in [#7931](https://github.com/getsentry/snuba/pull/7931)
+- OutcomesBasedRoutingStrategy: allow org-specific downsampling by @xurui-c in [#7923](https://github.com/getsentry/snuba/pull/7923)
+
 ## 26.4.2
 
 ### New Features ✨
