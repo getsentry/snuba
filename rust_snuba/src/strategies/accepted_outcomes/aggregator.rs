@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::time::{Duration, Instant};
 
+use chrono::{DateTime, Utc};
 use prost::Message as ProstMessage;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::counter;
@@ -14,6 +15,7 @@ use sentry_protos::snuba::v1::{TraceItem, TraceItemType};
 
 use sentry_options::options;
 
+use crate::processors::utils::{get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs};
 use crate::types::{item_type_name, AggregatedOutcomesBatch, BucketKey, ItemDedupKey};
 
 const OPTIONS_REFRESH_INTERVAL: Duration = Duration::from_secs(10);
@@ -278,6 +280,18 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
                 )));
             }
         };
+
+        let event_timestamp = trace_item
+            .timestamp
+            .as_ref()
+            .and_then(|ts| DateTime::from_timestamp(ts.seconds, 0));
+        if let Some(event_ts) = event_timestamp {
+            let now = Utc::now();
+            if get_drop_invalid_timestamps_enabled() && out_of_valid_interval_secs(event_ts, now) {
+                counter!("accepted_outcomes.dropped_out_of_range_timestamp", 1);
+                return Ok(());
+            }
+        }
 
         let ts_secs = if self.use_item_timestamp {
             trace_item
