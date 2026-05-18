@@ -522,7 +522,7 @@ def build_query(
         sample=None,
     )
 
-    include_arrays = state.get_int_config("trace_item_table_include_arrays", 1)
+    include_arrays = state.get_int_config("trace_item_table_include_arrays", 0)
 
     selected_columns = []
     for column in request.columns:

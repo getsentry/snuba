@@ -3744,99 +3744,109 @@ class TestArrayWildcardSearch(BaseApiTest):
     @pytest.mark.redis_db
     def test_trace_item_table_array_op_equals_includes_string_ignore_case(self) -> None:
         """OP_EQUALS with ignore_case matches a string in a TYPE_ARRAY (element-wise)."""
-        span_ts = BASE_TIME - timedelta(minutes=1)
-        items_storage = get_storage(StorageKey("eap_items"))
-        write_raw_unprocessed_events(
-            items_storage,  # type: ignore
-            [
-                gen_item_message(span_ts, attributes={"tags": _str_array("ERROR", "other")}),
-                gen_item_message(
-                    span_ts, attributes={"tags": _str_array("success", "cached", "http-error")}
-                ),
-                gen_item_message(span_ts, attributes={"tags": _str_array("Error", "timeout")}),
-            ],
-        )
-        message = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=START_TIMESTAMP,
-                end_timestamp=END_TIMESTAMP,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            filter=TraceItemFilter(
-                comparison_filter=ComparisonFilter(
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_ARRAY,
-                        name="tags",
+        state.set_config("trace_item_table_include_arrays", 1)
+        try:
+            span_ts = BASE_TIME - timedelta(minutes=1)
+            items_storage = get_storage(StorageKey("eap_items"))
+            write_raw_unprocessed_events(
+                items_storage,  # type: ignore
+                [
+                    gen_item_message(span_ts, attributes={"tags": _str_array("ERROR", "other")}),
+                    gen_item_message(
+                        span_ts, attributes={"tags": _str_array("success", "cached", "http-error")}
                     ),
-                    op=ComparisonFilter.OP_EQUALS,
-                    value=AttributeValue(val_str="error"),
-                    ignore_case=True,
-                )
-            ),
-            columns=[
-                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
-                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags")),
-            ],
-        )
-        response = EndpointTraceItemTable().execute(message)
-        assert len(response.column_values[0].results) == 2
-        by_name = {cv.attribute_name: cv for cv in response.column_values}
-        for row in by_name["tags"].results:
-            vals = [e.val_str for e in row.val_array.values if e.WhichOneof("value") == "val_str"]
-            assert "error" in [val.lower() for val in vals]
+                    gen_item_message(span_ts, attributes={"tags": _str_array("Error", "timeout")}),
+                ],
+            )
+            message = TraceItemTableRequest(
+                meta=RequestMeta(
+                    project_ids=[1, 2, 3],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    start_timestamp=START_TIMESTAMP,
+                    end_timestamp=END_TIMESTAMP,
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                ),
+                filter=TraceItemFilter(
+                    comparison_filter=ComparisonFilter(
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_ARRAY,
+                            name="tags",
+                        ),
+                        op=ComparisonFilter.OP_EQUALS,
+                        value=AttributeValue(val_str="error"),
+                        ignore_case=True,
+                    )
+                ),
+                columns=[
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags")),
+                ],
+            )
+            response = EndpointTraceItemTable().execute(message)
+            assert len(response.column_values[0].results) == 2
+            by_name = {cv.attribute_name: cv for cv in response.column_values}
+            for row in by_name["tags"].results:
+                vals = [
+                    e.val_str for e in row.val_array.values if e.WhichOneof("value") == "val_str"
+                ]
+                assert "error" in [val.lower() for val in vals]
+        finally:
+            state.delete_config("trace_item_table_include_arrays")
 
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
     def test_trace_item_table_array_op_equals_includes_int(self) -> None:
         """OP_EQUALS on TYPE_ARRAY with val_int=45 returns rows where some element is 45."""
-        span_ts = BASE_TIME - timedelta(minutes=1)
-        items_storage = get_storage(StorageKey("eap_items"))
-        write_raw_unprocessed_events(
-            items_storage,  # type: ignore
-            [
-                gen_item_message(span_ts, attributes={"frame_linenos": _int_array(1, 45, 200)}),
-                gen_item_message(span_ts, attributes={"frame_linenos": _int_array(10, 20)}),
-                gen_item_message(span_ts, attributes={"frame_linenos": _int_array(45, 99)}),
-            ],
-        )
-        message = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=START_TIMESTAMP,
-                end_timestamp=END_TIMESTAMP,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            filter=TraceItemFilter(
-                comparison_filter=ComparisonFilter(
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_ARRAY,
-                        name="frame_linenos",
-                    ),
-                    op=ComparisonFilter.OP_EQUALS,
-                    value=AttributeValue(val_int=45),
-                )
-            ),
-            columns=[
-                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
-                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="frame_linenos")),
-            ],
-        )
-        response = EndpointTraceItemTable().execute(message)
-        assert len(response.column_values[0].results) == 2
-        by_name = {cv.attribute_name: cv for cv in response.column_values}
-        assert by_name["frame_linenos"].results[0].WhichOneof("value") == "val_array"
-        for row in by_name["frame_linenos"].results:
-            int_vals = [
-                e.val_int for e in row.val_array.values if e.WhichOneof("value") == "val_int"
-            ]
-            assert 45 in int_vals
+        state.set_config("trace_item_table_include_arrays", 1)
+        try:
+            span_ts = BASE_TIME - timedelta(minutes=1)
+            items_storage = get_storage(StorageKey("eap_items"))
+            write_raw_unprocessed_events(
+                items_storage,  # type: ignore
+                [
+                    gen_item_message(span_ts, attributes={"frame_linenos": _int_array(1, 45, 200)}),
+                    gen_item_message(span_ts, attributes={"frame_linenos": _int_array(10, 20)}),
+                    gen_item_message(span_ts, attributes={"frame_linenos": _int_array(45, 99)}),
+                ],
+            )
+            message = TraceItemTableRequest(
+                meta=RequestMeta(
+                    project_ids=[1, 2, 3],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    start_timestamp=START_TIMESTAMP,
+                    end_timestamp=END_TIMESTAMP,
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                ),
+                filter=TraceItemFilter(
+                    comparison_filter=ComparisonFilter(
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_ARRAY,
+                            name="frame_linenos",
+                        ),
+                        op=ComparisonFilter.OP_EQUALS,
+                        value=AttributeValue(val_int=45),
+                    )
+                ),
+                columns=[
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="frame_linenos")),
+                ],
+            )
+            response = EndpointTraceItemTable().execute(message)
+            assert len(response.column_values[0].results) == 2
+            by_name = {cv.attribute_name: cv for cv in response.column_values}
+            assert by_name["frame_linenos"].results[0].WhichOneof("value") == "val_array"
+            for row in by_name["frame_linenos"].results:
+                int_vals = [
+                    e.val_int for e in row.val_array.values if e.WhichOneof("value") == "val_int"
+                ]
+                assert 45 in int_vals
+        finally:
+            state.delete_config("trace_item_table_include_arrays")
 
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
@@ -3893,44 +3903,48 @@ class TestArrayWildcardSearch(BaseApiTest):
         check_row: Any,
     ) -> None:
         """OP_EQUALS on TYPE_ARRAY: each scalar AttributeValue type matches a stored element"""
-        span_ts = BASE_TIME - timedelta(minutes=1)
-        items_storage = get_storage(StorageKey("eap_items"))
-        write_raw_unprocessed_events(
-            items_storage,  # type: ignore
-            [
-                gen_item_message(span_ts, attributes=match_attrs),
-                gen_item_message(span_ts, attributes=no_match_attrs),
-            ],
-        )
-        message = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=START_TIMESTAMP,
-                end_timestamp=END_TIMESTAMP,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            filter=TraceItemFilter(
-                comparison_filter=ComparisonFilter(
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_ARRAY,
-                        name=attr_name,
-                    ),
-                    op=ComparisonFilter.OP_EQUALS,
-                    value=filter_value,
-                )
-            ),
-            columns=[
-                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
-                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name=attr_name)),
-            ],
-        )
-        response = EndpointTraceItemTable().execute(message)
-        by_name = {cv.attribute_name: cv for cv in response.column_values}
-        assert len(by_name[attr_name].results) == 1
-        assert check_row(by_name[attr_name].results[0])
+        state.set_config("trace_item_table_include_arrays", 1)
+        try:
+            span_ts = BASE_TIME - timedelta(minutes=1)
+            items_storage = get_storage(StorageKey("eap_items"))
+            write_raw_unprocessed_events(
+                items_storage,  # type: ignore
+                [
+                    gen_item_message(span_ts, attributes=match_attrs),
+                    gen_item_message(span_ts, attributes=no_match_attrs),
+                ],
+            )
+            message = TraceItemTableRequest(
+                meta=RequestMeta(
+                    project_ids=[1, 2, 3],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    start_timestamp=START_TIMESTAMP,
+                    end_timestamp=END_TIMESTAMP,
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                ),
+                filter=TraceItemFilter(
+                    comparison_filter=ComparisonFilter(
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_ARRAY,
+                            name=attr_name,
+                        ),
+                        op=ComparisonFilter.OP_EQUALS,
+                        value=filter_value,
+                    )
+                ),
+                columns=[
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name=attr_name)),
+                ],
+            )
+            response = EndpointTraceItemTable().execute(message)
+            by_name = {cv.attribute_name: cv for cv in response.column_values}
+            assert len(by_name[attr_name].results) == 1
+            assert check_row(by_name[attr_name].results[0])
+        finally:
+            state.delete_config("trace_item_table_include_arrays")
 
 
 class TestTraceItemTableArrayColumn(BaseApiTest):
@@ -3938,66 +3952,74 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
     @pytest.mark.redis_db
     def test_select_array_column_returns_val_array(self) -> None:
         """TYPE_ARRAY columns are returned as val_array on TraceItemTable."""
-        span_ts = BASE_TIME - timedelta(minutes=1)
-        items_storage = get_storage(StorageKey("eap_items"))
-        write_raw_unprocessed_events(
-            items_storage,  # type: ignore
-            [
-                gen_item_message(
-                    span_ts,
-                    attributes={
-                        "tags": _str_array("alpha", "beta"),
-                        "cols": AnyValue(
-                            array_value=ArrayValue(values=[AnyValue(int_value=v) for v in [1, 3]])
-                        ),
-                        "resource.process.command_args": AnyValue(
-                            array_value=ArrayValue(
-                                values=[
-                                    AnyValue(string_value="node"),
-                                    AnyValue(string_value="--enable-source-maps"),
-                                ]
-                            )
-                        ),
-                    },
+        state.set_config("trace_item_table_include_arrays", 1)
+        try:
+            span_ts = BASE_TIME - timedelta(minutes=1)
+            items_storage = get_storage(StorageKey("eap_items"))
+            write_raw_unprocessed_events(
+                items_storage,  # type: ignore
+                [
+                    gen_item_message(
+                        span_ts,
+                        attributes={
+                            "tags": _str_array("alpha", "beta"),
+                            "cols": AnyValue(
+                                array_value=ArrayValue(
+                                    values=[AnyValue(int_value=v) for v in [1, 3]]
+                                )
+                            ),
+                            "resource.process.command_args": AnyValue(
+                                array_value=ArrayValue(
+                                    values=[
+                                        AnyValue(string_value="node"),
+                                        AnyValue(string_value="--enable-source-maps"),
+                                    ]
+                                )
+                            ),
+                        },
+                    ),
+                ],
+            )
+            message = TraceItemTableRequest(
+                meta=RequestMeta(
+                    project_ids=[1, 2, 3],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    start_timestamp=START_TIMESTAMP,
+                    end_timestamp=END_TIMESTAMP,
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 ),
-            ],
-        )
-        message = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=START_TIMESTAMP,
-                end_timestamp=END_TIMESTAMP,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            columns=[
-                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
-                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags")),
-                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="cols")),
-                Column(
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_ARRAY, name="resource.process.command_args"
-                    )
-                ),
-            ],
-        )
-        response = EndpointTraceItemTable().execute(message)
-        by_name = {cv.attribute_name: cv for cv in response.column_values}
-        assert by_name["tags"].results[0].WhichOneof("value") == "val_array"
-        assert [e.val_str for e in by_name["tags"].results[0].val_array.values] == [
-            "alpha",
-            "beta",
-        ]
-        assert by_name["cols"].results[0].WhichOneof("value") == "val_array"
-        assert [e.val_int for e in by_name["cols"].results[0].val_array.values] == [1, 3]
-        assert (
-            by_name["resource.process.command_args"].results[0].WhichOneof("value") == "val_array"
-        )
-        assert [
-            e.val_str for e in by_name["resource.process.command_args"].results[0].val_array.values
-        ] == ["node", "--enable-source-maps"]
+                columns=[
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags")),
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="cols")),
+                    Column(
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_ARRAY, name="resource.process.command_args"
+                        )
+                    ),
+                ],
+            )
+            response = EndpointTraceItemTable().execute(message)
+            by_name = {cv.attribute_name: cv for cv in response.column_values}
+            assert by_name["tags"].results[0].WhichOneof("value") == "val_array"
+            assert [e.val_str for e in by_name["tags"].results[0].val_array.values] == [
+                "alpha",
+                "beta",
+            ]
+            assert by_name["cols"].results[0].WhichOneof("value") == "val_array"
+            assert [e.val_int for e in by_name["cols"].results[0].val_array.values] == [1, 3]
+            assert (
+                by_name["resource.process.command_args"].results[0].WhichOneof("value")
+                == "val_array"
+            )
+            assert [
+                e.val_str
+                for e in by_name["resource.process.command_args"].results[0].val_array.values
+            ] == ["node", "--enable-source-maps"]
+        finally:
+            state.delete_config("trace_item_table_include_arrays")
 
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
