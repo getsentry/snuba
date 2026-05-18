@@ -522,15 +522,31 @@ def build_query(
         sample=None,
     )
 
+    # Reading the JSON attributes_array column forces ClickHouse to materialize
+    # every dynamic subcolumn per granule and re-serialize as a string, which
+    # dominates this endpoint's latency. Gate behind a runtime config so SRE
+    # can disable on the fly without a deploy. Default 1 preserves behavior.
+    # When 0, TYPE_ARRAY key columns return NULL instead of the JSON-decoded
+    # array so the response shape is preserved.
+    include_arrays = state.get_int_config("trace_item_table_include_arrays", 1)
+
     selected_columns = []
     for column in request.columns:
         # The key_col expression alias may differ from the column label. That is okay
         # the attribute key name is used in the groupby, the column label is just the name of
         # the returned attribute value
+        if (
+            not include_arrays
+            and column.HasField("key")
+            and column.key.type == AttributeKey.TYPE_ARRAY
+        ):
+            expression: Expression = f.cast(literal(None), "Nullable(String)", alias=column.label)
+        else:
+            expression = _column_to_expression(column, request.meta)
         selected_columns.append(
             SelectedExpression(
                 name=column.label,
-                expression=_column_to_expression(column, request.meta),
+                expression=expression,
             )
         )
         selected_columns.extend(_get_reliability_context_columns(column, request.meta))

@@ -57,6 +57,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
 
+from snuba import state
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import OrderBy, OrderByDirection
@@ -3997,6 +3998,56 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
         assert [
             e.val_str for e in by_name["resource.process.command_args"].results[0].val_array.values
         ] == ["node", "--enable-source-maps"]
+
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    def test_kill_switch_returns_null_for_array_columns(self) -> None:
+        """Setting trace_item_table_include_arrays=0 returns NULL for TYPE_ARRAY columns
+        instead of decoding the attributes_array JSON column."""
+        state.set_config("trace_item_table_include_arrays", 0)
+        try:
+            span_ts = BASE_TIME - timedelta(minutes=1)
+            items_storage = get_storage(StorageKey("eap_items"))
+            write_raw_unprocessed_events(
+                items_storage,  # type: ignore
+                [
+                    gen_item_message(
+                        span_ts,
+                        attributes={
+                            "tags": _str_array("alpha", "beta"),
+                            "cols": _int_array(1, 3),
+                        },
+                    ),
+                ],
+            )
+            message = TraceItemTableRequest(
+                meta=RequestMeta(
+                    project_ids=[1, 2, 3],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    start_timestamp=START_TIMESTAMP,
+                    end_timestamp=END_TIMESTAMP,
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                ),
+                columns=[
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags")),
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="cols")),
+                ],
+            )
+            response = EndpointTraceItemTable().execute(message)
+            by_name = {cv.attribute_name: cv for cv in response.column_values}
+            # Non-array column still resolves normally.
+            assert by_name["sentry.item_id"].results[0].WhichOneof("value") == "val_str"
+            # TYPE_ARRAY columns come back as is_null instead of val_array.
+            for name in ("tags", "cols"):
+                assert len(by_name[name].results) == len(by_name["sentry.item_id"].results)
+                for result in by_name[name].results:
+                    assert result.is_null is True
+                    assert result.WhichOneof("value") != "val_array"
+        finally:
+            state.delete_config("trace_item_table_include_arrays")
 
 
 class TestUtils:
