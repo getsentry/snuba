@@ -4062,12 +4062,13 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
             by_name = {cv.attribute_name: cv for cv in response.column_values}
             # Non-array column still resolves normally.
             assert by_name["sentry.item_id"].results[0].WhichOneof("value") == "val_str"
-            # TYPE_ARRAY columns come back as is_null instead of val_array.
+            # TYPE_ARRAY columns come back as is_null with no oneof value set,
+            # not as val_array (or any other typed payload).
             for name in ("tags", "cols"):
                 assert len(by_name[name].results) == len(by_name["sentry.item_id"].results)
                 for result in by_name[name].results:
                     assert result.is_null is True
-                    assert result.WhichOneof("value") != "val_array"
+                    assert result.WhichOneof("value") is None
         finally:
             state.delete_config("trace_item_table_include_arrays")
 
