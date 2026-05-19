@@ -1,4 +1,3 @@
-import json
 import uuid
 from typing import Any, Dict, Iterable, Tuple, Type
 
@@ -21,7 +20,6 @@ from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
-from snuba.query.expressions import FunctionCall, JsonPath
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -31,9 +29,10 @@ from snuba.web.rpc.common.common import (
     BUCKET_COUNT,
     add_existence_check_to_subscriptable_references,
     attribute_key_to_expression,
+    attributes_array_selected_expressions,
     base_conditions_and,
+    pop_attributes_array_paths,
     trace_item_filters_to_expression,
-    transform_array_value,
     treeify_or_and_conditions,
 )
 from snuba.web.rpc.common.debug_info import (
@@ -45,20 +44,6 @@ from snuba.web.rpc.common.exceptions import (
     RPCRequestException,
 )
 from snuba.web.rpc.v1.endpoint_get_trace import convert_to_attribute_value
-
-# Each path is read as its own JSON sub-column so we don't materialize the full
-# dynamic `attributes_array` value on every request.
-ATTRIBUTES_ARRAY_ALLOWLIST: Tuple[str, ...] = (
-    "gen_ai.input.messages",
-    "gen_ai.output.messages",
-    "gen_ai.request.messages",
-    "gen_ai.response.text",
-    "gen_ai.system_instructions",
-    "gen_ai.tool.definitions",
-    "gen_ai.response.object",
-    "gen_ai.tool.call.arguments",
-    "gen_ai.tool.input",
-)
 
 
 def _build_query(request: TraceItemDetailsRequest) -> Query:
@@ -101,24 +86,7 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
             SelectedExpression(
                 "attributes_bool", column("attributes_bool", alias="attributes_bool")
             ),
-            *[
-                SelectedExpression(
-                    path,
-                    FunctionCall(
-                        alias=path,
-                        function_name="toJSONString",
-                        parameters=(
-                            JsonPath(
-                                alias=None,
-                                base=column("attributes_array"),
-                                path=path,
-                                return_type="Array(JSON)",
-                            ),
-                        ),
-                    ),
-                )
-                for path in ATTRIBUTES_ARRAY_ALLOWLIST
-            ],
+            *attributes_array_selected_expressions(),
         ],
         condition=base_conditions_and(
             request.meta,
@@ -216,28 +184,8 @@ def _convert_results(
             continue
         attrs.append(TraceItemDetailsAttribute(name=k, value=AttributeValue(val_double=v)))
 
-    for path in ATTRIBUTES_ARRAY_ALLOWLIST:
-        raw = row.get(path)
-        if not raw:
-            continue
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError as e:
-            raise BadSnubaRPCRequestException(
-                f"attributes_array path {path!r} is not valid JSON: {e}"
-            ) from e
-        if not isinstance(parsed, list):
-            raise BadSnubaRPCRequestException(
-                f"attributes_array path {path!r} must decode to a list, got {type(parsed).__name__}"
-            )
-        if not parsed:
-            continue
-        attrs.append(
-            TraceItemDetailsAttribute(
-                name=path,
-                value=convert_to_attribute_value([transform_array_value(elem) for elem in parsed]),
-            )
-        )
+    for path, values in pop_attributes_array_paths(row):
+        attrs.append(TraceItemDetailsAttribute(name=path, value=convert_to_attribute_value(values)))
 
     return item_id, timestamp, attrs
 
