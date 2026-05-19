@@ -65,11 +65,6 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
     if let Some(event_ts) = event_timestamp {
         let now = Utc::now();
 
-        if get_drop_invalid_timestamps_enabled() && out_of_valid_interval_secs(event_ts, now) {
-            counter!("eap_items.messages.dropped_out_of_range_timestamp", 1);
-            should_skip = true;
-        }
-
         if let Some(grace_min) = get_dlq_grace_period_min(&config.storage_name) {
             if should_dlq_for_prior_partition(event_ts, now, grace_min) {
                 counter!("eap_items.messages.dlqed_prior_partition", 1);
@@ -77,6 +72,11 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
                     "eap-items message DLQed: event timestamp {event_ts} is before the prior weekly partition boundary; routed to DLQ"
                 );
             }
+        }
+
+        if get_drop_invalid_timestamps_enabled() && out_of_valid_interval_secs(event_ts, now) {
+            counter!("eap_items.messages.dropped_out_of_range_timestamp", 1);
+            should_skip = true;
         }
     }
 
