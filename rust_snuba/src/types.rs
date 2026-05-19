@@ -153,18 +153,18 @@ impl LatencyRecorder {
         (write_time as f64 - (self.sum_timestamps / self.num_values as f64)) as u64
     }
 
-    fn send_metric(&self, write_time: DateTime<Utc>, metric_name: &str) {
+    fn send_metric(&self, write_time: DateTime<Utc>, metric_name: &str, metric_prefix: &str) {
         if self.num_values == 0 {
             return;
         }
 
         timer!(
-            format_args!("insertions.max_{}_ms", metric_name),
+            format_args!("{}.max_{}_ms", metric_prefix, metric_name),
             self.max_value_ms(write_time)
         );
 
         timer!(
-            format_args!("insertions.{}_ms", metric_name),
+            format_args!("{}.{}_ms", metric_prefix, metric_name),
             self.avg_value_ms(write_time),
         );
     }
@@ -404,11 +404,15 @@ impl<R> BytesInsertBatch<R> {
     pub fn record_message_latency(&self) {
         let write_time = Utc::now();
 
-        self.message_timestamp.send_metric(write_time, "latency");
+        self.message_timestamp
+            .send_metric(write_time, "latency", "insertions");
         self.origin_timestamp
-            .send_metric(write_time, "end_to_end_latency");
-        self.sentry_received_timestamp
-            .send_metric(write_time, "sentry_received_latency");
+            .send_metric(write_time, "end_to_end_latency", "insertions");
+        self.sentry_received_timestamp.send_metric(
+            write_time,
+            "sentry_received_latency",
+            "insertions",
+        );
     }
 
     pub fn emit_item_type_metrics(&self) {
@@ -677,6 +681,8 @@ pub struct AggregatedOutcomesBatch {
     pub seen_items: HashMap<TraceItemType, HashSet<ItemDedupKey>>,
     /// Count of items skipped due to deduplication within this batch, keyed by item type
     pub duplicate_item_count: HashMap<TraceItemType, u64>,
+    /// Uses the timestamp the message was added to snuba-items topic
+    broker_timestamp: LatencyRecorder,
 }
 
 impl Default for AggregatedOutcomesBatch {
@@ -687,6 +693,7 @@ impl Default for AggregatedOutcomesBatch {
             category_metrics: BTreeMap::new(),
             seen_items: HashMap::new(),
             duplicate_item_count: HashMap::new(),
+            broker_timestamp: LatencyRecorder::default(),
         }
     }
 }
@@ -728,5 +735,18 @@ impl AggregatedOutcomesBatch {
     /// Get the total number of buckets
     pub fn num_buckets(&self) -> usize {
         self.buckets.len()
+    }
+
+    /// Merge a single broker timestamp into the batch's running latency recorder.
+    pub fn add_broker_timestamp(&mut self, timestamp: DateTime<Utc>) {
+        self.broker_timestamp
+            .merge(LatencyRecorder::from(timestamp));
+    }
+
+    /// Emit broker-latency timers (avg + max) under `accepted_outcomes.{metric_name}_ms` and
+    /// `accepted_outcomes.max_{metric_name}_ms`. Mirrors `BytesInsertBatch::record_message_latency`.
+    pub fn record_message_latency(&self, metric_name: &str) {
+        self.broker_timestamp
+            .send_metric(Utc::now(), metric_name, "accepted_outcomes");
     }
 }

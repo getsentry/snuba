@@ -88,6 +88,9 @@ impl TaskRunner<AggregatedOutcomesBatch, AggregatedOutcomesBatch, anyhow::Error>
             if let Ok(elapsed) = produce_finish.duration_since(produce_start) {
                 timer!("accepted_outcomes.batch_produce_ms", elapsed);
             }
+            message
+                .payload()
+                .record_message_latency("produce_broker_latency");
             Ok(message)
         })
     }
