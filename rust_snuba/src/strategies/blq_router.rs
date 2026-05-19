@@ -151,7 +151,14 @@ where
     ProduceStrategy: ProcessingStrategy<KafkaPayload> + 'static,
 {
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
-        self.prev_flag_state = Self::is_enabled();
+        let new_flag = Self::is_enabled();
+        if !self.prev_flag_state && new_flag {
+            tracing::info!(
+                "consumer.blq_enabled flipped on at runtime; exiting consumer to flush downstream state"
+            );
+            std::process::exit(0);
+        }
+        self.prev_flag_state = new_flag;
         let produce_result = self.producer.poll();
         let next_step_result = self.next_step.poll();
         match &mut self.state {
