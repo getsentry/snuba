@@ -32,6 +32,7 @@ from snuba import state
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.settings import ENABLE_TRACE_PAGINATION_DEFAULT
+from snuba.web.rpc.common.common import ATTRIBUTES_ARRAY_ALLOWLIST
 from snuba.web.rpc.v1.endpoint_get_trace import (
     APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
     EndpointGetTrace,
@@ -128,6 +129,9 @@ def get_attributes(
     for key, value in span.attributes.items():
         value_type = value.WhichOneof("value")
         if not value_type:
+            continue
+        if value_type == "array_value" and key not in ATTRIBUTES_ARRAY_ALLOWLIST:
+            # bulk get_trace only surfaces allowlisted attributes_array paths
             continue
         attribute_key = AttributeKey(
             name=key,
@@ -366,7 +370,7 @@ class TestGetTrace(BaseApiTest):
 
         query = _build_query(message, item)
 
-        assert query.get_final() == True
+        assert query.get_final()
 
         state.set_config(
             APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
@@ -375,7 +379,7 @@ class TestGetTrace(BaseApiTest):
 
         query = _build_query(message, item)
 
-        assert query.get_final() == False
+        assert not query.get_final()
 
     def test_with_logs(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
@@ -540,7 +544,7 @@ class TestGetTracePagination(BaseApiTest):
                     items_received.append(item.id)
             assert curr_response_len <= mylimit
             if curr_response_len < mylimit:
-                assert response.page_token.end_pagination == True
+                assert response.page_token.end_pagination
             if response.page_token.end_pagination:
                 break
             message.page_token.CopyFrom(response.page_token)
@@ -609,7 +613,7 @@ class TestGetTracePagination(BaseApiTest):
                         items_received.append(item.id)
                 assert curr_response_len <= configmax
                 if curr_response_len < configmax:
-                    assert response.page_token.end_pagination == True
+                    assert response.page_token.end_pagination
                 if response.page_token.end_pagination:
                     break
                 message.page_token.CopyFrom(response.page_token)

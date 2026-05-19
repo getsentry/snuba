@@ -1,6 +1,6 @@
 import json
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, TypeVar, cast
+from typing import Any, Callable, Iterator, TypeVar, cast
 
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
@@ -19,7 +19,7 @@ from snuba.protos.common import (
 from snuba.protos.common import (
     attribute_key_to_expression as _attribute_key_to_expression,
 )
-from snuba.query import Query
+from snuba.query import Query, SelectedExpression
 from snuba.query.conditions import combine_and_conditions, combine_or_conditions
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import (
@@ -35,6 +35,7 @@ from snuba.query.expressions import (
     Argument,
     Expression,
     FunctionCall,
+    JsonPath,
     Lambda,
     SubscriptableReference,
 )
@@ -163,6 +164,70 @@ def process_arrays(raw: str) -> dict[str, list[Any]]:
                 ) from e
         arrays[key] = parsed_elements
     return arrays
+
+
+# Allowlist of `attributes_array` JSON sub-paths exposed by endpoints that
+# return all attributes (TraceItemDetails, GetTrace bulk-fetch). Each path is
+# read as its own JSON sub-column so we don't materialize the full dynamic
+# JSON value on every request.
+ATTRIBUTES_ARRAY_ALLOWLIST: tuple[str, ...] = (
+    "gen_ai.input.messages",
+    "gen_ai.output.messages",
+    "gen_ai.request.messages",
+    "gen_ai.response.text",
+    "gen_ai.system_instructions",
+    "gen_ai.tool.definitions",
+    "gen_ai.response.object",
+    "gen_ai.tool.call.arguments",
+    "gen_ai.tool.input",
+)
+
+
+def attributes_array_selected_expressions() -> list[SelectedExpression]:
+    """Per-path `toJSONString(attributes_array.<path>.:Array(JSON))` selects for the allowlist."""
+    return [
+        SelectedExpression(
+            path,
+            FunctionCall(
+                alias=path,
+                function_name="toJSONString",
+                parameters=(
+                    JsonPath(
+                        alias=None,
+                        base=column("attributes_array"),
+                        path=path,
+                        return_type="Array(JSON)",
+                    ),
+                ),
+            ),
+        )
+        for path in ATTRIBUTES_ARRAY_ALLOWLIST
+    ]
+
+
+def pop_attributes_array_paths(row: dict[str, Any]) -> Iterator[tuple[str, list[Any]]]:
+    """Yield (path, decoded_values) for each allowlisted attributes_array path.
+
+    Consumed keys are popped from `row` so callers can iterate the rest safely.
+    Empty arrays (the default for missing JSON paths) are skipped.
+    """
+    for path in ATTRIBUTES_ARRAY_ALLOWLIST:
+        raw = row.pop(path, None)
+        if not raw:
+            continue
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as e:
+            raise BadSnubaRPCRequestException(
+                f"attributes_array path {path!r} is not valid JSON: {e}"
+            ) from e
+        if not isinstance(parsed, list):
+            raise BadSnubaRPCRequestException(
+                f"attributes_array path {path!r} must decode to a list, got {type(parsed).__name__}"
+            )
+        if not parsed:
+            continue
+        yield path, [transform_array_value(elem) for elem in parsed]
 
 
 def _check_non_string_values_cannot_ignore_case(

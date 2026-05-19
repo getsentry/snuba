@@ -20,7 +20,6 @@ from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
-from snuba.query.expressions import FunctionCall
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -30,8 +29,9 @@ from snuba.web.rpc.common.common import (
     BUCKET_COUNT,
     add_existence_check_to_subscriptable_references,
     attribute_key_to_expression,
+    attributes_array_selected_expressions,
     base_conditions_and,
-    process_arrays,
+    pop_attributes_array_paths,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
@@ -86,14 +86,7 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
             SelectedExpression(
                 "attributes_bool", column("attributes_bool", alias="attributes_bool")
             ),
-            SelectedExpression(
-                "attributes_array",
-                FunctionCall(
-                    "attributes_array",
-                    "toJSONString",
-                    (column("attributes_array"),),
-                ),
-            ),
+            *attributes_array_selected_expressions(),
         ],
         condition=base_conditions_and(
             request.meta,
@@ -191,15 +184,8 @@ def _convert_results(
             continue
         attrs.append(TraceItemDetailsAttribute(name=k, value=AttributeValue(val_double=v)))
 
-    raw_array = row.get("attributes_array")
-    if raw_array:
-        for k, values in process_arrays(raw_array).items():
-            attrs.append(
-                TraceItemDetailsAttribute(
-                    name=k,
-                    value=convert_to_attribute_value(values),
-                )
-            )
+    for path, values in pop_attributes_array_paths(row):
+        attrs.append(TraceItemDetailsAttribute(name=path, value=convert_to_attribute_value(values)))
 
     return item_id, timestamp, attrs
 

@@ -46,7 +46,8 @@ from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
-    process_arrays,
+    attributes_array_selected_expressions,
+    pop_attributes_array_paths,
     project_id_and_org_conditions,
     timestamp_in_range_condition,
     treeify_or_and_conditions,
@@ -226,14 +227,7 @@ def _build_query(
                     tuple(column(f"attributes_float_{i}") for i in range(40)),
                 ),
             ),
-            SelectedExpression(
-                name="attributes_array",
-                expression=FunctionCall(
-                    "attributes_array",
-                    "toJSONString",
-                    (column("attributes_array"),),
-                ),
-            ),
+            *attributes_array_selected_expressions(),
         ]
         selected_columns.extend(
             map(
@@ -488,7 +482,6 @@ def _process_results(
         for row in data:
             id = row.pop("id")
             ts = row.pop("timestamp")
-            arrays = row.pop("attributes_array", "{}") or "{}"
             # We want to merge these values after to overwrite potential floats
             # with the same name.
             booleans = row.pop("attributes_bool", {}) or {}
@@ -510,16 +503,15 @@ def _process_results(
                     value=attribute_value,
                 )
 
+            for array_key, array_value in pop_attributes_array_paths(row):
+                add_attribute(array_key, array_value)
+
             for row_key, row_value in row.items():
                 if isinstance(row_value, dict):
                     for column_key, column_value in row_value.items():
                         add_attribute(column_key, column_value)
                 else:
                     add_attribute(row_key, row_value)
-
-            attributes_array = process_arrays(arrays)
-            for array_key, array_value in attributes_array.items():
-                add_attribute(array_key, array_value)
 
             for bool_key, bool_value in booleans.items():
                 add_attribute(bool_key, bool_value)
