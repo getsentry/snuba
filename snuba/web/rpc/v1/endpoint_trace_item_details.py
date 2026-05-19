@@ -84,7 +84,18 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
     # every dynamic subcolumn per granule and re-serialize as a string, which
     # dominates this endpoint's latency. Gate behind a runtime config so SRE
     # can enable on the fly without a deploy. Default 0 skips the column.
-    if state.get_int_config("trace_item_details_include_arrays", 0):
+    include_arrays = bool(state.get_int_config("trace_item_details_include_arrays", 0))
+    if not include_arrays:
+        org_allowlist_raw = state.get_str_config(
+            "trace_item_details_include_arrays_org_allowlist", ""
+        )
+        if org_allowlist_raw:
+            org_allowlist = {
+                int(org_id.strip()) for org_id in org_allowlist_raw.split(",") if org_id.strip()
+            }
+            if request.meta.organization_id in org_allowlist:
+                include_arrays = True
+    if include_arrays:
         selected_columns.append(
             SelectedExpression(
                 "attributes_array",

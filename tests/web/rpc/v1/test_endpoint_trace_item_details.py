@@ -6,6 +6,7 @@ import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_trace_item_details_pb2 import (
     TraceItemDetailsRequest,
+    TraceItemDetailsResponse,
 )
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
@@ -421,6 +422,92 @@ class TestTraceItemDetails(BaseApiTest):
             assert not any(a.name in ("tags", "cols") for a in res.attributes)
         finally:
             state.delete_config("trace_item_details_include_arrays")
+
+    def test_org_allowlist_opts_in_when_global_off(self, eap: None, redis_db: None) -> None:
+        """Arrays are included iff the request's org is in the allowlist (global off)."""
+        state.set_config("trace_item_details_include_arrays", 0)
+        try:
+            span_ts = BASE_TIME - timedelta(minutes=1)
+            storage = get_storage(StorageKey("eap_items"))
+            write_raw_unprocessed_events(
+                storage,  # type: ignore
+                [
+                    gen_item_message(
+                        span_ts,
+                        attributes={
+                            "tags": _str_tags_array("gamma", "delta"),
+                        },
+                    ),
+                ],
+            )
+            start = Timestamp()
+            end = Timestamp()
+            start.FromDatetime(BASE_TIME - timedelta(hours=4))
+            end.GetCurrentTime()
+
+            spans = (
+                EndpointTraceItemTable()
+                .execute(
+                    TraceItemTableRequest(
+                        meta=RequestMeta(
+                            project_ids=[1],
+                            organization_id=1,
+                            cogs_category="something",
+                            referrer="something",
+                            start_timestamp=start,
+                            end_timestamp=end,
+                            request_id=_REQUEST_ID,
+                            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                        ),
+                        columns=[
+                            Column(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING, name="sentry.item_id"
+                                )
+                            ),
+                            Column(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING, name="sentry.trace_id"
+                                )
+                            ),
+                        ],
+                    )
+                )
+                .column_values
+            )
+            item_id = spans[0].results[0].val_str
+            trace_id = spans[1].results[0].val_str
+
+            def fetch_details() -> TraceItemDetailsResponse:
+                return EndpointTraceItemDetails().execute(
+                    TraceItemDetailsRequest(
+                        meta=RequestMeta(
+                            project_ids=[1],
+                            organization_id=1,
+                            cogs_category="something",
+                            referrer="something",
+                            start_timestamp=start,
+                            end_timestamp=end,
+                            request_id=_REQUEST_ID,
+                            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                        ),
+                        item_id=item_id,
+                        trace_id=trace_id,
+                    )
+                )
+
+            # Allowlist excludes org 1 → arrays omitted.
+            state.set_config("trace_item_details_include_arrays_org_allowlist", "42,99")
+            res_blocked = fetch_details()
+            assert not any(a.name == "tags" for a in res_blocked.attributes)
+
+            # Allowlist includes org 1 → arrays included.
+            state.set_config("trace_item_details_include_arrays_org_allowlist", "1,42")
+            res_allowed = fetch_details()
+            assert any(a.name == "tags" for a in res_allowed.attributes)
+        finally:
+            state.delete_config("trace_item_details_include_arrays")
+            state.delete_config("trace_item_details_include_arrays_org_allowlist")
 
     def test_dotted_key_array_attribute_parsed_properly(self, eap: None, redis_db: None) -> None:
         state.set_config("trace_item_details_include_arrays", 1)
