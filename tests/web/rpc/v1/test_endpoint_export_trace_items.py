@@ -1,9 +1,12 @@
+import re
 import uuid
-from datetime import timedelta
+from collections import namedtuple
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_trace_items_pb2 import ExportTraceItemsRequest
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_pb2 import TraceItem
@@ -12,7 +15,14 @@ from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web import QueryResult
 from snuba.web.query import run_query
-from snuba.web.rpc.v1.endpoint_export_trace_items import EndpointExportTraceItems
+from snuba.web.rpc.storage_routing.routing_strategies.outcomes_flex_time import (
+    OutcomesFlexTimeRoutingStrategy,
+)
+from snuba.web.rpc.v1.endpoint_export_trace_items import (
+    EndpointExportTraceItems,
+    FlexWindow,
+    KeysetCursor,
+)
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import _DEFAULT_ATTRIBUTES, BASE_TIME, gen_item_message
@@ -63,6 +73,7 @@ def _assert_attributes_keys(trace_items: list[TraceItem]) -> None:
                 "sentry.start_timestamp_precise",
                 "start_timestamp_ms",
                 "sentry._internal.ingested_at",
+                "sentry._internal.received_at",
             }
         )
         assert actual_keys == expected_keys
@@ -99,7 +110,6 @@ class TestExportTraceItems(BaseApiTest):
         assert response.trace_items == []
 
     def test_with_pagination(self, setup_teardown: Any) -> None:
-        response = None
         message = ExportTraceItemsRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -118,9 +128,9 @@ class TestExportTraceItems(BaseApiTest):
             response = EndpointExportTraceItems().execute(message)
             items.extend(response.trace_items)
             if len(response.trace_items) == 20:
-                assert response.page_token.end_pagination == False
+                assert not response.page_token.end_pagination
             else:
-                assert response.page_token.end_pagination == True
+                assert response.page_token.end_pagination
                 break
             message.page_token.CopyFrom(response.page_token)
 
@@ -210,4 +220,152 @@ class TestExportTraceItems(BaseApiTest):
         assert (
             "ORDER BY organization_id ASC, project_id ASC, item_type ASC, timestamp ASC, trace_id ASC, item_id ASC"
             in qr.extra["sql"]
+        )
+
+    def test_pagination_with_real_flex_window(
+        self, eap: Any, redis_db: Any, monkeypatch: Any
+    ) -> None:
+        """
+        Verify end-to-end flex-window pagination by capturing the full sequence of
+        queries.
+
+        Setup: 20 items [T0, T0+20s), limit=4, routing mock returns 20 outcomes for
+        any window crossing T0+5s → narrows to [T0+5, T0+20). After that window is
+        exhausted a window-only token advances to the earlier slice [T0, T0+5).
+        """
+        total = 20
+        max_items = 15
+        start_sec = int(BASE_TIME.timestamp())
+        end_sec = start_sec + total
+        # 20 outcomes / max 15 → factor 4/3 → routed window = last 15s = [T0+5, T0+20)
+        routed_start_sec = start_sec + 5
+
+        write_raw_unprocessed_events(
+            get_storage(StorageKey("eap_items")),  # type: ignore[arg-type]
+            [
+                gen_item_message(
+                    start_timestamp=BASE_TIME + timedelta(seconds=i),
+                    item_id=int(uuid.uuid4().hex[:16], 16).to_bytes(16, byteorder="little"),
+                    type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+                    project_id=1,
+                )
+                for i in range(total)
+            ],
+        )
+        OutcomesFlexTimeRoutingStrategy().set_config_value("max_items_to_query", max_items)
+
+        # outcomes_hourly buckets by hour, so second-level splits are invisible to routing.
+        # Mock the count directly so each sub-range sees the logically correct volume.
+        def _mock_outcomes(self: Any, routing_context: Any, time_window: Any) -> int:
+            tw_start = time_window.start_timestamp.seconds
+            tw_end = time_window.end_timestamp.seconds
+            if tw_start < routed_start_sec < tw_end:
+                return 20  # crosses the T0+5 boundary: triggers narrowing
+            if tw_start >= routed_start_sec:
+                return 14  # entirely in [T0+5, T0+20): below max, no narrowing
+            return 6  # entirely in [T0, T0+5): below max, no narrowing
+
+        monkeypatch.setattr(
+            OutcomesFlexTimeRoutingStrategy,
+            "get_ingested_items_for_timerange",
+            _mock_outcomes,
+        )
+
+        # Capture the actual time window each query ran against by parsing the SQL.
+        sql_queried_windows: list[tuple[int, int]] = []
+
+        def _capture_query(
+            dataset: Any,
+            request: Any,
+            timer: Any,
+            robust: bool = False,
+            concurrent_queries_gauge: Any = None,
+        ) -> QueryResult:
+            qr = run_query(dataset, request, timer, robust, concurrent_queries_gauge)
+            sql = qr.extra.get("sql", "")
+            start_m = re.search(r"greaterOrEquals\(timestamp, toDateTime\('([^']+)'\)\)", sql)
+            end_m = re.search(r"less\(timestamp, toDateTime\('([^']+)'\)\)", sql)
+            if start_m and end_m:
+
+                def _to_sec(s: str) -> int:
+                    return int(
+                        datetime.strptime(s, "%Y-%m-%d %H:%M:%S")
+                        .replace(tzinfo=timezone.utc)
+                        .timestamp()
+                    )
+
+                sql_queried_windows.append((_to_sec(start_m.group(1)), _to_sec(end_m.group(1))))
+            return qr
+
+        monkeypatch.setattr(
+            "snuba.web.rpc.v1.endpoint_export_trace_items.run_query", _capture_query
+        )
+
+        message = ExportTraceItemsRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=start_sec),
+                end_timestamp=Timestamp(seconds=end_sec),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.Mode.MODE_HIGHEST_ACCURACY_FLEXTIME
+                ),
+                request_id=uuid.uuid4().hex,
+            ),
+            limit=4,
+        )
+
+        PageRecord = namedtuple(
+            "PageRecord",
+            ["window_start", "window_end", "items_count", "has_cursor", "end_pagination"],
+        )
+        records: list[Any] = []
+
+        while True:
+            response = EndpointExportTraceItems().execute(message)
+            token = response.page_token
+            filter_count = len(token.filter_offset.and_filter.filters)
+            records.append(
+                PageRecord(
+                    window_start=sql_queried_windows[-1][0],
+                    window_end=sql_queried_windows[-1][1],
+                    items_count=len(response.trace_items),
+                    has_cursor=filter_count == len(FlexWindow._fields) + len(KeysetCursor._fields),
+                    end_pagination=token.end_pagination,
+                )
+            )
+            if token.end_pagination:
+                break
+            message.page_token.CopyFrom(token)
+
+        routed_pages = [r for r in records if r.window_start == routed_start_sec]
+        earlier_pages = [r for r in records if r.window_start == start_sec]
+
+        assert sum(r.items_count for r in records) == total, "not all items were returned"
+        assert records.index(routed_pages[-1]) < records.index(earlier_pages[0]), (
+            "routed window [T0+5, T0+20) must be fully exhausted before the earlier slice [T0, T0+5) begins"
+        )
+        assert sum(r.items_count for r in routed_pages) == 15, (
+            "routed window [T0+5, T0+20) should contain exactly 15 items"
+        )
+        assert all(r.has_cursor for r in routed_pages[:-1]), (
+            "every full page in the routed window carries a keyset cursor to continue within that window"
+        )
+        assert not routed_pages[-1].has_cursor, (
+            "once the routed window is exhausted the token switches to window-only (no cursor) to advance to the earlier slice"
+        )
+        assert not routed_pages[-1].end_pagination, (
+            "exhausting the routed window is not the end — the earlier slice [T0, T0+5) still needs to be fetched"
+        )
+        assert sum(r.items_count for r in earlier_pages) == 5, (
+            "earlier slice [T0, T0+5) should contain the remaining 5 items"
+        )
+        assert all(r.has_cursor for r in earlier_pages[:-1]), (
+            "every full page in the earlier slice carries a keyset cursor"
+        )
+        assert records[-1].end_pagination, (
+            "pagination ends only after the earlier slice is fully consumed"
         )

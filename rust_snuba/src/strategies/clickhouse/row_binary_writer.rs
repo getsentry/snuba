@@ -79,6 +79,7 @@ where
         Box::pin(async move {
             let (empty_message, insert_batch) = message.take();
             let batch_len = insert_batch.len();
+            let num_bytes = insert_batch.num_bytes();
             let (rows, empty_batch) = insert_batch.take();
 
             let write_start = SystemTime::now();
@@ -126,6 +127,7 @@ where
                 }
             }
 
+            counter!("insertions.batch_write_bytes", num_bytes as i64);
             counter!("insertions.batch_write_msgs", batch_len as i64);
             empty_batch.record_message_latency();
             empty_batch.emit_item_type_metrics();

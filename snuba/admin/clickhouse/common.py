@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import MutableMapping
 
 from sql_metadata import Parser, QueryType  # type: ignore
@@ -241,7 +242,10 @@ def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) ->
     ]
 
     for kw in disallowed_keywords:
-        if kw in lowered:
+        if kw == "replace":
+            if re.search(r"\breplace\b", lowered):
+                raise InvalidCustomQuery(f"{kw} is not allowed in the query")
+        elif kw in lowered:
             raise InvalidCustomQuery(f"{kw} is not allowed in the query")
 
     parsed = Parser(lowered)

@@ -33,13 +33,13 @@
                 "--no-strict-offset-reset",
                 "--use-rust-processor",
                 "--enforce-schema",
-                "--blq-stale-age-mins=30"
             ],
             "cwd": "${workspaceFolder}",
             "sourceLanguages": ["rust"],
             "env": {
                 "DOGSTATSD_HOST": "localhost"
-            }
+            },
+            "preLaunchTask": "uvx maturin develop"
         },
         // will only debug the python (first half)
         {
@@ -55,7 +55,6 @@
                 "--no-strict-offset-reset",
                 "--use-rust-processor",
                 "--enforce-schema",
-                "--blq-stale-age-mins=30"
             ],
             "cwd": "${workspaceFolder}",
             "justMyCode": false

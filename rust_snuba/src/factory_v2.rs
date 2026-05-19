@@ -24,6 +24,8 @@ use crate::config;
 use crate::metrics::global_tags::set_global_tag;
 use crate::processors::{self, get_cogs_label};
 use crate::strategies::accountant::RecordCogs;
+
+use crate::strategies::blq_router::BLQRouter;
 use crate::strategies::clickhouse::row_binary_writer::ClickhouseRowBinaryWriterStep;
 use crate::strategies::clickhouse::writer_v2::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
@@ -43,6 +45,7 @@ pub struct ConsumerStrategyFactoryV2 {
     pub logical_topic_name: String,
     pub max_batch_size: usize,
     pub max_batch_time: Duration,
+    pub max_batch_size_calculation: config::BatchSizeCalculation,
     pub processing_concurrency: ConcurrencyConfig,
     pub clickhouse_concurrency: ConcurrencyConfig,
     pub commitlog_concurrency: ConcurrencyConfig,
@@ -62,6 +65,8 @@ pub struct ConsumerStrategyFactoryV2 {
     pub join_timeout_ms: Option<u64>,
     pub health_check: String,
     pub use_row_binary: bool,
+    pub blq_producer_config: Option<KafkaConfig>,
+    pub blq_topic: Option<Topic>,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
@@ -86,6 +91,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
 
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
         if self.use_row_binary {
+            tracing::info!("Using row_binary pipeline");
             return match self
                 .storage_config
                 .message_processor
@@ -153,6 +159,12 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             },
         );
 
+        let compute_batch_size: fn(&BytesInsertBatch<RowData>) -> usize =
+            match self.max_batch_size_calculation {
+                config::BatchSizeCalculation::Bytes => |batch| batch.num_bytes(),
+                config::BatchSizeCalculation::Rows => |batch| batch.len(),
+            };
+
         let next_step = Reduce::new(
             next_step,
             accumulator,
@@ -168,7 +180,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             }),
             self.max_batch_size,
             self.max_batch_time,
-            |batch: &BytesInsertBatch<RowData>| batch.len(),
+            compute_batch_size,
             // we need to enable this to deal with storages where we skip 100% of values, such as
             // gen-metrics-gauges in s4s. we still need to commit there
         )
@@ -256,6 +268,26 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             next_step,
             Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
         );
+
+        let next_step: Box<dyn ProcessingStrategy<KafkaPayload>> =
+            if let (Some(blq_producer_config), Some(blq_topic)) =
+                (&self.blq_producer_config, self.blq_topic)
+            {
+                tracing::info!(
+                    "Routing stale messages to the backlog-queue topic {:?} \
+                     (thresholds configured via sentry-options)",
+                    self.blq_topic,
+                );
+                Box::new(BLQRouter::new(
+                    next_step,
+                    blq_producer_config.clone(),
+                    blq_topic,
+                ))
+            } else {
+                tracing::info!("Not using a backlog-queue",);
+                Box::new(next_step)
+            };
+
         if let Some(path) = &self.health_check_file {
             {
                 if self.health_check == "snuba" {
@@ -276,7 +308,13 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
 
 impl ConsumerStrategyFactoryV2 {
     fn create_row_binary_pipeline<
-        T: clickhouse::Row + serde::Serialize + Clone + Send + Sync + 'static,
+        T: clickhouse::Row
+            + serde::Serialize
+            + Clone
+            + Send
+            + Sync
+            + crate::types::EstimatedSize
+            + 'static,
     >(
         &self,
         func: fn(
@@ -335,6 +373,12 @@ impl ConsumerStrategyFactoryV2 {
             },
         );
 
+        type BatchSizeFn<T> = fn(&BytesInsertBatch<Vec<T>>) -> usize;
+        let compute_batch_size: BatchSizeFn<T> = match self.max_batch_size_calculation {
+            config::BatchSizeCalculation::Bytes => |batch| batch.num_bytes(),
+            config::BatchSizeCalculation::Rows => |batch| batch.len(),
+        };
+
         let next_step = Reduce::new(
             next_step,
             accumulator,
@@ -350,7 +394,7 @@ impl ConsumerStrategyFactoryV2 {
             }),
             self.max_batch_size,
             self.max_batch_time,
-            |batch: &BytesInsertBatch<Vec<T>>| batch.len(),
+            compute_batch_size,
         )
         .flush_empty_batches(true);
 
@@ -370,6 +414,25 @@ impl ConsumerStrategyFactoryV2 {
             next_step,
             Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
         );
+
+        let next_step: Box<dyn ProcessingStrategy<KafkaPayload>> =
+            if let (Some(blq_producer_config), Some(blq_topic)) =
+                (&self.blq_producer_config, self.blq_topic)
+            {
+                tracing::info!(
+                    "Routing stale messages to the backlog-queue topic {:?} \
+                     (thresholds configured via sentry-options)",
+                    self.blq_topic,
+                );
+                Box::new(BLQRouter::new(
+                    next_step,
+                    blq_producer_config.clone(),
+                    blq_topic,
+                ))
+            } else {
+                tracing::info!("Not using a backlog-queue",);
+                Box::new(next_step)
+            };
 
         if let Some(path) = &self.health_check_file {
             if self.health_check == "snuba" {
@@ -410,5 +473,242 @@ impl TaskRunner<KafkaPayload, KafkaPayload, anyhow::Error> for SchemaValidator {
                 .process_message(message)
                 .bind_hub(Hub::new_from_top(Hub::current())),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sentry_arroyo::processing::strategies::{
+        CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
+    };
+    use sentry_arroyo::types::{BrokerMessage, InnerMessage, Partition, Topic};
+    use std::sync::{Arc, Mutex};
+
+    // ----------- BYTES_INSERT_BATCH ------------------
+    /// A next-step that records every batch it receives.
+    struct RecordingStep {
+        batches: Arc<Mutex<Vec<BytesInsertBatch<RowData>>>>,
+    }
+
+    impl ProcessingStrategy<BytesInsertBatch<RowData>> for RecordingStep {
+        fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
+            Ok(None)
+        }
+
+        fn submit(
+            &mut self,
+            message: Message<BytesInsertBatch<RowData>>,
+        ) -> Result<(), SubmitError<BytesInsertBatch<RowData>>> {
+            self.batches.lock().unwrap().push(message.into_payload());
+            Ok(())
+        }
+
+        fn terminate(&mut self) {}
+
+        fn join(&mut self, _: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
+            Ok(None)
+        }
+    }
+
+    /// Create a BytesInsertBatch<RowData> with a specific number of rows and byte size.
+    fn make_batch(num_rows: usize, num_bytes: usize) -> BytesInsertBatch<RowData> {
+        BytesInsertBatch::<RowData>::new(
+            RowData {
+                encoded_rows: vec![0u8; num_bytes],
+                num_rows,
+            },
+            None,
+            None,
+            None,
+            Default::default(),
+            CogsData::default(),
+        )
+        .with_num_bytes(num_bytes)
+    }
+
+    fn make_message(
+        batch: BytesInsertBatch<RowData>,
+        partition: Partition,
+        offset: u64,
+    ) -> Message<BytesInsertBatch<RowData>> {
+        Message {
+            inner_message: InnerMessage::BrokerMessage(BrokerMessage::new(
+                batch,
+                partition,
+                offset,
+                chrono::Utc::now(),
+            )),
+        }
+    }
+
+    fn build_reduce(
+        next_step: RecordingStep,
+        max_batch_size: usize,
+        calculation: config::BatchSizeCalculation,
+    ) -> Reduce<BytesInsertBatch<RowData>, BytesInsertBatch<RowData>> {
+        let accumulator = Arc::new(
+            |batch: BytesInsertBatch<RowData>, small_batch: Message<BytesInsertBatch<RowData>>| {
+                Ok(batch.merge(small_batch.into_payload()))
+            },
+        );
+
+        let compute_batch_size: fn(&BytesInsertBatch<RowData>) -> usize = match calculation {
+            config::BatchSizeCalculation::Bytes => |batch| batch.num_bytes(),
+            config::BatchSizeCalculation::Rows => |batch| batch.len(),
+        };
+
+        Reduce::new(
+            next_step,
+            accumulator,
+            Arc::new(|| {
+                BytesInsertBatch::<RowData>::new(
+                    RowData::default(),
+                    None,
+                    None,
+                    None,
+                    Default::default(),
+                    CogsData::default(),
+                )
+            }),
+            max_batch_size,
+            // Very long timeout so only size triggers flush
+            Duration::from_secs(3600),
+            compute_batch_size,
+        )
+        .flush_empty_batches(true)
+    }
+
+    /// With row-based calculation: 20 messages with max_batch_size=10 should produce
+    /// 2 batches (flushed on size) + 1 final batch (flushed on join).
+    /// Each batch produced on size should have exactly 10 rows.
+    #[test]
+    fn test_row_based_batching() {
+        let batches = Arc::new(Mutex::new(Vec::new()));
+        let next_step = RecordingStep {
+            batches: batches.clone(),
+        };
+
+        let mut strategy = build_reduce(next_step, 10, config::BatchSizeCalculation::Rows);
+
+        let partition = Partition::new(Topic::new("test"), 0);
+
+        // Submit 20 messages, each with 1 row and 10_000 bytes
+        for i in 0..20 {
+            let batch = make_batch(1, 10_000);
+            strategy.submit(make_message(batch, partition, i)).unwrap();
+            let _ = strategy.poll();
+        }
+
+        let _ = strategy.join(None);
+
+        let batches = batches.lock().unwrap();
+        // 2 full batches of 10 (flushed on size) + 1 empty batch (flushed on join
+        // because flush_empty_batches is enabled)
+        assert_eq!(batches.len(), 3);
+        assert_eq!(batches[0].len(), 10);
+        assert_eq!(batches[1].len(), 10);
+        // Total bytes per full batch: 10 messages * 10_000 bytes = 100_000
+        assert_eq!(batches[0].num_bytes(), 100_000);
+        assert_eq!(batches[1].num_bytes(), 100_000);
+    }
+
+    /// With byte-based calculation: same 20 messages (each 10KB), but max_batch_size=50_000
+    /// (50KB). Should flush every 5 messages (5 * 10KB = 50KB), producing 4 batches on size
+    /// + 1 final batch on join.
+    #[test]
+    fn test_byte_based_batching() {
+        let batches = Arc::new(Mutex::new(Vec::new()));
+        let next_step = RecordingStep {
+            batches: batches.clone(),
+        };
+
+        let mut strategy = build_reduce(next_step, 50_000, config::BatchSizeCalculation::Bytes);
+
+        let partition = Partition::new(Topic::new("test"), 0);
+
+        // Submit 20 messages, each with 1 row and 10_000 bytes
+        for i in 0..20 {
+            let batch = make_batch(1, 10_000);
+            strategy.submit(make_message(batch, partition, i)).unwrap();
+            let _ = strategy.poll();
+        }
+
+        let _ = strategy.join(None);
+
+        let batches = batches.lock().unwrap();
+        // 4 full batches of 5 messages (flushed on size) + 1 empty batch (flushed on join)
+        assert_eq!(batches.len(), 5);
+        // Each full batch: 5 rows, 50_000 bytes
+        for batch in batches[..4].iter() {
+            assert_eq!(batch.len(), 5);
+            assert_eq!(batch.num_bytes(), 50_000);
+        }
+    }
+
+    /// With byte-based calculation and variable-size messages:
+    /// 3 messages of 40KB each with max_batch_size=100_000 bytes.
+    /// First 2 messages = 80KB (under limit), 3rd pushes to 120KB (over limit),
+    /// so the batch flushes after the 3rd message with all 3 rows.
+    /// This confirms that large messages cause earlier flushes than row counting would.
+    #[test]
+    fn test_byte_based_batching_large_messages_flush_early() {
+        let batches = Arc::new(Mutex::new(Vec::new()));
+        let next_step = RecordingStep {
+            batches: batches.clone(),
+        };
+
+        // 100KB byte limit — with row counting this would allow 100 messages
+        let mut strategy = build_reduce(next_step, 100_000, config::BatchSizeCalculation::Bytes);
+
+        let partition = Partition::new(Topic::new("test"), 0);
+
+        // Submit 5 messages of 40KB each
+        for i in 0..5 {
+            let batch = make_batch(1, 40_000);
+            strategy.submit(make_message(batch, partition, i)).unwrap();
+            let _ = strategy.poll();
+        }
+
+        let _ = strategy.join(None);
+
+        let batches = batches.lock().unwrap();
+        // 3 messages hit 120KB >= 100KB limit → flush
+        // Then 2 remaining → flush on join
+        assert_eq!(batches.len(), 2);
+        assert_eq!(batches[0].len(), 3); // 3 * 40KB = 120KB >= 100KB
+        assert_eq!(batches[0].num_bytes(), 120_000);
+        assert_eq!(batches[1].len(), 2); // 2 * 40KB = 80KB, flushed on join
+        assert_eq!(batches[1].num_bytes(), 80_000);
+    }
+
+    /// Verify that with row-based calculation, the same large messages do NOT
+    /// cause early flushing — all 5 fit in one batch since max_batch_size=100 rows.
+    #[test]
+    fn test_row_based_batching_ignores_byte_size() {
+        let batches = Arc::new(Mutex::new(Vec::new()));
+        let next_step = RecordingStep {
+            batches: batches.clone(),
+        };
+
+        // Row limit of 100 — 5 messages won't hit this
+        let mut strategy = build_reduce(next_step, 100, config::BatchSizeCalculation::Rows);
+
+        let partition = Partition::new(Topic::new("test"), 0);
+
+        // Submit 5 messages of 40KB each — huge bytes but only 5 rows
+        for i in 0..5 {
+            let batch = make_batch(1, 40_000);
+            strategy.submit(make_message(batch, partition, i)).unwrap();
+            let _ = strategy.poll();
+        }
+
+        let _ = strategy.join(None);
+
+        let batches = batches.lock().unwrap();
+        // All 5 fit in one batch (5 rows << 100 row limit), flushed on join
+        assert_eq!(batches.len(), 1);
+        assert_eq!(batches[0].len(), 5);
+        assert_eq!(batches[0].num_bytes(), 200_000); // 5 * 40KB accumulated but didn't trigger flush
     }
 }

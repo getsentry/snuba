@@ -3,10 +3,11 @@ from typing import Any, Generator, List
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeValuesRequest,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 from sentry_protos.snuba.v1.trace_item_pb2 import TraceItem as TraceItemMessage
@@ -181,3 +182,39 @@ class TestTraceItemAttributes(BaseApiTest):
         )
         res = AttributeValuesRequest().execute(req)
         assert res.values == [item_id]
+
+    def test_deprecated_alias_attribute(self) -> None:
+        """db.system.name request returns values stored only under deprecated key db.system."""
+
+        items_storage = get_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,  # type: ignore
+            [
+                gen_item_message(
+                    start_timestamp=BASE_TIME,
+                    attributes={"db.system": AnyValue(string_value="redis")},
+                ),
+                gen_item_message(
+                    start_timestamp=BASE_TIME,
+                    attributes={"db.system": AnyValue(string_value="postgresql")},
+                ),
+            ],
+        )
+        message = TraceItemAttributeValuesRequest(
+            meta=RequestMeta(
+                organization_id=1,
+                project_ids=[1],
+                cogs_category="something",
+                referrer="api.spans.tags-values.rpc",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                downsampled_storage_config=DownsampledStorageConfig(
+                    mode=DownsampledStorageConfig.MODE_NORMAL
+                ),
+            ),
+            key=AttributeKey(name="db.system.name", type=AttributeKey.TYPE_STRING),
+            limit=1001,
+        )
+        response = AttributeValuesRequest().execute(message)
+        assert sorted(response.values) == ["postgresql", "redis"]

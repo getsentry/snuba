@@ -1,12 +1,19 @@
 use std::cmp::min;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use chrono::{DateTime, Utc};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::timer;
 use sentry_protos::snuba::v1::TraceItemType;
 use serde::{Deserialize, Serialize};
+
+/// Trait for row types that can estimate their in-memory byte size.
+/// Used by byte-based batch size calculation in the Reduce step.
+pub trait EstimatedSize {
+    fn estimated_size(&self) -> usize;
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CommitLogEntry {
@@ -50,7 +57,7 @@ impl CogsData {
 }
 
 /// Returns the friendly name for a TraceItemType, e.g. "span" instead of "TRACE_ITEM_TYPE_SPAN".
-fn item_type_name(item_type: TraceItemType) -> String {
+pub fn item_type_name(item_type: TraceItemType) -> String {
     item_type
         .as_str_name()
         .strip_prefix("TRACE_ITEM_TYPE_")
@@ -255,6 +262,9 @@ pub struct BytesInsertBatch<R> {
     cogs_data: CogsData,
 
     item_type_metrics: ItemTypeMetrics,
+
+    /// Total encoded byte size of the batch, used for byte-based batch size limiting
+    num_bytes: usize,
 }
 
 impl<R> BytesInsertBatch<R> {
@@ -282,6 +292,7 @@ impl<R> BytesInsertBatch<R> {
             commit_log_offsets,
             cogs_data,
             item_type_metrics: Default::default(),
+            num_bytes: 0,
         }
     }
 
@@ -303,6 +314,7 @@ impl<R> BytesInsertBatch<R> {
             commit_log_offsets: Default::default(),
             cogs_data: Default::default(),
             item_type_metrics: Default::default(),
+            num_bytes: 0,
         }
     }
 
@@ -342,6 +354,17 @@ impl<R> BytesInsertBatch<R> {
         self
     }
 
+    /// Set the total encoded byte size of the batch
+    pub fn with_num_bytes(mut self, num_bytes: usize) -> Self {
+        self.num_bytes = num_bytes;
+        self
+    }
+
+    /// Get the total encoded byte size of the batch
+    pub fn num_bytes(&self) -> usize {
+        self.num_bytes
+    }
+
     pub fn commit_log_offsets(&self) -> &CommitLogOffsets {
         &self.commit_log_offsets
     }
@@ -359,6 +382,7 @@ impl<R> BytesInsertBatch<R> {
             commit_log_offsets: self.commit_log_offsets.clone(),
             cogs_data: self.cogs_data.clone(),
             item_type_metrics: self.item_type_metrics.clone(),
+            num_bytes: self.num_bytes,
         }
     }
 
@@ -371,6 +395,7 @@ impl<R> BytesInsertBatch<R> {
             commit_log_offsets: self.commit_log_offsets,
             cogs_data: self.cogs_data,
             item_type_metrics: self.item_type_metrics,
+            num_bytes: self.num_bytes,
         };
 
         (self.rows, new)
@@ -415,6 +440,7 @@ impl BytesInsertBatch<RowData> {
     pub fn merge(mut self, other: BytesInsertBatch<RowData>) -> Self {
         self.rows.encoded_rows.extend(other.rows.encoded_rows);
         self.rows.num_rows += other.rows.num_rows;
+        self.num_bytes += other.num_bytes;
         self.commit_log_offsets.merge(other.commit_log_offsets);
         self.message_timestamp.merge(other.message_timestamp);
         self.origin_timestamp.merge(other.origin_timestamp);
@@ -433,6 +459,7 @@ impl<T> BytesInsertBatch<Vec<T>> {
 
     pub fn merge(mut self, other: Self) -> Self {
         self.rows.extend(other.rows);
+        self.num_bytes += other.num_bytes;
         self.commit_log_offsets.merge(other.commit_log_offsets);
         self.message_timestamp.merge(other.message_timestamp);
         self.origin_timestamp.merge(other.origin_timestamp);
@@ -591,6 +618,19 @@ pub struct TrackOutcome {
     pub quantity: u64,
 }
 
+/// Key used to deduplicate items within an outcomes batch.
+/// Uses the relevant fields from the eap_items table sorting key:
+/// (organization_id, project_id, item_type, timestamp, trace_id, item_id)
+/// Note: item_type is handled separately via the HashMap in seen_items.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ItemDedupKey {
+    pub org_id: u64,
+    pub project_id: u64,
+    pub timestamp: u32,
+    pub trace_id: [u8; 16],
+    pub item_id: [u8; 16],
+}
+
 /// Key used to bucket accepted outcomes by time slot, organization, project, key, and data category.
 /// Outcome type is omitted because this consumer only processes accepted outcomes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -616,6 +656,14 @@ impl BucketStats {
     }
 }
 
+/// Per-category metrics accumulated within a batch
+#[derive(Clone, Debug, Default)]
+pub struct CategoryMetrics {
+    pub messages_seen: u64,
+    pub total_quantity: u64,
+    pub bucket_count: u64,
+}
+
 /// Batch type for aggregated outcomes data
 /// Stores bucketed counts instead of raw row data
 #[derive(Clone, Debug)]
@@ -623,6 +671,12 @@ pub struct AggregatedOutcomesBatch {
     /// Map from bucket key to aggregated statistics
     pub buckets: HashMap<BucketKey, BucketStats>,
     pub bucket_interval: u64,
+    /// Per-category metrics for the current batch
+    pub category_metrics: BTreeMap<u32, CategoryMetrics>,
+    /// Set of items already processed in this batch, used for deduplication, keyed by item type
+    pub seen_items: HashMap<TraceItemType, HashSet<ItemDedupKey>>,
+    /// Count of items skipped due to deduplication within this batch, keyed by item type
+    pub duplicate_item_count: HashMap<TraceItemType, u64>,
 }
 
 impl Default for AggregatedOutcomesBatch {
@@ -630,6 +684,9 @@ impl Default for AggregatedOutcomesBatch {
         Self {
             buckets: HashMap::new(),
             bucket_interval: 60,
+            category_metrics: BTreeMap::new(),
+            seen_items: HashMap::new(),
+            duplicate_item_count: HashMap::new(),
         }
     }
 }
@@ -643,14 +700,29 @@ impl AggregatedOutcomesBatch {
         }
     }
 
-    /// Add or update a bucket with a count and quantity
+    pub fn record_if_duplicate(&mut self, item_type: TraceItemType, key: ItemDedupKey) -> bool {
+        let is_dup = !self.seen_items.entry(item_type).or_default().insert(key);
+        if is_dup {
+            *self.duplicate_item_count.entry(item_type).or_insert(0) += 1;
+        }
+        is_dup
+    }
+
+    /// Add or update a bucket with a count and quantity, updating per-category metrics
     pub fn add_to_bucket(&mut self, key: BucketKey, quantity: u64) {
-        self.buckets
+        let is_new = !self.buckets.contains_key(&key);
+        let stats = self
+            .buckets
             .entry(key)
-            .and_modify(|stats| {
-                stats.quantity += quantity;
-            })
-            .or_insert_with(|| BucketStats::new(quantity));
+            .or_insert_with(|| BucketStats::new(0));
+        stats.quantity += quantity;
+
+        let m = self.category_metrics.entry(key.category).or_default();
+        m.messages_seen += 1;
+        m.total_quantity += quantity;
+        if is_new {
+            m.bucket_count += 1;
+        }
     }
 
     /// Get the total number of buckets

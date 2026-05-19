@@ -16,6 +16,8 @@ use sentry_arroyo::types::Topic;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
+use sentry_options::init_with_schemas;
+
 use crate::config;
 use crate::factory_v2::ConsumerStrategyFactoryV2;
 use crate::logging::{setup_logging, setup_sentry};
@@ -94,10 +96,13 @@ pub fn consumer_impl(
     use_row_binary: bool,
 ) -> usize {
     setup_logging();
+    init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)])
+        .expect("failed to initialize sentry-options");
 
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
     let max_batch_size = consumer_config.max_batch_size;
     let max_batch_time = Duration::from_millis(consumer_config.max_batch_time_ms);
+    let max_batch_size_calculation = consumer_config.max_batch_size_calculation;
 
     let batch_write_timeout = match batch_write_timeout_ms {
         Some(timeout_ms) => {
@@ -187,10 +192,23 @@ pub fn consumer_impl(
 
     // DLQ policy applies only if we are not skipping writes, otherwise we don't want to be
     // writing to the DLQ topics in prod.
+
+    let blq_producer_config = consumer_config.dlq_topic.as_ref().map(|dlq_topic_config| {
+        let mut overrides = dlq_topic_config.broker_config.clone();
+        overrides.insert("message.max.bytes".to_string(), "10000000".to_string()); // 10 MB, broker max
+        KafkaConfig::new_producer_config(vec![], Some(overrides))
+    });
+
+    let dlq_topic = consumer_config
+        .dlq_topic
+        .as_ref()
+        .map(|dlq_topic_config| Topic::new(&dlq_topic_config.physical_topic_name));
+
     let dlq_policy = consumer_config.dlq_topic.map(|dlq_topic_config| {
-        let producer_config =
-            KafkaConfig::new_producer_config(vec![], Some(dlq_topic_config.broker_config));
-        let producer = KafkaProducer::new(producer_config);
+        let producer = KafkaProducer::new(KafkaConfig::new_producer_config(
+            vec![],
+            Some(dlq_topic_config.broker_config),
+        ));
 
         let kafka_dlq_producer = Box::new(KafkaDlqProducer::new(
             producer,
@@ -251,6 +269,7 @@ pub fn consumer_impl(
         logical_topic_name,
         max_batch_size,
         max_batch_time,
+        max_batch_size_calculation,
         processing_concurrency: ConcurrencyConfig::new(concurrency),
         clickhouse_concurrency: ConcurrencyConfig::new(clickhouse_concurrency),
         commitlog_concurrency: ConcurrencyConfig::new(2),
@@ -270,6 +289,8 @@ pub fn consumer_impl(
         join_timeout_ms,
         health_check: health_check.to_string(),
         use_row_binary,
+        blq_producer_config: blq_producer_config.clone(),
+        blq_topic: dlq_topic,
     };
 
     let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);

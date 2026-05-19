@@ -78,7 +78,13 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     "--max-batch-size",
     default=settings.DEFAULT_MAX_BATCH_SIZE,
     type=int,
-    help="Max number of messages to batch in memory before writing to Kafka.",
+    help="Max number of messages (or bytes, if --max-batch-size-calculation=bytes) to batch in memory before flushing.",
+)
+@click.option(
+    "--max-batch-size-calculation",
+    default="rows",
+    type=click.Choice(["rows", "bytes"]),
+    help="How --max-batch-size is interpreted. 'rows' counts messages (default), 'bytes' counts total encoded byte size.",
 )
 @click.option(
     "--max-batch-time-ms",
@@ -207,6 +213,7 @@ def rust_consumer(
     commit_log_bootstrap_servers: Sequence[str],
     replacement_bootstrap_servers: Sequence[str],
     max_batch_size: int,
+    max_batch_size_calculation: str,
     max_batch_time_ms: int,
     log_level: str,
     concurrency: Optional[int],
@@ -241,6 +248,7 @@ def rust_consumer(
         replacement_bootstrap_servers=replacement_bootstrap_servers,
         max_batch_size=max_batch_size,
         max_batch_time_ms=max_batch_time_ms,
+        max_batch_size_calculation=max_batch_size_calculation,
         queued_max_messages_kbytes=queued_max_messages_kbytes,
         queued_min_messages=queued_min_messages,
         slice_id=None,
