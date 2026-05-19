@@ -58,6 +58,8 @@ enum State {
 pub struct BLQRouter<Next, ProduceStrategy> {
     next_step: Next,
     state: State,
+    prev_flag_state: bool,
+    blq_active: bool,
     producer: ProduceStrategy,
 
     // We have to keep this around ourself bc strategies::produce::Produce didn't define their lifetimes well
@@ -93,7 +95,7 @@ where
     Next: ProcessingStrategy<KafkaPayload> + 'static,
     ProduceStrategy: ProcessingStrategy<KafkaPayload> + 'static,
 {
-    fn is_enabled(&self) -> bool {
+    fn is_enabled() -> bool {
         options("snuba")
             .ok()
             .and_then(|o| o.get("consumer.blq_enabled").ok())
@@ -131,9 +133,12 @@ where
     }
 
     fn new_with_strategy(next_step: Next, blq_producer: ProduceStrategy) -> Self {
+        let flag = Self::is_enabled();
         Self {
             next_step,
             state: State::Idle,
+            prev_flag_state: flag,
+            blq_active: flag,
             producer: blq_producer,
             _concurrency: None,
         }
@@ -146,6 +151,7 @@ where
     ProduceStrategy: ProcessingStrategy<KafkaPayload> + 'static,
 {
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
+        self.prev_flag_state = Self::is_enabled();
         let produce_result = self.producer.poll();
         let next_step_result = self.next_step.poll();
         match &mut self.state {
@@ -160,7 +166,7 @@ where
     }
 
     fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), SubmitError<KafkaPayload>> {
-        if !self.is_enabled() {
+        if !Self::is_enabled() {
             return self.next_step.submit(message);
         }
 
