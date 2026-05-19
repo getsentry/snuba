@@ -1,5 +1,6 @@
 use anyhow::Context;
 use chrono::DateTime;
+use chrono::Datelike;
 use chrono::Utc;
 use prost::Message;
 use seq_macro::seq;
@@ -18,16 +19,20 @@ use crate::runtime_config::get_str_config;
 use crate::types::CogsData;
 use crate::types::{InsertBatch, ItemTypeMetrics, KafkaMessageMetadata, TypedInsertBatch};
 
-/// Runtime config key. When set to a positive integer N, the eap-items
-/// consumer drops any message whose event `timestamp` is older than N
-/// seconds relative to now (e.g. N=3600 drops anything more than an hour
-/// stale). Unset / non-positive disables the killswitch.
+/// Runtime config key prefix. Per-storage key
+/// `eap_items_dlq_grace_period_min:<storage_name>`: a non-negative integer
+/// in minutes. When set, the eap-items processor DLQs any message whose
+/// event `timestamp` belongs to a prior weekly partition, but only once
+/// we are at least `grace_min` minutes past the most recent Monday 00:00
+/// UTC partition boundary. Unset disables the killswitch for that
+/// storage (this is how `eap_items_dlq_replay` opts out).
 ///
-/// We key on `timestamp` (not `received`) because the eap_items table is
-/// partitioned by `(retention_days, toMonday(timestamp))`. Inserts that
-/// straddle the weekly partition boundary tax the system, and dropping by
-/// `timestamp` is what prevents writes into a prior partition.
-const DROP_OLD_TIMESTAMP_KEY: &str = "eap_items_drop_old_timestamp_threshold_sec";
+/// The eap_items table is partitioned by
+/// `(retention_days, toMonday(timestamp))`. Writes that straddle the
+/// weekly partition boundary tax ClickHouse; dropping prior-partition
+/// messages after a grace window prevents that pressure without
+/// over-eagerly dropping current-week stragglers.
+const DLQ_GRACE_PERIOD_MIN_KEY: &str = "eap_items_dlq_grace_period_min";
 
 /// Precision factor for sampling_factor calculations to compensate for floating point errors
 const SAMPLING_FACTOR_PRECISION: f64 = 1e9;
@@ -54,11 +59,12 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
         .and_then(|ts| DateTime::from_timestamp(ts.seconds, 0));
 
     if let Some(event_ts) = event_timestamp {
-        if let Some(threshold_sec) = get_drop_old_timestamp_threshold_sec() {
-            if let Some(age_sec) = stale_age_secs(event_ts, Utc::now(), threshold_sec) {
-                counter!("eap_items.messages.dropped_old_timestamp", 1);
+        if let Some(grace_min) = get_dlq_grace_period_min(&config.storage_name) {
+            let now = Utc::now();
+            if should_dlq_for_prior_partition(event_ts, now, grace_min) {
+                counter!("eap_items.messages.dlqed_prior_partition", 1);
                 anyhow::bail!(
-                    "eap-items message dropped: event timestamp {age_sec}s old > threshold {threshold_sec}s; routed to DLQ"
+                    "eap-items message DLQed: event timestamp {event_ts} is before the prior weekly partition boundary; routed to DLQ"
                 );
             }
         }
@@ -125,21 +131,36 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
     })
 }
 
-fn get_drop_old_timestamp_threshold_sec() -> Option<i64> {
-    get_str_config(DROP_OLD_TIMESTAMP_KEY)
+fn get_dlq_grace_period_min(storage_name: &str) -> Option<i64> {
+    if storage_name.is_empty() {
+        return None;
+    }
+    get_str_config(&format!("{DLQ_GRACE_PERIOD_MIN_KEY}:{storage_name}"))
         .ok()
         .flatten()
         .and_then(|s| s.parse::<i64>().ok())
-        .filter(|&n| n > 0)
+        .filter(|&n| n >= 0)
 }
 
-/// Returns Some(age_in_seconds) if `ts` is more than `threshold_sec` older
-/// than `now`. Returns None when the message is within the threshold (or
-/// arrived from the future, indicating clock skew on the producer side
-/// rather than staleness).
-fn stale_age_secs(ts: DateTime<Utc>, now: DateTime<Utc>, threshold_sec: i64) -> Option<i64> {
-    let age_sec = now.signed_duration_since(ts).num_seconds();
-    (age_sec > threshold_sec).then_some(age_sec)
+/// Most recent Monday 00:00 UTC at or before `now` — the active weekly
+/// partition boundary used by `toMonday(timestamp)` in ClickHouse.
+fn prior_partition_boundary(now: DateTime<Utc>) -> DateTime<Utc> {
+    let days_from_monday = now.weekday().num_days_from_monday() as i64;
+    let monday = now.date_naive() - chrono::Duration::days(days_from_monday);
+    monday.and_time(chrono::NaiveTime::MIN).and_utc()
+}
+
+/// True when we should DLQ this message because it belongs to the prior
+/// week's partition and we are far enough past the current partition
+/// boundary that prior-week stragglers should no longer be admitted.
+fn should_dlq_for_prior_partition(
+    event_ts: DateTime<Utc>,
+    now: DateTime<Utc>,
+    grace_min: i64,
+) -> bool {
+    let boundary = prior_partition_boundary(now);
+    let past_min = now.signed_duration_since(boundary).num_minutes();
+    past_min >= grace_min && event_ts < boundary
 }
 
 pub fn process_message(
@@ -807,33 +828,92 @@ mod tests {
         assert!(!has_received_at);
     }
 
-    #[test]
-    fn test_stale_age_secs_drops_old_messages() {
-        let now = DateTime::from_timestamp(1_000_000, 0).unwrap();
-        let received = DateTime::from_timestamp(1_000_000 - 3601, 0).unwrap();
-        assert_eq!(stale_age_secs(received, now, 3600), Some(3601));
+    /// Helper: construct a UTC DateTime from Y-M-D H:M:S.
+    fn ymd_hms(y: i32, m: u32, d: u32, hh: u32, mm: u32, ss: u32) -> DateTime<Utc> {
+        chrono::NaiveDate::from_ymd_opt(y, m, d)
+            .unwrap()
+            .and_hms_opt(hh, mm, ss)
+            .unwrap()
+            .and_utc()
     }
 
     #[test]
-    fn test_stale_age_secs_keeps_recent_messages() {
-        let now = DateTime::from_timestamp(1_000_000, 0).unwrap();
-        let received = DateTime::from_timestamp(1_000_000 - 1, 0).unwrap();
-        assert_eq!(stale_age_secs(received, now, 3600), None);
+    fn test_prior_partition_boundary_on_monday() {
+        // 2026-05-18 is a Monday; boundary is itself at 00:00.
+        let now = ymd_hms(2026, 5, 18, 12, 34, 56);
+        let boundary = prior_partition_boundary(now);
+        assert_eq!(boundary, ymd_hms(2026, 5, 18, 0, 0, 0));
     }
 
     #[test]
-    fn test_stale_age_secs_exactly_at_threshold_is_not_stale() {
-        let now = DateTime::from_timestamp(1_000_000, 0).unwrap();
-        let received = DateTime::from_timestamp(1_000_000 - 3600, 0).unwrap();
-        assert_eq!(stale_age_secs(received, now, 3600), None);
+    fn test_prior_partition_boundary_midweek() {
+        // 2026-05-21 is a Thursday; boundary is Monday 2026-05-18 00:00.
+        let now = ymd_hms(2026, 5, 21, 23, 59, 59);
+        let boundary = prior_partition_boundary(now);
+        assert_eq!(boundary, ymd_hms(2026, 5, 18, 0, 0, 0));
     }
 
     #[test]
-    fn test_stale_age_secs_future_received_is_not_stale() {
-        // Clock skew on the producer can yield received > now; never treat as stale.
-        let now = DateTime::from_timestamp(1_000_000, 0).unwrap();
-        let received = DateTime::from_timestamp(1_000_500, 0).unwrap();
-        assert_eq!(stale_age_secs(received, now, 3600), None);
+    fn test_prior_partition_boundary_on_sunday() {
+        // 2026-05-24 is a Sunday; boundary is Monday 2026-05-18 00:00.
+        let now = ymd_hms(2026, 5, 24, 0, 0, 1);
+        let boundary = prior_partition_boundary(now);
+        assert_eq!(boundary, ymd_hms(2026, 5, 18, 0, 0, 0));
+    }
+
+    #[test]
+    fn test_should_dlq_prior_week_past_grace() {
+        // 45 min past Monday 00:00 UTC; message timestamp is prior week → DLQ.
+        let now = ymd_hms(2026, 5, 18, 0, 45, 0);
+        let event_ts = ymd_hms(2026, 5, 17, 23, 30, 0);
+        assert!(should_dlq_for_prior_partition(event_ts, now, 45));
+    }
+
+    #[test]
+    fn test_should_not_dlq_within_grace() {
+        // 30 min past Monday 00:00 UTC, grace=45 → not DLQ even though prior week.
+        let now = ymd_hms(2026, 5, 18, 0, 30, 0);
+        let event_ts = ymd_hms(2026, 5, 17, 23, 30, 0);
+        assert!(!should_dlq_for_prior_partition(event_ts, now, 45));
+    }
+
+    #[test]
+    fn test_should_not_dlq_current_week_past_grace() {
+        // Past grace, but message belongs to current week → never DLQ.
+        let now = ymd_hms(2026, 5, 18, 1, 30, 0);
+        let event_ts = ymd_hms(2026, 5, 18, 1, 0, 0);
+        assert!(!should_dlq_for_prior_partition(event_ts, now, 45));
+    }
+
+    #[test]
+    fn test_should_not_dlq_event_at_boundary() {
+        // event_ts == boundary belongs to the new week — must not DLQ.
+        let now = ymd_hms(2026, 5, 18, 6, 0, 0);
+        let event_ts = ymd_hms(2026, 5, 18, 0, 0, 0);
+        assert!(!should_dlq_for_prior_partition(event_ts, now, 45));
+    }
+
+    #[test]
+    fn test_should_not_dlq_future_event_ts() {
+        // Producer clock skew: event_ts > now. Belongs to current week (or future);
+        // event_ts < boundary is false, so we never DLQ.
+        let now = ymd_hms(2026, 5, 21, 12, 0, 0);
+        let event_ts = ymd_hms(2026, 5, 22, 0, 0, 0);
+        assert!(!should_dlq_for_prior_partition(event_ts, now, 45));
+    }
+
+    #[test]
+    fn test_should_dlq_grace_zero_dlqs_immediately_at_boundary() {
+        // grace=0 → DLQ prior-week messages the instant the new week starts.
+        let now = ymd_hms(2026, 5, 18, 0, 0, 0);
+        let event_ts = ymd_hms(2026, 5, 17, 23, 59, 59);
+        assert!(should_dlq_for_prior_partition(event_ts, now, 0));
+    }
+
+    #[test]
+    fn test_get_dlq_grace_period_min_unset_storage_returns_none() {
+        // Empty storage_name short-circuits to None without hitting Python.
+        assert_eq!(get_dlq_grace_period_min(""), None);
     }
 
     #[test]

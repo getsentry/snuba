@@ -217,6 +217,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     &self.processing_concurrency,
                     config::ProcessorConfig {
                         env_config: self.env_config.clone(),
+                        storage_name: self.storage_config.name.clone(),
                     },
                     self.stop_at_timestamp,
                 )
@@ -230,6 +231,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     &self.processing_concurrency,
                     config::ProcessorConfig {
                         env_config: self.env_config.clone(),
+                        storage_name: self.storage_config.name.clone(),
                     },
                     self.stop_at_timestamp,
                 )
@@ -406,6 +408,7 @@ impl ConsumerStrategyFactoryV2 {
             &self.processing_concurrency,
             config::ProcessorConfig {
                 env_config: self.env_config.clone(),
+                storage_name: self.storage_config.name.clone(),
             },
             self.stop_at_timestamp,
         );
