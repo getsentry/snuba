@@ -10,7 +10,7 @@ mod profiles;
 mod querylog;
 mod release_health_metrics;
 mod replays;
-mod utils;
+pub mod utils;
 
 use crate::config::ProcessorConfig;
 use crate::types::{InsertBatch, InsertOrReplacement, KafkaMessageMetadata};

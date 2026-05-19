@@ -14,7 +14,9 @@ use sentry_protos::snuba::v1::any_value::Value;
 use sentry_protos::snuba::v1::{ArrayValue, TraceItem, TraceItemType};
 
 use crate::config::ProcessorConfig;
-use crate::processors::utils::enforce_retention;
+use crate::processors::utils::{
+    enforce_retention, get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs,
+};
 use crate::runtime_config::get_str_config;
 use crate::types::CogsData;
 use crate::types::{InsertBatch, ItemTypeMetrics, KafkaMessageMetadata, TypedInsertBatch};
@@ -44,6 +46,7 @@ struct ProcessedItem {
     origin_timestamp: Option<DateTime<Utc>>,
     item_type_metrics: ItemTypeMetrics,
     cogs_data: CogsData,
+    should_skip: bool,
 }
 
 fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Result<ProcessedItem> {
@@ -58,14 +61,24 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
         .as_ref()
         .and_then(|ts| DateTime::from_timestamp(ts.seconds, 0));
 
+    let mut should_skip = false;
     if let Some(event_ts) = event_timestamp {
-        if let Some(grace_min) = get_dlq_grace_period_min(&config.storage_name) {
-            let now = Utc::now();
-            if should_dlq_for_prior_partition(event_ts, now, grace_min) {
-                counter!("eap_items.messages.dlqed_prior_partition", 1);
-                anyhow::bail!(
-                    "eap-items message DLQed: event timestamp {event_ts} is before the prior weekly partition boundary; routed to DLQ"
-                );
+        let now = Utc::now();
+
+        // should_skip=true will drop messages that are too old or too far in the future
+        if get_drop_invalid_timestamps_enabled() && out_of_valid_interval_secs(event_ts, now) {
+            counter!("eap_items.messages.dropped_out_of_range_timestamp", 1);
+            should_skip = true;
+        }
+        // only DLQ messages that we don't want to drop (should_skip=false)
+        if !should_skip {
+            if let Some(grace_min) = get_dlq_grace_period_min(&config.storage_name) {
+                if should_dlq_for_prior_partition(event_ts, now, grace_min) {
+                    counter!("eap_items.messages.dlqed_prior_partition", 1);
+                    anyhow::bail!(
+                        "eap-items message DLQed: event timestamp {event_ts} is before the prior weekly partition boundary; routed to DLQ"
+                    );
+                }
             }
         }
     }
@@ -128,6 +141,7 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
         origin_timestamp,
         item_type_metrics,
         cogs_data,
+        should_skip,
     })
 }
 
@@ -169,6 +183,9 @@ pub fn process_message(
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let processed = process_eap_item(msg, config)?;
+    if processed.should_skip {
+        return Ok(InsertBatch::skip());
+    }
     let mut batch = InsertBatch::from_rows([processed.eap_item], processed.origin_timestamp)?;
     batch.item_type_metrics = Some(processed.item_type_metrics);
     batch.cogs_data = Some(processed.cogs_data);
@@ -181,6 +198,9 @@ pub fn process_message_row_binary(
     config: &ProcessorConfig,
 ) -> anyhow::Result<TypedInsertBatch<EAPItemRow>> {
     let processed = process_eap_item(msg, config)?;
+    if processed.should_skip {
+        return Ok(TypedInsertBatch::from_rows(vec![], None));
+    }
     let mut batch = TypedInsertBatch::from_rows(
         vec![EAPItemRow::try_from(processed.eap_item)?],
         processed.origin_timestamp,
