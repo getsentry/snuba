@@ -180,6 +180,7 @@ impl<TNext> OutcomesAggregator<TNext> {
 
         let category_metrics = batch.category_metrics.clone();
         let duplicate_item_counts = batch.duplicate_item_count.clone();
+        batch.record_message_latency("flush_broker_latency");
         let message = Message::new_any_message(batch, committable);
         match self.next_step.submit(message) {
             Ok(()) => {
@@ -255,6 +256,9 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
 
         let partition = broker_msg.partition;
         let broker_offset = broker_msg.offset;
+        let broker_timestamp = broker_msg.timestamp;
+
+        self.batch.add_broker_timestamp(broker_timestamp);
 
         self.latest_offsets
             .entry(partition)
