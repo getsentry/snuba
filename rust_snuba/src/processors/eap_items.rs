@@ -62,9 +62,9 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
         if let Some(grace_min) = get_dlq_grace_period_min(&config.storage_name) {
             let now = Utc::now();
             if should_dlq_for_prior_partition(event_ts, now, grace_min) {
-                counter!("eap_items.messages.dropped_prior_partition", 1);
+                counter!("eap_items.messages.dlqed_prior_partition", 1);
                 anyhow::bail!(
-                    "eap-items message dropped: event timestamp {event_ts} is before the prior weekly partition boundary; routed to DLQ"
+                    "eap-items message DLQed: event timestamp {event_ts} is before the prior weekly partition boundary; routed to DLQ"
                 );
             }
         }
