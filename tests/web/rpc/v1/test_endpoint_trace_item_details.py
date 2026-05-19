@@ -258,7 +258,7 @@ class TestTraceItemDetails(BaseApiTest):
             assert k in attributes_returned, k
 
     def test_endpoint_returns_array_attribute(self, eap: None, redis_db: None) -> None:
-        """attributes_array from storage is exposed as val_array on TraceItemDetails."""
+        """Allowlisted attributes_array paths are exposed as val_array on TraceItemDetails."""
         span_ts = BASE_TIME - timedelta(minutes=1)
         storage = get_storage(StorageKey("eap_items"))
         write_raw_unprocessed_events(
@@ -267,8 +267,8 @@ class TestTraceItemDetails(BaseApiTest):
                 gen_item_message(
                     span_ts,
                     attributes={
-                        "tags": _str_tags_array("gamma", "delta"),
-                        "cols": _int_vals_array(1, 3),
+                        "gen_ai.response.text": _str_tags_array("gamma", "delta"),
+                        "gen_ai.tool.input": _int_vals_array(1, 3),
                     },
                 ),
             ],
@@ -323,11 +323,11 @@ class TestTraceItemDetails(BaseApiTest):
                 trace_id=trace_id,
             )
         )
-        tags_attr = next((a for a in res.attributes if a.name == "tags"), None)
+        tags_attr = next((a for a in res.attributes if a.name == "gen_ai.response.text"), None)
         assert tags_attr is not None
         assert tags_attr.value.WhichOneof("value") == "val_array"
         assert [e.val_str for e in tags_attr.value.val_array.values] == ["gamma", "delta"]
-        cols_attr = next((a for a in res.attributes if a.name == "cols"), None)
+        cols_attr = next((a for a in res.attributes if a.name == "gen_ai.tool.input"), None)
         assert cols_attr is not None
         assert cols_attr.value.WhichOneof("value") == "val_array"
         assert [e.val_int for e in cols_attr.value.val_array.values] == [1, 3]
@@ -344,9 +344,7 @@ class TestTraceItemDetails(BaseApiTest):
                     trace_id=trace_id,
                     remove_default_attributes=True,
                     attributes={
-                        "resource.process.command_args": _str_tags_array(
-                            "node", "--enable-source-maps"
-                        ),
+                        "gen_ai.input.messages": _str_tags_array("node", "--enable-source-maps"),
                     },
                 ),
             ],
@@ -406,7 +404,7 @@ class TestTraceItemDetails(BaseApiTest):
                 trace_id=trace_id_for_details,
             )
         )
-        attr = next((a for a in res.attributes if a.name == "resource.process.command_args"), None)
+        attr = next((a for a in res.attributes if a.name == "gen_ai.input.messages"), None)
         assert attr is not None
         assert attr.value.WhichOneof("value") == "val_array"
         assert [e.val_str for e in attr.value.val_array.values] == ["node", "--enable-source-maps"]
@@ -519,8 +517,8 @@ def test_convert_results_dedupes() -> None:
 
 def test_convert_results_includes_attributes_array() -> None:
     """
-    TraceItemDetails maps the ClickHouse attributes_array JSON payload into val_array
-    attributes (same path EndpointTraceItemDetails uses after the query).
+    TraceItemDetails maps per-path JSON sub-column payloads from `attributes_array`
+    into val_array attributes (only allowlisted paths are read).
     """
     data = [
         {
@@ -534,11 +532,32 @@ def test_convert_results_includes_attributes_array() -> None:
             "attributes_int": {},
             "attributes_float": {},
             "attributes_bool": {},
-            "attributes_array": '{"tags":[{"String":"gamma"},{"String":"delta"}]}',
+            "gen_ai.input.messages": '[{"String":"gamma"},{"String":"delta"}]',
         }
     ]
     _, _, attrs = _convert_results(data)
-    tags = [a for a in attrs if a.name == "tags"]
-    assert len(tags) == 1
-    assert tags[0].value.WhichOneof("value") == "val_array"
-    assert [e.val_str for e in tags[0].value.val_array.values] == ["gamma", "delta"]
+    msgs = [a for a in attrs if a.name == "gen_ai.input.messages"]
+    assert len(msgs) == 1
+    assert msgs[0].value.WhichOneof("value") == "val_array"
+    assert [e.val_str for e in msgs[0].value.val_array.values] == ["gamma", "delta"]
+
+
+def test_convert_results_skips_non_allowlisted_array_paths() -> None:
+    """Rows only contain keys we explicitly selected; anything else is ignored."""
+    data = [
+        {
+            "timestamp": 1750964400,
+            "hex_item_id": "e70ef5b1b5bc4611840eff9964b7a767",
+            "trace_id": "cb190d6e7d5743d5bc1494c650592cd2",
+            "organization_id": 1,
+            "project_id": 1,
+            "item_type": 1,
+            "attributes_string": {},
+            "attributes_int": {},
+            "attributes_float": {},
+            "attributes_bool": {},
+            "gen_ai.input.messages": "[]",
+        }
+    ]
+    _, _, attrs = _convert_results(data)
+    assert not any(a.name == "gen_ai.input.messages" for a in attrs)
