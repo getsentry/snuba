@@ -111,6 +111,17 @@ impl<TNext> OutcomesAggregator<TNext> {
                 item_id,
             };
             let is_dup = self.batch.record_if_duplicate(item_type, dedup_key);
+            if is_dup {
+                let item_type_str = item_type_name(item_type);
+                let item_id_uuid = uuid::Uuid::from_bytes(item_id);
+                tracing::info!(
+                    "duplicate {} trace: org_id:{}, project_id:{}, item_id:{}",
+                    item_type_str,
+                    org_id,
+                    project_id,
+                    item_id_uuid
+                );
+            }
             return is_dup;
         }
         false
