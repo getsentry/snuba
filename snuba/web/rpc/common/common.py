@@ -221,7 +221,7 @@ def pop_attributes_array_paths(row: dict[str, Any]) -> Iterator[tuple[str, list[
             yield path, str(raw)
             continue
         if not isinstance(parsed, list):
-            yield path, parsed if isinstance(parsed, str) else json.dumps(parsed)
+            yield path, json.dumps(parsed)
             continue
         if not parsed:
             continue
