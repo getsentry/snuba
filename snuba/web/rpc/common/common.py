@@ -215,14 +215,10 @@ def pop_attributes_array_paths(row: dict[str, Any]) -> Iterator[tuple[str, list[
         raw = row.pop(path, None)
         if not raw:
             continue
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError:
-            yield path, str(raw)
+        if not raw.startswith("["):
+            yield path, raw
             continue
-        if not isinstance(parsed, list):
-            yield path, json.dumps(parsed)
-            continue
+        parsed = json.loads(raw)
         if not parsed:
             continue
         yield path, [transform_array_value(elem) for elem in parsed]
