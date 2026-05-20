@@ -268,7 +268,7 @@ class TestTraceItemDetails(BaseApiTest):
                     span_ts,
                     attributes={
                         "gen_ai.response.text": _str_tags_array("gamma", "delta"),
-                        "gen_ai.tool.input": _int_vals_array(1, 3),
+                        "gen_ai.tool.definitions": _int_vals_array(1, 3),
                     },
                 ),
             ],
@@ -327,7 +327,7 @@ class TestTraceItemDetails(BaseApiTest):
         assert tags_attr is not None
         assert tags_attr.value.WhichOneof("value") == "val_array"
         assert [e.val_str for e in tags_attr.value.val_array.values] == ["gamma", "delta"]
-        cols_attr = next((a for a in res.attributes if a.name == "gen_ai.tool.input"), None)
+        cols_attr = next((a for a in res.attributes if a.name == "gen_ai.tool.definitions"), None)
         assert cols_attr is not None
         assert cols_attr.value.WhichOneof("value") == "val_array"
         assert [e.val_int for e in cols_attr.value.val_array.values] == [1, 3]

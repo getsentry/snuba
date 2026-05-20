@@ -201,7 +201,7 @@ def attributes_array_selected_expressions() -> list[SelectedExpression]:
     ]
 
 
-def pop_attributes_array_paths(row: dict[str, Any]) -> Iterator[tuple[str, list[Any]]]:
+def pop_attributes_array_paths(row: dict[str, Any]) -> Iterator[tuple[str, list[Any] | str]]:
     """Yield (path, decoded_values) for each allowlisted attributes_array path.
 
     Consumed keys are popped from `row` so callers can iterate the rest safely.
@@ -213,14 +213,12 @@ def pop_attributes_array_paths(row: dict[str, Any]) -> Iterator[tuple[str, list[
             continue
         try:
             parsed = json.loads(raw)
-        except json.JSONDecodeError as e:
-            raise BadSnubaRPCRequestException(
-                f"attributes_array path {path!r} is not valid JSON: {e}"
-            ) from e
+        except json.JSONDecodeError:
+            yield path, str(raw)
+            continue
         if not isinstance(parsed, list):
-            raise BadSnubaRPCRequestException(
-                f"attributes_array path {path!r} must decode to a list, got {type(parsed).__name__}"
-            )
+            yield path, parsed if isinstance(parsed, str) else json.dumps(parsed)
+            continue
         if not parsed:
             continue
         yield path, [transform_array_value(elem) for elem in parsed]
