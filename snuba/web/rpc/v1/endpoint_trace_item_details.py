@@ -187,7 +187,7 @@ def _convert_results(
     # Everything popped above; whatever's left is an attributes_array path column.
     for key, raw in row.items():
         decoded = decode_attributes_array_value(key, raw)
-        if isinstance(decoded, list) and not decoded:
+        if decoded is None or (isinstance(decoded, list) and not decoded):
             continue
         attrs.append(TraceItemDetailsAttribute(name=key, value=convert_to_attribute_value(decoded)))
 

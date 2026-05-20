@@ -507,6 +507,55 @@ def test_process_results_leaves_explicit_attribute_allowlist_collision_as_string
     assert attribute.value.val_str == '{"location": "Paris"}'
 
 
+def test_process_results_skips_none_array_attribute() -> None:
+    processed_results = _process_results(
+        [
+            {
+                "id": "abc123",
+                "timestamp": 1778785776.0,
+                "gen_ai.input.messages": None,
+            }
+        ],
+    )
+
+    item = processed_results.items[0]
+    assert not any(a.key.name == "gen_ai.input.messages" for a in item.attributes)
+
+
+def test_process_results_falls_back_to_string_on_malformed_array_json() -> None:
+    processed_results = _process_results(
+        [
+            {
+                "id": "abc123",
+                "timestamp": 1778785776.0,
+                "gen_ai.input.messages": "[not valid json",
+            }
+        ],
+    )
+
+    item = processed_results.items[0]
+    attribute = next(attr for attr in item.attributes if attr.key.name == "gen_ai.input.messages")
+    assert attribute.key.type == AttributeKey.Type.TYPE_STRING
+    assert attribute.value.val_str == "[not valid json"
+
+
+def test_process_results_falls_back_to_string_on_untagged_array_elements() -> None:
+    processed_results = _process_results(
+        [
+            {
+                "id": "abc123",
+                "timestamp": 1778785776.0,
+                "gen_ai.input.messages": '["gamma", "delta"]',
+            }
+        ],
+    )
+
+    item = processed_results.items[0]
+    attribute = next(attr for attr in item.attributes if attr.key.name == "gen_ai.input.messages")
+    assert attribute.key.type == AttributeKey.Type.TYPE_STRING
+    assert attribute.value.val_str == '["gamma", "delta"]'
+
+
 @pytest.mark.eap
 @pytest.mark.redis_db
 class TestGetTracePagination(BaseApiTest):

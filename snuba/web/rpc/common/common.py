@@ -205,21 +205,25 @@ def attributes_array_selected_expressions() -> list[SelectedExpression]:
     ]
 
 
-def decode_attributes_array_value(key: str, raw: str) -> list[Any] | str:
+def decode_attributes_array_value(key: str, raw: Any) -> list[Any] | str | None:
     """Decode a `toJSONString(...:Array(JSON))` payload for an allowlisted path.
 
-    If `key` is in `ATTRIBUTES_ARRAY_ALLOWLIST` and `raw` looks like a JSON
-    array (starts with '['), parse it and normalize each element via
-    `transform_array_value`. Otherwise return `raw` unchanged — either the
-    JSON path resolved to a non-array (fall back to a string attribute) or
-    `key` isn't an attributes_array path at all. Callers should still skip
-    empty list results.
+    Returns None if `raw` is empty or not a string (caller should skip). If
+    `key` is in `ATTRIBUTES_ARRAY_ALLOWLIST` and `raw` looks like a JSON array
+    (starts with '['), parse it and normalize each element via
+    `transform_array_value`. Malformed JSON or non-tagged elements fall back
+    to the raw string. Otherwise return `raw` unchanged — either the JSON
+    path resolved to a non-array or `key` isn't an attributes_array path at
+    all. Callers should still skip empty list results.
     """
-    if key not in ATTRIBUTES_ARRAY_ALLOWLIST:
+    if not isinstance(raw, str) or not raw:
+        return None
+    if key not in ATTRIBUTES_ARRAY_ALLOWLIST or not raw.startswith("["):
         return raw
-    if not raw.startswith("["):
+    try:
+        return [transform_array_value(elem) for elem in json.loads(raw)]
+    except (json.JSONDecodeError, BadSnubaRPCRequestException):
         return raw
-    return [transform_array_value(elem) for elem in json.loads(raw)]
 
 
 def _check_non_string_values_cannot_ignore_case(
