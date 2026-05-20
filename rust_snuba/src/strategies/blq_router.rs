@@ -2,32 +2,6 @@
 //!
 //! BLQ Router is an arroyo strategy that re-directs stale messages (by timestamp) to a configured backlog-queue topic.
 //! Non-stale messages will be passively forwarded along to the next step in the arroyo strategy pipeline.
-//!
-//! ## Implementation
-//! its essentially a FSM
-//!
-//! ```text
-//!                        > forward to next step
-//!                              ┌fresh─┐
-//!                              │      ▼
-//!                           ┌──┴─────────┐
-//!                   ┌fresh─►│ Forwarding ├──stale──► PANIC
-//!                   │       └────────────┘
-//!                   │              ▲
-//!          ┌──────┐ │              │
-//!     ────►│ Idle ├─┤            fresh
-//!          └──────┘ │              │
-//!                   │       ┌──────┴───────┐
-//!                   └stale─►│ RoutingStale │
-//!                           └─┬────────────┘
-//!                             │        ▲
-//!                             └─stale──┘
-//!                          > redirect to blq
-//! ```
-//!
-//! the reason for the panic is that there may be accumulated data downstream that needs to be flushed before we start
-//! redirecting to backlog and committing those messages. The most reliable way to do this is crashing the consumer,
-//! when it comes back alive the first messages it gets will be stale so it will go straight from idle to RoutingStale.
 
 use std::time::Duration;
 
@@ -44,20 +18,8 @@ use sentry_arroyo::processing::strategies::{
 use sentry_arroyo::types::{Message, Topic, TopicOrPartition};
 use sentry_options::options;
 
-#[derive(Debug, PartialEq)]
-enum State {
-    Idle,         // no messages have gone through the router yet
-    RoutingStale, // router is directing stale messages to the backlog-queue (BLQ)
-    // we have processed all stale messages and are now flushing (finishing producing to BLQ)
-    // when we transition to this state we will have CommitRequest for what was flushed, and poll
-    // will be responsible for returning it
-    Flushing(Option<CommitRequest>),
-    Forwarding, // router is forwarding non-stale messages along to the next strategy
-}
-
 pub struct BLQRouter<Next, ProduceStrategy> {
     next_step: Next,
-    state: State,
     prev_flag_state: bool,
     blq_active: bool,
     producer: ProduceStrategy,
@@ -74,8 +36,8 @@ where
     /// next_step,
     ///     is where fresh messages get forwarded to.
     ///
-    /// The stale threshold and static friction are read at runtime from sentry-options
-    /// (`consumer.blq_stale_threshold_seconds`, `consumer.blq_static_friction_seconds`)
+    /// The stale threshold is read at runtime from sentry-options
+    /// (`consumer.blq_stale_threshold_seconds`)
     /// so they can be tuned without a restart.
     pub fn new(
         next_step: Next,
@@ -173,74 +135,28 @@ where
         self.prev_flag_state = new_flag;
         let produce_result = self.producer.poll();
         let next_step_result = self.next_step.poll();
-        match &mut self.state {
-            State::RoutingStale => produce_result,
-            State::Forwarding | State::Idle => next_step_result,
-            State::Flushing(commits) => {
-                let commits = commits.take();
-                self.state = State::Forwarding;
-                Ok(commits)
-            }
+        match &produce_result {
+            Ok(Some(_)) => produce_result,
+            _ => next_step_result,
         }
     }
 
     fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), SubmitError<KafkaPayload>> {
-        if !Self::is_enabled(&self.consumer_group) {
+        if !self.blq_active {
             return self.next_step.submit(message);
         }
-
         let msg_ts = message
             .timestamp()
             .expect("Expected kafka message to always have a timestamp, but there wasn't one");
         let elapsed = Utc::now() - msg_ts;
 
         let stale_threshold = self.stale_threshold();
-        let friction = self.static_friction().filter(|f| *f < stale_threshold);
-        let threshold = match (&self.state, friction) {
-            (State::RoutingStale, Some(f)) => stale_threshold - f,
-            _ => stale_threshold,
-        };
-        let is_stale = elapsed > threshold;
-        match (is_stale, &self.state) {
-            (true, State::Forwarding) => {
-                // When we transition from Forwarding to RoutingStale, there may be
-                // state in memory held downstream. We crash the consumer to get rid of internal state
-                // when it restarts it will have no internal state (State::Empty) and the first message in
-                // the topic will be stale.
-                panic!("Resetting consumer state to begin processing the stale backlog")
-            }
-            (true, State::Idle) | (true, State::RoutingStale) => {
-                // route the stale message to the BLQ
-                if self.state == State::Idle {
-                    self.state = State::RoutingStale;
-                }
-                self.producer.submit(message)
-            }
-            (false, State::Idle) | (false, State::Forwarding) => {
-                // Forward the fresh message along to the next step
-                if self.state == State::Idle {
-                    self.state = State::Forwarding;
-                }
-                self.next_step.submit(message)
-            }
-            (false, State::RoutingStale) => {
-                // We hit a fresh message, so we are done routing the backlog.
-                // Finish producing and committing all the state messages and
-                // then switch back to forwarding fresh.
-
-                // i know i shouldnt be blocking in submit but there was no better way to do it
-                // the pipeline cant make progress until this completes anyways so it should be fine
-                let flush_results = self.producer.join(Some(Duration::from_secs(5))).unwrap();
-                self.state = State::Flushing(flush_results);
-                Err(SubmitError::MessageRejected(
-                    sentry_arroyo::processing::strategies::MessageRejected { message },
-                ))
-            }
-            (true, State::Flushing(_)) | (false, State::Flushing(_)) => {
-                Err(SubmitError::MessageRejected(
-                    sentry_arroyo::processing::strategies::MessageRejected { message },
-                ))
-            }
+        let is_stale = elapsed > stale_threshold;
+        if !is_stale {
+            self.blq_active = false;
+            return self.next_step.submit(message);
+        } else {
+            self.producer.submit(message)
         }
     }
 
@@ -252,10 +168,10 @@ where
     fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         let producer_result = self.producer.join(timeout);
         let next_step_result = self.next_step.join(timeout);
-        match &self.state {
-            State::RoutingStale => producer_result,
-            State::Forwarding | State::Idle => next_step_result,
-            State::Flushing(commits) => Ok(commits.clone()),
+        if self.blq_active {
+            producer_result
+        } else {
+            next_step_result
         }
     }
 }
