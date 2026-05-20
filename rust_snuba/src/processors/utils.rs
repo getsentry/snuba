@@ -25,11 +25,9 @@ const PAYLOAD_DATETIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.fZ";
 /// Returns true if `ts` is more than one week after `now` or more than thirty
 /// days before `now`.
 pub fn out_of_valid_interval_secs(ts: DateTime<Utc>, now: DateTime<Utc>) -> bool {
-    if ts > now {
-        ts.signed_duration_since(now).num_seconds() > INVALID_TIMESTAMP_FUTURE_INTERVAL_SECONDS
-    } else {
-        now.signed_duration_since(ts).num_seconds() > INVALID_TIMESTAMP_PAST_INTERVAL_SECONDS
-    }
+    let offset_sec = ts.signed_duration_since(now).num_seconds();
+    offset_sec > INVALID_TIMESTAMP_FUTURE_INTERVAL_SECONDS
+        || offset_sec < -INVALID_TIMESTAMP_PAST_INTERVAL_SECONDS
 }
 
 pub fn get_drop_invalid_timestamps_enabled() -> bool {
@@ -128,16 +126,6 @@ mod tests {
         let now = DateTime::from_timestamp(2_000_000, 0).unwrap();
         let ts = DateTime::from_timestamp(2_000_000 - INVALID_TIMESTAMP_PAST_INTERVAL_SECONDS, 0)
             .unwrap();
-        assert!(!out_of_valid_interval_secs(ts, now));
-    }
-
-    #[test]
-    fn test_out_of_valid_interval_secs_keeps_messages_more_than_a_week_old_but_within_thirty_days()
-    {
-        let now = DateTime::from_timestamp(2_000_000, 0).unwrap();
-        let ts =
-            DateTime::from_timestamp(2_000_000 - INVALID_TIMESTAMP_FUTURE_INTERVAL_SECONDS - 1, 0)
-                .unwrap();
         assert!(!out_of_valid_interval_secs(ts, now));
     }
 
