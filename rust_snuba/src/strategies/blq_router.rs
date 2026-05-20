@@ -124,10 +124,9 @@ where
         self.prev_flag_state = new_flag;
         let produce_result = self.producer.poll();
         let next_step_result = self.next_step.poll();
-        match &produce_result {
-            Ok(Some(_)) => produce_result,
-            _ => next_step_result,
-        }
+        let produce_commit = produce_result?;
+        let next_step_commit = next_step_result?;
+        Ok(produce_commit.or(next_step_commit))
     }
 
     fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), SubmitError<KafkaPayload>> {
