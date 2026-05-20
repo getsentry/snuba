@@ -70,7 +70,7 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
             counter!("eap_items.messages.dropped_out_of_range_timestamp", 1);
             should_skip = true;
         }
-        // only DLQ messages that we don't want to drop (should_skip=false)
+        // only DLQ messages that we don't want to drop (when should_skip=false)
         if !should_skip {
             if let Some(grace_min) = get_dlq_grace_period_min(&config.storage_name) {
                 if should_dlq_for_prior_partition(event_ts, now, grace_min) {
