@@ -64,7 +64,7 @@ pub struct BLQRouter<Next, ProduceStrategy> {
 
     // We have to keep this around ourself bc strategies::produce::Produce didn't define their lifetimes well
     _concurrency: Option<ConcurrencyConfig>,
-    _consumer_group: String,
+    consumer_group: String,
 }
 
 impl<Next> BLQRouter<Next, Produce<CommitOffsets>>
@@ -101,11 +101,12 @@ where
     Next: ProcessingStrategy<KafkaPayload> + 'static,
     ProduceStrategy: ProcessingStrategy<KafkaPayload> + 'static,
 {
-    fn is_enabled() -> bool {
+    fn is_enabled(consumer_group: &str) -> bool {
         options("snuba")
             .ok()
             .and_then(|o| o.get("consumer.blq_enabled").ok())
-            .and_then(|v| v.as_bool())
+            .and_then(|v| v.as_str().map(str::to_owned))
+            .map(|s| s != "" && s == consumer_group)
             .unwrap_or(false)
     }
 
@@ -143,7 +144,7 @@ where
         blq_producer: ProduceStrategy,
         consumer_group: String,
     ) -> Self {
-        let flag = Self::is_enabled();
+        let flag = Self::is_enabled(&consumer_group);
         Self {
             next_step,
             state: State::Idle,
@@ -151,7 +152,7 @@ where
             blq_active: flag,
             producer: blq_producer,
             _concurrency: None,
-            _consumer_group: consumer_group,
+            consumer_group,
         }
     }
 }
@@ -162,7 +163,7 @@ where
     ProduceStrategy: ProcessingStrategy<KafkaPayload> + 'static,
 {
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
-        let new_flag = Self::is_enabled();
+        let new_flag = Self::is_enabled(&self.consumer_group);
         if !self.prev_flag_state && new_flag {
             tracing::info!(
                 "consumer.blq_enabled flipped on at runtime; exiting consumer to flush downstream state"
@@ -184,7 +185,7 @@ where
     }
 
     fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), SubmitError<KafkaPayload>> {
-        if !Self::is_enabled() {
+        if !Self::is_enabled(&self.consumer_group) {
             return self.next_step.submit(message);
         }
 
@@ -334,7 +335,11 @@ mod tests {
          */
         init_config();
         let _guard = override_options(&[
-            ("snuba", "consumer.blq_enabled", json!(true)),
+            (
+                "snuba",
+                "consumer.blq_enabled",
+                json!("test_consumer_group"),
+            ),
             ("snuba", "consumer.blq_stale_threshold_seconds", json!(10)),
             ("snuba", "consumer.blq_static_friction_seconds", json!(0)),
         ])
@@ -383,7 +388,11 @@ mod tests {
          */
         init_config();
         let _guard = override_options(&[
-            ("snuba", "consumer.blq_enabled", json!(true)),
+            (
+                "snuba",
+                "consumer.blq_enabled",
+                json!("test_consumer_group"),
+            ),
             ("snuba", "consumer.blq_stale_threshold_seconds", json!(10)),
             ("snuba", "consumer.blq_static_friction_seconds", json!(0)),
         ])
@@ -442,7 +451,7 @@ mod tests {
         // When the feature flag is explicitly false, stale messages should pass through
         init_config();
         let _guard = override_options(&[
-            ("snuba", "consumer.blq_enabled", json!(false)),
+            ("snuba", "consumer.blq_enabled", json!("")),
             ("snuba", "consumer.blq_stale_threshold_seconds", json!(10)),
             ("snuba", "consumer.blq_static_friction_seconds", json!(0)),
         ])
