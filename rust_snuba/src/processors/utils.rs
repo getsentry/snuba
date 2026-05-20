@@ -6,23 +6,30 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 /// One week in seconds. The eap_items table is partitioned by
 /// `(retention_days, toMonday(timestamp))`, so any event more than a week
-/// off will add more parts
-pub const INVALID_TIMESTAMP_INTERVAL_SECONDS: i64 = 7 * 24 * 60 * 60;
+/// in the future will add more parts.
+pub const INVALID_TIMESTAMP_FUTURE_INTERVAL_SECONDS: i64 = 7 * 24 * 60 * 60;
+
+/// Thirty days in seconds. Events older than this are dropped when invalid
+/// timestamp dropping is enabled.
+pub const INVALID_TIMESTAMP_PAST_INTERVAL_SECONDS: i64 = 30 * 24 * 60 * 60;
 
 /// Runtime config key. When set to `"1"`, the eap-items consumer skips messages
-/// whose event `timestamp` is more than one week from now (see
-/// `out_of_valid_interval_secs`).
+/// whose event `timestamp` is more than one week in the future or more than
+/// thirty days in the past (see `out_of_valid_interval_secs`).
 pub const DROP_INVALID_TIMESTAMPS_KEY: &str = "eap_items_drop_invalid_timestamps";
 
 // Equivalent to "%Y-%m-%dT%H:%M:%S.%fZ" in python
 // Notice the differennce of .%fZ vs %.fZ, this comes from a difference in how rust's chrono handles the format
 const PAYLOAD_DATETIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.fZ";
 
-/// Returns true if `ts` is more than `INVALID_TIMESTAMP_INTERVAL_SECONDS` off from
-/// `now` in either direction (past or future).
+/// Returns true if `ts` is more than one week after `now` or more than thirty
+/// days before `now`.
 pub fn out_of_valid_interval_secs(ts: DateTime<Utc>, now: DateTime<Utc>) -> bool {
-    let offset_sec = now.signed_duration_since(ts).num_seconds();
-    offset_sec.abs() > INVALID_TIMESTAMP_INTERVAL_SECONDS
+    if ts > now {
+        ts.signed_duration_since(now).num_seconds() > INVALID_TIMESTAMP_FUTURE_INTERVAL_SECONDS
+    } else {
+        now.signed_duration_since(ts).num_seconds() > INVALID_TIMESTAMP_PAST_INTERVAL_SECONDS
+    }
 }
 
 pub fn get_drop_invalid_timestamps_enabled() -> bool {
@@ -99,26 +106,38 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_out_of_valid_interval_secs_drops_messages_more_than_a_week_old() {
+    fn test_out_of_valid_interval_secs_drops_messages_more_than_thirty_days_old() {
         let now = DateTime::from_timestamp(2_000_000, 0).unwrap();
-        let ts = DateTime::from_timestamp(2_000_000 - INVALID_TIMESTAMP_INTERVAL_SECONDS - 1, 0)
-            .unwrap();
+        let ts =
+            DateTime::from_timestamp(2_000_000 - INVALID_TIMESTAMP_PAST_INTERVAL_SECONDS - 1, 0)
+                .unwrap();
         assert!(out_of_valid_interval_secs(ts, now));
     }
 
     #[test]
     fn test_out_of_valid_interval_secs_drops_messages_more_than_a_week_in_the_future() {
         let now = DateTime::from_timestamp(2_000_000, 0).unwrap();
-        let ts = DateTime::from_timestamp(2_000_000 + INVALID_TIMESTAMP_INTERVAL_SECONDS + 1, 0)
-            .unwrap();
+        let ts =
+            DateTime::from_timestamp(2_000_000 + INVALID_TIMESTAMP_FUTURE_INTERVAL_SECONDS + 1, 0)
+                .unwrap();
         assert!(out_of_valid_interval_secs(ts, now));
     }
 
     #[test]
-    fn test_out_of_valid_interval_secs_keeps_messages_at_exactly_one_week_old() {
+    fn test_out_of_valid_interval_secs_keeps_messages_at_exactly_thirty_days_old() {
+        let now = DateTime::from_timestamp(2_000_000, 0).unwrap();
+        let ts = DateTime::from_timestamp(2_000_000 - INVALID_TIMESTAMP_PAST_INTERVAL_SECONDS, 0)
+            .unwrap();
+        assert!(!out_of_valid_interval_secs(ts, now));
+    }
+
+    #[test]
+    fn test_out_of_valid_interval_secs_keeps_messages_more_than_a_week_old_but_within_thirty_days()
+    {
         let now = DateTime::from_timestamp(2_000_000, 0).unwrap();
         let ts =
-            DateTime::from_timestamp(2_000_000 - INVALID_TIMESTAMP_INTERVAL_SECONDS, 0).unwrap();
+            DateTime::from_timestamp(2_000_000 - INVALID_TIMESTAMP_FUTURE_INTERVAL_SECONDS - 1, 0)
+                .unwrap();
         assert!(!out_of_valid_interval_secs(ts, now));
     }
 
