@@ -163,20 +163,20 @@ def _convert_results(
             TraceItemDetailsAttribute(name="sentry.item_type", value=AttributeValue(val_int=val))
         )
 
-    for k, v in row["attributes_string"].items():
+    for k, v in row.pop("attributes_string").items():
         attrs.append(TraceItemDetailsAttribute(name=k, value=AttributeValue(val_str=v)))
 
     int_attr_names = set()
-    for k, v in row["attributes_int"].items():
+    for k, v in row.pop("attributes_int").items():
         int_attr_names.add(k)
         attrs.append(TraceItemDetailsAttribute(name=k, value=AttributeValue(val_int=v)))
 
     bool_attr_names = set()
-    for k, v in row["attributes_bool"].items():
+    for k, v in row.pop("attributes_bool").items():
         bool_attr_names.add(k)
         attrs.append(TraceItemDetailsAttribute(name=k, value=AttributeValue(val_bool=v)))
 
-    for k, v in row["attributes_float"].items():
+    for k, v in row.pop("attributes_float").items():
         if k in int_attr_names or k in bool_attr_names:
             # for bool & int attributes, we also store a float version in the database
             # to simplfy aggregations. when returning data to the user we should only return
@@ -184,10 +184,9 @@ def _convert_results(
             continue
         attrs.append(TraceItemDetailsAttribute(name=k, value=AttributeValue(val_double=v)))
 
-    for key, value in row.items():
-        if not isinstance(value, str):
-            continue
-        decoded = decode_attributes_array_value(value)
+    # Everything popped above; whatever's left is an attributes_array path column.
+    for key, raw in row.items():
+        decoded = decode_attributes_array_value(raw)
         if isinstance(decoded, list) and not decoded:
             continue
         attrs.append(TraceItemDetailsAttribute(name=key, value=convert_to_attribute_value(decoded)))
