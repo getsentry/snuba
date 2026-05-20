@@ -27,6 +27,10 @@ pub struct BLQRouter<Next, ProduceStrategy> {
     // We have to keep this around ourself bc strategies::produce::Produce didn't define their lifetimes well
     _concurrency: Option<ConcurrencyConfig>,
     consumer_group: String,
+
+    // Invoked from poll() when the flag flips on at runtime. Defaults to
+    // std::process::exit(0) — overridden in tests so the assertion is observable.
+    exit_fn: Box<dyn Fn() + Send + Sync>,
 }
 
 impl<Next> BLQRouter<Next, Produce<CommitOffsets>>
@@ -85,22 +89,6 @@ where
             .unwrap_or(TimeDelta::minutes(30))
     }
 
-    /// Hysteresis applied while in RoutingStale: we keep routing messages at
-    /// least (stale_threshold - static_friction) old so we don't flip-flop at
-    /// the boundary. A value <= 0 disables friction. Defaults to 2 minutes.
-    fn static_friction(&self) -> Option<TimeDelta> {
-        let secs = options("snuba")
-            .ok()
-            .and_then(|o| o.get("consumer.blq_static_friction_seconds").ok())
-            .and_then(|v| v.as_i64())
-            .unwrap_or(120);
-        if secs > 0 {
-            Some(TimeDelta::seconds(secs))
-        } else {
-            None
-        }
-    }
-
     fn new_with_strategy(
         next_step: Next,
         blq_producer: ProduceStrategy,
@@ -109,12 +97,12 @@ where
         let flag = Self::is_enabled(&consumer_group);
         Self {
             next_step,
-            state: State::Idle,
             prev_flag_state: flag,
             blq_active: flag,
             producer: blq_producer,
             _concurrency: None,
             consumer_group,
+            exit_fn: Box::new(|| std::process::exit(0)),
         }
     }
 }
@@ -130,7 +118,8 @@ where
             tracing::info!(
                 "consumer.blq_enabled flipped on at runtime; exiting consumer to flush downstream state"
             );
-            std::process::exit(0);
+            (self.exit_fn)();
+            return Ok(None);
         }
         self.prev_flag_state = new_flag;
         let produce_result = self.producer.poll();
@@ -182,8 +171,10 @@ mod tests {
     use chrono::DateTime;
     use sentry_arroyo::types::{Partition, Topic};
     use sentry_options::init_with_schemas;
-    use sentry_options::testing::override_options;
+    use sentry_options::testing::{override_options, set_override};
     use serde_json::json;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
     use std::sync::Once;
 
     static INIT: Once = Once::new();
@@ -193,17 +184,11 @@ mod tests {
 
     struct MockStrategy {
         submitted: Vec<Message<KafkaPayload>>,
-        join_called: bool,
-        terminate_called: bool,
     }
 
     impl MockStrategy {
         fn new() -> Self {
-            Self {
-                submitted: vec![],
-                join_called: false,
-                terminate_called: false,
-            }
+            Self { submitted: vec![] }
         }
     }
 
@@ -220,15 +205,12 @@ mod tests {
             Ok(())
         }
 
-        fn terminate(&mut self) {
-            self.terminate_called = true;
-        }
+        fn terminate(&mut self) {}
 
         fn join(
             &mut self,
             _timeout: Option<Duration>,
         ) -> Result<Option<CommitRequest>, StrategyError> {
-            self.join_called = true;
             Ok(None)
         }
     }
@@ -243,65 +225,49 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Resetting consumer state to begin processing the stale backlog")]
-    fn test_fresh_to_stale() {
-        /*
-        This tests that the BLQRouter forwards business-as-usual fresh messages through it
-        and crashes when it hits its first stale message
-         */
+    fn test_shutoff_when_flag_flips() {
+        // Flag off: router forwards everything (fresh or stale) to next_step.
+        // When the flag flips on at runtime, the next poll() invokes exit_fn.
         init_config();
-        let _guard = override_options(&[
-            (
-                "snuba",
-                "consumer.blq_enabled",
-                json!("test_consumer_group"),
-            ),
-            ("snuba", "consumer.blq_stale_threshold_seconds", json!(10)),
-            ("snuba", "consumer.blq_static_friction_seconds", json!(0)),
-        ])
-        .unwrap();
+        let _guard =
+            override_options(&[("snuba", "consumer.blq_stale_threshold_seconds", json!(10))])
+                .unwrap();
+
+        let exited = Arc::new(AtomicBool::new(false));
+        let exited_clone = exited.clone();
         let mut router = BLQRouter::new_with_strategy(
             MockStrategy::new(),
             MockStrategy::new(),
             "test_consumer_group".to_string(),
         );
-        // consuming messages as normal
-        for _ in 0..10 {
-            router.submit(make_message(Utc::now())).unwrap();
-            _ = router.poll();
-        }
-        assert_eq!(router.state, State::Forwarding);
-        // now theres a stale message, consumer should crash
-        _ = router.submit(make_message(Utc::now() - TimeDelta::seconds(20)));
-    }
+        router.exit_fn = Box::new(move || exited_clone.store(true, Ordering::SeqCst));
 
-    fn submit_with_retry(
-        router: &mut BLQRouter<MockStrategy, MockStrategy>,
-        message: Message<KafkaPayload>,
-        max_retries: usize,
-    ) -> Result<(), SubmitError<KafkaPayload>> {
-        let mut msg = message;
-        for _ in 0..max_retries {
-            match router.submit(msg) {
-                Ok(()) => return Ok(()),
-                Err(SubmitError::MessageRejected(rejected)) => {
-                    _ = router.poll();
-                    msg = rejected.message;
-                }
-                Err(e) => return Err(e),
-            }
-        }
-        Err(SubmitError::MessageRejected(
-            sentry_arroyo::processing::strategies::MessageRejected { message: msg },
-        ))
+        assert!(!router.blq_active);
+
+        router.submit(make_message(Utc::now())).unwrap();
+        router
+            .submit(make_message(Utc::now() - TimeDelta::minutes(1)))
+            .unwrap();
+        _ = router.poll();
+        assert_eq!(router.next_step.submitted.len(), 2);
+        assert_eq!(router.producer.submitted.len(), 0);
+        assert!(!exited.load(Ordering::SeqCst));
+
+        set_override(
+            "snuba",
+            "consumer.blq_enabled",
+            json!("test_consumer_group"),
+        );
+
+        _ = router.poll();
+        assert!(exited.load(Ordering::SeqCst));
     }
 
     #[test]
-    fn test_stale_to_fresh() {
-        /*
-        This tests that the BLQRouter properly routes stale messages to the BLQ
-        and then switches back to forwarding fresh messages once the backlog is burned
-         */
+    fn test_blq_routes_stale_then_disables_on_fresh() {
+        // Flag on at boot: stale messages route to the producer; the first fresh
+        // message flips blq_active off; from then on, fresh AND subsequent stale
+        // both go to next_step (no re-entry without a process restart).
         init_config();
         let _guard = override_options(&[
             (
@@ -310,7 +276,6 @@ mod tests {
                 json!("test_consumer_group"),
             ),
             ("snuba", "consumer.blq_stale_threshold_seconds", json!(10)),
-            ("snuba", "consumer.blq_static_friction_seconds", json!(0)),
         ])
         .unwrap();
         let mut router = BLQRouter::new_with_strategy(
@@ -318,76 +283,26 @@ mod tests {
             MockStrategy::new(),
             "test_consumer_group".to_string(),
         );
-        // backlog of 10 stale messages
+        assert!(router.blq_active);
+
         for _ in 0..10 {
             router
                 .submit(make_message(Utc::now() - TimeDelta::minutes(1)))
                 .unwrap();
             _ = router.poll();
         }
-        assert_eq!(router.state, State::RoutingStale);
-        assert!(!router.producer.join_called);
-        // now we are back to fresh messages
-        for _ in 0..5 {
-            submit_with_retry(&mut router, make_message(Utc::now()), 3).unwrap();
-            _ = router.poll();
-        }
-        assert_eq!(router.state, State::Forwarding);
-        assert!(router.producer.join_called);
         assert_eq!(router.producer.submitted.len(), 10);
-        assert_eq!(router.next_step.submitted.len(), 5);
-    }
+        assert_eq!(router.next_step.submitted.len(), 0);
+        assert!(router.blq_active);
 
-    #[test]
-    fn test_passthrough_when_no_flag() {
-        // When the feature flag is not set, stale messages should pass through
-        // to next_step instead of being routed to BLQ
-        init_config();
-        let mut router = BLQRouter::new_with_strategy(
-            MockStrategy::new(),
-            MockStrategy::new(),
-            "test_consumer_group".to_string(),
-        );
+        router.submit(make_message(Utc::now())).unwrap();
+        assert!(!router.blq_active);
 
-        for _ in 0..5 {
-            router
-                .submit(make_message(Utc::now() - TimeDelta::minutes(1)))
-                .unwrap();
-            _ = router.poll();
-        }
-
-        // All stale messages went to next_step, none to producer
-        assert_eq!(router.next_step.submitted.len(), 5);
-        assert_eq!(router.producer.submitted.len(), 0);
-        assert_eq!(router.state, State::Idle);
-    }
-
-    #[test]
-    fn test_passthrough_when_flag_disabled() {
-        // When the feature flag is explicitly false, stale messages should pass through
-        init_config();
-        let _guard = override_options(&[
-            ("snuba", "consumer.blq_enabled", json!("")),
-            ("snuba", "consumer.blq_stale_threshold_seconds", json!(10)),
-            ("snuba", "consumer.blq_static_friction_seconds", json!(0)),
-        ])
-        .unwrap();
-        let mut router = BLQRouter::new_with_strategy(
-            MockStrategy::new(),
-            MockStrategy::new(),
-            "test_consumer_group".to_string(),
-        );
-
-        for _ in 0..5 {
-            router
-                .submit(make_message(Utc::now() - TimeDelta::minutes(1)))
-                .unwrap();
-            _ = router.poll();
-        }
-
-        // All stale messages went to next_step, none to producer
-        assert_eq!(router.next_step.submitted.len(), 5);
-        assert_eq!(router.producer.submitted.len(), 0);
-        assert_eq!(router.state, State::Idle);
+        router.submit(make_message(Utc::now())).unwrap();
+        router
+            .submit(make_message(Utc::now() - TimeDelta::minutes(1)))
+            .unwrap();
+        assert_eq!(router.producer.submitted.len(), 10);
+        assert_eq!(router.next_step.submitted.len(), 3);
     }
 }
