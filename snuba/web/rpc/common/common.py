@@ -1,6 +1,6 @@
 import json
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Iterator, TypeVar, cast
+from typing import Any, Callable, TypeVar, cast
 
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
@@ -205,29 +205,25 @@ def attributes_array_selected_expressions() -> list[SelectedExpression]:
     ]
 
 
-def pop_attributes_array_paths(row: dict[str, Any]) -> Iterator[tuple[str, list[Any]]]:
-    """Yield (path, decoded_values) for each allowlisted attributes_array path.
+def decode_attributes_array_value(key: str, raw: Any) -> list[Any] | str | None:
+    """Decode a `toJSONString(...:Array(JSON))` payload for an allowlisted path.
 
-    Consumed keys are popped from `row` so callers can iterate the rest safely.
-    Empty arrays (the default for missing JSON paths) are skipped.
+    Returns None if `raw` is not a string (caller should skip). If `key` is
+    in `ATTRIBUTES_ARRAY_ALLOWLIST` and `raw` looks like a JSON array (starts
+    with '['), parse it and normalize each element via
+    `transform_array_value`. Malformed JSON or non-tagged elements fall back
+    to the raw string. Otherwise return `raw` unchanged — either the JSON
+    path resolved to a non-array or `key` isn't an attributes_array path at
+    all. Callers should still skip empty list results.
     """
-    for path in ATTRIBUTES_ARRAY_ALLOWLIST:
-        raw = row.pop(path, None)
-        if not raw:
-            continue
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError as e:
-            raise BadSnubaRPCRequestException(
-                f"attributes_array path {path!r} is not valid JSON: {e}"
-            ) from e
-        if not isinstance(parsed, list):
-            raise BadSnubaRPCRequestException(
-                f"attributes_array path {path!r} must decode to a list, got {type(parsed).__name__}"
-            )
-        if not parsed:
-            continue
-        yield path, [transform_array_value(elem) for elem in parsed]
+    if not isinstance(raw, str):
+        return None
+    if key not in ATTRIBUTES_ARRAY_ALLOWLIST or not raw.startswith("["):
+        return raw
+    try:
+        return [transform_array_value(elem) for elem in json.loads(raw)]
+    except (json.JSONDecodeError, BadSnubaRPCRequestException):
+        return raw
 
 
 def _check_non_string_values_cannot_ignore_case(

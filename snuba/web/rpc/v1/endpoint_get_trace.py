@@ -47,7 +47,7 @@ from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     attributes_array_selected_expressions,
-    pop_attributes_array_paths,
+    decode_attributes_array_value,
     project_id_and_org_conditions,
     timestamp_in_range_condition,
     treeify_or_and_conditions,
@@ -503,13 +503,17 @@ def _process_results(
                     value=attribute_value,
                 )
 
-            for array_key, array_value in pop_attributes_array_paths(row):
-                add_attribute(array_key, array_value)
-
             for row_key, row_value in row.items():
+                if row_value is None:
+                    continue
                 if isinstance(row_value, dict):
                     for column_key, column_value in row_value.items():
                         add_attribute(column_key, column_value)
+                elif isinstance(row_value, str):
+                    decoded = decode_attributes_array_value(row_key, row_value)
+                    if decoded is None or (isinstance(decoded, list) and not decoded):
+                        continue
+                    add_attribute(row_key, decoded)
                 else:
                     add_attribute(row_key, row_value)
 

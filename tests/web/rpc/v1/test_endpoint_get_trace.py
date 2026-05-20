@@ -37,6 +37,7 @@ from snuba.web.rpc.v1.endpoint_get_trace import (
     APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
     EndpointGetTrace,
     _build_query,
+    _process_results,
     _value_to_attribute,
 )
 from tests.base import BaseApiTest
@@ -487,6 +488,89 @@ def get_span_id(span: TraceItem) -> str:
             signed=False,
         )
     )[2:].rjust(16, "0")
+
+
+def test_process_results_leaves_explicit_attribute_allowlist_collision_as_string() -> None:
+    processed_results = _process_results(
+        [
+            {
+                "id": "abc123",
+                "timestamp": 1778785776.0,
+                "gen_ai.input.messages": '{"location": "Paris"}',
+            }
+        ],
+    )
+
+    item = processed_results.items[0]
+    attribute = next(attr for attr in item.attributes if attr.key.name == "gen_ai.input.messages")
+    assert attribute.key.type == AttributeKey.Type.TYPE_STRING
+    assert attribute.value.val_str == '{"location": "Paris"}'
+
+
+def test_process_results_skips_none_array_attribute() -> None:
+    processed_results = _process_results(
+        [
+            {
+                "id": "abc123",
+                "timestamp": 1778785776.0,
+                "gen_ai.input.messages": None,
+            }
+        ],
+    )
+
+    item = processed_results.items[0]
+    assert not any(a.key.name == "gen_ai.input.messages" for a in item.attributes)
+
+
+def test_process_results_falls_back_to_string_on_malformed_array_json() -> None:
+    processed_results = _process_results(
+        [
+            {
+                "id": "abc123",
+                "timestamp": 1778785776.0,
+                "gen_ai.input.messages": "[not valid json",
+            }
+        ],
+    )
+
+    item = processed_results.items[0]
+    attribute = next(attr for attr in item.attributes if attr.key.name == "gen_ai.input.messages")
+    assert attribute.key.type == AttributeKey.Type.TYPE_STRING
+    assert attribute.value.val_str == "[not valid json"
+
+
+def test_process_results_falls_back_to_string_on_untagged_array_elements() -> None:
+    processed_results = _process_results(
+        [
+            {
+                "id": "abc123",
+                "timestamp": 1778785776.0,
+                "gen_ai.input.messages": '["gamma", "delta"]',
+            }
+        ],
+    )
+
+    item = processed_results.items[0]
+    attribute = next(attr for attr in item.attributes if attr.key.name == "gen_ai.input.messages")
+    assert attribute.key.type == AttributeKey.Type.TYPE_STRING
+    assert attribute.value.val_str == '["gamma", "delta"]'
+
+
+def test_process_results_keeps_empty_string_attribute() -> None:
+    processed_results = _process_results(
+        [
+            {
+                "id": "abc123",
+                "timestamp": 1778785776.0,
+                "sentry.parent_span_id": "",
+            }
+        ],
+    )
+
+    item = processed_results.items[0]
+    attribute = next(attr for attr in item.attributes if attr.key.name == "sentry.parent_span_id")
+    assert attribute.key.type == AttributeKey.Type.TYPE_STRING
+    assert attribute.value.val_str == ""
 
 
 @pytest.mark.eap
