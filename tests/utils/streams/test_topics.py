@@ -12,7 +12,6 @@ def test_valid_topics() -> None:
             # These topics are not in use but have not yet been removed from snuba's codebase
             deprecated_topics = (
                 Topic.CDC,
-                Topic.SPANS,
                 Topic.EAP_SPANS_COMMIT_LOG,
                 Topic.SUBSCRIPTION_SCHEDULED_EAP_SPANS,
                 Topic.SUBSCRIPTION_RESULTS_EAP_SPANS,

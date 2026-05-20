@@ -20,7 +20,6 @@ from snuba.migrations.group_loader import (
     ReplaysLoader,
     SearchIssuesLoader,
     SessionsLoader,
-    SpansLoader,
     SystemLoader,
     TestMigrationLoader,
     TransactionsLoader,
@@ -42,7 +41,6 @@ class MigrationGroup(Enum):
     GENERIC_METRICS = "generic_metrics"
     TEST_MIGRATION = "test_migration"
     SEARCH_ISSUES = "search_issues"
-    SPANS = "spans"
     EVENTS_ANALYTICS_PLATFORM = "events_analytics_platform"
     GROUP_ATTRIBUTES = "group_attributes"
     PROFILE_CHUNKS = "profile_chunks"
@@ -162,11 +160,6 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
         storage_sets_keys={
             StorageSetKey.SEARCH_ISSUES,
         },
-        readiness_state=ReadinessState.COMPLETE,
-    ),
-    MigrationGroup.SPANS: _MigrationGroup(
-        loader=SpansLoader(),
-        storage_sets_keys={StorageSetKey.SPANS},
         readiness_state=ReadinessState.COMPLETE,
     ),
     MigrationGroup.EVENTS_ANALYTICS_PLATFORM: _MigrationGroup(
