@@ -64,6 +64,7 @@ pub struct BLQRouter<Next, ProduceStrategy> {
 
     // We have to keep this around ourself bc strategies::produce::Produce didn't define their lifetimes well
     _concurrency: Option<ConcurrencyConfig>,
+    _consumer_group: String,
 }
 
 impl<Next> BLQRouter<Next, Produce<CommitOffsets>>
@@ -76,7 +77,12 @@ where
     /// The stale threshold and static friction are read at runtime from sentry-options
     /// (`consumer.blq_stale_threshold_seconds`, `consumer.blq_static_friction_seconds`)
     /// so they can be tuned without a restart.
-    pub fn new(next_step: Next, blq_producer_config: KafkaConfig, blq_topic: Topic) -> Self {
+    pub fn new(
+        next_step: Next,
+        blq_producer_config: KafkaConfig,
+        blq_topic: Topic,
+        consumer_group: String,
+    ) -> Self {
         let concurrency = ConcurrencyConfig::new(10);
         let blq_producer = Produce::new(
             CommitOffsets::new(Duration::from_millis(250)),
@@ -84,7 +90,7 @@ where
             &concurrency,
             TopicOrPartition::Topic(blq_topic),
         );
-        let mut router = Self::new_with_strategy(next_step, blq_producer);
+        let mut router = Self::new_with_strategy(next_step, blq_producer, consumer_group);
         router._concurrency = Some(concurrency);
         router
     }
@@ -132,7 +138,11 @@ where
         }
     }
 
-    fn new_with_strategy(next_step: Next, blq_producer: ProduceStrategy) -> Self {
+    fn new_with_strategy(
+        next_step: Next,
+        blq_producer: ProduceStrategy,
+        consumer_group: String,
+    ) -> Self {
         let flag = Self::is_enabled();
         Self {
             next_step,
@@ -141,6 +151,7 @@ where
             blq_active: flag,
             producer: blq_producer,
             _concurrency: None,
+            _consumer_group: consumer_group,
         }
     }
 }
@@ -328,7 +339,11 @@ mod tests {
             ("snuba", "consumer.blq_static_friction_seconds", json!(0)),
         ])
         .unwrap();
-        let mut router = BLQRouter::new_with_strategy(MockStrategy::new(), MockStrategy::new());
+        let mut router = BLQRouter::new_with_strategy(
+            MockStrategy::new(),
+            MockStrategy::new(),
+            "test_consumer_group".to_string(),
+        );
         // consuming messages as normal
         for _ in 0..10 {
             router.submit(make_message(Utc::now())).unwrap();
@@ -373,7 +388,11 @@ mod tests {
             ("snuba", "consumer.blq_static_friction_seconds", json!(0)),
         ])
         .unwrap();
-        let mut router = BLQRouter::new_with_strategy(MockStrategy::new(), MockStrategy::new());
+        let mut router = BLQRouter::new_with_strategy(
+            MockStrategy::new(),
+            MockStrategy::new(),
+            "test_consumer_group".to_string(),
+        );
         // backlog of 10 stale messages
         for _ in 0..10 {
             router
@@ -399,7 +418,11 @@ mod tests {
         // When the feature flag is not set, stale messages should pass through
         // to next_step instead of being routed to BLQ
         init_config();
-        let mut router = BLQRouter::new_with_strategy(MockStrategy::new(), MockStrategy::new());
+        let mut router = BLQRouter::new_with_strategy(
+            MockStrategy::new(),
+            MockStrategy::new(),
+            "test_consumer_group".to_string(),
+        );
 
         for _ in 0..5 {
             router
@@ -424,7 +447,11 @@ mod tests {
             ("snuba", "consumer.blq_static_friction_seconds", json!(0)),
         ])
         .unwrap();
-        let mut router = BLQRouter::new_with_strategy(MockStrategy::new(), MockStrategy::new());
+        let mut router = BLQRouter::new_with_strategy(
+            MockStrategy::new(),
+            MockStrategy::new(),
+            "test_consumer_group".to_string(),
+        );
 
         for _ in 0..5 {
             router
