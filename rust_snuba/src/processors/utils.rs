@@ -26,8 +26,8 @@ const PAYLOAD_DATETIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.fZ";
 /// days before `now`.
 pub fn out_of_valid_interval_secs(ts: DateTime<Utc>, now: DateTime<Utc>) -> bool {
     let offset_sec = ts.signed_duration_since(now).num_seconds();
-    offset_sec > INVALID_TIMESTAMP_FUTURE_INTERVAL_SECONDS
-        || offset_sec < -INVALID_TIMESTAMP_PAST_INTERVAL_SECONDS
+    !(-INVALID_TIMESTAMP_PAST_INTERVAL_SECONDS..=INVALID_TIMESTAMP_FUTURE_INTERVAL_SECONDS)
+        .contains(&offset_sec)
 }
 
 pub fn get_drop_invalid_timestamps_enabled() -> bool {
