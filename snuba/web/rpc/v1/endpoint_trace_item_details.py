@@ -31,7 +31,7 @@ from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     attributes_array_selected_expressions,
     base_conditions_and,
-    pop_attributes_array_paths,
+    decode_attributes_array_value,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
@@ -184,8 +184,13 @@ def _convert_results(
             continue
         attrs.append(TraceItemDetailsAttribute(name=k, value=AttributeValue(val_double=v)))
 
-    for path, values in pop_attributes_array_paths(row):
-        attrs.append(TraceItemDetailsAttribute(name=path, value=convert_to_attribute_value(values)))
+    for key, value in row.items():
+        if not isinstance(value, str):
+            continue
+        decoded = decode_attributes_array_value(value)
+        if isinstance(decoded, list) and not decoded:
+            continue
+        attrs.append(TraceItemDetailsAttribute(name=key, value=convert_to_attribute_value(decoded)))
 
     return item_id, timestamp, attrs
 
