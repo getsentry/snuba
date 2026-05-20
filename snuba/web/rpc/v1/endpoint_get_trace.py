@@ -504,6 +504,8 @@ def _process_results(
                 )
 
             for row_key, row_value in row.items():
+                if row_value is None:
+                    continue
                 if isinstance(row_value, dict):
                     for column_key, column_value in row_value.items():
                         add_attribute(column_key, column_value)
