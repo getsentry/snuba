@@ -556,6 +556,23 @@ def test_process_results_falls_back_to_string_on_untagged_array_elements() -> No
     assert attribute.value.val_str == '["gamma", "delta"]'
 
 
+def test_process_results_keeps_empty_string_attribute() -> None:
+    processed_results = _process_results(
+        [
+            {
+                "id": "abc123",
+                "timestamp": 1778785776.0,
+                "sentry.parent_span_id": "",
+            }
+        ],
+    )
+
+    item = processed_results.items[0]
+    attribute = next(attr for attr in item.attributes if attr.key.name == "sentry.parent_span_id")
+    assert attribute.key.type == AttributeKey.Type.TYPE_STRING
+    assert attribute.value.val_str == ""
+
+
 @pytest.mark.eap
 @pytest.mark.redis_db
 class TestGetTracePagination(BaseApiTest):

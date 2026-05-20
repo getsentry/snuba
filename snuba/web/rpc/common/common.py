@@ -208,15 +208,15 @@ def attributes_array_selected_expressions() -> list[SelectedExpression]:
 def decode_attributes_array_value(key: str, raw: Any) -> list[Any] | str | None:
     """Decode a `toJSONString(...:Array(JSON))` payload for an allowlisted path.
 
-    Returns None if `raw` is empty or not a string (caller should skip). If
-    `key` is in `ATTRIBUTES_ARRAY_ALLOWLIST` and `raw` looks like a JSON array
-    (starts with '['), parse it and normalize each element via
+    Returns None if `raw` is not a string (caller should skip). If `key` is
+    in `ATTRIBUTES_ARRAY_ALLOWLIST` and `raw` looks like a JSON array (starts
+    with '['), parse it and normalize each element via
     `transform_array_value`. Malformed JSON or non-tagged elements fall back
     to the raw string. Otherwise return `raw` unchanged — either the JSON
     path resolved to a non-array or `key` isn't an attributes_array path at
     all. Callers should still skip empty list results.
     """
-    if not isinstance(raw, str) or not raw:
+    if not isinstance(raw, str):
         return None
     if key not in ATTRIBUTES_ARRAY_ALLOWLIST or not raw.startswith("["):
         return raw
