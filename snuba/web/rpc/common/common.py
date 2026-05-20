@@ -175,7 +175,11 @@ ATTRIBUTES_ARRAY_ALLOWLIST: tuple[str, ...] = (
     "gen_ai.output.messages",
     "gen_ai.request.messages",
     "gen_ai.response.text",
+    "gen_ai.system_instructions",
     "gen_ai.tool.definitions",
+    "gen_ai.response.object",
+    "gen_ai.tool.call.arguments",
+    "gen_ai.tool.input",
 )
 
 
