@@ -205,14 +205,18 @@ def attributes_array_selected_expressions() -> list[SelectedExpression]:
     ]
 
 
-def decode_attributes_array_value(raw: str) -> list[Any] | str:
-    """Decode a `toJSONString(...:Array(JSON))` payload by value shape.
+def decode_attributes_array_value(key: str, raw: str) -> list[Any] | str:
+    """Decode a `toJSONString(...:Array(JSON))` payload for an allowlisted path.
 
-    Strings starting with '[' are parsed as JSON arrays with each element
-    normalized via `transform_array_value`. Anything else (the JSON path
-    resolved to a non-array value) is returned unchanged so callers can fall
-    back to a plain string attribute. Callers should skip empty list results.
+    If `key` is in `ATTRIBUTES_ARRAY_ALLOWLIST` and `raw` looks like a JSON
+    array (starts with '['), parse it and normalize each element via
+    `transform_array_value`. Otherwise return `raw` unchanged — either the
+    JSON path resolved to a non-array (fall back to a string attribute) or
+    `key` isn't an attributes_array path at all. Callers should still skip
+    empty list results.
     """
+    if key not in ATTRIBUTES_ARRAY_ALLOWLIST:
+        return raw
     if not raw.startswith("["):
         return raw
     return [transform_array_value(elem) for elem in json.loads(raw)]

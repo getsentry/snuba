@@ -508,7 +508,7 @@ def _process_results(
                     for column_key, column_value in row_value.items():
                         add_attribute(column_key, column_value)
                 elif isinstance(row_value, str):
-                    decoded = decode_attributes_array_value(row_value)
+                    decoded = decode_attributes_array_value(row_key, row_value)
                     if isinstance(decoded, list) and not decoded:
                         continue
                     add_attribute(row_key, decoded)
