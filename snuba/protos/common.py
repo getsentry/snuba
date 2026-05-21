@@ -62,19 +62,40 @@ PROTO_TYPE_TO_ATTRIBUTE_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]]
 }
 
 
-def _build_deprecated_attributes() -> dict[str, set[str]]:
-    current_to_deprecated: dict[str, set[str]] = defaultdict(set)
+def _resolve_canonical(name: str) -> str:
+    visited: set[str] = set()
+    current = name
+    while current in ATTRIBUTE_METADATA:
+        meta = ATTRIBUTE_METADATA[current]
+        if not meta.deprecation or not meta.deprecation.replacement:
+            return current
+        if current in visited:
+            return current
+        visited.add(current)
+        current = meta.deprecation.replacement
+    return current
+
+
+def _build_deprecated_attributes() -> dict[str, list[str]]:
+    groups: dict[str, set[str]] = defaultdict(set)
     for name, metadata in ATTRIBUTE_METADATA.items():
         if metadata.deprecation and metadata.deprecation.replacement:
-            replacement = metadata.deprecation.replacement
-            deprecated = {name}
-            if metadata.aliases:
-                deprecated.update(metadata.aliases)
-            current_to_deprecated[replacement].update(deprecated)
-    return current_to_deprecated
+            canonical = _resolve_canonical(name)
+            groups[canonical].add(name)
+
+    result: dict[str, list[str]] = {}
+    for canonical, deprecated_names in groups.items():
+        full_group = {canonical} | deprecated_names
+        for member in full_group:
+            others = full_group - {member}
+            if member == canonical:
+                result[member] = sorted(others)
+            else:
+                result[member] = [canonical] + sorted(others - {canonical})
+    return result
 
 
-ATTRIBUTES_TO_COALESCE: dict[str, set[str]] = _build_deprecated_attributes()
+ATTRIBUTES_TO_COALESCE: dict[str, list[str]] = _build_deprecated_attributes()
 
 
 def _build_label_mapping_key(attribute_key: AttributeKey) -> str:
