@@ -70,9 +70,9 @@ where
     fn is_enabled(consumer_group: &str) -> bool {
         options("snuba")
             .ok()
-            .and_then(|o| o.get("consumer.blq_enabled").ok())
+            .and_then(|o| o.get("consumer.blq_enabled_2").ok())
             .and_then(|v| v.as_str().map(str::to_owned))
-            .map(|s| s != "" && s == consumer_group)
+            .map(|s| !s.is_empty() && s == consumer_group)
             .unwrap_or(false)
     }
 
@@ -116,7 +116,7 @@ where
         let new_flag = Self::is_enabled(&self.consumer_group);
         if !self.prev_flag_state && new_flag {
             tracing::info!(
-                "consumer.blq_enabled flipped on at runtime; exiting consumer to flush downstream state"
+                "consumer.blq_enabled_2 flipped on at runtime; exiting consumer to flush downstream state"
             );
             (self.exit_fn)();
             return Ok(None);
@@ -142,7 +142,7 @@ where
         let is_stale = elapsed > stale_threshold;
         if !is_stale {
             self.blq_active = false;
-            return self.next_step.submit(message);
+            self.next_step.submit(message)
         } else {
             self.producer.submit(message)
         }
@@ -254,7 +254,7 @@ mod tests {
 
         set_override(
             "snuba",
-            "consumer.blq_enabled",
+            "consumer.blq_enabled_2",
             json!("test_consumer_group"),
         );
 
@@ -271,7 +271,7 @@ mod tests {
         let _guard = override_options(&[
             (
                 "snuba",
-                "consumer.blq_enabled",
+                "consumer.blq_enabled_2",
                 json!("test_consumer_group"),
             ),
             ("snuba", "consumer.blq_stale_threshold_seconds", json!(10)),
