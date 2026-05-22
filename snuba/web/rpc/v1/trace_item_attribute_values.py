@@ -25,7 +25,7 @@ from snuba.query.conditions import combine_or_conditions
 from snuba.query.data_source.simple import Entity, LogicalDataSource
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column
-from snuba.query.expressions import Expression
+from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -128,10 +128,20 @@ def _build_query(
                 name="attr_value",
                 expression=f.distinct(column(attr_value.alias, alias="attr_value")),
             ),
+            SelectedExpression(
+                name="count()",
+                expression=FunctionCall(
+                    alias="count()",
+                    function_name="count",
+                    parameters=(),
+                ),
+            ),
         ],
         order_by=[
+            OrderBy(direction=OrderByDirection.DESC, expression=column("count()")),
             OrderBy(direction=OrderByDirection.ASC, expression=column("attr_value")),
         ],
+        groupby=[column("attr_value")],
         limit=request.limit,
         offset=(request.page_token.offset if request.page_token.HasField("offset") else 0),
     )
@@ -184,6 +194,7 @@ class AttributeValuesRequest(
         if in_msg.key.name == "sentry.item_id" and in_msg.value_substring_match:
             return TraceItemAttributeValuesResponse(
                 values=[in_msg.value_substring_match],
+                counts=[1],
                 page_token=None,
             )
         in_msg.limit = in_msg.limit or 1000
@@ -193,14 +204,19 @@ class AttributeValuesRequest(
             request=snuba_request,
             timer=self._timer,
         )
-        values = [r["attr_value"] for r in res.result.get("data", [])]
+        values, counts = [], []
+        for row in res.result.get("data", []):
+            values.append(row["attr_value"])
+            counts.append(row.get("count()", 0))
         if len(values) == 0:
             return TraceItemAttributeValuesResponse(
                 values=values,
+                counts=counts,
                 page_token=None,
             )
         return TraceItemAttributeValuesResponse(
             values=values,
+            counts=counts,
             page_token=(
                 PageToken(offset=in_msg.page_token.offset + len(values))
                 if in_msg.page_token.HasField("offset") or len(values) == 0
