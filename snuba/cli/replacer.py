@@ -57,6 +57,17 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
     help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
 @click.option("--log-level", help="Logging level to use.")
+@click.option(
+    "--health-check-file",
+    default=None,
+    type=str,
+    help="Arroyo will touch this file at intervals to indicate health. If not provided, no health check is performed.",
+)
+@click.option(
+    "--max-poll-interval-ms",
+    type=int,
+    default=30000,
+)
 def replacer(
     *,
     replacements_topic: Optional[str],
@@ -68,6 +79,8 @@ def replacer(
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
     log_level: Optional[str] = None,
+    health_check_file: Optional[str] = None,
+    max_poll_interval_ms: int = 30000,
 ) -> None:
     from arroyo import Topic, configure_metrics
     from arroyo.backends.kafka import KafkaConsumer
@@ -97,6 +110,12 @@ def replacer(
 
     configure_metrics(StreamMetricsAdapter(metrics))
 
+    consumer_config = {
+        "max.poll.interval.ms": max_poll_interval_ms,
+    }
+    if max_poll_interval_ms < 45000:
+        consumer_config["session.timeout.ms"] = max_poll_interval_ms
+
     replacer = StreamProcessor(
         KafkaConsumer(
             build_kafka_consumer_configuration(
@@ -107,11 +126,13 @@ def replacer(
                 strict_offset_reset=not no_strict_offset_reset,
                 queued_max_messages_kbytes=queued_max_messages_kbytes,
                 queued_min_messages=queued_min_messages,
+                override_params=consumer_config,
             ),
         ),
         Topic(replacements_topic),
         ReplacerStrategyFactory(
             worker=ReplacerWorker(storage, consumer_group, metrics=metrics),
+            health_check_file=health_check_file,
         ),
         ONCE_PER_SECOND,
     )

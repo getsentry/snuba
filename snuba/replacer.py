@@ -26,6 +26,7 @@ from arroyo.processing.strategies.abstract import (
     ProcessingStrategy,
     ProcessingStrategyFactory,
 )
+from arroyo.processing.strategies.healthcheck import Healthcheck
 from arroyo.types import BrokerValue, Commit, Message, Partition
 
 from snuba import settings
@@ -288,8 +289,10 @@ class ReplacerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
     def __init__(
         self,
         worker: ReplacerWorker,
+        health_check_file: Optional[str] = None,
     ) -> None:
         self.__worker = worker
+        self.__health_check_file = health_check_file
 
     def create_with_partitions(
         self,
@@ -303,7 +306,12 @@ class ReplacerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
 
         commit_offsets: ProcessingStrategy[Any] = CommitOffsets(commit)
 
-        return RunTask(processing_func, commit_offsets)
+        strategy: ProcessingStrategy[KafkaPayload] = RunTask(processing_func, commit_offsets)
+
+        if self.__health_check_file is not None:
+            strategy = Healthcheck(self.__health_check_file, strategy)
+
+        return strategy
 
 
 class ReplacerWorker:

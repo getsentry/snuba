@@ -9,6 +9,7 @@ from unittest import mock
 import pytest
 import simplejson as json
 from arroyo.backends.kafka import KafkaPayload
+from arroyo.processing.strategies.healthcheck import Healthcheck
 from arroyo.types import BrokerValue, Message, Partition, Topic
 
 from snuba import replacer, settings
@@ -423,3 +424,14 @@ class TestReplacer:
             # exclude_groups from project setter, start_merge from group setter
             {ReplacementType.EXCLUDE_GROUPS, ReplacementType.START_MERGE},
         )
+
+    def test_replacer_strategy_factory_wraps_healthcheck(self) -> None:
+        worker = mock.Mock()
+        factory = replacer.ReplacerStrategyFactory(
+            worker=worker,
+            health_check_file="/tmp/health.txt",
+        )
+
+        strategy = factory.create_with_partitions(mock.Mock(), {})
+
+        assert isinstance(strategy, Healthcheck)
