@@ -32,10 +32,12 @@ from snuba import state
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.settings import ENABLE_TRACE_PAGINATION_DEFAULT
+from snuba.web.rpc.common.common import ATTRIBUTES_ARRAY_ALLOWLIST
 from snuba.web.rpc.v1.endpoint_get_trace import (
     APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
     EndpointGetTrace,
     _build_query,
+    _process_results,
     _value_to_attribute,
 )
 from tests.base import BaseApiTest
@@ -128,6 +130,9 @@ def get_attributes(
     for key, value in span.attributes.items():
         value_type = value.WhichOneof("value")
         if not value_type:
+            continue
+        if value_type == "array_value" and key not in ATTRIBUTES_ARRAY_ALLOWLIST:
+            # bulk get_trace only surfaces allowlisted attributes_array paths
             continue
         attribute_key = AttributeKey(
             name=key,
@@ -366,7 +371,7 @@ class TestGetTrace(BaseApiTest):
 
         query = _build_query(message, item)
 
-        assert query.get_final() == True
+        assert query.get_final()
 
         state.set_config(
             APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
@@ -375,7 +380,7 @@ class TestGetTrace(BaseApiTest):
 
         query = _build_query(message, item)
 
-        assert query.get_final() == False
+        assert not query.get_final()
 
     def test_with_logs(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
@@ -485,6 +490,89 @@ def get_span_id(span: TraceItem) -> str:
     )[2:].rjust(16, "0")
 
 
+def test_process_results_leaves_explicit_attribute_allowlist_collision_as_string() -> None:
+    processed_results = _process_results(
+        [
+            {
+                "id": "abc123",
+                "timestamp": 1778785776.0,
+                "gen_ai.input.messages": '{"location": "Paris"}',
+            }
+        ],
+    )
+
+    item = processed_results.items[0]
+    attribute = next(attr for attr in item.attributes if attr.key.name == "gen_ai.input.messages")
+    assert attribute.key.type == AttributeKey.Type.TYPE_STRING
+    assert attribute.value.val_str == '{"location": "Paris"}'
+
+
+def test_process_results_skips_none_array_attribute() -> None:
+    processed_results = _process_results(
+        [
+            {
+                "id": "abc123",
+                "timestamp": 1778785776.0,
+                "gen_ai.input.messages": None,
+            }
+        ],
+    )
+
+    item = processed_results.items[0]
+    assert not any(a.key.name == "gen_ai.input.messages" for a in item.attributes)
+
+
+def test_process_results_falls_back_to_string_on_malformed_array_json() -> None:
+    processed_results = _process_results(
+        [
+            {
+                "id": "abc123",
+                "timestamp": 1778785776.0,
+                "gen_ai.input.messages": "[not valid json",
+            }
+        ],
+    )
+
+    item = processed_results.items[0]
+    attribute = next(attr for attr in item.attributes if attr.key.name == "gen_ai.input.messages")
+    assert attribute.key.type == AttributeKey.Type.TYPE_STRING
+    assert attribute.value.val_str == "[not valid json"
+
+
+def test_process_results_falls_back_to_string_on_untagged_array_elements() -> None:
+    processed_results = _process_results(
+        [
+            {
+                "id": "abc123",
+                "timestamp": 1778785776.0,
+                "gen_ai.input.messages": '["gamma", "delta"]',
+            }
+        ],
+    )
+
+    item = processed_results.items[0]
+    attribute = next(attr for attr in item.attributes if attr.key.name == "gen_ai.input.messages")
+    assert attribute.key.type == AttributeKey.Type.TYPE_STRING
+    assert attribute.value.val_str == '["gamma", "delta"]'
+
+
+def test_process_results_keeps_empty_string_attribute() -> None:
+    processed_results = _process_results(
+        [
+            {
+                "id": "abc123",
+                "timestamp": 1778785776.0,
+                "sentry.parent_span_id": "",
+            }
+        ],
+    )
+
+    item = processed_results.items[0]
+    attribute = next(attr for attr in item.attributes if attr.key.name == "sentry.parent_span_id")
+    assert attribute.key.type == AttributeKey.Type.TYPE_STRING
+    assert attribute.value.val_str == ""
+
+
 @pytest.mark.eap
 @pytest.mark.redis_db
 class TestGetTracePagination(BaseApiTest):
@@ -540,7 +628,7 @@ class TestGetTracePagination(BaseApiTest):
                     items_received.append(item.id)
             assert curr_response_len <= mylimit
             if curr_response_len < mylimit:
-                assert response.page_token.end_pagination == True
+                assert response.page_token.end_pagination
             if response.page_token.end_pagination:
                 break
             message.page_token.CopyFrom(response.page_token)
@@ -609,7 +697,7 @@ class TestGetTracePagination(BaseApiTest):
                         items_received.append(item.id)
                 assert curr_response_len <= configmax
                 if curr_response_len < configmax:
-                    assert response.page_token.end_pagination == True
+                    assert response.page_token.end_pagination
                 if response.page_token.end_pagination:
                     break
                 message.page_token.CopyFrom(response.page_token)

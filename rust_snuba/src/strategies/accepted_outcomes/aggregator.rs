@@ -1,17 +1,20 @@
 use std::collections::{BTreeMap, HashMap};
 use std::time::{Duration, Instant};
 
+use chrono::{DateTime, Utc};
 use prost::Message as ProstMessage;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::counter;
 use sentry_arroyo::processing::strategies::{
     merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
     StrategyError, SubmitError,
 };
 use sentry_arroyo::types::{InnerMessage, Message, Partition};
 use sentry_arroyo::utils::timing::Deadline;
-use sentry_protos::snuba::v1::TraceItem;
+use sentry_protos::snuba::v1::{TraceItem, TraceItemType};
 
-use crate::types::{AggregatedOutcomesBatch, BucketKey};
+use crate::processors::utils::{get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs};
+use crate::types::{item_type_name, AggregatedOutcomesBatch, BucketKey, ItemDedupKey};
 
 #[derive(Debug, Default)]
 struct TraceItemOutcome {
@@ -79,6 +82,51 @@ impl<TNext> OutcomesAggregator<TNext> {
         }
     }
 
+    fn is_duplicate(&mut self, trace_item: &TraceItem) -> bool {
+        let org_id = trace_item.organization_id;
+        let project_id = trace_item.project_id;
+        let item_type =
+            TraceItemType::try_from(trace_item.item_type).unwrap_or(TraceItemType::Unspecified);
+
+        if item_type != TraceItemType::Span {
+            return false;
+        }
+
+        let timestamp = trace_item
+            .timestamp
+            .as_ref()
+            .map(|t| t.seconds as u32)
+            .unwrap_or(0);
+
+        let trace_id = uuid::Uuid::try_parse(&trace_item.trace_id)
+            .map(|u| *u.as_bytes())
+            .unwrap_or([0u8; 16]);
+
+        if let Ok(item_id) = <[u8; 16]>::try_from(trace_item.item_id.as_slice()) {
+            let dedup_key = ItemDedupKey {
+                org_id,
+                project_id,
+                timestamp,
+                trace_id,
+                item_id,
+            };
+            let is_dup = self.batch.record_if_duplicate(item_type, dedup_key);
+            if is_dup {
+                let item_type_str = item_type_name(item_type);
+                let item_id_uuid = uuid::Uuid::from_bytes(item_id);
+                tracing::info!(
+                    "duplicate {} trace: org_id:{}, project_id:{}, item_id:{}",
+                    item_type_str,
+                    org_id,
+                    project_id,
+                    item_id_uuid
+                );
+            }
+            return is_dup;
+        }
+        false
+    }
+
     fn flush(&mut self) -> Result<(), StrategyError>
     where
         TNext: ProcessingStrategy<AggregatedOutcomesBatch>,
@@ -96,19 +144,27 @@ impl<TNext> OutcomesAggregator<TNext> {
             .map(|(partition, offset)| (*partition, offset + 1))
             .collect();
 
+        let category_metrics = batch.category_metrics.clone();
+        let duplicate_item_counts = batch.duplicate_item_count.clone();
+        batch.record_message_latency("flush_broker_latency");
         let message = Message::new_any_message(batch, committable);
-
         match self.next_step.submit(message) {
             Ok(()) => {
                 let now = Instant::now();
                 let seconds = (now - self.last_flush).as_secs_f64();
-                tracing::info!(
-                    "flushed {} buckets after {} seconds, with committable {:?}",
-                    num_buckets,
-                    seconds,
-                    latest_offsets
-                );
                 self.last_flush = now;
+
+                tracing::info!("flushed {} buckets after {} seconds", num_buckets, seconds);
+                for (item_type, count) in duplicate_item_counts {
+                    let item_type_str = item_type_name(item_type);
+                    counter!("accepted_outcomes.duplicate_items", count, "item_type" => item_type_str.as_str());
+                }
+                for (category, m) in category_metrics {
+                    let cat_str = category.to_string();
+                    counter!("accepted_outcomes.messages_seen", m.messages_seen, "data_category" => cat_str.as_str());
+                    counter!("accepted_outcomes.total_quantity", m.total_quantity, "data_category" => cat_str.as_str());
+                    counter!("accepted_outcomes.bucket_count", m.bucket_count, "data_category" => cat_str.as_str());
+                }
                 Ok(())
             }
             Err(SubmitError::MessageRejected(rejected)) => {
@@ -134,6 +190,7 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
                 Err(SubmitError::MessageRejected(MessageRejected {
                     message: carried_message,
                 })) => {
+                    counter!("accepted_outcomes.got_backpressure", 1, "strategy_name" => "outcomes_aggregator");
                     self.message_carried_over = Some(carried_message);
                 }
                 Err(SubmitError::InvalidMessage(e)) => {
@@ -163,6 +220,9 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
 
         let partition = broker_msg.partition;
         let broker_offset = broker_msg.offset;
+        let broker_timestamp = broker_msg.timestamp;
+
+        self.batch.add_broker_timestamp(broker_timestamp);
 
         self.latest_offsets
             .entry(partition)
@@ -189,13 +249,30 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
             }
         };
 
+        let event_timestamp = trace_item
+            .timestamp
+            .as_ref()
+            .and_then(|ts| DateTime::from_timestamp(ts.seconds, 0));
+        if let Some(event_ts) = event_timestamp {
+            let now = Utc::now();
+            if get_drop_invalid_timestamps_enabled() && out_of_valid_interval_secs(event_ts, now) {
+                counter!("accepted_outcomes.dropped_out_of_range_timestamp", 1);
+                return Ok(());
+            }
+        }
+
         let ts_secs = trace_item
             .received
             .as_ref()
             .map(|t| t.seconds as u64)
             .unwrap_or(0);
+
         let org_id = trace_item.organization_id;
         let project_id = trace_item.project_id;
+
+        if self.is_duplicate(&trace_item) {
+            return Ok(());
+        }
 
         let TraceItemOutcomes(outcomes) = TraceItemOutcomes::from_trace_item(trace_item);
         for item in outcomes {
@@ -249,6 +326,8 @@ mod tests {
     use prost::Message as ProstMessage;
     use prost_types::Timestamp;
     use sentry_arroyo::types::{Partition, Topic};
+    use sentry_options::init_with_schemas;
+    use sentry_protos::snuba::v1::TraceItemType;
     use sentry_protos::snuba::v1::{CategoryCount, Outcomes};
 
     struct Noop {
@@ -439,6 +518,7 @@ mod tests {
 
     #[test]
     fn poll_flushes_when_max_batch_size_reached() {
+        init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap();
         let mut aggregator = OutcomesAggregator::new(
             Noop { last_message: None },
             1,
@@ -464,6 +544,7 @@ mod tests {
 
     #[test]
     fn submit_returns_backpressure_when_message_carried_over() {
+        init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap();
         struct RejectOnce {
             rejected: bool,
         }
@@ -531,6 +612,7 @@ mod tests {
 
     #[test]
     fn join_honors_timeout_when_message_stays_carried_over() {
+        init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap();
         struct AlwaysReject;
         impl ProcessingStrategy<AggregatedOutcomesBatch> for AlwaysReject {
             fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
@@ -568,5 +650,165 @@ mod tests {
         let commit = aggregator.join(Some(Duration::from_millis(0))).unwrap();
         assert!(commit.is_none());
         assert!(aggregator.message_carried_over.is_some());
+    }
+
+    fn make_payload_with_item_id(
+        ts_secs: i64,
+        org_id: u64,
+        project_id: u64,
+        key_id: u64,
+        item_id: [u8; 16],
+        category_counts: &[(u32, u64)],
+    ) -> KafkaPayload {
+        let trace_item = TraceItem {
+            organization_id: org_id,
+            project_id,
+            item_id: item_id.to_vec(),
+            item_type: TraceItemType::Span.into(),
+            received: Some(Timestamp {
+                seconds: ts_secs,
+                nanos: 0,
+            }),
+            outcomes: Some(Outcomes {
+                key_id,
+                category_count: category_counts
+                    .iter()
+                    .map(|(data_category, quantity)| CategoryCount {
+                        data_category: *data_category,
+                        quantity: *quantity,
+                    })
+                    .collect(),
+            }),
+            ..Default::default()
+        };
+        let mut buf = Vec::new();
+        trace_item.encode(&mut buf).unwrap();
+        KafkaPayload::new(None, None, Some(buf))
+    }
+
+    #[test]
+    fn submit_deduplicates_same_item_id() {
+        let mut aggregator = OutcomesAggregator::new(
+            Noop { last_message: None },
+            500,
+            Duration::from_millis(5_000),
+            60,
+        );
+
+        let topic = Topic::new("snuba-items");
+        let partition = Partition::new(topic, 0);
+        let item_id: [u8; 16] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+
+        // Submit same item twice with quantity=5 each
+        for offset in [0, 1] {
+            aggregator
+                .submit(Message::new_broker_message(
+                    make_payload_with_item_id(1_700_000_000, 1, 2, 3, item_id, &[(4, 5)]),
+                    partition,
+                    offset,
+                    Utc::now(),
+                ))
+                .unwrap();
+        }
+
+        let key = BucketKey {
+            time_offset: 28_333_333,
+            org_id: 1,
+            project_id: 2,
+            key_id: 3,
+            category: 4,
+        };
+        // Should only count once (quantity=5), not twice (quantity=10)
+        assert_eq!(
+            aggregator.batch.buckets.get(&key).map(|s| s.quantity),
+            Some(5)
+        );
+    }
+
+    #[test]
+    fn submit_does_not_deduplicate_different_orgs() {
+        let mut aggregator = OutcomesAggregator::new(
+            Noop { last_message: None },
+            500,
+            Duration::from_millis(5_000),
+            60,
+        );
+
+        let topic = Topic::new("snuba-items");
+        let partition = Partition::new(topic, 0);
+        let item_id: [u8; 16] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+
+        // Submit same item_id but for different orgs
+        aggregator
+            .submit(Message::new_broker_message(
+                make_payload_with_item_id(1_700_000_000, 1, 2, 3, item_id, &[(4, 5)]),
+                partition,
+                0,
+                Utc::now(),
+            ))
+            .unwrap();
+        aggregator
+            .submit(Message::new_broker_message(
+                make_payload_with_item_id(1_700_000_000, 99, 2, 3, item_id, &[(4, 5)]),
+                partition,
+                1,
+                Utc::now(),
+            ))
+            .unwrap();
+
+        // Should have two separate buckets
+        let key_org1 = BucketKey {
+            time_offset: 28_333_333,
+            org_id: 1,
+            project_id: 2,
+            key_id: 3,
+            category: 4,
+        };
+        let key_org99 = BucketKey {
+            time_offset: 28_333_333,
+            org_id: 99,
+            project_id: 2,
+            key_id: 3,
+            category: 4,
+        };
+        assert_eq!(
+            aggregator.batch.buckets.get(&key_org1).map(|s| s.quantity),
+            Some(5)
+        );
+        assert_eq!(
+            aggregator.batch.buckets.get(&key_org99).map(|s| s.quantity),
+            Some(5)
+        );
+    }
+
+    #[test]
+    fn is_duplicate_per_item_type() {
+        let mut aggregator = OutcomesAggregator::new(
+            Noop { last_message: None },
+            500,
+            Duration::from_millis(5_000),
+            60,
+        );
+
+        let item_id: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+        let span_item = TraceItem {
+            organization_id: 1,
+            project_id: 2,
+            item_id: item_id.clone(),
+            item_type: TraceItemType::Span.into(),
+            ..Default::default()
+        };
+
+        // First time: not a duplicate
+        assert!(!aggregator.is_duplicate(&span_item));
+        // Second time: duplicate, count incremented for this item type
+        assert!(aggregator.is_duplicate(&span_item));
+        assert_eq!(
+            aggregator
+                .batch
+                .duplicate_item_count
+                .get(&TraceItemType::Span),
+            Some(&1)
+        );
     }
 }
