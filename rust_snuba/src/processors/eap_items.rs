@@ -1,5 +1,6 @@
 use anyhow::Context;
 use chrono::DateTime;
+use chrono::Datelike;
 use chrono::Utc;
 use prost::Message;
 use seq_macro::seq;
@@ -8,13 +9,32 @@ use std::collections::{BTreeMap, HashMap};
 use uuid::Uuid;
 
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::counter;
 use sentry_protos::snuba::v1::any_value::Value;
 use sentry_protos::snuba::v1::{ArrayValue, TraceItem, TraceItemType};
 
 use crate::config::ProcessorConfig;
-use crate::processors::utils::enforce_retention;
+use crate::processors::utils::{
+    enforce_retention, get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs,
+};
+use crate::runtime_config::get_str_config;
 use crate::types::CogsData;
 use crate::types::{InsertBatch, ItemTypeMetrics, KafkaMessageMetadata, TypedInsertBatch};
+
+/// Runtime config key prefix. Per-storage key
+/// `eap_items_dlq_grace_period_min:<storage_name>`: a non-negative integer
+/// in minutes. When set, the eap-items processor DLQs any message whose
+/// event `timestamp` belongs to a prior weekly partition, but only once
+/// we are at least `grace_min` minutes past the most recent Monday 00:00
+/// UTC partition boundary. Unset disables the killswitch for that
+/// storage (this is how `eap_items_dlq_replay` opts out).
+///
+/// The eap_items table is partitioned by
+/// `(retention_days, toMonday(timestamp))`. Writes that straddle the
+/// weekly partition boundary tax ClickHouse; dropping prior-partition
+/// messages after a grace window prevents that pressure without
+/// over-eagerly dropping current-week stragglers.
+const DLQ_GRACE_PERIOD_MIN_KEY: &str = "eap_items_dlq_grace_period_min";
 
 /// Precision factor for sampling_factor calculations to compensate for floating point errors
 const SAMPLING_FACTOR_PRECISION: f64 = 1e9;
@@ -26,6 +46,7 @@ struct ProcessedItem {
     origin_timestamp: Option<DateTime<Utc>>,
     item_type_metrics: ItemTypeMetrics,
     cogs_data: CogsData,
+    should_skip: bool,
 }
 
 fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Result<ProcessedItem> {
@@ -35,6 +56,33 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
         .received
         .as_ref()
         .and_then(|received| DateTime::from_timestamp(received.seconds, 0));
+    let event_timestamp = trace_item
+        .timestamp
+        .as_ref()
+        .and_then(|ts| DateTime::from_timestamp(ts.seconds, 0));
+
+    let mut should_skip = false;
+    if let Some(event_ts) = event_timestamp {
+        let now = Utc::now();
+
+        // should_skip=true will drop messages that are too old or too far in the future
+        if get_drop_invalid_timestamps_enabled() && out_of_valid_interval_secs(event_ts, now) {
+            counter!("eap_items.messages.dropped_out_of_range_timestamp", 1);
+            should_skip = true;
+        }
+        // only DLQ messages that we don't want to drop (when should_skip=false)
+        if !should_skip {
+            if let Some(grace_min) = get_dlq_grace_period_min(&config.storage_name) {
+                if should_dlq_for_prior_partition(event_ts, now, grace_min) {
+                    counter!("eap_items.messages.dlqed_prior_partition", 1);
+                    anyhow::bail!(
+                        "eap-items message DLQed: event timestamp {event_ts} is before the prior weekly partition boundary; routed to DLQ"
+                    );
+                }
+            }
+        }
+    }
+
     let retention_days = Some(enforce_retention(
         Some(trace_item.retention_days as u16),
         &config.env_config,
@@ -55,6 +103,13 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
         "sentry._internal.ingested_at".into(),
         Utc::now().timestamp_millis(),
     );
+    // we are using this to compare to outcomes which stores the timestamp as seconds
+    if let Some(received_at) = origin_timestamp {
+        eap_item.attributes.insert_int(
+            "sentry._internal.received_at".into(),
+            received_at.timestamp(),
+        );
+    }
 
     let mut item_type_metrics = ItemTypeMetrics::new();
     item_type_metrics.record_item(item_type, payload.len());
@@ -86,7 +141,40 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
         origin_timestamp,
         item_type_metrics,
         cogs_data,
+        should_skip,
     })
+}
+
+fn get_dlq_grace_period_min(storage_name: &str) -> Option<i64> {
+    if storage_name.is_empty() {
+        return None;
+    }
+    get_str_config(&format!("{DLQ_GRACE_PERIOD_MIN_KEY}:{storage_name}"))
+        .ok()
+        .flatten()
+        .and_then(|s| s.parse::<i64>().ok())
+        .filter(|&n| n >= 0)
+}
+
+/// Most recent Monday 00:00 UTC at or before `now` — the active weekly
+/// partition boundary used by `toMonday(timestamp)` in ClickHouse.
+fn prior_partition_boundary(now: DateTime<Utc>) -> DateTime<Utc> {
+    let days_from_monday = now.weekday().num_days_from_monday() as i64;
+    let monday = now.date_naive() - chrono::Duration::days(days_from_monday);
+    monday.and_time(chrono::NaiveTime::MIN).and_utc()
+}
+
+/// True when we should DLQ this message because it belongs to the prior
+/// week's partition and we are far enough past the current partition
+/// boundary that prior-week stragglers should no longer be admitted.
+fn should_dlq_for_prior_partition(
+    event_ts: DateTime<Utc>,
+    now: DateTime<Utc>,
+    grace_min: i64,
+) -> bool {
+    let boundary = prior_partition_boundary(now);
+    let past_min = now.signed_duration_since(boundary).num_minutes();
+    past_min >= grace_min && event_ts < boundary
 }
 
 pub fn process_message(
@@ -95,6 +183,9 @@ pub fn process_message(
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let processed = process_eap_item(msg, config)?;
+    if processed.should_skip {
+        return Ok(InsertBatch::skip());
+    }
     let mut batch = InsertBatch::from_rows([processed.eap_item], processed.origin_timestamp)?;
     batch.item_type_metrics = Some(processed.item_type_metrics);
     batch.cogs_data = Some(processed.cogs_data);
@@ -107,6 +198,9 @@ pub fn process_message_row_binary(
     config: &ProcessorConfig,
 ) -> anyhow::Result<TypedInsertBatch<EAPItemRow>> {
     let processed = process_eap_item(msg, config)?;
+    if processed.should_skip {
+        return Ok(TypedInsertBatch::from_rows(vec![], None));
+    }
     let mut batch = TypedInsertBatch::from_rows(
         vec![EAPItemRow::try_from(processed.eap_item)?],
         processed.origin_timestamp,
@@ -651,6 +745,195 @@ mod tests {
             .expect("The message should be processed when received is None");
 
         assert!(batch.origin_timestamp.is_none());
+    }
+
+    #[test]
+    fn test_received_at_attribute_is_set() {
+        let item_id = Uuid::new_v4();
+        let trace_item = generate_trace_item(item_id);
+        // generate_trace_item sets received.seconds = 1745562493
+        let expected_s: i64 = 1745562493;
+
+        let mut payload_bytes = Vec::new();
+        trace_item.encode(&mut payload_bytes).unwrap();
+
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+
+        // JSON path
+        let json_batch = process_message(
+            KafkaPayload::new(None, None, Some(payload_bytes.clone())),
+            meta.clone(),
+            &ProcessorConfig::default(),
+        )
+        .expect("The message should be processed");
+
+        #[derive(Deserialize)]
+        struct Item {
+            #[serde(default)]
+            attributes_int: HashMap<String, i64>,
+        }
+        let item: Item = serde_json::from_slice(&json_batch.rows.encoded_rows).unwrap();
+        assert_eq!(
+            item.attributes_int.get("sentry._internal.received_at"),
+            Some(&expected_s)
+        );
+
+        // RowBinary path
+        let rb_batch = process_message_row_binary(
+            KafkaPayload::new(None, None, Some(payload_bytes)),
+            meta,
+            &ProcessorConfig::default(),
+        )
+        .expect("The message should be processed");
+
+        let row = &rb_batch.rows[0];
+        let received_at = row
+            .attributes_int
+            .iter()
+            .find(|(k, _)| k == "sentry._internal.received_at")
+            .map(|(_, v)| *v);
+        assert_eq!(received_at, Some(expected_s));
+    }
+
+    #[test]
+    fn test_received_at_attribute_absent_when_received_none() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.received = None;
+
+        let mut payload_bytes = Vec::new();
+        trace_item.encode(&mut payload_bytes).unwrap();
+
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+
+        // JSON path
+        let json_batch = process_message(
+            KafkaPayload::new(None, None, Some(payload_bytes.clone())),
+            meta.clone(),
+            &ProcessorConfig::default(),
+        )
+        .expect("The message should be processed");
+
+        #[derive(Deserialize)]
+        struct Item {
+            #[serde(default)]
+            attributes_int: HashMap<String, i64>,
+        }
+        let item: Item = serde_json::from_slice(&json_batch.rows.encoded_rows).unwrap();
+        assert!(!item
+            .attributes_int
+            .contains_key("sentry._internal.received_at"));
+
+        // RowBinary path
+        let rb_batch = process_message_row_binary(
+            KafkaPayload::new(None, None, Some(payload_bytes)),
+            meta,
+            &ProcessorConfig::default(),
+        )
+        .expect("The message should be processed");
+
+        let row = &rb_batch.rows[0];
+        let has_received_at = row
+            .attributes_int
+            .iter()
+            .any(|(k, _)| k == "sentry._internal.received_at");
+        assert!(!has_received_at);
+    }
+
+    /// Helper: construct a UTC DateTime from Y-M-D H:M:S.
+    fn ymd_hms(y: i32, m: u32, d: u32, hh: u32, mm: u32, ss: u32) -> DateTime<Utc> {
+        chrono::NaiveDate::from_ymd_opt(y, m, d)
+            .unwrap()
+            .and_hms_opt(hh, mm, ss)
+            .unwrap()
+            .and_utc()
+    }
+
+    #[test]
+    fn test_prior_partition_boundary_on_monday() {
+        // 2026-05-18 is a Monday; boundary is itself at 00:00.
+        let now = ymd_hms(2026, 5, 18, 12, 34, 56);
+        let boundary = prior_partition_boundary(now);
+        assert_eq!(boundary, ymd_hms(2026, 5, 18, 0, 0, 0));
+    }
+
+    #[test]
+    fn test_prior_partition_boundary_midweek() {
+        // 2026-05-21 is a Thursday; boundary is Monday 2026-05-18 00:00.
+        let now = ymd_hms(2026, 5, 21, 23, 59, 59);
+        let boundary = prior_partition_boundary(now);
+        assert_eq!(boundary, ymd_hms(2026, 5, 18, 0, 0, 0));
+    }
+
+    #[test]
+    fn test_prior_partition_boundary_on_sunday() {
+        // 2026-05-24 is a Sunday; boundary is Monday 2026-05-18 00:00.
+        let now = ymd_hms(2026, 5, 24, 0, 0, 1);
+        let boundary = prior_partition_boundary(now);
+        assert_eq!(boundary, ymd_hms(2026, 5, 18, 0, 0, 0));
+    }
+
+    #[test]
+    fn test_should_dlq_prior_week_past_grace() {
+        // 45 min past Monday 00:00 UTC; message timestamp is prior week → DLQ.
+        let now = ymd_hms(2026, 5, 18, 0, 45, 0);
+        let event_ts = ymd_hms(2026, 5, 17, 23, 30, 0);
+        assert!(should_dlq_for_prior_partition(event_ts, now, 45));
+    }
+
+    #[test]
+    fn test_should_not_dlq_within_grace() {
+        // 30 min past Monday 00:00 UTC, grace=45 → not DLQ even though prior week.
+        let now = ymd_hms(2026, 5, 18, 0, 30, 0);
+        let event_ts = ymd_hms(2026, 5, 17, 23, 30, 0);
+        assert!(!should_dlq_for_prior_partition(event_ts, now, 45));
+    }
+
+    #[test]
+    fn test_should_not_dlq_current_week_past_grace() {
+        // Past grace, but message belongs to current week → never DLQ.
+        let now = ymd_hms(2026, 5, 18, 1, 30, 0);
+        let event_ts = ymd_hms(2026, 5, 18, 1, 0, 0);
+        assert!(!should_dlq_for_prior_partition(event_ts, now, 45));
+    }
+
+    #[test]
+    fn test_should_not_dlq_event_at_boundary() {
+        // event_ts == boundary belongs to the new week — must not DLQ.
+        let now = ymd_hms(2026, 5, 18, 6, 0, 0);
+        let event_ts = ymd_hms(2026, 5, 18, 0, 0, 0);
+        assert!(!should_dlq_for_prior_partition(event_ts, now, 45));
+    }
+
+    #[test]
+    fn test_should_not_dlq_future_event_ts() {
+        // Producer clock skew: event_ts > now. Belongs to current week (or future);
+        // event_ts < boundary is false, so we never DLQ.
+        let now = ymd_hms(2026, 5, 21, 12, 0, 0);
+        let event_ts = ymd_hms(2026, 5, 22, 0, 0, 0);
+        assert!(!should_dlq_for_prior_partition(event_ts, now, 45));
+    }
+
+    #[test]
+    fn test_should_dlq_grace_zero_dlqs_immediately_at_boundary() {
+        // grace=0 → DLQ prior-week messages the instant the new week starts.
+        let now = ymd_hms(2026, 5, 18, 0, 0, 0);
+        let event_ts = ymd_hms(2026, 5, 17, 23, 59, 59);
+        assert!(should_dlq_for_prior_partition(event_ts, now, 0));
+    }
+
+    #[test]
+    fn test_get_dlq_grace_period_min_unset_storage_returns_none() {
+        // Empty storage_name short-circuits to None without hitting Python.
+        assert_eq!(get_dlq_grace_period_min(""), None);
     }
 
     #[test]

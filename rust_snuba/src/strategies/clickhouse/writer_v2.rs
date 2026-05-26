@@ -13,7 +13,7 @@ use sentry_arroyo::types::Message;
 use sentry_arroyo::{counter, timer};
 
 use crate::config::ClickhouseConfig;
-use crate::runtime_config::get_load_balancing_config;
+use crate::runtime_config::{get_load_balancing_config, get_max_insert_block_size};
 use crate::types::{BytesInsertBatch, RowData};
 
 fn clickhouse_task_runner(
@@ -196,6 +196,9 @@ impl ClickhouseClient {
         if let Some(offset) = lb_config.first_offset {
             url.push_str(&format!("&load_balancing_first_offset={offset}"));
         }
+        if let Some(block_size) = get_max_insert_block_size(&self.storage_name) {
+            url.push_str(&format!("&max_insert_block_size={block_size}"));
+        }
         url
     }
 
@@ -354,6 +357,51 @@ mod tests {
         let url = client.build_url();
         assert!(url.contains("load_balancing=first_or_random"));
         assert!(url.contains("load_balancing_first_offset=1"));
+    }
+
+    #[test]
+    fn test_url_with_max_insert_block_size() {
+        crate::testutils::initialize_python();
+        let config = make_test_config();
+        let client = ClickhouseClient::new(
+            &config,
+            "test_table",
+            "writer_v2_block_size_test".to_string(),
+        );
+
+        // Default (key absent): no suffix.
+        let url = client.build_url();
+        assert!(!url.contains("max_insert_block_size"));
+
+        // Per-storage override at or above the ClickHouse default sets the suffix.
+        crate::runtime_config::patch_str_config_for_test(
+            "clickhouse_max_insert_block_size:writer_v2_block_size_test",
+            Some("2000000"),
+        );
+        let url = client.build_url();
+        assert!(url.contains("&max_insert_block_size=2000000"));
+
+        // A different storage isn't affected.
+        let other_client =
+            ClickhouseClient::new(&config, "test_table", "writer_v2_other_storage".to_string());
+        let url = other_client.build_url();
+        assert!(!url.contains("max_insert_block_size"));
+
+        // Values below the ClickHouse default (1_048_449) are rejected.
+        crate::runtime_config::patch_str_config_for_test(
+            "clickhouse_max_insert_block_size:writer_v2_block_size_test",
+            Some("1000000"),
+        );
+        let url = client.build_url();
+        assert!(!url.contains("max_insert_block_size"));
+
+        // Exactly the default is accepted.
+        crate::runtime_config::patch_str_config_for_test(
+            "clickhouse_max_insert_block_size:writer_v2_block_size_test",
+            Some("1048449"),
+        );
+        let url = client.build_url();
+        assert!(url.contains("&max_insert_block_size=1048449"));
     }
 
     #[tokio::test]

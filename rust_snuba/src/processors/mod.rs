@@ -10,7 +10,7 @@ mod profiles;
 mod querylog;
 mod release_health_metrics;
 mod replays;
-mod utils;
+pub mod utils;
 
 use crate::config::ProcessorConfig;
 use crate::types::{InsertBatch, InsertOrReplacement, KafkaMessageMetadata};
@@ -160,6 +160,10 @@ mod tests {
                     settings.add_redaction(
                         ".*.*[\"sentry._internal.ingested_at\"]",
                         "<ingestion timestamp>",
+                    );
+                    settings.add_redaction(
+                        ".*.*[\"sentry._internal.received_at\"]",
+                        "<received timestamp>",
                     );
                 }
 

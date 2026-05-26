@@ -16,19 +16,13 @@ use std::time::{Duration, SystemTime};
 struct ProduceOutcome {
     producer: Arc<dyn Producer<KafkaPayload>>,
     destination: Topic,
-    skip_produce: bool,
 }
 
 impl ProduceOutcome {
-    pub fn new(
-        producer: Arc<dyn Producer<KafkaPayload> + 'static>,
-        destination: Topic,
-        skip_produce: bool,
-    ) -> Self {
+    pub fn new(producer: Arc<dyn Producer<KafkaPayload> + 'static>, destination: Topic) -> Self {
         ProduceOutcome {
             producer,
             destination,
-            skip_produce,
         }
     }
 }
@@ -42,7 +36,6 @@ impl TaskRunner<AggregatedOutcomesBatch, AggregatedOutcomesBatch, anyhow::Error>
     ) -> RunTaskFunc<AggregatedOutcomesBatch, anyhow::Error> {
         let producer = self.producer.clone();
         let destination: TopicOrPartition = self.destination.into();
-        let skip_produce = self.skip_produce;
 
         Box::pin(async move {
             let produce_start = SystemTime::now();
@@ -68,10 +61,6 @@ impl TaskRunner<AggregatedOutcomesBatch, AggregatedOutcomesBatch, anyhow::Error>
                     quantity: stats.quantity,
                 };
 
-                if skip_produce {
-                    continue;
-                }
-
                 let payload_bytes = serde_json::to_vec(&outcome).map_err(|e| {
                     RunTaskError::Other(anyhow::anyhow!("serialization error: {e}"))
                 })?;
@@ -88,6 +77,9 @@ impl TaskRunner<AggregatedOutcomesBatch, AggregatedOutcomesBatch, anyhow::Error>
             if let Ok(elapsed) = produce_finish.duration_since(produce_start) {
                 timer!("accepted_outcomes.batch_produce_ms", elapsed);
             }
+            message
+                .payload()
+                .record_message_latency("produce_broker_latency");
             Ok(message)
         })
     }
@@ -106,11 +98,10 @@ where
         producer: Arc<dyn Producer<KafkaPayload> + 'static>,
         destination: Topic,
         concurrency: &ConcurrencyConfig,
-        skip_produce: bool,
     ) -> Self {
         let inner = RunTaskInThreads::new(
             next_step,
-            ProduceOutcome::new(producer, destination, skip_produce),
+            ProduceOutcome::new(producer, destination),
             concurrency,
             Some("produce_outcome"),
         );
@@ -205,7 +196,6 @@ mod tests {
             Arc::new(producer),
             Topic::new("test-outcomes"),
             &concurrency,
-            false,
         );
 
         strategy
@@ -216,60 +206,6 @@ mod tests {
 
         let produced = produced_payloads.lock().unwrap();
         assert_eq!(produced.len(), 2);
-    }
-
-    #[test]
-    fn skip_produce_does_not_produce() {
-        struct MockProducer {
-            pub payloads: Arc<Mutex<Vec<KafkaPayload>>>,
-        }
-
-        impl Producer<KafkaPayload> for MockProducer {
-            fn produce(
-                &self,
-                _topic: &TopicOrPartition,
-                payload: KafkaPayload,
-            ) -> Result<(), ProducerError> {
-                self.payloads.lock().unwrap().push(payload);
-                Ok(())
-            }
-        }
-
-        let produced_payloads = Arc::new(Mutex::new(Vec::new()));
-
-        let mut batch = AggregatedOutcomesBatch::new(60);
-        batch.buckets.insert(
-            BucketKey {
-                time_offset: 100,
-                org_id: 1,
-                project_id: 100,
-                key_id: 10,
-                category: 1,
-            },
-            BucketStats::new(5),
-        );
-
-        let producer = MockProducer {
-            payloads: produced_payloads.clone(),
-        };
-
-        let concurrency = ConcurrencyConfig::new(1);
-        let mut strategy = ProduceAcceptedOutcome::new(
-            Noop,
-            Arc::new(producer),
-            Topic::new("test-outcomes"),
-            &concurrency,
-            true, // skip_produce
-        );
-
-        strategy
-            .submit(Message::new_any_message(batch, BTreeMap::new()))
-            .unwrap();
-        strategy.poll().unwrap();
-        strategy.join(None).unwrap();
-
-        let produced = produced_payloads.lock().unwrap();
-        assert_eq!(produced.len(), 0);
     }
 
     #[test]

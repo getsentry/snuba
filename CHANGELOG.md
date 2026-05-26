@@ -1,5 +1,164 @@
 # Changelog
 
+## 26.5.0
+
+### New Features ✨
+
+- (clickhouse) Add timeout for ClickHouse pool connection acquisition by @onewland in [#7920](https://github.com/getsentry/snuba/pull/7920)
+
+### Bug Fixes 🐛
+
+- (ci) Set build_target to 'application' to reduce Docker image size by @aldy505 in [#7913](https://github.com/getsentry/snuba/pull/7913)
+- (inc-2141) Only check essential clusters in liveness healthcheck by @onewland in [#7925](https://github.com/getsentry/snuba/pull/7925)
+
+### Internal Changes 🔧
+
+- (eap-outcomes) Option to log duplicates by @MeredithAnya in [#7929](https://github.com/getsentry/snuba/pull/7929)
+- (inc-2150) Hard limit of MAX_BUFFERED_MESSAGES for batched deletes by @MeredithAnya in [#7922](https://github.com/getsentry/snuba/pull/7922)
+- Bump sentry-arroyo to 2.39.2 by @getsentry-bot in [#7930](https://github.com/getsentry/snuba/pull/7930)
+- Drop dead down-file shutdown signaling path by @onewland in [#7924](https://github.com/getsentry/snuba/pull/7924)
+- Bump ddl-changes job timeout to 10 minutes by @onewland in [#7921](https://github.com/getsentry/snuba/pull/7921)
+- Bump new development version by @sentry-release-bot[bot] in [9746d626](https://github.com/getsentry/snuba/commit/9746d6260f5a71a129b006c42d3e2b018c8d2aab)
+
+### Other
+
+- functions dataset: add max_execution_time by @xurui-c in [#7931](https://github.com/getsentry/snuba/pull/7931)
+- OutcomesBasedRoutingStrategy: allow org-specific downsampling by @xurui-c in [#7923](https://github.com/getsentry/snuba/pull/7923)
+
+## 26.4.2
+
+### New Features ✨
+
+- (data-explore) Add support in EAP to filter Array by elements by @manessaraj in [#7898](https://github.com/getsentry/snuba/pull/7898)
+- (devservices) Use distroless image in devservices by @oioki in [#7909](https://github.com/getsentry/snuba/pull/7909)
+- (explore) Add support for array in TraceItemDetail and TraceItemTable Endpoints by @manessaraj in [#7890](https://github.com/getsentry/snuba/pull/7890)
+
+### Bug Fixes 🐛
+
+#### Eap
+
+- Flatten nested attributes_array JSON for dotted keys by @manessaraj in [#7911](https://github.com/getsentry/snuba/pull/7911)
+- Fix coalesced attribute handling for deprecated keys by @buenaflor in [#7886](https://github.com/getsentry/snuba/pull/7886)
+
+#### Other
+
+- (eap-outcomes) Add trace ID and timestamp to dedup key by @untitaker in [#7915](https://github.com/getsentry/snuba/pull/7915)
+
+### Internal Changes 🔧
+
+#### Eap Outcomes
+
+- Add sentry._internal.received_at attribute by @MeredithAnya in [#7916](https://github.com/getsentry/snuba/pull/7916)
+- Family friendly metric name by @MeredithAnya in [#7899](https://github.com/getsentry/snuba/pull/7899)
+- Dedupe by item_type by @MeredithAnya in [#7896](https://github.com/getsentry/snuba/pull/7896)
+
+#### Snuba Commit Log
+
+- Remove commit log next offset option from `sentry-options` schema by @shashjar in [#7894](https://github.com/getsentry/snuba/pull/7894)
+- Remove the option gating next offset production to the commit log by @shashjar in [#7893](https://github.com/getsentry/snuba/pull/7893)
+
+#### Other
+
+- (consumer) Set message.max.bytes for DLQ/BLQ producers by @kylemumma in [#7897](https://github.com/getsentry/snuba/pull/7897)
+- (referrer) Register supergroups_backfill_lightweight.get_latest_events by @yuvmen in [#7889](https://github.com/getsentry/snuba/pull/7889)
+- Bump sentry-arroyo to 2.39.1 by @getsentry-bot in [#7910](https://github.com/getsentry/snuba/pull/7910)
+- Bump sentry-conventions to 0.6.0 by @buenaflor in [#7918](https://github.com/getsentry/snuba/pull/7918)
+- Bump sentry-conventions to 0.5.0 by @buenaflor in [#7884](https://github.com/getsentry/snuba/pull/7884)
+- Pin GitHub Actions to full-length commit SHAs by @joshuarli in [#7831](https://github.com/getsentry/snuba/pull/7831)
+
+### Other
+
+- feat(logs) : Update export items endpoint to respect sampling & routing decision by @manessaraj in [#7907](https://github.com/getsentry/snuba/pull/7907)
+- dep: upgrade granian to 2.7.4 by @gi0baro in [#7914](https://github.com/getsentry/snuba/pull/7914)
+
+## 26.4.1
+
+### New Features ✨
+
+- Add default value to attribute aggregations by @wmak in [#7888](https://github.com/getsentry/snuba/pull/7888)
+- Make BLQ stale threshold and static friction runtime-configurable by @kylemumma in [#7880](https://github.com/getsentry/snuba/pull/7880)
+
+### Bug Fixes 🐛
+
+- (admin) Allow ClickHouse replace* functions in read-only query validation by @xurui-c in [#7876](https://github.com/getsentry/snuba/pull/7876)
+- (COGS) Unique labels for resource_ids by @xurui-c in [#7864](https://github.com/getsentry/snuba/pull/7864)
+- (outcomes) Deduplicate outcomes by item_id within batch by @untitaker in [#7885](https://github.com/getsentry/snuba/pull/7885)
+
+### Internal Changes 🔧
+
+#### Eap Outcomes
+
+- Add min_partition tag by @MeredithAnya in [#7891](https://github.com/getsentry/snuba/pull/7891)
+- Add duplicate_item_count metric by @MeredithAnya in [#7887](https://github.com/getsentry/snuba/pull/7887)
+
+#### Other
+
+- (ci) Pull out migrations tests maybe lets see by @MeredithAnya in [#7881](https://github.com/getsentry/snuba/pull/7881)
+- (gocd) Bump gocd-jsonnet to v3.0.0 (grouped pipedream) by @mchen-sentry in [#7878](https://github.com/getsentry/snuba/pull/7878)
+- Bump new development version by @sentry-release-bot[bot] in [41fe9b16](https://github.com/getsentry/snuba/commit/41fe9b16faa55aee5e066c3e990a244d5761cbdc)
+
+## 26.4.0
+
+### New Features ✨
+
+#### Consumer
+
+- Emit batch_write_bytes metric from RowBinary writer by @onewland in [#7863](https://github.com/getsentry/snuba/pull/7863)
+- Add memory-based batching limit to Rust consumer by @onewland in [#7854](https://github.com/getsentry/snuba/pull/7854)
+
+#### Other
+
+- (cross-item) Prepare settings for production by @volokluev in [#7706](https://github.com/getsentry/snuba/pull/7706)
+- (docker) Switch distroless images to DHI by @oioki in [#7821](https://github.com/getsentry/snuba/pull/7821)
+- (manual-jobs) Add job to rerun completed idempotent migrations by @onewland in [#7859](https://github.com/getsentry/snuba/pull/7859)
+- (observability) Add baseline tags to RPC sourced sentry errors by @volokluev in [#7845](https://github.com/getsentry/snuba/pull/7845)
+- (options) Sentry options scaffolding by @kenzoengineer in [#7836](https://github.com/getsentry/snuba/pull/7836)
+- (outcomes) Add `no_parent_span` outcome by @Lms24 in [#7866](https://github.com/getsentry/snuba/pull/7866)
+- (snql) Add Sentry error tags for SnQL API requests by @volokluev in [#7839](https://github.com/getsentry/snuba/pull/7839)
+- (timeseries) Add 6h interval by @wmak in [#7867](https://github.com/getsentry/snuba/pull/7867)
+- Blq feature flag can be updated without restart by @kylemumma in [#7871](https://github.com/getsentry/snuba/pull/7871)
+- Add a backlog-queue to the snuba consumers by @kylemumma in [#7856](https://github.com/getsentry/snuba/pull/7856)
+- Debugger support for consumers, local metrics support, bugbear by @kylemumma in [#7818](https://github.com/getsentry/snuba/pull/7818)
+
+### Bug Fixes 🐛
+
+#### Rpc
+
+- Honor deprecated attribute keys in trace item attribute values by @xurui-c in [#7853](https://github.com/getsentry/snuba/pull/7853)
+- Validate that TraceItemTable requests have at least one column by @volokluev in [#7837](https://github.com/getsentry/snuba/pull/7837)
+
+#### Other
+
+- (ci) Bump timeout and use --no-project on bump_version test by @kenzoengineer in [#7841](https://github.com/getsentry/snuba/pull/7841)
+- (COGS) Label metrics correctly for query side by @xurui-c in [#7826](https://github.com/getsentry/snuba/pull/7826)
+- (slo) Correctly report TOO_MANY_BYTES from allocation policy as rate-limited by @volokluev in [#7846](https://github.com/getsentry/snuba/pull/7846)
+- (snuba commit log) Modify Rust consumer to produce next message offset to Snuba commit log by @shashjar in [#7852](https://github.com/getsentry/snuba/pull/7852)
+
+### Internal Changes 🔧
+
+#### Eap Outcomes
+
+- Use sentry-options to change which timestamp to use by @kenzoengineer in [#7838](https://github.com/getsentry/snuba/pull/7838)
+- Add category_metrics by @MeredithAnya in [#7847](https://github.com/getsentry/snuba/pull/7847)
+- Add config to change which timestamp to use by @MeredithAnya in [#7834](https://github.com/getsentry/snuba/pull/7834)
+- Debug -> info by @MeredithAnya in [#7824](https://github.com/getsentry/snuba/pull/7824)
+
+#### Other
+
+- (admin) Add skip_on_cluster and cluster_name option for target host by @MeredithAnya in [#7823](https://github.com/getsentry/snuba/pull/7823)
+- (ci) Add cancel-in-progress to pull_request prs by @joshuarli in [#7873](https://github.com/getsentry/snuba/pull/7873)
+- (deps) Bump picomatch from 2.3.1 to 2.3.2 in /snuba/admin by @dependabot in [#7840](https://github.com/getsentry/snuba/pull/7840)
+- (eap) Add arrayExists filter for attribute name queries by @volokluev in [#7832](https://github.com/getsentry/snuba/pull/7832)
+- (INC-2103) Increase distributed_ddl_task_timeout to 300 by @MeredithAnya in [#7862](https://github.com/getsentry/snuba/pull/7862)
+- (metrics) Bump sentry-relay version 0.9.25 by @k-fish in [#7825](https://github.com/getsentry/snuba/pull/7825)
+- Bump sentry-arroyo to 2.38.7 by @getsentry-bot in [#7857](https://github.com/getsentry/snuba/pull/7857)
+- Bump sentry-arroyo to 2.38.5 by @getsentry-bot in [#7851](https://github.com/getsentry/snuba/pull/7851)
+- Bump rust-toolchain to 1.88.0 by @MeredithAnya in [#7835](https://github.com/getsentry/snuba/pull/7835)
+
+### Other
+
+- Volo/fix bools autocomplete by @volokluev in [#7848](https://github.com/getsentry/snuba/pull/7848)
+
 ## 26.1.0
 
 ### New Features ✨

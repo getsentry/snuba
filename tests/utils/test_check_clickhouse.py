@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import threading
 from typing import Any, List, Sequence
 from unittest import mock
 
@@ -12,10 +13,8 @@ from snuba.datasets.readiness_state import ReadinessState
 from snuba.datasets.storage import ReadableTableStorage, Storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.utils.health_info import (
-    _set_shutdown,
     check_all_tables_present,
     filter_checked_storages,
-    get_shutdown,
     sanity_check_clickhouse_connections,
 )
 
@@ -136,12 +135,73 @@ def test_bad_dataset_fails_thorough_healthcheck(mock1: mock.MagicMock) -> None:
     return_value=[StorageKey.ERRORS_RO, FakeStorageKey("fake_storage_key")],
 )
 @pytest.mark.clickhouse_db
-def test_single_bad_dataset_passes_healthcheck(mock1: mock.MagicMock) -> None:
-    # a bad dataset is enabled and not operable, but at least a single
-    # clickhouse query node is still operable. We still want to pass the
-    # regular healthcheck in this case so that we can continue to serve request
-    # despite outage in a single cluster.
+def test_non_essential_bad_storage_ignored(mock1: mock.MagicMock) -> None:
+    # A non-essential broken storage (fake_storage_key) is filtered out before
+    # the cluster check, so as long as the essential clusters are reachable,
+    # the regular healthcheck still passes.
     assert sanity_check_clickhouse_connections()
+
+
+@mock.patch(
+    "snuba.utils.health_info.get_all_storage_keys",
+    return_value=[FakeStorageKey("fake_storage_key")],
+)
+def test_no_essential_storages_fails(mock1: mock.MagicMock) -> None:
+    # If no essential storages are enabled, the healthcheck fails defensively —
+    # we have nothing to verify connectivity against.
+    assert not sanity_check_clickhouse_connections()
+
+
+@mock.patch(
+    "snuba.utils.health_info.get_all_storage_keys",
+    return_value=[StorageKey.ERRORS_RO],
+)
+@mock.patch("snuba.utils.health_info._execute_show_tables")
+@pytest.mark.clickhouse_db
+def test_unreachable_essential_cluster_fails_healthcheck(
+    mock_execute: mock.MagicMock, mock_keys: mock.MagicMock
+) -> None:
+    # Per INC-2141: if an essential cluster is unreachable, the healthcheck must
+    # fail (we can no longer short-circuit to True via another healthy cluster).
+    mock_execute.side_effect = Exception("connection refused")
+    assert not sanity_check_clickhouse_connections()
+
+
+@mock.patch(
+    "snuba.utils.health_info.get_all_storage_keys",
+    return_value=[StorageKey.ERRORS_RO],
+)
+@mock.patch("snuba.utils.health_info._execute_show_tables")
+@pytest.mark.clickhouse_db
+def test_stalled_cluster_does_not_block_healthcheck(
+    mock_execute: mock.MagicMock, mock_keys: mock.MagicMock
+) -> None:
+    # Per INC-2141: a stalled connection (e.g. EAP holding broken sockets) must
+    # not keep sanity_check_clickhouse_connections from returning. The function
+    # should respect its timeout and return False well before the stalled
+    # worker finishes — not block until shutdown(wait=True) joins it.
+    import time as _time
+
+    stall_started = threading.Event()
+
+    def stall(_cluster: object) -> bool:
+        stall_started.set()
+        _time.sleep(10)  # far longer than the timeout
+        return True
+
+    mock_execute.side_effect = stall
+
+    timeout = 0.2
+    start = _time.monotonic()
+    result = sanity_check_clickhouse_connections(timeout_seconds=timeout)
+    elapsed = _time.monotonic() - start
+
+    assert stall_started.wait(timeout=2.0), "stalled worker never started"
+    assert not result
+    # Generous bound: timeout + executor teardown + test scheduler jitter, but
+    # still well short of the 10s sleep. Without shutdown(wait=False) this
+    # would wait ~10s.
+    assert elapsed < 5.0, f"healthcheck blocked on stalled worker for {elapsed:.2f}s"
 
 
 @mock.patch(
@@ -189,12 +249,3 @@ def test_filter_checked_storages(mock1: mock.MagicMock, temp_settings: Any) -> N
 
     # check that the storage with a non-supported readiness state is excluded in list
     assert MockStorage() not in storages
-
-
-def test_get_shutdown() -> None:
-    assert not get_shutdown()
-    _set_shutdown(True)
-    assert get_shutdown()
-
-    _set_shutdown(False)
-    assert not get_shutdown()
