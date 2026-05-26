@@ -10,14 +10,17 @@ class _AlterWorkloadOp(operations.RunSql):
     """Version-aware RunSql that picks the correct thread setting at execution time."""
 
     def __init__(self) -> None:
-        # Placeholder statement for validation; actual SQL is generated in execute()
+        # Initialize with the CH 25.8+ statement so format_sql() returns real SQL
+        # during dry-run / __eq__. The setting name is reselected at execute() time
+        # based on the live ClickHouse version.
         super().__init__(
             storage_set=StorageSetKey.EVENTS_ANALYTICS_PLATFORM,
-            statement="SELECT 1",
+            statement=self._build_statement("max_concurrent_threads"),
             target=OperationTarget.LOCAL,
         )
 
-    def _build_statement(self, thread_setting: str) -> str:
+    @staticmethod
+    def _build_statement(thread_setting: str) -> str:
         return f"""
             CREATE OR REPLACE WORKLOAD low_priority_deletes
             IN all
