@@ -648,10 +648,10 @@ wheels = [
 
 [[package]]
 name = "pyasn1"
-version = "0.6.2"
+version = "0.6.3"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/pyasn1-0.6.2-py3-none-any.whl", hash = "sha256:1eb26d860996a18e9b6ed05e7aae0e9fc21619fcee6af91cca9bad4fbea224bf" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/pyasn1-0.6.3-py3-none-any.whl", hash = "sha256:a80184d120f0864a52a073acc6fc642847d0be408e7c7252f31390c0f4eadcde" },
 ]
 
 [[package]]
@@ -1148,7 +1148,7 @@ requires-dist = [
     { name = "progressbar2", specifier = ">=4.2.0" },
     { name = "proto-plus", specifier = ">=1.24.0" },
     { name = "protobuf", specifier = ">=5.29.5" },
-    { name = "pyasn1", specifier = ">=0.6.2" },
+    { name = "pyasn1", specifier = ">=0.6.3" },
     { name = "python-dateutil", specifier = ">=2.8.2" },
     { name = "python-jose", extras = ["cryptography"], specifier = ">=3.5.0" },
     { name = "python-rapidjson", specifier = ">=1.8" },
