@@ -14,6 +14,7 @@ import os
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime
 
 
 def wait_for_envoy() -> None:
@@ -42,6 +43,14 @@ def main() -> None:
 
     wsgi_target = os.environ.get("SNUBA_WSGI_TARGET", "snuba.web.wsgi:application")
     args = ["granian", "--interface", "wsgi", "--host", "0.0.0.0", "--http", "auto", wsgi_target]
+
+    if os.environ.get("ENABLE_HEAPTRACK"):
+        # The bash predecessor had a latent bug: it built a `heaptrack …` argv
+        # via `set --` but then `exec granian …` instead of `exec "$@"`, so the
+        # wrapping never took effect. Fix it here by actually prepending.
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        args = ["heaptrack", "-o", f"./profiler_data/profile_{timestamp}"] + args
+
     os.execvp(args[0], args)
 
 
