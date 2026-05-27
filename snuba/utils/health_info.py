@@ -39,6 +39,7 @@ ESSENTIAL_STORAGE_SET_KEYS = {
     StorageSetKey.EVENTS,  # errors storage
     StorageSetKey.EVENTS_RO,  # errors_ro storage
     StorageSetKey.EVENTS_ANALYTICS_PLATFORM,
+    StorageSetKey.EVENTS_ANALYTICS_PLATFORM_RO,
 }
 
 
