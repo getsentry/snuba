@@ -1,7 +1,10 @@
 use crate::config::EnvConfig;
 use crate::runtime_config::get_str_config;
+use crate::types::item_type_name;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use schemars::JsonSchema;
+use sentry_arroyo::counter;
+use sentry_protos::snuba::v1::TraceItemType;
 use serde::{Deserialize, Deserializer, Serialize};
 
 /// One week in seconds. The eap_items table is partitioned by
@@ -36,6 +39,12 @@ pub fn get_drop_invalid_timestamps_enabled() -> bool {
         .flatten()
         .map(|s| s == "1")
         .unwrap_or(false)
+}
+
+pub fn record_invalid_timestamp_metric(prefix: &str, is_future: bool, item_type: TraceItemType) {
+    let metric_name = format!("{prefix}.dropped_out_of_range_timestamp");
+    let item_type_str = item_type_name(item_type);
+    counter!(metric_name, 1, "is_future" => is_future.to_string(), "item_type" => item_type_str);
 }
 
 pub fn enforce_retention(value: Option<u16>, config: &EnvConfig) -> u16 {
