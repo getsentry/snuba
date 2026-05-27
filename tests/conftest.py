@@ -172,6 +172,10 @@ def redis_db(request: pytest.FixtureRequest) -> Generator[None, None, None]:
     for redis_client in all_redis_clients():
         redis_client.flushdb()
 
+    # Drop the in-memory memoize cache of Redis-backed configs so stale entries
+    # from a prior redis_db test don't survive the flush above.
+    state.get_raw_configs.clear()  # type: ignore[attr-defined]
+
     yield
 
 

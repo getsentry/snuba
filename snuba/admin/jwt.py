@@ -1,5 +1,6 @@
 from typing import Any, Optional
 
+import jwt
 import requests
 
 from snuba import settings
@@ -32,7 +33,7 @@ def validate_assertion(assertion: str) -> AdminUser:
 
     If not, an exception will be raised
     """
-    from jose import jwt
-
-    info = jwt.decode(assertion, _certs(), algorithms=["ES256"], audience=_audience())
+    kid = jwt.get_unverified_header(assertion)["kid"]
+    key = _certs()[kid]
+    info = jwt.decode(assertion, key=key, algorithms=["ES256"], audience=_audience())
     return AdminUser(email=info["email"], id=info["sub"])
