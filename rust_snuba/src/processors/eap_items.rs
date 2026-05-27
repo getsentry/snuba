@@ -40,7 +40,7 @@ use crate::types::{
 const DLQ_GRACE_PERIOD_MIN_KEY: &str = "eap_items_dlq_grace_period_min";
 
 /// Precision factor for sampling_factor calculations to compensate for floating point errors
-const SAMPLING_FACTOR_PRECISION: f64 = 1e9;
+const SAMPLING_FACTOR_PRECISION: f64 = 1e6;
 /// Minimum allowed sampling_factor value
 const MIN_SAMPLING_FACTOR: f64 = 1.0 / SAMPLING_FACTOR_PRECISION;
 
@@ -1612,10 +1612,10 @@ mod tests {
         let item_id = Uuid::new_v4();
         let mut trace_item = generate_trace_item(item_id);
 
-        // Set extremely low sample rates that would multiply to a value smaller than 1e-9
-        trace_item.client_sample_rate = 0.00001; // 1e-5
-        trace_item.server_sample_rate = 0.00001; // 1e-5
-                                                 // Combined: 1e-10, which is smaller than MIN_SAMPLING_FACTOR (1e-9)
+        // Set extremely low sample rates that would multiply to a value smaller than 1e-6
+        trace_item.client_sample_rate = 0.001; // 1e-3
+        trace_item.server_sample_rate = 0.0001; // 1e-4
+                                                // Combined: 1e-7, which is smaller than MIN_SAMPLING_FACTOR (1e-6)
 
         let eap_item = EAPItem::try_from(trace_item);
 
