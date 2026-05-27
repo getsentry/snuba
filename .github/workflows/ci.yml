@@ -555,6 +555,17 @@ jobs:
       - name: Verify --help works
         run: docker run --rm snuba-distroless:test --help
 
+      - name: Verify subcommand resolution (api)
+        # Exercises the docker_entrypoint.py path where args[0] does NOT
+        # start with "-". This is the default self-hosted snuba-api
+        # invocation and the path that previously fell through to a
+        # FileNotFoundError when the snuba --help probe timed out.
+        run: docker run --rm snuba-distroless:test api --help
+
+      - name: Verify subcommand resolution (rust-consumer)
+        # rust-consumer is what every self-hosted consumer service runs.
+        run: docker run --rm snuba-distroless:test rust-consumer --help
+
       - name: Verify Python imports
         run: |
           docker run --rm --entrypoint python3 snuba-distroless:test \
