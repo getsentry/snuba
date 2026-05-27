@@ -31,13 +31,15 @@ use crate::strategies::clickhouse::writer_v2::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
 use crate::strategies::healthcheck::HealthCheck as SnubaHealthCheck;
 use crate::strategies::join_timeout::SetJoinTimeout;
+use crate::strategies::late_arrivals::ProduceLateArrivals;
 use crate::strategies::processor::{
     get_schema, make_rust_processor, make_rust_processor_row_binary,
-    make_rust_processor_with_replacements, validate_schema,
+    make_rust_processor_with_late_arrivals, make_rust_processor_with_replacements, validate_schema,
+    RowBinaryProcessorFn,
 };
 use crate::strategies::python::PythonTransformStep;
 use crate::strategies::replacements::ProduceReplacements;
-use crate::types::{BytesInsertBatch, CogsData, RowData, TypedInsertBatch};
+use crate::types::{BytesInsertBatch, CogsData, InsertOrLateArrival, RowData};
 
 pub struct ConsumerStrategyFactoryV2 {
     pub storage_config: config::StorageConfig,
@@ -50,6 +52,7 @@ pub struct ConsumerStrategyFactoryV2 {
     pub clickhouse_concurrency: ConcurrencyConfig,
     pub commitlog_concurrency: ConcurrencyConfig,
     pub replacements_concurrency: ConcurrencyConfig,
+    pub late_arrivals_concurrency: ConcurrencyConfig,
     pub async_inserts: bool,
     pub python_max_queue_depth: Option<usize>,
     pub use_rust_processor: bool,
@@ -67,6 +70,11 @@ pub struct ConsumerStrategyFactoryV2 {
     pub use_row_binary: bool,
     pub blq_producer_config: Option<KafkaConfig>,
     pub blq_topic: Option<Topic>,
+    /// Optional dedicated topic for messages diverted by the eap-items
+    /// partition-boundary killswitch. When set, late-arriving messages
+    /// are produced here instead of going through the regular DLQ. When
+    /// unset, the killswitch silently drops them.
+    pub late_arrivals_config: Option<(KafkaConfig, Topic)>,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
@@ -237,10 +245,58 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                 )
             }
             (
+                true,
+                Some(processors::ProcessingFunctionType::ProcessingFunctionWithLateArrivals(func)),
+            ) => {
+                let late_arrivals_step: Box<
+                    dyn ProcessingStrategy<InsertOrLateArrival<BytesInsertBatch<RowData>>>,
+                > = match self.late_arrivals_config.clone() {
+                    Some((producer_config, destination)) => {
+                        tracing::info!(
+                            "Routing late arrivals to dedicated topic {:?}",
+                            destination,
+                        );
+                        let producer = KafkaProducer::new(producer_config);
+                        Box::new(ProduceLateArrivals::new(
+                            next_step,
+                            producer,
+                            destination,
+                            &self.late_arrivals_concurrency,
+                            false,
+                        ))
+                    }
+                    None => {
+                        tracing::info!(
+                            "No late_arrivals_topic configured; late arrivals will be dropped",
+                        );
+                        Box::new(ProduceLateArrivals::disabled(next_step))
+                    }
+                };
+
+                make_rust_processor_with_late_arrivals(
+                    late_arrivals_step,
+                    func,
+                    &self.logical_topic_name,
+                    self.enforce_schema,
+                    &self.processing_concurrency,
+                    config::ProcessorConfig {
+                        env_config: self.env_config.clone(),
+                        storage_name: self.storage_config.name.clone(),
+                    },
+                    self.stop_at_timestamp,
+                )
+            }
+            (
                 false,
                 Some(processors::ProcessingFunctionType::ProcessingFunctionWithReplacements(_)),
             ) => {
                 panic!("Consumer with replacements cannot be run in hybrid-mode");
+            }
+            (
+                false,
+                Some(processors::ProcessingFunctionType::ProcessingFunctionWithLateArrivals(_)),
+            ) => {
+                panic!("Consumer with late arrivals cannot be run in hybrid-mode");
             }
             _ => {
                 let schema = get_schema(&self.logical_topic_name, self.enforce_schema);
@@ -319,11 +375,7 @@ impl ConsumerStrategyFactoryV2 {
             + 'static,
     >(
         &self,
-        func: fn(
-            KafkaPayload,
-            crate::types::KafkaMessageMetadata,
-            &config::ProcessorConfig,
-        ) -> anyhow::Result<TypedInsertBatch<T>>,
+        func: RowBinaryProcessorFn<T>,
     ) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
         // Commit offsets
         let next_step = CommitOffsets::new(Duration::from_secs(1));
@@ -399,6 +451,30 @@ impl ConsumerStrategyFactoryV2 {
             compute_batch_size,
         )
         .flush_empty_batches(true);
+
+        let next_step: Box<dyn ProcessingStrategy<InsertOrLateArrival<BytesInsertBatch<Vec<T>>>>> =
+            match self.late_arrivals_config.clone() {
+                Some((producer_config, destination)) => {
+                    tracing::info!(
+                        "Routing late arrivals (row-binary) to dedicated topic {:?}",
+                        destination,
+                    );
+                    let producer = KafkaProducer::new(producer_config);
+                    Box::new(ProduceLateArrivals::new(
+                        next_step,
+                        producer,
+                        destination,
+                        &self.late_arrivals_concurrency,
+                        false,
+                    ))
+                }
+                None => {
+                    tracing::info!(
+                    "No late_arrivals_topic configured (row-binary); late arrivals will be dropped",
+                );
+                    Box::new(ProduceLateArrivals::disabled(next_step))
+                }
+            };
 
         let next_step = make_rust_processor_row_binary(
             next_step,

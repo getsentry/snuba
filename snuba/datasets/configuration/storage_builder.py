@@ -206,6 +206,7 @@ def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
     subscription_delay_seconds = loader_config.get("subscription_delay_seconds")
 
     dlq_topic = __get_topic(loader_config, "dlq_topic")
+    late_arrivals_topic = __get_topic(loader_config, "late_arrivals_topic")
 
     return build_kafka_stream_loader_from_settings(
         processor,
@@ -219,6 +220,7 @@ def build_stream_loader(loader_config: dict[str, Any]) -> KafkaStreamLoader:
         subscription_synchronization_timestamp,
         subscription_delay_seconds,
         dlq_topic,
+        late_arrivals_topic,
     )
 
 

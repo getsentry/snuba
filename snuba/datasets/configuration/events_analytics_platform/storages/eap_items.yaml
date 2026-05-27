@@ -168,3 +168,4 @@ stream_loader:
   subscription_result_topic: subscription-results-eap-items
   subscription_delay_seconds: 60
   dlq_topic: snuba-dead-letter-items
+  late_arrivals_topic: snuba-eap-items-late-arrivals

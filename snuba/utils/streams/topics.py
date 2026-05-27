@@ -68,6 +68,7 @@ class Topic(Enum):
     SUBSCRIPTION_SCHEDULED_EAP_ITEMS = "scheduled-subscriptions-eap-items"
     SUBSCRIPTION_RESULTS_EAP_ITEMS = "subscription-results-eap-items"
     DEAD_LETTER_ITEMS = "snuba-dead-letter-items"
+    EAP_ITEMS_LATE_ARRIVALS = "snuba-eap-items-late-arrivals"
 
     LW_DELETIONS_GENERIC_EVENTS = "snuba-lw-deletions-generic-events"
     LW_DELETIONS_EAP_ITEMS = "snuba-lw-deletions-eap-items"

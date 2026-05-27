@@ -198,6 +198,29 @@ pub enum InsertOrReplacement<T> {
     Replacement(ReplacementData),
 }
 
+/// Output of a processor that may flag a message as a late arrival rather than
+/// an insert. `LateArrival` carries the original Kafka payload so a downstream
+/// strategy can re-produce it verbatim to a side topic (separate from the DLQ).
+#[derive(Clone, Debug)]
+pub enum InsertOrLateArrival<T> {
+    Insert(T),
+    LateArrival(KafkaPayload),
+}
+
+impl<T> InsertOrLateArrival<T> {
+    /// Test helper: extract the `Insert` variant or panic. Use in tests that
+    /// exercise the normal path and treat a `LateArrival` outcome as a bug.
+    #[cfg(test)]
+    pub fn unwrap_insert(self) -> T {
+        match self {
+            InsertOrLateArrival::Insert(t) => t,
+            InsertOrLateArrival::LateArrival(_) => {
+                panic!("expected InsertOrLateArrival::Insert, got LateArrival")
+            }
+        }
+    }
+}
+
 /// The return value of message processors.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct InsertBatch {

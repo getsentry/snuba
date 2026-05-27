@@ -67,6 +67,10 @@ STREAM_LOADER_SCHEMA = {
             "type": ["string", "null"],
             "description": "Name of the DLQ Kafka topic",
         },
+        "late_arrivals_topic": {
+            "type": ["string", "null"],
+            "description": "Name of the dedicated Kafka topic for late-arriving messages diverted by a partition-boundary killswitch (distinct from the DLQ; safe for automated replay).",
+        },
         "pre_filter": {
             "type": "object",
             "properties": {

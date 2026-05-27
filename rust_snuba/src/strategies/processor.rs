@@ -14,12 +14,22 @@ use sentry_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition};
 use sentry_kafka_schemas::{Schema, SchemaError, SchemaType};
 
 use crate::config::ProcessorConfig;
-use crate::processors::{ProcessingFunction, ProcessingFunctionWithReplacements};
+use crate::processors::{
+    ProcessingFunction, ProcessingFunctionWithLateArrivals, ProcessingFunctionWithReplacements,
+};
 use crate::types::{
     BytesInsertBatch, CommitLogEntry, CommitLogOffsets, EstimatedSize, InsertBatch,
-    InsertOrReplacement, KafkaMessageMetadata, RowData, TypedInsertBatch,
+    InsertOrLateArrival, InsertOrReplacement, KafkaMessageMetadata, RowData, TypedInsertBatch,
 };
 use tokio::time::Instant;
+
+/// Row-binary processor function pointer that may flag a message as a late
+/// arrival rather than an insert. Used by the eap-items row-binary pipeline.
+pub type RowBinaryProcessorFn<T> = fn(
+    KafkaPayload,
+    KafkaMessageMetadata,
+    &ProcessorConfig,
+) -> anyhow::Result<InsertOrLateArrival<TypedInsertBatch<T>>>;
 
 pub fn make_rust_processor(
     next_step: impl ProcessingStrategy<BytesInsertBatch<RowData>> + 'static,
@@ -179,13 +189,92 @@ pub fn make_rust_processor_with_replacements(
     ))
 }
 
+pub fn make_rust_processor_with_late_arrivals(
+    next_step: impl ProcessingStrategy<InsertOrLateArrival<BytesInsertBatch<RowData>>> + 'static,
+    func: ProcessingFunctionWithLateArrivals,
+    schema_name: &str,
+    enforce_schema: bool,
+    concurrency: &ConcurrencyConfig,
+    processor_config: ProcessorConfig,
+    stop_at_timestamp: Option<i64>,
+) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
+    let schema = get_schema(schema_name, enforce_schema);
+
+    fn result_to_next_msg(
+        transformed: InsertOrLateArrival<InsertBatch>,
+        partition: Partition,
+        offset: u64,
+        timestamp: DateTime<Utc>,
+        stop_at_timestamp: Option<i64>,
+    ) -> anyhow::Result<Message<InsertOrLateArrival<BytesInsertBatch<RowData>>>> {
+        if let Some(stop) = stop_at_timestamp {
+            if stop < timestamp.timestamp() {
+                let payload = BytesInsertBatch::default();
+                return Ok(Message::new_broker_message(
+                    InsertOrLateArrival::Insert(payload),
+                    partition,
+                    offset,
+                    timestamp,
+                ));
+            }
+        }
+
+        let payload = match transformed {
+            InsertOrLateArrival::Insert(transformed) => {
+                let num_bytes = transformed.rows.encoded_rows.len();
+                let mut batch = BytesInsertBatch::from_rows(transformed.rows)
+                    .with_num_bytes(num_bytes)
+                    .with_message_timestamp(timestamp)
+                    .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
+                        partition.index,
+                        CommitLogEntry {
+                            offset: offset + 1,
+                            orig_message_ts: timestamp,
+                            received_p99: transformed.origin_timestamp.into_iter().collect(),
+                        },
+                    )])))
+                    .with_cogs_data(transformed.cogs_data.unwrap_or_default());
+
+                if let Some(ts) = transformed.origin_timestamp {
+                    batch = batch.with_origin_timestamp(ts);
+                }
+                if let Some(ts) = transformed.sentry_received_timestamp {
+                    batch = batch.with_sentry_received_timestamp(ts);
+                }
+                if let Some(metrics) = transformed.item_type_metrics {
+                    batch = batch.with_item_type_metrics(metrics);
+                }
+
+                InsertOrLateArrival::Insert(batch)
+            }
+            InsertOrLateArrival::LateArrival(p) => InsertOrLateArrival::LateArrival(p),
+        };
+
+        Ok(Message::new_broker_message(
+            payload, partition, offset, timestamp,
+        ))
+    }
+
+    let task_runner = MessageProcessor {
+        schema,
+        enforce_schema,
+        func,
+        result_to_next_msg,
+        processor_config,
+        stop_at_timestamp,
+    };
+
+    Box::new(RunTaskInThreads::new(
+        next_step,
+        task_runner,
+        concurrency,
+        Some("process_message"),
+    ))
+}
+
 pub fn make_rust_processor_row_binary<T: Clone + Send + Sync + EstimatedSize + 'static>(
-    next_step: impl ProcessingStrategy<BytesInsertBatch<Vec<T>>> + 'static,
-    func: fn(
-        KafkaPayload,
-        KafkaMessageMetadata,
-        &ProcessorConfig,
-    ) -> anyhow::Result<TypedInsertBatch<T>>,
+    next_step: impl ProcessingStrategy<InsertOrLateArrival<BytesInsertBatch<Vec<T>>>> + 'static,
+    func: RowBinaryProcessorFn<T>,
     schema_name: &str,
     enforce_schema: bool,
     concurrency: &ConcurrencyConfig,
@@ -195,12 +284,12 @@ pub fn make_rust_processor_row_binary<T: Clone + Send + Sync + EstimatedSize + '
     let schema = get_schema(schema_name, enforce_schema);
 
     fn result_to_next_msg<T: EstimatedSize>(
-        transformed: TypedInsertBatch<T>,
+        transformed: InsertOrLateArrival<TypedInsertBatch<T>>,
         partition: Partition,
         offset: u64,
         timestamp: DateTime<Utc>,
         stop_at_timestamp: Option<i64>,
-    ) -> anyhow::Result<Message<BytesInsertBatch<Vec<T>>>> {
+    ) -> anyhow::Result<Message<InsertOrLateArrival<BytesInsertBatch<Vec<T>>>>> {
         // If a stop timestamp is set (used for backfills / replays), skip
         // processing messages whose timestamp exceeds the cutoff by returning
         // an empty batch that still commits the offset.
@@ -208,34 +297,44 @@ pub fn make_rust_processor_row_binary<T: Clone + Send + Sync + EstimatedSize + '
             if stop < timestamp.timestamp() {
                 let payload = BytesInsertBatch::from_rows(Vec::new());
                 return Ok(Message::new_broker_message(
-                    payload, partition, offset, timestamp,
+                    InsertOrLateArrival::Insert(payload),
+                    partition,
+                    offset,
+                    timestamp,
                 ));
             }
         }
 
-        let num_bytes: usize = transformed.rows.iter().map(|r| r.estimated_size()).sum();
-        let mut payload = BytesInsertBatch::from_rows(transformed.rows)
-            .with_num_bytes(num_bytes)
-            .with_message_timestamp(timestamp)
-            .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
-                partition.index,
-                CommitLogEntry {
-                    offset: offset + 1,
-                    orig_message_ts: timestamp,
-                    received_p99: transformed.origin_timestamp.into_iter().collect(),
-                },
-            )])))
-            .with_cogs_data(transformed.cogs_data.unwrap_or_default());
+        let payload = match transformed {
+            InsertOrLateArrival::Insert(transformed) => {
+                let num_bytes: usize = transformed.rows.iter().map(|r| r.estimated_size()).sum();
+                let mut batch = BytesInsertBatch::from_rows(transformed.rows)
+                    .with_num_bytes(num_bytes)
+                    .with_message_timestamp(timestamp)
+                    .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
+                        partition.index,
+                        CommitLogEntry {
+                            offset: offset + 1,
+                            orig_message_ts: timestamp,
+                            received_p99: transformed.origin_timestamp.into_iter().collect(),
+                        },
+                    )])))
+                    .with_cogs_data(transformed.cogs_data.unwrap_or_default());
 
-        if let Some(ts) = transformed.origin_timestamp {
-            payload = payload.with_origin_timestamp(ts);
-        }
-        if let Some(ts) = transformed.sentry_received_timestamp {
-            payload = payload.with_sentry_received_timestamp(ts);
-        }
-        if let Some(metrics) = transformed.item_type_metrics {
-            payload = payload.with_item_type_metrics(metrics);
-        }
+                if let Some(ts) = transformed.origin_timestamp {
+                    batch = batch.with_origin_timestamp(ts);
+                }
+                if let Some(ts) = transformed.sentry_received_timestamp {
+                    batch = batch.with_sentry_received_timestamp(ts);
+                }
+                if let Some(metrics) = transformed.item_type_metrics {
+                    batch = batch.with_item_type_metrics(metrics);
+                }
+
+                InsertOrLateArrival::Insert(batch)
+            }
+            InsertOrLateArrival::LateArrival(p) => InsertOrLateArrival::LateArrival(p),
+        };
 
         Ok(Message::new_broker_message(
             payload, partition, offset, timestamp,
