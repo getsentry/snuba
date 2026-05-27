@@ -6,7 +6,6 @@ api_changes:
   - "snuba/query/**/*.py"
   - "snuba/snuba_migrations/**/*"
   - "snuba/cli/devserver.py"
-  - "rust_snuba/src/processors/*"
   - "snuba/datasets/processors/*"
 
 devservices_changes:
