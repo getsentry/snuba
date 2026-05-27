@@ -42,7 +42,7 @@ pub fn get_drop_invalid_timestamps_enabled() -> bool {
 }
 
 pub fn record_invalid_timestamp_metric(prefix: &str, is_future: bool, item_type: TraceItemType) {
-    let metric_name = format!("{}.dropped_out_of_range_timestamp", prefix);
+    let metric_name = format!("{prefix}.dropped_out_of_range_timestamp");
     let item_type_str = item_type_name(item_type);
     counter!(metric_name, 1, "is_future" => is_future.to_string(), "item_type" => item_type_str);
 }
