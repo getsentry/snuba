@@ -16,6 +16,7 @@ use sentry_protos::snuba::v1::{ArrayValue, TraceItem, TraceItemType};
 use crate::config::ProcessorConfig;
 use crate::processors::utils::{
     enforce_retention, get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs,
+    record_invalid_timestamp_metric,
 };
 use crate::runtime_config::get_str_config;
 use crate::types::CogsData;
@@ -61,13 +62,17 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
         .as_ref()
         .and_then(|ts| DateTime::from_timestamp(ts.seconds, 0));
 
+    let item_type =
+        TraceItemType::try_from(trace_item.item_type).unwrap_or(TraceItemType::Unspecified);
+
     let mut should_skip = false;
     if let Some(event_ts) = event_timestamp {
         let now = Utc::now();
 
         // should_skip=true will drop messages that are too old or too far in the future
         if get_drop_invalid_timestamps_enabled() && out_of_valid_interval_secs(event_ts, now) {
-            counter!("eap_items.messages.dropped_out_of_range_timestamp", 1);
+            let is_future = event_ts > now;
+            record_invalid_timestamp_metric("eap_items.messages", is_future, item_type);
             should_skip = true;
         }
         // only DLQ messages that we don't want to drop (when should_skip=false)
@@ -93,8 +98,6 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
         retention_days
     };
 
-    let item_type =
-        TraceItemType::try_from(trace_item.item_type).unwrap_or(TraceItemType::Unspecified);
     let mut eap_item = EAPItem::try_from(trace_item)?;
 
     eap_item.retention_days = retention_days;
