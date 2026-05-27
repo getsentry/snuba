@@ -20,7 +20,9 @@ use crate::processors::utils::{
 };
 use crate::runtime_config::get_str_config;
 use crate::types::CogsData;
-use crate::types::{InsertBatch, ItemTypeMetrics, KafkaMessageMetadata, TypedInsertBatch};
+use crate::types::{
+    item_type_name, InsertBatch, ItemTypeMetrics, KafkaMessageMetadata, TypedInsertBatch,
+};
 
 /// Runtime config key prefix. Per-storage key
 /// `eap_items_dlq_grace_period_min:<storage_name>`: a non-negative integer
@@ -79,7 +81,8 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
         if !should_skip {
             if let Some(grace_min) = get_dlq_grace_period_min(&config.storage_name) {
                 if should_dlq_for_prior_partition(event_ts, now, grace_min) {
-                    counter!("eap_items.messages.dlqed_prior_partition", 1);
+                    let item_type_str = item_type_name(item_type);
+                    counter!("eap_items.messages.dlqed_prior_partition", 1, "item_type" => item_type_str);
                     anyhow::bail!(
                         "eap-items message DLQed: event timestamp {event_ts} is before the prior weekly partition boundary; routed to DLQ"
                     );
