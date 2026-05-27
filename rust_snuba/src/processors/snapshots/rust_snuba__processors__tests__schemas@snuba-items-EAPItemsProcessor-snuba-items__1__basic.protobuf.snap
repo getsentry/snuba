@@ -13,9 +13,6 @@ expression: snapshot_payload
     "attributes_float_35": {
       "sentry._internal.received_at": "<received timestamp>"
     },
-    "attributes_float_6": {
-      "some_bool": 1.0
-    },
     "attributes_float_8": {
       "with a float": 123.123
     },
