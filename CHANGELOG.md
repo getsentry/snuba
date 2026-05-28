@@ -1,5 +1,73 @@
 # Changelog
 
+## 26.5.1
+
+### New Features ✨
+
+#### Eap Items
+
+- Partition-boundary DLQ killswitch, per-storage by @onewland in [#7946](https://github.com/getsentry/snuba/pull/7946)
+- Add eap_items_dlq_replay storage for DLQ consumption by @onewland in [#7944](https://github.com/getsentry/snuba/pull/7944)
+- Runtime killswitch to DLQ messages with old event timestamps by @onewland in [#7940](https://github.com/getsentry/snuba/pull/7940)
+
+#### Other
+
+- (consumer) Per-storage max_insert_block_size override by @onewland in [#7939](https://github.com/getsentry/snuba/pull/7939)
+- (eap) Make deprecated attribute coalescing bidirectional by @mjq in [#7953](https://github.com/getsentry/snuba/pull/7953)
+- (eap-outcomes) Record broker latency metrics by @MeredithAnya in [#7948](https://github.com/getsentry/snuba/pull/7948)
+
+### Bug Fixes 🐛
+
+- (rpc) Defensively convert array attributes by @shellmayr in [#7951](https://github.com/getsentry/snuba/pull/7951)
+- Revert "functions dataset: add max_execution_time (#7931)" by @sentry-snuba-fast-revert-bot[bot] in [44055513](https://github.com/getsentry/snuba/commit/44055513cf681498918d9c13bb64e7ba40b9b21e)
+
+### Internal Changes 🔧
+
+#### Deps
+
+- Drop vulnerable rand 0.7.3 and ecdsa transitive deps by @phacops in [#7967](https://github.com/getsentry/snuba/pull/7967)
+- Bump deps to address dependabot security alerts by @phacops in [#7965](https://github.com/getsentry/snuba/pull/7965)
+- Bump actions/checkout from 4.2.2 to 6.0.2 by @dependabot in [#7850](https://github.com/getsentry/snuba/pull/7850)
+- Bump actions/create-github-app-token from 2.2.2 to 3.1.1 by @dependabot in [#7905](https://github.com/getsentry/snuba/pull/7905)
+- Bump getsentry/sentry-options/.github/workflows/validate-schema.yml from fa066c1d3ef0849153092a0272c17fc0bcce14c8 to 369660e343ea1856e631af921725931f8ae4e3cf by @dependabot in [#7903](https://github.com/getsentry/snuba/pull/7903)
+- Bump peaceiris/actions-gh-pages from 47f197a2200bb9de68ba5f48fad1c088eb1c4a32 to 4f9cc6602d3f66b9c108549d475ec49e8ef4d45e by @dependabot in [#7900](https://github.com/getsentry/snuba/pull/7900)
+- Bump rand from 0.9.2 to 0.9.3 in /rust_snuba by @dependabot in [#7874](https://github.com/getsentry/snuba/pull/7874)
+- Bump docker/setup-buildx-action from 3.12.0 to 4.0.0 by @dependabot in [#7906](https://github.com/getsentry/snuba/pull/7906)
+- Bump actions/setup-node from 6.3.0 to 6.4.0 by @dependabot in [#7901](https://github.com/getsentry/snuba/pull/7901)
+- Bump handlebars from 4.7.8 to 4.7.9 in /snuba/admin by @dependabot in [#7844](https://github.com/getsentry/snuba/pull/7844)
+- Bump getsentry/action-github-app-token from 3.0.0 to 4.0.0 by @dependabot in [#7828](https://github.com/getsentry/snuba/pull/7828)
+- Bump docker/build-push-action from 6.19.2 to 7.1.0 by @dependabot in [#7904](https://github.com/getsentry/snuba/pull/7904)
+- Bump volta-cli/action from 4.2.1 to 5.0.0 by @dependabot in [#7902](https://github.com/getsentry/snuba/pull/7902)
+- Bump astral-sh/setup-uv from 7.3.1 to 8.1.0 by @dependabot in [#7883](https://github.com/getsentry/snuba/pull/7883)
+- Bump @tootallnate/once from 2.0.0 to 2.0.1 in /snuba/admin by @dependabot in [#7958](https://github.com/getsentry/snuba/pull/7958)
+- Bump lz4_flex from 0.11.5 to 0.11.6 in /rust_snuba by @dependabot in [#7820](https://github.com/getsentry/snuba/pull/7820)
+- Bump pyasn1 from 0.6.2 to 0.6.3 by @dependabot in [#7822](https://github.com/getsentry/snuba/pull/7822)
+- Bump cryptography from 46.0.5 to 46.0.7 by @dependabot in [#7927](https://github.com/getsentry/snuba/pull/7927)
+- Bump actix-http from 3.12.0 to 3.12.1 in /rust_snuba by @dependabot in [#7892](https://github.com/getsentry/snuba/pull/7892)
+- Bump requests from 2.32.4 to 2.33.0 by @dependabot in [#7928](https://github.com/getsentry/snuba/pull/7928)
+- Bump urllib3 from 2.6.3 to 2.7.0 by @dependabot in [#7936](https://github.com/getsentry/snuba/pull/7936)
+
+#### Eap Outcomes
+
+- Remove skip_produce by @MeredithAnya in [#7956](https://github.com/getsentry/snuba/pull/7956)
+- Remove options by @MeredithAnya in [#7949](https://github.com/getsentry/snuba/pull/7949)
+
+#### Gocd
+
+- Update jsonnetfile.lock.json for gocd-jsonnet 3.0.4 by @dmajere in [#7964](https://github.com/getsentry/snuba/pull/7964)
+- Gocd-jsonnet 3.0.4 by @dmajere in [#7963](https://github.com/getsentry/snuba/pull/7963)
+
+#### Inc 2179
+
+- Drop past data older than 30 days by @MeredithAnya in [#7952](https://github.com/getsentry/snuba/pull/7952)
+- Drop eap-items and accepted-outcomes messages with out-of-range timestamps by @MeredithAnya in [#7945](https://github.com/getsentry/snuba/pull/7945)
+
+#### Other
+
+- (deps-dev) Bump pytest from 8.3.3 to 9.0.3 by @dependabot in [#7926](https://github.com/getsentry/snuba/pull/7926)
+- (eap) Read only allowlisted attributes_array sub-paths by @phacops in [#7947](https://github.com/getsentry/snuba/pull/7947)
+- (spans) Remove deprecated standalone spans storage by @phacops in [#7955](https://github.com/getsentry/snuba/pull/7955)
+
 ## 26.5.0
 
 ### New Features ✨

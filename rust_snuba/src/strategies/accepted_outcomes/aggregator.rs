@@ -13,7 +13,10 @@ use sentry_arroyo::types::{InnerMessage, Message, Partition};
 use sentry_arroyo::utils::timing::Deadline;
 use sentry_protos::snuba::v1::{TraceItem, TraceItemType};
 
-use crate::processors::utils::{get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs};
+use crate::processors::utils::{
+    get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs,
+    record_invalid_timestamp_metric,
+};
 use crate::types::{item_type_name, AggregatedOutcomesBatch, BucketKey, ItemDedupKey};
 
 #[derive(Debug, Default)]
@@ -256,7 +259,10 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
         if let Some(event_ts) = event_timestamp {
             let now = Utc::now();
             if get_drop_invalid_timestamps_enabled() && out_of_valid_interval_secs(event_ts, now) {
-                counter!("accepted_outcomes.dropped_out_of_range_timestamp", 1);
+                let item_type = TraceItemType::try_from(trace_item.item_type)
+                    .unwrap_or(TraceItemType::Unspecified);
+                let is_future = event_ts > now;
+                record_invalid_timestamp_metric("accepted_outcomes", is_future, item_type);
                 return Ok(());
             }
         }
