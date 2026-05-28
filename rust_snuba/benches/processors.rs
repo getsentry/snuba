@@ -73,6 +73,8 @@ fn create_factory(
         ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
     let replacements_concurrency =
         ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
+    let late_arrivals_concurrency =
+        ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
     let factory = ConsumerStrategyFactoryV2 {
         storage_config: storage,
         env_config: EnvConfig::default(),
@@ -84,6 +86,7 @@ fn create_factory(
         clickhouse_concurrency,
         commitlog_concurrency,
         replacements_concurrency,
+        late_arrivals_concurrency,
         async_inserts: false,
         python_max_queue_depth: None,
         use_rust_processor: true,
@@ -106,6 +109,7 @@ fn create_factory(
         use_row_binary: false,
         blq_producer_config: None,
         blq_topic: None,
+        late_arrivals_config: None,
     };
     Box::new(factory)
 }

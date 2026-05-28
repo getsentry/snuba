@@ -21,23 +21,26 @@ use crate::processors::utils::{
 use crate::runtime_config::get_str_config;
 use crate::types::CogsData;
 use crate::types::{
-    item_type_name, InsertBatch, ItemTypeMetrics, KafkaMessageMetadata, TypedInsertBatch,
+    item_type_name, InsertBatch, InsertOrLateArrival, ItemTypeMetrics, KafkaMessageMetadata,
+    TypedInsertBatch,
 };
 
 /// Runtime config key prefix. Per-storage key
-/// `eap_items_dlq_grace_period_min:<storage_name>`: a non-negative integer
-/// in minutes. When set, the eap-items processor DLQs any message whose
-/// event `timestamp` belongs to a prior weekly partition, but only once
-/// we are at least `grace_min` minutes past the most recent Monday 00:00
-/// UTC partition boundary. Unset disables the killswitch for that
-/// storage (this is how `eap_items_dlq_replay` opts out).
+/// `eap_items_late_arrival_grace_period_min:<storage_name>`: a non-negative
+/// integer in minutes. When set, the eap-items processor routes any message
+/// whose event `timestamp` belongs to a prior weekly partition to the
+/// dedicated late-arrivals topic (not the DLQ), but only once we are at
+/// least `grace_min` minutes past the most recent Monday 00:00 UTC
+/// partition boundary. Unset disables the killswitch for that storage
+/// (this is how the replay consumer opts out).
 ///
 /// The eap_items table is partitioned by
 /// `(retention_days, toMonday(timestamp))`. Writes that straddle the
-/// weekly partition boundary tax ClickHouse; dropping prior-partition
-/// messages after a grace window prevents that pressure without
-/// over-eagerly dropping current-week stragglers.
-const DLQ_GRACE_PERIOD_MIN_KEY: &str = "eap_items_dlq_grace_period_min";
+/// weekly partition boundary tax ClickHouse; diverting prior-partition
+/// messages to a side topic after a grace window prevents that pressure
+/// without over-eagerly dropping current-week stragglers, and keeps the
+/// real DLQ reserved for messages that are genuinely invalid.
+const LATE_ARRIVAL_GRACE_PERIOD_MIN_KEY: &str = "eap_items_late_arrival_grace_period_min";
 
 /// Precision factor for sampling_factor calculations to compensate for floating point errors
 const SAMPLING_FACTOR_PRECISION: f64 = 1e9;
@@ -52,8 +55,13 @@ struct ProcessedItem {
     should_skip: bool,
 }
 
-fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Result<ProcessedItem> {
-    let payload: &[u8] = msg.payload().context("Expected payload")?;
+/// Returns `Ok(None)` when the message should be diverted to the
+/// late-arrivals topic. Returns `Ok(Some(_))` for every other path,
+/// including the silent-drop `should_skip` path.
+fn process_eap_item(
+    payload: &[u8],
+    config: &ProcessorConfig,
+) -> anyhow::Result<Option<ProcessedItem>> {
     let trace_item = TraceItem::decode(payload)?;
     let origin_timestamp = trace_item
         .received
@@ -77,15 +85,13 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
             record_invalid_timestamp_metric("eap_items.messages", is_future, item_type);
             should_skip = true;
         }
-        // only DLQ messages that we don't want to drop (when should_skip=false)
+        // only route to the late-arrivals topic if we don't already plan to drop
         if !should_skip {
-            if let Some(grace_min) = get_dlq_grace_period_min(&config.storage_name) {
-                if should_dlq_for_prior_partition(event_ts, now, grace_min) {
+            if let Some(grace_min) = get_late_arrival_grace_period_min(&config.storage_name) {
+                if should_route_late_arrival(event_ts, now, grace_min) {
                     let item_type_str = item_type_name(item_type);
-                    counter!("eap_items.messages.dlqed_prior_partition", 1, "item_type" => item_type_str);
-                    anyhow::bail!(
-                        "eap-items message DLQed: event timestamp {event_ts} is before the prior weekly partition boundary; routed to DLQ"
-                    );
+                    counter!("eap_items.messages.routed_late_arrival", 1, "item_type" => item_type_str);
+                    return Ok(None);
                 }
             }
         }
@@ -142,24 +148,26 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
         data: BTreeMap::from([(app_feature, payload.len() as u64)]),
     };
 
-    Ok(ProcessedItem {
+    Ok(Some(ProcessedItem {
         eap_item,
         origin_timestamp,
         item_type_metrics,
         cogs_data,
         should_skip,
-    })
+    }))
 }
 
-fn get_dlq_grace_period_min(storage_name: &str) -> Option<i64> {
+fn get_late_arrival_grace_period_min(storage_name: &str) -> Option<i64> {
     if storage_name.is_empty() {
         return None;
     }
-    get_str_config(&format!("{DLQ_GRACE_PERIOD_MIN_KEY}:{storage_name}"))
-        .ok()
-        .flatten()
-        .and_then(|s| s.parse::<i64>().ok())
-        .filter(|&n| n >= 0)
+    get_str_config(&format!(
+        "{LATE_ARRIVAL_GRACE_PERIOD_MIN_KEY}:{storage_name}"
+    ))
+    .ok()
+    .flatten()
+    .and_then(|s| s.parse::<i64>().ok())
+    .filter(|&n| n >= 0)
 }
 
 /// Most recent Monday 00:00 UTC at or before `now` — the active weekly
@@ -170,14 +178,11 @@ fn prior_partition_boundary(now: DateTime<Utc>) -> DateTime<Utc> {
     monday.and_time(chrono::NaiveTime::MIN).and_utc()
 }
 
-/// True when we should DLQ this message because it belongs to the prior
-/// week's partition and we are far enough past the current partition
-/// boundary that prior-week stragglers should no longer be admitted.
-fn should_dlq_for_prior_partition(
-    event_ts: DateTime<Utc>,
-    now: DateTime<Utc>,
-    grace_min: i64,
-) -> bool {
+/// True when we should route this message to the late-arrivals topic
+/// because it belongs to the prior week's partition and we are far
+/// enough past the current partition boundary that prior-week
+/// stragglers should no longer be admitted to ClickHouse directly.
+fn should_route_late_arrival(event_ts: DateTime<Utc>, now: DateTime<Utc>, grace_min: i64) -> bool {
     let boundary = prior_partition_boundary(now);
     let past_min = now.signed_duration_since(boundary).num_minutes();
     past_min >= grace_min && event_ts < boundary
@@ -187,25 +192,36 @@ pub fn process_message(
     msg: KafkaPayload,
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
-) -> anyhow::Result<InsertBatch> {
-    let processed = process_eap_item(msg, config)?;
+) -> anyhow::Result<InsertOrLateArrival<InsertBatch>> {
+    let payload: &[u8] = msg.payload().context("Expected payload")?;
+    let processed = match process_eap_item(payload, config)? {
+        Some(p) => p,
+        None => return Ok(InsertOrLateArrival::LateArrival(msg)),
+    };
     if processed.should_skip {
-        return Ok(InsertBatch::skip());
+        return Ok(InsertOrLateArrival::Insert(InsertBatch::skip()));
     }
     let mut batch = InsertBatch::from_rows([processed.eap_item], processed.origin_timestamp)?;
     batch.item_type_metrics = Some(processed.item_type_metrics);
     batch.cogs_data = Some(processed.cogs_data);
-    Ok(batch)
+    Ok(InsertOrLateArrival::Insert(batch))
 }
 
 pub fn process_message_row_binary(
     msg: KafkaPayload,
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
-) -> anyhow::Result<TypedInsertBatch<EAPItemRow>> {
-    let processed = process_eap_item(msg, config)?;
+) -> anyhow::Result<InsertOrLateArrival<TypedInsertBatch<EAPItemRow>>> {
+    let payload: &[u8] = msg.payload().context("Expected payload")?;
+    let processed = match process_eap_item(payload, config)? {
+        Some(p) => p,
+        None => return Ok(InsertOrLateArrival::LateArrival(msg)),
+    };
     if processed.should_skip {
-        return Ok(TypedInsertBatch::from_rows(vec![], None));
+        return Ok(InsertOrLateArrival::Insert(TypedInsertBatch::from_rows(
+            vec![],
+            None,
+        )));
     }
     let mut batch = TypedInsertBatch::from_rows(
         vec![EAPItemRow::try_from(processed.eap_item)?],
@@ -213,7 +229,7 @@ pub fn process_message_row_binary(
     );
     batch.item_type_metrics = Some(processed.item_type_metrics);
     batch.cogs_data = Some(processed.cogs_data);
-    Ok(batch)
+    Ok(InsertOrLateArrival::Insert(batch))
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -570,7 +586,8 @@ mod tests {
             timestamp: DateTime::from(SystemTime::now()),
         };
         let batch = process_message(payload, meta, &ProcessorConfig::default())
-            .expect("The message should be processed");
+            .expect("The message should be processed")
+            .unwrap_insert();
 
         #[derive(Deserialize)]
         pub struct Item {
@@ -601,7 +618,8 @@ mod tests {
             timestamp: DateTime::from(SystemTime::now()),
         };
         let batch = process_message(payload, meta, &ProcessorConfig::default())
-            .expect("The message should be processed");
+            .expect("The message should be processed")
+            .unwrap_insert();
 
         #[derive(Deserialize)]
         pub struct Item {
@@ -633,7 +651,8 @@ mod tests {
         };
 
         let batch = process_message(payload, meta, &ProcessorConfig::default())
-            .expect("The message should be processed");
+            .expect("The message should be processed")
+            .unwrap_insert();
 
         // Verify that item_type_metrics is populated
         assert!(batch.item_type_metrics.is_some());
@@ -670,7 +689,8 @@ mod tests {
         };
 
         let batch_1 = process_message(payload_1, meta_1, &ProcessorConfig::default())
-            .expect("The message should be processed");
+            .expect("The message should be processed")
+            .unwrap_insert();
 
         // Process second message with item type Log
         let item_id_2 = Uuid::new_v4();
@@ -688,7 +708,8 @@ mod tests {
         };
 
         let batch_2 = process_message(payload_2, meta_2, &ProcessorConfig::default())
-            .expect("The message should be processed");
+            .expect("The message should be processed")
+            .unwrap_insert();
 
         // Merge the metrics as would happen in the pipeline
         let mut merged_metrics = batch_1.item_type_metrics.unwrap();
@@ -746,7 +767,8 @@ mod tests {
             timestamp: DateTime::from(SystemTime::now()),
         };
         let batch = process_message(payload, meta, &ProcessorConfig::default())
-            .expect("The message should be processed when received is None");
+            .expect("The message should be processed when received is None")
+            .unwrap_insert();
 
         assert!(batch.origin_timestamp.is_none());
     }
@@ -773,7 +795,8 @@ mod tests {
             meta.clone(),
             &ProcessorConfig::default(),
         )
-        .expect("The message should be processed");
+        .expect("The message should be processed")
+        .unwrap_insert();
 
         #[derive(Deserialize)]
         struct Item {
@@ -792,7 +815,8 @@ mod tests {
             meta,
             &ProcessorConfig::default(),
         )
-        .expect("The message should be processed");
+        .expect("The message should be processed")
+        .unwrap_insert();
 
         let row = &rb_batch.rows[0];
         let received_at = row
@@ -824,7 +848,8 @@ mod tests {
             meta.clone(),
             &ProcessorConfig::default(),
         )
-        .expect("The message should be processed");
+        .expect("The message should be processed")
+        .unwrap_insert();
 
         #[derive(Deserialize)]
         struct Item {
@@ -842,7 +867,8 @@ mod tests {
             meta,
             &ProcessorConfig::default(),
         )
-        .expect("The message should be processed");
+        .expect("The message should be processed")
+        .unwrap_insert();
 
         let row = &rb_batch.rows[0];
         let has_received_at = row
@@ -886,58 +912,137 @@ mod tests {
     }
 
     #[test]
-    fn test_should_dlq_prior_week_past_grace() {
-        // 45 min past Monday 00:00 UTC; message timestamp is prior week → DLQ.
+    fn test_should_route_late_arrival_prior_week_past_grace() {
+        // 45 min past Monday 00:00 UTC; message timestamp is prior week → route to late-arrivals.
         let now = ymd_hms(2026, 5, 18, 0, 45, 0);
         let event_ts = ymd_hms(2026, 5, 17, 23, 30, 0);
-        assert!(should_dlq_for_prior_partition(event_ts, now, 45));
+        assert!(should_route_late_arrival(event_ts, now, 45));
     }
 
     #[test]
-    fn test_should_not_dlq_within_grace() {
-        // 30 min past Monday 00:00 UTC, grace=45 → not DLQ even though prior week.
+    fn test_should_not_route_within_grace() {
+        // 30 min past Monday 00:00 UTC, grace=45 → not routed even though prior week.
         let now = ymd_hms(2026, 5, 18, 0, 30, 0);
         let event_ts = ymd_hms(2026, 5, 17, 23, 30, 0);
-        assert!(!should_dlq_for_prior_partition(event_ts, now, 45));
+        assert!(!should_route_late_arrival(event_ts, now, 45));
     }
 
     #[test]
-    fn test_should_not_dlq_current_week_past_grace() {
-        // Past grace, but message belongs to current week → never DLQ.
+    fn test_should_not_route_current_week_past_grace() {
+        // Past grace, but message belongs to current week → never routed.
         let now = ymd_hms(2026, 5, 18, 1, 30, 0);
         let event_ts = ymd_hms(2026, 5, 18, 1, 0, 0);
-        assert!(!should_dlq_for_prior_partition(event_ts, now, 45));
+        assert!(!should_route_late_arrival(event_ts, now, 45));
     }
 
     #[test]
-    fn test_should_not_dlq_event_at_boundary() {
-        // event_ts == boundary belongs to the new week — must not DLQ.
+    fn test_should_not_route_event_at_boundary() {
+        // event_ts == boundary belongs to the new week — must not be routed.
         let now = ymd_hms(2026, 5, 18, 6, 0, 0);
         let event_ts = ymd_hms(2026, 5, 18, 0, 0, 0);
-        assert!(!should_dlq_for_prior_partition(event_ts, now, 45));
+        assert!(!should_route_late_arrival(event_ts, now, 45));
     }
 
     #[test]
-    fn test_should_not_dlq_future_event_ts() {
+    fn test_should_not_route_future_event_ts() {
         // Producer clock skew: event_ts > now. Belongs to current week (or future);
-        // event_ts < boundary is false, so we never DLQ.
+        // event_ts < boundary is false, so we never route.
         let now = ymd_hms(2026, 5, 21, 12, 0, 0);
         let event_ts = ymd_hms(2026, 5, 22, 0, 0, 0);
-        assert!(!should_dlq_for_prior_partition(event_ts, now, 45));
+        assert!(!should_route_late_arrival(event_ts, now, 45));
     }
 
     #[test]
-    fn test_should_dlq_grace_zero_dlqs_immediately_at_boundary() {
-        // grace=0 → DLQ prior-week messages the instant the new week starts.
+    fn test_should_route_grace_zero_immediately_at_boundary() {
+        // grace=0 → route prior-week messages the instant the new week starts.
         let now = ymd_hms(2026, 5, 18, 0, 0, 0);
         let event_ts = ymd_hms(2026, 5, 17, 23, 59, 59);
-        assert!(should_dlq_for_prior_partition(event_ts, now, 0));
+        assert!(should_route_late_arrival(event_ts, now, 0));
     }
 
     #[test]
-    fn test_get_dlq_grace_period_min_unset_storage_returns_none() {
+    fn test_get_late_arrival_grace_period_min_unset_storage_returns_none() {
         // Empty storage_name short-circuits to None without hitting Python.
-        assert_eq!(get_dlq_grace_period_min(""), None);
+        assert_eq!(get_late_arrival_grace_period_min(""), None);
+    }
+
+    /// Cover the integration of the killswitch with `process_message`:
+    /// when the runtime config is armed and the event timestamp is firmly
+    /// in a prior week, the processor must return the `LateArrival`
+    /// variant carrying the original Kafka payload rather than an Insert.
+    #[test]
+    fn test_process_message_routes_late_arrival_when_armed() {
+        // grace=0 + event_ts in 2020 → guaranteed prior-week regardless of
+        // when this test runs.
+        crate::runtime_config::patch_str_config_for_test(
+            "eap_items_late_arrival_grace_period_min:test_la_storage_json",
+            Some("0"),
+        );
+
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.timestamp = Some(Timestamp {
+            seconds: 1_577_836_800, // 2020-01-01
+            nanos: 0,
+        });
+
+        let mut payload_bytes = Vec::new();
+        trace_item.encode(&mut payload_bytes).unwrap();
+        let payload = KafkaPayload::new(None, None, Some(payload_bytes.clone()));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        let config = ProcessorConfig {
+            env_config: Default::default(),
+            storage_name: "test_la_storage_json".to_string(),
+        };
+
+        let result = process_message(payload, meta, &config).expect("processing should not error");
+        match result {
+            crate::types::InsertOrLateArrival::LateArrival(p) => {
+                assert_eq!(p.payload(), Some(&payload_bytes));
+            }
+            crate::types::InsertOrLateArrival::Insert(_) => panic!("expected LateArrival"),
+        }
+    }
+
+    #[test]
+    fn test_process_message_row_binary_routes_late_arrival_when_armed() {
+        crate::runtime_config::patch_str_config_for_test(
+            "eap_items_late_arrival_grace_period_min:test_la_storage_rb",
+            Some("0"),
+        );
+
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.timestamp = Some(Timestamp {
+            seconds: 1_577_836_800, // 2020-01-01
+            nanos: 0,
+        });
+
+        let mut payload_bytes = Vec::new();
+        trace_item.encode(&mut payload_bytes).unwrap();
+        let payload = KafkaPayload::new(None, None, Some(payload_bytes.clone()));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        let config = ProcessorConfig {
+            env_config: Default::default(),
+            storage_name: "test_la_storage_rb".to_string(),
+        };
+
+        let result = process_message_row_binary(payload, meta, &config)
+            .expect("processing should not error");
+        match result {
+            crate::types::InsertOrLateArrival::LateArrival(p) => {
+                assert_eq!(p.payload(), Some(&payload_bytes));
+            }
+            crate::types::InsertOrLateArrival::Insert(_) => panic!("expected LateArrival"),
+        }
     }
 
     #[test]
@@ -957,7 +1062,8 @@ mod tests {
             timestamp: DateTime::from(SystemTime::now()),
         };
         let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
-            .expect("The message should be processed");
+            .expect("The message should be processed")
+            .unwrap_insert();
 
         assert_eq!(batch.rows.len(), 1);
         let row = &batch.rows[0];
@@ -985,7 +1091,8 @@ mod tests {
             timestamp: DateTime::from(SystemTime::now()),
         };
         let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
-            .expect("The message should be processed");
+            .expect("The message should be processed")
+            .unwrap_insert();
 
         let row = &batch.rows[0];
         assert_eq!(row.retention_days, row.downsampled_retention_days);
@@ -1007,7 +1114,8 @@ mod tests {
             timestamp: DateTime::from(SystemTime::now()),
         };
         let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
-            .expect("The message should be processed");
+            .expect("The message should be processed")
+            .unwrap_insert();
 
         let row = &batch.rows[0];
         assert_eq!(row.downsampled_retention_days, 365);
@@ -1031,7 +1139,8 @@ mod tests {
         };
 
         let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
-            .expect("The message should be processed");
+            .expect("The message should be processed")
+            .unwrap_insert();
 
         assert!(batch.item_type_metrics.is_some());
         let metrics = batch.item_type_metrics.unwrap();
@@ -1060,7 +1169,8 @@ mod tests {
         };
 
         let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
-            .expect("The message should be processed");
+            .expect("The message should be processed")
+            .unwrap_insert();
 
         assert!(batch.cogs_data.is_some());
         let cogs = batch.cogs_data.unwrap();
@@ -1106,7 +1216,8 @@ mod tests {
         };
 
         let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
-            .expect("The message should be processed");
+            .expect("The message should be processed")
+            .unwrap_insert();
 
         let row = &batch.rows[0];
 
@@ -1145,7 +1256,8 @@ mod tests {
         };
 
         let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
-            .expect("The message should be processed");
+            .expect("The message should be processed")
+            .unwrap_insert();
 
         let row = &batch.rows[0];
         assert_eq!(row.sampling_weight, 8); // 1 / (0.5 * 0.25) = 8
@@ -1218,12 +1330,14 @@ mod tests {
         // Process through JSON path
         let json_payload = KafkaPayload::new(None, None, Some(payload_bytes.clone()));
         let json_batch = process_message(json_payload, meta.clone(), &ProcessorConfig::default())
-            .expect("JSON path should succeed");
+            .expect("JSON path should succeed")
+            .unwrap_insert();
 
         // Process through RowBinary path
         let rb_payload = KafkaPayload::new(None, None, Some(payload_bytes));
         let rb_batch = process_message_row_binary(rb_payload, meta, &ProcessorConfig::default())
-            .expect("RowBinary path should succeed");
+            .expect("RowBinary path should succeed")
+            .unwrap_insert();
 
         // Parse the JSON output
         let json_str =
@@ -1489,7 +1603,8 @@ mod tests {
         };
 
         let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
-            .expect("The message should be processed");
+            .expect("The message should be processed")
+            .unwrap_insert();
 
         assert_eq!(batch.rows.len(), 1);
         let row = batch.rows[0].clone();

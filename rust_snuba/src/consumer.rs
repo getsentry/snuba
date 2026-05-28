@@ -250,6 +250,17 @@ pub fn consumer_impl(
         None
     };
 
+    let late_arrivals_config = if let Some(topic_config) = consumer_config.late_arrivals_topic {
+        let producer_config =
+            KafkaConfig::new_producer_config(vec![], Some(topic_config.broker_config));
+        Some((
+            producer_config,
+            Topic::new(&topic_config.physical_topic_name),
+        ))
+    } else {
+        None
+    };
+
     let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);
 
     let mut rebalance_delay_secs = consumer_config
@@ -274,6 +285,7 @@ pub fn consumer_impl(
         clickhouse_concurrency: ConcurrencyConfig::new(clickhouse_concurrency),
         commitlog_concurrency: ConcurrencyConfig::new(2),
         replacements_concurrency: ConcurrencyConfig::new(4),
+        late_arrivals_concurrency: ConcurrencyConfig::new(10),
         async_inserts,
         python_max_queue_depth,
         use_rust_processor,
@@ -291,6 +303,7 @@ pub fn consumer_impl(
         use_row_binary,
         blq_producer_config: blq_producer_config.clone(),
         blq_topic: dlq_topic,
+        late_arrivals_config,
     };
 
     let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);
@@ -378,6 +391,24 @@ pub fn process_message(
                     let key_bytes = PyBytes::new(py, &r.key).into();
                     let value_bytes = PyBytes::new(py, &r.value).into();
                     Ok((None, Some((key_bytes, value_bytes))))
+                }
+            }
+        }
+        processors::ProcessingFunctionType::ProcessingFunctionWithLateArrivals(f) => {
+            let res = f(payload, meta, &config::ProcessorConfig::default())
+                .map_err(|e| SnubaRustError::new_err(format!("invalid message: {e:?}")))?;
+
+            match res {
+                crate::types::InsertOrLateArrival::Insert(r) => {
+                    let payload = PyBytes::new(py, &r.rows.into_encoded_rows()).into();
+                    Ok((Some(payload), None))
+                }
+                crate::types::InsertOrLateArrival::LateArrival(_) => {
+                    // This Python helper is for single-message decoding (e.g.,
+                    // by the admin/replay tooling). A late-arrival outcome
+                    // isn't insertable; surface it as an empty insert so the
+                    // caller doesn't try to consume rows.
+                    Ok((None, None))
                 }
             }
         }

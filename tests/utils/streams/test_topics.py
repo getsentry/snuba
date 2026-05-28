@@ -18,6 +18,9 @@ def test_valid_topics() -> None:
                 Topic.EAP_MUTATIONS,
                 Topic.OURLOGS,
             )
+            # New topics pending registration in sentry-kafka-schemas.
+            # Remove the entry from this tuple once a schema has been added.
+            pending_schema_registration = (Topic.EAP_ITEMS_LATE_ARRIVALS,)
 
-            if topic not in deprecated_topics:
+            if topic not in deprecated_topics and topic not in pending_schema_registration:
                 raise

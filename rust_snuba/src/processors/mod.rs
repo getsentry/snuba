@@ -13,12 +13,13 @@ mod replays;
 pub mod utils;
 
 use crate::config::ProcessorConfig;
-use crate::types::{InsertBatch, InsertOrReplacement, KafkaMessageMetadata};
+use crate::types::{InsertBatch, InsertOrLateArrival, InsertOrReplacement, KafkaMessageMetadata};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 
 pub enum ProcessingFunctionType {
     ProcessingFunction(ProcessingFunction),
     ProcessingFunctionWithReplacements(ProcessingFunctionWithReplacements),
+    ProcessingFunctionWithLateArrivals(ProcessingFunctionWithLateArrivals),
 }
 
 pub type ProcessingFunction =
@@ -30,6 +31,13 @@ pub type ProcessingFunctionWithReplacements =
         KafkaMessageMetadata,
         config: &ProcessorConfig,
     ) -> anyhow::Result<InsertOrReplacement<InsertBatch>>;
+
+pub type ProcessingFunctionWithLateArrivals =
+    fn(
+        KafkaPayload,
+        KafkaMessageMetadata,
+        config: &ProcessorConfig,
+    ) -> anyhow::Result<InsertOrLateArrival<InsertBatch>>;
 
 macro_rules! define_processing_functions {
     ($(($name:literal, $logical_topic:literal, $function:expr)),* $(,)*) => {
@@ -63,7 +71,7 @@ define_processing_functions! {
     ("PolymorphicMetricsProcessor", "snuba-metrics", ProcessingFunctionType::ProcessingFunction(release_health_metrics::process_metrics_message)),
     ("ErrorsProcessor", "events", ProcessingFunctionType::ProcessingFunctionWithReplacements(errors::process_message_with_replacement)),
     ("ProfileChunksProcessor", "snuba-profile-chunks", ProcessingFunctionType::ProcessingFunction(profile_chunks::process_message)),
-    ("EAPItemsProcessor", "snuba-items", ProcessingFunctionType::ProcessingFunction(eap_items::process_message)),
+    ("EAPItemsProcessor", "snuba-items", ProcessingFunctionType::ProcessingFunctionWithLateArrivals(eap_items::process_message)),
 }
 
 // COGS is recorded for these processors
@@ -206,6 +214,30 @@ mod tests {
                                 insta::assert_json_snapshot!(snapshot_payload);
                             }
                             InsertOrReplacement::Replacement(_replacement) => {}
+                        }
+                    }
+                    ProcessingFunctionType::ProcessingFunctionWithLateArrivals(processor_fn) => {
+                        let processed =
+                            processor_fn(payload, metadata.clone(), &processor_config).unwrap();
+
+                        match processed {
+                            InsertOrLateArrival::Insert(insert) => {
+                                let encoded_rows =
+                                    String::from_utf8(insert.rows.into_encoded_rows()).unwrap();
+                                let mut snapshot_payload = Vec::new();
+                                for row in encoded_rows.lines() {
+                                    let row_value: serde_json::Value =
+                                        serde_json::from_str(row).unwrap();
+                                    snapshot_payload.push(row_value);
+                                }
+                                insta::assert_json_snapshot!(snapshot_payload);
+                            }
+                            InsertOrLateArrival::LateArrival(_) => {
+                                // Schema examples are never expected to trigger
+                                // the killswitch — runtime config is unset in
+                                // tests, so this branch is unreachable.
+                                panic!("unexpected LateArrival for schema example");
+                            }
                         }
                     }
                 }

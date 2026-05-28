@@ -2,7 +2,7 @@ from functools import cached_property
 from typing import Any, Mapping, Optional, Sequence
 
 from arroyo.backends.kafka import KafkaPayload
-from confluent_kafka.admin import (
+from confluent_kafka.admin import (  # type: ignore[attr-defined]
     AdminClient,
     ConfigResource,
     ResourceType,
@@ -113,6 +113,7 @@ class KafkaStreamLoader:
         subscription_result_topic_spec: Optional[KafkaTopicSpec] = None,
         subscription_delay_seconds: Optional[int] = None,
         dlq_topic_spec: Optional[KafkaTopicSpec] = None,
+        late_arrivals_topic_spec: Optional[KafkaTopicSpec] = None,
     ) -> None:
         subscription_values = [
             bool(subscription_scheduled_topic_spec),
@@ -136,6 +137,7 @@ class KafkaStreamLoader:
         self.__subscription_delay_seconds = subscription_delay_seconds
         self.__pre_filter = pre_filter
         self.__dlq_topic_spec = dlq_topic_spec
+        self.__late_arrivals_topic_spec = late_arrivals_topic_spec
 
     def get_processor(self) -> MessageProcessor:
         return self.__processor
@@ -174,6 +176,9 @@ class KafkaStreamLoader:
     def get_dlq_topic_spec(self) -> Optional[KafkaTopicSpec]:
         return self.__dlq_topic_spec
 
+    def get_late_arrivals_topic_spec(self) -> Optional[KafkaTopicSpec]:
+        return self.__late_arrivals_topic_spec
+
 
 def build_kafka_stream_loader_from_settings(
     processor: MessageProcessor,
@@ -187,6 +192,7 @@ def build_kafka_stream_loader_from_settings(
     subscription_synchronization_timestamp: Optional[str] = None,
     subscription_delay_seconds: Optional[int] = None,
     dlq_topic: Optional[Topic] = None,
+    late_arrivals_topic: Optional[Topic] = None,
 ) -> KafkaStreamLoader:
     default_topic_spec = KafkaTopicSpec(default_topic)
 
@@ -220,6 +226,11 @@ def build_kafka_stream_loader_from_settings(
     else:
         dlq_topic_spec = None
 
+    if late_arrivals_topic is not None:
+        late_arrivals_topic_spec: Optional[KafkaTopicSpec] = KafkaTopicSpec(late_arrivals_topic)
+    else:
+        late_arrivals_topic_spec = None
+
     return KafkaStreamLoader(
         processor,
         default_topic_spec,
@@ -232,6 +243,7 @@ def build_kafka_stream_loader_from_settings(
         subscription_result_topic_spec=subscription_result_topic_spec,
         subscription_delay_seconds=subscription_delay_seconds,
         dlq_topic_spec=dlq_topic_spec,
+        late_arrivals_topic_spec=late_arrivals_topic_spec,
     )
 
 

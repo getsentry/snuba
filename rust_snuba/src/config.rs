@@ -26,6 +26,12 @@ pub struct ConsumerConfig {
     pub replacements_topic: Option<TopicConfig>,
     pub accepted_outcomes_topic: Option<TopicConfig>,
     pub dlq_topic: Option<TopicConfig>,
+    /// Optional Kafka topic for messages diverted by an eap-items-style
+    /// partition-boundary killswitch. Distinct from `dlq_topic`: late
+    /// arrivals are known-good payloads safe for automated replay, while
+    /// the DLQ is reserved for genuinely invalid messages.
+    #[serde(default)]
+    pub late_arrivals_topic: Option<TopicConfig>,
     pub accountant_topic: TopicConfig,
     pub max_batch_size: usize,
     pub max_batch_time_ms: u64,

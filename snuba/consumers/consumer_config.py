@@ -68,6 +68,7 @@ class ConsumerConfig:
     replacements_topic: Optional[TopicConfig]
     accepted_outcomes_topic: Optional[TopicConfig]
     dlq_topic: Optional[TopicConfig]
+    late_arrivals_topic: Optional[TopicConfig]
     max_batch_size: int
     max_batch_time_ms: int
     max_batch_size_calculation: str
@@ -258,6 +259,15 @@ def resolve_consumer_config(
         slice_id,
     )
 
+    # Late-arrivals topic does not support override via CLI
+    late_arrivals_topic_spec = stream_loader.get_late_arrivals_topic_spec()
+    resolved_late_arrivals_topic = _resolve_topic_config(
+        "late arrivals topic",
+        late_arrivals_topic_spec,
+        None,
+        slice_id,
+    )
+
     accountant_topic = _resolve_topic_config(
         "accountant topic",
         KafkaTopicSpec(Topic.COGS_SHARED_RESOURCES_USAGE),
@@ -276,6 +286,7 @@ def resolve_consumer_config(
         replacements_topic=resolved_replacements_topic,
         accepted_outcomes_topic=resolved_accepted_outcomes_topic,
         dlq_topic=resolved_dlq_topic,
+        late_arrivals_topic=resolved_late_arrivals_topic,
         max_batch_size=max_batch_size,
         max_batch_time_ms=max_batch_time_ms,
         max_batch_size_calculation=max_batch_size_calculation,
