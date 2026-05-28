@@ -130,6 +130,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "search_issues",
             "generic_metrics_counters",
             "events_analytics_platform",
+            "events_analytics_platform_ro",
             "group_attributes",
             "generic_metrics_gauges",
             "profile_chunks",
