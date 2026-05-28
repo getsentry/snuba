@@ -40,7 +40,7 @@ use crate::types::{
 const DLQ_GRACE_PERIOD_MIN_KEY: &str = "eap_items_dlq_grace_period_min";
 
 /// Precision factor for sampling_factor calculations to compensate for floating point errors
-const SAMPLING_FACTOR_PRECISION: f64 = 1e9;
+const SAMPLING_FACTOR_PRECISION: f64 = 1e6;
 /// Minimum allowed sampling_factor value
 const MIN_SAMPLING_FACTOR: f64 = 1.0 / SAMPLING_FACTOR_PRECISION;
 
@@ -272,12 +272,15 @@ impl TryFrom<TraceItem> for EAPItem {
             }
         }
 
-        if from.client_sample_rate > 0.0 {
+        // Sample rates must be in (0, 1]. Values outside that range are treated as
+        // missing and fall back to the default of 1.0. This mirrors the normalization
+        // Relay does on `sentry.client_sample_rate` / `sentry.server_sample_rate`.
+        if is_valid_sample_rate(from.client_sample_rate) {
             eap_item.sampling_factor *= from.client_sample_rate;
             eap_item.client_sample_rate = from.client_sample_rate;
         }
 
-        if from.server_sample_rate > 0.0 {
+        if is_valid_sample_rate(from.server_sample_rate) {
             eap_item.sampling_factor *= from.server_sample_rate;
             eap_item.server_sample_rate = from.server_sample_rate;
         }
@@ -296,6 +299,10 @@ impl TryFrom<TraceItem> for EAPItem {
 
         Ok(eap_item)
     }
+}
+
+fn is_valid_sample_rate(rate: f64) -> bool {
+    rate > 0.0 && rate <= 1.0
 }
 
 fn fnv_1a(input: &[u8]) -> u32 {
@@ -1541,14 +1548,74 @@ mod tests {
     }
 
     #[test]
+    fn test_out_of_range_sample_rates_are_normalized_to_one() {
+        for (client, server) in [
+            (1.5, 0.5),  // client > 1
+            (0.5, 1.5),  // server > 1
+            (-0.1, 0.5), // client < 0
+            (0.5, -0.1), // server < 0
+            (0.0, 0.5),  // client == 0
+            (0.5, 0.0),  // server == 0
+        ] {
+            let item_id = Uuid::new_v4();
+            let mut trace_item = generate_trace_item(item_id);
+            trace_item.client_sample_rate = client;
+            trace_item.server_sample_rate = server;
+
+            let eap_item = EAPItem::try_from(trace_item).expect("conversion should succeed");
+
+            let expected_client = if is_valid_sample_rate(client) {
+                client
+            } else {
+                1.0
+            };
+            let expected_server = if is_valid_sample_rate(server) {
+                server
+            } else {
+                1.0
+            };
+            let expected_factor = expected_client * expected_server;
+
+            assert_eq!(
+                eap_item.client_sample_rate, expected_client,
+                "client_sample_rate {client} should normalize to {expected_client}"
+            );
+            assert_eq!(
+                eap_item.server_sample_rate, expected_server,
+                "server_sample_rate {server} should normalize to {expected_server}"
+            );
+            assert!(
+                (eap_item.sampling_factor - expected_factor).abs() < 1e-9,
+                "sampling_factor for ({client}, {server}) should be {expected_factor}, got {}",
+                eap_item.sampling_factor
+            );
+        }
+    }
+
+    #[test]
+    fn test_nan_sample_rates_are_normalized_to_one() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.client_sample_rate = f64::NAN;
+        trace_item.server_sample_rate = f64::NAN;
+
+        let eap_item = EAPItem::try_from(trace_item).expect("conversion should succeed");
+
+        assert_eq!(eap_item.client_sample_rate, 1.0);
+        assert_eq!(eap_item.server_sample_rate, 1.0);
+        assert_eq!(eap_item.sampling_factor, 1.0);
+        assert_eq!(eap_item.sampling_weight, 1);
+    }
+
+    #[test]
     fn test_very_low_sample_rates_do_not_result_in_zero_sampling_factor() {
         let item_id = Uuid::new_v4();
         let mut trace_item = generate_trace_item(item_id);
 
-        // Set extremely low sample rates that would multiply to a value smaller than 1e-9
-        trace_item.client_sample_rate = 0.00001; // 1e-5
-        trace_item.server_sample_rate = 0.00001; // 1e-5
-                                                 // Combined: 1e-10, which is smaller than MIN_SAMPLING_FACTOR (1e-9)
+        // Set extremely low sample rates that would multiply to a value smaller than 1e-6
+        trace_item.client_sample_rate = 0.001; // 1e-3
+        trace_item.server_sample_rate = 0.0001; // 1e-4
+                                                // Combined: 1e-7, which is smaller than MIN_SAMPLING_FACTOR (1e-6)
 
         let eap_item = EAPItem::try_from(trace_item);
 
