@@ -95,6 +95,20 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 param_types={"organization_id": int},
             ),
             Configuration(
+                "organization_referrer_max_bytes_to_read",
+                "Per-(organization_id, referrer) hard cap forwarded to clickhouse as max_bytes_to_read. Queries that match are allowed to run with this cap and bypass the sliding-window scan limit",
+                int,
+                DEFAULT_OVERRIDE_LIMIT,
+                param_types={"organization_id": int, "referrer": str},
+            ),
+            Configuration(
+                "organization_max_bytes_to_read",
+                "Per-organization_id hard cap forwarded to clickhouse as max_bytes_to_read across any referrer. Queries that match are allowed to run with this cap and bypass the sliding-window scan limit",
+                int,
+                DEFAULT_OVERRIDE_LIMIT,
+                param_types={"organization_id": int},
+            ),
+            Configuration(
                 "project_referrer_scan_limit",
                 f"DEFAULT: how many bytes can a project scan per referrer in the last {self.WINDOW_SECONDS / 60} mins before queries start getting rejected",
                 int,
@@ -197,6 +211,31 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             "customer tenant key is neither project_id or organization_id, this should never happen",
         )
 
+    def __get_organization_max_bytes_to_read(
+        self, tenant_ids: dict[str, str | int], referrer: str | int
+    ) -> int | None:
+        """Return a per-org max_bytes_to_read cap if one is configured.
+
+        Precedence: (organization_id, referrer) > organization_id.
+        Returns None when no cap applies.
+        """
+        org_id = tenant_ids.get("organization_id")
+        if org_id is None:
+            return None
+        org_referrer_cap = self.get_config_value(
+            "organization_referrer_max_bytes_to_read",
+            {"organization_id": org_id, "referrer": referrer},
+        )
+        if org_referrer_cap != DEFAULT_OVERRIDE_LIMIT:
+            return int(org_referrer_cap)
+        org_cap = self.get_config_value(
+            "organization_max_bytes_to_read",
+            {"organization_id": org_id},
+        )
+        if org_cap != DEFAULT_OVERRIDE_LIMIT:
+            return int(org_cap)
+        return None
+
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
@@ -233,6 +272,23 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 quota_used=0,
                 quota_unit=QUOTA_UNIT,
                 suggestion=PASS_THROUGH_REFERRERS_SUGGESTION,
+            )
+
+        org_cap = self.__get_organization_max_bytes_to_read(tenant_ids, referrer)
+        if org_cap is not None:
+            return QuotaAllowance(
+                can_run=True,
+                max_threads=self.max_threads,
+                max_bytes_to_read=org_cap,
+                explanation={
+                    "reason": f"organization_id {tenant_ids.get('organization_id')} runs with a per-org max_bytes_to_read cap of {org_cap}"
+                },
+                is_throttled=False,
+                throttle_threshold=MAX_THRESHOLD,
+                rejection_threshold=MAX_THRESHOLD,
+                quota_used=0,
+                quota_unit=QUOTA_UNIT,
+                suggestion=NO_SUGGESTION,
             )
 
         scan_limit = self.__get_scan_limit(customer_tenant_key, customer_tenant_value, referrer)
