@@ -1,4 +1,3 @@
-from typing import Sequence
 from unittest.mock import Mock, patch
 
 from click.testing import CliRunner
@@ -20,10 +19,19 @@ from snuba.cli.replacer import replacer
 @patch.object(snuba.cli.replacer, "get_writable_storage")
 @patch.object(snuba.cli.replacer, "setup_logging")
 @patch.object(snuba.cli.replacer, "setup_sentry")
-@patch.object(snuba.cli.replacer, "configure_metrics")
+@patch("arroyo.configure_metrics")
 @patch.object(snuba.cli.replacer, "signal")
 def test_replacer_cli(
-    *_mocks: Sequence[Mock],
+    _signal: Mock,
+    _configure_metrics: Mock,
+    _setup_sentry: Mock,
+    _setup_logging: Mock,
+    get_writable_storage: Mock,
+    replacer_worker: Mock,
+    replacer_strategy_factory: Mock,
+    build_kafka_consumer_configuration: Mock,
+    _kafka_consumer: Mock,
+    _stream_processor: Mock,
 ) -> None:
     storage = Mock()
     topic_spec = Mock()
@@ -32,10 +40,10 @@ def test_replacer_cli(
     storage.get_table_writer.return_value.get_stream_loader.return_value.get_replacement_topic_spec.return_value = (
         topic_spec
     )
-    snuba.cli.replacer.get_writable_storage.return_value = storage
+    get_writable_storage.return_value = storage
 
     worker = Mock()
-    snuba.replacer.ReplacerWorker.return_value = worker
+    replacer_worker.return_value = worker
 
     runner = CliRunner()
     result = runner.invoke(
@@ -51,11 +59,11 @@ def test_replacer_cli(
     )
 
     assert result.exit_code == 0, result.output
-    assert snuba.replacer.ReplacerStrategyFactory.call_args.kwargs == {
+    assert replacer_strategy_factory.call_args.kwargs == {
         "worker": worker,
         "health_check_file": "/tmp/health.txt",
     }
-    assert snuba.utils.streams.configuration_builder.build_kafka_consumer_configuration.call_args.kwargs[
+    assert build_kafka_consumer_configuration.call_args.kwargs[
         "override_params"
     ] == {
         "max.poll.interval.ms": 12345,
