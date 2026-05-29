@@ -180,6 +180,10 @@ ATTRIBUTES_ARRAY_ALLOWLIST: tuple[str, ...] = (
     "gen_ai.response.object",
     "gen_ai.tool.call.arguments",
     "gen_ai.tool.input",
+    "workflow_ids",
+    "triggered_workflow_ids",
+    "action_filter_group_ids",
+    "triggered_action_ids",
 )
 
 
