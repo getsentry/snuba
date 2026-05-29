@@ -37,9 +37,7 @@ def test_replacer_cli(
     topic_spec = Mock()
     topic_spec.topic_name = "replacements-topic"
     topic_spec.topic = Mock()
-    storage.get_table_writer.return_value.get_stream_loader.return_value.get_replacement_topic_spec.return_value = (
-        topic_spec
-    )
+    storage.get_table_writer.return_value.get_stream_loader.return_value.get_replacement_topic_spec.return_value = topic_spec
     get_writable_storage.return_value = storage
 
     worker = Mock()
@@ -63,9 +61,7 @@ def test_replacer_cli(
         "worker": worker,
         "health_check_file": "/tmp/health.txt",
     }
-    assert build_kafka_consumer_configuration.call_args.kwargs[
-        "override_params"
-    ] == {
+    assert build_kafka_consumer_configuration.call_args.kwargs["override_params"] == {
         "max.poll.interval.ms": 12345,
         "session.timeout.ms": 12345,
     }
