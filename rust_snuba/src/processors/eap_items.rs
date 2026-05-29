@@ -19,10 +19,9 @@ use crate::processors::utils::{
     record_invalid_timestamp_metric,
 };
 use crate::runtime_config::get_str_config;
+use crate::strategies::clickhouse::rowbinary;
 use crate::types::CogsData;
-use crate::types::{
-    item_type_name, InsertBatch, ItemTypeMetrics, KafkaMessageMetadata, TypedInsertBatch,
-};
+use crate::types::{item_type_name, InsertBatch, ItemTypeMetrics, KafkaMessageMetadata, RowData};
 
 /// Runtime config key prefix. Per-storage key
 /// `eap_items_dlq_grace_period_min:<storage_name>`: a non-negative integer
@@ -202,18 +201,62 @@ pub fn process_message_row_binary(
     msg: KafkaPayload,
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
-) -> anyhow::Result<TypedInsertBatch<EAPItemRow>> {
+) -> anyhow::Result<InsertBatch> {
     let processed = process_eap_item(msg, config)?;
     if processed.should_skip {
-        return Ok(TypedInsertBatch::from_rows(vec![], None));
+        return Ok(InsertBatch::skip());
     }
-    let mut batch = TypedInsertBatch::from_rows(
-        vec![EAPItemRow::try_from(processed.eap_item)?],
-        processed.origin_timestamp,
-    );
-    batch.item_type_metrics = Some(processed.item_type_metrics);
-    batch.cogs_data = Some(processed.cogs_data);
-    Ok(batch)
+    let row = EAPItemRow::try_from(processed.eap_item)?;
+
+    // Encode the row to RowBinary bytes inline so the wide typed struct (~80
+    // Vec<(String, _)> buckets) drops here instead of riding the pipeline to
+    // the writer step. The batch downstream sees only a compact Vec<u8>.
+    let mut encoded_rows = Vec::new();
+    rowbinary::serialize_into(&mut encoded_rows, &row)?;
+
+    Ok(InsertBatch {
+        rows: RowData {
+            encoded_rows,
+            num_rows: 1,
+        },
+        origin_timestamp: processed.origin_timestamp,
+        sentry_received_timestamp: None,
+        cogs_data: Some(processed.cogs_data),
+        item_type_metrics: Some(processed.item_type_metrics),
+    })
+}
+
+/// Test-only: returns the typed `EAPItemRow` (plus the metadata fields the
+/// pipeline carries) without the bytes serialization step. Tests that
+/// inspect individual columns use this; the production path goes through
+/// `process_message_row_binary` and never holds the typed struct beyond
+/// `process_eap_item`.
+#[cfg(test)]
+pub(crate) struct EAPItemRowBatch {
+    pub rows: Vec<EAPItemRow>,
+    pub cogs_data: Option<CogsData>,
+    pub item_type_metrics: Option<ItemTypeMetrics>,
+}
+
+#[cfg(test)]
+pub(crate) fn process_message_row_binary_typed(
+    msg: KafkaPayload,
+    _metadata: KafkaMessageMetadata,
+    config: &ProcessorConfig,
+) -> anyhow::Result<EAPItemRowBatch> {
+    let processed = process_eap_item(msg, config)?;
+    if processed.should_skip {
+        return Ok(EAPItemRowBatch {
+            rows: vec![],
+            cogs_data: None,
+            item_type_metrics: None,
+        });
+    }
+    Ok(EAPItemRowBatch {
+        rows: vec![EAPItemRow::try_from(processed.eap_item)?],
+        cogs_data: Some(processed.cogs_data),
+        item_type_metrics: Some(processed.item_type_metrics),
+    })
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -421,13 +464,13 @@ impl AttributeMap {
 }
 
 seq_attrs! {
-#[derive(Debug, Clone, clickhouse::Row, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct EAPItemRow {
     organization_id: u64,
     project_id: u64,
     item_type: u8,
     timestamp: u32,
-    #[serde(with = "clickhouse::serde::uuid")]
+    #[serde(with = "crate::strategies::clickhouse::rowbinary::uuid")]
     trace_id: Uuid,
     item_id: u128,
 
@@ -448,31 +491,6 @@ pub struct EAPItemRow {
     )*
 
     attributes_array: String,
-}
-}
-
-fn vec_string_pair_size<B>(v: &[(String, B)]) -> usize {
-    let heap: usize = v.iter().map(|(s, _)| s.len()).sum();
-    std::mem::size_of_val(v) + heap
-}
-
-fn vec_string_string_pair_size(v: &[(String, String)]) -> usize {
-    let heap: usize = v.iter().map(|(k, v)| k.len() + v.len()).sum();
-    std::mem::size_of_val(v) + heap
-}
-
-seq_attrs! {
-impl crate::types::EstimatedSize for EAPItemRow {
-    fn estimated_size(&self) -> usize {
-        std::mem::size_of::<Self>()
-            + vec_string_pair_size(&self.attributes_bool)
-            + vec_string_pair_size(&self.attributes_int)
-            + self.attributes_array.len()
-            #(
-            + vec_string_string_pair_size(&self.attributes_string_~N)
-            + vec_string_pair_size(&self.attributes_float_~N)
-            )*
-    }
 }
 }
 
@@ -794,7 +812,7 @@ mod tests {
         );
 
         // RowBinary path
-        let rb_batch = process_message_row_binary(
+        let rb_batch = process_message_row_binary_typed(
             KafkaPayload::new(None, None, Some(payload_bytes)),
             meta,
             &ProcessorConfig::default(),
@@ -844,7 +862,7 @@ mod tests {
             .contains_key("sentry._internal.received_at"));
 
         // RowBinary path
-        let rb_batch = process_message_row_binary(
+        let rb_batch = process_message_row_binary_typed(
             KafkaPayload::new(None, None, Some(payload_bytes)),
             meta,
             &ProcessorConfig::default(),
@@ -963,7 +981,7 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
+        let batch = process_message_row_binary_typed(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
 
         assert_eq!(batch.rows.len(), 1);
@@ -991,7 +1009,7 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
+        let batch = process_message_row_binary_typed(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
 
         let row = &batch.rows[0];
@@ -1013,7 +1031,7 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
+        let batch = process_message_row_binary_typed(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
 
         let row = &batch.rows[0];
@@ -1037,7 +1055,7 @@ mod tests {
             timestamp: DateTime::from(SystemTime::now()),
         };
 
-        let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
+        let batch = process_message_row_binary_typed(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
 
         assert!(batch.item_type_metrics.is_some());
@@ -1066,7 +1084,7 @@ mod tests {
             timestamp: DateTime::from(SystemTime::now()),
         };
 
-        let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
+        let batch = process_message_row_binary_typed(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
 
         assert!(batch.cogs_data.is_some());
@@ -1112,7 +1130,7 @@ mod tests {
             timestamp: DateTime::from(SystemTime::now()),
         };
 
-        let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
+        let batch = process_message_row_binary_typed(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
 
         let row = &batch.rows[0];
@@ -1151,7 +1169,7 @@ mod tests {
             timestamp: DateTime::from(SystemTime::now()),
         };
 
-        let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
+        let batch = process_message_row_binary_typed(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
 
         let row = &batch.rows[0];
@@ -1229,8 +1247,9 @@ mod tests {
 
         // Process through RowBinary path
         let rb_payload = KafkaPayload::new(None, None, Some(payload_bytes));
-        let rb_batch = process_message_row_binary(rb_payload, meta, &ProcessorConfig::default())
-            .expect("RowBinary path should succeed");
+        let rb_batch =
+            process_message_row_binary_typed(rb_payload, meta, &ProcessorConfig::default())
+                .expect("RowBinary path should succeed");
 
         // Parse the JSON output
         let json_str =
@@ -1435,6 +1454,12 @@ mod tests {
         );
     }
 
+    /// End-to-end test of the production RowBinary path against a live
+    /// ClickHouse instance: process_message_row_binary produces bytes via the
+    /// vendored serializer, those bytes are POSTed verbatim with
+    /// `FORMAT RowBinary`, and the row is read back via `FORMAT JSON`. This
+    /// is the cross-boundary check that our wire format matches what
+    /// ClickHouse expects — pure unit tests can't catch that.
     #[tokio::test]
     async fn test_row_binary_clickhouse_insert() {
         let host = std::env::var("CLICKHOUSE_HOST").unwrap_or("127.0.0.1".to_string());
@@ -1443,12 +1468,9 @@ mod tests {
             .parse()
             .unwrap();
         let database = std::env::var("CLICKHOUSE_DATABASE").unwrap_or("default".to_string());
+        let base_url = format!("http://{host}:{http_port}");
 
-        let client = clickhouse::Client::default()
-            .with_url(format!("http://{host}:{http_port}"))
-            .with_database(&database)
-            .with_option("input_format_binary_read_json_as_string", "1")
-            .with_option("insert_deduplicate", "0");
+        let http = reqwest::Client::new();
 
         // Use a unique organization_id to avoid conflicts with other test data
         let unique_org_id: u64 = 999_999_000 + (rand::random::<u32>() % 1000) as u64;
@@ -1495,56 +1517,91 @@ mod tests {
             timestamp: DateTime::from(SystemTime::now()),
         };
 
+        // Production path: encodes the row to RowBinary bytes inside the processor.
         let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
+        assert_eq!(batch.rows.num_rows, 1);
 
-        assert_eq!(batch.rows.len(), 1);
-        let row = batch.rows[0].clone();
-
-        // Insert via RowBinary (same code path as production)
-        let mut insert = client
-            .insert("eap_items_1_local")
-            .expect("Failed to create insert");
-        insert.write(&row).await.expect("Failed to write row");
-        insert.end().await.expect("Failed to end insert");
-
-        // Read it back using organization_id (primary key prefix) for reliable lookup
-        let count: u64 = client
-            .query(&format!(
-                "SELECT count() FROM eap_items_1_local WHERE organization_id = {unique_org_id}"
-            ))
-            .fetch_one()
+        // Insert: POST the pre-encoded bytes with FORMAT RowBinary.
+        let insert_resp = http
+            .post(&base_url)
+            .header("X-ClickHouse-Database", &database)
+            .query(&[
+                ("query", "INSERT INTO eap_items_1_local FORMAT RowBinary"),
+                ("input_format_binary_read_json_as_string", "1"),
+                ("insert_deduplicate", "0"),
+            ])
+            .body(batch.rows.encoded_rows.clone())
+            .send()
             .await
-            .expect("Failed to count rows");
+            .expect("Insert request failed to send");
         assert!(
-            count > 0,
-            "No rows found after insert for org_id={unique_org_id}"
+            insert_resp.status().is_success(),
+            "Insert failed: {}",
+            insert_resp.text().await.unwrap_or_default()
         );
 
-        let result = client
-            .query(&format!(
-                "SELECT organization_id, project_id, item_type, sampling_weight \
-                 FROM eap_items_1_local \
-                 WHERE organization_id = {unique_org_id} \
-                 LIMIT 1"
-            ))
-            .fetch_one::<(u64, u64, u8, u64)>()
+        // Read it back via FORMAT JSON. We use organization_id (primary key prefix)
+        // for a deterministic lookup. ClickHouse's FORMAT JSON renders 64-bit
+        // ints as strings to avoid JS-precision loss, so we parse them back.
+        let select_resp = http
+            .post(&base_url)
+            .header("X-ClickHouse-Database", &database)
+            .query(&[(
+                "query",
+                format!(
+                    "SELECT organization_id, project_id, item_type, sampling_weight \
+                     FROM eap_items_1_local \
+                     WHERE organization_id = {unique_org_id} \
+                     LIMIT 1 FORMAT JSON"
+                ),
+            )])
+            .send()
             .await
-            .expect("Failed to read back inserted row");
-
-        assert_eq!(result.0, unique_org_id); // organization_id
-        assert_eq!(result.1, 1); // project_id
-        assert_eq!(result.2, TraceItemType::Span as u8); // item_type
-        assert_eq!(result.3, 1); // sampling_weight
+            .expect("Select request failed to send");
+        assert!(select_resp.status().is_success(), "Select failed");
+        let body_text = select_resp.text().await.expect("response body");
+        let body: serde_json::Value = serde_json::from_str(&body_text).expect("JSON response");
+        let data = body["data"].as_array().expect("data array");
+        assert_eq!(data.len(), 1, "no rows found for org_id={unique_org_id}");
+        let row = &data[0];
+        assert_eq!(
+            row["organization_id"]
+                .as_str()
+                .unwrap()
+                .parse::<u64>()
+                .unwrap(),
+            unique_org_id
+        );
+        assert_eq!(
+            row["project_id"].as_str().unwrap().parse::<u64>().unwrap(),
+            1
+        );
+        assert_eq!(
+            row["item_type"].as_u64().unwrap() as u8,
+            TraceItemType::Span as u8
+        );
+        assert_eq!(
+            row["sampling_weight"]
+                .as_str()
+                .unwrap()
+                .parse::<u64>()
+                .unwrap(),
+            1
+        );
 
         // Clean up
-        client
-            .query(&format!(
-                "ALTER TABLE eap_items_1_local DELETE WHERE organization_id = {unique_org_id}"
-            ))
-            .execute()
-            .await
-            .ok();
+        let _ = http
+            .post(&base_url)
+            .header("X-ClickHouse-Database", &database)
+            .query(&[(
+                "query",
+                format!(
+                    "ALTER TABLE eap_items_1_local DELETE WHERE organization_id = {unique_org_id}"
+                ),
+            )])
+            .send()
+            .await;
     }
 
     #[test]

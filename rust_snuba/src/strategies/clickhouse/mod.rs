@@ -1,2 +1,2 @@
-pub mod row_binary_writer;
+pub mod rowbinary;
 pub mod writer_v2;
