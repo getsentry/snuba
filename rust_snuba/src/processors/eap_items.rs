@@ -1630,8 +1630,12 @@ mod tests {
             .send()
             .await
             .expect("Select request failed to send");
-        assert!(select_resp.status().is_success(), "Select failed");
+        let select_status = select_resp.status();
         let body_text = select_resp.text().await.expect("response body");
+        assert!(
+            select_status.is_success(),
+            "Select failed: status={select_status}, body={body_text}"
+        );
         let body: serde_json::Value = serde_json::from_str(&body_text).expect("JSON response");
         let data = body["data"].as_array().expect("data array");
         assert_eq!(data.len(), 1, "no rows found for org_id={unique_org_id}");
