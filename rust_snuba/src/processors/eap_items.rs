@@ -1615,8 +1615,12 @@ mod tests {
         // Read it back via FORMAT JSON. We use organization_id (primary key prefix)
         // for a deterministic lookup. ClickHouse's FORMAT JSON renders 64-bit
         // ints as strings to avoid JS-precision loss, so we parse them back.
+        //
+        // GET (not POST) for the read-back: ClickHouse 25.x rejects bodyless
+        // POSTs with HTTP 411 because reqwest doesn't emit a Content-Length
+        // header by default when there's nothing to send.
         let select_resp = http
-            .post(&base_url)
+            .get(&base_url)
             .header("X-ClickHouse-Database", &database)
             .query(&[(
                 "query",
@@ -1665,7 +1669,8 @@ mod tests {
             1
         );
 
-        // Clean up
+        // Clean up. POST with an empty body (rather than no body) so reqwest
+        // emits Content-Length: 0 and ClickHouse 25.x doesn't reject with 411.
         let _ = http
             .post(&base_url)
             .header("X-ClickHouse-Database", &database)
@@ -1675,6 +1680,7 @@ mod tests {
                     "ALTER TABLE eap_items_1_local DELETE WHERE organization_id = {unique_org_id}"
                 ),
             )])
+            .body("")
             .send()
             .await;
     }
