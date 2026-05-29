@@ -94,6 +94,10 @@ DISABLED_DATASETS: Set[str] = set()
 
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
+# Maximum time (seconds) to wait for a connection from the ClickHouse pool
+# before failing fast. Prevents API workers from blocking indefinitely on
+# pool.get() when ClickHouse is hung but not dropping connections.
+CLICKHOUSE_POOL_GET_TIMEOUT_SECONDS = 5
 
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
@@ -125,8 +129,8 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "generic_metrics_distributions",
             "search_issues",
             "generic_metrics_counters",
-            "spans",
             "events_analytics_platform",
+            "events_analytics_platform_ro",
             "group_attributes",
             "generic_metrics_gauges",
             "profile_chunks",
@@ -141,6 +145,7 @@ DOGSTATSD_HOST, DOGSTATSD_PORT = get_statsd_addr()
 DOGSTATSD_SAMPLING_RATES = {
     "metrics.processor.set.size": 0.1,
     "metrics.processor.distribution.size": 0.1,
+    "off_peak_rejected": 0.01,
 }
 DDM_METRICS_SAMPLE_RATE = float(os.environ.get("SNUBA_DDM_METRICS_SAMPLE_RATE", 0.01))
 
@@ -469,7 +474,8 @@ SLICED_KAFKA_BROKER_CONFIG: Mapping[Tuple[str, int], Mapping[str, Any]] = {}
 VALIDATE_DATASET_YAMLS_ON_STARTUP = False
 
 MAX_ONGOING_MUTATIONS_FOR_DELETE = 5
-LW_DELETES_PARTITION_TRACKING_TTL = 3600
+MAX_PARTS_MUTATING_FOR_DELETE = 20
+LW_DELETES_PARTITION_TRACKING_TTL = 86400
 SNQL_DISABLED_DATASETS: set[str] = set([])
 
 ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS: int = 0  # 0 means no limit

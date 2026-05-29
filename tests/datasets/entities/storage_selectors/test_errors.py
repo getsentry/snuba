@@ -91,7 +91,7 @@ TEST_CASES = [
         ErrorsQueryStorageSelector(),
         True,
         get_storage(StorageKey.ERRORS_RO),
-        id="Errors storage selector",
+        id="Errors RO storage selector",
     ),
 ]
 
@@ -109,11 +109,11 @@ def test_query_storage_selector(
     use_readable: bool,
     expected_storage: Storage,
 ) -> None:
+    state.set_config("enable_events_readonly_table", use_readable)
+
     query = parse_snql_query(str(snql_query), dataset)
     assert isinstance(query, Query)
 
-    if use_readable:
-        state.set_config("enable_events_readonly_table", True)
     selected_storage = selector.select_storage(
         query, HTTPQuerySettings(referrer="r"), storage_connections
     )

@@ -14,7 +14,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
-from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
+from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -82,6 +82,14 @@ def setup_spans_in_db(eap: None, redis_db: None) -> None:
     ]
 
     write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+
+
+def _str_tags_array(*values: str) -> AnyValue:
+    return AnyValue(array_value=ArrayValue(values=[AnyValue(string_value=v) for v in values]))
+
+
+def _int_vals_array(*values: int) -> AnyValue:
+    return AnyValue(array_value=ArrayValue(values=[AnyValue(int_value=v) for v in values]))
 
 
 @pytest.mark.eap
@@ -249,6 +257,158 @@ class TestTraceItemDetails(BaseApiTest):
         }:
             assert k in attributes_returned, k
 
+    def test_endpoint_returns_array_attribute(self, eap: None, redis_db: None) -> None:
+        """Allowlisted attributes_array paths are exposed as val_array on TraceItemDetails."""
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        storage = get_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            storage,  # type: ignore
+            [
+                gen_item_message(
+                    span_ts,
+                    attributes={
+                        "gen_ai.response.text": _str_tags_array("gamma", "delta"),
+                        "gen_ai.tool.input": _int_vals_array(1, 3),
+                    },
+                ),
+            ],
+        )
+        start = Timestamp()
+        end = Timestamp()
+        start.FromDatetime(BASE_TIME - timedelta(hours=4))
+        end.GetCurrentTime()
+
+        spans = (
+            EndpointTraceItemTable()
+            .execute(
+                TraceItemTableRequest(
+                    meta=RequestMeta(
+                        project_ids=[1],
+                        organization_id=1,
+                        cogs_category="something",
+                        referrer="something",
+                        start_timestamp=start,
+                        end_timestamp=end,
+                        request_id=_REQUEST_ID,
+                        trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    ),
+                    columns=[
+                        Column(
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
+                        ),
+                        Column(
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.trace_id")
+                        ),
+                    ],
+                )
+            )
+            .column_values
+        )
+        item_id = spans[0].results[0].val_str
+        trace_id = spans[1].results[0].val_str
+
+        res = EndpointTraceItemDetails().execute(
+            TraceItemDetailsRequest(
+                meta=RequestMeta(
+                    project_ids=[1],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    start_timestamp=start,
+                    end_timestamp=end,
+                    request_id=_REQUEST_ID,
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                ),
+                item_id=item_id,
+                trace_id=trace_id,
+            )
+        )
+        tags_attr = next((a for a in res.attributes if a.name == "gen_ai.response.text"), None)
+        assert tags_attr is not None
+        assert tags_attr.value.WhichOneof("value") == "val_array"
+        assert [e.val_str for e in tags_attr.value.val_array.values] == ["gamma", "delta"]
+        cols_attr = next((a for a in res.attributes if a.name == "gen_ai.tool.input"), None)
+        assert cols_attr is not None
+        assert cols_attr.value.WhichOneof("value") == "val_array"
+        assert [e.val_int for e in cols_attr.value.val_array.values] == [1, 3]
+
+    def test_dotted_key_array_attribute_parsed_properly(self, eap: None, redis_db: None) -> None:
+        trace_id = uuid.uuid4().hex
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        storage = get_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            storage,  # type: ignore
+            [
+                gen_item_message(
+                    span_ts,
+                    trace_id=trace_id,
+                    remove_default_attributes=True,
+                    attributes={
+                        "gen_ai.input.messages": _str_tags_array("node", "--enable-source-maps"),
+                    },
+                ),
+            ],
+        )
+        start = Timestamp()
+        end = Timestamp()
+        start.FromDatetime(BASE_TIME - timedelta(hours=4))
+        end.GetCurrentTime()
+
+        spans = (
+            EndpointTraceItemTable()
+            .execute(
+                TraceItemTableRequest(
+                    meta=RequestMeta(
+                        project_ids=[1],
+                        organization_id=1,
+                        cogs_category="something",
+                        referrer="something",
+                        start_timestamp=start,
+                        end_timestamp=end,
+                        request_id=_REQUEST_ID,
+                        trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    ),
+                    columns=[
+                        Column(
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
+                        ),
+                        Column(
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.trace_id")
+                        ),
+                    ],
+                )
+            )
+            .column_values
+        )
+        idx = next(
+            i
+            for i, tr in enumerate(spans[1].results)
+            if tr.val_str.replace("-", "").lower() == trace_id.replace("-", "").lower()
+        )
+        item_id = spans[0].results[idx].val_str
+        trace_id_for_details = spans[1].results[idx].val_str
+
+        res = EndpointTraceItemDetails().execute(
+            TraceItemDetailsRequest(
+                meta=RequestMeta(
+                    project_ids=[1],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    start_timestamp=start,
+                    end_timestamp=end,
+                    request_id=_REQUEST_ID,
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                ),
+                item_id=item_id,
+                trace_id=trace_id_for_details,
+            )
+        )
+        attr = next((a for a in res.attributes if a.name == "gen_ai.input.messages"), None)
+        assert attr is not None
+        assert attr.value.WhichOneof("value") == "val_array"
+        assert [e.val_str for e in attr.value.val_array.values] == ["node", "--enable-source-maps"]
+
     def test_endpoint_on_spans(self, setup_spans_in_db: Any) -> None:
         end = Timestamp()
         start = Timestamp()
@@ -353,3 +513,51 @@ def test_convert_results_dedupes() -> None:
     _, _, attrs = _convert_results(data)
     is_segment_attrs = list(filter(lambda x: x.name == "sentry.is_segment", attrs))
     assert len(is_segment_attrs) == 1
+
+
+def test_convert_results_includes_attributes_array() -> None:
+    """
+    TraceItemDetails maps per-path JSON sub-column payloads from `attributes_array`
+    into val_array attributes (only allowlisted paths are read).
+    """
+    data = [
+        {
+            "timestamp": 1750964400,
+            "hex_item_id": "e70ef5b1b5bc4611840eff9964b7a767",
+            "trace_id": "cb190d6e7d5743d5bc1494c650592cd2",
+            "organization_id": 1,
+            "project_id": 1,
+            "item_type": 1,
+            "attributes_string": {},
+            "attributes_int": {},
+            "attributes_float": {},
+            "attributes_bool": {},
+            "gen_ai.input.messages": '[{"String":"gamma"},{"String":"delta"}]',
+        }
+    ]
+    _, _, attrs = _convert_results(data)
+    msgs = [a for a in attrs if a.name == "gen_ai.input.messages"]
+    assert len(msgs) == 1
+    assert msgs[0].value.WhichOneof("value") == "val_array"
+    assert [e.val_str for e in msgs[0].value.val_array.values] == ["gamma", "delta"]
+
+
+def test_convert_results_skips_non_allowlisted_array_paths() -> None:
+    """Rows only contain keys we explicitly selected; anything else is ignored."""
+    data = [
+        {
+            "timestamp": 1750964400,
+            "hex_item_id": "e70ef5b1b5bc4611840eff9964b7a767",
+            "trace_id": "cb190d6e7d5743d5bc1494c650592cd2",
+            "organization_id": 1,
+            "project_id": 1,
+            "item_type": 1,
+            "attributes_string": {},
+            "attributes_int": {},
+            "attributes_float": {},
+            "attributes_bool": {},
+            "gen_ai.input.messages": "[]",
+        }
+    ]
+    _, _, attrs = _convert_results(data)
+    assert not any(a.name == "gen_ai.input.messages" for a in attrs)

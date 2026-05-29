@@ -25,13 +25,13 @@ from sentry_protos.snuba.v1.error_pb2 import Error
 from sentry_protos.snuba.v1.formula_pb2 import Literal
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    Array,
     AttributeAggregation,
     AttributeKey,
     AttributeKeyExpression,
     AttributeValue,
     ExtrapolationMode,
     Function,
-    StrArray,
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     AndFilter,
@@ -305,6 +305,153 @@ class TestTimeSeriesApi(BaseApiTest):
                 data_points=[
                     DataPoint(data=300, data_present=True, sample_count=300)
                     for _ in range(len(expected_buckets))
+                ],
+            ),
+        ]
+
+    def test_default_value(self) -> None:
+        # store a a test metric with a value of 1, every second of one hour
+        granularity_secs = 300
+        query_duration = 60 * 30
+        store_spans_timeseries(
+            BASE_TIME,
+            600,
+            3600,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+        )
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("test_metric2", get_value=lambda x: 1)],
+        )
+
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            expressions=[
+                Expression(
+                    formula=Expression.BinaryFormula(
+                        op=Expression.BinaryFormula.OP_ADD,
+                        left=Expression(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                                label="sum",
+                                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                                default_value_int64=1337,
+                            )
+                        ),
+                        right=Expression(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_AVG,
+                                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric2"),
+                                label="sum",
+                                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                            )
+                        ),
+                    ),
+                    label="metric + metric2",
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+        assert sorted(response.result_timeseries, key=lambda x: x.label) == [
+            TimeSeries(
+                label="metric + metric2",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(data=2, data_present=True, sample_count=300),
+                    DataPoint(data=1338, data_present=True, sample_count=300),
+                    DataPoint(data=2, data_present=True, sample_count=300),
+                    DataPoint(data=1338, data_present=True, sample_count=300),
+                    DataPoint(data=2, data_present=True, sample_count=300),
+                    DataPoint(data=1338, data_present=True, sample_count=300),
+                ],
+            ),
+        ]
+
+    def test_formula_with_null_values(self) -> None:
+        # store a a test metric with a value of 1, every second of one hour
+        granularity_secs = 300
+        query_duration = 60 * 30
+        store_spans_timeseries(
+            BASE_TIME,
+            600,
+            3600,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+        )
+        store_spans_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("test_metric2", get_value=lambda x: 1)],
+        )
+
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + query_duration)),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            expressions=[
+                Expression(
+                    formula=Expression.BinaryFormula(
+                        op=Expression.BinaryFormula.OP_ADD,
+                        left=Expression(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                                label="sum",
+                                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                            )
+                        ),
+                        right=Expression(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_AVG,
+                                key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric2"),
+                                label="sum",
+                                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                            )
+                        ),
+                    ),
+                    label="metric + metric2",
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+        assert sorted(response.result_timeseries, key=lambda x: x.label) == [
+            TimeSeries(
+                label="metric + metric2",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(data=2, data_present=True, sample_count=300),
+                    DataPoint(sample_count=300),
+                    DataPoint(data=2, data_present=True, sample_count=300),
+                    DataPoint(sample_count=300),
+                    DataPoint(data=2, data_present=True, sample_count=300),
+                    DataPoint(sample_count=300),
                 ],
             ),
         ]
@@ -631,7 +778,12 @@ class TestTimeSeriesApi(BaseApiTest):
                                 key=AttributeKey(type=AttributeKey.TYPE_STRING, name="customer"),
                                 op=ComparisonFilter.OP_IN,
                                 value=AttributeValue(
-                                    val_str_array=StrArray(values=["bob", "alice"])
+                                    val_array=Array(
+                                        values=[
+                                            AttributeValue(val_str="bob"),
+                                            AttributeValue(val_str="alice"),
+                                        ]
+                                    )
                                 ),
                             )
                         ),
@@ -725,7 +877,12 @@ class TestTimeSeriesApi(BaseApiTest):
                                 key=AttributeKey(type=AttributeKey.TYPE_STRING, name="customer"),
                                 op=ComparisonFilter.OP_IN,
                                 value=AttributeValue(
-                                    val_str_array=StrArray(values=["BOB", "AlIcE"])
+                                    val_array=Array(
+                                        values=[
+                                            AttributeValue(val_str="BOB"),
+                                            AttributeValue(val_str="AlIcE"),
+                                        ]
+                                    )
                                 ),
                                 ignore_case=True,
                             )
@@ -736,7 +893,6 @@ class TestTimeSeriesApi(BaseApiTest):
             granularity_secs=granularity_secs,
         )
         response = EndpointTimeSeries().execute(message)
-        # print(response)
         expected_buckets = [
             Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
             for secs in range(0, query_duration, granularity_secs)

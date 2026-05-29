@@ -14,7 +14,7 @@ from snuba.clusters.cluster import ClickhouseNode
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.lw_deletions.batching import BatchStepCustom
-from snuba.lw_deletions.formatters import SearchIssuesFormatter
+from snuba.lw_deletions.formatters import EAPItemsFormatter, SearchIssuesFormatter
 from snuba.lw_deletions.strategy import FormatQuery, increment_by
 from snuba.lw_deletions.types import ConditionsType
 from snuba.redis import RedisClientKey, get_redis_client
@@ -58,7 +58,7 @@ def generate_message() -> Iterator[Message[KafkaPayload]]:
         i += 1
 
 
-@patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
+@patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
 def test_multiple_batches_strategies(mock_execute: Mock, mock_num_mutations: Mock) -> None:
@@ -84,7 +84,7 @@ def test_multiple_batches_strategies(mock_execute: Mock, mock_num_mutations: Moc
     assert commit_step.submit.call_count == 2
 
 
-@patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
+@patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
 def test_clickhouse_settings(mock_execute: Mock, mock_num_mutations: Mock) -> None:
@@ -124,7 +124,7 @@ def test_clickhouse_settings(mock_execute: Mock, mock_num_mutations: Mock) -> No
     assert commit_step.submit.call_count == 2
 
 
-@patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
+@patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
 def test_single_batch(mock_execute: Mock, mock_num_mutations: Mock) -> None:
@@ -159,16 +159,16 @@ def test_single_batch(mock_execute: Mock, mock_num_mutations: Mock) -> None:
     assert commit_step.submit.call_count == 1
 
 
-@patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=10)
+@patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=100)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
 def test_too_many_mutations(mock_execute: Mock, mock_num_mutations: Mock) -> None:
     """
     Before we execute the DELETE FROM query, we check to see how many
-    ongoing mutations there are.If there are more ongoing mutations than
-    the max allows, we raise MessageRejected and back pressure is applied.
+    parts are currently mutating. If there are more than the max allows,
+    we raise MessageRejected and back pressure is applied.
 
-    The max is 5 (the default) and our mocked ongoing mutations is 10.
+    The max is 20 (the default) and our mocked parts mutating is 100.
     """
     commit_step = Mock()
     metrics = Mock()
@@ -220,7 +220,7 @@ def _make_single_message(
     )
 
 
-@patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
+@patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @patch.object(
     FormatQuery,
@@ -274,7 +274,7 @@ def test_split_by_partition_enabled(mock_execute: Mock, mock_num_mutations: Mock
     assert len(increment_calls) == 3
 
 
-@patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
+@patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
 def test_split_by_partition_disabled(mock_execute: Mock, mock_num_mutations: Mock) -> None:
@@ -303,7 +303,7 @@ def test_split_by_partition_disabled(mock_execute: Mock, mock_num_mutations: Moc
     assert commit_step.submit.call_count == 1
 
 
-@patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
+@patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
 def test_split_by_partition_redis_tracking(mock_execute: Mock, mock_num_mutations: Mock) -> None:
@@ -393,7 +393,7 @@ def test_split_by_partition_redis_tracking(mock_execute: Mock, mock_num_mutation
     assert commit_step.submit.call_count == 1
 
 
-@patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
+@patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
 def test_split_by_partition_fallback(mock_execute: Mock, mock_num_mutations: Mock) -> None:
@@ -435,7 +435,7 @@ def test_split_by_partition_fallback(mock_execute: Mock, mock_num_mutations: Moc
     assert commit_step.submit.call_count == 1
 
 
-@patch("snuba.lw_deletions.strategy._num_ongoing_mutations", return_value=1)
+@patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
 def test_partition_date_filtering(mock_execute: Mock, mock_num_mutations: Mock) -> None:
@@ -485,3 +485,147 @@ def test_partition_date_filtering(mock_execute: Mock, mock_num_mutations: Mock) 
     ]
     assert len(filtered_calls) == 1
     assert filtered_calls[0][1]["value"] == 2
+
+
+def _get_eap_message(rows: int, conditions: ConditionsType) -> DeleteQueryMessage:
+    return {
+        "rows_to_delete": rows,
+        "storage_name": "eap_items",
+        "conditions": conditions,
+        "tenant_ids": {"project_id": 1, "organization_id": 1},
+    }
+
+
+def _make_eap_message(
+    rows: int = 10, conditions: ConditionsType | None = None
+) -> Message[KafkaPayload]:
+    if conditions is None:
+        conditions = {"organization_id": [1], "project_id": [1]}
+    return Message(
+        BrokerValue(
+            KafkaPayload(
+                None,
+                rapidjson.dumps(_get_eap_message(rows, conditions)).encode("utf-8"),
+                [],
+            ),
+            Partition(Topic(SnubaTopic.LW_DELETIONS_GENERIC_EVENTS.value), 0),
+            0,
+            datetime(1970, 1, 1),
+        )
+    )
+
+
+@patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
+@patch("snuba.lw_deletions.strategy._execute_query")
+@pytest.mark.redis_db
+def test_allowlist_partial_batch(mock_execute: Mock, mock_num_mutations: Mock) -> None:
+    """
+    Batch with 2 conditions (org 1 and org 2), allowlist = "1".
+    Only org 1's conditions should be executed; org 2 is skipped.
+    Offsets are always committed.
+    """
+    commit_step = Mock()
+    metrics = Mock()
+    storage = get_writable_storage(StorageKey("eap_items"))
+
+    state.set_config("org_ids_delete_allowlist", "1")
+
+    format_query = FormatQuery(commit_step, storage, EAPItemsFormatter(), metrics)
+
+    # Build a batch with two messages: org 1 (allowed) and org 2 (not allowed)
+    msg1 = _make_eap_message(5, {"organization_id": [1], "project_id": [1]})
+    msg2 = _make_eap_message(5, {"organization_id": [2], "project_id": [2]})
+
+    strategy = BatchStepCustom(
+        max_batch_size=20,
+        max_batch_time=1000,
+        next_step=format_query,
+        increment_by=increment_by,
+    )
+    strategy.submit(msg1)
+    strategy.submit(msg2)
+    strategy.join(2.0)
+
+    # _execute_query is called once per table (4 tables) but only with org 1's conditions
+    assert mock_execute.call_count == 4
+    assert commit_step.submit.call_count == 1
+
+    # delete_skipped metric incremented once (for org 2)
+    skipped_calls = [c for c in metrics.increment.call_args_list if c[0][0] == "delete_skipped"]
+    assert len(skipped_calls) == 1
+
+
+@patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
+@patch("snuba.lw_deletions.strategy._execute_query")
+@pytest.mark.redis_db
+def test_allowlist_all_blocked(mock_execute: Mock, mock_num_mutations: Mock) -> None:
+    """
+    All conditions have unallowed org IDs. _execute_query should not be called,
+    but offsets should still be committed.
+    """
+    commit_step = Mock()
+    metrics = Mock()
+    storage = get_writable_storage(StorageKey("eap_items"))
+
+    state.set_config("org_ids_delete_allowlist", "999")
+
+    format_query = FormatQuery(commit_step, storage, EAPItemsFormatter(), metrics)
+
+    msg1 = _make_eap_message(5, {"organization_id": [1], "project_id": [1]})
+    msg2 = _make_eap_message(5, {"organization_id": [2], "project_id": [2]})
+
+    strategy = BatchStepCustom(
+        max_batch_size=20,
+        max_batch_time=1000,
+        next_step=format_query,
+        increment_by=increment_by,
+    )
+    strategy.submit(msg1)
+    strategy.submit(msg2)
+    strategy.join(2.0)
+
+    # No deletes executed
+    assert mock_execute.call_count == 0
+    # Offsets still committed
+    assert commit_step.submit.call_count == 1
+
+    # delete_skipped incremented for each blocked condition
+    skipped_calls = [c for c in metrics.increment.call_args_list if c[0][0] == "delete_skipped"]
+    assert len(skipped_calls) == 2
+
+
+@patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
+@patch("snuba.lw_deletions.strategy._execute_query")
+@pytest.mark.redis_db
+def test_allowlist_all_allowed(mock_execute: Mock, mock_num_mutations: Mock) -> None:
+    """
+    All conditions have allowed org IDs. Normal execution, no delete_skipped.
+    """
+    commit_step = Mock()
+    metrics = Mock()
+    storage = get_writable_storage(StorageKey("eap_items"))
+
+    state.set_config("org_ids_delete_allowlist", "1,2")
+
+    format_query = FormatQuery(commit_step, storage, EAPItemsFormatter(), metrics)
+
+    msg1 = _make_eap_message(5, {"organization_id": [1], "project_id": [1]})
+    msg2 = _make_eap_message(5, {"organization_id": [2], "project_id": [2]})
+
+    strategy = BatchStepCustom(
+        max_batch_size=20,
+        max_batch_time=1000,
+        next_step=format_query,
+        increment_by=increment_by,
+    )
+    strategy.submit(msg1)
+    strategy.submit(msg2)
+    strategy.join(2.0)
+
+    # Normal execution: 4 tables
+    assert mock_execute.call_count == 4
+    assert commit_step.submit.call_count == 1
+
+    # No delete_skipped
+    skipped_calls = [c for c in metrics.increment.call_args_list if c[0][0] == "delete_skipped"]
+    assert len(skipped_calls) == 0

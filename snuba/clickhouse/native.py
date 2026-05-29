@@ -86,6 +86,7 @@ class ClickhousePool(object):
         connect_timeout: int = 1,
         send_receive_timeout: Optional[int] = 35,
         max_pool_size: int = settings.CLICKHOUSE_MAX_POOL_SIZE,
+        pool_get_timeout_seconds: float = settings.CLICKHOUSE_POOL_GET_TIMEOUT_SECONDS,
         client_settings: Mapping[str, Any] = {},
     ) -> None:
         self.host = host
@@ -98,6 +99,7 @@ class ClickhousePool(object):
         self.verify = verify
         self.connect_timeout = connect_timeout
         self.send_receive_timeout = send_receive_timeout
+        self.pool_get_timeout_seconds = pool_get_timeout_seconds
         self.client_settings = client_settings
 
         self.pool: queue.LifoQueue[Optional[Client]] = queue.LifoQueue(max_pool_size)
@@ -130,8 +132,15 @@ class ClickhousePool(object):
         failures.
         """
         try:
-            conn = self.pool.get(block=True)
+            conn = self.pool.get(block=True, timeout=self.pool_get_timeout_seconds)
+        except queue.Empty:
+            metrics.increment(
+                "pool_get_timeout",
+                tags={"host": self.host, "port": str(self.port)},
+            )
+            raise
 
+        try:
             if retryable:
                 attempts_remaining = 3
             else:

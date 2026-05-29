@@ -85,7 +85,10 @@ impl PythonTransformStep {
                 })
                 .collect();
 
-            let mut payload = BytesInsertBatch::from_rows(RowData::from_encoded_rows(payload))
+            let row_data = RowData::from_encoded_rows(payload);
+            let num_bytes = row_data.encoded_rows.len();
+            let mut payload = BytesInsertBatch::from_rows(row_data)
+                .with_num_bytes(num_bytes)
                 .with_message_timestamp(message_timestamp)
                 .with_commit_log_offsets(CommitLogOffsets(commit_log_offsets));
 

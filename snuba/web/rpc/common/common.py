@@ -4,18 +4,22 @@ from typing import Any, Callable, TypeVar, cast
 
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
+    AnyAttributeFilter,
     ComparisonFilter,
     TraceItemFilter,
 )
 
 from snuba import settings, state
-from snuba.protos.common import MalformedAttributeException
+from snuba.protos.common import (
+    MalformedAttributeException,
+    type_array_to_membership_array_expression,
+)
 from snuba.protos.common import (
     attribute_key_to_expression as _attribute_key_to_expression,
 )
-from snuba.query import Query
+from snuba.query import Query, SelectedExpression
 from snuba.query.conditions import combine_and_conditions, combine_or_conditions
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import (
@@ -27,7 +31,14 @@ from snuba.query.dsl import (
     not_cond,
     or_cond,
 )
-from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
+from snuba.query.expressions import (
+    Argument,
+    Expression,
+    FunctionCall,
+    JsonPath,
+    Lambda,
+    SubscriptableReference,
+)
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
@@ -47,38 +58,191 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
         raise BadSnubaRPCRequestException(str(e)) from e
 
 
+def _trace_item_filter_key_expression(
+    attr_to_key_expression_callable: Callable[[AttributeKey], Expression], key: AttributeKey
+) -> Expression:
+    """predicates must use the normalized
+    ``arrayMap`` (``type_array_to_membership_array_expression``) so
+    ``arrayExists`` compares per element. It is different from SELECT predicate.
+    """
+    if key.type == AttributeKey.Type.TYPE_ARRAY:
+        try:
+            return type_array_to_membership_array_expression(key)
+        except MalformedAttributeException as e:
+            raise BadSnubaRPCRequestException(str(e)) from e
+    return attr_to_key_expression_callable(key)
+
+
 Tin = TypeVar("Tin", bound=ProtobufMessage)
 Tout = TypeVar("Tout", bound=ProtobufMessage)
 
 BUCKET_COUNT = 40
 
 
-def transform_array_value(value: dict[str, str]) -> Any:
+def transform_array_value(value: Any) -> Any:
+    """Decode one array element: with a String, Int, Double, or Bool tag."""
+    if not isinstance(value, dict):
+        raise BadSnubaRPCRequestException(
+            f"array element must be an object with a String/Int/Double/Bool tag, got {type(value).__name__}"
+        )
     for t, v in value.items():
         if t == "Int":
             return int(v)
         if t == "Double":
             return float(v)
-        if t in {"String", "Bool"}:
-            return v
-    raise BadSnubaRPCRequestException(f"array value type unknown: {type(v)}")
+        if t == "Bool":
+            return str(v).lower() == "true"
+        if t == "String":
+            return str(v)
+    raise BadSnubaRPCRequestException(
+        f"array value has no recognized tag, keys={list(value.keys())}"
+    )
+
+
+def _flatten_attributes_array_json(node: dict[str, Any], prefix: str = "") -> dict[str, list[Any]]:
+    """Flatten nested dicts into dotted keys (name -> list).
+    ClickHouse stores all JSON objects as flat and interprets dotted paths in a special way to support nesting
+    Docs: https://clickhouse.com/docs/sql-reference/data-types/newjson#handling-json-keys-with-dots
+    """
+    out: dict[str, list[Any]] = {}
+    for k, v in node.items():
+        full_key = f"{prefix}.{k}" if prefix else k
+        if isinstance(v, list):
+            if full_key in out:
+                raise BadSnubaRPCRequestException(
+                    f"duplicate attributes_array key after normalization: {full_key!r}"
+                )
+            out[full_key] = v
+        elif isinstance(v, dict):
+            nested = _flatten_attributes_array_json(v, full_key)
+            for nk, nv in nested.items():
+                if nk in out:
+                    raise BadSnubaRPCRequestException(
+                        f"duplicate attributes_array key after normalization: {nk!r}"
+                    )
+                out[nk] = nv
+        else:
+            raise BadSnubaRPCRequestException(
+                f"attributes_array value at {full_key!r} must be a list or object, got {type(v).__name__}"
+            )
+    return out
 
 
 def process_arrays(raw: str) -> dict[str, list[Any]]:
-    parsed = json.loads(raw) or {}
-    arrays = {}
-    for key, values in parsed.items():
-        arrays[key] = [transform_array_value(v) for v in values]
+    """Parse attributes_array JSON into attribute name -> list of decoded values."""
+    if raw is None or (isinstance(raw, str) and raw.strip() == ""):
+        parsed: Any = {}
+    else:
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as e:
+            raise BadSnubaRPCRequestException(f"attributes_array is not valid JSON: {e}") from e
+
+    if parsed is None:
+        parsed = {}
+    if not isinstance(parsed, dict):
+        raise BadSnubaRPCRequestException(
+            f"attributes_array JSON must be an object, got {type(parsed).__name__}"
+        )
+
+    collected = _flatten_attributes_array_json(parsed)
+    arrays: dict[str, list[Any]] = {}
+    for key, values in collected.items():
+        if not isinstance(values, list):
+            raise BadSnubaRPCRequestException(
+                f"attributes_array key {key!r} must map to a list, got {type(values).__name__}"
+            )
+        parsed_elements: list[Any] = []
+        for i, elem in enumerate(values):
+            try:
+                parsed_elements.append(transform_array_value(elem))
+            except BadSnubaRPCRequestException:
+                raise
+            except Exception as e:
+                raise BadSnubaRPCRequestException(
+                    f"invalid attributes_array element at {key!r}[{i}]: {e}"
+                ) from e
+        arrays[key] = parsed_elements
     return arrays
+
+
+# Allowlist of `attributes_array` JSON sub-paths exposed by endpoints that
+# return all attributes (TraceItemDetails, GetTrace bulk-fetch). Each path is
+# read as its own JSON sub-column so we don't materialize the full dynamic
+# JSON value on every request.
+ATTRIBUTES_ARRAY_ALLOWLIST: tuple[str, ...] = (
+    "gen_ai.input.messages",
+    "gen_ai.output.messages",
+    "gen_ai.request.messages",
+    "gen_ai.response.text",
+    "gen_ai.system_instructions",
+    "gen_ai.tool.definitions",
+    "gen_ai.response.object",
+    "gen_ai.tool.call.arguments",
+    "gen_ai.tool.input",
+    "workflow_ids",
+    "triggered_workflow_ids",
+    "action_filter_group_ids",
+    "triggered_action_ids",
+)
+
+
+def attributes_array_selected_expressions() -> list[SelectedExpression]:
+    """Per-path `toJSONString(attributes_array.<path>.:Array(JSON))` selects for the allowlist."""
+    return [
+        SelectedExpression(
+            path,
+            FunctionCall(
+                alias=path,
+                function_name="toJSONString",
+                parameters=(
+                    JsonPath(
+                        alias=None,
+                        base=column("attributes_array"),
+                        path=path,
+                        return_type="Array(JSON)",
+                    ),
+                ),
+            ),
+        )
+        for path in ATTRIBUTES_ARRAY_ALLOWLIST
+    ]
+
+
+def decode_attributes_array_value(key: str, raw: Any) -> list[Any] | str | None:
+    """Decode a `toJSONString(...:Array(JSON))` payload for an allowlisted path.
+
+    Returns None if `raw` is not a string (caller should skip). If `key` is
+    in `ATTRIBUTES_ARRAY_ALLOWLIST` and `raw` looks like a JSON array (starts
+    with '['), parse it and normalize each element via
+    `transform_array_value`. Malformed JSON or non-tagged elements fall back
+    to the raw string. Otherwise return `raw` unchanged — either the JSON
+    path resolved to a non-array or `key` isn't an attributes_array path at
+    all. Callers should still skip empty list results.
+    """
+    if not isinstance(raw, str):
+        return None
+    if key not in ATTRIBUTES_ARRAY_ALLOWLIST or not raw.startswith("["):
+        return raw
+    try:
+        return [transform_array_value(elem) for elem in json.loads(raw)]
+    except (json.JSONDecodeError, BadSnubaRPCRequestException):
+        return raw
 
 
 def _check_non_string_values_cannot_ignore_case(
     comparison_filter: ComparisonFilter,
 ) -> None:
-    if comparison_filter.ignore_case and (
-        comparison_filter.value.WhichOneof("value") != "val_str"
-        and comparison_filter.value.WhichOneof("value") != "val_str_array"
-    ):
+    if not comparison_filter.ignore_case:
+        return
+    value_type = comparison_filter.value.WhichOneof("value")
+    if value_type == "val_array":
+        if not all(
+            elem.WhichOneof("value") == "val_str"
+            for elem in comparison_filter.value.val_array.values
+        ):
+            raise BadSnubaRPCRequestException("Cannot ignore case on non-string values")
+    elif value_type not in ("val_str", "val_str_array"):
         raise BadSnubaRPCRequestException("Cannot ignore case on non-string values")
 
 
@@ -170,6 +334,267 @@ def add_existence_check_to_subscriptable_references(query: Query) -> None:
     query.transform_expressions(transform)
 
 
+def _scalar_value(v: AttributeValue) -> bool | str | int | float | None:
+    """Extract a Python scalar from an AttributeValue proto."""
+    match v.WhichOneof("value"):
+        case "val_bool":
+            return v.val_bool
+        case "val_str":
+            return v.val_str
+        case "val_float":
+            return v.val_float
+        case "val_double":
+            return v.val_double
+        case "val_int":
+            return v.val_int
+        case None:
+            return None
+        case other:
+            raise NotImplementedError(f"not a scalar AttributeValue type: {other}")
+
+
+def _attribute_value_to_expression(v: AttributeValue) -> Expression:
+    """Convert an AttributeValue proto to a Snuba Expression."""
+    value_type = v.WhichOneof("value")
+    match value_type:
+        case "val_bool":
+            return literal(v.val_bool)
+        case "val_str":
+            return literal(v.val_str)
+        case "val_float":
+            return literal(v.val_float)
+        case "val_double":
+            return literal(v.val_double)
+        case "val_int":
+            return literal(v.val_int)
+        case "val_array":
+            return literals_array(None, [literal(_scalar_value(x)) for x in v.val_array.values])
+        case "val_str_array" | "val_int_array" | "val_float_array" | "val_double_array":
+            return literals_array(None, [literal(x) for x in getattr(v, value_type).values])
+        case default:
+            raise NotImplementedError(
+                f"translation of AttributeValue type {default} is not implemented"
+            )
+
+
+_NEGATIVE_OPS = {
+    AnyAttributeFilter.OP_NOT_EQUALS,
+    AnyAttributeFilter.OP_NOT_LIKE,
+    AnyAttributeFilter.OP_NOT_IN,
+}
+
+_POSITIVE_OP_FOR_NEGATIVE: dict[int, int] = {
+    AnyAttributeFilter.OP_NOT_EQUALS: AnyAttributeFilter.OP_EQUALS,
+    AnyAttributeFilter.OP_NOT_LIKE: AnyAttributeFilter.OP_LIKE,
+    AnyAttributeFilter.OP_NOT_IN: AnyAttributeFilter.OP_IN,
+}
+
+_STRING_COLUMNS = {"attributes_string"}
+
+# Map scalar value types to the ClickHouse column they're compatible with
+_VALUE_TYPE_TO_COLUMN: dict[str, str] = {
+    "val_str": "attributes_string",
+    "val_int": "attributes_float",
+    "val_float": "attributes_float",
+    "val_double": "attributes_float",
+    "val_bool": "attributes_bool",
+    # Deprecated per-type array fields (still supported)
+    "val_str_array": "attributes_string",
+    "val_int_array": "attributes_float",
+    "val_float_array": "attributes_float",
+    "val_double_array": "attributes_float",
+}
+
+_ARRAY_VALUE_TYPES = {
+    "val_array",
+    "val_str_array",
+    "val_int_array",
+    "val_float_array",
+    "val_double_array",
+}
+
+
+def _validate_comparison_filter_type_array(
+    op: ComparisonFilter.Op.ValueType, v: AttributeValue
+) -> None:
+    if op in (ComparisonFilter.OP_LIKE, ComparisonFilter.OP_NOT_LIKE):
+        if v.WhichOneof("value") != "val_str":
+            raise BadSnubaRPCRequestException(
+                "LIKE/NOT_LIKE on array keys requires a string pattern"
+            )
+        return
+    if op in (ComparisonFilter.OP_EQUALS, ComparisonFilter.OP_NOT_EQUALS):
+        # Array can be empty or non-empty. It can never be null, or can never have null elements.
+        vt = v.WhichOneof("value")
+        if vt in (
+            None,
+            "val_null",
+            "val_array",
+            "val_str_array",
+            "val_int_array",
+            "val_float_array",
+            "val_double_array",
+        ):
+            raise BadSnubaRPCRequestException(
+                "OP_EQUALS/OP_NOT_EQUALS on array keys require a scalar value "
+                "(e.g. val_str, val_int) or null (is_null / val_null) to match null elements"
+            )
+        return
+    raise BadSnubaRPCRequestException(
+        f"{ComparisonFilter.Op.Name(op)} is not supported on array keys "
+        "(supported: LIKE, NOT_LIKE, OP_EQUALS, OP_NOT_EQUALS)"
+    )
+
+
+def _type_array_membership_rhs_expression(v: AttributeValue) -> Expression:
+    """RHS as String, comparable to TYPE_ARRAY arrayMap output (Array(String) in CH)."""
+    value_type = v.WhichOneof("value")
+    match value_type:
+        case "val_str":
+            return literal(v.val_str)
+        case "val_int":
+            return f.toString(literal(v.val_int))
+        case "val_double":
+            return f.toString(literal(v.val_double))
+        case "val_float":
+            return f.toString(literal(v.val_float))
+        case "val_bool":
+            return literal(str(v.val_bool).lower())
+        case _:
+            raise BadSnubaRPCRequestException(
+                f"unsupported AttributeValue for array membership: {value_type}"
+            )
+
+
+def _type_array_includes_scalar_expression(
+    array_expr: Expression,
+    v: AttributeValue,
+    ignore_case: bool,
+) -> Expression:
+    """Any element equals scalar (includes / [*])"""
+    if v.WhichOneof("value") == "val_null" or v.is_null:
+        raise BadSnubaRPCRequestException("Arrays can't be NULL or cannot have NULL elements")
+    x = Argument(None, "x")
+    rhs = _type_array_membership_rhs_expression(v)
+    if ignore_case and v.WhichOneof("value") == "val_str":
+        return f.arrayExists(
+            Lambda(None, ("x",), f.equals(f.lower(x), f.lower(rhs))),
+            array_expr,
+        )
+    return f.arrayExists(Lambda(None, ("x",), f.equals(x, rhs)), array_expr)
+
+
+def _any_attribute_filter_to_expression(
+    filt: AnyAttributeFilter,
+) -> Expression:
+    """Build an expression that searches across attribute values.
+
+    The column to search is derived from the value type to avoid
+    ClickHouse type mismatches (e.g. comparing a string against a Float64 column).
+
+    Generates::
+
+        arrayExists(x -> <comparison>(x, value), mapValues(column))
+
+    wrapped with NOT(...) for negative ops.
+    """
+    # 1. Extract and validate the comparison value
+    v = filt.value
+    value_type = v.WhichOneof("value")
+    if value_type is None or value_type == "val_null":
+        raise BadSnubaRPCRequestException("any_attribute_filter does not have a value")
+
+    # Resolve the effective op for building the lambda (negation handled at the end)
+    is_negative = filt.op in _NEGATIVE_OPS
+    effective_op = _POSITIVE_OP_FOR_NEGATIVE.get(filt.op, filt.op)
+
+    is_array = value_type in _ARRAY_VALUE_TYPES
+    if effective_op == AnyAttributeFilter.OP_IN and not is_array:
+        raise BadSnubaRPCRequestException(
+            "IN/NOT_IN operations require an array value type (val_array)"
+        )
+
+    if effective_op != AnyAttributeFilter.OP_IN and is_array:
+        raise BadSnubaRPCRequestException(
+            f"{AnyAttributeFilter.Op.Name(filt.op)} does not support array values, use OP_IN/OP_NOT_IN"
+        )
+
+    # Validate that IN/NOT_IN arrays are non-empty
+    if effective_op == AnyAttributeFilter.OP_IN:
+        arr_values = (
+            v.val_array.values if value_type == "val_array" else getattr(v, value_type).values
+        )
+        if len(arr_values) == 0:
+            raise BadSnubaRPCRequestException("IN/NOT_IN operations require a non-empty array")
+
+    # 2. Determine which column to search based on the value type
+    if value_type == "val_array":
+        elem_types = {elem.WhichOneof("value") for elem in v.val_array.values}
+        if len(elem_types) != 1:
+            raise BadSnubaRPCRequestException("val_array elements must all be the same type")
+        elem_type = elem_types.pop()
+        if elem_type not in _VALUE_TYPE_TO_COLUMN:
+            raise BadSnubaRPCRequestException(f"Unsupported array element type: {elem_type}")
+        col_name = _VALUE_TYPE_TO_COLUMN[elem_type]
+    else:
+        if value_type not in _VALUE_TYPE_TO_COLUMN:
+            raise BadSnubaRPCRequestException(
+                f"Unsupported value type for any_attribute_filter: {value_type}"
+            )
+        col_name = _VALUE_TYPE_TO_COLUMN[value_type]
+
+    # LIKE/NOT_LIKE only makes sense on string columns
+    if effective_op == AnyAttributeFilter.OP_LIKE and col_name not in _STRING_COLUMNS:
+        raise BadSnubaRPCRequestException(
+            "LIKE/NOT_LIKE operations are only supported on string values"
+        )
+
+    # ignore_case uses lower() which only works on string columns
+    if filt.ignore_case and col_name not in _STRING_COLUMNS:
+        raise BadSnubaRPCRequestException("Cannot ignore case on non-string values")
+
+    v_expression = _attribute_value_to_expression(v)
+
+    # 3. Build the lambda comparison
+    x = Argument(None, "x")
+
+    if effective_op == AnyAttributeFilter.OP_EQUALS:
+        if filt.ignore_case:
+            comparison = f.equals(f.lower(x), f.lower(v_expression))
+        else:
+            comparison = f.equals(x, v_expression)
+    elif effective_op == AnyAttributeFilter.OP_LIKE:
+        if filt.ignore_case:
+            comparison = f.ilike(x, v_expression)
+        else:
+            comparison = f.like(x, v_expression)
+    elif effective_op == AnyAttributeFilter.OP_IN:
+        if filt.ignore_case:
+            if value_type == "val_str_array":
+                lowered = [literal(s.lower()) for s in v.val_str_array.values]
+            else:
+                lowered = [literal(elem.val_str.lower()) for elem in v.val_array.values]
+            comparison = in_cond(
+                f.lower(x),
+                literals_array(None, lowered),
+            )
+        else:
+            comparison = in_cond(x, v_expression)
+    else:
+        raise BadSnubaRPCRequestException(
+            f"Unsupported any_attribute_filter op: {AnyAttributeFilter.Op.Name(filt.op)}"
+        )
+
+    lam = Lambda(None, ("x",), comparison)
+
+    # 4. Build the arrayExists expression for the single matching column.
+    positive_expr = f.arrayExists(lam, f.mapValues(column(col_name)))
+
+    if is_negative:
+        return not_cond(positive_expr)
+    return positive_expr
+
+
 def trace_item_filters_to_expression(
     item_filter: TraceItemFilter,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
@@ -216,82 +641,97 @@ def trace_item_filters_to_expression(
 
     if item_filter.HasField("comparison_filter"):
         k = item_filter.comparison_filter.key
-        k_expression = attribute_key_to_expression(k)
         op = item_filter.comparison_filter.op
         v = item_filter.comparison_filter.value
+
+        if k.type == AttributeKey.Type.TYPE_ARRAY:
+            _validate_comparison_filter_type_array(op, v)
+
+        k_expression = _trace_item_filter_key_expression(
+            attr_to_key_expression_callable=attribute_key_to_expression, key=k
+        )
 
         value_type = v.WhichOneof("value")
         if value_type is None:
             raise BadSnubaRPCRequestException("comparison does not have a right hand side")
 
-        if v.is_null:
+        if v.is_null or value_type == "val_null":
             v_expression: Expression = literal(None)
         else:
-            match value_type:
-                case "val_bool":
-                    v_expression = literal(v.val_bool)
-                case "val_str":
-                    v_expression = literal(v.val_str)
-                case "val_float":
-                    v_expression = literal(v.val_float)
-                case "val_double":
-                    v_expression = literal(v.val_double)
-                case "val_int":
-                    v_expression = literal(v.val_int)
-                case "val_str_array":
-                    v_expression = literals_array(
-                        None, list(map(lambda x: literal(x), v.val_str_array.values))
-                    )
-                case "val_int_array":
-                    v_expression = literals_array(
-                        None, list(map(lambda x: literal(x), v.val_int_array.values))
-                    )
-                case "val_float_array":
-                    v_expression = literals_array(
-                        None, list(map(lambda x: literal(x), v.val_float_array.values))
-                    )
-                case "val_double_array":
-                    v_expression = literals_array(
-                        None, list(map(lambda x: literal(x), v.val_double_array.values))
-                    )
-                case default:
-                    raise NotImplementedError(
-                        f"translation of AttributeValue type {default} is not implemented"
-                    )
+            v_expression = _attribute_value_to_expression(v)
 
         if op == ComparisonFilter.OP_EQUALS:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
-            expr = (
-                f.equals(f.lower(k_expression), f.lower(v_expression))
-                if item_filter.comparison_filter.ignore_case
-                else f.equals(k_expression, v_expression)
-            )
-            # we redefine the way equals works for nulls
-            # now null=null is true
-            expr_with_null = or_cond(expr, and_cond(f.isNull(k_expression), f.isNull(v_expression)))
-            return expr_with_null
+
+            if k.type == AttributeKey.Type.TYPE_ARRAY:
+                return _type_array_includes_scalar_expression(
+                    k_expression, v, item_filter.comparison_filter.ignore_case
+                )
+            else:
+                expr = (
+                    f.equals(f.lower(k_expression), f.lower(v_expression))
+                    if item_filter.comparison_filter.ignore_case
+                    else f.equals(k_expression, v_expression)
+                )
+                # we redefine the way equals works for nulls
+                # now null=null is true
+                expr_with_null = or_cond(
+                    expr, and_cond(f.isNull(k_expression), f.isNull(v_expression))
+                )
+                return expr_with_null
         if op == ComparisonFilter.OP_NOT_EQUALS:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
-            expr = (
-                f.notEquals(f.lower(k_expression), f.lower(v_expression))
-                if item_filter.comparison_filter.ignore_case
-                else f.notEquals(k_expression, v_expression)
-            )
-            # we redefine the way not equals works for nulls
-            # now null!=null is true
-            expr_with_null = or_cond(expr, f.xor(f.isNull(k_expression), f.isNull(v_expression)))
-            return expr_with_null
+            if k.type == AttributeKey.Type.TYPE_ARRAY:
+                return not_cond(
+                    _type_array_includes_scalar_expression(
+                        k_expression, v, item_filter.comparison_filter.ignore_case
+                    )
+                )
+            else:
+                expr = (
+                    f.notEquals(f.lower(k_expression), f.lower(v_expression))
+                    if item_filter.comparison_filter.ignore_case
+                    else f.notEquals(k_expression, v_expression)
+                )
+                # we redefine the way not equals works for nulls
+                # now null!=null is true
+                expr_with_null = or_cond(
+                    expr, f.xor(f.isNull(k_expression), f.isNull(v_expression))
+                )
+                return expr_with_null
         if op == ComparisonFilter.OP_LIKE:
+            if k.type == AttributeKey.Type.TYPE_ARRAY:
+                like_fn = f.ilike if item_filter.comparison_filter.ignore_case else f.like
+                return f.arrayExists(
+                    Lambda(
+                        None,
+                        ("x",),
+                        like_fn(Argument(None, "x"), v_expression),
+                    ),
+                    k_expression,
+                )
             if k.type != AttributeKey.Type.TYPE_STRING:
                 raise BadSnubaRPCRequestException(
-                    "the LIKE comparison is only supported on string keys"
+                    "the LIKE comparison is only supported on string and array keys"
                 )
             comparison_function = f.ilike if item_filter.comparison_filter.ignore_case else f.like
             return comparison_function(k_expression, v_expression)
         if op == ComparisonFilter.OP_NOT_LIKE:
+            if k.type == AttributeKey.Type.TYPE_ARRAY:
+                like_fn = f.ilike if item_filter.comparison_filter.ignore_case else f.like
+                return not_cond(
+                    f.arrayExists(
+                        Lambda(
+                            None,
+                            ("x",),
+                            like_fn(Argument(None, "x"), v_expression),
+                        ),
+                        k_expression,
+                    )
+                )
             if k.type != AttributeKey.Type.TYPE_STRING:
                 raise BadSnubaRPCRequestException(
-                    "the NOT LIKE comparison is only supported on string keys"
+                    "the NOT LIKE comparison is only supported on string and array keys"
                 )
             comparison_function = (
                 f.notILike if item_filter.comparison_filter.ignore_case else f.notLike
@@ -313,10 +753,16 @@ def trace_item_filters_to_expression(
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
             if item_filter.comparison_filter.ignore_case:
                 k_expression = f.lower(k_expression)
-                v_expression = literals_array(
-                    None,
-                    list(map(lambda x: literal(x.lower()), v.val_str_array.values)),
-                )
+                if value_type == "val_str_array":
+                    v_expression = literals_array(
+                        None,
+                        [literal(s.lower()) for s in v.val_str_array.values],
+                    )
+                else:
+                    v_expression = literals_array(
+                        None,
+                        [literal(elem.val_str.lower()) for elem in v.val_array.values],
+                    )
             expr = in_cond(k_expression, v_expression)
             # note: v_expression must be an array
             # we redefine the way in works for nulls
@@ -330,10 +776,16 @@ def trace_item_filters_to_expression(
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
             if item_filter.comparison_filter.ignore_case:
                 k_expression = f.lower(k_expression)
-                v_expression = literals_array(
-                    None,
-                    list(map(lambda x: literal(x.lower()), v.val_str_array.values)),
-                )
+                if value_type == "val_str_array":
+                    v_expression = literals_array(
+                        None,
+                        [literal(s.lower()) for s in v.val_str_array.values],
+                    )
+                else:
+                    v_expression = literals_array(
+                        None,
+                        [literal(elem.val_str.lower()) for elem in v.val_array.values],
+                    )
             expr = not_cond(in_cond(k_expression, v_expression))
             # note: v_expression must be an array
             # we redefine the way not in works for nulls
@@ -353,8 +805,16 @@ def trace_item_filters_to_expression(
 
     if item_filter.HasField("exists_filter"):
         return get_field_existence_expression(
-            attribute_key_to_expression(item_filter.exists_filter.key)
+            _trace_item_filter_key_expression(
+                attr_to_key_expression_callable=attribute_key_to_expression,
+                key=item_filter.exists_filter.key,
+            )
         )
+
+    if item_filter.HasField("any_attribute_filter"):
+        if not state.get_int_config("enable_any_attribute_filter", 1):
+            return literal(True)
+        return _any_attribute_filter_to_expression(item_filter.any_attribute_filter)
 
     return literal(True)
 
@@ -439,6 +899,11 @@ def get_field_existence_expression(field: Expression) -> Expression:
                 return field.parameters[0]
 
         return None
+
+    if isinstance(field, FunctionCall) and field.function_name == "coalesce":
+        return combine_or_conditions(
+            [get_field_existence_expression(param) for param in field.parameters]
+        )
 
     subscriptable_field = get_subscriptable_field(field)
     if subscriptable_field is not None:

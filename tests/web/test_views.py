@@ -77,26 +77,6 @@ def test_handle_invalid_query(
 def test_check_envoy_health(snuba_api: FlaskClient) -> None:
     response = snuba_api.get("/health_envoy")
     assert response.status_code == 200
-    with mock.patch("snuba.web.views.check_down_file_exists", return_value=True):
-        response = snuba_api.get("/health_envoy")
-        assert response.status_code == 503
-
-
-def test_down_file_exists_pod_healthy(snuba_api: FlaskClient) -> None:
-    with mock.patch(
-        "snuba.utils.health_info.sanity_check_clickhouse_connections",
-        return_value=True,
-    ):
-        response = snuba_api.get("/health")
-        assert response.status_code == 200
-    # down file existing does not mean the pod is unhealthy
-    with mock.patch(
-        "snuba.utils.health_info.sanity_check_clickhouse_connections",
-        return_value=True,
-    ):
-        with mock.patch("snuba.utils.health_info.check_down_file_exists", return_value=True):
-            response = snuba_api.get("/health")
-            assert response.status_code == 200
 
 
 def test_do_not_check_clickhouse_tables_if_not_thorough(snuba_api: FlaskClient) -> None:

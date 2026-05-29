@@ -108,7 +108,6 @@ def test_invalid_system_query(sql_query: str) -> None:
         ("SYSSSSSSSTEM DO SOMETHING", False),
         ("SYSTEM STOP MERGES", True),
         ("SYSTEM STOP TTL MERGES", True),
-        ("SYSTEM STOP TTL MERGES ON CLUSTER 'snuba-spans'", True),
         ("KILL MUTATION WHERE mutation_id='0000000000'", True),
         ("system STOP MerGes", True),
         ("system SHUTDOWN", False),
@@ -222,6 +221,58 @@ def test_run_sudo_queries(
             run_query()
     else:
         run_query()
+
+
+@pytest.mark.parametrize(
+    "sudo_mode, expected_helper",
+    [
+        pytest.param(
+            False,
+            "get_ro_clusterless_node_connection",
+            id="Non-sudo clusterless uses readonly credentials",
+        ),
+        pytest.param(
+            True,
+            "get_clusterless_node_connection",
+            id="Sudo clusterless uses cluster admin credentials",
+        ),
+    ],
+)
+def test_clusterless_uses_readonly_for_non_sudo(sudo_mode: bool, expected_helper: str) -> None:
+    """
+    Non-sudo clusterless system queries must connect with the global readonly
+    user. Without this, the default NOOP auth provider would let anonymous
+    users run queries against ClickHouse with the full cluster admin
+    credentials, leaking sensitive data via system tables.
+    """
+    from unittest.mock import patch
+
+    from snuba.admin.clickhouse import system_queries
+
+    mock_result = type("MockResult", (), {"results": []})()
+    forbidden = (
+        "get_clusterless_node_connection"
+        if expected_helper == "get_ro_clusterless_node_connection"
+        else "get_ro_clusterless_node_connection"
+    )
+
+    with (
+        patch.object(system_queries, expected_helper) as mock_used,
+        patch.object(system_queries, forbidden) as mock_forbidden,
+    ):
+        mock_used.return_value.execute.return_value = mock_result
+
+        system_queries._run_sql_query_on_host(
+            "host",
+            9000,
+            "errors",
+            "SELECT * FROM system.clusters",
+            sudo_mode,
+            True,
+        )
+
+        assert mock_used.called, f"Expected {expected_helper} to be used"
+        assert not mock_forbidden.called, f"{forbidden} must not be used in this mode"
 
 
 @pytest.mark.parametrize(

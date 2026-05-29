@@ -43,9 +43,6 @@ def test_message_processors(topic: str, processor: Type[DatasetMessageProcessor]
             data_json["start_time"] = int(time.time())
         if topic == "processed-profiles":
             data_json["received"] = int(time.time())
-        elif topic == "snuba-spans":
-            data_json["start_timestamp_ms"] = int(time.time()) * 1000
-            data_json.pop("group_raw", None)
 
         processor_name = processor.__qualname__
         partition = 0

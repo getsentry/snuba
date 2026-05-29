@@ -195,7 +195,7 @@ function(region) {
                   checks: {
                     elastic_profile_id: 'snuba',
                     environment_variables: {
-                      PIPELINE_FIRST_STEP: 'deploy-snuba-py-s4s',
+                      PIPELINE_FIRST_STEP: 'deploy-snuba-py-s4s2',
                     },
                     tasks: [
                       gocdtasks.script(importstr '../bash/check-github.sh'),

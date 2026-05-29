@@ -15,6 +15,9 @@ TResult = TypeVar("TResult")
 
 
 Accumulator = Callable[[TResult, BaseValue[TPayload]], TResult]
+# https://clickhouse.com/docs/operations/settings/settings#max_ast_elements
+# max_ast_elements defaults to 50000
+MAX_BUFFERED_MESSAGES = 2000
 
 
 class ReduceRowsBuffer(Generic[TPayload, TResult]):
@@ -35,6 +38,8 @@ class ReduceRowsBuffer(Generic[TPayload, TResult]):
         self._buffer = initial_value()
         self._buffer_size = 0
         self._buffer_until = time.time() + max_batch_time
+        # used to set a max value on the delete AST
+        self._buffered_messages = 0
 
     @property
     def buffer(self) -> TResult:
@@ -46,7 +51,11 @@ class ReduceRowsBuffer(Generic[TPayload, TResult]):
 
     @property
     def is_ready(self) -> bool:
-        return self._buffer_size >= self.max_batch_size or time.time() >= self._buffer_until
+        return (
+            self._buffer_size >= self.max_batch_size
+            or time.time() >= self._buffer_until
+            or self._buffered_messages >= MAX_BUFFERED_MESSAGES
+        )
 
     def append(self, message: BaseValue[TPayload]) -> None:
         """
@@ -61,6 +70,7 @@ class ReduceRowsBuffer(Generic[TPayload, TResult]):
         else:
             buffer_increment = 1
         self._buffer_size += buffer_increment
+        self._buffered_messages += 1
 
     def new(self) -> "ReduceRowsBuffer[TPayload, TResult]":
         return ReduceRowsBuffer(

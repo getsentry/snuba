@@ -14,6 +14,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.lw_deletions.types import AttributeConditions
 from snuba.web.bulk_delete_query import delete_from_storage
 from snuba.web.rpc import RPCEndpoint
+from snuba.web.rpc.common.common import _scalar_value
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
@@ -28,12 +29,10 @@ def _extract_attribute_value(comparison_filter: ComparisonFilter) -> Any:
         return comparison_filter.value.val_double
     elif value_field == "val_bool":
         return comparison_filter.value.val_bool
-    elif value_field == "val_str_array":
-        return list(comparison_filter.value.val_str_array.values)
-    elif value_field == "val_int_array":
-        return list(comparison_filter.value.val_int_array.values)
-    elif value_field == "val_double_array":
-        return list(comparison_filter.value.val_double_array.values)
+    elif value_field == "val_array":
+        return [_scalar_value(elem) for elem in comparison_filter.value.val_array.values]
+    elif value_field in ("val_str_array", "val_int_array", "val_double_array", "val_float_array"):
+        return list(getattr(comparison_filter.value, value_field).values)
     else:
         raise BadSnubaRPCRequestException(f"Unsupported attribute value type: {value_field}")
 
