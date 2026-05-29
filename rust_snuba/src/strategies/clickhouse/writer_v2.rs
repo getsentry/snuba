@@ -101,6 +101,7 @@ where
     /// `RowBinary`, which would otherwise fall back to the table's positional
     /// column order — a footgun whenever wire order and table order diverge.
     /// For `JSONEachRow`, pass `None` to preserve historical behavior.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         next_step: N,
         cluster_config: ClickhouseConfig,
