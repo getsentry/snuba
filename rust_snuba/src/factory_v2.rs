@@ -92,20 +92,30 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
         // processor function is the only thing that varies between them: it
         // encodes each row to the right wire format up front and the
         // pipeline carries the resulting bytes the rest of the way.
-        let (insert_format, process_fn_override) = if self.use_row_binary {
+        let (insert_format, process_fn_override, insert_columns): (
+            InsertFormat,
+            Option<crate::processors::ProcessingFunction>,
+            Option<&'static [&'static str]>,
+        ) = if self.use_row_binary {
             tracing::info!("Using RowBinary wire format");
             let processor_name = self
                 .storage_config
                 .message_processor
                 .python_class_name
                 .as_str();
-            let func: crate::processors::ProcessingFunction = match processor_name {
-                "EAPItemsProcessor" => crate::processors::eap_items::process_message_row_binary,
+            let (func, columns): (
+                crate::processors::ProcessingFunction,
+                &'static [&'static str],
+            ) = match processor_name {
+                "EAPItemsProcessor" => (
+                    crate::processors::eap_items::process_message_row_binary,
+                    crate::processors::eap_items::EAPItemRow::COLUMN_NAMES,
+                ),
                 name => panic!("RowBinary not supported for processor: {name}"),
             };
-            (InsertFormat::RowBinary, Some(func))
+            (InsertFormat::RowBinary, Some(func), Some(columns))
         } else {
-            (InsertFormat::JsonEachRow, None)
+            (InsertFormat::JsonEachRow, None, None)
         };
 
         // Commit offsets
@@ -153,6 +163,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             &self.clickhouse_concurrency,
             self.storage_config.name.clone(),
             insert_format,
+            insert_columns,
         );
 
         let accumulator = Arc::new(

@@ -96,6 +96,11 @@ impl<N> ClickhouseWriterStep<N>
 where
     N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
 {
+    /// `columns`: if `Some`, expand into the SQL as
+    /// `INSERT INTO {table} (col1, col2, ...) FORMAT ...`. Required for
+    /// `RowBinary`, which would otherwise fall back to the table's positional
+    /// column order — a footgun whenever wire order and table order diverge.
+    /// For `JSONEachRow`, pass `None` to preserve historical behavior.
     pub fn new(
         next_step: N,
         cluster_config: ClickhouseConfig,
@@ -104,6 +109,7 @@ where
         concurrency: &ConcurrencyConfig,
         storage_name: String,
         format: InsertFormat,
+        columns: Option<&'static [&'static str]>,
     ) -> Self {
         let inner = RunTaskInThreads::new(
             next_step,
@@ -113,6 +119,7 @@ where
                     &table,
                     storage_name,
                     format,
+                    columns,
                 )),
                 skip_write,
             ),
@@ -179,6 +186,7 @@ impl ClickhouseClient {
         table: &str,
         storage_name: String,
         format: InsertFormat,
+        columns: Option<&[&str]>,
     ) -> ClickhouseClient {
         let mut headers = HeaderMap::with_capacity(6);
         headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
@@ -206,7 +214,14 @@ impl ClickhouseClient {
             // to treat any binary string targeting a JSON column as JSON text.
             base_url.push_str("&input_format_binary_read_json_as_string=1");
         }
-        let query = format!("INSERT INTO {table} FORMAT {}", format.as_str());
+        let columns_clause = match columns {
+            Some(cols) => format!(" ({})", cols.join(", ")),
+            None => String::new(),
+        };
+        let query = format!(
+            "INSERT INTO {table}{columns_clause} FORMAT {fmt}",
+            fmt = format.as_str(),
+        );
 
         ClickhouseClient {
             client: Client::new(),
@@ -357,6 +372,7 @@ mod tests {
             "querylog_local",
             "test_storage".to_string(),
             InsertFormat::JsonEachRow,
+            None,
         );
 
         let url = client.build_url();
@@ -377,6 +393,7 @@ mod tests {
             "test_table",
             "writer_v2_lb_test".to_string(),
             InsertFormat::JsonEachRow,
+            None,
         );
 
         // Default: in_order
@@ -408,6 +425,7 @@ mod tests {
             "test_table",
             "writer_v2_block_size_test".to_string(),
             InsertFormat::JsonEachRow,
+            None,
         );
 
         // Default (key absent): no suffix.
@@ -428,6 +446,7 @@ mod tests {
             "test_table",
             "writer_v2_other_storage".to_string(),
             InsertFormat::JsonEachRow,
+            None,
         );
         let url = other_client.build_url();
         assert!(!url.contains("max_insert_block_size"));
@@ -469,6 +488,7 @@ mod tests {
             "test_table",
             "test_storage".to_string(),
             InsertFormat::JsonEachRow,
+            None,
         );
 
         let start_time = Instant::now();

@@ -494,6 +494,47 @@ pub struct EAPItemRow {
 }
 }
 
+seq_attrs! {
+impl EAPItemRow {
+    /// Column names in struct (= wire) order. We MUST pass this list to
+    /// ClickHouse on insert (`INSERT INTO t (col1, col2, ...) FORMAT RowBinary`)
+    /// because the on-disk column order in `eap_items_1_local` differs from
+    /// the struct order:
+    ///
+    /// * `client_sample_rate` and `server_sample_rate` were added with
+    ///   identical `AFTER sampling_factor` in migration 0048, so the table
+    ///   ends up with the pair reversed (server before client).
+    /// * The struct interleaves `attributes_string_N, attributes_float_N` for
+    ///   each `N` (per the `seq_attrs!` expansion), while the initial table
+    ///   put all `attributes_string_*` first, then all `attributes_float_*`.
+    ///
+    /// Without an explicit column list, ClickHouse falls back to the table's
+    /// positional order and misreads bytes (the integration test hits a
+    /// `CANNOT_READ_ALL_DATA` deep inside the maps section).
+    pub(crate) const COLUMN_NAMES: &'static [&'static str] = &[
+        "organization_id",
+        "project_id",
+        "item_type",
+        "timestamp",
+        "trace_id",
+        "item_id",
+        "sampling_weight",
+        "sampling_factor",
+        "client_sample_rate",
+        "server_sample_rate",
+        "retention_days",
+        "downsampled_retention_days",
+        "attributes_bool",
+        "attributes_int",
+        #(
+        concat!("attributes_string_", stringify!(N)),
+        concat!("attributes_float_", stringify!(N)),
+        )*
+        "attributes_array",
+    ];
+}
+}
+
 impl TryFrom<EAPItem> for EAPItemRow {
     type Error = anyhow::Error;
 
@@ -932,6 +973,30 @@ mod tests {
         let now = ymd_hms(2026, 5, 18, 1, 30, 0);
         let event_ts = ymd_hms(2026, 5, 18, 1, 0, 0);
         assert!(!should_dlq_for_prior_partition(event_ts, now, 45));
+    }
+
+    /// The column list we ship with `INSERT INTO ... FORMAT RowBinary` must
+    /// match the struct's field order exactly — otherwise ClickHouse misreads
+    /// bytes (e.g., a `Map(String, String)` worth of data lands in a column
+    /// declared `Map(String, Float64)`). Lock the order down here so anyone
+    /// adding/reordering fields on `EAPItemRow` also updates this list.
+    #[test]
+    fn test_column_names_match_struct_layout() {
+        let names = EAPItemRow::COLUMN_NAMES;
+        // 12 scalars + attributes_bool + attributes_int + 80 buckets + attributes_array
+        assert_eq!(names.len(), 95);
+        assert_eq!(names[0], "organization_id");
+        assert_eq!(names[7], "sampling_factor");
+        assert_eq!(names[8], "client_sample_rate");
+        assert_eq!(names[9], "server_sample_rate");
+        // Bucket pairs are interleaved (string_N then float_N) per the
+        // `seq_attrs!` expansion on EAPItemRow.
+        assert_eq!(names[14], "attributes_string_0");
+        assert_eq!(names[15], "attributes_float_0");
+        assert_eq!(names[16], "attributes_string_1");
+        assert_eq!(names[92], "attributes_string_39");
+        assert_eq!(names[93], "attributes_float_39");
+        assert_eq!(names[94], "attributes_array");
     }
 
     #[test]
@@ -1522,12 +1587,18 @@ mod tests {
             .expect("The message should be processed");
         assert_eq!(batch.rows.num_rows, 1);
 
-        // Insert: POST the pre-encoded bytes with FORMAT RowBinary.
+        // Insert: POST the pre-encoded bytes with FORMAT RowBinary. We must
+        // pass the column list — the struct's wire order does NOT match the
+        // table's on-disk column order (see EAPItemRow::COLUMN_NAMES).
+        let insert_query = format!(
+            "INSERT INTO eap_items_1_local ({}) FORMAT RowBinary",
+            EAPItemRow::COLUMN_NAMES.join(", "),
+        );
         let insert_resp = http
             .post(&base_url)
             .header("X-ClickHouse-Database", &database)
             .query(&[
-                ("query", "INSERT INTO eap_items_1_local FORMAT RowBinary"),
+                ("query", insert_query.as_str()),
                 ("input_format_binary_read_json_as_string", "1"),
                 ("insert_deduplicate", "0"),
             ])
