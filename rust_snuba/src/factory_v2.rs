@@ -188,9 +188,16 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
         )
         .flush_empty_batches(true);
 
+        // RowBinary can only be emitted by the Rust processor (the Python path
+        // always returns JSONEachRow bytes). If the storage opted into
+        // RowBinary, force the Rust processor branch — otherwise we'd POST
+        // JSON bytes under `FORMAT RowBinary` and ClickHouse would reject the
+        // batch. The previous early-return for RowBinary did this implicitly.
+        let use_rust_processor = self.use_rust_processor || self.use_row_binary;
+
         // Transform messages
         let next_step = match (
-            self.use_rust_processor,
+            use_rust_processor,
             processors::get_processing_function(
                 &self.storage_config.message_processor.python_class_name,
             ),
