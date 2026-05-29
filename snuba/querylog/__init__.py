@@ -35,6 +35,7 @@ _ITEM_TYPE_TO_APP_FEATURE: dict[str, str] = {
     "TRACE_ITEM_TYPE_ATTACHMENT": "attachments",
     "TRACE_ITEM_TYPE_PREPROD": "preprod",
     "TRACE_ITEM_TYPE_USER_SESSION": "sessions",
+    "TRACE_ITEM_TYPE_PROCESSING_ERROR": "processing_errors",
     "TRACE_ITEM_TYPE_UNSPECIFIED": "null",
 }
 
