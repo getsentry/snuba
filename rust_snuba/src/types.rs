@@ -220,6 +220,27 @@ impl InsertBatch {
         })
     }
 
+    /// Constructor for processors that have already serialized their rows into
+    /// the wire format (e.g. the RowBinary path encodes each `EAPItemRow`
+    /// inside the processor instead of carrying the typed struct downstream).
+    /// `num_rows` is the count those bytes represent.
+    pub fn from_encoded_rows(
+        encoded_rows: Vec<u8>,
+        num_rows: usize,
+        origin_timestamp: Option<DateTime<Utc>>,
+    ) -> Self {
+        Self {
+            rows: RowData {
+                encoded_rows,
+                num_rows,
+            },
+            origin_timestamp,
+            sentry_received_timestamp: None,
+            cogs_data: None,
+            item_type_metrics: None,
+        }
+    }
+
     /// In case the processing function wants to skip the message, we return an empty batch.
     /// But instead of having the caller send an empty batch, lets make an explicit api for
     /// skipping. This way we can change the implementation later if we want to. Skipping ensures

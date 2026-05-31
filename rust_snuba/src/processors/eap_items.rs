@@ -21,7 +21,7 @@ use crate::processors::utils::{
 use crate::runtime_config::get_str_config;
 use crate::strategies::clickhouse::rowbinary;
 use crate::types::CogsData;
-use crate::types::{item_type_name, InsertBatch, ItemTypeMetrics, KafkaMessageMetadata, RowData};
+use crate::types::{item_type_name, InsertBatch, ItemTypeMetrics, KafkaMessageMetadata};
 
 /// Runtime config key prefix. Per-storage key
 /// `eap_items_dlq_grace_period_min:<storage_name>`: a non-negative integer
@@ -214,16 +214,10 @@ pub fn process_message_row_binary(
     let mut encoded_rows = Vec::new();
     rowbinary::serialize_into(&mut encoded_rows, &row)?;
 
-    Ok(InsertBatch {
-        rows: RowData {
-            encoded_rows,
-            num_rows: 1,
-        },
-        origin_timestamp: processed.origin_timestamp,
-        sentry_received_timestamp: None,
-        cogs_data: Some(processed.cogs_data),
-        item_type_metrics: Some(processed.item_type_metrics),
-    })
+    let mut batch = InsertBatch::from_encoded_rows(encoded_rows, 1, processed.origin_timestamp);
+    batch.cogs_data = Some(processed.cogs_data);
+    batch.item_type_metrics = Some(processed.item_type_metrics);
+    Ok(batch)
 }
 
 /// Test-only: returns the typed `EAPItemRow` (plus the metadata fields the
