@@ -88,10 +88,6 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
     }
 
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
-        // Both JSON and RowBinary now flow through the same pipeline. The
-        // processor function is the only thing that varies between them: it
-        // encodes each row to the right wire format up front and the
-        // pipeline carries the resulting bytes the rest of the way.
         let (insert_format, process_fn_override, insert_columns): (
             InsertFormat,
             Option<crate::processors::ProcessingFunction>,
