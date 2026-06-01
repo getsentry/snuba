@@ -75,7 +75,7 @@ jobs:
           # NOTE: can't pass --only-dev yet since we're missing some mypy stub packages
           install-cmd: uv sync --frozen --active
 
-      - uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: ~/.cache/pre-commit
           key: cache-epoch-1|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml', 'uv.lock') }}
@@ -208,7 +208,7 @@ jobs:
 
       - name: Restore Docker dependency image cache
         id: cache-restore
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: /tmp/docker-deps
           key: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
@@ -241,7 +241,7 @@ jobs:
 
       - name: Save Docker dependency image cache
         if: steps.load-pull.outputs.pulled == '1'
-        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: /tmp/docker-deps
           key: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
@@ -278,7 +278,7 @@ jobs:
           docker image ls -a
 
       - name: Restore Docker dependency image cache
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: /tmp/docker-deps
           key: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
@@ -494,7 +494,7 @@ jobs:
           docker image ls -a
 
       - name: Restore Docker dependency image cache
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: /tmp/docker-deps
           key: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
