@@ -2,6 +2,7 @@ import json
 import socket
 import time
 from typing import Dict, List, cast
+from uuid import UUID
 
 import structlog
 from flask import g
@@ -26,10 +27,23 @@ def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
         query_trace: TraceOutput object to update with profile events
         storage: Storage identifier
     """
-    profile_events_raw_sql = "SELECT ProfileEvents FROM system.query_log WHERE query_id = '{}' AND type = 'QueryFinish'"
+    profile_events_raw_sql = (
+        "SELECT ProfileEvents FROM system.query_log WHERE query_id = '{}' AND type = 'QueryFinish'"
+    )
 
     for query_trace_data in parse_trace_for_query_ids(query_trace):
-        sql = profile_events_raw_sql.format(query_trace_data.query_id)
+        # query_id is reachable from user input via /fetch_profile_events, so
+        # require a UUID before interpolating into raw SQL.
+        try:
+            validated_query_id = str(UUID(query_trace_data.query_id))
+        except (ValueError, AttributeError, TypeError):
+            logger.warning(
+                "skipping profile events fetch for non-UUID query_id",
+                query_id=query_trace_data.query_id,
+                node_name=query_trace_data.node_name,
+            )
+            continue
+        sql = profile_events_raw_sql.format(validated_query_id)
         logger.info(
             "Gathering profile event using host: {}, port = {}, storage = {}, sql = {}, g.user = {}".format(
                 query_trace_data.host, query_trace_data.port, storage, sql, g.user
@@ -46,6 +60,7 @@ def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
                     int(query_trace_data.port),
                     storage,
                     sql,
+                    False,
                     False,
                     g.user,
                 )
@@ -65,9 +80,7 @@ def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
 
         if system_query_result is not None and len(system_query_result.results) > 0:
             query_trace.profile_events_meta.append(system_query_result.meta)
-            query_trace.profile_events_profile = cast(
-                Dict[str, int], system_query_result.profile
-            )
+            query_trace.profile_events_profile = cast(Dict[str, int], system_query_result.profile)
             columns = system_query_result.meta
             if columns:
                 res = {}

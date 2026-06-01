@@ -58,7 +58,10 @@ function QueryDisplay(props: {
       .then((result) => {
         const tracing_result = {
           input_query: `${query.sql}`,
-          timestamp: result.timestamp,
+          // TraceOutput has no timestamp field, so the API response never
+          // includes one. Stamp client-side so each execution gets a unique
+          // cache key for lazy-loaded profile events.
+          timestamp: Date.now(),
           storage: query.storage,
           num_rows_result: result.num_rows_result,
           result: result.result,

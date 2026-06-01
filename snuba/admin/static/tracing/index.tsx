@@ -140,7 +140,10 @@ function TracingQueries(props: { api: Client }) {
       const timestamp = queryResult.timestamp;
       const cached = profileEventsCache[timestamp];
 
-      if (!cached || (!cached.loading && !cached.data && !cached.error)) {
+      // Re-fetch when nothing is in flight and we don't already have data —
+      // including after a previous error, so the user can retry by collapsing
+      // and re-expanding the accordion.
+      if (!cached || (!cached.loading && !cached.data)) {
         if (queryResult.summarized_trace_output?.query_summaries && queryResult.storage) {
           fetchProfileEventsWithRetry(
             queryResult.summarized_trace_output.query_summaries,
@@ -220,32 +223,43 @@ function TracingQueries(props: { api: Client }) {
 
     return (
       <ol style={collapsibleStyle} key={title + "-root"}>
-        <Title order={4}>Profile Events Output</Title>
-        {profileEventsState?.loading && (
-          <li>
-            <Loader size="sm" />
-            <Text>Loading profile events...</Text>
-          </li>
-        )}
-        {profileEventsState?.error && (
-          <li>
-            <Alert color="yellow">{profileEventsState.error}</Alert>
-          </li>
-        )}
-        {!profileEventsState?.loading && profileEventRows.length === 0 && (
-          <li>
-            <Alert color="blue">No profile events found</Alert>
-          </li>
-        )}
-        {profileEventRows.map((line, index) => {
-          const node_name = line.split("=>")[0];
-          const row = line.split("=>")[1];
-          return (
-            <li key={title + index}>
-              <Text>[ {node_name} ] {row}</Text>
-            </li>
-          );
-        })}
+        <Accordion
+          chevronPosition="left"
+          onChange={(value) => handleProfileEventsAccordionChange(value, queryResult)}
+        >
+          <Accordion.Item value="profile-events" key="profile-events">
+            <Accordion.Control>
+              <Title order={4}>Profile Events Output</Title>
+            </Accordion.Control>
+            <Accordion.Panel>
+              {profileEventsState?.loading && (
+                <li>
+                  <Loader size="sm" />
+                  <Text>Loading profile events...</Text>
+                </li>
+              )}
+              {profileEventsState?.error && (
+                <li>
+                  <Alert color="yellow">{profileEventsState.error}</Alert>
+                </li>
+              )}
+              {!profileEventsState?.loading && profileEventRows.length === 0 && (
+                <li>
+                  <Alert color="blue">No profile events found</Alert>
+                </li>
+              )}
+              {profileEventRows.map((line, index) => {
+                const node_name = line.split("=>")[0];
+                const row = line.split("=>")[1];
+                return (
+                  <li key={title + index}>
+                    <Text>[ {node_name} ] {row}</Text>
+                  </li>
+                );
+              })}
+            </Accordion.Panel>
+          </Accordion.Item>
+        </Accordion>
         <br />
         <Title order={4}>Trace Output</Title>
         {parsedLines.map((line, index) => {
