@@ -144,6 +144,30 @@ local deploy_canary_stage(region) =
         },
       },
     ]
+  else if region == 'de' then
+    [
+      {
+        'deploy-canary': {
+          fetch_materials: true,
+          jobs: {
+            'deploy-canary': {
+              timeout: 1200,
+              elastic_profile_id: 'snuba',
+              environment_variables: {
+                SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
+                DATADOG_API_KEY: '{{SECRET:[devinfra][sentry_datadog_api_key]}}',
+                DATADOG_APP_KEY: '{{SECRET:[devinfra][sentry_datadog_app_key]}}',
+                LABEL_SELECTOR: 'service=snuba,is_canary=true',
+              },
+              tasks: [
+                gocdtasks.script(importstr '../bash/deploy-py.sh'),
+                gocdtasks.script(importstr '../bash/canary-ddog-health-check.sh'),
+              ],
+            },
+          },
+        },
+      },
+    ]
   else
     [];
 
@@ -171,7 +195,7 @@ function(region) {
                   checks: {
                     elastic_profile_id: 'snuba',
                     environment_variables: {
-                      PIPELINE_FIRST_STEP: 'deploy-snuba-py-s4s',
+                      PIPELINE_FIRST_STEP: 'deploy-snuba-py-s4s2',
                     },
                     tasks: [
                       gocdtasks.script(importstr '../bash/check-github.sh'),

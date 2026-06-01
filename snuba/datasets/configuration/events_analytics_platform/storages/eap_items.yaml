@@ -108,7 +108,7 @@ schema:
     ]
   local_table_name: eap_items_1_local
   dist_table_name: eap_items_1_dist
-  partition_format: [date]
+  partition_format: [retention_days, date]
 
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
@@ -138,6 +138,7 @@ deletion_settings:
   is_enabled: 1
   max_rows_to_delete: 2000000
   bulk_delete_only: true
+  partition_column: timestamp
   tables:
     - eap_items_1_local
     - eap_items_1_downsample_8_local

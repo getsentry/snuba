@@ -159,7 +159,7 @@ def test_consumer_builder_optional_attributes(con_build) -> None:  # type: ignor
     con_build.output_block_size
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_run_processing_strategy() -> None:
     assert get_row_count(get_writable_storage(StorageKey.ERRORS)) == 0
 

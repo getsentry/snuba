@@ -1,4 +1,4 @@
-import { ParsedCommand, ShellMode } from "./types";
+import { ParsedCommand, ShellMode, OutputFormat } from "./types";
 
 /**
  * Command definition for the shell parser.
@@ -88,6 +88,15 @@ const COMMANDS: CommandDefinition[] = [
       enabled: match[1].toUpperCase() === "ON",
     }),
     modes: ["system"],
+  },
+
+  // FORMAT TABLE|JSON|CSV|VERTICAL - Set output format
+  {
+    pattern: /^FORMAT\s+(TABLE|JSON|CSV|VERTICAL)$/i,
+    parse: (match) => ({
+      type: "format",
+      format: match[1].toLowerCase() as OutputFormat,
+    }),
   },
 
   // HELP - Show help message

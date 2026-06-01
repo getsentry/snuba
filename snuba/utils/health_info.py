@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import logging
-import os
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, TimeoutError, as_completed
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, MutableMapping, Optional, Set, Union, cast
+from typing import Any, Dict, List, Mapping, MutableMapping, Set, Union, cast
 
 import sentry_sdk
 import simplejson as json
@@ -19,6 +18,7 @@ from snuba.clusters.cluster import (
     ConnectionId,
     UndefinedClickhouseCluster,
 )
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import Storage
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
@@ -31,44 +31,16 @@ setup_logging(None)
 logger = logging.getLogger("snuba.health")
 
 
-def shutdown_time() -> Optional[float]:
-    try:
-        return os.stat("/tmp/snuba.down").st_mtime
-    except OSError:
-        return None
-
-
-_IS_SHUTTING_DOWN = False
-
-try:
-    import uwsgi
-except ImportError:
-
-    def check_down_file_exists() -> bool:
-        return False
-
-else:
-
-    def check_down_file_exists() -> bool:
-        try:
-            m_time = shutdown_time()
-            if m_time is None:
-                return False
-
-            start_time: float = uwsgi.started_on
-            _set_shutdown(m_time > start_time)
-            return get_shutdown()
-        except OSError:
-            return False
-
-
-def _set_shutdown(is_shutting_down: bool) -> None:
-    global _IS_SHUTTING_DOWN
-    _IS_SHUTTING_DOWN = is_shutting_down
-
-
-def get_shutdown() -> bool:
-    return _IS_SHUTTING_DOWN
+# INC-2141: clusters whose connectivity is required for Snuba to be considered
+# healthy. Identified by storage_set_key, which maps 1:1 to a cluster in
+# settings.CLUSTERS. Failing any of these will fail the health check so the
+# pod can be recycled promptly.
+ESSENTIAL_STORAGE_SET_KEYS = {
+    StorageSetKey.EVENTS,  # errors storage
+    StorageSetKey.EVENTS_RO,  # errors_ro storage
+    StorageSetKey.EVENTS_ANALYTICS_PLATFORM,
+    StorageSetKey.EVENTS_ANALYTICS_PLATFORM_RO,
+}
 
 
 def _execute_show_tables(cluster: ClickhouseCluster) -> bool:
@@ -85,14 +57,8 @@ class HealthInfo:
 
 
 def get_health_info(thorough: Union[bool, str]) -> HealthInfo:
-
     start = time.time()
-    down_file_exists = check_down_file_exists()
-
-    metric_tags = {
-        "down_file_exists": str(down_file_exists),
-        "thorough": str(thorough),
-    }
+    metric_tags = {"thorough": str(thorough)}
 
     if get_int_config("health_check_ignore_clickhouse", 0) == 1:
         clickhouse_health = True
@@ -108,12 +74,10 @@ def get_health_info(thorough: Union[bool, str]) -> HealthInfo:
 
     body: Mapping[str, Union[str, bool]]
     if clickhouse_health:
-        body = {"status": "ok", "down_file_exists": down_file_exists}
+        body = {"status": "ok"}
         status = 200
     else:
-        body = {
-            "down_file_exists": down_file_exists,
-        }
+        body = {}
         if thorough:
             body["clickhouse_ok"] = clickhouse_health
         status = 502
@@ -121,15 +85,12 @@ def get_health_info(thorough: Union[bool, str]) -> HealthInfo:
     payload = json.dumps(body)
     if status != 200:
         metrics.increment("healthcheck_failed", tags=metric_tags)
-        if down_file_exists:
-            logger.error("Snuba health check failed! Tags: %s", metric_tags)
-        else:
-            logger.info("Snuba health check failed! Tags: %s", metric_tags)
+        logger.info("Snuba health check failed! Tags: %s", metric_tags)
 
     metrics.timing(
         "healthcheck.latency",
         time.time() - start,
-        tags={"thorough": str(thorough), "down_file_exists": str(down_file_exists)},
+        tags={"thorough": str(thorough)},
     )
 
     return HealthInfo(
@@ -149,53 +110,83 @@ def filter_checked_storages(filtered_storages: List[Storage]) -> None:
 
 def sanity_check_clickhouse_connections(timeout_seconds: float = 0.5) -> bool:
     """
-    Check if at least a single clickhouse query node is operable,
-    returns True if so, False otherwise.
+    Check that every essential ClickHouse cluster (see ESSENTIAL_STORAGE_SET_KEYS)
+    is operable. Returns True only if all essential clusters respond
+    successfully within the timeout, False otherwise.
+
+    Per INC-2141: previously this short-circuited to True if *any* cluster
+    responded, which delayed pod recycling when a high-traffic cluster (EAP)
+    held stalled connections while other clusters answered fine. We now fail
+    health if any essential cluster is unreachable.
 
     Every individual query node check is limited to a `timeout_seconds` timeout
     (default 0.5 or 500ms).
     """
-    storages: List[Storage] = []
     timeout_seconds = get_float_config("health_check.timeout_override_seconds", timeout_seconds)  # type: ignore
 
+    storages: List[Storage] = []
     try:
         filter_checked_storages(storages)
     except KeyError:
         pass
 
     unique_clusters: dict[ConnectionId, ClickhouseCluster] = {}
-
     for storage in storages:
+        if storage.get_storage_set_key() not in ESSENTIAL_STORAGE_SET_KEYS:
+            continue
         try:
-            unique_clusters[storage.get_cluster().get_connection_id()] = storage.get_cluster()
+            cluster = storage.get_cluster()
+            unique_clusters[cluster.get_connection_id()] = cluster
         except UndefinedClickhouseCluster as err:
             logger.error(err)
-            continue
+            return False
 
-    with ThreadPoolExecutor(
+    if not unique_clusters:
+        logger.error("No essential ClickHouse clusters found for health check")
+        return False
+
+    # Don't use `with ThreadPoolExecutor(...)` — its __exit__ calls
+    # shutdown(wait=True), which blocks on stalled futures and defeats the
+    # timeout (the exact INC-2141 scenario). Instead, shutdown(wait=False) on
+    # the way out so a stalled connection can't keep the health check pinned.
+    # Stalled worker threads will run to completion in the background; that's
+    # acceptable because the pod is failing health and will be recycled.
+    executor = ThreadPoolExecutor(
         max_workers=len(unique_clusters), thread_name_prefix="health-check"
-    ) as executor:
+    )
+    try:
         future_to_cluster = {
             executor.submit(_execute_show_tables, cluster): cluster
             for cluster in unique_clusters.values()
         }
 
+        healthy = True
+        completed: Set[ConnectionId] = set()
         try:
             for future in as_completed(future_to_cluster, timeout=timeout_seconds):
                 cluster = future_to_cluster[future]
+                completed.add(cluster.get_connection_id())
                 try:
-                    result = future.result()
-                    if result:
-                        return True
+                    future.result()
                 except Exception as err:
                     with sentry_sdk.new_scope() as scope:
                         scope.set_tag("health_cluster_name", cluster.get_clickhouse_cluster_name())
                         logger.error(err)
-                    continue
+                    healthy = False
         except TimeoutError:
-            logger.info(f"No ClickHouse clusters responded within {timeout_seconds}s timeout")
+            unfinished = [
+                cluster.get_clickhouse_cluster_name()
+                for connection_id, cluster in unique_clusters.items()
+                if connection_id not in completed
+            ]
+            logger.info(
+                f"Essential ClickHouse clusters did not respond within {timeout_seconds}s: {unfinished}"
+            )
+            healthy = False
+    finally:
+        executor.shutdown(wait=False)
 
-    return False
+    return healthy
 
 
 def check_all_tables_present(metric_tags: dict[str, Any] | None = None) -> bool:

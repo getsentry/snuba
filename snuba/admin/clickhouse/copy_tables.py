@@ -59,7 +59,7 @@ def get_create_table_statements(
 
         if cluster_name:
             table_statement = table_statement.replace(
-                db_table, f"{db_table} ON CLUSTER {cluster_name}"
+                db_table, f"{db_table} ON CLUSTER '{cluster_name}'"
             )
 
         table_statements.append(
@@ -124,6 +124,9 @@ def copy_tables(
     source_host: str,
     storage_name: str,
     dry_run: bool,
+    target_host: Optional[str] = None,
+    skip_on_cluster: bool = False,
+    cluster_name_override: Optional[str] = None,
 ) -> CopyTablesResponse:
     settings = ClickhouseClientSettings.QUERY
     source_connection = get_clusterless_node_connection(
@@ -134,10 +137,13 @@ def copy_tables(
     cluster = storage.get_cluster()
     database_name = cluster.get_database()
 
-    if not cluster.is_single_node():
+    if skip_on_cluster:
+        cluster_name = None
+    elif cluster_name_override:
+        cluster_name = cluster_name_override
+    elif not cluster.is_single_node():
         cluster_name = storage.get_cluster().get_clickhouse_cluster_name()
-
-        assert cluster_name, "Missing cluster name for ON CLUSTER create statement "
+        assert cluster_name, "Missing cluster name for ON CLUSTER create statement"
     else:
         cluster_name = None
 
@@ -163,15 +169,22 @@ def copy_tables(
     if dry_run:
         return resp
 
+    if target_host:
+        target_connection = get_clusterless_node_connection(
+            target_host, 9000, storage_name, client_settings=settings
+        )
+    else:
+        target_connection = source_connection
+
     for ts in mergetree_tables:
-        source_connection.execute(ts.statement)
+        target_connection.execute(ts.statement)
 
     for ts in non_mergetree_tables:
-        source_connection.execute(ts.statement)
+        target_connection.execute(ts.statement)
 
     # Verify tables were created on all replicas
     missing_tables_by_host, verified_hosts_num = verify_tables_on_replicas(
-        source_connection, cluster_name, database_name, ordered_table_names
+        target_connection, cluster_name, database_name, ordered_table_names
     )
 
     resp["incomplete_hosts"] = {

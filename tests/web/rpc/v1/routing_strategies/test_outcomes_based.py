@@ -128,6 +128,41 @@ def test_item_type_full_retention() -> None:
 
 @pytest.mark.eap
 @pytest.mark.redis_db
+def test_item_type_full_retention_preprod() -> None:
+    """
+    PREPROD item type should not use long term retention downsampling,
+    it should always fetch tier1 for its 90 day retention period.
+    """
+    state.set_config(
+        "enable_long_term_retention_downsampling",
+        1,
+    )
+    strategy = OutcomesBasedRoutingStrategy()
+
+    # request that queries last 50 days of data
+    end_time = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    start_time = end_time - timedelta(hours=1200)  # 50 days
+    request = TraceItemTableRequest(
+        meta=_get_request_meta(
+            start=start_time,
+            end=end_time,
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_PREPROD,
+        )
+    )
+    request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
+    context = RoutingContext(
+        in_msg=request,
+        timer=Timer("test"),
+        query_id=uuid.uuid4().hex,
+    )
+    routing_decision = strategy.get_routing_decision(context)
+    assert routing_decision.tier == Tier.TIER_1
+    assert routing_decision.clickhouse_settings == {"max_threads": 10}
+    assert routing_decision.can_run
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
 def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
     state.set_config(
         "enable_long_term_retention_downsampling",
@@ -262,6 +297,46 @@ def test_outcomes_based_routing_downsample(store_outcomes_fixture: Any) -> None:
     assert routing_decision.tier == Tier.TIER_512
     assert routing_decision.clickhouse_settings == {"max_threads": 10}
     assert routing_decision.can_run
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
+def test_outcomes_based_routing_per_org_override(store_outcomes_fixture: Any) -> None:
+    # global says no downsampling; per-org override forces TIER_64
+    state.set_config("OutcomesBasedRoutingStrategy.max_items_before_downsampling", 1_000_000_000)
+    strategy = OutcomesBasedRoutingStrategy()
+    strategy.set_config_value(
+        "max_items_before_downsampling",
+        500_000,
+        params={"organization_id": _ORG_ID},
+    )
+
+    request = TraceItemTableRequest(meta=_get_request_meta())
+    request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
+
+    routing_decision = strategy.get_routing_decision(
+        RoutingContext(
+            in_msg=request,
+            timer=Timer("test"),
+            query_id=uuid.uuid4().hex,
+        )
+    )
+    assert routing_decision.tier == Tier.TIER_64
+    assert routing_decision.can_run
+
+    # different org with no override falls back to the global config
+    other_org_request = TraceItemTableRequest(meta=_get_request_meta())
+    other_org_request.meta.organization_id = _ORG_ID + 1
+    other_org_request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
+
+    other_routing_decision = strategy.get_routing_decision(
+        RoutingContext(
+            in_msg=other_org_request,
+            timer=Timer("test"),
+            query_id=uuid.uuid4().hex,
+        )
+    )
+    assert other_routing_decision.tier == Tier.TIER_1
 
 
 @pytest.mark.eap

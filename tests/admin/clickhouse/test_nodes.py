@@ -14,7 +14,7 @@ _OG_CLUSTER_MAP = _get_storage_set_cluster_map()
     "snuba.clusters.cluster._get_storage_set_cluster_map",
     return_value={StorageSetKey.EVENTS: _OG_CLUSTER_MAP[StorageSetKey.EVENTS]},
 )
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_get_local_nodes(map_mock: mock.MagicMock) -> None:
     """
     This test is checking that requesting a storage key not in the map doesn't cause any errors.

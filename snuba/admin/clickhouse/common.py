@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import MutableMapping
 
 from sql_metadata import Parser, QueryType  # type: ignore
@@ -205,20 +206,78 @@ def get_clusterless_node_connection(
     return connection
 
 
+def get_ro_clusterless_node_connection(
+    clickhouse_host: str,
+    clickhouse_port: int,
+    storage_name: str,
+    client_settings: ClickhouseClientSettings,
+) -> ClickhousePool:
+    storage = _get_storage(storage_name)
+    cluster = storage.get_cluster()
+    database = cluster.get_database()
+
+    key = f"{storage.get_storage_key()}-{clickhouse_host}-clusterless-ro-{database}"
+    if key in NODE_CONNECTIONS:
+        return NODE_CONNECTIONS[key]
+
+    assert client_settings in {
+        ClickhouseClientSettings.QUERY,
+        ClickhouseClientSettings.QUERYLOG,
+    }, "ro clusterless connections must use a read-only client settings profile"
+
+    connection = ClickhousePool(
+        clickhouse_host,
+        clickhouse_port,
+        settings.CLICKHOUSE_READONLY_USER,
+        settings.CLICKHOUSE_READONLY_PASSWORD,
+        database,
+        max_pool_size=2,
+        client_settings=client_settings.value.settings,
+    )
+    NODE_CONNECTIONS[key] = connection
+    return connection
+
+
 def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) -> None:
     """
-    Simple validation to ensure query only attempts read queries.
+    Validates that the query is a safe read-only query.
 
     If allowed_tables is provided, ensures the 'from' clause contains
     an allowed table. All tables are allowed otherwise.
 
     Raises InvalidCustomQuery if query is invalid or not allowed.
     """
+    # Check for balanced quotes to prevent injection
+    single_quote_count = sql_query.count("'")
+    double_quote_count = sql_query.count('"')
+    if single_quote_count % 2 != 0 or double_quote_count % 2 != 0:
+        raise InvalidCustomQuery("Unbalanced quotes detected in query")
+
     lowered = sql_query.lower()
-    disallowed_keywords = ["insert", ";"]
+    # Enhanced disallowed keywords to prevent SQL injection and data modification
+    disallowed_keywords = [
+        "insert",
+        "update",
+        "delete",
+        "drop",
+        "create",
+        "alter",
+        "truncate",
+        "replace",
+        ";",  # Prevent query chaining
+        "--",  # Prevent comment-based injection
+        "/*",  # Prevent multi-line comment injection
+        "*/",
+        "exec",
+        "execute",
+        "xp_",  # Prevent stored procedure execution
+    ]
 
     for kw in disallowed_keywords:
-        if kw in lowered:
+        if kw == "replace":
+            if re.search(r"\breplace\b", lowered):
+                raise InvalidCustomQuery(f"{kw} is not allowed in the query")
+        elif kw in lowered:
             raise InvalidCustomQuery(f"{kw} is not allowed in the query")
 
     parsed = Parser(lowered)

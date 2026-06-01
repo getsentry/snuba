@@ -12,6 +12,7 @@ from snuba.query.expressions import (
     Expression,
     ExpressionVisitor,
     FunctionCall,
+    JsonPath,
     Lambda,
     Literal,
     SubscriptableReference,
@@ -254,3 +255,6 @@ class AliasExpanderVisitor(ExpressionVisitor[Expression]):
 
     def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> Expression:
         return exp
+
+    def visit_json_path(self, exp: JsonPath) -> Expression:
+        return replace(exp, base=exp.base.accept(self))

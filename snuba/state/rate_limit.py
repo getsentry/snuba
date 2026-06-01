@@ -8,8 +8,10 @@ from collections import ChainMap, namedtuple
 from contextlib import AbstractContextManager, ExitStack, contextmanager
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Any, Iterator, MutableMapping, Optional, Sequence, Type
+from typing import Any, Iterator, MutableMapping, Optional, Sequence, Type, cast
 from typing import ChainMap as TypingChainMap
+
+from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from snuba import environment, state
 from snuba.redis import RedisClientKey, get_redis_client
@@ -73,6 +75,10 @@ class RateLimitExceeded(SerializableException):
     Exception thrown when the rate limit is exceeded. scope and name are
     additional parameters which are provided when the exception is raised.
     """
+
+    @property
+    def quota_allowance(self) -> dict[str, Any]:
+        return cast(dict[str, Any], self.extra_data.get("quota_allowance", {}))
 
 
 @dataclass(frozen=True)
@@ -275,6 +281,14 @@ def rate_limit_start_request(
                 concurrent = sum(next(pipe_results) for _ in range(rate_limit_shard_factor))
             else:
                 concurrent = 0
+        except RedisTimeoutError:
+            raise
+        except StopIteration:
+            metrics.increment(
+                "rate_limit_fail_open",
+                tags={"reason": "StopIteration", "func": "rate_limit_start_request"},
+            )
+            return RateLimitStats(rate=-1, concurrent=-1)
         except Exception as ex:
             # if something goes wrong, we don't want to block the request,
             # set the values such that they pass under any limit
@@ -311,6 +325,8 @@ def rate_limit_finish_request(
                 pipe.zincrby(query_bucket, -float(max_query_duration_s), query_id)
                 pipe.expire(query_bucket, max_query_duration_s)
                 pipe.execute()
+    except RedisTimeoutError:
+        raise
     except Exception as ex:
         logger.exception(ex)
 

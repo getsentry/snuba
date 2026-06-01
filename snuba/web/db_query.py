@@ -467,7 +467,7 @@ def _raw_query(
         error_code = None
         trigger_rate_limiter = None
         status = None
-        request_status = get_request_status(cause)
+        request_status = get_request_status(cause, context=stats)
 
         calculated_cause = cause
         if isinstance(cause, RateLimitExceeded):
@@ -477,9 +477,13 @@ def _raw_query(
             error_code = cause.code
             status = get_query_status_from_error_codes(error_code)
             if error_code == ErrorCodes.TOO_MANY_BYTES:
-                calculated_cause = RateLimitExceeded(
-                    "Query scanned more than the allocated amount of bytes"
-                )
+                # Only treat as rate limiting if the limit was set by allocation policy
+                if stats.get("max_bytes_to_read_set_by_policy", False):
+                    calculated_cause = RateLimitExceeded(
+                        "Query scanned more than the allocated amount of bytes",
+                        quota_allowance=stats["quota_allowance"],
+                    )
+                    status = QueryStatus.RATE_LIMITED
 
             with configure_scope() as scope:
                 fingerprint = ["{{default}}", str(cause.code), dataset_name]
@@ -507,7 +511,7 @@ def _raw_query(
             cause.__class__.__name__,
             cause.message if isinstance(cause, ClickhouseError) else str(cause),
             {
-                "stats": stats,
+                "stats": dict(stats),
                 "sql": sql,
                 "experiments": clickhouse_query.get_experiments(),
             },
@@ -521,7 +525,7 @@ def _raw_query(
         return QueryResult(
             result,
             {
-                "stats": stats,
+                "stats": dict(stats),
                 "sql": sql,
                 "experiments": clickhouse_query.get_experiments(),
             },
@@ -575,7 +579,8 @@ def _record_bytes_scanned(
     custom_metrics = MetricsWrapper(environment.metrics, "allocation_policy")
 
     if result_or_error.query_result:
-        progress_bytes_scanned = cast(int, result_or_error.query_result.result.get("profile", {}).get("progress_bytes", 0))  # type: ignore
+        profile = result_or_error.query_result.result.get("profile") or {}
+        progress_bytes_scanned = cast(int, profile.get("progress_bytes", 0))
         custom_metrics.increment(
             "bytes_scanned",
             progress_bytes_scanned,
@@ -684,7 +689,7 @@ def db_query(
             AllocationPolicyViolations.__name__,
             "Query cannot be run due to allocation policies",
             extra={
-                "stats": stats,
+                "stats": dict(stats),
                 "sql": "no sql run",
                 "experiments": {},
             },
@@ -699,7 +704,7 @@ def db_query(
             e.__class__.__name__,
             str(e),
             {
-                "stats": stats,
+                "stats": dict(stats),
                 "sql": "",
                 "experiments": clickhouse_query.get_experiments(),
             },
@@ -751,7 +756,6 @@ def _add_quota_info(
     action: str,
     quota_and_policy: _QuotaAndPolicy | None = None,
 ) -> None:
-
     quota_info: dict[str, Any] = {}
     summary[action] = quota_info
 
@@ -856,6 +860,8 @@ def _apply_allocation_policies_quota(
         if max_bytes_to_read != 0:
             query_settings.push_clickhouse_setting("max_bytes_to_read", max_bytes_to_read)
             summary["max_bytes_to_read"] = max_bytes_to_read
+            # Track that max_bytes_to_read was set by allocation policy
+            stats["max_bytes_to_read_set_by_policy"] = True
 
         _populate_query_status(summary, rejection_quota_and_policy, throttle_quota_and_policy)
         _add_quota_info(summary, _REJECTED_BY, rejection_quota_and_policy)

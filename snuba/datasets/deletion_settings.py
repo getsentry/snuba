@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Sequence
+from typing import Dict, List, Optional, Sequence
 
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
@@ -16,6 +16,7 @@ class DeletionSettings:
     allowed_columns: Sequence[str] = field(default_factory=list)
     max_rows_to_delete: int = MAX_ROWS_TO_DELETE_DEFAULT
     allowed_attributes_by_item_type: Dict[str, List[str]] = field(default_factory=dict)
+    partition_column: Optional[str] = None
 
 
 def get_trace_item_type_name(item_type: int) -> str:

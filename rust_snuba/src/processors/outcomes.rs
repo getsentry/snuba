@@ -33,6 +33,8 @@ const CLIENT_DISCARD_REASONS: &[&str] = &[
     "invalid",
     // events were dropped because of network errors and were not retried.
     "network_error",
+    // a span was dropped or not started by an SDK due to a missing parent span
+    "no_parent_span",
     // a SDK internal queue (eg: transport queue) overflowed
     "queue_overflow",
     // the SDK dropped events because an earlier rate limit instructed the SDK to back off.
@@ -100,6 +102,7 @@ struct Outcome {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
     use chrono::DateTime;

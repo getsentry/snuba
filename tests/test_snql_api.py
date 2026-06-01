@@ -89,14 +89,14 @@ class RejectAllocationPolicy123(AllocationPolicy):
         return
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 class TestSnQLApi(BaseApiTest):
     def post(self, url: str, data: str) -> Any:
         return self.app.post(url, data=data, headers={"referer": "test"})
 
     @pytest.fixture(autouse=True)
-    def setup_teardown(self, clickhouse_db: None, redis_db: None) -> None:
+    def setup_teardown(self, events_db: None, redis_db: None) -> None:
         self.trace_id = uuid.UUID("7400045b-25c4-43b8-8591-4600aa83ad04")
         self.event = get_raw_event()
         self.project_id = self.event["project_id"]
@@ -119,30 +119,6 @@ class TestSnQLApi(BaseApiTest):
             get_writable_storage(StorageKey.TRANSACTIONS),
             [get_raw_transaction()],
         )
-
-    def test_avg_gauges(self) -> None:
-        # est that `avg(value)` works on gauges even thouh that agregate function doesn't exist on the table
-        query = """MATCH (generic_metrics_gauges) SELECT avg(value) AS
-        `aggregate_value` BY toStartOfInterval(timestamp, toIntervalSecond(1800), 'Universal') AS `time`
-        WHERE granularity = 60 AND metric_id = 87269488 AND (org_id IN array(1) AND project_id IN array(1)
-        AND use_case_id = 'custom') AND timestamp >= toDateTime('2023-11-27T14:00:00') AND timestamp <
-        toDateTime('2023-11-28T14:30:00') ORDER BY time ASC"""
-        response = self.post(
-            "/generic_metrics/snql",
-            data=json.dumps(
-                {
-                    "query": query,
-                    "referrer": "myreferrer",
-                    "turbo": False,
-                    "consistent": True,
-                    "debug": True,
-                    "tenant_ids": {"referrer": "r", "organization_id": 123},
-                }
-            ),
-        )
-        data = json.loads(response.data)
-
-        assert response.status_code == 200, data
 
     def test_simple_query(self) -> None:
         response = self.post(
@@ -1360,6 +1336,45 @@ class TestSnQLApi(BaseApiTest):
                 == "Query scanned more than the allocated amount of bytes"
             )
 
+            expected_quota_allowance = {
+                "details": {
+                    "MaxBytesPolicy123": {
+                        "can_run": True,
+                        "max_threads": 0,
+                        "max_bytes_to_read": 1,
+                        "explanation": {
+                            "storage_key": "doesntmatter",
+                        },
+                        "is_throttled": True,
+                        "throttle_threshold": MAX_THRESHOLD,
+                        "rejection_threshold": MAX_THRESHOLD,
+                        "quota_used": 0,
+                        "quota_unit": NO_UNITS,
+                        "suggestion": NO_SUGGESTION,
+                    }
+                },
+                "summary": {
+                    "threads_used": 0,
+                    "max_bytes_to_read": 1,
+                    "is_successful": False,
+                    "is_rejected": False,
+                    "is_throttled": True,
+                    "rejection_storage_key": None,
+                    "throttle_storage_key": "doesntmatter",
+                    "rejected_by": {},
+                    "throttled_by": {
+                        "policy": "MaxBytesPolicy123",
+                        "quota_used": 0,
+                        "quota_unit": NO_UNITS,
+                        "suggestion": NO_SUGGESTION,
+                        "storage_key": "doesntmatter",
+                        "throttle_threshold": MAX_THRESHOLD,
+                    },
+                },
+            }
+
+            assert response.json["quota_allowance"] == expected_quota_allowance
+
     def test_allocation_policy_violation(self) -> None:
         with patch(
             "snuba.web.db_query._get_allocation_policies",
@@ -1427,6 +1442,8 @@ class TestSnQLApi(BaseApiTest):
                 == f"Query on could not be run due to allocation policies, info: {info}"
             )
 
+            assert response.json["quota_allowance"] == info
+
     def test_tags_key_column(self) -> None:
         response = self.post(
             "/events/snql",
@@ -1485,34 +1502,6 @@ class TestSnQLApi(BaseApiTest):
         )
 
         assert response.status_code == 200
-
-    def test_hexint_in_condition(self) -> None:
-        response = self.post(
-            "/events/snql",
-            data=json.dumps(
-                {
-                    "dataset": "events",
-                    "query": f"""MATCH (spans)
-                    SELECT span_id
-                    WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
-                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
-                    AND project_id IN array({self.project_id})
-                    AND span_id IN array('844e2e5c081e6199')
-                    LIMIT 101 OFFSET 0""",
-                    "legacy": True,
-                    "app_id": "legacy",
-                    "tenant_ids": {
-                        "organization_id": self.org_id,
-                        "referrer": "join.tag.test",
-                    },
-                    "parent_api": "/api/0/issues|groups/{issue_id}/tags/",
-                }
-            ),
-        )
-
-        assert response.status_code == 200
-        data = json.loads(response.data)
-        assert "9533608433997996441" in data["sql"], data["sql"]  # Hexint was applied
 
     def test_low_cardinality_processor(self) -> None:
         response = self.post(
@@ -1581,7 +1570,7 @@ class TestSnQLApi(BaseApiTest):
         assert data["data"] == [{"flags[flag-name]": "true"}]
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 class TestSnQLApiErrorsRO(TestSnQLApi):
     """

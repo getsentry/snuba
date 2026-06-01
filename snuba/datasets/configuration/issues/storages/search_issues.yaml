@@ -68,6 +68,7 @@ schema:
     ]
   local_table_name: search_issues_local_v2
   dist_table_name: search_issues_dist_v2
+  partition_format: [retention_days, date]
 
 allocation_policies:
   - name: ConcurrentRateLimitAllocationPolicy
@@ -143,6 +144,7 @@ query_processors:
 deletion_settings:
   is_enabled: 1
   max_rows_to_delete: 2000000
+  partition_column: client_timestamp
   tables:
     - search_issues_local_v2
   allowed_columns:

@@ -24,7 +24,7 @@ from snuba.web.query import run_query
 from tests.helpers import write_unprocessed_events
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 def test_transform_column_names() -> None:
     """

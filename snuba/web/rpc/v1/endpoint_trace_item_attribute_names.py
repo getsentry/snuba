@@ -21,8 +21,8 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Storage
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond, column, in_cond, not_cond
-from snuba.query.expressions import Expression, Lambda
+from snuba.query.dsl import and_cond, column, in_cond, not_cond, or_cond
+from snuba.query.expressions import Argument, Expression, FunctionCall, Lambda
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.reader import Row
@@ -105,6 +105,43 @@ def get_co_occurring_attributes_date_condition(
     )
 
 
+def _add_substring_match_optimization(
+    request: TraceItemAttributeNamesRequest,
+    condition: Expression,
+) -> FunctionCall | Expression:
+    """Add arrayExists to WHERE clause to filter rows before loading arrays.
+
+    This reduces memory usage by only processing rows with matching attributes.
+    Similar to the hasAll optimization, this allows ClickHouse to use PREWHERE
+    and filter rows before loading large attribute arrays.
+    """
+    if not request.value_substring_match:
+        return condition
+
+    pattern = f"%{request.value_substring_match}%"
+    like_lambda = Lambda(None, ("x",), f.like(Argument(None, "x"), pattern))
+
+    if request.type == AttributeKey.Type.TYPE_STRING:
+        return and_cond(condition, f.arrayExists(like_lambda, column("attributes_string")))
+    elif request.type in (
+        AttributeKey.Type.TYPE_FLOAT,
+        AttributeKey.Type.TYPE_DOUBLE,
+        AttributeKey.Type.TYPE_INT,
+    ):
+        return and_cond(condition, f.arrayExists(like_lambda, column("attributes_float")))
+    elif request.type == AttributeKey.Type.TYPE_BOOLEAN:
+        return and_cond(condition, f.arrayExists(like_lambda, column("attributes_bool")))
+    else:  # TYPE_UNSPECIFIED - check all arrays with OR
+        return and_cond(
+            condition,
+            or_cond(
+                f.arrayExists(like_lambda, column("attributes_string")),
+                f.arrayExists(like_lambda, column("attributes_float")),
+                f.arrayExists(like_lambda, column("attributes_bool")),
+            ),
+        )
+
+
 def get_co_occurring_attributes(
     request: TraceItemAttributeNamesRequest,
 ) -> SnubaRequest:
@@ -169,7 +206,7 @@ def get_co_occurring_attributes(
         sample=None,
     )
 
-    condition = and_cond(
+    condition: Expression = and_cond(
         project_id_and_org_conditions(request.meta),
         get_co_occurring_attributes_date_condition(request),
     )
@@ -182,6 +219,9 @@ def get_co_occurring_attributes(
                 f.array(*[f.cityHash64(k) for k in attribute_keys_to_search]),
             ),
         )
+
+    # Optimization: Add arrayExists to WHERE clause to filter rows before loading arrays
+    condition = _add_substring_match_optimization(request, condition)
 
     if request.meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
         condition = and_cond(f.equals(column("item_type"), request.meta.trace_item_type), condition)

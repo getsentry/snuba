@@ -622,6 +622,10 @@ DELETION_SETTINGS_SCHEMA = {
                 "items": {"type": "string"},
             },
         },
+        "partition_column": {
+            "type": "string",
+            "description": "Column used for partition splitting in lightweight deletes. When set, deletes can be split by toMonday(partition_column) to reduce per-mutation CPU.",
+        },
     },
     "required": ["is_enabled", "tables"],
     "additionalProperties": False,

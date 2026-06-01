@@ -134,9 +134,15 @@ class MetricsLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.metrics")
 
 
-class SessionsLoader(DirectoryLoader):
-    def __init__(self) -> None:
-        super().__init__("snuba.snuba_migrations.sessions")
+class SessionsLoader(GroupLoader):
+    def get_migrations(self) -> Sequence[str]:
+        """
+        Sessions is deprecated
+        """
+        return []
+
+    def load_migration(self, migration_id: str) -> Migration:
+        raise MigrationDoesNotExist("Sessions is deprecated")
 
 
 class QuerylogLoader(DirectoryLoader):
@@ -167,11 +173,6 @@ class GenericMetricsLoader(DirectoryLoader):
 class SearchIssuesLoader(DirectoryLoader):
     def __init__(self) -> None:
         super().__init__("snuba.snuba_migrations.search_issues")
-
-
-class SpansLoader(DirectoryLoader):
-    def __init__(self) -> None:
-        super().__init__("snuba.snuba_migrations.spans")
 
 
 class EventsAnalyticsPlatformLoader(DirectoryLoader):

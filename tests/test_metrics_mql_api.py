@@ -128,7 +128,7 @@ GAUGES = MetricFixture(
 DATASET = "generic_metrics"
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.genmetrics_db
 @pytest.mark.redis_db
 class TestGenericMetricsMQLApi(BaseApiTest):
     @pytest.fixture
@@ -138,7 +138,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
     @pytest.fixture(autouse=True)
     def setup_teardown(
         self,
-        clickhouse_db: None,
+        genmetrics_db: None,
     ) -> None:
         self.post = self.app.post
         self.mql_route = f"/{DATASET}/mql"

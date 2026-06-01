@@ -373,7 +373,6 @@ export const useShellStyles = createStyles((theme) => ({
       padding: "4px 10px",
       borderBottom: "1px solid #21262d",
       color: "#e6edf3",
-      maxWidth: "400px",
       whiteSpace: "pre-wrap",
       wordBreak: "break-word",
       overflowWrap: "break-word",
@@ -388,13 +387,6 @@ export const useShellStyles = createStyles((theme) => ({
   nullValue: {
     color: "#6e7681",
     fontStyle: "italic",
-  },
-  truncatedNote: {
-    color: "#6e7681",
-    fontSize: "10px",
-    marginTop: "6px",
-    paddingTop: "6px",
-    borderTop: "1px solid #21262d",
   },
   emptyResult: {
     color: "#6e7681",
@@ -423,5 +415,62 @@ export const useShellStyles = createStyles((theme) => ({
     whiteSpace: "pre-wrap",
     wordBreak: "break-word",
     overflowWrap: "break-word",
+  },
+  // JSON output format styles
+  jsonOutput: {
+    color: "#e6edf3",
+    fontSize: "11px",
+    lineHeight: 1.5,
+    fontFamily: "inherit",
+    margin: 0,
+    padding: "8px",
+    backgroundColor: "rgba(13, 17, 23, 0.4)",
+    borderRadius: "4px",
+    overflow: "auto",
+    maxHeight: "400px",
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+  },
+  // CSV output format styles
+  csvOutput: {
+    color: "#e6edf3",
+    fontSize: "11px",
+    lineHeight: 1.5,
+    fontFamily: "inherit",
+    margin: 0,
+    padding: "8px",
+    backgroundColor: "rgba(13, 17, 23, 0.4)",
+    borderRadius: "4px",
+    overflow: "auto",
+    maxHeight: "400px",
+    whiteSpace: "pre",
+  },
+  // Vertical output format styles
+  verticalOutput: {
+    fontSize: "11px",
+    lineHeight: 1.5,
+    fontFamily: "inherit",
+  },
+  verticalRow: {
+    marginBottom: "12px",
+  },
+  verticalRowHeader: {
+    color: "#ffa657",
+    marginBottom: "4px",
+    fontWeight: 500,
+  },
+  verticalField: {
+    display: "flex",
+    color: "#e6edf3",
+    lineHeight: 1.6,
+  },
+  verticalFieldName: {
+    color: "#58a6ff",
+    whiteSpace: "pre",
+    minWidth: "120px",
+  },
+  verticalFieldValue: {
+    color: "#e6edf3",
+    wordBreak: "break-word",
   },
 }));

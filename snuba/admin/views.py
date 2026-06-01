@@ -170,7 +170,7 @@ def settings_endpoint() -> Response:
             {
                 "dsn": settings.ADMIN_FRONTEND_DSN,
                 "tracesSampleRate": settings.ADMIN_TRACE_SAMPLE_RATE,
-                "profilesSampleRate": settings.ADMIN_PROFILES_SAMPLE_RATE,
+                "profileSessionSampleRate": settings.ADMIN_PROFILES_SAMPLE_RATE,
                 "tracePropagationTargets": settings.ADMIN_FRONTEND_TRACE_PROPAGATION_TARGETS,
                 "replaysSessionSampleRate": settings.ADMIN_REPLAYS_SAMPLE_RATE,
                 "replaysOnErrorSampleRate": settings.ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR,
@@ -466,11 +466,17 @@ def copy_table_query() -> Response:
         source_host = req["source_host"]
 
         dry_run = req.get("dry_run", True)
+        target_host = req.get("target_host")
+        skip_on_cluster = req.get("skip_on_cluster", False)
+        cluster_name_override = req.get("cluster_name")
 
         resp = copy_tables(
             source_host=source_host,
             storage_name=storage,
             dry_run=dry_run,
+            target_host=target_host,
+            skip_on_cluster=skip_on_cluster,
+            cluster_name_override=cluster_name_override,
         )
     except KeyError as err:
         return make_response(

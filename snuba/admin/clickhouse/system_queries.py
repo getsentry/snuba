@@ -8,6 +8,7 @@ from snuba.admin.auth_roles import ExecuteSudoSystemQuery
 from snuba.admin.clickhouse.common import (
     InvalidCustomQuery,
     get_clusterless_node_connection,
+    get_ro_clusterless_node_connection,
     get_ro_node_connection,
     get_sudo_node_connection,
 )
@@ -45,10 +46,20 @@ def _run_sql_query_on_host(
         settings = ClickhouseClientSettings.QUERY
 
     if clusterless_mode:
-        connection = get_clusterless_node_connection(
-            clickhouse_host, clickhouse_port, storage_name, settings
+        # Sudo clusterless queries (SYSTEM, ALTER, DROP, etc.) require the full
+        # cluster credentials; read-only clusterless queries use the global
+        # readonly user so anonymous/low-privilege admin users cannot connect
+        # to ClickHouse with admin credentials via this path.
+        clusterless_connection = (
+            get_clusterless_node_connection(
+                clickhouse_host, clickhouse_port, storage_name, settings
+            )
+            if sudo
+            else get_ro_clusterless_node_connection(
+                clickhouse_host, clickhouse_port, storage_name, settings
+            )
         )
-        return connection.execute(query=sql, with_column_types=True)
+        return clusterless_connection.execute(query=sql, with_column_types=True)
 
     connection = (
         get_ro_node_connection(clickhouse_host, clickhouse_port, storage_name, settings)
@@ -136,6 +147,18 @@ ALTER_QUERY_RE = re.compile(
     r"""
         ^
         (ALTER|CREATE)
+        \s
+        [\w\s,=()*+<>'%"\-\/:\.`]+
+        ;? # Optional semicolon
+        $
+    """,
+    re.IGNORECASE + re.VERBOSE,
+)
+
+DROP_TABLE_QUERY_RE = re.compile(
+    r"""
+        ^
+        (DROP\sTABLE)
         \s
         [\w\s,=()*+<>'%"\-\/:\.`]+
         ;? # Optional semicolon
@@ -262,6 +285,15 @@ def is_query_alter(sql_query: str) -> bool:
     return True if match else False
 
 
+def is_query_drop(sql_query: str) -> bool:
+    """
+    Validates whether we are running something like DROP TABLE ...
+    """
+    sql_query = " ".join(sql_query.split())
+    match = DROP_TABLE_QUERY_RE.match(sql_query)
+    return True if match else False
+
+
 def validate_query(
     clickhouse_host: str,
     clickhouse_port: int,
@@ -277,6 +309,7 @@ def validate_query(
         is_system_command(system_query_sql)
         or is_query_alter(system_query_sql)
         or is_query_optimize(system_query_sql)
+        or is_query_drop(system_query_sql)
     ):
         return
 

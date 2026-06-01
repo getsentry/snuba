@@ -16,8 +16,8 @@ use sentry_kafka_schemas::{Schema, SchemaError, SchemaType};
 use crate::config::ProcessorConfig;
 use crate::processors::{ProcessingFunction, ProcessingFunctionWithReplacements};
 use crate::types::{
-    BytesInsertBatch, CommitLogEntry, CommitLogOffsets, InsertBatch, InsertOrReplacement,
-    KafkaMessageMetadata, RowData,
+    BytesInsertBatch, CommitLogEntry, CommitLogOffsets, EstimatedSize, InsertBatch,
+    InsertOrReplacement, KafkaMessageMetadata, RowData, TypedInsertBatch,
 };
 use tokio::time::Instant;
 
@@ -49,12 +49,14 @@ pub fn make_rust_processor(
             }
         }
 
+        let num_bytes = transformed.rows.encoded_rows.len();
         let mut payload = BytesInsertBatch::from_rows(transformed.rows)
+            .with_num_bytes(num_bytes)
             .with_message_timestamp(timestamp)
             .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
                 partition.index,
                 CommitLogEntry {
-                    offset,
+                    offset: offset + 1,
                     orig_message_ts: timestamp,
                     received_p99: transformed.origin_timestamp.into_iter().collect(),
                 },
@@ -126,12 +128,14 @@ pub fn make_rust_processor_with_replacements(
 
         let payload = match transformed {
             InsertOrReplacement::Insert(transformed) => {
+                let num_bytes = transformed.rows.encoded_rows.len();
                 let mut batch = BytesInsertBatch::from_rows(transformed.rows)
+                    .with_num_bytes(num_bytes)
                     .with_message_timestamp(timestamp)
                     .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
                         partition.index,
                         CommitLogEntry {
-                            offset,
+                            offset: offset + 1,
                             orig_message_ts: timestamp,
                             received_p99: transformed.origin_timestamp.into_iter().collect(),
                         },
@@ -163,6 +167,86 @@ pub fn make_rust_processor_with_replacements(
         enforce_schema,
         func,
         result_to_next_msg,
+        processor_config,
+        stop_at_timestamp,
+    };
+
+    Box::new(RunTaskInThreads::new(
+        next_step,
+        task_runner,
+        concurrency,
+        Some("process_message"),
+    ))
+}
+
+pub fn make_rust_processor_row_binary<T: Clone + Send + Sync + EstimatedSize + 'static>(
+    next_step: impl ProcessingStrategy<BytesInsertBatch<Vec<T>>> + 'static,
+    func: fn(
+        KafkaPayload,
+        KafkaMessageMetadata,
+        &ProcessorConfig,
+    ) -> anyhow::Result<TypedInsertBatch<T>>,
+    schema_name: &str,
+    enforce_schema: bool,
+    concurrency: &ConcurrencyConfig,
+    processor_config: ProcessorConfig,
+    stop_at_timestamp: Option<i64>,
+) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
+    let schema = get_schema(schema_name, enforce_schema);
+
+    fn result_to_next_msg<T: EstimatedSize>(
+        transformed: TypedInsertBatch<T>,
+        partition: Partition,
+        offset: u64,
+        timestamp: DateTime<Utc>,
+        stop_at_timestamp: Option<i64>,
+    ) -> anyhow::Result<Message<BytesInsertBatch<Vec<T>>>> {
+        // If a stop timestamp is set (used for backfills / replays), skip
+        // processing messages whose timestamp exceeds the cutoff by returning
+        // an empty batch that still commits the offset.
+        if let Some(stop) = stop_at_timestamp {
+            if stop < timestamp.timestamp() {
+                let payload = BytesInsertBatch::from_rows(Vec::new());
+                return Ok(Message::new_broker_message(
+                    payload, partition, offset, timestamp,
+                ));
+            }
+        }
+
+        let num_bytes: usize = transformed.rows.iter().map(|r| r.estimated_size()).sum();
+        let mut payload = BytesInsertBatch::from_rows(transformed.rows)
+            .with_num_bytes(num_bytes)
+            .with_message_timestamp(timestamp)
+            .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
+                partition.index,
+                CommitLogEntry {
+                    offset: offset + 1,
+                    orig_message_ts: timestamp,
+                    received_p99: transformed.origin_timestamp.into_iter().collect(),
+                },
+            )])))
+            .with_cogs_data(transformed.cogs_data.unwrap_or_default());
+
+        if let Some(ts) = transformed.origin_timestamp {
+            payload = payload.with_origin_timestamp(ts);
+        }
+        if let Some(ts) = transformed.sentry_received_timestamp {
+            payload = payload.with_sentry_received_timestamp(ts);
+        }
+        if let Some(metrics) = transformed.item_type_metrics {
+            payload = payload.with_item_type_metrics(metrics);
+        }
+
+        Ok(Message::new_broker_message(
+            payload, partition, offset, timestamp,
+        ))
+    }
+
+    let task_runner = MessageProcessor {
+        schema,
+        enforce_schema,
+        func,
+        result_to_next_msg: result_to_next_msg::<T>,
         processor_config,
         stop_at_timestamp,
     };
@@ -392,11 +476,17 @@ fn record_message_stats(payload: &[u8]) {
 mod tests {
     use super::*;
 
+    use std::sync::Arc;
+    use std::time::Duration;
+
     use chrono::Utc;
     use sentry_arroyo::backends::kafka::types::KafkaPayload;
+    use sentry_arroyo::processing::strategies::{
+        CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
+    };
     use sentry_arroyo::types::{Message, Partition, Topic};
 
-    use crate::types::InsertBatch;
+    use crate::types::{InsertBatch, RowData};
     use crate::Noop;
 
     #[test]
@@ -440,6 +530,76 @@ mod tests {
         let _ = strategy.join(None);
     }
 
+    /// The commit log offset produced by the processor must use next-to-consume
+    /// semantics (raw offset + 1).
+    #[test]
+    fn commit_log_entry_uses_next_offset() {
+        let captured: Arc<std::sync::Mutex<Vec<BytesInsertBatch<RowData>>>> =
+            Arc::new(std::sync::Mutex::new(Vec::new()));
+        let captured_clone = captured.clone();
+
+        struct Capture(Arc<std::sync::Mutex<Vec<BytesInsertBatch<RowData>>>>);
+        impl ProcessingStrategy<BytesInsertBatch<RowData>> for Capture {
+            fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
+                Ok(None)
+            }
+            fn submit(
+                &mut self,
+                message: Message<BytesInsertBatch<RowData>>,
+            ) -> Result<(), SubmitError<BytesInsertBatch<RowData>>> {
+                self.0.lock().unwrap().push(message.into_payload());
+                Ok(())
+            }
+            fn terminate(&mut self) {}
+            fn join(
+                &mut self,
+                _timeout: Option<Duration>,
+            ) -> Result<Option<CommitRequest>, StrategyError> {
+                Ok(None)
+            }
+        }
+
+        fn noop_processor(
+            _payload: KafkaPayload,
+            _metadata: KafkaMessageMetadata,
+            _config: &ProcessorConfig,
+        ) -> anyhow::Result<InsertBatch> {
+            Ok(InsertBatch::default())
+        }
+
+        let partition = Partition::new(Topic::new("events-small"), 7);
+        let raw_offset: u64 = 42;
+        let concurrency = ConcurrencyConfig::new(1);
+
+        let mut strategy = make_rust_processor(
+            Capture(captured_clone),
+            noop_processor,
+            "outcomes",
+            false,
+            &concurrency,
+            ProcessorConfig::default(),
+            None,
+        );
+
+        let payload = KafkaPayload::new(None, None, Some(b"{}".to_vec()));
+        let message = Message::new_broker_message(payload, partition, raw_offset, Utc::now());
+
+        strategy.submit(message).unwrap();
+        strategy.poll().unwrap();
+        let _ = strategy.join(None);
+
+        let batches = captured.lock().unwrap();
+        assert_eq!(batches.len(), 1);
+
+        let offsets = batches[0].commit_log_offsets();
+        let entry = offsets
+            .0
+            .get(&partition.index)
+            .expect("commit log entry missing for partition");
+
+        assert_eq!(entry.offset, raw_offset + 1);
+    }
+
     #[test]
     fn test_ip_addresses() {
         let test_cases = [
@@ -457,8 +617,7 @@ mod tests {
             assert_eq!(
                 IP_REGEX.is_match(address),
                 is_ipv4,
-                "{} failed IPv4 validation",
-                address
+                "{address} failed IPv4 validation"
             );
         }
     }

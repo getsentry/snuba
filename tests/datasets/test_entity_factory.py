@@ -14,8 +14,6 @@ initialize_entity_factory()
 ENTITY_KEYS = [
     EntityKey.DISCOVER,
     EntityKey.EVENTS,
-    EntityKey.SPANS_NUM_ATTRS,
-    EntityKey.SPANS_STR_ATTRS,
     EntityKey.GROUPASSIGNEE,
     EntityKey.GROUPEDMESSAGE,
     EntityKey.OUTCOMES,
@@ -37,7 +35,6 @@ ENTITY_KEYS = [
     EntityKey.GENERIC_METRICS_COUNTERS,
     EntityKey.GENERIC_ORG_METRICS_COUNTERS,
     EntityKey.GENERIC_METRICS_GAUGES,
-    EntityKey.SPANS,
     EntityKey.GROUP_ATTRIBUTES,
     EntityKey.__INTERNAL_GENERIC_ORG_METRICS_DISTRIBUTIONS,
     EntityKey.__INTERNAL_GENERIC_ORG_METRICS_SETS,
