@@ -53,7 +53,7 @@ jobs:
                 jb-install: true
                 jsonnet-dir: gocd/templates
                 generated-dir: gocd/generated-pipelines
-            - uses: getsentry/action-validate-gocd-pipelines@80fde540c1403d52e17783368930fa28bd93447f # v1
+            - uses: getsentry/action-validate-gocd-pipelines@5662a2b631d4e2aa1bfc21e878f9e131c31c40c1 # v1
               with:
                 configrepo: snuba__master
                 gocd_access_token: ${{ secrets.GOCD_ACCESS_TOKEN }}
