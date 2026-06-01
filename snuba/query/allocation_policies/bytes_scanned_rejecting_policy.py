@@ -212,16 +212,13 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
         )
 
     def __get_organization_max_bytes_to_read(
-        self, tenant_ids: dict[str, str | int], referrer: str | int
+        self, org_id: str | int, referrer: str | int
     ) -> int | None:
         """Return a per-org max_bytes_to_read cap if one is configured.
 
         Precedence: (organization_id, referrer) > organization_id.
         Returns None when no cap applies.
         """
-        org_id = tenant_ids.get("organization_id")
-        if org_id is None:
-            return None
         org_referrer_cap = self.get_config_value(
             "organization_referrer_max_bytes_to_read",
             {"organization_id": org_id, "referrer": referrer},
@@ -274,22 +271,23 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 suggestion=PASS_THROUGH_REFERRERS_SUGGESTION,
             )
 
-        org_cap = self.__get_organization_max_bytes_to_read(tenant_ids, referrer)
-        if org_cap is not None:
-            return QuotaAllowance(
-                can_run=True,
-                max_threads=self.max_threads,
-                max_bytes_to_read=org_cap,
-                explanation={
-                    "reason": f"organization_id {tenant_ids.get('organization_id')} runs with a per-org max_bytes_to_read cap of {org_cap}"
-                },
-                is_throttled=False,
-                throttle_threshold=MAX_THRESHOLD,
-                rejection_threshold=MAX_THRESHOLD,
-                quota_used=0,
-                quota_unit=QUOTA_UNIT,
-                suggestion=NO_SUGGESTION,
-            )
+        if customer_tenant_key == "organization_id":
+            org_cap = self.__get_organization_max_bytes_to_read(customer_tenant_value, referrer)
+            if org_cap is not None:
+                return QuotaAllowance(
+                    can_run=True,
+                    max_threads=self.max_threads,
+                    max_bytes_to_read=org_cap,
+                    explanation={
+                        "reason": f"organization_id {customer_tenant_value} runs with a per-org max_bytes_to_read cap of {org_cap}"
+                    },
+                    is_throttled=False,
+                    throttle_threshold=MAX_THRESHOLD,
+                    rejection_threshold=MAX_THRESHOLD,
+                    quota_used=0,
+                    quota_unit=QUOTA_UNIT,
+                    suggestion=NO_SUGGESTION,
+                )
 
         scan_limit = self.__get_scan_limit(customer_tenant_key, customer_tenant_value, referrer)
         throttle_threshold = max(

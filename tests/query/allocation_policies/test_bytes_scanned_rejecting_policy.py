@@ -371,6 +371,50 @@ def test_org_referrer_cap_beats_org_cap(policy: BytesScannedRejectingPolicy) -> 
 
 
 @pytest.mark.redis_db
+def test_org_caps_do_not_apply_to_project_queries(
+    policy: BytesScannedRejectingPolicy,
+) -> None:
+    """An org-level cap must not bypass project-level sliding-window limits.
+
+    Sentry queries usually carry both organization_id and project_id; the
+    policy resolves those to the project_id branch. The org cap should only
+    fire on org-keyed queries.
+    """
+    _configure_policy(policy)
+    tenant_ids: dict[str, str | int] = {
+        "organization_id": 123,
+        "project_id": 12345,
+        "referrer": "some_referrer",
+    }
+    policy.set_config_value(
+        "organization_max_bytes_to_read",
+        500,
+        {"organization_id": 123},
+    )
+    policy.set_config_value(
+        "organization_referrer_max_bytes_to_read",
+        200,
+        {"organization_id": 123, "referrer": "some_referrer"},
+    )
+
+    # Exhaust the project quota; the org cap must not let the query through.
+    policy.update_quota_balance(
+        tenant_ids,
+        QUERY_ID,
+        QueryResultOrError(
+            query_result=QueryResult(
+                result={"profile": {"progress_bytes": PROJECT_REFERRER_SCAN_LIMIT}},
+                extra={"stats": {}, "sql": "", "experiments": {}},
+            ),
+            error=None,
+        ),
+    )
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert not allowance.can_run
+    assert allowance.max_bytes_to_read == 0
+
+
+@pytest.mark.redis_db
 def test_penalize_timeout(policy: BytesScannedRejectingPolicy) -> None:
     _configure_policy(policy)
     tenant_ids: dict[str, int | str] = {
