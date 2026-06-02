@@ -1,5 +1,46 @@
 # Changelog
 
+## 26.5.2
+
+### New Features ✨
+
+- (eap) Route select queries to read-only cluster by @phacops in [#7969](https://github.com/getsentry/snuba/pull/7969)
+- (replacer) Expose --max-poll-interval-ms and --health-check-file into the CLI by @aldy505 in [#7961](https://github.com/getsentry/snuba/pull/7961)
+
+### Bug Fixes 🐛
+
+- (admin) Use readonly user for non-sudo clusterless system queries by @phacops in [#7974](https://github.com/getsentry/snuba/pull/7974)
+- (docker) Detect snuba subcommands via listdir instead of --help probe by @oioki in [#7968](https://github.com/getsentry/snuba/pull/7968)
+
+### Internal Changes 🔧
+
+#### Deps
+
+- Bump actions/cache from 5.0.4 to 5.0.5 by @dependabot in [#7981](https://github.com/getsentry/snuba/pull/7981)
+- Bump actions/labeler from 6.0.1 to 6.1.0 by @dependabot in [#7982](https://github.com/getsentry/snuba/pull/7982)
+- Bump getsentry/craft from 2.25.0 to 2.26.6 by @dependabot in [#7983](https://github.com/getsentry/snuba/pull/7983)
+- Bump getsentry/self-hosted from 871c182cb0a99dc1fad72cc7ce7889b514b0c5f0 to 3701f1e1927e2a91b912af34952f95f2b69fc4e3 by @dependabot in [#7984](https://github.com/getsentry/snuba/pull/7984)
+- Bump getsentry/action-validate-gocd-pipelines from 80fde540c1403d52e17783368930fa28bd93447f to 5662a2b631d4e2aa1bfc21e878f9e131c31c40c1 by @dependabot in [#7985](https://github.com/getsentry/snuba/pull/7985)
+- Bump actions/dependency-review-action from 4.9.0 to 5.0.0 by @dependabot in [#7986](https://github.com/getsentry/snuba/pull/7986)
+- Bump actions/upload-artifact from 7.0.0 to 7.0.1 by @dependabot in [#7987](https://github.com/getsentry/snuba/pull/7987)
+- Bump docker/setup-buildx-action from 4.0.0 to 4.1.0 by @dependabot in [#7988](https://github.com/getsentry/snuba/pull/7988)
+- Bump actions/create-github-app-token from 3.1.1 to 3.2.0 by @dependabot in [#7989](https://github.com/getsentry/snuba/pull/7989)
+- Bump docker/build-push-action from 7.1.0 to 7.2.0 by @dependabot in [#7990](https://github.com/getsentry/snuba/pull/7990)
+- Update sentry-conventions to 0.10.0 by @mjq in [#7978](https://github.com/getsentry/snuba/pull/7978)
+
+#### Eap Items
+
+- Encode RowBinary inserts in the processor by @phacops in [#7979](https://github.com/getsentry/snuba/pull/7979)
+- Normalize client and server sample rates by @phacops in [#7973](https://github.com/getsentry/snuba/pull/7973)
+- Stop double writing booleans into float columns by @phacops in [#7689](https://github.com/getsentry/snuba/pull/7689)
+
+#### Other
+
+- (eap) Add workflow attributes to attributes_array allowlist by @phacops in [#7976](https://github.com/getsentry/snuba/pull/7976)
+- (metrics) Tag dropped_out_of_range_timestamp with item_type and is_future by @MeredithAnya in [#7970](https://github.com/getsentry/snuba/pull/7970)
+- Bump sentry-protos to 0.17.0 by @getsentry-bot in [#7977](https://github.com/getsentry/snuba/pull/7977)
+- Bump sentry-options to 1.0.11 by @kenzoengineer in [#7957](https://github.com/getsentry/snuba/pull/7957)
+
 ## 26.5.1
 
 ### New Features ✨
