@@ -243,11 +243,14 @@ function TracingQueries(props: { api: Client }) {
                   <Alert color="yellow">{profileEventsState.error}</Alert>
                 </li>
               )}
-              {!profileEventsState?.loading && profileEventRows.length === 0 && (
-                <li>
-                  <Alert color="blue">No profile events found</Alert>
-                </li>
-              )}
+              {profileEventsState &&
+                !profileEventsState.loading &&
+                !profileEventsState.error &&
+                profileEventRows.length === 0 && (
+                  <li>
+                    <Alert color="blue">No profile events found</Alert>
+                  </li>
+                )}
               {profileEventRows.map((line, index) => {
                 const node_name = line.split("=>")[0];
                 const row = line.split("=>")[1];
@@ -434,11 +437,14 @@ function TracingQueries(props: { api: Client }) {
                   {profileEventsState.error}
                 </Alert>
               )}
-              {!profileEventsState?.loading && Object.keys(effectiveProfileEvents).length === 0 && (
-                <Alert color="blue" title="No Profile Events">
-                  No profile events were found for this query.
-                </Alert>
-              )}
+              {profileEventsState &&
+                !profileEventsState.loading &&
+                !profileEventsState.error &&
+                Object.keys(effectiveProfileEvents).length === 0 && (
+                  <Alert color="blue" title="No Profile Events">
+                    No profile events were found for this query.
+                  </Alert>
+                )}
               {Object.entries(effectiveProfileEvents).map(([host, event]) => (
                 <Accordion chevronPosition="left" key={host}>
                   <Accordion.Item value={host}>
