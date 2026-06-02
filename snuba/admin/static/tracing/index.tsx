@@ -123,11 +123,21 @@ function TracingQueries(props: { api: Client }) {
         }
       }));
     } catch (error) {
+      // The API client rejects non-2xx (and non-404) responses with the
+      // parsed JSON body, which has the shape {error: {type, message}}.
+      // Fall back to Error.message, then a generic string.
+      let message = "Failed to fetch";
+      if (error instanceof Error) {
+        message = error.message;
+      } else if (error && typeof error === "object") {
+        const errObj = error as { error?: { message?: string }; message?: string };
+        message = errObj.error?.message ?? errObj.message ?? message;
+      }
       setProfileEventsCache(prev => ({
         ...prev,
         [timestamp]: {
           loading: false,
-          error: error instanceof Error ? error.message : "Failed to fetch",
+          error: message,
           data: null,
           retryCount
         }

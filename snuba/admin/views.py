@@ -603,21 +603,41 @@ def fetch_profile_events() -> Response:
             400,
         )
 
+    if not isinstance(query_summaries_dict, dict):
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "validation",
+                        "message": "query_summaries must be an object",
+                    }
+                }
+            ),
+            400,
+        )
+
     try:
         # Reconstruct QuerySummary objects from the dict
         query_summaries = {}
         for node_name, summary_dict in query_summaries_dict.items():
-            query_summary = QuerySummary(
-                node_name=summary_dict["node_name"],
-                is_distributed=summary_dict["is_distributed"],
-                query_id=summary_dict["query_id"],
-                execute_summaries=summary_dict.get("execute_summaries"),
-                select_summaries=summary_dict.get("select_summaries"),
-                index_summaries=summary_dict.get("index_summaries"),
-                stream_summaries=summary_dict.get("stream_summaries"),
-                aggregation_summaries=summary_dict.get("aggregation_summaries"),
-                sorting_summaries=summary_dict.get("sorting_summaries"),
-            )
+            if not isinstance(summary_dict, dict):
+                raise ValueError(f"query_summaries[{node_name!r}] must be an object")
+            try:
+                query_summary = QuerySummary(
+                    node_name=summary_dict["node_name"],
+                    is_distributed=summary_dict["is_distributed"],
+                    query_id=summary_dict["query_id"],
+                    execute_summaries=summary_dict.get("execute_summaries"),
+                    select_summaries=summary_dict.get("select_summaries"),
+                    index_summaries=summary_dict.get("index_summaries"),
+                    stream_summaries=summary_dict.get("stream_summaries"),
+                    aggregation_summaries=summary_dict.get("aggregation_summaries"),
+                    sorting_summaries=summary_dict.get("sorting_summaries"),
+                )
+            except KeyError as err:
+                raise ValueError(
+                    f"query_summaries[{node_name!r}] missing required field {err.args[0]!r}"
+                )
             query_summaries[node_name] = query_summary
 
         # Create a minimal TraceOutput object
@@ -661,17 +681,9 @@ def fetch_profile_events() -> Response:
             ),
             200,
         )
-    except InvalidNodeError as err:
-        logger.error(err, exc_info=True)
+    except ValueError as err:
         return make_response(
-            jsonify(
-                {
-                    "error": {
-                        "type": "node_error",
-                        "message": str(err),
-                    }
-                }
-            ),
+            jsonify({"error": {"type": "validation", "message": str(err)}}),
             400,
         )
     except Exception as err:
