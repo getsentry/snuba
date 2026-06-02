@@ -586,11 +586,17 @@ def fetch_profile_events() -> Response:
     Fetch profile events for query summaries that have already been executed.
     This endpoint is called separately from the trace query to allow lazy loading.
     """
-    req = json.loads(request.data)
+    try:
+        req = json.loads(request.data)
+    except ValueError:
+        return make_response(
+            jsonify({"error": {"type": "validation", "message": "Invalid JSON body"}}),
+            400,
+        )
     try:
         query_summaries_dict = req["query_summaries"]
         storage = req["storage"]
-    except KeyError as e:
+    except (KeyError, TypeError) as e:
         return make_response(
             jsonify(
                 {

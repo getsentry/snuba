@@ -115,6 +115,18 @@ function TracingQueries(props: { api: Client }) {
       }
 
       if (response.status === "not_ready" && retryCount < MAX_RETRIES) {
+        // Reflect the upcoming retry in the cache immediately so the "Attempt
+        // N/4" indicator advances during the wait instead of stalling on the
+        // previous number until the next call lands.
+        setProfileEventsCache(prev => ({
+          ...prev,
+          [timestamp]: {
+            ...prev[timestamp],
+            loading: true,
+            error: null,
+            retryCount: retryCount + 1,
+          }
+        }));
         const handle = setTimeout(() => {
           retryTimeoutsRef.current.delete(handle);
           fetchProfileEventsWithRetry(querySummaries, storage, timestamp, retryCount + 1);
