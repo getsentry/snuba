@@ -632,8 +632,10 @@ def fetch_profile_events() -> Response:
             profile_events_profile={},
         )
 
-        # Gather profile events
-        gather_profile_events(trace_output, storage)
+        # The frontend drives its own poll/retry loop for this endpoint, so
+        # do a single attempt — stacking server-side retries on top would push
+        # worst-case latency into the minutes.
+        gather_profile_events(trace_output, storage, max_attempts=1)
 
         # Check if profile events were successfully gathered
         if not trace_output.profile_events_results:

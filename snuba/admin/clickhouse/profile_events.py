@@ -18,7 +18,11 @@ from snuba.utils.constants import (
 logger = structlog.get_logger().bind(module=__name__)
 
 
-def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
+def gather_profile_events(
+    query_trace: TraceOutput,
+    storage: str,
+    max_attempts: int = PROFILE_EVENTS_MAX_ATTEMPTS,
+) -> None:
     """
     Gathers profile events for each query trace and updates the query_trace object with results.
     Uses exponential backoff when polling for results.
@@ -26,6 +30,10 @@ def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
     Args:
         query_trace: TraceOutput object to update with profile events
         storage: Storage identifier
+        max_attempts: Maximum number of polling attempts before giving up. Callers
+            that drive their own retry loop (e.g. the lazy-loading
+            /fetch_profile_events endpoint) should pass 1 to avoid stacking
+            server-side and client-side waits.
     """
     profile_events_raw_sql = (
         "SELECT ProfileEvents FROM system.query_log WHERE query_id = '{}' AND type = 'QueryFinish'"
@@ -53,7 +61,7 @@ def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
         system_query_result = None
         attempt = 0
         wait_time = 1
-        while attempt < PROFILE_EVENTS_MAX_ATTEMPTS:
+        while attempt < max_attempts:
             try:
                 system_query_result = run_system_query_on_host_with_sql(
                     query_trace_data.host,
@@ -74,9 +82,11 @@ def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
             if system_query_result.results:
                 break
 
+            attempt += 1
+            if attempt >= max_attempts:
+                break
             wait_time = min(wait_time * 2, PROFILE_EVENTS_MAX_WAIT_SECONDS)
             time.sleep(wait_time)
-            attempt += 1
 
         if system_query_result is not None and len(system_query_result.results) > 0:
             query_trace.profile_events_meta.append(system_query_result.meta)

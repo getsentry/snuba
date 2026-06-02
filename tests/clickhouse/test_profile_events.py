@@ -165,3 +165,33 @@ def test_gather_profile_events_rejects_non_uuid_query_id() -> None:
                     False,
                     "test_user",
                 )
+
+
+def test_gather_profile_events_max_attempts_one_is_non_blocking() -> None:
+    """With max_attempts=1, an empty result must not trigger a sleep."""
+    trace_output = MagicMock()
+    trace_output.summarized_trace_output.query_summaries = {
+        "host1": MagicMock(query_id=VALID_QUERY_ID_1),
+    }
+    trace_output.profile_events_meta = []
+    trace_output.profile_events_results = {}
+
+    empty_result = MagicMock()
+    empty_result.results = []
+
+    with patch(
+        "snuba.admin.clickhouse.profile_events.run_system_query_on_host_with_sql"
+    ) as mock_query:
+        mock_query.return_value = empty_result
+        with patch("snuba.admin.clickhouse.profile_events.hostname_resolves", return_value=True):
+            with patch("time.sleep") as mock_sleep:
+                from flask import Flask
+
+                app = Flask(__name__)
+                with app.app_context():
+                    g.user = "test_user"
+                    gather_profile_events(trace_output, "test_storage", max_attempts=1)
+
+                    assert mock_query.call_count == 1
+                    assert mock_sleep.call_count == 0
+                    assert trace_output.profile_events_results == {}
