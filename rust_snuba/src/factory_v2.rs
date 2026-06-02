@@ -26,18 +26,16 @@ use crate::processors::{self, get_cogs_label};
 use crate::strategies::accountant::RecordCogs;
 
 use crate::strategies::blq_router::BLQRouter;
-use crate::strategies::clickhouse::row_binary_writer::ClickhouseRowBinaryWriterStep;
-use crate::strategies::clickhouse::writer_v2::ClickhouseWriterStep;
+use crate::strategies::clickhouse::writer_v2::{ClickhouseWriterStep, InsertFormat};
 use crate::strategies::commit_log::ProduceCommitLog;
 use crate::strategies::healthcheck::HealthCheck as SnubaHealthCheck;
 use crate::strategies::join_timeout::SetJoinTimeout;
 use crate::strategies::processor::{
-    get_schema, make_rust_processor, make_rust_processor_row_binary,
-    make_rust_processor_with_replacements, validate_schema,
+    get_schema, make_rust_processor, make_rust_processor_with_replacements, validate_schema,
 };
 use crate::strategies::python::PythonTransformStep;
 use crate::strategies::replacements::ProduceReplacements;
-use crate::types::{BytesInsertBatch, CogsData, RowData, TypedInsertBatch};
+use crate::types::{BytesInsertBatch, CogsData, RowData};
 
 pub struct ConsumerStrategyFactoryV2 {
     pub storage_config: config::StorageConfig,
@@ -90,22 +88,31 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
     }
 
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
-        if self.use_row_binary {
-            tracing::info!("Using row_binary pipeline");
-            return match self
+        let (insert_format, process_fn_override, insert_columns): (
+            InsertFormat,
+            Option<crate::processors::ProcessingFunction>,
+            Option<&'static [&'static str]>,
+        ) = if self.use_row_binary {
+            tracing::info!("Using RowBinary wire format");
+            let processor_name = self
                 .storage_config
                 .message_processor
                 .python_class_name
-                .as_str()
-            {
-                "EAPItemsProcessor" => self.create_row_binary_pipeline(
+                .as_str();
+            let (func, columns): (
+                crate::processors::ProcessingFunction,
+                &'static [&'static str],
+            ) = match processor_name {
+                "EAPItemsProcessor" => (
                     crate::processors::eap_items::process_message_row_binary,
+                    crate::processors::eap_items::EAPItemRow::COLUMN_NAMES,
                 ),
                 name => panic!("RowBinary not supported for processor: {name}"),
             };
-        }
-
-        // ---- Existing JSONEachRow path (unchanged below this line) ----
+            (InsertFormat::RowBinary, Some(func), Some(columns))
+        } else {
+            (InsertFormat::JsonEachRow, None, None)
+        };
 
         // Commit offsets
         let next_step = CommitOffsets::new(Duration::from_secs(1));
@@ -151,6 +158,8 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             false,
             &self.clickhouse_concurrency,
             self.storage_config.name.clone(),
+            insert_format,
+            insert_columns,
         );
 
         let accumulator = Arc::new(
@@ -186,9 +195,16 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
         )
         .flush_empty_batches(true);
 
+        // RowBinary can only be emitted by the Rust processor (the Python path
+        // always returns JSONEachRow bytes). If the storage opted into
+        // RowBinary, force the Rust processor branch — otherwise we'd POST
+        // JSON bytes under `FORMAT RowBinary` and ClickHouse would reject the
+        // batch. The previous early-return for RowBinary did this implicitly.
+        let use_rust_processor = self.use_rust_processor || self.use_row_binary;
+
         // Transform messages
         let next_step = match (
-            self.use_rust_processor,
+            use_rust_processor,
             processors::get_processing_function(
                 &self.storage_config.message_processor.python_class_name,
             ),
@@ -223,6 +239,10 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                 )
             }
             (true, Some(processors::ProcessingFunctionType::ProcessingFunction(func))) => {
+                // For storages opted into RowBinary, swap the registered JSON
+                // processor for its RowBinary sibling. Same signature, same
+                // pipeline; only the encoding inside the processor differs.
+                let func = process_fn_override.unwrap_or(func);
                 make_rust_processor(
                     next_step,
                     func,
@@ -301,151 +321,6 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                 } else {
                     Box::new(HealthCheck::new(next_step, path))
                 }
-            }
-        } else {
-            Box::new(next_step)
-        }
-    }
-}
-
-impl ConsumerStrategyFactoryV2 {
-    fn create_row_binary_pipeline<
-        T: clickhouse::Row
-            + serde::Serialize
-            + Clone
-            + Send
-            + Sync
-            + crate::types::EstimatedSize
-            + 'static,
-    >(
-        &self,
-        func: fn(
-            KafkaPayload,
-            crate::types::KafkaMessageMetadata,
-            &config::ProcessorConfig,
-        ) -> anyhow::Result<TypedInsertBatch<T>>,
-    ) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
-        // Commit offsets
-        let next_step = CommitOffsets::new(Duration::from_secs(1));
-
-        let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<()>>> =
-            if let Some((ref producer, destination)) = self.commit_log_producer {
-                Box::new(ProduceCommitLog::new(
-                    next_step,
-                    producer.clone(),
-                    destination,
-                    self.physical_topic_name,
-                    self.physical_consumer_group.clone(),
-                    &self.commitlog_concurrency,
-                    false,
-                ))
-            } else {
-                Box::new(next_step)
-            };
-
-        let cogs_label = get_cogs_label(&self.storage_config.message_processor.python_class_name);
-
-        let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<()>>> =
-            match (self.env_config.record_cogs, cogs_label) {
-                (true, Some(resource_id)) => Box::new(RecordCogs::new(
-                    next_step,
-                    resource_id,
-                    self.accountant_topic_config.broker_config.clone(),
-                    &self.accountant_topic_config.physical_topic_name,
-                )),
-                _ => Box::new(next_step),
-            };
-
-        let next_step = SetJoinTimeout::new(
-            next_step,
-            Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
-        );
-
-        let next_step = ClickhouseRowBinaryWriterStep::<T, _>::new(
-            next_step,
-            self.storage_config.clickhouse_cluster.clone(),
-            self.storage_config.clickhouse_table_name.clone(),
-            &self.clickhouse_concurrency,
-            self.storage_config.name.clone(),
-        );
-
-        let accumulator = Arc::new(
-            |batch: BytesInsertBatch<Vec<T>>, small_batch: Message<BytesInsertBatch<Vec<T>>>| {
-                Ok(batch.merge(small_batch.into_payload()))
-            },
-        );
-
-        type BatchSizeFn<T> = fn(&BytesInsertBatch<Vec<T>>) -> usize;
-        let compute_batch_size: BatchSizeFn<T> = match self.max_batch_size_calculation {
-            config::BatchSizeCalculation::Bytes => |batch| batch.num_bytes(),
-            config::BatchSizeCalculation::Rows => |batch| batch.len(),
-        };
-
-        let next_step = Reduce::new(
-            next_step,
-            accumulator,
-            Arc::new(move || {
-                BytesInsertBatch::<Vec<T>>::new(
-                    Vec::new(),
-                    None,
-                    None,
-                    None,
-                    Default::default(),
-                    CogsData::default(),
-                )
-            }),
-            self.max_batch_size,
-            self.max_batch_time,
-            compute_batch_size,
-        )
-        .flush_empty_batches(true);
-
-        let next_step = make_rust_processor_row_binary(
-            next_step,
-            func,
-            &self.logical_topic_name,
-            self.enforce_schema,
-            &self.processing_concurrency,
-            config::ProcessorConfig {
-                env_config: self.env_config.clone(),
-                storage_name: self.storage_config.name.clone(),
-            },
-            self.stop_at_timestamp,
-        );
-
-        let next_step = SetJoinTimeout::new(
-            next_step,
-            Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
-        );
-
-        let next_step: Box<dyn ProcessingStrategy<KafkaPayload>> =
-            if let (Some(blq_producer_config), Some(blq_topic)) =
-                (&self.blq_producer_config, self.blq_topic)
-            {
-                tracing::info!(
-                    "Routing stale messages to the backlog-queue topic {:?} \
-                     (thresholds configured via sentry-options)",
-                    self.blq_topic,
-                );
-                Box::new(BLQRouter::new(
-                    next_step,
-                    blq_producer_config.clone(),
-                    blq_topic,
-                ))
-            } else {
-                tracing::info!("Not using a backlog-queue",);
-                Box::new(next_step)
-            };
-
-        if let Some(path) = &self.health_check_file {
-            if self.health_check == "snuba" {
-                tracing::info!(
-                    "Using Snuba HealthCheck for consumer group: {}",
-                    self.physical_consumer_group
-                );
-                Box::new(SnubaHealthCheck::new(next_step, path))
-            } else {
-                Box::new(HealthCheck::new(next_step, path))
             }
         } else {
             Box::new(next_step)
