@@ -456,6 +456,16 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             customer_tenant_key,
             customer_tenant_value,
         ) = self._get_customer_tenant_key_and_value(tenant_ids)
+        # Mirror the bypass in _get_quota_allowance: org-keyed queries running under a
+        # max_bytes_to_read cap skip the sliding window entirely. Recording usage here
+        # would silently fill the window, so removing the cap later would reject queries
+        # against quota they never actually consumed.
+        if (
+            customer_tenant_key == "organization_id"
+            and self.__get_organization_max_bytes_to_read(customer_tenant_value, referrer)
+            is not None
+        ):
+            return
         scan_limit = self.__get_scan_limit(customer_tenant_key, customer_tenant_value, referrer)
         # we can assume that the requested quota was granted (because it was)
         # we just need to update the quota with however many bytes were consumed

@@ -338,6 +338,55 @@ def test_org_max_bytes_to_read_cap(policy: BytesScannedRejectingPolicy) -> None:
 
 
 @pytest.mark.redis_db
+def test_org_cap_does_not_record_into_sliding_window(
+    policy: BytesScannedRejectingPolicy,
+) -> None:
+    """Capped org queries must not accumulate usage in the sliding window.
+
+    `_get_quota_allowance` bypasses the window when an org cap is set;
+    `_update_quota_balance` must match, otherwise removing the cap later
+    would reject queries against a window that silently filled up while
+    the cap was active.
+    """
+    _configure_policy(policy)
+    tenant_ids: dict[str, str | int] = {
+        "organization_id": 123,
+        "referrer": "some_referrer",
+    }
+    policy.set_config_value(
+        "organization_max_bytes_to_read",
+        500,
+        {"organization_id": 123},
+    )
+
+    # While the cap is set, lots of bytes scanned must not be recorded.
+    for _ in range(5):
+        policy.update_quota_balance(
+            tenant_ids,
+            QUERY_ID,
+            QueryResultOrError(
+                query_result=QueryResult(
+                    result={"profile": {"progress_bytes": ORGANIZATION_REFERRER_SCAN_LIMIT}},
+                    extra={"stats": {}, "sql": "", "experiments": {}},
+                ),
+                error=None,
+            ),
+        )
+
+    # Remove the cap; the sliding window should be empty, so the next query
+    # is allowed under the normal org-referrer limit.
+    policy.set_config_value(
+        "organization_max_bytes_to_read",
+        -1,
+        {"organization_id": 123},
+    )
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert allowance.can_run
+    assert allowance.max_threads == MAX_THREAD_NUMBER
+    assert not allowance.is_throttled
+
+
+@pytest.mark.redis_db
 def test_org_referrer_cap_beats_org_cap(policy: BytesScannedRejectingPolicy) -> None:
     """(org_id, referrer) cap is more specific than the org_id cap and wins."""
     _configure_policy(policy)
