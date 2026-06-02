@@ -22,6 +22,7 @@ def gather_profile_events(
     query_trace: TraceOutput,
     storage: str,
     max_attempts: int = PROFILE_EVENTS_MAX_ATTEMPTS,
+    raise_node_errors: bool = False,
 ) -> None:
     """
     Gathers profile events for each query trace and updates the query_trace object with results.
@@ -34,6 +35,11 @@ def gather_profile_events(
             that drive their own retry loop (e.g. the lazy-loading
             /fetch_profile_events endpoint) should pass 1 to avoid stacking
             server-side and client-side waits.
+        raise_node_errors: If True, propagate InvalidNodeError to the caller
+            instead of logging and continuing past it. Off by default so
+            callers like /rpc_summarize_trace_with_profile keep their existing
+            partial-success behavior for storage sets such as discover/errors_ro
+            where a node may not resolve to the cluster definitions.
     """
     profile_events_raw_sql = (
         "SELECT ProfileEvents FROM system.query_log WHERE query_id = '{}' AND type = 'QueryFinish'"
@@ -77,6 +83,8 @@ def gather_profile_events(
                 # discover and errors_ro, where the query_trace_data host
                 # and port don't match the cluster definitions
                 logger.error(exc, exc_info=True)
+                if raise_node_errors:
+                    raise
                 break
 
             if system_query_result.results:

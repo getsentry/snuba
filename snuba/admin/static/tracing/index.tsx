@@ -145,26 +145,52 @@ function TracingQueries(props: { api: Client }) {
     }
   }, [props.api]);
 
-  const handleProfileEventsAccordionChange = useCallback((value: string | null, queryResult: TracingResult) => {
-    if (value === "profile-events") {
-      const timestamp = queryResult.timestamp;
-      const cached = profileEventsCache[timestamp];
-
-      // Re-fetch when nothing is in flight and we don't already have data —
-      // including after a previous error, so the user can retry by collapsing
-      // and re-expanding the accordion.
-      if (!cached || (!cached.loading && !cached.data)) {
-        if (queryResult.summarized_trace_output?.query_summaries && queryResult.storage) {
-          fetchProfileEventsWithRetry(
-            queryResult.summarized_trace_output.query_summaries,
-            queryResult.storage,
-            timestamp,
-            0
-          );
-        }
-      }
+  // Plain function rather than useCallback: every consumer wraps it in an
+  // inline arrow, so the memo would buy nothing, and including
+  // profileEventsCache in the dep array (needed to read cached state below)
+  // would recreate the callback on every cache update anyway.
+  function handleProfileEventsAccordionChange(value: string | null, queryResult: TracingResult) {
+    if (value !== "profile-events") {
+      return;
     }
-  }, [profileEventsCache, fetchProfileEventsWithRetry]);
+    const timestamp = queryResult.timestamp;
+    const cached = profileEventsCache[timestamp];
+
+    // Re-fetch when nothing is in flight and we don't already have data —
+    // including after a previous error, so the user can retry by collapsing
+    // and re-expanding the accordion.
+    if (cached && (cached.loading || cached.data)) {
+      return;
+    }
+
+    if (!queryResult.summarized_trace_output?.query_summaries) {
+      return;
+    }
+
+    if (!queryResult.storage) {
+      // History entries written before storage was added to TracingResult
+      // (and persisted in localStorage) won't have it. Surface a clear
+      // message so the user knows to re-run the query rather than waiting
+      // for events that will never load.
+      setProfileEventsCache(prev => ({
+        ...prev,
+        [timestamp]: {
+          loading: false,
+          error: "Re-run this query to load profile events; this entry was saved before lazy loading was introduced.",
+          data: null,
+          retryCount: 0,
+        }
+      }));
+      return;
+    }
+
+    fetchProfileEventsWithRetry(
+      queryResult.summarized_trace_output.query_summaries,
+      queryResult.storage,
+      timestamp,
+      0
+    );
+  }
 
   function tablePopulator(queryResult: TracingResult, showFormatted: boolean) {
     var elements = {};
@@ -228,7 +254,9 @@ function TracingQueries(props: { api: Client }) {
 
     const profileEventRows: Array<string> = [];
     for (const [k, v] of Object.entries(effectiveProfileEvents)) {
-      profileEventRows.push(k + '=>' + v.rows[0]);
+      if (v.rows.length > 0) {
+        profileEventRows.push(k + '=>' + v.rows[0]);
+      }
     }
 
     return (

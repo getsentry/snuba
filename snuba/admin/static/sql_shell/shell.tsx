@@ -253,7 +253,6 @@ function SQLShell({ api, mode }: SQLShellProps) {
               const request: TracingRequest = {
                 sql: normalizedQuery,
                 storage: state.currentStorage,
-                gather_profile_events: state.profileEnabled,
               };
 
               const result = await api.executeTracingQuery(request);

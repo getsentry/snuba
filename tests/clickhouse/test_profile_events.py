@@ -1,7 +1,9 @@
 from unittest.mock import MagicMock, patch
 
+import pytest
 from flask import g, json
 
+from snuba.admin.clickhouse.common import InvalidNodeError
 from snuba.admin.clickhouse.profile_events import (
     gather_profile_events,
     hostname_resolves,
@@ -165,6 +167,64 @@ def test_gather_profile_events_rejects_non_uuid_query_id() -> None:
                     False,
                     "test_user",
                 )
+
+
+def test_gather_profile_events_raises_node_error_when_opted_in() -> None:
+    """raise_node_errors=True must propagate InvalidNodeError to the caller."""
+    trace_output = MagicMock()
+    trace_output.summarized_trace_output.query_summaries = {
+        "host1": MagicMock(query_id=VALID_QUERY_ID_1),
+    }
+    trace_output.profile_events_meta = []
+    trace_output.profile_events_results = {}
+
+    with patch(
+        "snuba.admin.clickhouse.profile_events.run_system_query_on_host_with_sql"
+    ) as mock_query:
+        mock_query.side_effect = InvalidNodeError("no such node")
+        with patch("snuba.admin.clickhouse.profile_events.hostname_resolves", return_value=True):
+            from flask import Flask
+
+            app = Flask(__name__)
+            with app.app_context():
+                g.user = "test_user"
+                with pytest.raises(InvalidNodeError):
+                    gather_profile_events(trace_output, "test_storage", raise_node_errors=True)
+
+
+def test_gather_profile_events_swallows_node_error_by_default() -> None:
+    """Default behavior must continue past InvalidNodeError for partial success."""
+    trace_output = MagicMock()
+    trace_output.summarized_trace_output.query_summaries = {
+        "bad_host": MagicMock(query_id=VALID_QUERY_ID_1),
+        "good_host": MagicMock(query_id=VALID_QUERY_ID_2),
+    }
+    trace_output.profile_events_meta = []
+    trace_output.profile_events_results = {}
+
+    success_result = MagicMock()
+    success_result.results = [("profile_events",)]
+    success_result.meta = [("column1", "type1")]
+    success_result.profile = {}
+
+    with patch(
+        "snuba.admin.clickhouse.profile_events.run_system_query_on_host_with_sql"
+    ) as mock_query:
+        mock_query.side_effect = [
+            InvalidNodeError("bad_host failed"),
+            success_result,
+        ]
+        with patch("snuba.admin.clickhouse.profile_events.hostname_resolves", return_value=True):
+            from flask import Flask
+
+            app = Flask(__name__)
+            with app.app_context():
+                g.user = "test_user"
+                gather_profile_events(trace_output, "test_storage")
+
+                # good_host was still queried after bad_host errored.
+                assert mock_query.call_count == 2
+                assert "good_host" in trace_output.profile_events_results
 
 
 def test_gather_profile_events_max_attempts_one_is_non_blocking() -> None:

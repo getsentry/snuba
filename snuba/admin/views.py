@@ -654,8 +654,14 @@ def fetch_profile_events() -> Response:
 
         # The frontend drives its own poll/retry loop for this endpoint, so
         # do a single attempt — stacking server-side retries on top would push
-        # worst-case latency into the minutes.
-        gather_profile_events(trace_output, storage, max_attempts=1)
+        # worst-case latency into the minutes. Surface InvalidNodeError so a
+        # misconfigured storage produces a 400 instead of an endless poll.
+        gather_profile_events(
+            trace_output,
+            storage,
+            max_attempts=1,
+            raise_node_errors=True,
+        )
 
         # Check if profile events were successfully gathered
         if not trace_output.profile_events_results:
@@ -684,6 +690,12 @@ def fetch_profile_events() -> Response:
     except ValueError as err:
         return make_response(
             jsonify({"error": {"type": "validation", "message": str(err)}}),
+            400,
+        )
+    except InvalidNodeError as err:
+        logger.error(err, exc_info=True)
+        return make_response(
+            jsonify({"error": {"type": "node_error", "message": str(err)}}),
             400,
         )
     except Exception as err:
