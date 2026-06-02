@@ -10,7 +10,6 @@ export type ParsedCommand =
   | { type: "host"; host: string; port: number }
   | { type: "show_storages" }
   | { type: "show_hosts" }
-  | { type: "profile"; enabled: boolean }
   | { type: "trace_mode"; formatted: boolean }
   | { type: "sudo"; enabled: boolean }
   | { type: "format"; format: OutputFormat }
@@ -41,7 +40,6 @@ export interface ShellState {
   currentStorage: string | null;
   currentHost: string | null;
   currentPort: number | null;
-  profileEnabled: boolean;
   traceFormatted: boolean;
   sudoEnabled: boolean;
   outputFormat: OutputFormat;

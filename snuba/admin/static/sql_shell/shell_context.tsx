@@ -32,7 +32,6 @@ function createInitialState(mode: ShellMode): ShellState {
     currentStorage: null,
     currentHost: null,
     currentPort: null,
-    profileEnabled: true,
     traceFormatted: true,
     sudoEnabled: false,
     outputFormat: "table",

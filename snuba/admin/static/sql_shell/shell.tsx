@@ -152,26 +152,6 @@ function SQLShell({ api, mode }: SQLShellProps) {
           });
           break;
 
-        case "profile":
-          if (mode !== "tracing") {
-            addHistoryEntry({
-              type: "error",
-              content: "PROFILE command is only available in tracing mode.",
-              timestamp: Date.now(),
-            });
-            break;
-          }
-          setState((prev) => ({
-            ...prev,
-            profileEnabled: parsed.enabled,
-          }));
-          addHistoryEntry({
-            type: "info",
-            content: `Profile events ${parsed.enabled ? "enabled" : "disabled"}`,
-            timestamp: Date.now(),
-          });
-          break;
-
         case "trace_mode":
           if (mode !== "tracing") {
             addHistoryEntry({
@@ -298,7 +278,7 @@ function SQLShell({ api, mode }: SQLShellProps) {
           break;
       }
     },
-    [api, mode, state.currentStorage, state.currentHost, state.currentPort, state.profileEnabled, state.sudoEnabled, storages, getHostsForStorage, addHistoryEntry, addCommandToHistory, clearHistory]
+    [api, mode, state.currentStorage, state.currentHost, state.currentPort, state.sudoEnabled, storages, getHostsForStorage, addHistoryEntry, addCommandToHistory, clearHistory]
   );
 
   const handleTabComplete = useCallback(() => {
@@ -541,26 +521,12 @@ function SQLShell({ api, mode }: SQLShellProps) {
             </>
           )}
           {mode === "tracing" && (
-            <>
-              <div className={classes.statusItem}>
-                <span>PROFILE:</span>
-                <span
-                  className={
-                    state.profileEnabled
-                      ? classes.statusActive
-                      : classes.statusInactive
-                  }
-                >
-                  {state.profileEnabled ? "ON" : "OFF"}
-                </span>
-              </div>
-              <div className={classes.statusItem}>
-                <span>TRACE:</span>
-                <span className={classes.statusActive}>
-                  {state.traceFormatted ? "FORMATTED" : "RAW"}
-                </span>
-              </div>
-            </>
+            <div className={classes.statusItem}>
+              <span>TRACE:</span>
+              <span className={classes.statusActive}>
+                {state.traceFormatted ? "FORMATTED" : "RAW"}
+              </span>
+            </div>
           )}
           <div className={classes.statusItem}>
             <span>FORMAT:</span>

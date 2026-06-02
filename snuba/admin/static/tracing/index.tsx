@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { Accordion, Stack, Title, Text, Group, Table, Loader, Alert } from "@mantine/core";
 
 import Client from "SnubaAdmin/api_client";
@@ -72,6 +72,19 @@ function TracingQueries(props: { api: Client }) {
     };
   }>({});
 
+  // Track pending setTimeout retries so we can clear them on unmount
+  // (otherwise React warns about state updates on unmounted components and
+  // the timer keeps a closure alive past the component's lifetime).
+  const retryTimeoutsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      retryTimeoutsRef.current.forEach(clearTimeout);
+      retryTimeoutsRef.current.clear();
+    };
+  }, []);
+
   const fetchProfileEventsWithRetry = useCallback(async (
     querySummaries: { [nodeName: string]: QuerySummary },
     storage: string,
@@ -81,6 +94,10 @@ function TracingQueries(props: { api: Client }) {
     const MAX_RETRIES = 3;
     const RETRY_DELAY_MS = 2000;
 
+    if (!isMountedRef.current) {
+      return;
+    }
+
     setProfileEventsCache(prev => ({
       ...prev,
       [timestamp]: { loading: true, error: null, data: prev[timestamp]?.data || null, retryCount }
@@ -89,14 +106,20 @@ function TracingQueries(props: { api: Client }) {
     try {
       const response = await props.api.fetchProfileEvents(querySummaries, storage);
 
+      if (!isMountedRef.current) {
+        return;
+      }
+
       if (response.error) {
         throw new Error(response.error.message);
       }
 
       if (response.status === "not_ready" && retryCount < MAX_RETRIES) {
-        setTimeout(() => {
+        const handle = setTimeout(() => {
+          retryTimeoutsRef.current.delete(handle);
           fetchProfileEventsWithRetry(querySummaries, storage, timestamp, retryCount + 1);
         }, RETRY_DELAY_MS);
+        retryTimeoutsRef.current.add(handle);
         return;
       }
 

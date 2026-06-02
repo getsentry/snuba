@@ -60,16 +60,6 @@ const COMMANDS: CommandDefinition[] = [
     modes: ["system"],
   },
 
-  // PROFILE ON/OFF - Toggle profile event collection (tracing mode only)
-  {
-    pattern: /^PROFILE\s+(ON|OFF)$/i,
-    parse: (match) => ({
-      type: "profile",
-      enabled: match[1].toUpperCase() === "ON",
-    }),
-    modes: ["tracing"],
-  },
-
   // TRACE RAW/FORMATTED - Toggle trace output format (tracing mode only)
   {
     pattern: /^TRACE\s+(RAW|FORMATTED)$/i,

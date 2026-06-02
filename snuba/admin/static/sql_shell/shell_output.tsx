@@ -296,7 +296,6 @@ function HelpOutput({ mode, classes }: { mode: ShellMode; classes: Record<string
   const tracingCommands = [
     { cmd: "USE <storage>", desc: "Set the active storage for queries" },
     { cmd: "SHOW STORAGES", desc: "List all available storages" },
-    { cmd: "PROFILE ON/OFF", desc: "Toggle profile event collection" },
     { cmd: "TRACE RAW/FORMATTED", desc: "Toggle trace output format" },
     { cmd: "FORMAT TABLE/JSON/CSV/VERTICAL", desc: "Set output format" },
     { cmd: "CLEAR", desc: "Clear the terminal output" },
