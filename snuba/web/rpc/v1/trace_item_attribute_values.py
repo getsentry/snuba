@@ -7,11 +7,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeValuesResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import PageToken
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
-from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
-    ComparisonFilter,
-    TraceItemFilter,
-)
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -25,7 +21,7 @@ from snuba.query.conditions import combine_or_conditions
 from snuba.query.data_source.simple import Entity, LogicalDataSource
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column
-from snuba.query.expressions import Expression
+from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -126,12 +122,22 @@ def _build_query(
         selected_columns=[
             SelectedExpression(
                 name="attr_value",
-                expression=f.distinct(column(attr_value.alias, alias="attr_value")),
+                expression=column(attr_value.alias, alias="attr_value"),
+            ),
+            SelectedExpression(
+                name="count()",
+                expression=FunctionCall(
+                    alias="count()",
+                    function_name="count",
+                    parameters=(),
+                ),
             ),
         ],
         order_by=[
+            OrderBy(direction=OrderByDirection.DESC, expression=column("count()")),
             OrderBy(direction=OrderByDirection.ASC, expression=column("attr_value")),
         ],
+        groupby=[column("attr_value")],
         limit=request.limit,
         offset=(request.page_token.offset if request.page_token.HasField("offset") else 0),
     )
@@ -184,6 +190,7 @@ class AttributeValuesRequest(
         if in_msg.key.name == "sentry.item_id" and in_msg.value_substring_match:
             return TraceItemAttributeValuesResponse(
                 values=[in_msg.value_substring_match],
+                counts=[1],
                 page_token=None,
             )
         in_msg.limit = in_msg.limit or 1000
@@ -193,25 +200,23 @@ class AttributeValuesRequest(
             request=snuba_request,
             timer=self._timer,
         )
-        values = [r["attr_value"] for r in res.result.get("data", [])]
+        values, counts = [], []
+        for row in res.result.get("data", []):
+            values.append(row["attr_value"])
+            counts.append(row.get("count()", 0))
         if len(values) == 0:
             return TraceItemAttributeValuesResponse(
                 values=values,
+                counts=counts,
                 page_token=None,
             )
         return TraceItemAttributeValuesResponse(
             values=values,
+            counts=counts,
             page_token=(
-                PageToken(offset=in_msg.page_token.offset + len(values))
-                if in_msg.page_token.HasField("offset") or len(values) == 0
-                else PageToken(
-                    filter_offset=TraceItemFilter(
-                        comparison_filter=ComparisonFilter(
-                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="attr_value"),
-                            op=ComparisonFilter.OP_GREATER_THAN,
-                            value=AttributeValue(val_str=values[-1]),
-                        )
-                    )
+                PageToken(
+                    offset=(in_msg.page_token.offset if in_msg.page_token.HasField("offset") else 0)
+                    + len(values)
                 )
             ),
         )
