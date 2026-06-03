@@ -656,6 +656,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "cityhash-rs"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93a719913643003b84bd13022b4b7e703c09342cd03b679c4641c7d2e50dc34d"
+
+[[package]]
 name = "clap"
 version = "4.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2348,6 +2354,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lz4_flex"
+version = "0.11.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "373f5eceeeab7925e0c1098212f2fbc4d416adec9d35051a6ab251e824c1854a"
+dependencies = [
+ "twox-hash",
+]
+
+[[package]]
 name = "matchers"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3384,6 +3399,7 @@ dependencies = [
  "bytes",
  "cadence",
  "chrono",
+ "cityhash-rs",
  "criterion",
  "ctrlc",
  "data-encoding",
@@ -3392,6 +3408,7 @@ dependencies = [
  "hyper 1.6.0",
  "insta",
  "json-schema-diff",
+ "lz4_flex",
  "md5",
  "once_cell",
  "parking_lot",
@@ -4647,6 +4664,12 @@ name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
+
+[[package]]
+name = "twox-hash"
+version = "2.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ea3136b675547379c4bd395ca6b938e5ad3c3d20fad76e7fe85f9e0d011419c"
 
 [[package]]
 name = "typenum"
