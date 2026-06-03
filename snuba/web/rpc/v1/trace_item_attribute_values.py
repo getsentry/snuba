@@ -7,11 +7,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeValuesResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import PageToken
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
-from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
-    ComparisonFilter,
-    TraceItemFilter,
-)
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -126,7 +122,7 @@ def _build_query(
         selected_columns=[
             SelectedExpression(
                 name="attr_value",
-                expression=f.distinct(column(attr_value.alias, alias="attr_value")),
+                expression=column(attr_value.alias, alias="attr_value"),
             ),
             SelectedExpression(
                 name="count()",
@@ -218,16 +214,9 @@ class AttributeValuesRequest(
             values=values,
             counts=counts,
             page_token=(
-                PageToken(offset=in_msg.page_token.offset + len(values))
-                if in_msg.page_token.HasField("offset") or len(values) == 0
-                else PageToken(
-                    filter_offset=TraceItemFilter(
-                        comparison_filter=ComparisonFilter(
-                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="attr_value"),
-                            op=ComparisonFilter.OP_GREATER_THAN,
-                            value=AttributeValue(val_str=values[-1]),
-                        )
-                    )
+                PageToken(
+                    offset=(in_msg.page_token.offset if in_msg.page_token.HasField("offset") else 0)
+                    + len(values)
                 )
             ),
         )

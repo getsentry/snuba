@@ -230,3 +230,24 @@ class TestTraceItemAttributes(BaseApiTest):
         response = AttributeValuesRequest().execute(message)
         assert sorted(response.values) == ["postgresql", "redis"]
         assert response.counts == [1, 1]
+
+    def test_pagination(self, setup_teardown: Any) -> None:
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=1,
+            key=AttributeKey(name="tag1", type=AttributeKey.TYPE_STRING),
+        )
+        response = AttributeValuesRequest().execute(message)
+        assert response.values == ["derpderp"]
+        assert response.counts == [2]
+
+        for expected in ["blah", "durp", "herp", "herpderp"]:
+            message = TraceItemAttributeValuesRequest(
+                meta=COMMON_META,
+                limit=1,
+                key=AttributeKey(name="tag1", type=AttributeKey.TYPE_STRING),
+                page_token=response.page_token,
+            )
+            response = AttributeValuesRequest().execute(message)
+            assert response.values == [expected]
+            assert response.counts == [1]
