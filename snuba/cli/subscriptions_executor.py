@@ -134,7 +134,7 @@ def subscriptions_executor(
         build_kafka_producer_configuration(
             result_topic_spec.topic,
             bootstrap_servers=result_bootstrap_server,
-            override_params={"partitioner": "consistent"},
+            override_params={"partitioner": "consistent", "client.id": "snuba-subscriptions-executor"},
         )
     )
 

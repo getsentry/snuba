@@ -71,6 +71,7 @@ def _get_kafka_producer(topic: Topic) -> Producer:
         producer = Producer(
             build_kafka_producer_configuration(
                 topic=topic,
+                override_params={"client.id": "snuba-bulk-delete"},
             )
         )
         PRODUCER_MAP[topic.value] = producer

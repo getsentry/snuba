@@ -56,6 +56,7 @@ def _kafka_producer() -> Producer:
         kfk = Producer(
             build_kafka_producer_configuration(
                 topic=Topic.QUERYLOG,
+                override_params={"client.id": "snuba-querylog"},
             )
         )
     return kfk
