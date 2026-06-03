@@ -94,6 +94,10 @@ DISABLED_DATASETS: Set[str] = set()
 
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
+# Maximum time (seconds) to wait for a connection from the ClickHouse pool
+# before failing fast. Prevents API workers from blocking indefinitely on
+# pool.get() when ClickHouse is hung but not dropping connections.
+CLICKHOUSE_POOL_GET_TIMEOUT_SECONDS = 5
 
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
@@ -125,8 +129,8 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "generic_metrics_distributions",
             "search_issues",
             "generic_metrics_counters",
-            "spans",
             "events_analytics_platform",
+            "events_analytics_platform_ro",
             "group_attributes",
             "generic_metrics_gauges",
             "profile_chunks",

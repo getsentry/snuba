@@ -16,8 +16,8 @@ _HARDCODED_STORAGE_SET_KEYS = {
     "PROFILES": "profiles",
     "FUNCTIONS": "functions",
     "SEARCH_ISSUES": "search_issues",
-    "SPANS": "spans",
     "EVENTS_ANALYTICS_PLATFORM": "events_analytics_platform",
+    "EVENTS_ANALYTICS_PLATFORM_RO": "events_analytics_platform_ro",
     "GROUP_ATTRIBUTES": "group_attributes",
     "PROFILE_CHUNKS": "profile_chunks",
 }

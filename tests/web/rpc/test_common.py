@@ -17,10 +17,12 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Array,
     AttributeKey,
     AttributeValue,
+    StrArray,
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     AnyAttributeFilter,
     ComparisonFilter,
+    ExistsFilter,
     TraceItemFilter,
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
@@ -28,12 +30,14 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 from snuba import settings
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.query.expressions import FunctionCall, Lambda
+from snuba.protos.common import ATTRIBUTES_TO_COALESCE
+from snuba.query.expressions import FunctionCall, Lambda, Literal
 from snuba.web.rpc.common.common import (
     _any_attribute_filter_to_expression,
     attribute_key_to_expression,
     next_monday,
     prev_monday,
+    process_arrays,
     trace_item_filters_to_expression,
     use_sampling_factor,
 )
@@ -46,6 +50,38 @@ from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import gen_item_message
+
+
+class TestProcessArrays:
+    def test_flat_json(self) -> None:
+        raw = '{"tags":[{"String":"a"},{"String":"b"}]}'
+        assert process_arrays(raw) == {"tags": ["a", "b"]}
+
+    def test_nested_json_from_dotted_key_roundtrip(self) -> None:
+        """Simulates ClickHouse toJSONString when dotted keys become nested objects."""
+        nested = '{"resource":{"process":{"command_args":[{"String":"node"},{"String":"--enable-source-maps"}]}}}'
+        assert process_arrays(nested) == {
+            "resource.process.command_args": ["node", "--enable-source-maps"],
+        }
+
+    def test_mixed_flat_and_nested(self) -> None:
+        raw = '{"tags":[{"String":"x"}],"resource":{"process":{"command_args":[{"Int":"1"}]}}}'
+        assert process_arrays(raw) == {
+            "tags": ["x"],
+            "resource.process.command_args": [1],
+        }
+
+    def test_invalid_json_raises(self) -> None:
+        with pytest.raises(BadSnubaRPCRequestException, match="not valid JSON"):
+            process_arrays("not json")
+
+    def test_non_object_root_raises(self) -> None:
+        with pytest.raises(BadSnubaRPCRequestException, match="must be an object"):
+            process_arrays("[1]")
+
+    def test_scalar_leaf_raises(self) -> None:
+        with pytest.raises(BadSnubaRPCRequestException, match="must be a list or object"):
+            process_arrays('{"a":{"b":"bad"}}')
 
 
 class TestCommon:
@@ -174,17 +210,17 @@ class TestTraceItemFiltersArrayLike:
         ):
             trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
 
-    def test_equals_on_array_key_raises(self) -> None:
+    def test_equals_on_array_key_with_str_array_value_raises(self) -> None:
         item_filter = TraceItemFilter(
             comparison_filter=ComparisonFilter(
                 key=AttributeKey(type=AttributeKey.Type.TYPE_ARRAY, name="my_tags"),
                 op=ComparisonFilter.OP_EQUALS,
-                value=AttributeValue(val_str="something"),
+                value=AttributeValue(val_str_array=StrArray(values=["a", "b"])),
             )
         )
         with pytest.raises(
             BadSnubaRPCRequestException,
-            match="only LIKE and NOT_LIKE comparisons are supported on array keys",
+            match="OP_EQUALS/OP_NOT_EQUALS on array keys require a scalar value",
         ):
             trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
 
@@ -208,6 +244,55 @@ class TestTraceItemFiltersArrayLike:
             match="NOT LIKE comparison is only supported on string and array keys",
         ):
             trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+
+
+class TestExistsFilterCoalesced:
+    """exists_filter on coalesced attributes must check all deprecated keys."""
+
+    @staticmethod
+    def _collect_map_contains_keys(expr: FunctionCall) -> set[str]:
+        """Recursively collect all keys from a (possibly nested) OR of mapContains calls."""
+        keys: set[str] = set()
+        if expr.function_name == "mapContains":
+            key_literal = expr.parameters[1]
+            assert isinstance(key_literal, Literal)
+            assert isinstance(key_literal.value, str)
+            keys.add(key_literal.value)
+        elif expr.function_name == "or":
+            for param in expr.parameters:
+                assert isinstance(param, FunctionCall)
+                keys.update(TestExistsFilterCoalesced._collect_map_contains_keys(param))
+        return keys
+
+    def test_exists_filter_on_coalesced_string_attribute(self) -> None:
+        """End-to-end: exists_filter through trace_item_filters_to_expression
+        for a canonical key that has deprecated aliases (string type)."""
+        canonical = "db.system.name"
+        assert canonical in ATTRIBUTES_TO_COALESCE, "test precondition: key must be coalesced"
+        deprecated_keys = ATTRIBUTES_TO_COALESCE[canonical]
+
+        item_filter = TraceItemFilter(
+            exists_filter=ExistsFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_STRING, name=canonical)
+            )
+        )
+        expr = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        assert isinstance(expr, FunctionCall)
+        assert expr.function_name == "or"
+        checked_keys = self._collect_map_contains_keys(expr)
+        expected_keys = {canonical, *deprecated_keys}
+        assert checked_keys == expected_keys
+
+    def test_exists_filter_on_non_coalesced_attribute_unchanged(self) -> None:
+        """Non-coalesced attributes should still produce a single mapContains."""
+        item_filter = TraceItemFilter(
+            exists_filter=ExistsFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_STRING, name="some.custom.tag")
+            )
+        )
+        expr = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        assert isinstance(expr, FunctionCall)
+        assert expr.function_name == "mapContains"
 
 
 @pytest.mark.redis_db

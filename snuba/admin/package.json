@@ -48,6 +48,10 @@
     "resize-observer-polyfill": "^1.5.1",
     "ts-jest": "^29.4.6"
   },
+  "resolutions": {
+    "handlebars": "^4.7.9",
+    "uuid": "^11.1.1"
+  },
   "volta": {
     "node": "24.14.0",
     "yarn": "1.22.22"

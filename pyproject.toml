@@ -1,6 +1,6 @@
 [project]
 name = "snuba"
-version = "26.5.0.dev0"
+version = "26.7.0.dev0"
 dependencies = [
     "blinker>=1.9",
     "click>=8.1.7",
@@ -22,16 +22,16 @@ dependencies = [
     "progressbar2>=4.2.0",
     "proto-plus>=1.24.0",
     "protobuf>=5.29.5",
-    "pyasn1>=0.6.2",
+    "pyasn1>=0.6.3",
     "python-dateutil>=2.8.2",
-    "python-jose[cryptography]>=3.5.0",
+    "pyjwt[crypto]>=2.8.0",
     "python-rapidjson>=1.8",
     "pyyaml>=6.0",
     "redis>=4.5.4",
-    "sentry-arroyo>=2.38.7",
-    "sentry-conventions>=0.3.0",
+    "sentry-arroyo>=2.39.2",
+    "sentry-conventions>=0.10.0",
     "sentry-kafka-schemas>=2.1.24",
-    "sentry-protos>=0.12.0",
+    "sentry-protos>=0.17.0",
     "sentry-redis-tools>=0.5.1",
     "sentry-relay>=0.9.25",
     "sentry-sdk>=2.35.0",
@@ -42,7 +42,7 @@ dependencies = [
     "sqlparse>=0.5.0",
     "structlog>=22.3.0",
     "structlog-sentry>=2.0.0",
-    "urllib3>=2.2.3",
+    "urllib3>=2.7.0",
     "werkzeug>=3.0.6",
     "rust_snuba>=0.0.0",
 ]
@@ -78,10 +78,9 @@ snuba = "snuba.cli:main"
 dev = [
     "devservices>=1.2.1",
     "freezegun>=1.5.5",
-    "honcho>=1.1.0",
     "mypy>=1.1.1",
     "pre-commit>=4.2.0",
-    "pytest>=8.3.3",
+    "pytest>=9.0.3",
     "pytest-cov>=4.1.0",
     "pytest-watch>=4.2.0",
     "ruff>=0.14.0",
@@ -90,7 +89,6 @@ dev = [
     "types-google-cloud-ndb>=2.2.0",
     "types-protobuf>=5.27.0.20240626",
     "types-python-dateutil>=2.8.19.14",
-    "types-python-jose>=3.3.0",
     "types-pyyaml>=6.0.12.20240808",
     "types-requests>=2.32.0.20240907",
     "types-setuptools>=74.1.0.20240907",
@@ -136,7 +134,6 @@ module = [
     "fastjsonschema",
     "fastjsonschema.exceptions",
     "granian",
-    "honcho.manager",
     "jsonschema",
     "jsonschema.exceptions",
     "jsonschema2md",

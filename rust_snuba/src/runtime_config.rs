@@ -71,6 +71,24 @@ pub fn get_load_balancing_config(storage_name: &str) -> LoadBalancingConfig {
     }
 }
 
+/// ClickHouse's compiled-in default for `max_insert_block_size`. We refuse to
+/// apply any override below this to avoid silently shrinking blocks below what
+/// the server would already produce on its own.
+pub const CLICKHOUSE_DEFAULT_MAX_INSERT_BLOCK_SIZE: u64 = 1_048_449;
+
+/// Returns Some(n) if `clickhouse_max_insert_block_size:<storage_name>` is set
+/// to an integer >= ClickHouse's default (1_048_449); otherwise None. Values
+/// below the default are rejected, since they wouldn't increase the block size
+/// past what ClickHouse already does by default. Callers should append
+/// `&max_insert_block_size=<n>` to the INSERT URL when Some.
+pub fn get_max_insert_block_size(storage_name: &str) -> Option<u64> {
+    get_str_config(&format!("clickhouse_max_insert_block_size:{storage_name}"))
+        .ok()
+        .flatten()
+        .and_then(|s| s.parse::<u64>().ok())
+        .filter(|&n| n >= CLICKHOUSE_DEFAULT_MAX_INSERT_BLOCK_SIZE)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

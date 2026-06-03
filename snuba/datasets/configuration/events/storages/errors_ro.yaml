@@ -299,6 +299,9 @@ allocation_policies:
         getsentry.tasks.backfill_grouping_records:
           max_threads: 7
           concurrent_limit: 60
+        supergroups_backfill_lightweight.get_latest_events:
+          max_threads: 7
+          concurrent_limit: 60
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: TupleUnaliaser
