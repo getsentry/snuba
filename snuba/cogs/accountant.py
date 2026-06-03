@@ -18,7 +18,11 @@ def _accumulator(create: bool = False) -> UsageAccumulator | None:
     global accumulator
     if accumulator is None and create:
         producer = KafkaProducer(
-            build_kafka_producer_configuration(StreamTopic.COGS_SHARED_RESOURCES_USAGE, None, override_params={"client.id": "snuba-cogs-accountant"})
+            build_kafka_producer_configuration(
+                StreamTopic.COGS_SHARED_RESOURCES_USAGE,
+                None,
+                override_params={"client.id": "snuba-cogs-accountant"},
+            )
         )
         accumulator = UsageAccumulator(producer=producer)
     return accumulator

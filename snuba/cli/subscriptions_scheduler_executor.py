@@ -120,7 +120,10 @@ def subscriptions_scheduler_executor(
     producer = KafkaProducer(
         build_kafka_producer_configuration(
             result_topic_spec.topic,
-            override_params={"partitioner": "consistent", "client.id": "snuba-subscriptions-scheduler-executor"},
+            override_params={
+                "partitioner": "consistent",
+                "client.id": "snuba-subscriptions-scheduler-executor",
+            },
         )
     )
 

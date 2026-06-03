@@ -164,7 +164,10 @@ def subscriptions_scheduler(
             scheduled_topic_spec.topic,
             slice_id,
             bootstrap_servers=scheduled_bootstrap_server,
-            override_params={"partitioner": "consistent", "client.id": "snuba-subscriptions-scheduler"},
+            override_params={
+                "partitioner": "consistent",
+                "client.id": "snuba-subscriptions-scheduler",
+            },
         )
     )
 
