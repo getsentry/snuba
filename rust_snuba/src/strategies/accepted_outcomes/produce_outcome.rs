@@ -16,7 +16,7 @@ use std::time::{Duration, SystemTime};
 /// Number of messages to produce before pausing to avoid flooding the producer queue.
 const THROTTLE_BATCH_SIZE: u64 = 20_000;
 /// How long to pause once THROTTLE_BATCH_SIZE messages have been produced.
-const THROTTLE_SLEEP: Duration = Duration::from_secs(1);
+const THROTTLE_SLEEP: Duration = Duration::from_millis(500);
 
 struct ProduceOutcome {
     producer: Arc<dyn Producer<KafkaPayload>>,
