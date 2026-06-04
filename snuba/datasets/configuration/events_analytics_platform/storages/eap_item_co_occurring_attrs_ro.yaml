@@ -24,6 +24,6 @@ schema:
       { name: attributes_bool, type: Array, args: { inner_type: { type: String } } }
     ]
   local_table_name: eap_item_co_occurring_attrs_1_local
-  dist_table_name: eap_item_co_occurring_attrs_1_dist
+  dist_table_name: eap_item_co_occurring_attrs_1_dist_ro
   partition_format: [retention_days, date]
 allocation_policies: []

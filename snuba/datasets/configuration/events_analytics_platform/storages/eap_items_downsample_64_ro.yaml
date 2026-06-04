@@ -107,7 +107,7 @@ schema:
 
     ]
   local_table_name: eap_items_1_downsample_64_local
-  dist_table_name: eap_items_1_downsample_64_dist
+  dist_table_name: eap_items_1_downsample_64_dist_ro
   partition_format: [retention_days, date]
 
 query_processors:
