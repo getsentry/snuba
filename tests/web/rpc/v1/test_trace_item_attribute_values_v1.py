@@ -108,6 +108,7 @@ def setup_teardown(eap: None, redis_db: None) -> Generator[List[bytes], None, No
             start_timestamp=start_timestamp,
             attributes={
                 "tag1": AnyValue(string_value="some_last_value"),
+                "sentry.is_segment": AnyValue(bool_value=False),
             },
         ),
         gen_item_message(
@@ -251,3 +252,13 @@ class TestTraceItemAttributes(BaseApiTest):
             response = AttributeValuesRequest().execute(message)
             assert response.values == [expected]
             assert response.counts == [1]
+
+    def test_boolean_case(self, setup_teardown: Any) -> None:
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=5,
+            key=AttributeKey(name="sentry.is_segment", type=AttributeKey.TYPE_BOOLEAN),
+        )
+        response = AttributeValuesRequest().execute(message)
+        assert response.values == ["True", "False"]
+        assert response.counts == [8, 1]

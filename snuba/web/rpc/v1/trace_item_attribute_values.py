@@ -50,25 +50,32 @@ def _map_key_names_for_existence_check(request_key: AttributeKey) -> list[str]:
 
 def _build_conditions(request: TraceItemAttributeValuesRequest) -> Expression:
     attribute_key = attribute_key_to_expression(request.key)
+    conditions: list[Expression] = []
 
-    key_existence = combine_or_conditions(
-        [
-            f.has(column("attributes_string"), name)
-            for name in _map_key_names_for_existence_check(request.key)
-        ]
-    )
+    if request.key.type == AttributeKey.TYPE_STRING:
+        key_existence = combine_or_conditions(
+            [
+                f.has(column("attributes_string"), name)
+                for name in _map_key_names_for_existence_check(request.key)
+            ]
+        )
+        conditions.append(key_existence)
 
-    conditions: list[Expression] = [key_existence]
     if request.meta.trace_item_type:
         conditions.append(f.equals(column("item_type"), request.meta.trace_item_type))
 
     if request.value_substring_match:
-        conditions.append(
-            f.like(
-                attribute_key,
-                f"%{request.value_substring_match}%",
+        if request.key.type == AttributeKey.TYPE_STRING:
+            conditions.append(
+                f.like(
+                    attribute_key,
+                    f"%{request.value_substring_match}%",
+                )
             )
-        )
+        else:
+            raise BadSnubaRPCRequestException(
+                "substring matches can only be used on string attributes"
+            )
 
     return base_conditions_and(request.meta, *conditions)
 
@@ -210,6 +217,9 @@ class AttributeValuesRequest(
                 counts=counts,
                 page_token=None,
             )
+        # Cast values to strings if this is a boolean request
+        if in_msg.key.type == AttributeKey.TYPE_BOOLEAN:
+            values = [str(value) for value in values]
         return TraceItemAttributeValuesResponse(
             values=values,
             counts=counts,
