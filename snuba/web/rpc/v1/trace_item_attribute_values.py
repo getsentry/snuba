@@ -59,7 +59,17 @@ def _build_conditions(request: TraceItemAttributeValuesRequest) -> Expression:
                 for name in _map_key_names_for_existence_check(request.key)
             ]
         )
-        conditions.append(key_existence)
+    elif request.key.type == AttributeKey.TYPE_BOOLEAN:
+        key_existence = combine_or_conditions(
+            [
+                f.has(column("attributes_bool"), name)
+                for name in _map_key_names_for_existence_check(request.key)
+            ]
+        )
+    else:
+        raise BadSnubaRPCRequestException("Only string and boolean attributes can be used")
+
+    conditions.append(key_existence)
 
     if request.meta.trace_item_type:
         conditions.append(f.equals(column("item_type"), request.meta.trace_item_type))
