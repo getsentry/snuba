@@ -259,6 +259,10 @@ impl ClickhouseClient {
         // across attempts, so paying the LZ4 cost per attempt would be wasted
         // work. `bytes::Bytes` makes the per-attempt clone cheap (refcount bump).
         let body_bytes = bytes::Bytes::from(lz4_compress(&body));
+        // Free the uncompressed buffer now; it would otherwise stay alive
+        // across every retry attempt and backoff sleep, holding ~3× the
+        // compressed size per in-flight send for the full send window.
+        drop(body);
 
         for attempt in 0..=retry_config.max_retries {
             let url = self.build_url();
