@@ -1,9 +1,11 @@
 from typing import Sequence
+from unittest.mock import patch
 
 import pytest
 
 from snuba import settings
 from snuba.admin.auth_roles import ROLES, Role
+from snuba.admin.clickhouse.common import InvalidNodeError
 from snuba.admin.clickhouse.system_queries import (
     UnauthorizedForSudo,
     is_valid_system_query,
@@ -11,6 +13,7 @@ from snuba.admin.clickhouse.system_queries import (
     validate_query,
 )
 from snuba.admin.user import AdminUser
+from snuba.clusters.cluster import ClickhouseClientSettings
 
 
 @pytest.mark.parametrize(
@@ -273,6 +276,59 @@ def test_clusterless_uses_readonly_for_non_sudo(sudo_mode: bool, expected_helper
 
         assert mock_used.called, f"Expected {expected_helper} to be used"
         assert not mock_forbidden.called, f"{forbidden} must not be used in this mode"
+
+
+@pytest.mark.parametrize(
+    "helper_name, client_settings",
+    [
+        pytest.param(
+            "get_clusterless_node_connection",
+            ClickhouseClientSettings.QUERY,
+            id="sudo clusterless helper",
+        ),
+        pytest.param(
+            "get_ro_clusterless_node_connection",
+            ClickhouseClientSettings.QUERY,
+            id="readonly clusterless helper",
+        ),
+    ],
+)
+def test_clusterless_rejects_unvalidated_host(
+    helper_name: str, client_settings: ClickhouseClientSettings
+) -> None:
+    """
+    Regression for EAP-488: the clusterless helpers used to construct a
+    ClickhousePool against any attacker-supplied host/port, which leaked the
+    configured ClickHouse user/password in the first hello packet of the
+    native protocol. Both helpers must now call _validate_node before
+    constructing the pool, so an invalid host produces InvalidNodeError and
+    no credentials ever leave the process.
+    """
+    from snuba.admin.clickhouse import common
+
+    helper = getattr(common, helper_name)
+
+    with (
+        patch.object(
+            common,
+            "_validate_node",
+            side_effect=InvalidNodeError("host not in cluster"),
+        ) as mock_validate,
+        patch.object(common, "ClickhousePool") as mock_pool,
+    ):
+        # Clear any cached connection for this storage so the cache lookup
+        # can't short-circuit validation.
+        for key in [k for k in common.NODE_CONNECTIONS if k.startswith("errors-")]:
+            del common.NODE_CONNECTIONS[key]
+
+        with pytest.raises(InvalidNodeError):
+            helper("attacker.example.com", 9009, "errors", client_settings)
+
+        assert mock_validate.called, "_validate_node must run before pool construction"
+        assert not mock_pool.called, (
+            "ClickhousePool must not be constructed for an unvalidated host — "
+            "doing so would transmit ClickHouse credentials to the attacker"
+        )
 
 
 @pytest.mark.parametrize(

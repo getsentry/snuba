@@ -192,6 +192,12 @@ def get_clusterless_node_connection(
     if key in NODE_CONNECTIONS:
         return NODE_CONNECTIONS[key]
 
+    # ClickhousePool sends the configured user/password in the very first hello
+    # packet on connection — if we let an unvalidated host/port through, an
+    # attacker who controls the listener at that address sees those credentials
+    # before any query runs.
+    _validate_node(clickhouse_host, clickhouse_port, cluster, storage_name)
+
     (clickhouse_user, clickhouse_password) = storage.get_cluster().get_credentials()
     connection = ClickhousePool(
         clickhouse_host,
@@ -224,6 +230,10 @@ def get_ro_clusterless_node_connection(
         ClickhouseClientSettings.QUERY,
         ClickhouseClientSettings.QUERYLOG,
     }, "ro clusterless connections must use a read-only client settings profile"
+
+    # See get_clusterless_node_connection: even readonly credentials leak in the
+    # hello packet, so reject hosts that don't belong to the storage's cluster.
+    _validate_node(clickhouse_host, clickhouse_port, cluster, storage_name)
 
     connection = ClickhousePool(
         clickhouse_host,
