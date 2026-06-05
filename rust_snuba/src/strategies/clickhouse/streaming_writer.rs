@@ -4,17 +4,25 @@
 //! path. Instead of accumulating the full uncompressed batch in a
 //! `BytesInsertBatch<RowData>` and then handing it to a buffered writer
 //! that compresses and sends in one shot, this strategy compresses rows
-//! into ClickHouse-native LZ4 blocks as messages arrive and pushes the
-//! resulting `Bytes` onto an HTTP body channel feeding a single in-flight
-//! POST per batch. The encoded uncompressed bytes are dropped per
-//! message; the compressed chunks live in the `retry_buf` (and in the
-//! mpsc until reqwest drains them).
+//! into ClickHouse-native LZ4 blocks as messages arrive and accumulates
+//! the compressed `Bytes` in `chunks`. The encoded uncompressed bytes
+//! are dropped per message, so we never hold a full uncompressed batch
+//! in memory — peak resident set is ~0.3× the batch (compressed only).
+//!
+//! The HTTP POST is spawned at flush time, not at first-message time,
+//! with the full compressed batch in hand. Earlier drafts streamed the
+//! body live to overlap network with batch accumulation, but a network
+//! failure mid-stream could cause the retry to fire against a partial
+//! `retry_buf` (the strategy may still be adding chunks). ClickHouse
+//! would accept that truncated body and return OK, dropping the rest
+//! of the rows. Spawning at flush makes the body content immutable
+//! before the first attempt, so retries always see the full batch.
 //!
 //! Concurrency is fixed at one in-flight batch — submits are rejected
 //! while we're awaiting the previous batch's response. The existing
 //! buffered path uses `RunTaskInThreads` for inter-batch concurrency;
-//! we sacrifice that here for a much smaller resident set and a simpler
-//! state machine.
+//! we sacrifice that here for a much smaller resident set and a
+//! simpler state machine.
 
 use std::collections::BTreeMap;
 use std::io;
@@ -22,6 +30,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use bytes::Bytes;
+use parking_lot::Mutex;
 use reqwest::Response;
 use sentry_arroyo::processing::strategies::{
     merge_commit_request, CommitRequest, MessageRejected, ProcessingStrategy, StrategyError,
@@ -31,17 +40,15 @@ use sentry_arroyo::types::{Message, Partition};
 use sentry_arroyo::utils::timing::Deadline;
 use sentry_arroyo::{counter, timer};
 use tokio::runtime::Handle;
-use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
-use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use super::streaming_lz4::StreamingLz4Compressor;
 use super::writer_v2::{ClickhouseClient, RetryConfig};
 use crate::types::{BytesInsertBatch, RowData};
 
 /// State for the batch currently being accumulated. Holds the running
-/// metadata plus, once the first non-empty message arrives, the
-/// streaming compression + HTTP request handle.
+/// metadata plus the incremental compressor and the compressed-chunk
+/// buffer that becomes the HTTP body at flush time.
 struct PendingBatch {
     batch_start: Deadline,
     /// Running batch-size measurement under `compute_batch_size`. Drives
@@ -58,21 +65,18 @@ struct PendingBatch {
     /// Wall-clock at the moment the first message of the batch arrived.
     /// Used to compute `insertions.batch_write_ms` on completion.
     write_start: SystemTime,
-    /// `None` until the first non-empty, non-skipped message lands. We
-    /// don't open an HTTP request for empty batches (commit-only flushes).
-    streaming: Option<StreamingState>,
-}
-
-struct StreamingState {
+    /// Incremental ClickHouse-native LZ4 encoder. Fed one message's
+    /// `encoded_rows` at a time, emits one `Bytes` per complete 1 MiB
+    /// block; the final partial block is drained by `finish()` at flush.
     compressor: StreamingLz4Compressor,
-    /// Producer side of the request body channel. Dropping it signals
-    /// end-of-body to reqwest, which then finalizes the POST.
-    body_tx: mpsc::UnboundedSender<Result<Bytes, io::Error>>,
-    /// Shared with the spawned `send_streamed` task — every compressed
-    /// chunk we push to `body_tx` is also recorded here so retries can
-    /// replay the body without re-running the (already-consumed) stream.
-    retry_buf: Arc<std::sync::Mutex<Vec<Bytes>>>,
-    handle: JoinHandle<anyhow::Result<Response>>,
+    /// Compressed chunks accumulated for this batch. At flush time
+    /// this is both the body source for the HTTP POST and the
+    /// `retry_buf` passed to `send_streamed`, so the first attempt
+    /// and retries replay the exact same bytes. Uses
+    /// `parking_lot::Mutex` so neither side has to handle poisoning
+    /// — the lock is held briefly and there's nothing useful to do
+    /// if a holder panics anyway.
+    chunks: Arc<Mutex<Vec<Bytes>>>,
 }
 
 /// A batch whose body has been finalized and is awaiting the HTTP
@@ -134,11 +138,6 @@ where
         }
     }
 
-    /// Ensure `self.pending` exists with the streaming state initialized
-    /// up to (but not including) the first compressed chunk. Spawns the
-    /// `send_streamed` task lazily — the first message of a batch may
-    /// be empty (or `skip_write` may be set), in which case we never open
-    /// an HTTP request and the in-flight batch carries `handle = None`.
     fn ensure_pending(&mut self) -> &mut PendingBatch {
         self.pending.get_or_insert_with(|| PendingBatch {
             batch_start: Deadline::new(self.max_batch_time),
@@ -148,64 +147,17 @@ where
             offsets: BTreeMap::new(),
             meta: BytesInsertBatch::<()>::default(),
             write_start: SystemTime::now(),
-            streaming: None,
+            compressor: StreamingLz4Compressor::new(),
+            chunks: Arc::new(Default::default()),
         })
     }
 
-    /// Lazy-start the HTTP request task on the first non-empty message.
-    fn ensure_streaming(
-        client: Arc<ClickhouseClient>,
-        runtime: &Handle,
-        pending: &mut PendingBatch,
-    ) {
-        if pending.streaming.is_some() {
-            return;
-        }
-        let (body_tx, body_rx) = mpsc::unbounded_channel::<Result<Bytes, io::Error>>();
-        let retry_buf: Arc<std::sync::Mutex<Vec<Bytes>>> = Arc::new(Default::default());
-        let stream = UnboundedReceiverStream::new(body_rx);
-        let retry_buf_for_task = retry_buf.clone();
-        let handle = runtime.spawn(async move {
-            client
-                .send_streamed(stream, retry_buf_for_task, RetryConfig::default())
-                .await
-        });
-        pending.streaming = Some(StreamingState {
-            compressor: StreamingLz4Compressor::new(),
-            body_tx,
-            retry_buf,
-            handle,
-        });
-    }
-
-    /// Append `bytes` to the active streaming compressor. Every chunk
-    /// that pops out of the compressor is teed into `retry_buf` (so
-    /// retries can replay it) and pushed onto `body_tx`. Send errors on
-    /// `body_tx` are intentionally ignored: they signal that the first
-    /// HTTP attempt consumed-and-dropped the stream after a network
-    /// error, and `send_streamed`'s retry loop will pick up from
-    /// `retry_buf` once we close the body.
-    fn push_bytes(streaming: &mut StreamingState, bytes: &[u8]) {
-        let chunks = streaming.compressor.push(bytes);
-        if chunks.is_empty() {
-            return;
-        }
-        {
-            let mut buf = streaming.retry_buf.lock().unwrap();
-            for chunk in &chunks {
-                buf.push(chunk.clone());
-            }
-        }
-        for chunk in chunks {
-            let _ = streaming.body_tx.send(Ok(chunk));
-        }
-    }
-
     /// Move `pending` → `in_flight`: drain the compressor's tail (if
-    /// any), drop the sender to close the HTTP body, and stash the
-    /// `JoinHandle` for `poll` to await. Must be called only when
-    /// `in_flight` is `None` (the strategy keeps at most one batch in
-    /// flight at a time).
+    /// any), then — if any compressed bytes were produced — spawn the
+    /// `send_streamed` task with the now-immutable chunk buffer as
+    /// both the body source and the retry source. Must be called only
+    /// when `in_flight` is `None` (the strategy keeps at most one
+    /// batch in flight at a time).
     fn flush_pending(&mut self) {
         debug_assert!(self.in_flight.is_none());
         let Some(pending) = self.pending.take() else {
@@ -219,24 +171,37 @@ where
             offsets,
             meta,
             write_start,
-            streaming,
+            compressor,
+            chunks,
         } = pending;
-        let handle = streaming.map(|s| {
-            let StreamingState {
-                compressor,
-                body_tx,
-                retry_buf,
-                handle,
-            } = s;
-            if let Some(last) = compressor.finish() {
-                retry_buf.lock().unwrap().push(last.clone());
-                let _ = body_tx.send(Ok(last));
+
+        if let Some(last) = compressor.finish() {
+            chunks.lock().push(last);
+        }
+
+        // After this point nothing else writes to `chunks`. Both the
+        // first attempt and retries inside `send_streamed` read from
+        // the same `Arc<Mutex<Vec<Bytes>>>`, so the body content is
+        // stable for the entire request lifetime.
+        let handle = {
+            let chunks_snapshot = chunks.lock();
+            if chunks_snapshot.is_empty() {
+                None
+            } else {
+                let body_chunks: Vec<Bytes> = chunks_snapshot.clone();
+                drop(chunks_snapshot);
+                let client = self.client.clone();
+                let chunks_for_retry = chunks.clone();
+                Some(self.runtime.spawn(async move {
+                    let body_stream =
+                        futures::stream::iter(body_chunks.into_iter().map(Ok::<_, io::Error>));
+                    client
+                        .send_streamed(body_stream, chunks_for_retry, RetryConfig::default())
+                        .await
+                }))
             }
-            // Dropping `body_tx` here closes the HTTP body — `send_streamed`
-            // sees end-of-stream and finalizes the POST.
-            drop(body_tx);
-            handle
-        });
+        };
+
         self.in_flight = Some(InFlightBatch {
             handle,
             num_rows,
@@ -250,6 +215,12 @@ where
     /// Try to drain the in-flight batch. If `blocking` is false, returns
     /// without doing work when the HTTP request hasn't finished yet. If
     /// `blocking`, waits for the request to complete (used by `join`).
+    ///
+    /// Calls `Handle::block_on` to bridge from the synchronous arroyo
+    /// strategy loop to the async tokio task. This is safe: arroyo
+    /// invokes `poll`/`join` on the consumer thread, which is not
+    /// itself running inside a tokio runtime — same pattern that
+    /// `RunTaskInThreads` uses today.
     ///
     /// On success: emits per-batch metrics, builds an any-message with
     /// the merged meta + offsets, and submits it to `next_step`. A
@@ -370,9 +341,6 @@ where
             num_rows,
         } = row_data;
         let row_bytes_len = encoded_rows.len();
-
-        let client = self.client.clone();
-        let runtime = self.runtime.clone();
         let skip_write = self.skip_write;
         let pending = self.ensure_pending();
 
@@ -386,26 +354,26 @@ where
         pending.meta = prev_meta.merge_meta(msg_meta);
 
         if !encoded_rows.is_empty() && !skip_write {
-            Self::ensure_streaming(client, &runtime, pending);
-            // safety: `ensure_streaming` populates `streaming`.
-            let streaming = pending.streaming.as_mut().unwrap();
-            Self::push_bytes(streaming, &encoded_rows);
+            // Compress in place. Any complete 1 MiB blocks are appended
+            // to `chunks` so they're already in the body buffer by the
+            // time we flush.
+            let new_chunks = pending.compressor.push(&encoded_rows);
+            if !new_chunks.is_empty() {
+                let mut buf = pending.chunks.lock();
+                for chunk in new_chunks {
+                    buf.push(chunk);
+                }
+            }
         }
-        // Free the encoded uncompressed bytes immediately. (Already
-        // dropped on the previous line — the explicit drop here is
-        // defensive against a future edit that adds a branch which
-        // forgets to consume `encoded_rows`.)
-        drop(encoded_rows);
+        // `encoded_rows` is dropped here at scope end — the source bytes
+        // never outlive this `submit` call, which is the whole point of
+        // the streaming path.
 
         Ok(())
     }
 
     fn terminate(&mut self) {
-        if let Some(pending) = self.pending.take() {
-            if let Some(streaming) = pending.streaming {
-                streaming.handle.abort();
-            }
-        }
+        self.pending = None;
         if let Some(in_flight) = self.in_flight.take() {
             if let Some(handle) = in_flight.handle {
                 handle.abort();
@@ -457,8 +425,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Mutex;
-
     use sentry_arroyo::types::{BrokerMessage, InnerMessage, Topic};
 
     use crate::config::ClickhouseConfig;
@@ -479,7 +445,7 @@ mod tests {
             &mut self,
             message: Message<BytesInsertBatch<()>>,
         ) -> Result<(), SubmitError<BytesInsertBatch<()>>> {
-            self.batches.lock().unwrap().push(message.into_payload());
+            self.batches.lock().push(message.into_payload());
             Ok(())
         }
         fn terminate(&mut self) {}
@@ -562,12 +528,14 @@ mod tests {
         for i in 0..3 {
             strategy
                 .submit(make_message(batch_with(1, 100), partition, i))
-                .unwrap();
+                .expect("submit should be accepted");
             let _ = strategy.poll();
         }
-        let _ = strategy.join(Some(Duration::from_secs(5))).unwrap();
+        strategy
+            .join(Some(Duration::from_secs(5)))
+            .expect("join should not error");
 
-        let batches = recorded.lock().unwrap();
+        let batches = recorded.lock();
         assert_eq!(batches.len(), 2, "size-flush + join-flush");
         assert_eq!(batches[0].num_bytes(), 200, "two messages of 100B");
         assert_eq!(batches[1].num_bytes(), 100, "trailing single message");
@@ -617,7 +585,7 @@ mod tests {
         // First submit fits and triggers a flush at size=1.
         strategy
             .submit(make_message(batch_with(1, 50), partition, 0))
-            .unwrap();
+            .expect("first submit should be accepted");
         let _ = strategy.poll();
 
         // The flushed batch is carried over because next_step rejected.
@@ -646,7 +614,9 @@ mod tests {
             |b| b.len(),
         );
 
-        strategy.join(Some(Duration::from_secs(1))).unwrap();
-        assert!(recorded.lock().unwrap().is_empty());
+        strategy
+            .join(Some(Duration::from_secs(1)))
+            .expect("join should not error");
+        assert!(recorded.lock().is_empty());
     }
 }

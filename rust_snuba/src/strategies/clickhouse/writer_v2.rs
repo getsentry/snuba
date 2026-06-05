@@ -370,7 +370,7 @@ impl ClickhouseClient {
     pub async fn send_streamed<S>(
         &self,
         body_stream: S,
-        retry_buf: Arc<std::sync::Mutex<Vec<Bytes>>>,
+        retry_buf: Arc<parking_lot::Mutex<Vec<Bytes>>>,
         retry_config: RetryConfig,
     ) -> anyhow::Result<Response>
     where
@@ -387,7 +387,7 @@ impl ClickhouseClient {
                 Some(b) => b,
                 None => {
                     // Clone is an Arc bump per chunk — no payload copy.
-                    let chunks: Vec<Bytes> = retry_buf.lock().unwrap().clone();
+                    let chunks: Vec<Bytes> = retry_buf.lock().clone();
                     reqwest::Body::wrap_stream(futures::stream::iter(
                         chunks.into_iter().map(Ok::<_, std::io::Error>),
                     ))
@@ -823,11 +823,11 @@ mod tests {
         // Simulate the caller's tee: the stream yields chunks that have
         // already been recorded in `retry_buf`. Retries replay from this
         // buffer rather than re-running the (consumed) stream.
-        let retry_buf = Arc::new(std::sync::Mutex::new(vec![
+        let retry_buf = Arc::new(parking_lot::Mutex::new(vec![
             Bytes::from_static(b"chunk-a"),
             Bytes::from_static(b"chunk-b"),
         ]));
-        let stream_chunks = retry_buf.lock().unwrap().clone();
+        let stream_chunks = retry_buf.lock().clone();
         let body_stream =
             futures::stream::iter(stream_chunks.into_iter().map(Ok::<_, std::io::Error>));
 
