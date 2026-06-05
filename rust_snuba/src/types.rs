@@ -471,6 +471,25 @@ impl BytesInsertBatch<RowData> {
     }
 }
 
+impl BytesInsertBatch<()> {
+    /// Fold another batch's metadata into this one without touching rows.
+    /// Used by the streaming writer, which feeds rows directly into an open
+    /// HTTP request and only needs the metadata aggregated for the
+    /// downstream commit-log / latency / cogs steps.
+    #[allow(dead_code)]
+    pub fn merge_meta(mut self, other: BytesInsertBatch<()>) -> Self {
+        self.num_bytes += other.num_bytes;
+        self.commit_log_offsets.merge(other.commit_log_offsets);
+        self.message_timestamp.merge(other.message_timestamp);
+        self.origin_timestamp.merge(other.origin_timestamp);
+        self.sentry_received_timestamp
+            .merge(other.sentry_received_timestamp);
+        self.cogs_data.merge(other.cogs_data);
+        self.item_type_metrics.merge(other.item_type_metrics);
+        self
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq)]
 pub struct RowData {
     pub encoded_rows: Vec<u8>,
