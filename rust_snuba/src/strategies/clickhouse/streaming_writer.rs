@@ -38,7 +38,7 @@ use sentry_arroyo::processing::strategies::{
 };
 use sentry_arroyo::types::{Message, Partition};
 use sentry_arroyo::utils::timing::Deadline;
-use sentry_arroyo::{counter, timer};
+use sentry_arroyo::{counter, gauge, timer};
 use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
 
@@ -60,6 +60,10 @@ struct PendingBatch {
     /// messages. Reported as `insertions.batch_write_bytes` so the
     /// metric meaning matches the buffered writer.
     num_bytes: usize,
+    /// Sum of compressed chunk sizes already in `chunks`. Tracked
+    /// alongside the buffer so the resident-memory gauge can read it
+    /// without locking + iterating `chunks` on every poll.
+    compressed_bytes: usize,
     offsets: BTreeMap<Partition, u64>,
     meta: BytesInsertBatch<()>,
     /// Wall-clock at the moment the first message of the batch arrived.
@@ -86,6 +90,11 @@ struct InFlightBatch {
     handle: Option<JoinHandle<anyhow::Result<Response>>>,
     num_rows: usize,
     num_bytes: usize,
+    /// Total compressed body size (== chunk buffer footprint). Held
+    /// for the duration of the HTTP request; reported as the
+    /// `resident_compressed_bytes` gauge while in flight and as
+    /// `last_batch_compressed_bytes` once the response lands.
+    compressed_bytes: usize,
     offsets: BTreeMap<Partition, u64>,
     meta: BytesInsertBatch<()>,
     write_start: SystemTime,
@@ -144,6 +153,7 @@ where
             batch_size: 0,
             num_rows: 0,
             num_bytes: 0,
+            compressed_bytes: 0,
             offsets: BTreeMap::new(),
             meta: BytesInsertBatch::<()>::default(),
             write_start: SystemTime::now(),
@@ -168,6 +178,7 @@ where
             batch_size: _,
             num_rows,
             num_bytes,
+            mut compressed_bytes,
             offsets,
             meta,
             write_start,
@@ -176,6 +187,7 @@ where
         } = pending;
 
         if let Some(last) = compressor.finish() {
+            compressed_bytes += last.len();
             chunks.lock().push(last);
         }
 
@@ -206,6 +218,7 @@ where
             handle,
             num_rows,
             num_bytes,
+            compressed_bytes,
             offsets,
             meta,
             write_start,
@@ -252,6 +265,19 @@ where
         }
         counter!("insertions.batch_write_bytes", in_flight.num_bytes as i64);
         counter!("insertions.batch_write_msgs", in_flight.num_rows as i64);
+        // Per-batch input → output sizing. The pair lets dashboards
+        // correlate ClickHouse insert load (compressed bytes on wire)
+        // with the consumer-side memory peak we hold for that batch
+        // — the resident gauge below samples the live side of the
+        // same number.
+        gauge!(
+            "insertions.streaming_writer.last_batch_uncompressed_bytes",
+            in_flight.num_bytes as u64
+        );
+        gauge!(
+            "insertions.streaming_writer.last_batch_compressed_bytes",
+            in_flight.compressed_bytes as u64
+        );
         in_flight.meta.record_message_latency();
         in_flight.meta.emit_item_type_metrics();
         tracing::info!("Inserted {} rows (streamed)", in_flight.num_rows);
@@ -321,6 +347,22 @@ where
             self.try_drain_in_flight(false)?;
         }
 
+        // Sample the writer's resident-memory footprint after the tick
+        // has settled — pending and in_flight are mutually exclusive,
+        // so this is the total compressed bytes the strategy is holding
+        // (the uncompressed source bytes are already gone). Lets us
+        // correlate consumer RSS with batch sizing if we hit memory
+        // pressure again.
+        let resident = match (&self.pending, &self.in_flight) {
+            (Some(p), _) => p.compressed_bytes,
+            (None, Some(b)) => b.compressed_bytes,
+            (None, None) => 0,
+        };
+        gauge!(
+            "insertions.streaming_writer.resident_compressed_bytes",
+            resident as u64
+        );
+
         Ok(self.commit_request_carried_over.take())
     }
 
@@ -361,6 +403,7 @@ where
             if !new_chunks.is_empty() {
                 let mut buf = pending.chunks.lock();
                 for chunk in new_chunks {
+                    pending.compressed_bytes += chunk.len();
                     buf.push(chunk);
                 }
             }
