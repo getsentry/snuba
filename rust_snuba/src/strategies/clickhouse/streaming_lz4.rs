@@ -6,10 +6,9 @@
 //! a `Bytes` for each complete block as soon as it fills. Used by the
 //! streaming writer so we never buffer a full uncompressed batch.
 //!
-//! Scaffolded ahead of `StreamingClickhouseWriter` — items below are
-//! exercised by unit tests now and will be picked up by the strategy in
-//! a follow-up commit.
-#![allow(dead_code)]
+//! Consumed by `StreamingClickhouseWriter` (see `streaming_writer.rs`),
+//! which feeds rows incrementally and forwards each emitted block onto
+//! the HTTP body channel for an in-flight POST.
 
 use bytes::Bytes;
 

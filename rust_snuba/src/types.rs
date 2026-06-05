@@ -476,7 +476,6 @@ impl BytesInsertBatch<()> {
     /// Used by the streaming writer, which feeds rows directly into an open
     /// HTTP request and only needs the metadata aggregated for the
     /// downstream commit-log / latency / cogs steps.
-    #[allow(dead_code)]
     pub fn merge_meta(mut self, other: BytesInsertBatch<()>) -> Self {
         self.num_bytes += other.num_bytes;
         self.commit_log_offsets.merge(other.commit_log_offsets);

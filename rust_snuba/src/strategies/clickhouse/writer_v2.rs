@@ -352,25 +352,21 @@ impl ClickhouseClient {
     /// Stream `body_stream` as the POST body for the first attempt; on
     /// failure, retry from `retry_buf` instead of re-running the stream.
     ///
-    /// Currently unused — scaffolded for `StreamingClickhouseWriter`,
-    /// which will be added in a follow-up commit. Exercised by
-    /// `test_send_streamed_retries_from_buffered_chunks`.
-    ///
-    /// The caller MUST tee every chunk it pushes into `body_stream` into
-    /// `retry_buf` (in the same order). The first attempt consumes
-    /// `body_stream` exactly once and emits the chunks straight to the
-    /// wire — we never buffer them ourselves. Retries replay the
-    /// already-compressed chunks from `retry_buf` via another streamed
-    /// body, so memory peaks at the size of the compressed batch (~30%
-    /// of source) instead of the uncompressed source + compressed copy
-    /// the buffered `send` path holds.
+    /// Used by `StreamingClickhouseWriter`. The caller MUST tee every
+    /// chunk it pushes into `body_stream` into `retry_buf` (in the same
+    /// order). The first attempt consumes `body_stream` exactly once and
+    /// emits the chunks straight to the wire — we never buffer them
+    /// ourselves. Retries replay the already-compressed chunks from
+    /// `retry_buf` via another streamed body, so memory peaks at the
+    /// size of the compressed batch (~30% of source) instead of the
+    /// uncompressed source + compressed copy the buffered `send` path
+    /// holds.
     ///
     /// `body_stream` must end only when the entire batch has been
     /// pushed: a mid-batch close lands a truncated body on the server,
     /// which then rejects every retry too (we'd be replaying a partial
     /// `retry_buf`). Surface caller-side cancellations as errors and
     /// don't enter this function.
-    #[allow(dead_code)]
     pub async fn send_streamed<S>(
         &self,
         body_stream: S,
