@@ -523,6 +523,13 @@ where
                     None => DrainMode::BlockForever,
                 };
                 self.try_drain_in_flight(mode)?;
+            } else {
+                // Downstream is back-pressuring our merged-meta submit
+                // and there's no in_flight to block on — the loop
+                // would otherwise spin on the deadline check and
+                // burn a core until timeout. Yield briefly so the
+                // wait is bounded by sleep rather than CPU.
+                std::thread::sleep(Duration::from_millis(10));
             }
         }
 
