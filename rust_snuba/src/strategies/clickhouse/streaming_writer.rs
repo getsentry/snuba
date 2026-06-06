@@ -469,25 +469,46 @@ where
     fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         let deadline = timeout.map(Deadline::new);
 
-        // Force-flush any in-progress batch so the request closes and
-        // begins finishing. After this, `in_flight` is set (or there
-        // was nothing pending), and we just need to wait for the HTTP
-        // response and drain into next_step.
-        if self.in_flight.is_none() && self.message_carried_over.is_none() {
+        // Only flush the pending batch if we have time to wait for the
+        // HTTP response. Spawning a POST and then bailing on the
+        // deadline before we can drain it would let the request land
+        // in ClickHouse without the matching offset commit — duplicate
+        // data on the next consumer instance picking up from the last
+        // committed offset. `SetJoinTimeout(0)` (used by arroyo to
+        // drop in-flight work during rebalance) exercises this path.
+        if deadline.is_some_and(|d| d.has_elapsed()) {
+            if let Some(pending) = self.pending.take() {
+                tracing::warn!(
+                    "Streaming writer join called with already-elapsed deadline; abandoning pending batch ({} rows, {} uncompressed bytes)",
+                    pending.num_rows,
+                    pending.num_bytes
+                );
+            }
+        } else if self.in_flight.is_none() && self.message_carried_over.is_none() {
             self.flush_pending();
         }
 
         // Drain until we either finish everything in flight or hit the
         // deadline. Pass the remaining deadline into the drain so
-        // block_on inside it is bounded — otherwise a hung HTTP
+        // `block_on` inside it is bounded — otherwise a hung HTTP
         // response would keep `join` running indefinitely regardless
-        // of the timeout we were given.
+        // of the timeout we were given. On a deadline-driven break,
+        // abort any still-running in-flight task: leaving it detached
+        // would let the POST complete after we've already returned,
+        // landing data in ClickHouse for offsets we never committed.
         while self.in_flight.is_some() || self.message_carried_over.is_some() {
             if deadline.is_some_and(|d| d.has_elapsed()) {
-                tracing::warn!(
-                    "Timeout {:?} reached while waiting for streaming writer to finish",
-                    timeout
-                );
+                if let Some(in_flight) = self.in_flight.take() {
+                    if let Some(handle) = in_flight.handle {
+                        handle.abort();
+                    }
+                    tracing::warn!(
+                        "Timeout {:?} reached during streaming-writer join; aborted in-flight batch ({} rows)",
+                        timeout,
+                        in_flight.num_rows
+                    );
+                }
+                self.message_carried_over = None;
                 break;
             }
 
@@ -751,6 +772,57 @@ mod tests {
         // The stuck batch was aborted, not flushed downstream — the
         // recording step must not have seen anything.
         assert!(recorded.lock().is_empty());
+    }
+
+    /// `join(Some(0))` (arroyo's drop-in-flight rebalance signal) must
+    /// not spawn a fresh HTTP POST for the pending batch — doing so
+    /// would let CH receive the rows while the offsets never reach
+    /// downstream commit steps, producing duplicates on the next
+    /// consumer. Confirm pending is abandoned and the downstream
+    /// recorder sees nothing.
+    #[tokio::test]
+    async fn join_with_elapsed_deadline_abandons_pending() {
+        crate::testutils::initialize_python();
+        let runtime = Handle::current();
+        let recorded = Arc::new(Mutex::new(Vec::new()));
+        let next_step = RecordingStep {
+            batches: recorded.clone(),
+        };
+        // skip_write=false so the writer would normally spawn an HTTP
+        // task at flush time. With elapsed deadline, it must skip the
+        // flush entirely.
+        let mut strategy = StreamingClickhouseWriter::new(
+            next_step,
+            skip_write_client(),
+            false,
+            runtime,
+            10,
+            Duration::from_secs(3600),
+            |b| b.len(),
+        );
+
+        let partition = Partition::new(Topic::new("t"), 0);
+        strategy
+            .submit(make_message(batch_with(1, 50), partition, 0))
+            .expect("submit should be accepted");
+        // Pending now holds bytes that would be POSTed on a normal flush.
+
+        strategy
+            .join(Some(Duration::ZERO))
+            .expect("join should not error");
+
+        assert!(
+            recorded.lock().is_empty(),
+            "elapsed-deadline join must not propagate the pending batch downstream"
+        );
+        assert!(
+            strategy.pending.is_none(),
+            "pending should be abandoned, not carried forward"
+        );
+        assert!(
+            strategy.in_flight.is_none(),
+            "no HTTP task should be spawned"
+        );
     }
 
     /// `join` on an empty strategy is a no-op — never opens a request,
