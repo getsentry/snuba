@@ -83,6 +83,18 @@ struct PendingBatch {
     chunks: Arc<Mutex<Vec<Bytes>>>,
 }
 
+/// How `try_drain_in_flight` should handle a not-yet-finished
+/// HTTP handle. Keeps the join-time bounded wait distinct from
+/// the non-blocking probe `poll` uses each tick.
+enum DrainMode {
+    /// Return immediately if the handle isn't finished yet.
+    NonBlocking,
+    /// Wait indefinitely (used when `join` was called with no timeout).
+    BlockForever,
+    /// Wait up to the given duration; abort the task on elapsed.
+    BlockUpTo(Duration),
+}
+
 /// A batch whose body has been finalized and is awaiting the HTTP
 /// response (or, for batches that never opened an HTTP request, ready
 /// to be submitted downstream immediately).
@@ -225,9 +237,7 @@ where
         });
     }
 
-    /// Try to drain the in-flight batch. If `blocking` is false, returns
-    /// without doing work when the HTTP request hasn't finished yet. If
-    /// `blocking`, waits for the request to complete (used by `join`).
+    /// Try to drain the in-flight batch.
     ///
     /// Calls `Handle::block_on` to bridge from the synchronous arroyo
     /// strategy loop to the async tokio task. This is safe: arroyo
@@ -239,24 +249,55 @@ where
     /// the merged meta + offsets, and submits it to `next_step`. A
     /// downstream `MessageRejected` is stashed in `message_carried_over`
     /// for `poll` to retry — we still consider `in_flight` drained.
-    fn try_drain_in_flight(&mut self, blocking: bool) -> Result<(), StrategyError> {
+    fn try_drain_in_flight(&mut self, mode: DrainMode) -> Result<(), StrategyError> {
         let Some(mut in_flight) = self.in_flight.take() else {
             return Ok(());
         };
         match in_flight.handle.take() {
             None => {}
-            Some(handle) => {
-                if !blocking && !handle.is_finished() {
-                    in_flight.handle = Some(handle);
-                    self.in_flight = Some(in_flight);
-                    return Ok(());
+            Some(mut handle) => match mode {
+                DrainMode::NonBlocking => {
+                    if !handle.is_finished() {
+                        in_flight.handle = Some(handle);
+                        self.in_flight = Some(in_flight);
+                        return Ok(());
+                    }
+                    // is_finished() == true → block_on returns immediately.
+                    match self.runtime.block_on(&mut handle) {
+                        Ok(Ok(_response)) => {}
+                        Ok(Err(e)) => return Err(StrategyError::Other(e.into())),
+                        Err(e) => return Err(StrategyError::Other(Box::new(e))),
+                    }
                 }
-                match self.runtime.block_on(handle) {
+                DrainMode::BlockForever => match self.runtime.block_on(&mut handle) {
                     Ok(Ok(_response)) => {}
                     Ok(Err(e)) => return Err(StrategyError::Other(e.into())),
                     Err(e) => return Err(StrategyError::Other(Box::new(e))),
+                },
+                DrainMode::BlockUpTo(max_wait) => {
+                    // Pass `&mut handle` (JoinHandle is Unpin) so on
+                    // timeout we still own the handle and can abort
+                    // the task. Without the abort, the task would
+                    // detach and keep its retry_buf live until it
+                    // exhausts retries or the runtime drops.
+                    let timeout_res = self
+                        .runtime
+                        .block_on(async { tokio::time::timeout(max_wait, &mut handle).await });
+                    match timeout_res {
+                        Ok(Ok(Ok(_response))) => {}
+                        Ok(Ok(Err(e))) => return Err(StrategyError::Other(e.into())),
+                        Ok(Err(e)) => return Err(StrategyError::Other(Box::new(e))),
+                        Err(_elapsed) => {
+                            handle.abort();
+                            tracing::warn!(
+                                "Streaming HTTP write exceeded {:?}; aborted in-flight task. Batch metadata not committed downstream — the next consumer instance will retry from the last committed offset.",
+                                max_wait
+                            );
+                            return Ok(());
+                        }
+                    }
                 }
-            }
+            },
         }
 
         let write_finish = SystemTime::now();
@@ -333,7 +374,7 @@ where
         // Drain a finished in-flight before considering whether to flush
         // pending — we only allow one batch in flight at a time.
         if self.message_carried_over.is_none() {
-            self.try_drain_in_flight(false)?;
+            self.try_drain_in_flight(DrainMode::NonBlocking)?;
         }
 
         if self.in_flight.is_none()
@@ -344,7 +385,7 @@ where
             // Best-effort drain: the handle is unlikely to be done this
             // tick, but if it is (or there's no handle), we hand the
             // result off immediately.
-            self.try_drain_in_flight(false)?;
+            self.try_drain_in_flight(DrainMode::NonBlocking)?;
         }
 
         // Sample the writer's resident-memory footprint after the tick
@@ -437,8 +478,10 @@ where
         }
 
         // Drain until we either finish everything in flight or hit the
-        // deadline. `try_drain_in_flight(true)` blocks on the handle, so
-        // this loop won't spin.
+        // deadline. Pass the remaining deadline into the drain so
+        // block_on inside it is bounded — otherwise a hung HTTP
+        // response would keep `join` running indefinitely regardless
+        // of the timeout we were given.
         while self.in_flight.is_some() || self.message_carried_over.is_some() {
             if deadline.is_some_and(|d| d.has_elapsed()) {
                 tracing::warn!(
@@ -454,7 +497,11 @@ where
 
             self.try_resubmit_carried_over()?;
             if self.message_carried_over.is_none() {
-                self.try_drain_in_flight(true)?;
+                let mode = match deadline {
+                    Some(d) => DrainMode::BlockUpTo(d.remaining()),
+                    None => DrainMode::BlockForever,
+                };
+                self.try_drain_in_flight(mode)?;
             }
         }
 
@@ -635,6 +682,75 @@ mod tests {
         // A second submit must now be rejected.
         let res = strategy.submit(make_message(batch_with(1, 50), partition, 1));
         assert!(matches!(res, Err(SubmitError::MessageRejected(_))));
+    }
+
+    /// If the HTTP task is hung (or just very slow), `join` must
+    /// return within the requested timeout instead of blocking
+    /// indefinitely on the spawned future. Inject a never-resolving
+    /// handle directly into `in_flight` and confirm `join(200ms)`
+    /// honors the bound.
+    ///
+    /// Uses `#[test]` (not `#[tokio::test]`) because the strategy's
+    /// `runtime.block_on(...)` panics if invoked from within an
+    /// existing tokio runtime — which is fine in production (arroyo
+    /// drives strategies from the consumer thread, not a tokio task)
+    /// but makes `#[tokio::test]` unsuitable for any test that
+    /// actually exercises the block_on path.
+    #[test]
+    fn join_respects_timeout_with_hung_http() {
+        crate::testutils::initialize_python();
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .expect("build tokio runtime");
+        let handle = runtime.handle().clone();
+
+        let recorded = Arc::new(Mutex::new(Vec::new()));
+        let next_step = RecordingStep {
+            batches: recorded.clone(),
+        };
+        let mut strategy = StreamingClickhouseWriter::new(
+            next_step,
+            skip_write_client(),
+            true,
+            handle.clone(),
+            10,
+            Duration::from_secs(3600),
+            |b| b.len(),
+        );
+
+        // Spawn a task on the runtime that pretends to be the HTTP
+        // request but never resolves. Without the timeout-bounded
+        // drain, `join` would wait on it forever via `block_on(handle)`.
+        let stuck = handle.spawn(async {
+            tokio::time::sleep(Duration::from_secs(3600)).await;
+            anyhow::bail!("would have resolved if we ever got here")
+        });
+        strategy.in_flight = Some(InFlightBatch {
+            handle: Some(stuck),
+            num_rows: 0,
+            num_bytes: 0,
+            compressed_bytes: 0,
+            offsets: BTreeMap::new(),
+            meta: BytesInsertBatch::<()>::default(),
+            write_start: SystemTime::now(),
+        });
+
+        let join_timeout = Duration::from_millis(200);
+        let started = std::time::Instant::now();
+        strategy
+            .join(Some(join_timeout))
+            .expect("join should not error on timeout");
+        let elapsed = started.elapsed();
+
+        assert!(
+            elapsed < Duration::from_secs(2),
+            "join took {elapsed:?}; should have honored the {join_timeout:?} budget"
+        );
+        // The stuck batch was aborted, not flushed downstream — the
+        // recording step must not have seen anything.
+        assert!(recorded.lock().is_empty());
     }
 
     /// `join` on an empty strategy is a no-op — never opens a request,
