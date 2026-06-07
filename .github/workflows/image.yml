@@ -194,7 +194,7 @@ jobs:
 
     steps:
       - name: Run Sentry self-hosted e2e CI
-        uses: getsentry/self-hosted@3701f1e1927e2a91b912af34952f95f2b69fc4e3 # master
+        uses: getsentry/self-hosted@53b2a6fb5c032adb61945963d8051673f4d5d306 # master
         with:
           project_name: snuba
           image_url: ghcr.io/getsentry/snuba:${{ github.sha }}
