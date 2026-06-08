@@ -519,7 +519,9 @@ def test_routing_strategy_with_rejecting_allocation_policy() -> None:
         with pytest.raises(RPCAllocationPolicyException) as excinfo:
             EndpointTimeSeries().execute(_get_in_msg())
         assert update_called
-        assert not excinfo.value.details["can_run"]
+        exc = excinfo.value
+        assert isinstance(exc, RPCAllocationPolicyException)
+        assert not exc.details["can_run"]
 
 
 @pytest.mark.redis_db
@@ -676,8 +678,10 @@ def test_allocation_policy_updates_quota() -> None:
         with pytest.raises(RPCAllocationPolicyException) as e:
             EndpointTimeSeries().execute(_get_in_msg())
 
-    assert not e.value.details["allocation_policies_recommendations"]["QueryCountPolicy"]["can_run"]
-    assert not e.value.details["allocation_policies_recommendations"]["QueryCountPolicyDuplicate"][
+    exc = e.value
+    assert isinstance(exc, RPCAllocationPolicyException)
+    assert not exc.details["allocation_policies_recommendations"]["QueryCountPolicy"]["can_run"]
+    assert not exc.details["allocation_policies_recommendations"]["QueryCountPolicyDuplicate"][
         "can_run"
     ]
 
