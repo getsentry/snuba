@@ -26,10 +26,7 @@ use crate::processors::{self, get_cogs_label};
 use crate::strategies::accountant::RecordCogs;
 
 use crate::strategies::blq_router::BLQRouter;
-use crate::strategies::clickhouse::streaming_writer::StreamingClickhouseWriter;
-use crate::strategies::clickhouse::writer_v2::{
-    ClickhouseClient, ClickhouseWriterStep, InsertFormat,
-};
+use crate::strategies::clickhouse::writer_v2::{ClickhouseWriterStep, InsertFormat};
 use crate::strategies::commit_log::ProduceCommitLog;
 use crate::strategies::healthcheck::HealthCheck as SnubaHealthCheck;
 use crate::strategies::join_timeout::SetJoinTimeout;
@@ -154,77 +151,49 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
         );
 
+        let next_step = ClickhouseWriterStep::new(
+            next_step,
+            self.storage_config.clickhouse_cluster.clone(),
+            self.storage_config.clickhouse_table_name.clone(),
+            false,
+            &self.clickhouse_concurrency,
+            self.storage_config.name.clone(),
+            insert_format,
+            insert_columns,
+        );
+
+        let accumulator = Arc::new(
+            |batch: BytesInsertBatch<RowData>, small_batch: Message<BytesInsertBatch<RowData>>| {
+                Ok(batch.merge(small_batch.into_payload()))
+            },
+        );
+
         let compute_batch_size: fn(&BytesInsertBatch<RowData>) -> usize =
             match self.max_batch_size_calculation {
                 config::BatchSizeCalculation::Bytes => |batch| batch.num_bytes(),
                 config::BatchSizeCalculation::Rows => |batch| batch.len(),
             };
 
-        // RowBinary gets the streaming writer (Reduce + ClickhouseWriterStep
-        // collapsed into one step that compresses + POSTs rows to ClickHouse
-        // as they arrive). JSON stays on the buffered writer — same pipeline
-        // we've shipped, no urgency to migrate it.
-        let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<RowData>>> =
-            if self.use_row_binary {
-                tracing::info!("Using streaming ClickHouse writer (RowBinary)");
-                let client = Arc::new(ClickhouseClient::new(
-                    &self.storage_config.clickhouse_cluster,
-                    &self.storage_config.clickhouse_table_name,
-                    self.storage_config.name.clone(),
-                    insert_format,
-                    insert_columns,
-                ));
-                Box::new(StreamingClickhouseWriter::new(
-                    next_step,
-                    client,
-                    false,
-                    self.clickhouse_concurrency.handle(),
-                    self.max_batch_size,
-                    self.max_batch_time,
-                    compute_batch_size,
-                ))
-            } else {
-                let writer = ClickhouseWriterStep::new(
-                    next_step,
-                    self.storage_config.clickhouse_cluster.clone(),
-                    self.storage_config.clickhouse_table_name.clone(),
-                    false,
-                    &self.clickhouse_concurrency,
-                    self.storage_config.name.clone(),
-                    insert_format,
-                    insert_columns,
-                );
-
-                let accumulator = Arc::new(
-                    |batch: BytesInsertBatch<RowData>,
-                     small_batch: Message<BytesInsertBatch<RowData>>| {
-                        Ok(batch.merge(small_batch.into_payload()))
-                    },
-                );
-
-                Box::new(
-                    Reduce::new(
-                        writer,
-                        accumulator,
-                        Arc::new(move || {
-                            BytesInsertBatch::<RowData>::new(
-                                RowData::default(),
-                                None,
-                                None,
-                                None,
-                                Default::default(),
-                                CogsData::default(),
-                            )
-                        }),
-                        self.max_batch_size,
-                        self.max_batch_time,
-                        compute_batch_size,
-                        // we need to enable this to deal with storages where we skip 100% of values,
-                        // such as gen-metrics-gauges in s4s. we still need to commit there
-                    )
-                    .flush_empty_batches(true),
+        let next_step = Reduce::new(
+            next_step,
+            accumulator,
+            Arc::new(move || {
+                BytesInsertBatch::<RowData>::new(
+                    RowData::default(),
+                    None,
+                    None,
+                    None,
+                    Default::default(),
+                    CogsData::default(),
                 )
-            };
+            }),
+            self.max_batch_size,
+            self.max_batch_time,
+            compute_batch_size,
+            // we need to enable this to deal with storages where we skip 100% of values, such as
+            // gen-metrics-gauges in s4s. we still need to commit there
+        )
+        .flush_empty_batches(true);
 
         // RowBinary can only be emitted by the Rust processor (the Python path
         // always returns JSONEachRow bytes). If the storage opted into
