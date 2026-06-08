@@ -442,7 +442,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
 
                 routing_context.cluster_load_info = (
                     get_cluster_loadinfo()
-                    if state.get_config("storage_routing.enable_get_cluster_loadinfo", True)
+                    if state.get_config("storage_routing.enable_get_cluster_loadinfo", False)
                     else None
                 )
 
