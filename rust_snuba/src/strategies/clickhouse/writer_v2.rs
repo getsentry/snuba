@@ -1,6 +1,8 @@
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
+use bytes::Bytes;
+use futures::stream::Stream;
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, Response};
 use sentry_arroyo::processing::strategies::run_task_in_threads::{
@@ -259,6 +261,10 @@ impl ClickhouseClient {
         // across attempts, so paying the LZ4 cost per attempt would be wasted
         // work. `bytes::Bytes` makes the per-attempt clone cheap (refcount bump).
         let body_bytes = bytes::Bytes::from(lz4_compress(&body));
+        // Free the uncompressed buffer now; it would otherwise stay alive
+        // across every retry attempt and backoff sleep, holding ~3× the
+        // compressed size per in-flight send for the full send window.
+        drop(body);
 
         for attempt in 0..=retry_config.max_retries {
             let url = self.build_url();
@@ -342,15 +348,138 @@ impl ClickhouseClient {
 
         unreachable!("Loop should always return or bail before reaching here");
     }
+
+    /// Stream `body_stream` as the POST body for the first attempt; on
+    /// failure, retry from `retry_buf` instead of re-running the stream.
+    ///
+    /// Used by `StreamingClickhouseWriter`. The caller MUST tee every
+    /// chunk it pushes into `body_stream` into `retry_buf` (in the same
+    /// order). The first attempt consumes `body_stream` exactly once and
+    /// emits the chunks straight to the wire — we never buffer them
+    /// ourselves. Retries replay the already-compressed chunks from
+    /// `retry_buf` via another streamed body, so memory peaks at the
+    /// size of the compressed batch (~30% of source) instead of the
+    /// uncompressed source + compressed copy the buffered `send` path
+    /// holds.
+    ///
+    /// `body_stream` must end only when the entire batch has been
+    /// pushed: a mid-batch close lands a truncated body on the server,
+    /// which then rejects every retry too (we'd be replaying a partial
+    /// `retry_buf`). Surface caller-side cancellations as errors and
+    /// don't enter this function.
+    pub async fn send_streamed<S>(
+        &self,
+        body_stream: S,
+        retry_buf: Arc<parking_lot::Mutex<Vec<Bytes>>>,
+        retry_config: RetryConfig,
+    ) -> anyhow::Result<Response>
+    where
+        S: Stream<Item = Result<Bytes, std::io::Error>> + Send + 'static,
+    {
+        // The first attempt consumes the live stream; retries can't
+        // replay it, so we stash it here and `take()` on attempt 0.
+        let mut first_body: Option<reqwest::Body> = Some(reqwest::Body::wrap_stream(body_stream));
+
+        for attempt in 0..=retry_config.max_retries {
+            let url = self.build_url();
+
+            let body = match first_body.take() {
+                Some(b) => b,
+                None => {
+                    // Clone is an Arc bump per chunk — no payload copy.
+                    let chunks: Vec<Bytes> = retry_buf.lock().clone();
+                    reqwest::Body::wrap_stream(futures::stream::iter(
+                        chunks.into_iter().map(Ok::<_, std::io::Error>),
+                    ))
+                }
+            };
+
+            let res = self
+                .client
+                .post(&url)
+                .headers(self.headers.clone())
+                .query(&[("query", &self.query)])
+                .body(body)
+                .send()
+                .await;
+
+            match res {
+                Ok(response) => {
+                    if response.status() == reqwest::StatusCode::OK {
+                        return Ok(response);
+                    } else {
+                        let status = response.status().to_string();
+                        let error_text = response
+                            .text()
+                            .await
+                            .unwrap_or_else(|_| "unknown error".to_string());
+
+                        if attempt == retry_config.max_retries {
+                            counter!("rust_consumer.clickhouse_insert_error", 1, "status" => status, "retried" => "false");
+                            anyhow::bail!(
+                                "error writing to clickhouse after {} attempts: {}",
+                                retry_config.max_retries + 1,
+                                error_text
+                            );
+                        }
+
+                        counter!("rust_consumer.clickhouse_insert_error", 1, "status" => status, "retried" => "true");
+                        tracing::warn!(
+                            "Streamed ClickHouse write failed (attempt {}/{}): status={}, error={}",
+                            attempt + 1,
+                            retry_config.max_retries + 1,
+                            status,
+                            error_text
+                        );
+                    }
+                }
+                Err(e) => {
+                    if attempt == retry_config.max_retries {
+                        counter!("rust_consumer.clickhouse_insert_error", 1, "status" => "network_error", "retried" => "false");
+                        anyhow::bail!(
+                            "error writing to clickhouse after {} attempts: {}",
+                            retry_config.max_retries + 1,
+                            e
+                        );
+                    }
+                    counter!("rust_consumer.clickhouse_insert_error", 1, "status" => "network_error", "retried" => "true");
+
+                    tracing::warn!(
+                        "Streamed ClickHouse write failed (attempt {}/{}): {}",
+                        attempt + 1,
+                        retry_config.max_retries + 1,
+                        e
+                    );
+                }
+            }
+
+            if attempt < retry_config.max_retries {
+                let backoff_ms =
+                    retry_config.initial_backoff_ms * (2_u64.pow(attempt as u32) as f64);
+                let jitter = rand::random::<f64>() * retry_config.jitter_factor
+                    - retry_config.jitter_factor / 2.0;
+                let delay = Duration::from_millis((backoff_ms * (1.0 + jitter)).round() as u64);
+                tracing::debug!(
+                    "Retrying streamed write in {:?} (attempt {}/{})",
+                    delay,
+                    attempt + 1,
+                    retry_config.max_retries
+                );
+                tokio::time::sleep(delay).await;
+            }
+        }
+
+        unreachable!("Loop should always return or bail before reaching here");
+    }
 }
 
 /// ClickHouse native compressed-block size cap. Matches the server's
 /// `max_compress_block_size` default; sending larger blocks risks tripping
 /// server-side decompress limits.
-const LZ4_BLOCK_SIZE: usize = 1024 * 1024;
+pub(super) const LZ4_BLOCK_SIZE: usize = 1024 * 1024;
 
 /// ClickHouse compression method identifier for LZ4 in the native block header.
-const LZ4_METHOD_BYTE: u8 = 0x82;
+pub(super) const LZ4_METHOD_BYTE: u8 = 0x82;
 
 /// CityHash128 over `data` in the wire layout ClickHouse's
 /// `CompressedReadBuffer` reads: 8 little-endian bytes of the low 64-bit half
@@ -366,7 +495,7 @@ const LZ4_METHOD_BYTE: u8 = 0x82;
 /// We use CityHash 1.0.2 — that's the variant ClickHouse bundles for
 /// compression checksums; the 110 variant is reserved for newer hash columns
 /// and is NOT interchangeable here.
-fn ch_compression_checksum(data: &[u8]) -> [u8; 16] {
+pub(super) fn ch_compression_checksum(data: &[u8]) -> [u8; 16] {
     cityhash_rs::cityhash_102_128(data)
         .rotate_left(64)
         .to_le_bytes()
@@ -664,5 +793,62 @@ mod tests {
         // Error message should mention the number of attempts
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("after 5 attempts"));
+    }
+
+    #[tokio::test]
+    async fn test_send_streamed_retries_from_buffered_chunks() {
+        crate::testutils::initialize_python();
+        // Point at a port nothing is listening on so every attempt errors
+        // out at the transport layer. That exercises the retry loop and,
+        // importantly, the "first attempt drains the stream → later
+        // attempts replay from retry_buf" branch.
+        let config = ClickhouseConfig {
+            host: "127.0.0.1".to_string(),
+            port: 9000,
+            secure: false,
+            http_port: 9999,
+            user: "default".to_string(),
+            password: "".to_string(),
+            database: "default".to_string(),
+        };
+
+        let client = ClickhouseClient::new(
+            &config,
+            "test_table",
+            "test_storage".to_string(),
+            InsertFormat::RowBinary,
+            Some(&["col"]),
+        );
+
+        // Simulate the caller's tee: the stream yields chunks that have
+        // already been recorded in `retry_buf`. Retries replay from this
+        // buffer rather than re-running the (consumed) stream.
+        let retry_buf = Arc::new(parking_lot::Mutex::new(vec![
+            Bytes::from_static(b"chunk-a"),
+            Bytes::from_static(b"chunk-b"),
+        ]));
+        let stream_chunks = retry_buf.lock().clone();
+        let body_stream =
+            futures::stream::iter(stream_chunks.into_iter().map(Ok::<_, std::io::Error>));
+
+        let start = Instant::now();
+        let result = client
+            .send_streamed(
+                body_stream,
+                retry_buf.clone(),
+                RetryConfig {
+                    initial_backoff_ms: 100.0,
+                    max_retries: 4,
+                    jitter_factor: 0.1,
+                },
+            )
+            .await;
+        let elapsed = start.elapsed();
+
+        assert!(result.is_err());
+        // 100 + 200 + 400 + 800 = 1500ms nominal, minus 10% jitter floor.
+        assert!(elapsed >= Duration::from_millis(1350));
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("after 5 attempts"), "got: {err}");
     }
 }
