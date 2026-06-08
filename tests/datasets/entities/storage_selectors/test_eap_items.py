@@ -88,34 +88,3 @@ def test_selects_downsample_ro_when_enabled() -> None:
         assert selected_storage.storage == get_storage(StorageKey.EAP_ITEMS_DOWNSAMPLE_512_RO)
     finally:
         state.delete_config("enable_eap_readonly_table")
-
-
-@pytest.mark.redis_db
-def test_forced_downsample_killswtich_tier_1() -> None:
-    unimportant_query = Query(from_clause=EAP_ITEMS_ENTITY)
-    query_settings = HTTPQuerySettings()
-    query_settings.set_sampling_tier(Tier.TIER_1)
-
-    state.set_config("forced_downsample_killswitch", 1)
-    try:
-        selected_storage = EAPItemsStorageSelector().select_storage(
-            unimportant_query, query_settings, EAP_ITEMS_STORAGE_CONNECTIONS
-        )
-        assert selected_storage.storage == get_storage(StorageKey.EAP_ITEMS_DOWNSAMPLE_8)
-    finally:
-        state.delete_config("forced_downsample_killswitch")
-
-
-@pytest.mark.redis_db
-def test_forced_downsample_killswtich_no_tier() -> None:
-    unimportant_query = Query(from_clause=EAP_ITEMS_ENTITY)
-    query_settings = HTTPQuerySettings()
-
-    state.set_config("forced_downsample_killswitch", 1)
-    try:
-        selected_storage = EAPItemsStorageSelector().select_storage(
-            unimportant_query, query_settings, EAP_ITEMS_STORAGE_CONNECTIONS
-        )
-        assert selected_storage.storage == get_storage(StorageKey.EAP_ITEMS_DOWNSAMPLE_8)
-    finally:
-        state.delete_config("forced_downsample_killswitch")

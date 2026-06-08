@@ -269,6 +269,12 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
     def _get_default_config_definitions(self) -> list[Configuration]:
         return cast(list[Configuration], self._default_config_definitions)
 
+    def _get_default_routing_decision_tier(self) -> Tier:
+        if state.get_int_config("forced_downsample_killswitch", 0):
+            return Tier.TIER_8
+
+        return Tier.TIER_1
+
     def additional_config_definitions(self) -> list[Configuration]:
         return self._overridden_additional_config_definitions
 
@@ -410,6 +416,8 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             OutcomesBasedRoutingStrategy,
         )
 
+        default_tier = self._get_default_routing_decision_tier()
+
         with sentry_sdk.start_span(op="decide_tier") as span:
             try:
                 routing_context.timer.mark(_START_ESTIMATION_MARK)
@@ -426,7 +434,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 routing_decision = RoutingDecision(
                     routing_context=routing_context,
                     strategy=self,
-                    tier=Tier.TIER_1,
+                    tier=default_tier,
                     clickhouse_settings=combined_allocation_policies_recommendations["settings"],
                     can_run=combined_allocation_policies_recommendations["can_run"],
                     is_throttled=combined_allocation_policies_recommendations["is_throttled"],
@@ -457,7 +465,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 routing_decision = RoutingDecision(
                     routing_context=routing_context,
                     strategy=OutcomesBasedRoutingStrategy(),
-                    tier=Tier.TIER_1,
+                    tier=default_tier,
                     can_run=True,
                 )
 

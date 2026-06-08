@@ -18,13 +18,6 @@ class EAPItemsStorageSelector(QueryStorageSelector):
         storage_connections: Sequence[EntityStorageConnection],
     ) -> EntityStorageConnection:
         assert isinstance(query_settings, HTTPQuerySettings)
-        # forced_downsample_killswitch prevents any select queries
-        # from going to TIER_1 across all item types. To be used
-        # sparingly during incidents if Clickhouse load is too high
-        if state.get_int_config(
-            "forced_downsample_killswitch", 0
-        ) and query_settings.get_sampling_tier() in (Tier.TIER_1, Tier.TIER_NO_TIER):
-            query_settings.set_sampling_tier(Tier.TIER_8)
 
         tier = query_settings.get_sampling_tier()
 
