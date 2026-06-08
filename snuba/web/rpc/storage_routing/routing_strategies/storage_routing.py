@@ -278,8 +278,8 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             return Tier.TIER_64
         elif tier_int == 8:
             return Tier.TIER_8
-
-        return Tier.TIER_1
+        else:
+            return Tier.TIER_1
 
     def additional_config_definitions(self) -> list[Configuration]:
         return self._overridden_additional_config_definitions

@@ -265,7 +265,7 @@ def test_routing_decision_forced_downsample_killswitch() -> None:
         routing_decision = AlwaysTier1RoutingStrategy().get_routing_decision(routing_context)
         assert routing_decision.tier == Tier.TIER_8
     finally:
-        state.delete_config("forced_downsample_killswitch")
+        state.delete_config("default_tier")
 
 
 @pytest.mark.redis_db
