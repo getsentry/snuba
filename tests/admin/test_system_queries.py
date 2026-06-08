@@ -1,3 +1,5 @@
+import ast
+from pathlib import Path
 from typing import Sequence
 from unittest.mock import patch
 
@@ -381,3 +383,88 @@ def test_sudo_mode_skips_experimental_analyzer(sql_query: str, sudo_mode: bool) 
             assert "allow_experimental_analyzer" in explain_query, (
                 f"Non-sudo mode should use experimental analyzer, but got: {explain_query}"
             )
+
+
+def _find_clickhouse_pool_calls(tree: ast.AST) -> list[tuple[ast.Call, list[str]]]:
+    """
+    Walks an AST and returns every `ClickhousePool(...)` call site, paired
+    with the chain of enclosing function names (outermost first) so the
+    regression guard below can assert *where* construction happens.
+    """
+    results: list[tuple[ast.Call, list[str]]] = []
+
+    class Visitor(ast.NodeVisitor):
+        def __init__(self) -> None:
+            self.scope: list[str] = []
+
+        def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+            self.scope.append(node.name)
+            self.generic_visit(node)
+            self.scope.pop()
+
+        def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+            self.scope.append(node.name)
+            self.generic_visit(node)
+            self.scope.pop()
+
+        def visit_Call(self, node: ast.Call) -> None:
+            func = node.func
+            name = (
+                func.id
+                if isinstance(func, ast.Name)
+                else func.attr
+                if isinstance(func, ast.Attribute)
+                else None
+            )
+            if name == "ClickhousePool":
+                results.append((node, list(self.scope)))
+            self.generic_visit(node)
+
+    Visitor().visit(tree)
+    return results
+
+
+def test_no_direct_clickhouse_pool_construction_in_admin() -> None:
+    """
+    Defense-in-depth for EAP-488: ClickhousePool ships the configured
+    user/password in the first hello packet of the native protocol, so any
+    admin code path that constructs one against a caller-supplied host
+    leaks credentials to whatever listener answers. `_build_validated_pool`
+    in snuba/admin/clickhouse/common.py is the single chokepoint that runs
+    `_validate_node` first — every other admin module must go through it.
+
+    This test enforces that structural invariant by AST-walking every
+    snuba/admin/**/*.py file:
+
+    * common.py may only construct ClickhousePool from inside
+      `_build_validated_pool`.
+    * No other admin module may construct ClickhousePool at all.
+
+    If this fails, a new caller has likely re-introduced the vulnerability.
+    """
+    admin_root = Path(__file__).resolve().parents[2] / "snuba" / "admin"
+    assert admin_root.is_dir(), f"expected admin root at {admin_root}"
+
+    common_path = admin_root / "clickhouse" / "common.py"
+    offenders: list[str] = []
+
+    for py_file in sorted(admin_root.rglob("*.py")):
+        tree = ast.parse(py_file.read_text(), filename=str(py_file))
+        for call, scope in _find_clickhouse_pool_calls(tree):
+            rel = py_file.relative_to(admin_root.parent.parent)
+            location = f"{rel}:{call.lineno}"
+            if py_file == common_path:
+                if scope != ["_build_validated_pool"]:
+                    offenders.append(
+                        f"{location} constructs ClickhousePool inside "
+                        f"{'.'.join(scope) or '<module>'} — must be inside "
+                        "_build_validated_pool so _validate_node runs first."
+                    )
+            else:
+                offenders.append(
+                    f"{location} constructs ClickhousePool directly — call "
+                    "_build_validated_pool (or a helper that wraps it) so "
+                    "_validate_node guards the host before credentials are sent."
+                )
+
+    assert not offenders, "\n".join(offenders)

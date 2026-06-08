@@ -79,6 +79,34 @@ def _validate_node(
 NODE_CONNECTIONS: MutableMapping[str, ClickhousePool] = {}
 
 
+def _build_validated_pool(
+    clickhouse_host: str,
+    clickhouse_port: int,
+    storage_name: str,
+    cluster: ClickhouseCluster,
+    database: str,
+    username: str,
+    password: str,
+    client_settings: ClickhouseClientSettings,
+) -> ClickhousePool:
+    # Single chokepoint for admin ClickhousePool construction. ClickhousePool
+    # ships the user/password in the first hello packet of the native protocol,
+    # so an unvalidated host means credentials reach whatever listener answers.
+    # All admin helpers must go through here — never call ClickhousePool
+    # directly from this module. The regression test
+    # test_no_direct_clickhouse_pool_construction_in_admin enforces this.
+    _validate_node(clickhouse_host, clickhouse_port, cluster, storage_name)
+    return ClickhousePool(
+        clickhouse_host,
+        clickhouse_port,
+        username,
+        password,
+        database,
+        max_pool_size=2,
+        client_settings=client_settings.value.settings,
+    )
+
+
 def get_ro_node_connection(
     clickhouse_host: str,
     clickhouse_port: int,
@@ -93,7 +121,6 @@ def get_ro_node_connection(
 
     cluster = storage.get_cluster()
     database = cluster.get_database()
-    _validate_node(clickhouse_host, clickhouse_port, cluster, storage_name)
 
     assert client_settings in {
         ClickhouseClientSettings.QUERY,
@@ -115,14 +142,15 @@ def get_ro_node_connection(
         username = settings.CLICKHOUSE_TRACE_USER
         password = settings.CLICKHOUSE_TRACE_PASSWORD
 
-    connection = ClickhousePool(
+    connection = _build_validated_pool(
         clickhouse_host,
         clickhouse_port,
+        storage_name,
+        cluster,
+        database,
         username,
         password,
-        database,
-        max_pool_size=2,
-        client_settings=client_settings.value.settings,
+        client_settings,
     )
     NODE_CONNECTIONS[key] = connection
     return connection
@@ -162,17 +190,17 @@ def get_sudo_node_connection(
 
     cluster = storage.get_cluster()
     database = cluster.get_database()
-    _validate_node(clickhouse_host, clickhouse_port, cluster, storage_name)
+    (clickhouse_user, clickhouse_password) = cluster.get_credentials()
 
-    (clickhouse_user, clickhouse_password) = storage.get_cluster().get_credentials()
-    connection = ClickhousePool(
+    connection = _build_validated_pool(
         clickhouse_host,
         clickhouse_port,
+        storage_name,
+        cluster,
+        database,
         clickhouse_user,
         clickhouse_password,
-        database,
-        max_pool_size=2,
-        client_settings=client_settings.value.settings,
+        client_settings,
     )
     NODE_CONNECTIONS[key] = connection
     return connection
@@ -192,21 +220,16 @@ def get_clusterless_node_connection(
     if key in NODE_CONNECTIONS:
         return NODE_CONNECTIONS[key]
 
-    # ClickhousePool sends the configured user/password in the very first hello
-    # packet on connection — if we let an unvalidated host/port through, an
-    # attacker who controls the listener at that address sees those credentials
-    # before any query runs.
-    _validate_node(clickhouse_host, clickhouse_port, cluster, storage_name)
-
-    (clickhouse_user, clickhouse_password) = storage.get_cluster().get_credentials()
-    connection = ClickhousePool(
+    (clickhouse_user, clickhouse_password) = cluster.get_credentials()
+    connection = _build_validated_pool(
         clickhouse_host,
         clickhouse_port,
+        storage_name,
+        cluster,
+        database,
         clickhouse_user,
         clickhouse_password,
-        database,
-        max_pool_size=2,
-        client_settings=client_settings.value.settings,
+        client_settings,
     )
     NODE_CONNECTIONS[key] = connection
     return connection
@@ -231,18 +254,15 @@ def get_ro_clusterless_node_connection(
         ClickhouseClientSettings.QUERYLOG,
     }, "ro clusterless connections must use a read-only client settings profile"
 
-    # See get_clusterless_node_connection: even readonly credentials leak in the
-    # hello packet, so reject hosts that don't belong to the storage's cluster.
-    _validate_node(clickhouse_host, clickhouse_port, cluster, storage_name)
-
-    connection = ClickhousePool(
+    connection = _build_validated_pool(
         clickhouse_host,
         clickhouse_port,
+        storage_name,
+        cluster,
+        database,
         settings.CLICKHOUSE_READONLY_USER,
         settings.CLICKHOUSE_READONLY_PASSWORD,
-        database,
-        max_pool_size=2,
-        client_settings=client_settings.value.settings,
+        client_settings,
     )
     NODE_CONNECTIONS[key] = connection
     return connection
