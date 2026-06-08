@@ -240,7 +240,7 @@ def test_routing_strategy_selects_tier_1_if_highest_accuracy_mode() -> None:
 
 @pytest.mark.redis_db
 def test_routing_decision_forced_downsample_killswitch() -> None:
-    state.set_config("forced_downsample_killswitch", 1)
+    state.set_config("default_tier", 8)
 
     try:
         ts = Timestamp()

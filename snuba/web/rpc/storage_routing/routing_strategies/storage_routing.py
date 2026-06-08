@@ -270,7 +270,13 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         return cast(list[Configuration], self._default_config_definitions)
 
     def _get_default_routing_decision_tier(self) -> Tier:
-        if state.get_int_config("forced_downsample_killswitch", 0):
+        tier_int = state.get_int_config("default_tier", 1)
+
+        if tier_int == 512:
+            return Tier.TIER_512
+        elif tier_int == 64:
+            return Tier.TIER_64
+        elif tier_int == 8:
             return Tier.TIER_8
 
         return Tier.TIER_1
