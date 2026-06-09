@@ -8,6 +8,7 @@ from typing import (
     Callable,
     Dict,
     List,
+    NamedTuple,
     Optional,
     TypeAlias,
     TypedDict,
@@ -70,12 +71,38 @@ CBRS_HASH = "cbrs"
 RoutedRequestType = Union[TimeSeriesRequest, TraceItemTableRequest]
 ClickhouseQuerySettings = Dict[str, Any]
 
+
+class _OrgOverridableSetting(NamedTuple):
+    """One entry in the per-org ClickHouse setting override allowlist.
+
+    `unset_sentinel` is the value stored when no override is configured — chosen
+    so it cannot collide with a legitimate value an operator might want to set
+    (e.g. ClickHouse treats max_threads=0 as 'use all available cores', so 0 is
+    a real value and -1 is the sentinel). `description` is the operator-facing
+    string shown in the admin UI for this setting's override.
+    """
+
+    value_type: type
+    unset_sentinel: Any
+    description: str
+
+
 # Allowlist of ClickHouse settings that operators may override per-organization
 # via routing-strategy config. Each entry adds an `organization_<name>_override`
 # Configuration to every routing strategy, keyed by organization_id. The override
 # is applied after _update_routing_decision and replaces any prior value.
-ORG_OVERRIDABLE_CLICKHOUSE_SETTINGS: dict[str, type] = {
-    "max_threads": int,
+ORG_OVERRIDABLE_CLICKHOUSE_SETTINGS: dict[str, _OrgOverridableSetting] = {
+    "max_threads": _OrgOverridableSetting(
+        value_type=int,
+        unset_sentinel=-1,
+        description=(
+            "Per-organization_id override for the ClickHouse max_threads setting. "
+            "Replaces any value set by allocation policies or the routing strategy, "
+            "including raising it above the policy-derived value. Default -1 means "
+            "no override; note that 0 is a legitimate value (ClickHouse interprets "
+            "max_threads=0 as 'use all available physical cores')."
+        ),
+    ),
 }
 
 
@@ -267,19 +294,13 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 default=100,
             ),
         ]
-        for setting_name, value_type in ORG_OVERRIDABLE_CLICKHOUSE_SETTINGS.items():
-            sentinel = value_type()
+        for setting_name, setting in ORG_OVERRIDABLE_CLICKHOUSE_SETTINGS.items():
             self._default_config_definitions.append(
                 RoutingStrategyConfig(
                     name=f"organization_{setting_name}_override",
-                    description=(
-                        f"Per-organization_id override for the ClickHouse '{setting_name}' "
-                        f"setting. Replaces any value set by allocation policies or the "
-                        f"routing strategy (including raising above the policy-derived value). "
-                        f"Default {sentinel!r} means no override."
-                    ),
-                    value_type=value_type,
-                    default=sentinel,
+                    description=setting.description,
+                    value_type=setting.value_type,
+                    default=setting.unset_sentinel,
                     param_types={"organization_id": int},
                 )
             )
@@ -406,12 +427,12 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         if org_id is None:
             return {}
         overrides: dict[str, Any] = {}
-        for setting_name, value_type in ORG_OVERRIDABLE_CLICKHOUSE_SETTINGS.items():
+        for setting_name, setting in ORG_OVERRIDABLE_CLICKHOUSE_SETTINGS.items():
             value = self.get_config_value(
                 f"organization_{setting_name}_override",
                 {"organization_id": org_id},
             )
-            if value != value_type():
+            if value != setting.unset_sentinel:
                 overrides[setting_name] = value
         return overrides
 

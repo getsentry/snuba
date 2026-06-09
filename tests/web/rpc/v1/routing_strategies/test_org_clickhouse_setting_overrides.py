@@ -81,6 +81,20 @@ def test_org_override_can_raise_above_allocation_policy_value() -> None:
 
 @pytest.mark.eap
 @pytest.mark.redis_db
+def test_override_value_of_zero_is_honored() -> None:
+    # ClickHouse treats max_threads=0 as "use all available cores", so 0 is a
+    # legitimate override value — must not be mistaken for the unset sentinel.
+    strategy = OutcomesBasedRoutingStrategy()
+    strategy.set_config_value("organization_max_threads_override", 0, {"organization_id": _ORG_ID})
+    routing_decision = strategy.get_routing_decision(_build_context())
+    assert routing_decision.clickhouse_settings["max_threads"] == 0
+    assert routing_decision.routing_context.extra_info["org_clickhouse_setting_overrides"] == {
+        "max_threads": 0
+    }
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
 def test_override_scoped_to_organization_id() -> None:
     strategy = OutcomesBasedRoutingStrategy()
     strategy.set_config_value("organization_max_threads_override", 4, {"organization_id": _ORG_ID})
