@@ -70,6 +70,14 @@ CBRS_HASH = "cbrs"
 RoutedRequestType = Union[TimeSeriesRequest, TraceItemTableRequest]
 ClickhouseQuerySettings = Dict[str, Any]
 
+# Allowlist of ClickHouse settings that operators may override per-organization
+# via routing-strategy config. Each entry adds an `organization_<name>_override`
+# Configuration to every routing strategy, keyed by organization_id. The override
+# is applied after _update_routing_decision and replaces any prior value.
+ORG_OVERRIDABLE_CLICKHOUSE_SETTINGS: dict[str, type] = {
+    "max_threads": int,
+}
+
 
 @dataclass
 class RoutingContext:
@@ -259,6 +267,22 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 default=100,
             ),
         ]
+        for setting_name, value_type in ORG_OVERRIDABLE_CLICKHOUSE_SETTINGS.items():
+            sentinel = value_type()
+            self._default_config_definitions.append(
+                RoutingStrategyConfig(
+                    name=f"organization_{setting_name}_override",
+                    description=(
+                        f"Per-organization_id override for the ClickHouse '{setting_name}' "
+                        f"setting. Replaces any value set by allocation policies or the "
+                        f"routing strategy (including raising above the policy-derived value). "
+                        f"Default {sentinel!r} means no override."
+                    ),
+                    value_type=value_type,
+                    default=sentinel,
+                    param_types={"organization_id": int},
+                )
+            )
         self._overridden_additional_config_definitions = (
             self._get_overridden_additional_config_defaults(default_config_overrides)
         )
@@ -375,6 +399,22 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
     ) -> None:
         raise NotImplementedError
 
+    def _get_org_clickhouse_setting_overrides(
+        self, tenant_ids: dict[str, str | int]
+    ) -> dict[str, Any]:
+        org_id = tenant_ids.get("organization_id")
+        if org_id is None:
+            return {}
+        overrides: dict[str, Any] = {}
+        for setting_name, value_type in ORG_OVERRIDABLE_CLICKHOUSE_SETTINGS.items():
+            value = self.get_config_value(
+                f"organization_{setting_name}_override",
+                {"organization_id": org_id},
+            )
+            if value != value_type():
+                overrides[setting_name] = value
+        return overrides
+
     def _get_combined_allocation_policies_recommendations(
         self, policy_recommendations: List[QuotaAllowance]
     ) -> CombinedAllocationPoliciesRecommendations:
@@ -453,6 +493,13 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 )
 
                 self._update_routing_decision(routing_decision)
+
+                org_overrides = self._get_org_clickhouse_setting_overrides(
+                    routing_context.tenant_ids
+                )
+                if org_overrides:
+                    routing_decision.clickhouse_settings.update(org_overrides)
+                    routing_context.extra_info["org_clickhouse_setting_overrides"] = org_overrides
 
                 routing_context.timer.mark(_END_ESTIMATION_MARK)
                 self._record_value_in_span_and_DD(
