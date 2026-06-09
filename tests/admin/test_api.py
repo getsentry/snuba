@@ -540,7 +540,17 @@ def test_get_routing_strategy_configs(admin_api: FlaskClient) -> None:
         "value": 50,
         "params": {},
     } in strategy_data["configurations"]
-    assert strategy_data["optional_config_definitions"] == []
+    assert {
+        "name": "organization_max_threads_override",
+        "type": "int",
+        "default": 0,
+        "description": (
+            "Per-organization_id override for the ClickHouse 'max_threads' setting. "
+            "Replaces any value set by allocation policies or the routing strategy "
+            "(including raising above the policy-derived value). Default 0 means no override."
+        ),
+        "params": [{"name": "organization_id", "type": "int"}],
+    } in strategy_data["optional_config_definitions"]
 
     # Check policies data
     assert len(strategy_data["policies_data"]) == 2
