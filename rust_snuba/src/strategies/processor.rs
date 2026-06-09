@@ -14,6 +14,7 @@ use sentry_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition};
 use sentry_kafka_schemas::{Schema, SchemaError, SchemaType};
 
 use crate::config::ProcessorConfig;
+use crate::processors::utils::SilencedDLQMessage;
 use crate::processors::{ProcessingFunction, ProcessingFunctionWithReplacements};
 use crate::types::{
     BytesInsertBatch, CommitLogEntry, CommitLogOffsets, InsertBatch, InsertOrReplacement,
@@ -242,6 +243,16 @@ impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
 
         let processed_message = self.process_payload(msg).map_err(|error| {
             counter!("invalid_message");
+
+            // Some failures are expected DLQ outcomes that we don't want to
+            // report to Sentry as errors. These surface as `SilencedDLQMessage`.
+            // NOTE: `downcast_ref` only matches the outermost error, so the
+            // `SilencedDLQMessage` must be the root error — do not wrap it in
+            // `.context(...)` anywhere on the processing path, or it will be
+            // reported to Sentry instead of silenced.
+            if error.downcast_ref::<SilencedDLQMessage>().is_some() {
+                return maybe_err;
+            }
 
             sentry::with_scope(
                 |scope| {

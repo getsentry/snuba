@@ -16,7 +16,7 @@ use sentry_protos::snuba::v1::{ArrayValue, TraceItem, TraceItemType};
 use crate::config::ProcessorConfig;
 use crate::processors::utils::{
     enforce_retention, get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs,
-    record_invalid_timestamp_metric,
+    record_invalid_timestamp_metric, SilencedDLQMessage,
 };
 use crate::runtime_config::get_str_config;
 use crate::strategies::clickhouse::rowbinary;
@@ -82,9 +82,12 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
                 if should_dlq_for_prior_partition(event_ts, now, grace_min) {
                     let item_type_str = item_type_name(item_type);
                     counter!("eap_items.messages.dlqed_prior_partition", 1, "item_type" => item_type_str);
-                    anyhow::bail!(
+                    // `SilencedDLQMessage` must remain the root error: the processor
+                    // strategy silences it via `downcast_ref`, which only matches the
+                    // outermost error. Do not wrap this in `.context(...)`.
+                    anyhow::bail!(SilencedDLQMessage::new(format!(
                         "eap-items message DLQed: event timestamp {event_ts} is before the prior weekly partition boundary; routed to DLQ"
-                    );
+                    )));
                 }
             }
         }
