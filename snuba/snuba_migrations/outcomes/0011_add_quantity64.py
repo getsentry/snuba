@@ -20,14 +20,14 @@ class Migration(ClickhouseNodeMigration):
             AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_raw_local",
-                column=Column("quantity_64", schemas.UInt(64, modifiers=None)),
+                column=Column("quantity64", schemas.UInt(64, modifiers=None)),
                 after="quantity",
                 target=OperationTarget.LOCAL,
             ),
             AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_raw_dist",
-                column=Column("quantity_64", schemas.UInt(64, modifiers=None)),
+                column=Column("quantity64", schemas.UInt(64, modifiers=None)),
                 after="quantity",
                 target=OperationTarget.DISTRIBUTED,
             ),
@@ -38,13 +38,13 @@ class Migration(ClickhouseNodeMigration):
             DropColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_raw_dist",
-                column_name="quantity_64",
+                column_name="quantity64",
                 target=OperationTarget.DISTRIBUTED,
             ),
             DropColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_raw_local",
-                column_name="quantity_64",
+                column_name="quantity64",
                 target=OperationTarget.LOCAL,
             ),
         ]
