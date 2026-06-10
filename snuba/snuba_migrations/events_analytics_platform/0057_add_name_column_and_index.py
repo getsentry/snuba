@@ -89,28 +89,40 @@ class Migration(migration.ClickhouseNodeMigration):
             ]
         )
 
-        ops.append(
-            operations.AddIndex(
-                storage_set=storage_set,
-                table_name=local_table_name,
-                index_name=index_name,
-                index_expression=index_expression,
-                index_type=index_type,
-                granularity=index_granularity,
-                target=OperationTarget.LOCAL,
-            )
+        local_table_names = [local_table_name] + [
+            f"eap_items_1_downsample_{sampling_weight}_local"
+            for sampling_weight in sampling_weights
+        ]
+        ops.extend(
+            [
+                operations.AddIndex(
+                    storage_set=storage_set,
+                    table_name=table_name,
+                    index_name=index_name,
+                    index_expression=index_expression,
+                    index_type=index_type,
+                    granularity=index_granularity,
+                    target=OperationTarget.LOCAL,
+                )
+                for table_name in local_table_names
+            ]
         )
 
         return ops
 
     def backwards_ops(self) -> list[operations.SqlOperation]:
+        local_table_names = [local_table_name] + [
+            f"eap_items_1_downsample_{sampling_weight}_local"
+            for sampling_weight in sampling_weights
+        ]
         ops: list[operations.SqlOperation] = [
             operations.DropIndex(
                 storage_set=storage_set,
-                table_name=local_table_name,
+                table_name=table_name,
                 index_name=index_name,
                 target=OperationTarget.LOCAL,
             )
+            for table_name in local_table_names
         ]
 
         ops.extend(
