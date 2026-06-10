@@ -6,7 +6,6 @@ use schemars::JsonSchema;
 use sentry_arroyo::counter;
 use sentry_protos::snuba::v1::TraceItemType;
 use serde::{Deserialize, Deserializer, Serialize};
-use std::fmt;
 
 /// One week in seconds. The eap_items table is partitioned by
 /// `(retention_days, toMonday(timestamp))`, so any event more than a week
@@ -112,26 +111,9 @@ pub struct StringToIntDatetime64(
 /// reported to Sentry. The processor strategy downcasts to this type and skips
 /// the usual error-level logging / Sentry capture, treating the failure as an
 /// expected (silenced) DLQ outcome.
-#[derive(Debug, Clone)]
-pub struct SilencedDLQMessage {
-    err_msg: String,
-}
-
-impl SilencedDLQMessage {
-    pub fn new(err_msg: impl Into<String>) -> Self {
-        Self {
-            err_msg: err_msg.into(),
-        }
-    }
-}
-
-impl fmt::Display for SilencedDLQMessage {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.err_msg)
-    }
-}
-
-impl std::error::Error for SilencedDLQMessage {}
+#[derive(Debug, Clone, thiserror::Error)]
+#[error("message routed to DLQ (silenced)")]
+pub struct SilencedDLQMessage;
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]

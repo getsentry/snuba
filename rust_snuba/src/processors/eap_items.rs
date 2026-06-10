@@ -85,9 +85,7 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
                     // `SilencedDLQMessage` must remain the root error: the processor
                     // strategy silences it via `downcast_ref`, which only matches the
                     // outermost error. Do not wrap this in `.context(...)`.
-                    anyhow::bail!(SilencedDLQMessage::new(format!(
-                        "eap-items message DLQed: event timestamp {event_ts} is before the prior weekly partition boundary; routed to DLQ"
-                    )));
+                    anyhow::bail!(SilencedDLQMessage);
                 }
             }
         }

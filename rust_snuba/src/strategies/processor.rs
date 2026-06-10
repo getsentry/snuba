@@ -246,11 +246,7 @@ impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
 
             // Some failures are expected DLQ outcomes that we don't want to
             // report to Sentry as errors. These surface as `SilencedDLQMessage`.
-            // NOTE: `downcast_ref` only matches the outermost error, so the
-            // `SilencedDLQMessage` must be the root error — do not wrap it in
-            // `.context(...)` anywhere on the processing path, or it will be
-            // reported to Sentry instead of silenced.
-            if error.downcast_ref::<SilencedDLQMessage>().is_some() {
+            if error.is::<SilencedDLQMessage>() {
                 return maybe_err;
             }
 
