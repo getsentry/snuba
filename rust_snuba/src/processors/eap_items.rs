@@ -82,9 +82,6 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
                 if should_dlq_for_prior_partition(event_ts, now, grace_min) {
                     let item_type_str = item_type_name(item_type);
                     counter!("eap_items.messages.dlqed_prior_partition", 1, "item_type" => item_type_str);
-                    // `SilencedDLQMessage` must remain the root error: the processor
-                    // strategy silences it via `downcast_ref`, which only matches the
-                    // outermost error. Do not wrap this in `.context(...)`.
                     anyhow::bail!(SilencedDLQMessage);
                 }
             }
