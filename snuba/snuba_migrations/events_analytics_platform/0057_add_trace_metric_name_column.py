@@ -5,6 +5,7 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget
 
 storage_set = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
+ro_storage_set = StorageSetKey.EVENTS_ANALYTICS_PLATFORM_RO
 table_name_prefix = "eap_items_1"
 new_columns = [
     Column(
@@ -62,6 +63,27 @@ class Migration(migration.ClickhouseNodeMigration):
                 ]
             )
 
+        # The read-only distributed tables (created via `CREATE TABLE ... AS`)
+        # do not inherit schema changes from their source tables, so the column
+        # must be added explicitly for queries on the read path to see it.
+        ro_table_names = [f"{table_name_prefix}_dist_ro"] + [
+            f"eap_items_1_downsample_{sampling_weight}_dist_ro"
+            for sampling_weight in sampling_weights
+        ]
+        ops.extend(
+            [
+                operations.AddColumn(
+                    storage_set=ro_storage_set,
+                    table_name=ro_table_name,
+                    column=new_column,
+                    after=after,
+                    target=OperationTarget.DISTRIBUTED,
+                )
+                for ro_table_name in ro_table_names
+                for new_column in new_columns
+            ]
+        )
+
         return ops
 
     def backwards_ops(self) -> list[operations.SqlOperation]:
@@ -97,5 +119,22 @@ class Migration(migration.ClickhouseNodeMigration):
                     for new_column in new_columns
                 ]
             )
+
+        ro_table_names = [f"{table_name_prefix}_dist_ro"] + [
+            f"eap_items_1_downsample_{sampling_weight}_dist_ro"
+            for sampling_weight in sampling_weights
+        ]
+        ops.extend(
+            [
+                operations.DropColumn(
+                    storage_set=ro_storage_set,
+                    table_name=ro_table_name,
+                    column_name=new_column.name,
+                    target=OperationTarget.DISTRIBUTED,
+                )
+                for ro_table_name in ro_table_names
+                for new_column in new_columns
+            ]
+        )
 
         return ops
