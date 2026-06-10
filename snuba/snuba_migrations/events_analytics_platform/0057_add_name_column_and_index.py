@@ -9,7 +9,7 @@ ro_storage_set = StorageSetKey.EVENTS_ANALYTICS_PLATFORM_RO
 table_name_prefix = "eap_items_1"
 new_columns = [
     Column(
-        "trace_metric_name",
+        "name",
         String(
             Modifiers(
                 low_cardinality=True,
@@ -22,6 +22,11 @@ new_columns = [
 ]
 after = "attributes_array"
 sampling_weights = [8, 8**2, 8**3]
+local_table_name = f"{table_name_prefix}_local"
+index_name = "bf_name"
+index_expression = "name"
+index_type = "bloom_filter"
+index_granularity = 1
 
 
 class Migration(migration.ClickhouseNodeMigration):
@@ -84,22 +89,45 @@ class Migration(migration.ClickhouseNodeMigration):
             ]
         )
 
+        ops.append(
+            operations.AddIndex(
+                storage_set=storage_set,
+                table_name=local_table_name,
+                index_name=index_name,
+                index_expression=index_expression,
+                index_type=index_type,
+                granularity=index_granularity,
+                target=OperationTarget.LOCAL,
+            )
+        )
+
         return ops
 
     def backwards_ops(self) -> list[operations.SqlOperation]:
         ops: list[operations.SqlOperation] = [
-            operations.DropColumn(
+            operations.DropIndex(
                 storage_set=storage_set,
-                table_name=f"{table_name_prefix}_{suffix}",
-                column_name=new_column.name,
-                target=target,
+                table_name=local_table_name,
+                index_name=index_name,
+                target=OperationTarget.LOCAL,
             )
-            for suffix, target in [
-                ("dist", OperationTarget.DISTRIBUTED),
-                ("local", OperationTarget.LOCAL),
-            ]
-            for new_column in new_columns
         ]
+
+        ops.extend(
+            [
+                operations.DropColumn(
+                    storage_set=storage_set,
+                    table_name=f"{table_name_prefix}_{suffix}",
+                    column_name=new_column.name,
+                    target=target,
+                )
+                for suffix, target in [
+                    ("dist", OperationTarget.DISTRIBUTED),
+                    ("local", OperationTarget.LOCAL),
+                ]
+                for new_column in new_columns
+            ]
+        )
 
         for sampling_weight in sampling_weights:
             downsampled_table_prefix = f"eap_items_1_downsample_{sampling_weight}"
