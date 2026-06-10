@@ -14,6 +14,7 @@ use sentry_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition};
 use sentry_kafka_schemas::{Schema, SchemaError, SchemaType};
 
 use crate::config::ProcessorConfig;
+use crate::processors::utils::SilencedDLQMessage;
 use crate::processors::{ProcessingFunction, ProcessingFunctionWithReplacements};
 use crate::types::{
     BytesInsertBatch, CommitLogEntry, CommitLogOffsets, InsertBatch, InsertOrReplacement,
@@ -241,6 +242,12 @@ impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
         record_message_stats(payload);
 
         let processed_message = self.process_payload(msg).map_err(|error| {
+            // Some failures are expected DLQ outcomes that we don't want to
+            // report to Sentry as errors. These surface as `SilencedDLQMessage`.
+            if error.is::<SilencedDLQMessage>() {
+                return maybe_err;
+            }
+
             counter!("invalid_message");
 
             sentry::with_scope(
