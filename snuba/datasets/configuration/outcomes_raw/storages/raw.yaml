@@ -20,6 +20,7 @@ schema:
       { name: reason, type: String, args: { schema_modifiers: [nullable] } },
       { name: event_id, type: UUID, args: { schema_modifiers: [nullable] } },
       { name: quantity, type: UInt, args: { size: 32 } },
+      { name: quantity_64, type: UInt, args: { size: 64 } },
       { name: category, type: UInt, args: { size: 8 } },
     ]
   local_table_name: outcomes_raw_local
