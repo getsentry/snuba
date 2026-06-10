@@ -370,10 +370,8 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
             message, result_future = self.__queue.popleft()
 
-            result = result_future.future.result()
-
             transformed_message = self.__result_encoder.encode(
-                SubscriptionTaskResult(result_future.task, result)
+                SubscriptionTaskResult(result_future.task, result_future.future.result())
             )
 
             self.__next_step.submit(message.replace(transformed_message))
