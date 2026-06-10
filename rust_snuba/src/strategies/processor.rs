@@ -242,13 +242,13 @@ impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
         record_message_stats(payload);
 
         let processed_message = self.process_payload(msg).map_err(|error| {
-            counter!("invalid_message");
-
             // Some failures are expected DLQ outcomes that we don't want to
             // report to Sentry as errors. These surface as `SilencedDLQMessage`.
             if error.is::<SilencedDLQMessage>() {
                 return maybe_err;
             }
+
+            counter!("invalid_message");
 
             sentry::with_scope(
                 |scope| {

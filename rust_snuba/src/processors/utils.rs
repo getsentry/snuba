@@ -111,7 +111,7 @@ pub struct StringToIntDatetime64(
 /// reported to Sentry. The processor strategy downcasts to this type and skips
 /// the usual error-level logging / Sentry capture, treating the failure as an
 /// expected (silenced) DLQ outcome.
-#[derive(Debug, Clone, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 #[error("message routed to DLQ (silenced)")]
 pub struct SilencedDLQMessage;
 
