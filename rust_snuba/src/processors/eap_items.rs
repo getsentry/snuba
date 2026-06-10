@@ -261,6 +261,10 @@ struct EAPItem {
     trace_id: Uuid,
     item_id: u128,
 
+    /// Per-item-type primary name attribute, promoted to a dedicated column.
+    /// Sourced from `sentry.op` for spans and `sentry.name` for metrics.
+    name: String,
+
     #[serde(flatten)]
     attributes: AttributeMap,
 
@@ -279,6 +283,25 @@ impl TryFrom<TraceItem> for EAPItem {
 
     fn try_from(from: TraceItem) -> Result<Self, Self::Error> {
         let timestamp = from.timestamp.context("Expected a timestamp")?;
+
+        // Promote the per-item-type primary name attribute into a dedicated
+        // `name` column: `sentry.op` for spans, `sentry.name` for metrics.
+        // Read it before `from.attributes` is consumed by the loop below;
+        // the attribute is also still written to the attribute maps.
+        let item_type =
+            TraceItemType::try_from(from.item_type).unwrap_or(TraceItemType::Unspecified);
+        let name = match item_type {
+            TraceItemType::Span => Some("sentry.op"),
+            TraceItemType::Metric => Some("sentry.name"),
+            _ => None,
+        }
+        .and_then(|key| from.attributes.get(key))
+        .and_then(|value| match &value.value {
+            Some(Value::StringValue(string)) => Some(string.clone()),
+            _ => None,
+        })
+        .unwrap_or_default();
+
         let mut eap_item = EAPItem {
             organization_id: from.organization_id,
             project_id: from.project_id,
@@ -286,6 +309,7 @@ impl TryFrom<TraceItem> for EAPItem {
             trace_id: Uuid::parse_str(&from.trace_id)?,
             item_id: read_item_id(from.item_id)?,
             timestamp: timestamp.seconds as u32,
+            name,
             attributes: Default::default(),
             retention_days: Default::default(),
             downsampled_retention_days: Default::default(),
@@ -467,6 +491,8 @@ pub struct EAPItemRow {
     trace_id: Uuid,
     item_id: u128,
 
+    name: String,
+
     sampling_weight: u64,
     sampling_factor: f64,
     client_sample_rate: f64,
@@ -511,6 +537,7 @@ impl EAPItemRow {
         "timestamp",
         "trace_id",
         "item_id",
+        "name",
         "sampling_weight",
         "sampling_factor",
         "client_sample_rate",
@@ -545,6 +572,7 @@ impl TryFrom<EAPItem> for EAPItemRow {
                 timestamp: item.timestamp,
                 trace_id: item.trace_id,
                 item_id: item.item_id,
+                name: item.name,
                 sampling_weight: item.sampling_weight,
                 sampling_factor: item.sampling_factor,
                 client_sample_rate: item.client_sample_rate,
@@ -976,20 +1004,23 @@ mod tests {
     #[test]
     fn test_column_names_match_struct_layout() {
         let names = EAPItemRow::COLUMN_NAMES;
-        // 12 scalars + attributes_bool + attributes_int + 80 buckets + attributes_array
-        assert_eq!(names.len(), 95);
+        // 12 scalars + name + attributes_bool + attributes_int + 80 buckets + attributes_array
+        assert_eq!(names.len(), 96);
         assert_eq!(names[0], "organization_id");
-        assert_eq!(names[7], "sampling_factor");
-        assert_eq!(names[8], "client_sample_rate");
-        assert_eq!(names[9], "server_sample_rate");
+        assert_eq!(names[5], "item_id");
+        assert_eq!(names[6], "name");
+        assert_eq!(names[7], "sampling_weight");
+        assert_eq!(names[8], "sampling_factor");
+        assert_eq!(names[9], "client_sample_rate");
+        assert_eq!(names[10], "server_sample_rate");
         // Bucket pairs are interleaved (string_N then float_N) per the
         // `seq_attrs!` expansion on EAPItemRow.
-        assert_eq!(names[14], "attributes_string_0");
-        assert_eq!(names[15], "attributes_float_0");
-        assert_eq!(names[16], "attributes_string_1");
-        assert_eq!(names[92], "attributes_string_39");
-        assert_eq!(names[93], "attributes_float_39");
-        assert_eq!(names[94], "attributes_array");
+        assert_eq!(names[15], "attributes_string_0");
+        assert_eq!(names[16], "attributes_float_0");
+        assert_eq!(names[17], "attributes_string_1");
+        assert_eq!(names[93], "attributes_string_39");
+        assert_eq!(names[94], "attributes_float_39");
+        assert_eq!(names[95], "attributes_array");
     }
 
     #[test]
@@ -1208,6 +1239,77 @@ mod tests {
         // Array attributes are serialized as JSON string in the attributes_array column
         assert!(row.attributes_array.contains("my_array"));
         assert!(row.attributes_array.contains("elem"));
+    }
+
+    #[test]
+    fn test_name_from_sentry_op_for_spans() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.item_type = TraceItemType::Span.into();
+        trace_item.attributes.insert(
+            "sentry.op".to_string(),
+            AnyValue {
+                value: Some(Value::StringValue("db.query".to_string())),
+            },
+        );
+
+        let eap_item = EAPItem::try_from(trace_item).unwrap();
+        assert_eq!(eap_item.name, "db.query");
+    }
+
+    #[test]
+    fn test_name_from_sentry_name_for_metrics() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.item_type = TraceItemType::Metric.into();
+        trace_item.attributes.insert(
+            "sentry.name".to_string(),
+            AnyValue {
+                value: Some(Value::StringValue("my.metric".to_string())),
+            },
+        );
+
+        let eap_item = EAPItem::try_from(trace_item).unwrap();
+        assert_eq!(eap_item.name, "my.metric");
+    }
+
+    #[test]
+    fn test_name_empty_when_source_attribute_missing() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.item_type = TraceItemType::Span.into();
+        // No sentry.op attribute set.
+
+        let eap_item = EAPItem::try_from(trace_item).unwrap();
+        assert_eq!(eap_item.name, "");
+    }
+
+    #[test]
+    fn test_name_serialized_in_row_binary() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.item_type = TraceItemType::Span.into();
+        trace_item.attributes.insert(
+            "sentry.op".to_string(),
+            AnyValue {
+                value: Some(Value::StringValue("http.server".to_string())),
+            },
+        );
+
+        let mut payload = Vec::new();
+        trace_item.encode(&mut payload).unwrap();
+
+        let payload = KafkaPayload::new(None, None, Some(payload));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+
+        let batch = process_message_row_binary_typed(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+
+        assert_eq!(batch.rows[0].name, "http.server");
     }
 
     #[test]

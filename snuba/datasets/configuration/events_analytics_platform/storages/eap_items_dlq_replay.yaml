@@ -22,6 +22,8 @@ schema:
       { name: retention_days, type: UInt, args: { size: 16 } },
       { name: downsampled_retention_days, type: UInt, args: { size: 16 } },
 
+      { name: name, type: String, args: { schema_modifiers: [ low_cardinality ] } },
+
       { name: attributes_bool, type: Map, args: { key: { type: String }, value: { type: Bool } } },
       { name: attributes_int, type: Map, args: { key: { type: String }, value: { type: Int, args: { size: 64 } } } },
 
