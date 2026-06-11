@@ -31,7 +31,7 @@ from snuba import settings
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.protos.common import ATTRIBUTES_TO_COALESCE
-from snuba.query.expressions import FunctionCall, Lambda, Literal
+from snuba.query.expressions import Argument, Expression, FunctionCall, JsonPath, Lambda, Literal
 from snuba.web.rpc.common.common import (
     _any_attribute_filter_to_expression,
     attribute_key_to_expression,
@@ -244,6 +244,152 @@ class TestTraceItemFiltersArrayLike:
             match="NOT LIKE comparison is only supported on string and array keys",
         ):
             trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+
+
+class TestTraceItemFiltersArrayNumericComparison:
+    """Per-element numeric comparison (>, <, >=, <=) for TYPE_ARRAY keys"""
+
+    @staticmethod
+    def _make_comparison_filter(
+        attr_name: str,
+        attr_type: AttributeKey.Type.ValueType,
+        op: ComparisonFilter.Op.ValueType,
+        value: AttributeValue,
+    ) -> TraceItemFilter:
+        return TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=attr_type, name=attr_name),
+                op=op,
+                value=value,
+            )
+        )
+
+    @staticmethod
+    def _assert_array_numeric_comparison_shape(
+        expr: Expression,
+        expected_ch_fn: str,
+        expected_literal_value: float | int,
+        expected_attr_name: str,
+    ) -> None:
+        """arrayExists(x -> <fn>(x.<Int|Double>, <literal>), attributes_array[name])
+
+        Element tag is derived from the literal's Python type:
+        int (not bool) -> x.Int (Nullable(Int64)); float -> x.Double (Nullable(Float64)).
+        """
+        if isinstance(expected_literal_value, bool) or not isinstance(expected_literal_value, int):
+            expected_tag, expected_return_type = "Double", "Nullable(Float64)"
+        else:
+            expected_tag, expected_return_type = "Int", "Nullable(Int64)"
+
+        assert isinstance(expr, FunctionCall) and expr.function_name == "arrayExists"
+        lam, array_expr = expr.parameters
+        assert isinstance(lam, Lambda) and lam.parameters == ("x",)
+        assert isinstance(array_expr, JsonPath)
+        assert (array_expr.path, array_expr.return_type) == (expected_attr_name, "Array(JSON)")
+
+        comparison = lam.transformation
+        assert isinstance(comparison, FunctionCall)
+        assert comparison.function_name == expected_ch_fn
+        element, rhs = comparison.parameters
+        assert isinstance(element, JsonPath)
+        assert isinstance(element.base, Argument) and element.base.name == "x"
+        assert (element.path, element.return_type) == (expected_tag, expected_return_type)
+        assert isinstance(rhs, Literal) and rhs.value == expected_literal_value
+
+    def test_greater_than_on_array_key_with_val_int(self) -> None:
+        item_filter = self._make_comparison_filter(
+            "my_nums",
+            AttributeKey.Type.TYPE_ARRAY,
+            ComparisonFilter.OP_GREATER_THAN,
+            AttributeValue(val_int=5),
+        )
+        result = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        self._assert_array_numeric_comparison_shape(result, "greater", 5, "my_nums")
+
+    def test_less_than_on_array_key_with_val_double(self) -> None:
+        item_filter = self._make_comparison_filter(
+            "my_nums",
+            AttributeKey.Type.TYPE_ARRAY,
+            ComparisonFilter.OP_LESS_THAN,
+            AttributeValue(val_double=1.5),
+        )
+        result = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        self._assert_array_numeric_comparison_shape(result, "less", 1.5, "my_nums")
+
+    def test_greater_or_equals_on_array_key_with_val_float(self) -> None:
+        item_filter = self._make_comparison_filter(
+            "my_nums",
+            AttributeKey.Type.TYPE_ARRAY,
+            ComparisonFilter.OP_GREATER_THAN_OR_EQUALS,
+            AttributeValue(val_float=2.0),
+        )
+        result = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        self._assert_array_numeric_comparison_shape(result, "greaterOrEquals", 2.0, "my_nums")
+
+    def test_less_or_equals_on_array_key_with_val_int(self) -> None:
+        item_filter = self._make_comparison_filter(
+            "my_nums",
+            AttributeKey.Type.TYPE_ARRAY,
+            ComparisonFilter.OP_LESS_THAN_OR_EQUALS,
+            AttributeValue(val_int=10),
+        )
+        result = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        self._assert_array_numeric_comparison_shape(result, "lessOrEquals", 10, "my_nums")
+
+    @pytest.mark.parametrize(
+        "op",
+        [
+            ComparisonFilter.OP_LESS_THAN,
+            ComparisonFilter.OP_LESS_THAN_OR_EQUALS,
+            ComparisonFilter.OP_GREATER_THAN,
+            ComparisonFilter.OP_GREATER_THAN_OR_EQUALS,
+        ],
+    )
+    def test_numeric_comparison_on_array_key_with_val_str_raises(
+        self, op: ComparisonFilter.Op.ValueType
+    ) -> None:
+        item_filter = self._make_comparison_filter(
+            "my_nums",
+            AttributeKey.Type.TYPE_ARRAY,
+            op,
+            AttributeValue(val_str="5"),
+        )
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="on array keys requires a numeric value",
+        ):
+            trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+
+    def test_numeric_comparison_on_array_key_with_val_bool_raises(self) -> None:
+        item_filter = self._make_comparison_filter(
+            "my_nums",
+            AttributeKey.Type.TYPE_ARRAY,
+            ComparisonFilter.OP_GREATER_THAN,
+            AttributeValue(val_bool=True),
+        )
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="on array keys requires a numeric value",
+        ):
+            trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+
+    def test_negated_greater_than_on_array_key_wraps_in_not(self) -> None:
+        """!array[*]:>5 composes as not_filter wrapping the comparison filter."""
+        inner = self._make_comparison_filter(
+            "my_nums",
+            AttributeKey.Type.TYPE_ARRAY,
+            ComparisonFilter.OP_GREATER_THAN,
+            AttributeValue(val_int=5),
+        )
+        from sentry_protos.snuba.v1.trace_item_filter_pb2 import NotFilter
+
+        item_filter = TraceItemFilter(not_filter=NotFilter(filters=[inner]))
+        result = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        assert isinstance(result, FunctionCall)
+        assert result.function_name == "not"
+        wrapped = result.parameters[0]
+        assert isinstance(wrapped, FunctionCall)
+        self._assert_array_numeric_comparison_shape(wrapped, "greater", 5, "my_nums")
 
 
 class TestExistsFilterCoalesced:

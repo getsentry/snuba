@@ -15,6 +15,7 @@ from snuba import settings, state
 from snuba.protos.common import (
     MalformedAttributeException,
     type_array_to_membership_array_expression,
+    type_array_to_stored_array_json_path,
 )
 from snuba.protos.common import (
     attribute_key_to_expression as _attribute_key_to_expression,
@@ -413,6 +414,15 @@ _ARRAY_VALUE_TYPES = {
     "val_double_array",
 }
 
+_NUMBER_VALUE_TYPES = {"val_int", "val_float", "val_double"}
+
+_NUMERIC_COMPARISON_OP_TO_FN: dict[int, Callable[..., FunctionCall]] = {
+    ComparisonFilter.OP_LESS_THAN: f.less,
+    ComparisonFilter.OP_LESS_THAN_OR_EQUALS: f.lessOrEquals,
+    ComparisonFilter.OP_GREATER_THAN: f.greater,
+    ComparisonFilter.OP_GREATER_THAN_OR_EQUALS: f.greaterOrEquals,
+}
+
 
 def _validate_comparison_filter_type_array(
     op: ComparisonFilter.Op.ValueType, v: AttributeValue
@@ -423,12 +433,17 @@ def _validate_comparison_filter_type_array(
                 "LIKE/NOT_LIKE on array keys requires a string pattern"
             )
         return
+    if op in _NUMERIC_COMPARISON_OP_TO_FN:
+        if v.WhichOneof("value") not in _NUMBER_VALUE_TYPES:
+            raise BadSnubaRPCRequestException(
+                f"{ComparisonFilter.Op.Name(op)} on array keys requires a numeric value"
+                "(val_int, val_float, val_double)"
+            )
+        return
     if op in (ComparisonFilter.OP_EQUALS, ComparisonFilter.OP_NOT_EQUALS):
-        # Array can be empty or non-empty. It can never be null, or can never have null elements.
         vt = v.WhichOneof("value")
+        # Nested Arrays are not Supported, Array value in SET not implemented yet.
         if vt in (
-            None,
-            "val_null",
             "val_array",
             "val_str_array",
             "val_int_array",
@@ -442,7 +457,8 @@ def _validate_comparison_filter_type_array(
         return
     raise BadSnubaRPCRequestException(
         f"{ComparisonFilter.Op.Name(op)} is not supported on array keys "
-        "(supported: LIKE, NOT_LIKE, OP_EQUALS, OP_NOT_EQUALS)"
+        "(supported: OP_EQUALS, OP_NOT_EQUALS, OP_LIKE, OP_NOT_LIKE, "
+        "OP_LESS_THAN, OP_LESS_THAN_OR_EQUALS, OP_GREATER_THAN, OP_GREATER_THAN_OR_EQUALS)"
     )
 
 
@@ -482,6 +498,27 @@ def _type_array_includes_scalar_expression(
             array_expr,
         )
     return f.arrayExists(Lambda(None, ("x",), f.equals(x, rhs)), array_expr)
+
+
+def _type_array_numeric_comparison_expression(
+    attr_key: AttributeKey,
+    op: ComparisonFilter.Op.ValueType,
+    v: AttributeValue,
+) -> Expression:
+    """Per-element numeric comparison (>, <, >=, <=) for TYPE_ARRAY keys.
+    Non-numeric comparison yields NULL through coalesce and silently fail through predicate
+    """
+    array_expr = type_array_to_stored_array_json_path(attr_key)
+    x = Argument(None, "x")
+    if v.WhichOneof("value") == "val_int":
+        element = JsonPath(None, x, "Int", "Nullable(Int64)")
+    else:
+        element = JsonPath(None, x, "Double", "Nullable(Float64)")
+    rhs = _attribute_value_to_expression(v)
+    return f.arrayExists(
+        Lambda(None, ("x",), _NUMERIC_COMPARISON_OP_TO_FN[op](element, rhs)),
+        array_expr,
+    )
 
 
 def _any_attribute_filter_to_expression(
@@ -742,12 +779,20 @@ def trace_item_filters_to_expression(
             expr_with_null = or_cond(expr, f.isNull(k_expression))
             return expr_with_null
         if op == ComparisonFilter.OP_LESS_THAN:
+            if k.type == AttributeKey.Type.TYPE_ARRAY:
+                return _type_array_numeric_comparison_expression(k, op, v)
             return f.less(k_expression, v_expression)
         if op == ComparisonFilter.OP_LESS_THAN_OR_EQUALS:
+            if k.type == AttributeKey.Type.TYPE_ARRAY:
+                return _type_array_numeric_comparison_expression(k, op, v)
             return f.lessOrEquals(k_expression, v_expression)
         if op == ComparisonFilter.OP_GREATER_THAN:
+            if k.type == AttributeKey.Type.TYPE_ARRAY:
+                return _type_array_numeric_comparison_expression(k, op, v)
             return f.greater(k_expression, v_expression)
         if op == ComparisonFilter.OP_GREATER_THAN_OR_EQUALS:
+            if k.type == AttributeKey.Type.TYPE_ARRAY:
+                return _type_array_numeric_comparison_expression(k, op, v)
             return f.greaterOrEquals(k_expression, v_expression)
         if op == ComparisonFilter.OP_IN:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
