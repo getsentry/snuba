@@ -9,11 +9,14 @@ use sentry_arroyo::counter;
 use sentry_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
-use sentry_arroyo::processing::strategies::{InvalidMessage, ProcessingStrategy};
+use sentry_arroyo::processing::strategies::{
+    InvalidMessage, InvalidMessageReason, ProcessingStrategy,
+};
 use sentry_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition};
 use sentry_kafka_schemas::{Schema, SchemaError, SchemaType};
 
 use crate::config::ProcessorConfig;
+use crate::processors::utils::SilencedDLQMessage;
 use crate::processors::{ProcessingFunction, ProcessingFunctionWithReplacements};
 use crate::types::{
     BytesInsertBatch, CommitLogEntry, CommitLogOffsets, InsertBatch, InsertOrReplacement,
@@ -228,19 +231,27 @@ impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
             }
         };
 
-        let maybe_err = RunTaskError::InvalidMessage(InvalidMessage {
+        let invalid_msg = InvalidMessage {
             partition: msg.partition,
             offset: msg.offset,
-        });
+            reason: InvalidMessageReason::Invalid,
+        };
 
         let kafka_payload = &msg.payload.clone();
         let Some(payload) = kafka_payload.payload() else {
-            return Err(maybe_err);
+            return Err(RunTaskError::InvalidMessage(invalid_msg));
         };
 
         record_message_stats(payload);
 
         let processed_message = self.process_payload(msg).map_err(|error| {
+            if error.is::<SilencedDLQMessage>() {
+                return RunTaskError::InvalidMessage(InvalidMessage {
+                    reason: InvalidMessageReason::Ignored,
+                    ..invalid_msg
+                });
+            }
+
             counter!("invalid_message");
 
             sentry::with_scope(
@@ -256,7 +267,7 @@ impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
                 },
             );
 
-            maybe_err
+            RunTaskError::InvalidMessage(invalid_msg)
         });
 
         let elapsed = start_time.elapsed();
@@ -314,6 +325,7 @@ pub fn validate_schema(
     let maybe_err = RunTaskError::InvalidMessage(InvalidMessage {
         partition: msg.partition,
         offset: msg.offset,
+        reason: InvalidMessageReason::Invalid,
     });
 
     let kafka_payload = &msg.payload.clone();

@@ -506,6 +506,19 @@ def copy_table_query() -> Response:
             "code": err.code,
         }
         return make_response(jsonify({"error": details}), 400)
+    except InvalidNodeError as err:
+        logger.error(err, exc_info=True)
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "request",
+                        "message": err.message or "Invalid node",
+                    }
+                }
+            ),
+            400,
+        )
 
     try:
         return make_response(jsonify(resp), 200)
