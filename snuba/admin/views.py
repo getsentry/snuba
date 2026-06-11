@@ -68,7 +68,7 @@ from snuba.consumers.dlq import (
     load_instruction,
     store_instruction,
 )
-from snuba.datasets.factory import get_enabled_dataset_names
+from snuba.datasets.factory import InvalidDatasetError, get_enabled_dataset_names
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.manual_jobs.runner import (
@@ -117,6 +117,16 @@ def handle_invalid_json(exception: UnauthorizedException) -> Response:
     return Response(
         json.dumps({"error": "Unauthorized"}),
         401,
+        {"Content-Type": "application/json"},
+    )
+
+
+@application.errorhandler(InvalidDatasetError)
+def handle_invalid_dataset(exception: InvalidDatasetError) -> Response:
+    data = {"error": {"type": "dataset", "message": str(exception)}}
+    return Response(
+        json.dumps(data, sort_keys=True, indent=4),
+        404,
         {"Content-Type": "application/json"},
     )
 
