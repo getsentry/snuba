@@ -13,6 +13,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 
 from snuba import settings, state
 from snuba.protos.common import (
+    COLUMN_PREFIX,
     MalformedAttributeException,
     type_array_to_membership_array_expression,
 )
@@ -659,6 +660,26 @@ def trace_item_filters_to_expression(
             v_expression: Expression = literal(None)
         else:
             v_expression = _attribute_value_to_expression(v)
+
+        # `sentry.timestamp` is a normalized column that `attribute_key_to_expression`
+        # maps to `CAST(timestamp, 'Float64')`. Wrapping the primary-key/partition
+        # column in a CAST prevents ClickHouse from using it for granule and partition
+        # pruning, so range filters on it scan far more data than necessary. It also
+        # duplicates the mandatory time-range condition (timestamp_in_range_condition)
+        # that is already applied on the raw column. For range comparisons, compare
+        # against the raw DateTime `timestamp` column instead so the condition is
+        # index- and partition-prunable and folds with the mandatory time bounds.
+        if k.name == f"{COLUMN_PREFIX}timestamp" and not (v.is_null or value_type == "val_null"):
+            raw_timestamp = column("timestamp")
+            raw_value = f.toDateTime(v_expression)
+            if op == ComparisonFilter.OP_LESS_THAN:
+                return f.less(raw_timestamp, raw_value)
+            if op == ComparisonFilter.OP_LESS_THAN_OR_EQUALS:
+                return f.lessOrEquals(raw_timestamp, raw_value)
+            if op == ComparisonFilter.OP_GREATER_THAN:
+                return f.greater(raw_timestamp, raw_value)
+            if op == ComparisonFilter.OP_GREATER_THAN_OR_EQUALS:
+                return f.greaterOrEquals(raw_timestamp, raw_value)
 
         if op == ComparisonFilter.OP_EQUALS:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)

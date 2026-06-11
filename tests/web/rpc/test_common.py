@@ -295,6 +295,65 @@ class TestExistsFilterCoalesced:
         assert expr.function_name == "mapContains"
 
 
+class TestSentryTimestampFilter:
+    """Range filters on `sentry.timestamp` must target the raw DateTime `timestamp`
+    column (index- and partition-prunable) rather than CAST(timestamp, 'Float64')."""
+
+    @staticmethod
+    def _range_filter(op: "ComparisonFilter.Op.ValueType") -> TraceItemFilter:
+        return TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_DOUBLE, name="sentry.timestamp"),
+                op=op,
+                value=AttributeValue(val_double=1781040732),
+            )
+        )
+
+    @pytest.mark.parametrize(
+        "op,expected_function",
+        [
+            (ComparisonFilter.OP_LESS_THAN, "less"),
+            (ComparisonFilter.OP_LESS_THAN_OR_EQUALS, "lessOrEquals"),
+            (ComparisonFilter.OP_GREATER_THAN, "greater"),
+            (ComparisonFilter.OP_GREATER_THAN_OR_EQUALS, "greaterOrEquals"),
+        ],
+    )
+    def test_range_filter_uses_raw_timestamp_column(
+        self, op: "ComparisonFilter.Op.ValueType", expected_function: str
+    ) -> None:
+        expr = trace_item_filters_to_expression(self._range_filter(op), attribute_key_to_expression)
+        assert isinstance(expr, FunctionCall)
+        assert expr.function_name == expected_function
+
+        # LHS is the bare `timestamp` column, not a CAST.
+        from snuba.query.expressions import Column as SnubaColumn
+
+        lhs = expr.parameters[0]
+        assert isinstance(lhs, SnubaColumn)
+        assert lhs.column_name == "timestamp"
+
+        # RHS is toDateTime(value) so it compares against a DateTime, enabling
+        # primary-key and partition (toMonday(timestamp)) pruning.
+        rhs = expr.parameters[1]
+        assert isinstance(rhs, FunctionCall)
+        assert rhs.function_name == "toDateTime"
+
+    def test_equals_filter_unchanged(self) -> None:
+        """Non-range comparisons keep the existing CAST-based behavior."""
+        expr = trace_item_filters_to_expression(
+            self._range_filter(ComparisonFilter.OP_EQUALS), attribute_key_to_expression
+        )
+        # equals path wraps in the null-aware OR; the LHS of the equals is still the CAST.
+        assert isinstance(expr, FunctionCall)
+        assert expr.function_name == "or"
+        equals_expr = expr.parameters[0]
+        assert isinstance(equals_expr, FunctionCall)
+        assert equals_expr.function_name == "equals"
+        cast_expr = equals_expr.parameters[0]
+        assert isinstance(cast_expr, FunctionCall)
+        assert cast_expr.function_name == "cast"
+
+
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
 def test_convert_rpc_exception_to_proto_packs_details() -> None:
