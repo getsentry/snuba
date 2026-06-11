@@ -68,7 +68,7 @@ from snuba.consumers.dlq import (
     load_instruction,
     store_instruction,
 )
-from snuba.datasets.factory import InvalidDatasetError, get_enabled_dataset_names
+from snuba.datasets.factory import get_enabled_dataset_names
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.manual_jobs.runner import (
@@ -1012,12 +1012,6 @@ def snuba_debug() -> Response:
             400,
             {"Content-Type": "application/json"},
         )
-    except InvalidDatasetError as exception:
-        return Response(
-            json.dumps({"error": {"message": str(exception)}}, indent=4),
-            400,
-            {"Content-Type": "application/json"},
-        )
     finally:
         explain_cleanup()
 
@@ -1319,12 +1313,6 @@ def production_snql_query() -> Response:
             400,
             {"Content-Type": "application/json"},
         )
-    except InvalidDatasetError as exception:
-        return Response(
-            json.dumps({"error": {"message": str(exception)}}, indent=4),
-            400,
-            {"Content-Type": "application/json"},
-        )
 
 
 @application.route("/production_mql_query", methods=["POST"])
@@ -1335,12 +1323,6 @@ def production_mql_query() -> Response:
     try:
         return run_mql_query(body, g.user.email)
     except InvalidQueryException as exception:
-        return Response(
-            json.dumps({"error": {"message": str(exception)}}, indent=4),
-            400,
-            {"Content-Type": "application/json"},
-        )
-    except InvalidDatasetError as exception:
         return Response(
             json.dumps({"error": {"message": str(exception)}}, indent=4),
             400,

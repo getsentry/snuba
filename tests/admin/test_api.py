@@ -1023,7 +1023,7 @@ def test_prod_snql_query_invalid_dataset(admin_api: FlaskClient) -> None:
     response = admin_api.post(
         "/production_snql_query", data=json.dumps({"dataset": "", "query": ""})
     )
-    assert response.status_code == 400
+    assert response.status_code == 404
     data = json.loads(response.data)
     assert data["error"]["message"] == "dataset '' does not exist"
 
@@ -1121,7 +1121,7 @@ def test_prod_mql_query_invalid_dataset(admin_api: FlaskClient) -> None:
         "/production_mql_query",
         data=json.dumps({"dataset": "", "query": "", "mql_context": {}}),
     )
-    assert response.status_code == 400
+    assert response.status_code == 404
     data = json.loads(response.data)
     assert data["error"]["message"] == "dataset '' does not exist"
 
