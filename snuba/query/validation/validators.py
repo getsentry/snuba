@@ -404,8 +404,6 @@ class DatetimeConditionValidator(QueryValidator):
                         if isinstance(rhs, Literal):
                             if not isinstance(rhs.value, datetime):
                                 lhs = match.expression("column")
-                                # TODO: change this to a proper exception after ensuring the product isn't
-                                # passing bad queries
                                 metrics.increment(
                                     "datetime_condition_error",
                                     tags={
@@ -413,7 +411,7 @@ class DatetimeConditionValidator(QueryValidator):
                                         "entity": query.get_from_clause().key.value,
                                     },
                                 )
-                                logger.warning(
+                                raise InvalidQueryException(
                                     f"{lhs} requires datetime conditions: '{rhs.value}' is not a valid datetime"
                                 )
                         elif isinstance(rhs, FunctionCall):
@@ -423,8 +421,6 @@ class DatetimeConditionValidator(QueryValidator):
                                     param.value, datetime
                                 ):
                                     lhs = match.expression("column")
-                                    # TODO: change this to a proper exception after ensuring the product isn't
-                                    # passing bad queries
                                     metrics.increment(
                                         "datetime_condition_error",
                                         tags={
@@ -432,7 +428,7 @@ class DatetimeConditionValidator(QueryValidator):
                                             "entity": query.get_from_clause().key.value,
                                         },
                                     )
-                                    logger.warning(
+                                    raise InvalidQueryException(
                                         f"{lhs} requires datetime conditions: '{param.value}' is not a valid datetime"
                                     )
 

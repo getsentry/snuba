@@ -1,6 +1,6 @@
 import datetime
+import re
 from typing import Optional
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -9,9 +9,10 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.query import SelectedExpression
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query as LogicalQuery
-from snuba.query.validation.validators import DatetimeConditionValidator, logger
+from snuba.query.validation.validators import DatetimeConditionValidator
 
 required_column_tests = [
     pytest.param(
@@ -82,9 +83,6 @@ invalid_tests = [
 
 
 def test_invalid_datetime_column_validation() -> None:
-    old_logger = logger.warning
-    mock_logger = MagicMock()
-    logger.warning = mock_logger  # type: ignore
     for condition, message in invalid_tests:
         query = LogicalQuery(
             QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
@@ -95,9 +93,5 @@ def test_invalid_datetime_column_validation() -> None:
         )
 
         validator = DatetimeConditionValidator()
-        validator.validate(query)
-
-        mock_logger.assert_called_with(message)
-        mock_logger.reset_mock()
-
-    logger.warning = old_logger  # type: ignore
+        with pytest.raises(InvalidQueryException, match=re.escape(message)):
+            validator.validate(query)
