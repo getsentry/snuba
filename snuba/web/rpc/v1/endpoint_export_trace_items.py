@@ -29,7 +29,6 @@ from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
-from snuba.query.expressions import FunctionCall
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -38,8 +37,9 @@ from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     BUCKET_COUNT,
     attribute_key_to_expression,
+    attributes_array_selected_expressions,
     base_conditions_and,
-    process_arrays,
+    decode_attributes_array_value,
     treeify_or_and_conditions,
 )
 from snuba.web.rpc.common.debug_info import setup_trace_query_settings
@@ -289,10 +289,7 @@ def _build_query(
         ),
         SelectedExpression("attributes_int", column("attributes_int", alias="attributes_int")),
         SelectedExpression("attributes_bool", column("attributes_bool", alias="attributes_bool")),
-        SelectedExpression(
-            "attributes_array",
-            FunctionCall("attributes_array", "toJSONString", (column("attributes_array"),)),
-        ),
+        *attributes_array_selected_expressions(),
     ]
 
     entity = Entity(
@@ -427,21 +424,29 @@ def _convert_rows(rows: Iterable[Dict[str, Any]]) -> ProcessedResults:
         server_sample_rate = row.pop("server_sample_rate", 1.0)
         row.pop("sampling_factor", 1.0)
         row.pop("sampling_weight", 1.0)
-        arrays = row.pop("attributes_array", "{}") or "{}"
         booleans = row.pop("attributes_bool", {}) or {}
         integers = row.pop("attributes_int", {}) or {}
         floats = row.pop("attributes_float", {}) or {}
 
         attributes_map: dict[str, AnyValue] = {}
 
+        # Whatever's left in the row is either a map column (e.g. attributes_string)
+        # or an allowlisted attributes_array path column (a JSON string).
         for row_key, row_value in row.items():
+            if row_value is None:
+                continue
             if isinstance(row_value, dict):
                 for column_key, column_value in row_value.items():
                     attributes_map[column_key] = _to_any_value(column_value)
+            elif isinstance(row_value, str):
+                decoded = decode_attributes_array_value(row_key, row_value)
+                if decoded is None or (isinstance(decoded, list) and not decoded):
+                    continue
+                attributes_map[row_key] = _to_any_value(decoded)
             else:
                 attributes_map[row_key] = _to_any_value(row_value)
 
-        for source in (process_arrays(arrays), booleans, integers, floats):
+        for source in (booleans, integers, floats):
             for key, value in source.items():
                 attributes_map[key] = _to_any_value(value)
 
