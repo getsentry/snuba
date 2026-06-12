@@ -9,7 +9,7 @@ ro_storage_set = StorageSetKey.EVENTS_ANALYTICS_PLATFORM_RO
 table_name_prefix = "eap_items_1"
 new_columns = [
     Column(
-        "name",
+        "indexed_name",
         String(
             Modifiers(
                 codecs=[
@@ -22,8 +22,8 @@ new_columns = [
 after = "retention_days"
 sampling_weights = [8, 8**2, 8**3]
 local_table_name = f"{table_name_prefix}_local"
-index_name = "bf_name"
-index_expression = "name"
+index_name = "bf_indexed_name"
+index_expression = "indexed_name"
 index_type = "bloom_filter"
 index_granularity = 1
 
