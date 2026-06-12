@@ -35,6 +35,7 @@ from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
+    ATTRIBUTES_ARRAY_ALLOWLIST,
     BUCKET_COUNT,
     attribute_key_to_expression,
     attributes_array_selected_expressions,
@@ -430,19 +431,21 @@ def _convert_rows(rows: Iterable[Dict[str, Any]]) -> ProcessedResults:
 
         attributes_map: dict[str, AnyValue] = {}
 
-        # Whatever's left in the row is either a map column (e.g. attributes_string)
-        # or an allowlisted attributes_array path column (a JSON string).
+        # Each allowlisted attributes_array path is its own JSON-string column.
+        # Decode only those rather than probing every value in the row.
+        for path in ATTRIBUTES_ARRAY_ALLOWLIST:
+            decoded = decode_attributes_array_value(path, row.pop(path, None))
+            if decoded is None or (isinstance(decoded, list) and not decoded):
+                continue
+            attributes_map[path] = _to_any_value(decoded)
+
+        # Remaining columns are scalar map columns (e.g. attributes_string).
         for row_key, row_value in row.items():
             if row_value is None:
                 continue
             if isinstance(row_value, dict):
                 for column_key, column_value in row_value.items():
                     attributes_map[column_key] = _to_any_value(column_value)
-            elif isinstance(row_value, str):
-                decoded = decode_attributes_array_value(row_key, row_value)
-                if decoded is None or (isinstance(decoded, list) and not decoded):
-                    continue
-                attributes_map[row_key] = _to_any_value(decoded)
             else:
                 attributes_map[row_key] = _to_any_value(row_value)
 
