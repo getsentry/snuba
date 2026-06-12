@@ -12,7 +12,6 @@ new_columns = [
         "name",
         String(
             Modifiers(
-                low_cardinality=True,
                 codecs=[
                     "ZSTD(1)",
                 ],
