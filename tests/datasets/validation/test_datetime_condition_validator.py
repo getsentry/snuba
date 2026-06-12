@@ -60,11 +60,48 @@ invalid_tests = [
         binary_condition(
             "equals",
             Column("_snuba_received", None, "received"),
-            Literal(None, "2023-01-25T20:03:13+00:00"),
+            # A bare epoch (here in milliseconds) is not a valid datetime.
+            Literal(None, "1726374214000"),
         ),
-        "received AS `_snuba_received` requires datetime conditions: '2023-01-25T20:03:13+00:00' is not a valid datetime",
+        "received AS `_snuba_received` requires datetime conditions: '1726374214000' is not a valid datetime",
     ),
     (
+        binary_condition(
+            "in",
+            Column("_snuba_received", None, "received"),
+            FunctionCall(
+                None,
+                "array",
+                (
+                    Literal(None, datetime.datetime.utcnow()),
+                    Literal(None, "not a datetime"),
+                ),
+            ),
+        ),
+        "received AS `_snuba_received` requires datetime conditions: 'not a datetime' is not a valid datetime",
+    ),
+]
+
+
+valid_datetime_string_tests = [
+    pytest.param(
+        binary_condition(
+            "equals",
+            Column("_snuba_received", None, "received"),
+            Literal(None, "2023-01-25T20:03:13+00:00"),
+        ),
+        id="ISO datetime string with timezone",
+    ),
+    pytest.param(
+        binary_condition(
+            "equals",
+            Column("_snuba_received", None, "received"),
+            # str(datetime), as emitted by the legacy JSON query API.
+            Literal(None, "2023-01-25 20:03:13"),
+        ),
+        id="space-separated datetime string",
+    ),
+    pytest.param(
         binary_condition(
             "in",
             Column("_snuba_received", None, "received"),
@@ -77,9 +114,22 @@ invalid_tests = [
                 ),
             ),
         ),
-        "received AS `_snuba_received` requires datetime conditions: '2023-02-25T20:03:13+00:00' is not a valid datetime",
+        id="array of datetime and datetime string",
     ),
 ]
+
+
+@pytest.mark.parametrize("condition", valid_datetime_string_tests)
+def test_valid_datetime_string_conditions(condition: Expression) -> None:
+    query = LogicalQuery(
+        QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
+        selected_columns=[
+            SelectedExpression("time", Column("_snuba_timestamp", None, "timestamp")),
+        ],
+        condition=condition,
+    )
+
+    DatetimeConditionValidator().validate(query)
 
 
 def test_invalid_datetime_column_validation() -> None:
