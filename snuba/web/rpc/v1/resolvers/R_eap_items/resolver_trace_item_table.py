@@ -271,10 +271,20 @@ def _convert_order_by(
                 ]
             )
         elif x.column.HasField("key"):
+            # `sentry.timestamp` maps to `CAST(timestamp, 'Float64')`; the cast stops
+            # ClickHouse from sorting against the primary-key `timestamp` column. The
+            # cast is monotonic, so ordering by the raw DateTime column yields the same
+            # order while staying read-in-order friendly. (The i == 0 / single-project /
+            # no-groupby branch above already expands to the full table sort key; this
+            # covers `sentry.timestamp` ordering anywhere else.)
+            if x.column.key.name == "sentry.timestamp":
+                expression: Expression = snuba_column("timestamp")
+            else:
+                expression = attribute_key_to_expression(x.column.key)
             res.append(
                 OrderBy(
                     direction=direction,
-                    expression=attribute_key_to_expression(x.column.key),
+                    expression=expression,
                 )
             )
         elif x.column.HasField("conditional_aggregation"):
