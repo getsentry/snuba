@@ -9,6 +9,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Iterator,
     Mapping,
     MutableMapping,
     MutableSequence,
@@ -371,51 +372,50 @@ def storage_delete(*, storage: WritableTableStorage, timer: Timer) -> Union[Resp
             return make_response(jsonify({"error": details}), 500)
 
         # i put the result inside "data" bc thats how sentry utils/snuba.py expects the result
-        return Response(dump_payload({"data": payload}), 200, {"Content-Type": "application/json"})
+        return Response(
+            stream_payload({"data": payload}), 200, {"Content-Type": "application/json"}
+        )
 
     else:
         assert False, "unexpected fallthrough"
 
 
-def _sanitize_payload(payload: MutableMapping[str, Any], res: MutableMapping[str, Any]) -> None:
-    def hex_encode_if_bytes(value: Any) -> Any:
-        if isinstance(value, bytes):
-            try:
-                return value.decode("utf-8")
-            except UnicodeDecodeError:
-                # encode the byte string in a hex string
-                return "RAW_BYTESTRING__" + value.hex()
+def _payload_default(obj: Any) -> Any:
+    """
+    Serialization fallback for values the JSON encoder does not natively
+    handle. Bytes are decoded as UTF-8 when possible, otherwise hex-encoded so
+    one undecodable string cannot break the whole payload (and to avoid handing
+    potentially malicious raw bytes to downstream clients). Everything else
+    falls back to ``str`` (matching the previous ``default=str`` behavior).
+    """
+    if isinstance(obj, bytes):
+        try:
+            return obj.decode("utf-8")
+        except UnicodeDecodeError:
+            # encode the byte string in a hex string
+            return "RAW_BYTESTRING__" + obj.hex()
 
-        return value
-
-    for k, v in payload.items():
-        if isinstance(v, dict):
-            res[hex_encode_if_bytes(k)] = {}
-            _sanitize_payload(v, res[hex_encode_if_bytes(k)])
-        elif isinstance(v, list):
-            res[hex_encode_if_bytes(k)] = []
-            for item in v:
-                if isinstance(item, dict):
-                    res[hex_encode_if_bytes(k)].append({})
-                    _sanitize_payload(item, res[hex_encode_if_bytes(k)][-1])
-                else:
-                    res[hex_encode_if_bytes(k)].append(hex_encode_if_bytes(item))
-        else:
-            res[hex_encode_if_bytes(k)] = hex_encode_if_bytes(v)
+    return str(obj)
 
 
-def dump_payload(payload: MutableMapping[str, Any]) -> str:
-    try:
-        return json.dumps(payload, default=str)
-    except UnicodeDecodeError:
-        # If there were any string that could not be decoded, we
-        # encode the problematic bytes in a hex string.
-        # this is to prevent other clients downstream of us from having
-        # to deal with potentially malicious strings and to prevent one
-        # bad string from breaking the entire payload.
-        sanitized_payload: MutableMapping[str, Any] = {}
-        _sanitize_payload(payload, sanitized_payload)
-        return json.dumps(sanitized_payload, default=str)
+def stream_payload(payload: Mapping[str, Any]) -> Iterator[str]:
+    """
+    Incrementally encode ``payload`` to JSON, yielding chunks instead of
+    building the entire serialized response as a single string in memory.
+
+    ``encoding=None`` routes ``bytes`` values to ``_payload_default`` rather
+    than letting simplejson attempt (and fail) to decode them itself, which
+    would raise ``UnicodeDecodeError`` mid-stream. Combined with the default
+    ``ensure_ascii=True``, every yielded chunk is pure ASCII and safe to encode.
+    """
+    encoder = json.JSONEncoder(encoding=None, default=_payload_default)
+    # _one_shot=False keeps the incremental (chunk-yielding) encoder path; passing
+    # True would invoke the C fast path that builds the whole string at once.
+    yield from encoder.iterencode(payload, _one_shot=False)
+
+
+def dump_payload(payload: Mapping[str, Any]) -> str:
+    return "".join(stream_payload(payload))
 
 
 @with_span()
@@ -503,7 +503,7 @@ def dataset_query(
     if settings.STATS_IN_RESPONSE or request.query_settings.get_debug():
         payload.update(result.extra)
 
-    return Response(dump_payload(payload), 200, {"Content-Type": "application/json"})
+    return Response(stream_payload(payload), 200, {"Content-Type": "application/json"})
 
 
 @application.errorhandler(InvalidSubscriptionError)

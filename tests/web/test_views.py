@@ -62,6 +62,49 @@ def test_response_dumping() -> None:
     assert json.loads(dumped_payload) == clean_data
 
 
+def test_stream_payload() -> None:
+    from snuba.web.views import stream_payload
+
+    data = {
+        "data": [
+            {"count": 5181337, "release": "elsa"},
+            {"count": 2170, "release": b"valid-utf8"},
+            {"count": 88, "release": b"x;\x83\xc0\x05"},
+        ],
+        "meta": [],
+    }
+
+    chunks = list(stream_payload(data))
+    # The whole point is incremental encoding: many small chunks, not one blob.
+    assert len(chunks) > 1
+    assert all(isinstance(chunk, str) for chunk in chunks)
+
+    parsed = json.loads("".join(chunks))
+    assert parsed["data"][0]["release"] == "elsa"
+    # valid UTF-8 bytes are decoded to a string
+    assert parsed["data"][1]["release"] == "valid-utf8"
+    # undecodable bytes are hex-encoded rather than breaking the stream
+    assert parsed["data"][2]["release"] == "RAW_BYTESTRING__" + b"x;\x83\xc0\x05".hex()
+
+
+def test_streamed_response() -> None:
+    from flask import Response
+
+    from snuba.web.views import application, stream_payload
+
+    payload = {"data": [{"a": 1}, {"b": b"x;\x83\xc0\x05"}], "meta": []}
+
+    with application.app_context():
+        response = Response(stream_payload(payload), 200, {"Content-Type": "application/json"})
+        # A generator body is streamed, not buffered into a fixed-length body.
+        assert response.is_streamed
+        body = response.get_data(as_text=True)
+
+    parsed = json.loads(body)
+    assert parsed["data"][0]["a"] == 1
+    assert parsed["data"][1]["b"] == "RAW_BYTESTRING__" + b"x;\x83\xc0\x05".hex()
+
+
 @pytest.mark.parametrize("exception, expected_log_level", invalid_query_exception_test_cases)
 def test_handle_invalid_query(
     caplog: Any, exception: InvalidQueryException, expected_log_level: str
