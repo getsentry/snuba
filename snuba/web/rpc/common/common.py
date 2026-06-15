@@ -249,6 +249,28 @@ def treeify_or_and_conditions(query: Query) -> None:
     query.transform_expressions(transform)
 
 
+# Map column -> the Nullable type its values resolve to, used to emit a typed
+# NULL as the `if(...)` else-branch below. A bare, untyped NULL default trips
+# the ClickHouse "new analyzer": it canonicalizes the very same `if(...)`
+# expression inconsistently when it appears both as an IN operand and elsewhere
+# (e.g. the NOT_IN predicate in `_get_field_existence_expression`), wrapping the
+# NULL in a redundant CAST in one place but not the other. The aggregate column
+# computed in the block then no longer matches the projection name, surfacing as
+# "Code: 10. DB::Exception: Not found column ... in block". Emitting an
+# already-typed NULL leaves nothing for the analyzer to fold inconsistently.
+_MAP_COLUMN_NULL_TYPE = {
+    "attributes_string": "Nullable(String)",
+    "attributes_float": "Nullable(Float64)",
+}
+
+
+def _typed_null_for_map_column(column_name: str) -> Expression:
+    for prefix, null_type in _MAP_COLUMN_NULL_TYPE.items():
+        if column_name.startswith(prefix):
+            return f.cast(literal(None), null_type)
+    return literal(None)
+
+
 def add_existence_check_to_subscriptable_references(query: Query) -> None:
     def transform(exp: Expression) -> Expression:
         if not isinstance(exp, SubscriptableReference):
@@ -260,7 +282,7 @@ def add_existence_check_to_subscriptable_references(query: Query) -> None:
             parameters=(
                 f.mapContains(exp.column, exp.key),
                 SubscriptableReference(None, exp.column, exp.key),
-                literal(None),
+                _typed_null_for_map_column(exp.column.column_name),
             ),
         )
 
