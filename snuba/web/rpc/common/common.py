@@ -311,6 +311,34 @@ def _contains_subscriptable_reference(exp: Expression) -> bool:
     return found
 
 
+def _contains_coalesce(exp: Expression) -> bool:
+    """True if ``exp`` has any ``coalesce(...)`` call in its subtree."""
+    found = False
+
+    def visit(node: Expression) -> Expression:
+        nonlocal found
+        if isinstance(node, FunctionCall) and node.function_name == "coalesce":
+            found = True
+        return node
+
+    exp.transform(visit)
+    return found
+
+
+def _use_map_backed_operands(k_expression: Expression) -> bool:
+    """Whether the analyzer-safe ``(mapContains, arrayElement)`` rewrite applies.
+
+    Requires a map lookup (a ``SubscriptableReference``) and excludes *coalesced*
+    attributes. ``coalesce(if(mapContains(a), a[k], NULL), if(mapContains(b), ...))``
+    relies on each branch being NULL for a missing key so it can fall through to
+    the next; a bare ``arrayElement`` returns the column default ('' / 0), never
+    NULL, so lowering it would pin the result to the first key. Coalesced keys
+    therefore keep the legacy ``isNull``-based handling (the ``if(..., NULL)``
+    wrapper is load-bearing there).
+    """
+    return _contains_subscriptable_reference(k_expression) and not _contains_coalesce(k_expression)
+
+
 def _subscriptable_references_to_array_element(exp: Expression) -> Expression:
     """Lower every ``SubscriptableReference`` in ``exp`` to a bare ``arrayElement``.
 
@@ -364,10 +392,34 @@ def _analyzer_safe_in_expression(
     fields (``val_str_array`` etc.) only carry scalars, so the set never contains
     NULL and the old ``has(set, NULL)`` branch was always a constant ``false``.
     """
-    exists = get_field_existence_expression(k_expression)
-    membership_value = _subscriptable_references_to_array_element(k_expression)
-    present = and_cond(exists, in_cond(membership_value, v_expression))
+    value, exists = _map_backed_operands(k_expression)
+    present = and_cond(exists, in_cond(value, v_expression))
     return not_cond(present) if negated else present
+
+
+def _map_backed_operands(k_expression: Expression) -> tuple[Expression, Expression]:
+    """Return ``(value, exists)`` for a map-backed attribute key expression.
+
+    ``value`` is the raw ``arrayElement(...)`` with every ``SubscriptableReference``
+    lowered (so ``add_existence_check_to_subscriptable_references`` cannot wrap it
+    in ``if(..., NULL)``), and ``exists`` is the ``mapContains`` existence guard.
+    Per-key comparisons are then built as ``and(exists, cmp(value, v))`` (and
+    negated for ``!=`` / ``NOT LIKE`` / ``NOT IN``). This keeps every NULL constant
+    out of the WHERE / aggregate-condition predicate — see
+    ``_analyzer_safe_in_expression`` for why that matters to the new analyzer —
+    while preserving the absent-vs-empty distinction: a missing key has
+    ``exists = false``, whereas a stored empty value has ``exists = true`` and
+    ``value = ''`` (``arrayElement`` reads both as the column default, so the
+    ``mapContains`` guard is the only thing that tells them apart).
+
+    Only valid when ``_contains_subscriptable_reference(k_expression)`` is true;
+    normalized columns / booleans / arrays keep their legacy ``isNull``-based
+    handling.
+    """
+    return (
+        _subscriptable_references_to_array_element(k_expression),
+        get_field_existence_expression(k_expression),
+    )
 
 
 def _scalar_value(v: AttributeValue) -> bool | str | int | float | None:
@@ -691,7 +743,8 @@ def trace_item_filters_to_expression(
         if value_type is None:
             raise BadSnubaRPCRequestException("comparison does not have a right hand side")
 
-        if v.is_null or value_type == "val_null":
+        v_is_null = v.is_null or value_type == "val_null"
+        if v_is_null:
             v_expression: Expression = literal(None)
         else:
             v_expression = _attribute_value_to_expression(v)
@@ -703,6 +756,19 @@ def trace_item_filters_to_expression(
                 return _type_array_includes_scalar_expression(
                     k_expression, v, item_filter.comparison_filter.ignore_case
                 )
+            if _use_map_backed_operands(k_expression):
+                # Map-backed attribute: compare the raw arrayElement value guarded
+                # by mapContains, keeping NULL out of the predicate.
+                value, exists = _map_backed_operands(k_expression)
+                if v_is_null:
+                    # `attr = null` means the key is absent.
+                    return not_cond(exists)
+                lhs, rhs = (
+                    (f.lower(value), f.lower(v_expression))
+                    if item_filter.comparison_filter.ignore_case
+                    else (value, v_expression)
+                )
+                return and_cond(exists, f.equals(lhs, rhs))
             else:
                 expr = (
                     f.equals(f.lower(k_expression), f.lower(v_expression))
@@ -723,6 +789,18 @@ def trace_item_filters_to_expression(
                         k_expression, v, item_filter.comparison_filter.ignore_case
                     )
                 )
+            if _use_map_backed_operands(k_expression):
+                # Negation of the OP_EQUALS form: an absent key is "not equal".
+                value, exists = _map_backed_operands(k_expression)
+                if v_is_null:
+                    # `attr != null` means the key is present.
+                    return exists
+                lhs, rhs = (
+                    (f.lower(value), f.lower(v_expression))
+                    if item_filter.comparison_filter.ignore_case
+                    else (value, v_expression)
+                )
+                return not_cond(and_cond(exists, f.equals(lhs, rhs)))
             else:
                 expr = (
                     f.notEquals(f.lower(k_expression), f.lower(v_expression))
@@ -751,6 +829,9 @@ def trace_item_filters_to_expression(
                     "the LIKE comparison is only supported on string and array keys"
                 )
             comparison_function = f.ilike if item_filter.comparison_filter.ignore_case else f.like
+            if _use_map_backed_operands(k_expression):
+                value, exists = _map_backed_operands(k_expression)
+                return and_cond(exists, comparison_function(value, v_expression))
             return comparison_function(k_expression, v_expression)
         if op == ComparisonFilter.OP_NOT_LIKE:
             if k.type == AttributeKey.Type.TYPE_ARRAY:
@@ -769,6 +850,11 @@ def trace_item_filters_to_expression(
                 raise BadSnubaRPCRequestException(
                     "the NOT LIKE comparison is only supported on string and array keys"
                 )
+            if _use_map_backed_operands(k_expression):
+                # Negation of the OP_LIKE form: an absent key is "not like".
+                like_fn = f.ilike if item_filter.comparison_filter.ignore_case else f.like
+                value, exists = _map_backed_operands(k_expression)
+                return not_cond(and_cond(exists, like_fn(value, v_expression)))
             comparison_function = (
                 f.notILike if item_filter.comparison_filter.ignore_case else f.notLike
             )
@@ -802,7 +888,7 @@ def trace_item_filters_to_expression(
             # note: v_expression must be an array
             # we redefine the way in works for nulls
             # now null in ['hi', null] is true
-            if _contains_subscriptable_reference(k_expression):
+            if _use_map_backed_operands(k_expression):
                 # Map-backed attribute: avoid feeding the existence if(...) into
                 # in(...), which the new analyzer canonicalizes inconsistently.
                 return _analyzer_safe_in_expression(k_expression, v_expression, negated=False)
@@ -829,7 +915,7 @@ def trace_item_filters_to_expression(
             # note: v_expression must be an array
             # we redefine the way not in works for nulls
             # now null not in ['hi'] is true
-            if _contains_subscriptable_reference(k_expression):
+            if _use_map_backed_operands(k_expression):
                 # Map-backed attribute: avoid feeding the existence if(...) into
                 # in(...), which the new analyzer canonicalizes inconsistently.
                 return _analyzer_safe_in_expression(k_expression, v_expression, negated=True)

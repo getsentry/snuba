@@ -20,6 +20,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     StrArray,
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
+    AndFilter,
     AnyAttributeFilter,
     ComparisonFilter,
     ExistsFilter,
@@ -393,6 +394,102 @@ class TestInNotInAnalyzerSafe:
         )
 
 
+class TestComparisonAnalyzerSafe:
+    """EQUALS / NOT_EQUALS / LIKE / NOT_LIKE on map-backed attributes are built
+    from a (mapContains, arrayElement) pair instead of the legacy
+    if(mapContains, arrayElement, NULL) + isNull(...) idiom, so no NULL constant
+    is fed into the WHERE / aggregate-condition predicate (same class of new
+    analyzer fragility as IN/NOT_IN), while the absent-vs-empty distinction is
+    preserved by the explicit mapContains guard.
+    """
+
+    @staticmethod
+    def _walk(expr: Expression) -> list[Expression]:
+        nodes: list[Expression] = []
+
+        def visit(node: Expression) -> Expression:
+            nodes.append(node)
+            return node
+
+        expr.transform(visit)
+        return nodes
+
+    def _cmp(
+        self,
+        op: ComparisonFilter.Op.ValueType,
+        *,
+        value: str | None = None,
+        is_null: bool = False,
+        ignore_case: bool = False,
+    ) -> Expression:
+        av = AttributeValue(val_null=True) if is_null else AttributeValue(val_str=value or "")
+        item_filter = TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_STRING, name="some.custom.tag"),
+                op=op,
+                value=av,
+                ignore_case=ignore_case,
+            )
+        )
+        return trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+
+    def _fn_names(self, expr: Expression) -> set[str]:
+        return {n.function_name for n in self._walk(expr) if isinstance(n, FunctionCall)}
+
+    def _assert_clean(self, expr: Expression) -> None:
+        # No NULL literal, no leftover SubscriptableReference, no foldable if(...).
+        for n in self._walk(expr):
+            assert not (isinstance(n, Literal) and n.value is None)
+            assert not isinstance(n, SubscriptableReference)
+            assert not (isinstance(n, FunctionCall) and n.function_name == "if")
+
+    def test_equals_is_guarded_arrayelement(self) -> None:
+        expr = self._cmp(ComparisonFilter.OP_EQUALS, value="ok")
+        self._assert_clean(expr)
+        assert isinstance(expr, FunctionCall) and expr.function_name == "and"
+        assert {"and", "mapContains", "equals", "arrayElement"} <= self._fn_names(expr)
+
+    def test_equals_null_is_not_map_contains(self) -> None:
+        # `attr = null` == key absent == not(mapContains(...))
+        expr = self._cmp(ComparisonFilter.OP_EQUALS, is_null=True)
+        self._assert_clean(expr)
+        assert isinstance(expr, FunctionCall) and expr.function_name == "not"
+        assert self._fn_names(expr) == {"not", "mapContains"}
+
+    def test_not_equals_is_negated_guarded_equals(self) -> None:
+        expr = self._cmp(ComparisonFilter.OP_NOT_EQUALS, value="ok")
+        self._assert_clean(expr)
+        assert isinstance(expr, FunctionCall) and expr.function_name == "not"
+        assert {"not", "and", "mapContains", "equals", "arrayElement"} <= self._fn_names(expr)
+
+    def test_not_equals_null_is_map_contains(self) -> None:
+        # `attr != null` == key present == mapContains(...)
+        expr = self._cmp(ComparisonFilter.OP_NOT_EQUALS, is_null=True)
+        self._assert_clean(expr)
+        assert isinstance(expr, FunctionCall) and expr.function_name == "mapContains"
+
+    def test_like_is_guarded_arrayelement(self) -> None:
+        expr = self._cmp(ComparisonFilter.OP_LIKE, value="%ok%")
+        self._assert_clean(expr)
+        assert isinstance(expr, FunctionCall) and expr.function_name == "and"
+        assert {"and", "mapContains", "like", "arrayElement"} <= self._fn_names(expr)
+
+    def test_not_like_is_negated_guarded_like(self) -> None:
+        expr = self._cmp(ComparisonFilter.OP_NOT_LIKE, value="%ok%")
+        self._assert_clean(expr)
+        assert isinstance(expr, FunctionCall) and expr.function_name == "not"
+        names = self._fn_names(expr)
+        assert {"not", "and", "mapContains", "like", "arrayElement"} <= names
+        # positive like under the negation, not notLike
+        assert "notLike" not in names
+
+    def test_not_like_ignore_case_uses_ilike(self) -> None:
+        expr = self._cmp(ComparisonFilter.OP_NOT_LIKE, value="%ok%", ignore_case=True)
+        self._assert_clean(expr)
+        names = self._fn_names(expr)
+        assert "ilike" in names and "notILike" not in names
+
+
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
 def test_convert_rpc_exception_to_proto_packs_details() -> None:
@@ -699,3 +796,144 @@ class TestAnyAttributeFilterIntegration:
             )
         )
         assert colors == []
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
+class TestEmptyVsAbsentComparison:
+    """End-to-end: the migrated per-key comparisons (EQUALS / NOT_EQUALS / LIKE /
+    NOT_LIKE) must keep distinguishing a *stored empty value* from an *absent
+    key*, since arrayElement reads both as '' and only mapContains tells them
+    apart. Three spans, by the attribute under test:
+      - present, value "ok"  (color "red")
+      - present, empty ""    (color "blue")
+      - absent               (color "green")
+
+    A unique per-run batch tag (present on all three rows and AND-ed into every
+    query) isolates these rows, so the absent-key cases aren't polluted by other
+    rows in the shared table (which also lack the attribute under test).
+    """
+
+    # Custom attribute names not present in gen_item_message's default set
+    # (which injects e.g. status="ok"), so we fully control present/empty/absent.
+    ATTR = "test.empty_vs_absent.status"
+    BATCH_ATTR = "test.empty_vs_absent.batch"
+
+    @pytest.fixture(autouse=True)
+    def setup(self, eap: None, redis_db: None) -> None:
+        self.batch = f"batch-{uuid.uuid4().hex}"
+        self.base_time = datetime.now(tz=timezone.utc).replace(
+            minute=0, second=0, microsecond=0
+        ) - timedelta(hours=1)
+        self.start_ts = Timestamp(seconds=int((self.base_time - timedelta(hours=1)).timestamp()))
+        self.end_ts = Timestamp(seconds=int((self.base_time + timedelta(hours=2)).timestamp()))
+        batch = AnyValue(string_value=self.batch)
+        messages = [
+            gen_item_message(
+                start_timestamp=self.base_time,
+                attributes={
+                    self.BATCH_ATTR: batch,
+                    self.ATTR: AnyValue(string_value="ok"),
+                    "color": AnyValue(string_value="red"),
+                },
+            ),
+            gen_item_message(
+                start_timestamp=self.base_time + timedelta(minutes=1),
+                attributes={
+                    self.BATCH_ATTR: batch,
+                    self.ATTR: AnyValue(string_value=""),
+                    "color": AnyValue(string_value="blue"),
+                },
+            ),
+            gen_item_message(
+                start_timestamp=self.base_time + timedelta(minutes=2),
+                attributes={
+                    self.BATCH_ATTR: batch,
+                    "color": AnyValue(string_value="green"),
+                },
+            ),
+        ]
+        storage = get_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(storage, messages)  # type: ignore
+
+    def _execute(
+        self,
+        op: ComparisonFilter.Op.ValueType,
+        *,
+        value: str | None = None,
+        is_null: bool = False,
+    ) -> list[str]:
+        av = AttributeValue(val_null=True) if is_null else AttributeValue(val_str=value or "")
+        filt = TraceItemFilter(
+            and_filter=AndFilter(
+                filters=[
+                    TraceItemFilter(
+                        comparison_filter=ComparisonFilter(
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name=self.BATCH_ATTR),
+                            op=ComparisonFilter.OP_EQUALS,
+                            value=AttributeValue(val_str=self.batch),
+                        )
+                    ),
+                    TraceItemFilter(
+                        comparison_filter=ComparisonFilter(
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name=self.ATTR),
+                            op=op,
+                            value=av,
+                        )
+                    ),
+                ]
+            )
+        )
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="test",
+                referrer="test",
+                start_timestamp=self.start_ts,
+                end_timestamp=self.end_ts,
+                request_id=uuid.uuid4().hex,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=filt,
+            columns=[Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color"))],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color"))
+                )
+            ],
+            limit=100,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        if not response.column_values:
+            return []
+        return sorted(r.val_str for r in response.column_values[0].results)
+
+    def test_equals_empty_matches_only_stored_empty(self) -> None:
+        # The critical case: `status = ''` must match the stored empty, NOT the
+        # absent key (arrayElement reads both as '').
+        assert self._execute(ComparisonFilter.OP_EQUALS, value="") == ["blue"]
+
+    def test_equals_value_matches_only_that_value(self) -> None:
+        assert self._execute(ComparisonFilter.OP_EQUALS, value="ok") == ["red"]
+
+    def test_equals_null_matches_only_absent(self) -> None:
+        assert self._execute(ComparisonFilter.OP_EQUALS, is_null=True) == ["green"]
+
+    def test_not_equals_value_includes_empty_and_absent(self) -> None:
+        assert self._execute(ComparisonFilter.OP_NOT_EQUALS, value="ok") == ["blue", "green"]
+
+    def test_not_equals_empty_includes_value_and_absent(self) -> None:
+        assert self._execute(ComparisonFilter.OP_NOT_EQUALS, value="") == ["green", "red"]
+
+    def test_not_equals_null_matches_only_present(self) -> None:
+        assert self._execute(ComparisonFilter.OP_NOT_EQUALS, is_null=True) == ["blue", "red"]
+
+    def test_like_wildcard_matches_present_not_absent(self) -> None:
+        # '%' matches both present rows (incl. the stored empty) but never the
+        # absent key.
+        assert self._execute(ComparisonFilter.OP_LIKE, value="%") == ["blue", "red"]
+
+    def test_not_like_wildcard_matches_only_absent(self) -> None:
+        # Present rows all `like '%'`, so only the absent key survives NOT LIKE.
+        assert self._execute(ComparisonFilter.OP_NOT_LIKE, value="%") == ["green"]
