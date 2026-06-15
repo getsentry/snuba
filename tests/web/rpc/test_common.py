@@ -324,19 +324,45 @@ class TestAnalyzerSafeFilters:
         )
         return trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
 
-    def test_in(self) -> None:
+    # --- pruned forms: literal != column default, so no mapContains guard ---
+
+    def test_in_pruned(self) -> None:
         expr = self._build(ComparisonFilter.OP_IN, values=["a", "b"])
         self._assert_clean(expr)
-        assert isinstance(expr, FunctionCall) and expr.function_name == "and"
-        assert {"and", "in", "mapContains", "arrayElement"} <= self._fn_names(expr)
+        assert isinstance(expr, FunctionCall) and expr.function_name == "in"
+        assert "mapContains" not in self._fn_names(expr)
 
-    def test_not_in(self) -> None:
+    def test_not_in_pruned(self) -> None:
         expr = self._build(ComparisonFilter.OP_NOT_IN, values=["a", "b"])
         self._assert_clean(expr)
         assert isinstance(expr, FunctionCall) and expr.function_name == "not"
         names = self._fn_names(expr)
-        assert {"not", "and", "in", "mapContains", "arrayElement"} <= names
-        assert "has" not in names  # no NULL-in-set handling needed
+        assert {"not", "in", "arrayElement"} <= names
+        assert "mapContains" not in names and "has" not in names
+
+    def test_equals_pruned(self) -> None:
+        expr = self._build(ComparisonFilter.OP_EQUALS, value="ok")
+        self._assert_clean(expr)
+        assert isinstance(expr, FunctionCall) and expr.function_name == "equals"
+        assert "mapContains" not in self._fn_names(expr)
+
+    def test_not_equals_pruned(self) -> None:
+        expr = self._build(ComparisonFilter.OP_NOT_EQUALS, value="ok")
+        self._assert_clean(expr)
+        assert isinstance(expr, FunctionCall) and expr.function_name == "notEquals"
+        assert "mapContains" not in self._fn_names(expr)
+
+    def test_coalesced_pruned_uses_multi_if_no_outer_guard(self) -> None:
+        # Coalesced keys resolve via a NULL-free multiIf over per-key mapContains
+        # (never coalesce(if(..., NULL), ...)); with a non-default literal the
+        # outer existence OR-guard is dropped too.
+        assert "transaction" in ATTRIBUTES_TO_COALESCE
+        expr = self._build(ComparisonFilter.OP_EQUALS, name="transaction", value="t")
+        self._assert_clean(expr)
+        assert isinstance(expr, FunctionCall) and expr.function_name == "equals"
+        names = self._fn_names(expr)
+        assert "multiIf" in names and "coalesce" not in names
+        assert "or" not in names  # no outer exists guard
 
     def test_in_ignore_case_lowers_array_element(self) -> None:
         expr = self._build(ComparisonFilter.OP_NOT_IN, values=["A", "B"], ignore_case=True)
@@ -349,11 +375,27 @@ class TestAnalyzerSafeFilters:
         inner = operand.parameters[0]
         assert isinstance(inner, FunctionCall) and inner.function_name == "arrayElement"
 
-    def test_equals(self) -> None:
-        expr = self._build(ComparisonFilter.OP_EQUALS, value="ok")
+    # --- guarded forms: literal IS the column default, so mapContains is kept ---
+
+    def test_equals_default_value_keeps_guard(self) -> None:
+        expr = self._build(ComparisonFilter.OP_EQUALS, value="")  # '' could match an absent key
         self._assert_clean(expr)
         assert isinstance(expr, FunctionCall) and expr.function_name == "and"
         assert {"and", "mapContains", "equals", "arrayElement"} <= self._fn_names(expr)
+
+    def test_in_with_default_value_keeps_guard(self) -> None:
+        expr = self._build(ComparisonFilter.OP_IN, values=["", "x"])
+        self._assert_clean(expr)
+        assert isinstance(expr, FunctionCall) and expr.function_name == "and"
+        assert {"and", "in", "mapContains"} <= self._fn_names(expr)
+
+    def test_coalesced_default_value_keeps_guard(self) -> None:
+        expr = self._build(ComparisonFilter.OP_EQUALS, name="transaction", value="")
+        self._assert_clean(expr)
+        assert isinstance(expr, FunctionCall) and expr.function_name == "and"
+        assert {"and", "or", "equals", "multiIf", "mapContains"} <= self._fn_names(expr)
+
+    # --- always-guarded forms: null comparisons and LIKE/NOT_LIKE ---
 
     def test_equals_null_is_not_map_contains(self) -> None:
         expr = self._build(ComparisonFilter.OP_EQUALS, is_null=True)  # attr = null <=> absent
@@ -361,44 +403,26 @@ class TestAnalyzerSafeFilters:
         assert isinstance(expr, FunctionCall) and expr.function_name == "not"
         assert self._fn_names(expr) == {"not", "mapContains"}
 
-    def test_not_equals_is_negated_guarded_equals(self) -> None:
-        expr = self._build(ComparisonFilter.OP_NOT_EQUALS, value="ok")
-        self._assert_clean(expr)
-        assert isinstance(expr, FunctionCall) and expr.function_name == "not"
-        assert {"not", "and", "mapContains", "equals", "arrayElement"} <= self._fn_names(expr)
-
     def test_not_equals_null_is_map_contains(self) -> None:
         expr = self._build(ComparisonFilter.OP_NOT_EQUALS, is_null=True)  # attr != null <=> present
         self._assert_clean(expr)
         assert isinstance(expr, FunctionCall) and expr.function_name == "mapContains"
 
-    def test_like(self) -> None:
+    def test_like_keeps_guard(self) -> None:
         expr = self._build(ComparisonFilter.OP_LIKE, value="%ok%")
         self._assert_clean(expr)
         assert isinstance(expr, FunctionCall) and expr.function_name == "and"
         assert {"and", "mapContains", "like", "arrayElement"} <= self._fn_names(expr)
 
-    def test_not_like_negates_positive_like(self) -> None:
+    def test_not_like_keeps_guard_and_negates_positive_like(self) -> None:
         expr = self._build(ComparisonFilter.OP_NOT_LIKE, value="%ok%")
         self._assert_clean(expr)
         assert isinstance(expr, FunctionCall) and expr.function_name == "not"
         names = self._fn_names(expr)
         assert {"not", "and", "mapContains", "like", "arrayElement"} <= names
         assert "notLike" not in names  # positive like under the negation
-        ilike_expr = self._build(ComparisonFilter.OP_NOT_LIKE, value="%ok%", ignore_case=True)
-        assert "ilike" in self._fn_names(ilike_expr) and "notILike" not in self._fn_names(
-            ilike_expr
-        )
-
-    def test_coalesced_attribute_uses_multi_if_not_coalesce(self) -> None:
-        # Coalesced keys resolve via a NULL-free multiIf over per-key mapContains,
-        # never coalesce(if(..., NULL), ...), so they are analyzer-safe too.
-        assert "transaction" in ATTRIBUTES_TO_COALESCE
-        expr = self._build(ComparisonFilter.OP_EQUALS, name="transaction", value="t")
-        self._assert_clean(expr)
-        names = self._fn_names(expr)
-        assert "multiIf" in names and "coalesce" not in names
-        assert {"and", "equals", "mapContains", "or", "arrayElement"} <= names
+        ilike = self._build(ComparisonFilter.OP_NOT_LIKE, value="%ok%", ignore_case=True)
+        assert "ilike" in self._fn_names(ilike) and "notILike" not in self._fn_names(ilike)
 
 
 @pytest.mark.redis_db

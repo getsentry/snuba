@@ -341,10 +341,11 @@ def _map_backed_operands(k: AttributeKey) -> tuple[Expression, Expression]:
                          arrayElement(kn))                         # first present
         exists = mapContains(k1) OR ... OR mapContains(kn)
 
-    Callers build ``and(exists, cmp(value, v))`` (negated for !=/NOT LIKE/NOT IN).
-    ``exists`` — not the value — distinguishes a missing key from a stored empty
-    value, since ``arrayElement`` reads both as the '' / 0 default; the coalesced
-    ``multiIf`` else is only reached when all keys are absent (``exists`` false).
+    Callers build ``cmp(value, v)``, wrapped in ``and(exists, ...)`` only when the
+    literal could be the column default (see ``_comparison_can_match_column_default``)
+    — then ``exists``, not the value, distinguishes a missing key from a stored
+    empty value, since ``arrayElement`` reads both as the '' / 0 default. The
+    coalesced ``multiIf`` else is only reached when all keys are absent.
     Only valid for map-backed keys (string/int/float); the legacy
     ``coalesce(if(..., NULL))`` form remains in SELECT, where NULL output is wanted.
     """
@@ -371,16 +372,18 @@ def _analyzer_safe_in_expression(
     *,
     negated: bool,
     ignore_case: bool = False,
+    guard: bool = True,
 ) -> Expression:
-    """``IN`` / ``NOT IN`` as ``[not] and(exists, in(value, set))`` via
-    ``_map_backed_operands`` — keeps the NULL-laden existence ``if(...)`` out of
-    ``in(...)`` (see that helper). Equivalent to the legacy null-handling: the
-    value lists only carry scalars, so the set never contains NULL (the old
-    ``has(set, NULL)`` branch was always constant ``false``)."""
+    """``IN`` / ``NOT IN`` as ``[not] in(value, set)``, wrapped in
+    ``and(exists, ...)`` only when ``guard`` is set (see ``_map_backed_operands``
+    and ``_comparison_can_match_column_default``). The value lists carry only
+    scalars, so the set never contains NULL — the legacy ``has(set, NULL)`` branch
+    was always ``false``."""
     value, exists = _map_backed_operands(k)
     if ignore_case:
         value = f.lower(value)
-    present = and_cond(exists, in_cond(value, v_expression))
+    membership = in_cond(value, v_expression)
+    present = and_cond(exists, membership) if guard else membership
     return not_cond(present) if negated else present
 
 
@@ -401,6 +404,23 @@ def _scalar_value(v: AttributeValue) -> bool | str | int | float | None:
             return None
         case other:
             raise NotImplementedError(f"not a scalar AttributeValue type: {other}")
+
+
+def _comparison_can_match_column_default(
+    attr_type: AttributeKey.Type.ValueType, v: AttributeValue, value_type: str
+) -> bool:
+    """True if any compared literal is the column default ('' / 0), which an
+    absent key also reads as — so the ``mapContains`` guard is needed to avoid
+    matching absent keys. When no literal is the default the guard is dropped (the
+    simplest form). LIKE/NOT_LIKE always guard; null comparisons are separate."""
+    default: str | int = "" if attr_type == AttributeKey.Type.TYPE_STRING else 0
+    if value_type == "val_array":
+        scalars: list[Any] = [_scalar_value(x) for x in v.val_array.values]
+    elif value_type in ("val_str_array", "val_int_array", "val_float_array", "val_double_array"):
+        scalars = list(getattr(v, value_type).values)
+    else:
+        scalars = [_scalar_value(v)]
+    return any(s == default for s in scalars)
 
 
 def _attribute_value_to_expression(v: AttributeValue) -> Expression:
@@ -728,7 +748,11 @@ def trace_item_filters_to_expression(
                     if item_filter.comparison_filter.ignore_case
                     else (value, v_expression)
                 )
-                return and_cond(exists, f.equals(lhs, rhs))
+                cmp = f.equals(lhs, rhs)
+                # mapContains guard only needed when '' / 0 could match an absent key.
+                if _comparison_can_match_column_default(k.type, v, value_type):
+                    return and_cond(exists, cmp)
+                return cmp
             else:
                 expr = (
                     f.equals(f.lower(k_expression), f.lower(v_expression))
@@ -759,7 +783,9 @@ def trace_item_filters_to_expression(
                     if item_filter.comparison_filter.ignore_case
                     else (value, v_expression)
                 )
-                return not_cond(and_cond(exists, f.equals(lhs, rhs)))
+                if _comparison_can_match_column_default(k.type, v, value_type):
+                    return not_cond(and_cond(exists, f.equals(lhs, rhs)))
+                return f.notEquals(lhs, rhs)
             else:
                 expr = (
                     f.notEquals(f.lower(k_expression), f.lower(v_expression))
@@ -850,7 +876,11 @@ def trace_item_filters_to_expression(
             if _contains_subscriptable_reference(k_expression):
                 # Map-backed: keep the existence if(...) out of in() (see helper).
                 return _analyzer_safe_in_expression(
-                    k, v_expression, negated=False, ignore_case=ignore_case
+                    k,
+                    v_expression,
+                    negated=False,
+                    ignore_case=ignore_case,
+                    guard=_comparison_can_match_column_default(k.type, v, value_type),
                 )
             if ignore_case:
                 k_expression = f.lower(k_expression)
@@ -880,7 +910,11 @@ def trace_item_filters_to_expression(
             if _contains_subscriptable_reference(k_expression):
                 # Map-backed: keep the existence if(...) out of in() (see helper).
                 return _analyzer_safe_in_expression(
-                    k, v_expression, negated=True, ignore_case=ignore_case
+                    k,
+                    v_expression,
+                    negated=True,
+                    ignore_case=ignore_case,
+                    guard=_comparison_can_match_column_default(k.type, v, value_type),
                 )
             if ignore_case:
                 k_expression = f.lower(k_expression)
