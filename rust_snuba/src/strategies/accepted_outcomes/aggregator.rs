@@ -6,8 +6,8 @@ use prost::Message as ProstMessage;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::counter;
 use sentry_arroyo::processing::strategies::{
-    merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
-    StrategyError, SubmitError,
+    merge_commit_request, CommitRequest, InvalidMessage, InvalidMessageReason, MessageRejected,
+    ProcessingStrategy, StrategyError, SubmitError,
 };
 use sentry_arroyo::types::{InnerMessage, Message, Partition};
 use sentry_arroyo::utils::timing::Deadline;
@@ -235,6 +235,7 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
         let maybe_err = SubmitError::InvalidMessage(InvalidMessage {
             partition,
             offset: broker_offset,
+            reason: InvalidMessageReason::Invalid,
         });
 
         let kafka_payload = &broker_msg.payload.clone();

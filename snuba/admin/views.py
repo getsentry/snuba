@@ -121,6 +121,16 @@ def handle_invalid_json(exception: UnauthorizedException) -> Response:
     )
 
 
+@application.errorhandler(InvalidDatasetError)
+def handle_invalid_dataset(exception: InvalidDatasetError) -> Response:
+    data = {"error": {"type": "dataset", "message": str(exception)}}
+    return Response(
+        json.dumps(data, sort_keys=True, indent=4),
+        404,
+        {"Content-Type": "application/json"},
+    )
+
+
 @application.before_request
 def set_logging_context() -> None:
     clear_contextvars()
@@ -506,6 +516,19 @@ def copy_table_query() -> Response:
             "code": err.code,
         }
         return make_response(jsonify({"error": details}), 400)
+    except InvalidNodeError as err:
+        logger.error(err, exc_info=True)
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "request",
+                        "message": err.message or "Invalid node",
+                    }
+                }
+            ),
+            400,
+        )
 
     try:
         return make_response(jsonify(resp), 200)
@@ -999,12 +1022,6 @@ def snuba_debug() -> Response:
             400,
             {"Content-Type": "application/json"},
         )
-    except InvalidDatasetError as exception:
-        return Response(
-            json.dumps({"error": {"message": str(exception)}}, indent=4),
-            400,
-            {"Content-Type": "application/json"},
-        )
     finally:
         explain_cleanup()
 
@@ -1306,12 +1323,6 @@ def production_snql_query() -> Response:
             400,
             {"Content-Type": "application/json"},
         )
-    except InvalidDatasetError as exception:
-        return Response(
-            json.dumps({"error": {"message": str(exception)}}, indent=4),
-            400,
-            {"Content-Type": "application/json"},
-        )
 
 
 @application.route("/production_mql_query", methods=["POST"])
@@ -1322,12 +1333,6 @@ def production_mql_query() -> Response:
     try:
         return run_mql_query(body, g.user.email)
     except InvalidQueryException as exception:
-        return Response(
-            json.dumps({"error": {"message": str(exception)}}, indent=4),
-            400,
-            {"Content-Type": "application/json"},
-        )
-    except InvalidDatasetError as exception:
         return Response(
             json.dumps({"error": {"message": str(exception)}}, indent=4),
             400,

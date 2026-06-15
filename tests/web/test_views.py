@@ -1,7 +1,6 @@
 import copy
 import logging
 from typing import Any
-from unittest import mock
 
 import pytest
 import simplejson as json
@@ -79,48 +78,12 @@ def test_check_envoy_health(snuba_api: FlaskClient) -> None:
     assert response.status_code == 200
 
 
-def test_do_not_check_clickhouse_tables_if_not_thorough(snuba_api: FlaskClient) -> None:
-    with mock.patch(
-        "snuba.utils.health_info.sanity_check_clickhouse_connections",
-        return_value=True,
-    ):
-        response = snuba_api.get("/health")
+def test_health_always_ok(snuba_api: FlaskClient) -> None:
+    response = snuba_api.get("/health")
     assert response.status_code == 200
-    # don't check clickhouse if not thorough
-    with mock.patch("snuba.utils.health_info.check_all_tables_present", return_value=False):
-        with mock.patch(
-            "snuba.utils.health_info.sanity_check_clickhouse_connections",
-            return_value=True,
-        ):
-            response = snuba_api.get("/health")
-            assert response.status_code == 200
+    assert json.loads(response.data) == {"status": "ok"}
 
-
-def test_bad_clickhouse_connection_thorough_healthcheck_fails(
-    snuba_api: FlaskClient,
-) -> None:
-    with mock.patch(
-        "snuba.utils.health_info.sanity_check_clickhouse_connections",
-        return_value=True,
-    ):
-        response = snuba_api.get("/health")
+    # thorough no longer changes the outcome — ClickHouse is not checked
+    response = snuba_api.get("/health?thorough=true")
     assert response.status_code == 200
-    # thorough healthcheck fails on bad clickhouse connection
-    with mock.patch("snuba.utils.health_info.check_all_tables_present", return_value=False):
-        response = snuba_api.get("/health?thorough=true")
-        assert response.status_code == 502
-
-
-def test_good_clickhouse_connection_thorough_healthcheck_passes(
-    snuba_api: FlaskClient,
-) -> None:
-    with mock.patch(
-        "snuba.utils.health_info.sanity_check_clickhouse_connections",
-        return_value=True,
-    ):
-        response = snuba_api.get("/health")
-    assert response.status_code == 200
-    # thorough healthcheck passes on good clickhouse connection
-    with mock.patch("snuba.utils.health_info.check_all_tables_present", return_value=True):
-        response = snuba_api.get("/health?thorough=true")
-        assert response.status_code == 200
+    assert json.loads(response.data) == {"status": "ok"}

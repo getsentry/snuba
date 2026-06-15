@@ -107,6 +107,14 @@ pub struct StringToIntDatetime64(
     pub u64,
 );
 
+/// Error type for messages that should be routed to the DLQ without being
+/// reported to Sentry. The processor strategy downcasts to this type and skips
+/// the usual error-level logging / Sentry capture, treating the failure as an
+/// expected (silenced) DLQ outcome.
+#[derive(Debug, thiserror::Error)]
+#[error("message routed to DLQ (silenced)")]
+pub struct SilencedDLQMessage;
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
