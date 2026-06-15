@@ -1,5 +1,4 @@
 import json
-from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, TypeVar, cast
 
@@ -15,8 +14,9 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 from snuba import settings, state
 from snuba.protos.common import (
     ATTRIBUTES_TO_COALESCE,
+    PROTO_TYPE_TO_ATTRIBUTE_COLUMN,
+    PROTO_TYPE_TO_CLICKHOUSE_TYPE,
     MalformedAttributeException,
-    _generate_subscriptable_reference,
     type_array_to_membership_array_expression,
 )
 from snuba.protos.common import (
@@ -308,33 +308,15 @@ def _contains_subscriptable_reference(exp: Expression) -> bool:
     return found
 
 
-def _subscriptable_references_to_array_element(exp: Expression) -> Expression:
-    """Lower ``SubscriptableReference``\\ s to bare ``arrayElement`` (no NULL).
-
-    Aliases are stripped so the lowered form can't collide with the existence
-    ``if(...)`` the SELECT clause may carry for the same attribute (same alias,
-    different expression).
-    """
-
-    def transform(node: Expression) -> Expression:
-        if isinstance(node, SubscriptableReference):
-            return arrayElement(None, node.column, node.key)
-        if node.alias is not None:
-            return replace(node, alias=None)
-        return node
-
-    return exp.transform(transform)
-
-
 def _map_backed_operands(k: AttributeKey) -> tuple[Expression, Expression]:
-    """Build ``(value, exists)`` for a map-backed key, NULL-free.
+    """Build ``(value, exists)`` for a map-backed key directly, NULL-free.
 
     The legacy ``if(mapContains, arrayElement, NULL)`` form puts a NULL constant
     into the predicate; the new ClickHouse analyzer canonicalizes that NULL
     inconsistently between an aggregate's projection name and its computed block
     (notably inside ``in(...)``), so the column isn't found ("Code: 10 ... Not
-    found column ... in block"). Building from ``mapContains`` + ``arrayElement``
-    avoids the NULL entirely:
+    found column ... in block"). We write ``mapContains`` + ``arrayElement``
+    directly, so no NULL appears:
 
         value  = arrayElement(k)                                  # single key
         value  = multiIf(mapContains(k1), arrayElement(k1), ...,  # coalesced:
@@ -345,14 +327,26 @@ def _map_backed_operands(k: AttributeKey) -> tuple[Expression, Expression]:
     literal could be the column default (see ``_comparison_can_match_column_default``)
     — then ``exists``, not the value, distinguishes a missing key from a stored
     empty value, since ``arrayElement`` reads both as the '' / 0 default. The
-    coalesced ``multiIf`` else is only reached when all keys are absent.
-    Only valid for map-backed keys (string/int/float); the legacy
-    ``coalesce(if(..., NULL))`` form remains in SELECT, where NULL output is wanted.
+    ``multiIf`` else is only reached when all keys are absent.
+
+    Built without aliases: conditions don't need them, and an alias here would
+    collide with the SELECT clause's existence ``if(...)`` for the same attribute
+    (same alias, different expression). Only valid for map-backed keys
+    (string/int/float); booleans / normalized columns / arrays take the legacy
+    path, and SELECT keeps its own ``coalesce(...)`` representation untouched.
     """
+    col_name = PROTO_TYPE_TO_ATTRIBUTE_COLUMN[k.type]
     names = [k.name] + list(ATTRIBUTES_TO_COALESCE.get(k.name, ()))
-    branches = [_generate_subscriptable_reference(name, k.type) for name in names]
-    values = [_subscriptable_references_to_array_element(b) for b in branches]
-    existences = [get_field_existence_expression(b) for b in branches]
+
+    def _value(name: str) -> Expression:
+        elem = arrayElement(None, column(col_name), literal(name))
+        # ints live in the float map and surface as Int64, so they need a cast.
+        if k.type == AttributeKey.Type.TYPE_INT:
+            return f.cast(elem, f"Nullable({PROTO_TYPE_TO_CLICKHOUSE_TYPE[k.type]})")
+        return elem
+
+    values = [_value(name) for name in names]
+    existences = [f.mapContains(column(col_name), literal(name)) for name in names]
 
     exists = combine_or_conditions(existences) if len(existences) > 1 else existences[0]
     if len(values) == 1:
