@@ -489,6 +489,27 @@ class TestComparisonAnalyzerSafe:
         names = self._fn_names(expr)
         assert "ilike" in names and "notILike" not in names
 
+    def test_coalesced_attribute_uses_multi_if_not_coalesce(self) -> None:
+        # A coalesced attribute is generated as a NULL-free multiIf over the
+        # per-key mapContains (never a coalesce(if(..., NULL), ...)), so it is
+        # analyzer-safe too.
+        canonical = "transaction"
+        assert canonical in ATTRIBUTES_TO_COALESCE, "test precondition: key must be coalesced"
+        item_filter = TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_STRING, name=canonical),
+                op=ComparisonFilter.OP_EQUALS,
+                value=AttributeValue(val_str="t"),
+            )
+        )
+        expr = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        self._assert_clean(expr)
+        names = self._fn_names(expr)
+        assert "multiIf" in names
+        assert "coalesce" not in names
+        # existence is an OR of mapContains across canonical + deprecated keys
+        assert {"and", "equals", "mapContains", "or", "arrayElement"} <= names
+
 
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
