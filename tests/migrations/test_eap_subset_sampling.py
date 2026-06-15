@@ -1,5 +1,5 @@
 """Unit tests for the EAP downsample materialized view introduced in
-migration 0055_sample_downsample_tiers_by_trace.
+migration 0057_sample_downsample_tiers_by_trace.
 
 These check:
 - the new MV samples on `trace_id` (so every item in a trace lands in the
@@ -12,7 +12,7 @@ These check:
 from importlib import import_module
 
 _migration = import_module(
-    "snuba.snuba_migrations.events_analytics_platform.0055_sample_downsample_tiers_by_trace"
+    "snuba.snuba_migrations.events_analytics_platform.0057_sample_downsample_tiers_by_trace"
 )
 
 
