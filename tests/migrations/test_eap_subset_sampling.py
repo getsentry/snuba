@@ -1,5 +1,5 @@
 """Unit tests for the EAP downsample materialized view introduced in
-migration 0057_sample_downsample_tiers_by_trace.
+migration 0057_nest_downsample_tiers.
 
 These check:
 - the new MV samples per item via a single, un-perturbed hash of `item_id`
@@ -14,7 +14,7 @@ These check:
 from importlib import import_module
 
 _migration = import_module(
-    "snuba.snuba_migrations.events_analytics_platform.0057_sample_downsample_tiers_by_trace"
+    "snuba.snuba_migrations.events_analytics_platform.0057_nest_downsample_tiers"
 )
 
 
