@@ -31,9 +31,17 @@ from snuba import settings
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.protos.common import ATTRIBUTES_TO_COALESCE
-from snuba.query.expressions import FunctionCall, Lambda, Literal
+from snuba.query.expressions import (
+    Expression,
+    FunctionCall,
+    Lambda,
+    Literal,
+    SubscriptableReference,
+)
+from snuba.query.logical import Query
 from snuba.web.rpc.common.common import (
     _any_attribute_filter_to_expression,
+    add_existence_check_to_subscriptable_references,
     attribute_key_to_expression,
     next_monday,
     prev_monday,
@@ -260,6 +268,129 @@ class TestExistsFilterCoalesced:
         expr = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
         assert isinstance(expr, FunctionCall)
         assert expr.function_name == "mapContains"
+
+
+class TestInNotInAnalyzerSafe:
+    """IN / NOT IN on a map-backed attribute must not feed the existence
+    ``if(mapContains(...), arrayElement(...), NULL)`` into ``in(...)``.
+
+    That shape makes the new ClickHouse analyzer name the projection column and
+    the computed block inconsistently (it folds the NULL else-branch differently
+    in each), surfacing as ``Code: 10. DB::Exception: Not found column ... in
+    block`` (SNUBA-B62 / SNUBA-B6C / SNUBA-A13). We compare the raw
+    ``arrayElement`` value and guard NULL handling with an explicit
+    ``mapContains`` instead.
+    """
+
+    @staticmethod
+    def _walk(expr: Expression) -> list[Expression]:
+        nodes: list[Expression] = []
+
+        def visit(node: Expression) -> Expression:
+            nodes.append(node)
+            return node
+
+        expr.transform(visit)
+        return nodes
+
+    @staticmethod
+    def _make_in_filter(
+        name: str,
+        op: ComparisonFilter.Op.ValueType,
+        values: list[str],
+    ) -> TraceItemFilter:
+        return TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_STRING, name=name),
+                op=op,
+                value=AttributeValue(val_str_array=StrArray(values=values)),
+            )
+        )
+
+    def _assert_in_operand_is_array_element(self, expr: Expression) -> None:
+        # The whole point: every in(...) left operand is a raw arrayElement, not
+        # an if(...) carrying a NULL constant.
+        in_calls = [
+            n for n in self._walk(expr) if isinstance(n, FunctionCall) and n.function_name == "in"
+        ]
+        assert in_calls, "expected an in(...) call in the predicate"
+        for in_call in in_calls:
+            operand = in_call.parameters[0]
+            assert isinstance(operand, FunctionCall), operand
+            assert operand.function_name == "arrayElement", operand.function_name
+
+    def _assert_no_subscriptable_references(self, expr: Expression) -> None:
+        # No SubscriptableReference means add_existence_check_to_subscriptable_references
+        # is a no-op here, so it can never reintroduce the if(...) inside in(...).
+        assert not any(isinstance(n, SubscriptableReference) for n in self._walk(expr))
+
+    def _assert_no_null_literals(self, expr: Expression) -> None:
+        # The predicate must contain no NULL literal at all -- not in in(...),
+        # and not in a has(set, NULL) term either.
+        assert not any(isinstance(n, Literal) and n.value is None for n in self._walk(expr))
+
+    def test_not_in_uses_array_element_and_map_contains(self) -> None:
+        item_filter = self._make_in_filter(
+            "some.custom.tag", ComparisonFilter.OP_NOT_IN, ["a", "b"]
+        )
+        expr = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        self._assert_in_operand_is_array_element(expr)
+        self._assert_no_subscriptable_references(expr)
+
+        # not( and(mapContains, in(arrayElement, set)) ) -- no NULL anywhere.
+        assert isinstance(expr, FunctionCall) and expr.function_name == "not"
+        names = {n.function_name for n in self._walk(expr) if isinstance(n, FunctionCall)}
+        assert {"not", "and", "in", "mapContains", "arrayElement"} <= names
+        assert "has" not in names
+        self._assert_no_null_literals(expr)
+
+    def test_in_uses_array_element_and_map_contains(self) -> None:
+        item_filter = self._make_in_filter("some.custom.tag", ComparisonFilter.OP_IN, ["a", "b"])
+        expr = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        self._assert_in_operand_is_array_element(expr)
+        self._assert_no_subscriptable_references(expr)
+        # and(mapContains, in(arrayElement, set)) -- no NULL anywhere.
+        assert isinstance(expr, FunctionCall) and expr.function_name == "and"
+        self._assert_no_null_literals(expr)
+
+    def test_not_in_ignore_case_lowers_array_element(self) -> None:
+        item_filter = TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_STRING, name="some.custom.tag"),
+                op=ComparisonFilter.OP_NOT_IN,
+                value=AttributeValue(val_str_array=StrArray(values=["A", "B"])),
+                ignore_case=True,
+            )
+        )
+        expr = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        self._assert_no_subscriptable_references(expr)
+        # in(...) operand is lower(arrayElement(...)); set values are lowercased.
+        in_calls = [
+            n for n in self._walk(expr) if isinstance(n, FunctionCall) and n.function_name == "in"
+        ]
+        assert len(in_calls) == 1
+        operand = in_calls[0].parameters[0]
+        assert isinstance(operand, FunctionCall) and operand.function_name == "lower"
+        inner = operand.parameters[0]
+        assert isinstance(inner, FunctionCall) and inner.function_name == "arrayElement"
+
+    def test_existence_pass_is_noop_on_in_predicate(self) -> None:
+        """add_existence_check_to_subscriptable_references must not reintroduce an
+        if(...) inside the in(...) — it has no SubscriptableReference to wrap."""
+        item_filter = self._make_in_filter(
+            "some.custom.tag", ComparisonFilter.OP_NOT_IN, ["a", "b"]
+        )
+        expr = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+
+        query = Query(from_clause=None, condition=expr)
+        add_existence_check_to_subscriptable_references(query)
+        transformed = query.get_condition()
+        assert transformed is not None
+        self._assert_in_operand_is_array_element(transformed)
+        # No if(...) wrapper anywhere — the analyzer-foldable shape is gone.
+        assert not any(
+            isinstance(n, FunctionCall) and n.function_name == "if" for n in self._walk(transformed)
+        )
 
 
 @pytest.mark.redis_db

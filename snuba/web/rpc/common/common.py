@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, TypeVar, cast
 
@@ -24,6 +25,7 @@ from snuba.query.conditions import combine_and_conditions, combine_or_conditions
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import (
     and_cond,
+    arrayElement,
     column,
     in_cond,
     literal,
@@ -287,6 +289,85 @@ def add_existence_check_to_subscriptable_references(query: Query) -> None:
         )
 
     query.transform_expressions(transform)
+
+
+def _contains_subscriptable_reference(exp: Expression) -> bool:
+    """True if ``exp`` has any ``SubscriptableReference`` in its subtree.
+
+    Those are exactly the nodes ``add_existence_check_to_subscriptable_references``
+    later wraps in ``if(mapContains(...), ..., NULL)``. When such a wrapped
+    reference ends up as the left operand of ``in(...)`` it triggers the new
+    analyzer column-name mismatch (see ``_analyzer_safe_in_expression``).
+    """
+    found = False
+
+    def visit(node: Expression) -> Expression:
+        nonlocal found
+        if isinstance(node, SubscriptableReference):
+            found = True
+        return node
+
+    exp.transform(visit)
+    return found
+
+
+def _subscriptable_references_to_array_element(exp: Expression) -> Expression:
+    """Lower every ``SubscriptableReference`` in ``exp`` to a bare ``arrayElement``.
+
+    ``add_existence_check_to_subscriptable_references`` only rewrites
+    ``SubscriptableReference`` nodes, so pre-lowering them to ``arrayElement``
+    keeps that pass from wrapping them in ``if(mapContains(...), ..., NULL)``.
+    The result carries no NULL constant, so it is safe as the left operand of
+    ``in(...)`` (see ``_analyzer_safe_in_expression``). ``arrayElement`` returns
+    the map's default ('' / 0) for a missing key rather than NULL — callers pair
+    this with an explicit ``mapContains`` guard to restore NULL semantics.
+
+    All aliases are stripped: the lowered expression is structurally different
+    from the existence ``if(...)`` the SELECT clause may still carry for the same
+    attribute, so reusing the alias would collide ("different expression, same
+    alias"). Condition expressions don't need aliases anyway.
+    """
+
+    def transform(node: Expression) -> Expression:
+        if isinstance(node, SubscriptableReference):
+            return arrayElement(None, node.column, node.key)
+        if node.alias is not None:
+            return replace(node, alias=None)
+        return node
+
+    return exp.transform(transform)
+
+
+def _analyzer_safe_in_expression(
+    k_expression: Expression, v_expression: Expression, *, negated: bool
+) -> Expression:
+    """Build an ``IN`` / ``NOT IN`` predicate the new ClickHouse analyzer can name
+    consistently.
+
+    The straightforward form ``in(if(mapContains(...), arrayElement(...), NULL), set)``
+    puts a NULL constant inside the ``in(...)`` left operand. The new analyzer
+    folds that NULL differently when it names the projection column versus when
+    it computes the block (it strips the redundant CAST in one place but not the
+    other), so the aggregate column no longer matches its projection name and the
+    query dies with ``Code: 10. DB::Exception: Not found column ... in block``.
+
+    Instead of feeding the existence ``if(...)`` into ``in(...)`` we compare the
+    raw ``arrayElement(...)`` value and guard it with an explicit ``mapContains``
+    so a missing key (which ``arrayElement`` reads as the column default '' / 0,
+    not NULL) can never match:
+
+      * IN:      key exists AND value in set
+      * NOT IN:  NOT (key exists AND value in set)   -> missing key is "not in"
+
+    This is equivalent to the legacy ``isNull(if(mapContains, arrayElement,
+    NULL))`` handling for every value list these filters accept: the typed array
+    fields (``val_str_array`` etc.) only carry scalars, so the set never contains
+    NULL and the old ``has(set, NULL)`` branch was always a constant ``false``.
+    """
+    exists = get_field_existence_expression(k_expression)
+    membership_value = _subscriptable_references_to_array_element(k_expression)
+    present = and_cond(exists, in_cond(membership_value, v_expression))
+    return not_cond(present) if negated else present
 
 
 def _scalar_value(v: AttributeValue) -> bool | str | int | float | None:
@@ -718,10 +799,14 @@ def trace_item_filters_to_expression(
                         None,
                         [literal(elem.val_str.lower()) for elem in v.val_array.values],
                     )
-            expr = in_cond(k_expression, v_expression)
             # note: v_expression must be an array
             # we redefine the way in works for nulls
             # now null in ['hi', null] is true
+            if _contains_subscriptable_reference(k_expression):
+                # Map-backed attribute: avoid feeding the existence if(...) into
+                # in(...), which the new analyzer canonicalizes inconsistently.
+                return _analyzer_safe_in_expression(k_expression, v_expression, negated=False)
+            expr = in_cond(k_expression, v_expression)
             expr_with_null = or_cond(
                 expr,
                 and_cond(f.isNull(k_expression), f.has(v_expression, literal(None))),
@@ -741,10 +826,14 @@ def trace_item_filters_to_expression(
                         None,
                         [literal(elem.val_str.lower()) for elem in v.val_array.values],
                     )
-            expr = not_cond(in_cond(k_expression, v_expression))
             # note: v_expression must be an array
             # we redefine the way not in works for nulls
             # now null not in ['hi'] is true
+            if _contains_subscriptable_reference(k_expression):
+                # Map-backed attribute: avoid feeding the existence if(...) into
+                # in(...), which the new analyzer canonicalizes inconsistently.
+                return _analyzer_safe_in_expression(k_expression, v_expression, negated=True)
+            expr = not_cond(in_cond(k_expression, v_expression))
             expr_with_null = or_cond(
                 expr,
                 and_cond(
