@@ -39,10 +39,8 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.query.logical import Query
 from snuba.web.rpc.common.common import (
     _any_attribute_filter_to_expression,
-    add_existence_check_to_subscriptable_references,
     attribute_key_to_expression,
     next_monday,
     prev_monday,
@@ -271,16 +269,12 @@ class TestExistsFilterCoalesced:
         assert expr.function_name == "mapContains"
 
 
-class TestInNotInAnalyzerSafe:
-    """IN / NOT IN on a map-backed attribute must not feed the existence
-    ``if(mapContains(...), arrayElement(...), NULL)`` into ``in(...)``.
-
-    That shape makes the new ClickHouse analyzer name the projection column and
-    the computed block inconsistently (it folds the NULL else-branch differently
-    in each), surfacing as ``Code: 10. DB::Exception: Not found column ... in
-    block`` (SNUBA-B62 / SNUBA-B6C / SNUBA-A13). We compare the raw
-    ``arrayElement`` value and guard NULL handling with an explicit
-    ``mapContains`` instead.
+class TestAnalyzerSafeFilters:
+    """Per-key filters on map-backed attributes are built from a NULL-free
+    (mapContains, arrayElement) pair instead of the legacy
+    if(mapContains, arrayElement, NULL) + isNull(...) idiom, so the new ClickHouse
+    analyzer names the aggregate column consistently (SNUBA-B62/B6C/A13). The
+    mapContains guard preserves the absent-vs-empty distinction.
     """
 
     @staticmethod
@@ -293,145 +287,6 @@ class TestInNotInAnalyzerSafe:
 
         expr.transform(visit)
         return nodes
-
-    @staticmethod
-    def _make_in_filter(
-        name: str,
-        op: ComparisonFilter.Op.ValueType,
-        values: list[str],
-    ) -> TraceItemFilter:
-        return TraceItemFilter(
-            comparison_filter=ComparisonFilter(
-                key=AttributeKey(type=AttributeKey.Type.TYPE_STRING, name=name),
-                op=op,
-                value=AttributeValue(val_str_array=StrArray(values=values)),
-            )
-        )
-
-    def _assert_in_operand_is_array_element(self, expr: Expression) -> None:
-        # The whole point: every in(...) left operand is a raw arrayElement, not
-        # an if(...) carrying a NULL constant.
-        in_calls = [
-            n for n in self._walk(expr) if isinstance(n, FunctionCall) and n.function_name == "in"
-        ]
-        assert in_calls, "expected an in(...) call in the predicate"
-        for in_call in in_calls:
-            operand = in_call.parameters[0]
-            assert isinstance(operand, FunctionCall), operand
-            assert operand.function_name == "arrayElement", operand.function_name
-
-    def _assert_no_subscriptable_references(self, expr: Expression) -> None:
-        # No SubscriptableReference means add_existence_check_to_subscriptable_references
-        # is a no-op here, so it can never reintroduce the if(...) inside in(...).
-        assert not any(isinstance(n, SubscriptableReference) for n in self._walk(expr))
-
-    def _assert_no_null_literals(self, expr: Expression) -> None:
-        # The predicate must contain no NULL literal at all -- not in in(...),
-        # and not in a has(set, NULL) term either.
-        assert not any(isinstance(n, Literal) and n.value is None for n in self._walk(expr))
-
-    def test_not_in_uses_array_element_and_map_contains(self) -> None:
-        item_filter = self._make_in_filter(
-            "some.custom.tag", ComparisonFilter.OP_NOT_IN, ["a", "b"]
-        )
-        expr = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
-        self._assert_in_operand_is_array_element(expr)
-        self._assert_no_subscriptable_references(expr)
-
-        # not( and(mapContains, in(arrayElement, set)) ) -- no NULL anywhere.
-        assert isinstance(expr, FunctionCall) and expr.function_name == "not"
-        names = {n.function_name for n in self._walk(expr) if isinstance(n, FunctionCall)}
-        assert {"not", "and", "in", "mapContains", "arrayElement"} <= names
-        assert "has" not in names
-        self._assert_no_null_literals(expr)
-
-    def test_in_uses_array_element_and_map_contains(self) -> None:
-        item_filter = self._make_in_filter("some.custom.tag", ComparisonFilter.OP_IN, ["a", "b"])
-        expr = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
-        self._assert_in_operand_is_array_element(expr)
-        self._assert_no_subscriptable_references(expr)
-        # and(mapContains, in(arrayElement, set)) -- no NULL anywhere.
-        assert isinstance(expr, FunctionCall) and expr.function_name == "and"
-        self._assert_no_null_literals(expr)
-
-    def test_not_in_ignore_case_lowers_array_element(self) -> None:
-        item_filter = TraceItemFilter(
-            comparison_filter=ComparisonFilter(
-                key=AttributeKey(type=AttributeKey.Type.TYPE_STRING, name="some.custom.tag"),
-                op=ComparisonFilter.OP_NOT_IN,
-                value=AttributeValue(val_str_array=StrArray(values=["A", "B"])),
-                ignore_case=True,
-            )
-        )
-        expr = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
-        self._assert_no_subscriptable_references(expr)
-        # in(...) operand is lower(arrayElement(...)); set values are lowercased.
-        in_calls = [
-            n for n in self._walk(expr) if isinstance(n, FunctionCall) and n.function_name == "in"
-        ]
-        assert len(in_calls) == 1
-        operand = in_calls[0].parameters[0]
-        assert isinstance(operand, FunctionCall) and operand.function_name == "lower"
-        inner = operand.parameters[0]
-        assert isinstance(inner, FunctionCall) and inner.function_name == "arrayElement"
-
-    def test_existence_pass_is_noop_on_in_predicate(self) -> None:
-        """add_existence_check_to_subscriptable_references must not reintroduce an
-        if(...) inside the in(...) — it has no SubscriptableReference to wrap."""
-        item_filter = self._make_in_filter(
-            "some.custom.tag", ComparisonFilter.OP_NOT_IN, ["a", "b"]
-        )
-        expr = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
-
-        query = Query(from_clause=None, condition=expr)
-        add_existence_check_to_subscriptable_references(query)
-        transformed = query.get_condition()
-        assert transformed is not None
-        self._assert_in_operand_is_array_element(transformed)
-        # No if(...) wrapper anywhere — the analyzer-foldable shape is gone.
-        assert not any(
-            isinstance(n, FunctionCall) and n.function_name == "if" for n in self._walk(transformed)
-        )
-
-
-class TestComparisonAnalyzerSafe:
-    """EQUALS / NOT_EQUALS / LIKE / NOT_LIKE on map-backed attributes are built
-    from a (mapContains, arrayElement) pair instead of the legacy
-    if(mapContains, arrayElement, NULL) + isNull(...) idiom, so no NULL constant
-    is fed into the WHERE / aggregate-condition predicate (same class of new
-    analyzer fragility as IN/NOT_IN), while the absent-vs-empty distinction is
-    preserved by the explicit mapContains guard.
-    """
-
-    @staticmethod
-    def _walk(expr: Expression) -> list[Expression]:
-        nodes: list[Expression] = []
-
-        def visit(node: Expression) -> Expression:
-            nodes.append(node)
-            return node
-
-        expr.transform(visit)
-        return nodes
-
-    def _cmp(
-        self,
-        op: ComparisonFilter.Op.ValueType,
-        *,
-        value: str | None = None,
-        is_null: bool = False,
-        ignore_case: bool = False,
-    ) -> Expression:
-        av = AttributeValue(val_null=True) if is_null else AttributeValue(val_str=value or "")
-        item_filter = TraceItemFilter(
-            comparison_filter=ComparisonFilter(
-                key=AttributeKey(type=AttributeKey.Type.TYPE_STRING, name="some.custom.tag"),
-                op=op,
-                value=av,
-                ignore_case=ignore_case,
-            )
-        )
-        return trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
 
     def _fn_names(self, expr: Expression) -> set[str]:
         return {n.function_name for n in self._walk(expr) if isinstance(n, FunctionCall)}
@@ -443,71 +298,106 @@ class TestComparisonAnalyzerSafe:
             assert not isinstance(n, SubscriptableReference)
             assert not (isinstance(n, FunctionCall) and n.function_name == "if")
 
-    def test_equals_is_guarded_arrayelement(self) -> None:
-        expr = self._cmp(ComparisonFilter.OP_EQUALS, value="ok")
+    def _build(
+        self,
+        op: ComparisonFilter.Op.ValueType,
+        *,
+        name: str = "some.custom.tag",
+        value: str | None = None,
+        values: list[str] | None = None,
+        is_null: bool = False,
+        ignore_case: bool = False,
+    ) -> Expression:
+        if values is not None:
+            av = AttributeValue(val_str_array=StrArray(values=values))
+        elif is_null:
+            av = AttributeValue(val_null=True)
+        else:
+            av = AttributeValue(val_str=value or "")
+        item_filter = TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_STRING, name=name),
+                op=op,
+                value=av,
+                ignore_case=ignore_case,
+            )
+        )
+        return trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+
+    def test_in(self) -> None:
+        expr = self._build(ComparisonFilter.OP_IN, values=["a", "b"])
+        self._assert_clean(expr)
+        assert isinstance(expr, FunctionCall) and expr.function_name == "and"
+        assert {"and", "in", "mapContains", "arrayElement"} <= self._fn_names(expr)
+
+    def test_not_in(self) -> None:
+        expr = self._build(ComparisonFilter.OP_NOT_IN, values=["a", "b"])
+        self._assert_clean(expr)
+        assert isinstance(expr, FunctionCall) and expr.function_name == "not"
+        names = self._fn_names(expr)
+        assert {"not", "and", "in", "mapContains", "arrayElement"} <= names
+        assert "has" not in names  # no NULL-in-set handling needed
+
+    def test_in_ignore_case_lowers_array_element(self) -> None:
+        expr = self._build(ComparisonFilter.OP_NOT_IN, values=["A", "B"], ignore_case=True)
+        self._assert_clean(expr)
+        (in_call,) = [
+            n for n in self._walk(expr) if isinstance(n, FunctionCall) and n.function_name == "in"
+        ]
+        operand = in_call.parameters[0]
+        assert isinstance(operand, FunctionCall) and operand.function_name == "lower"
+        inner = operand.parameters[0]
+        assert isinstance(inner, FunctionCall) and inner.function_name == "arrayElement"
+
+    def test_equals(self) -> None:
+        expr = self._build(ComparisonFilter.OP_EQUALS, value="ok")
         self._assert_clean(expr)
         assert isinstance(expr, FunctionCall) and expr.function_name == "and"
         assert {"and", "mapContains", "equals", "arrayElement"} <= self._fn_names(expr)
 
     def test_equals_null_is_not_map_contains(self) -> None:
-        # `attr = null` == key absent == not(mapContains(...))
-        expr = self._cmp(ComparisonFilter.OP_EQUALS, is_null=True)
+        expr = self._build(ComparisonFilter.OP_EQUALS, is_null=True)  # attr = null <=> absent
         self._assert_clean(expr)
         assert isinstance(expr, FunctionCall) and expr.function_name == "not"
         assert self._fn_names(expr) == {"not", "mapContains"}
 
     def test_not_equals_is_negated_guarded_equals(self) -> None:
-        expr = self._cmp(ComparisonFilter.OP_NOT_EQUALS, value="ok")
+        expr = self._build(ComparisonFilter.OP_NOT_EQUALS, value="ok")
         self._assert_clean(expr)
         assert isinstance(expr, FunctionCall) and expr.function_name == "not"
         assert {"not", "and", "mapContains", "equals", "arrayElement"} <= self._fn_names(expr)
 
     def test_not_equals_null_is_map_contains(self) -> None:
-        # `attr != null` == key present == mapContains(...)
-        expr = self._cmp(ComparisonFilter.OP_NOT_EQUALS, is_null=True)
+        expr = self._build(ComparisonFilter.OP_NOT_EQUALS, is_null=True)  # attr != null <=> present
         self._assert_clean(expr)
         assert isinstance(expr, FunctionCall) and expr.function_name == "mapContains"
 
-    def test_like_is_guarded_arrayelement(self) -> None:
-        expr = self._cmp(ComparisonFilter.OP_LIKE, value="%ok%")
+    def test_like(self) -> None:
+        expr = self._build(ComparisonFilter.OP_LIKE, value="%ok%")
         self._assert_clean(expr)
         assert isinstance(expr, FunctionCall) and expr.function_name == "and"
         assert {"and", "mapContains", "like", "arrayElement"} <= self._fn_names(expr)
 
-    def test_not_like_is_negated_guarded_like(self) -> None:
-        expr = self._cmp(ComparisonFilter.OP_NOT_LIKE, value="%ok%")
+    def test_not_like_negates_positive_like(self) -> None:
+        expr = self._build(ComparisonFilter.OP_NOT_LIKE, value="%ok%")
         self._assert_clean(expr)
         assert isinstance(expr, FunctionCall) and expr.function_name == "not"
         names = self._fn_names(expr)
         assert {"not", "and", "mapContains", "like", "arrayElement"} <= names
-        # positive like under the negation, not notLike
-        assert "notLike" not in names
-
-    def test_not_like_ignore_case_uses_ilike(self) -> None:
-        expr = self._cmp(ComparisonFilter.OP_NOT_LIKE, value="%ok%", ignore_case=True)
-        self._assert_clean(expr)
-        names = self._fn_names(expr)
-        assert "ilike" in names and "notILike" not in names
+        assert "notLike" not in names  # positive like under the negation
+        ilike_expr = self._build(ComparisonFilter.OP_NOT_LIKE, value="%ok%", ignore_case=True)
+        assert "ilike" in self._fn_names(ilike_expr) and "notILike" not in self._fn_names(
+            ilike_expr
+        )
 
     def test_coalesced_attribute_uses_multi_if_not_coalesce(self) -> None:
-        # A coalesced attribute is generated as a NULL-free multiIf over the
-        # per-key mapContains (never a coalesce(if(..., NULL), ...)), so it is
-        # analyzer-safe too.
-        canonical = "transaction"
-        assert canonical in ATTRIBUTES_TO_COALESCE, "test precondition: key must be coalesced"
-        item_filter = TraceItemFilter(
-            comparison_filter=ComparisonFilter(
-                key=AttributeKey(type=AttributeKey.Type.TYPE_STRING, name=canonical),
-                op=ComparisonFilter.OP_EQUALS,
-                value=AttributeValue(val_str="t"),
-            )
-        )
-        expr = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        # Coalesced keys resolve via a NULL-free multiIf over per-key mapContains,
+        # never coalesce(if(..., NULL), ...), so they are analyzer-safe too.
+        assert "transaction" in ATTRIBUTES_TO_COALESCE
+        expr = self._build(ComparisonFilter.OP_EQUALS, name="transaction", value="t")
         self._assert_clean(expr)
         names = self._fn_names(expr)
-        assert "multiIf" in names
-        assert "coalesce" not in names
-        # existence is an OR of mapContains across canonical + deprecated keys
+        assert "multiIf" in names and "coalesce" not in names
         assert {"and", "equals", "mapContains", "or", "arrayElement"} <= names
 
 

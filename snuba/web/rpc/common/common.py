@@ -294,13 +294,8 @@ def add_existence_check_to_subscriptable_references(query: Query) -> None:
 
 
 def _contains_subscriptable_reference(exp: Expression) -> bool:
-    """True if ``exp`` has any ``SubscriptableReference`` in its subtree.
-
-    Those are exactly the nodes ``add_existence_check_to_subscriptable_references``
-    later wraps in ``if(mapContains(...), ..., NULL)``. When such a wrapped
-    reference ends up as the left operand of ``in(...)`` it triggers the new
-    analyzer column-name mismatch (see ``_analyzer_safe_in_expression``).
-    """
+    """True if ``exp`` contains a ``SubscriptableReference`` (a map lookup) — the
+    map-backed keys we route through ``_map_backed_operands``."""
     found = False
 
     def visit(node: Expression) -> Expression:
@@ -314,20 +309,11 @@ def _contains_subscriptable_reference(exp: Expression) -> bool:
 
 
 def _subscriptable_references_to_array_element(exp: Expression) -> Expression:
-    """Lower every ``SubscriptableReference`` in ``exp`` to a bare ``arrayElement``.
+    """Lower ``SubscriptableReference``\\ s to bare ``arrayElement`` (no NULL).
 
-    ``add_existence_check_to_subscriptable_references`` only rewrites
-    ``SubscriptableReference`` nodes, so pre-lowering them to ``arrayElement``
-    keeps that pass from wrapping them in ``if(mapContains(...), ..., NULL)``.
-    The result carries no NULL constant, so it is safe as the left operand of
-    ``in(...)`` (see ``_analyzer_safe_in_expression``). ``arrayElement`` returns
-    the map's default ('' / 0) for a missing key rather than NULL — callers pair
-    this with an explicit ``mapContains`` guard to restore NULL semantics.
-
-    All aliases are stripped: the lowered expression is structurally different
-    from the existence ``if(...)`` the SELECT clause may still carry for the same
-    attribute, so reusing the alias would collide ("different expression, same
-    alias"). Condition expressions don't need aliases anyway.
+    Aliases are stripped so the lowered form can't collide with the existence
+    ``if(...)`` the SELECT clause may carry for the same attribute (same alias,
+    different expression).
     """
 
     def transform(node: Expression) -> Expression:
@@ -341,37 +327,26 @@ def _subscriptable_references_to_array_element(exp: Expression) -> Expression:
 
 
 def _map_backed_operands(k: AttributeKey) -> tuple[Expression, Expression]:
-    """Build ``(value, exists)`` for a map-backed attribute key, directly and
-    without ever constructing a ``coalesce``.
+    """Build ``(value, exists)`` for a map-backed key, NULL-free.
 
-    A plain attribute resolves to a single ``arrayElement``; a coalesced
-    attribute resolves to the value of the first of its (canonical + deprecated)
-    keys that is present. We express that with a NULL-free ``multiIf`` over the
-    per-key ``mapContains``:
+    The legacy ``if(mapContains, arrayElement, NULL)`` form puts a NULL constant
+    into the predicate; the new ClickHouse analyzer canonicalizes that NULL
+    inconsistently between an aggregate's projection name and its computed block
+    (notably inside ``in(...)``), so the column isn't found ("Code: 10 ... Not
+    found column ... in block"). Building from ``mapContains`` + ``arrayElement``
+    avoids the NULL entirely:
 
-        value  = multiIf(mapContains(k1), arrayElement(k1),
-                         ...,
-                         mapContains(k_{n-1}), arrayElement(k_{n-1}),
-                         arrayElement(kn))        # else: last key's raw value
+        value  = arrayElement(k)                                  # single key
+        value  = multiIf(mapContains(k1), arrayElement(k1), ...,  # coalesced:
+                         arrayElement(kn))                         # first present
         exists = mapContains(k1) OR ... OR mapContains(kn)
 
-    Per-key comparisons are then built as ``and(exists, cmp(value, v))`` (negated
-    for ``!=`` / ``NOT LIKE`` / ``NOT IN``). This keeps every NULL constant out of
-    the WHERE / aggregate-condition predicate — see ``_analyzer_safe_in_expression``
-    for why that matters to the new analyzer — while preserving the
-    absent-vs-empty distinction: a missing key has ``exists = false``, whereas a
-    stored empty value has ``exists = true`` and ``value = ''`` (``arrayElement``
-    reads both as the column default, so ``mapContains`` is the only thing that
-    tells them apart). The ``multiIf`` else value is only reached when every key
-    is absent, where ``exists`` is already false, so it never affects the result.
-
-    The legacy ``coalesce(if(mapContains, ..., NULL), ...)`` form (built by
-    ``attribute_key_to_expression`` and used in SELECT) leans on each branch being
-    NULL to fall through; we avoid it entirely here.
-
-    Only valid for map-backed keys (string/int/float) — i.e. exactly when
-    ``_contains_subscriptable_reference`` of the built key expression is true.
-    Normalized columns / booleans / arrays keep their legacy ``isNull`` handling.
+    Callers build ``and(exists, cmp(value, v))`` (negated for !=/NOT LIKE/NOT IN).
+    ``exists`` — not the value — distinguishes a missing key from a stored empty
+    value, since ``arrayElement`` reads both as the '' / 0 default; the coalesced
+    ``multiIf`` else is only reached when all keys are absent (``exists`` false).
+    Only valid for map-backed keys (string/int/float); the legacy
+    ``coalesce(if(..., NULL))`` form remains in SELECT, where NULL output is wanted.
     """
     names = [k.name] + list(ATTRIBUTES_TO_COALESCE.get(k.name, ()))
     branches = [_generate_subscriptable_reference(name, k.type) for name in names]
@@ -397,29 +372,11 @@ def _analyzer_safe_in_expression(
     negated: bool,
     ignore_case: bool = False,
 ) -> Expression:
-    """Build an ``IN`` / ``NOT IN`` predicate the new ClickHouse analyzer can name
-    consistently.
-
-    The straightforward form ``in(if(mapContains(...), arrayElement(...), NULL), set)``
-    puts a NULL constant inside the ``in(...)`` left operand. The new analyzer
-    folds that NULL differently when it names the projection column versus when
-    it computes the block (it strips the redundant CAST in one place but not the
-    other), so the aggregate column no longer matches its projection name and the
-    query dies with ``Code: 10. DB::Exception: Not found column ... in block``.
-
-    Instead of feeding the existence ``if(...)`` into ``in(...)`` we compare the
-    NULL-free value and guard it with an explicit ``mapContains`` so a missing key
-    (which ``arrayElement`` reads as the column default '' / 0, not NULL) can
-    never match:
-
-      * IN:      key exists AND value in set
-      * NOT IN:  NOT (key exists AND value in set)   -> missing key is "not in"
-
-    This is equivalent to the legacy ``isNull(if(mapContains, arrayElement,
-    NULL))`` handling for every value list these filters accept: the typed array
-    fields (``val_str_array`` etc.) only carry scalars, so the set never contains
-    NULL and the old ``has(set, NULL)`` branch was always a constant ``false``.
-    """
+    """``IN`` / ``NOT IN`` as ``[not] and(exists, in(value, set))`` via
+    ``_map_backed_operands`` — keeps the NULL-laden existence ``if(...)`` out of
+    ``in(...)`` (see that helper). Equivalent to the legacy null-handling: the
+    value lists only carry scalars, so the set never contains NULL (the old
+    ``has(set, NULL)`` branch was always constant ``false``)."""
     value, exists = _map_backed_operands(k)
     if ignore_case:
         value = f.lower(value)
@@ -762,11 +719,9 @@ def trace_item_filters_to_expression(
                     k_expression, v, item_filter.comparison_filter.ignore_case
                 )
             if _contains_subscriptable_reference(k_expression):
-                # Map-backed attribute: compare the raw arrayElement value guarded
-                # by mapContains, keeping NULL out of the predicate.
+                # Map-backed: NULL-free (exists, value) form (see _map_backed_operands).
                 value, exists = _map_backed_operands(k)
-                if v_is_null:
-                    # `attr = null` means the key is absent.
+                if v_is_null:  # `attr = null` <=> key absent
                     return not_cond(exists)
                 lhs, rhs = (
                     (f.lower(value), f.lower(v_expression))
@@ -795,10 +750,9 @@ def trace_item_filters_to_expression(
                     )
                 )
             if _contains_subscriptable_reference(k_expression):
-                # Negation of the OP_EQUALS form: an absent key is "not equal".
+                # Negation of OP_EQUALS; an absent key is "not equal".
                 value, exists = _map_backed_operands(k)
-                if v_is_null:
-                    # `attr != null` means the key is present.
+                if v_is_null:  # `attr != null` <=> key present
                     return exists
                 lhs, rhs = (
                     (f.lower(value), f.lower(v_expression))
@@ -856,7 +810,7 @@ def trace_item_filters_to_expression(
                     "the NOT LIKE comparison is only supported on string and array keys"
                 )
             if _contains_subscriptable_reference(k_expression):
-                # Negation of the OP_LIKE form: an absent key is "not like".
+                # Negation of OP_LIKE; an absent key is "not like".
                 like_fn = f.ilike if item_filter.comparison_filter.ignore_case else f.like
                 value, exists = _map_backed_operands(k)
                 return not_cond(and_cond(exists, like_fn(value, v_expression)))
@@ -894,8 +848,7 @@ def trace_item_filters_to_expression(
             # we redefine the way in works for nulls
             # now null in ['hi', null] is true
             if _contains_subscriptable_reference(k_expression):
-                # Map-backed attribute: avoid feeding the existence if(...) into
-                # in(...), which the new analyzer canonicalizes inconsistently.
+                # Map-backed: keep the existence if(...) out of in() (see helper).
                 return _analyzer_safe_in_expression(
                     k, v_expression, negated=False, ignore_case=ignore_case
                 )
@@ -925,8 +878,7 @@ def trace_item_filters_to_expression(
             # we redefine the way not in works for nulls
             # now null not in ['hi'] is true
             if _contains_subscriptable_reference(k_expression):
-                # Map-backed attribute: avoid feeding the existence if(...) into
-                # in(...), which the new analyzer canonicalizes inconsistently.
+                # Map-backed: keep the existence if(...) out of in() (see helper).
                 return _analyzer_safe_in_expression(
                     k, v_expression, negated=True, ignore_case=ignore_case
                 )
