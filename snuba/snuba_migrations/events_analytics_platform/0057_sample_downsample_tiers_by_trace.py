@@ -16,9 +16,10 @@ new_version = old_version + 1
 columns = get_eap_items_columns()
 
 
-# Per-item sampling on `item_id`. Each tier picks independently so the tiers
-# are not subsets of each other, and items belonging to the same trace can
-# end up in different tiers.
+# Per-item sampling on `item_id`, but the hash is perturbed by the sampling
+# weight (`item_id + weight`). Because each tier hashes a different value,
+# the tiers pick independently and are not subsets of each other: an item
+# can land in tier 8 but not tier 64.
 def generate_old_materialized_view_expression(sampling_weight: int) -> str:
     return downsample_mv_select(
         columns,
@@ -27,16 +28,18 @@ def generate_old_materialized_view_expression(sampling_weight: int) -> str:
     )
 
 
-# Trace-based sampling that keeps each tier a strict subset of the tier
-# above. Hashing `trace_id` (and not perturbing the hash per tier) makes
-# every item in a trace land in the same set of tiers, and because the
-# sampling weights are 8 / 64 / 512 (each divides the next), an item that
-# satisfies `H % 512 == 0` also satisfies `H % 64 == 0` and `H % 8 == 0`.
+# Per-item sampling on `item_id` with a single, un-perturbed hash. Sampling
+# stays independent across items (so the extrapolation variance math keeps
+# its Bernoulli-independence assumption), but because the sampling weights
+# are 8 / 64 / 512 (each divides the next) and every tier hashes the same
+# value, an item that satisfies `H % 512 == 0` also satisfies `H % 64 == 0`
+# and `H % 8 == 0`. That makes the tiers strict subsets: tier 512 ⊆ tier 64
+# ⊆ tier 8.
 def generate_new_materialized_view_expression(sampling_weight: int) -> str:
     return downsample_mv_select(
         columns,
         sampling_weight,
-        where_predicate=f"cityHash64(reinterpretAsUInt128(trace_id)) % {sampling_weight}",
+        where_predicate=f"cityHash64(item_id) % {sampling_weight}",
     )
 
 
