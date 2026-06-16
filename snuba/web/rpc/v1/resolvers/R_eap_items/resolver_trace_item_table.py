@@ -38,10 +38,16 @@ from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, if_cond, in_cond, literal, literals_array, or_cond
 from snuba.query.dsl import column as snuba_column
 from snuba.query.expressions import (
+    Column as ColumnExpr,
+)
+from snuba.query.expressions import (
     DangerousRawSQL,
     Expression,
     FunctionCall,
     SubscriptableReference,
+)
+from snuba.query.expressions import (
+    Literal as LiteralExpr,
 )
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -52,6 +58,7 @@ from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
     attribute_key_to_expression,
     base_conditions_and,
+    get_field_existence_expression,
     timestamp_in_range_condition,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
@@ -137,31 +144,49 @@ def _apply_virtual_columns(
     mapped_column_to_context = {c.to_column_name: c for c in virtual_column_contexts}
 
     def transform_expressions(expression: Expression) -> Expression:
-        # virtual columns will show up as `attr_str[virtual_column_name]` or `attr_num[virtual_column_name]`
-        if not isinstance(expression, SubscriptableReference):
+        # An attribute read appears as attributes_string[key] (SELECT / group by) or
+        # as arrayElement / mapContains over attributes_string — the forms map-backed
+        # filters build directly (see _map_backed_operands). For a virtual column the
+        # value forms map to the value transform and the mapContains existence guard
+        # maps to the backing column, so filters resolve against from_column_name.
+        is_existence = False
+        if isinstance(expression, SubscriptableReference):
+            if expression.column.column_name != "attributes_string":
+                return expression
+            key = str(expression.key.value)
+        elif (
+            isinstance(expression, FunctionCall)
+            and expression.function_name in ("arrayElement", "mapContains")
+            and isinstance(expression.parameters[0], ColumnExpr)
+            and expression.parameters[0].column_name == "attributes_string"
+            and isinstance(expression.parameters[1], LiteralExpr)
+        ):
+            key = str(expression.parameters[1].value)
+            is_existence = expression.function_name == "mapContains"
+        else:
             return expression
 
-        if expression.column.column_name != "attributes_string":
+        context = mapped_column_to_context.get(key)
+        if context is None:
             return expression
-        context = mapped_column_to_context.get(str(expression.key.value))
-        if context:
-            attribute_expression = attribute_key_to_expression(
-                AttributeKey(
-                    name=context.from_column_name,
-                    type=NORMALIZED_COLUMNS_EAP_ITEMS.get(
-                        context.from_column_name, [AttributeKey.TYPE_STRING]
-                    )[0],
-                )
-            )
-            return f.transform(
-                f.CAST(f.ifNull(attribute_expression, literal("")), "String"),
-                literals_array(None, [literal(k) for k in context.value_map.keys()]),
-                literals_array(None, [literal(v) for v in context.value_map.values()]),
-                literal(context.default_value if context.default_value != "" else "unknown"),
-                alias=context.to_column_name,
-            )
 
-        return expression
+        from_column = attribute_key_to_expression(
+            AttributeKey(
+                name=context.from_column_name,
+                type=NORMALIZED_COLUMNS_EAP_ITEMS.get(
+                    context.from_column_name, [AttributeKey.TYPE_STRING]
+                )[0],
+            )
+        )
+        if is_existence:
+            return get_field_existence_expression(from_column)
+        return f.transform(
+            f.CAST(f.ifNull(from_column, literal("")), "String"),
+            literals_array(None, [literal(k) for k in context.value_map.keys()]),
+            literals_array(None, [literal(v) for v in context.value_map.values()]),
+            literal(context.default_value if context.default_value != "" else "unknown"),
+            alias=context.to_column_name,
+        )
 
     query.transform_expressions(transform_expressions)
 
