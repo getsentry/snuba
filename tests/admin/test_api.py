@@ -1023,7 +1023,7 @@ def test_prod_snql_query_invalid_dataset(admin_api: FlaskClient) -> None:
     response = admin_api.post(
         "/production_snql_query", data=json.dumps({"dataset": "", "query": ""})
     )
-    assert response.status_code == 400
+    assert response.status_code == 404
     data = json.loads(response.data)
     assert data["error"]["message"] == "dataset '' does not exist"
 
@@ -1041,7 +1041,7 @@ def test_prod_snql_query_invalid_query(admin_api: FlaskClient) -> None:
 @pytest.mark.redis_db
 @pytest.mark.events_db
 def test_force_overwrite(admin_api: FlaskClient) -> None:
-    migration_id = "0011_add_timestamp_ms"
+    migration_id = "0012_add_group_id_bloom_filter_index"
     migrations = json.loads(admin_api.get("/migrations/search_issues/list").data)
     downgraded_migration = [m for m in migrations if m.get("migration_id") == migration_id][0]
     assert downgraded_migration["status"] == "completed"
@@ -1121,7 +1121,7 @@ def test_prod_mql_query_invalid_dataset(admin_api: FlaskClient) -> None:
         "/production_mql_query",
         data=json.dumps({"dataset": "", "query": "", "mql_context": {}}),
     )
-    assert response.status_code == 400
+    assert response.status_code == 404
     data = json.loads(response.data)
     assert data["error"]["message"] == "dataset '' does not exist"
 

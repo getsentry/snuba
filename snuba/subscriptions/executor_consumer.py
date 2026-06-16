@@ -292,15 +292,27 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
                 )
             except QueryException as exc:
                 cause = exc.__cause__
-                if isinstance(cause, ClickhouseError):
-                    if cause.code in NON_RETRYABLE_CLICKHOUSE_ERROR_CODES:
-                        logger.exception("Error running subscription query %r", exc)
-                        self.__metrics.increment(
-                            "subscription_executor_nonretryable_error",
-                            tags={"error_type": str(cause.code)},
-                        )
-                    else:
-                        raise SubscriptionQueryException(exc.message)
+                # Retryable ClickHouse errors are re-raised so the consumer
+                # crashes and the message is retried. Every other failure
+                # (non-retryable ClickHouse error codes as well as non-ClickHouse
+                # causes such as QueryTooLongException) is non-retryable: log it,
+                # emit a metric and skip the message instead of submitting an
+                # unassigned transformed_message downstream.
+                if (
+                    isinstance(cause, ClickhouseError)
+                    and cause.code not in NON_RETRYABLE_CLICKHOUSE_ERROR_CODES
+                ):
+                    raise SubscriptionQueryException(exc.message)
+
+                logger.exception("Error running subscription query %r", exc)
+                error_type = (
+                    str(cause.code) if isinstance(cause, ClickhouseError) else type(cause).__name__
+                )
+                self.__metrics.increment(
+                    "subscription_executor_nonretryable_error",
+                    tags={"error_type": error_type},
+                )
+                continue
 
             self.__next_step.submit(transformed_message)
 

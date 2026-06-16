@@ -15,6 +15,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
+from snuba.query.processors.physical.type_converters import ColumnTypeError
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint, list_all_endpoint_names
 from snuba.web.rpc.common.exceptions import (
@@ -78,6 +79,23 @@ class ErrorRPC(RPCEndpoint[TimeSeriesRequest, TimeSeriesRequest]):
     def _execute(self, in_msg: TimeSeriesRequest) -> TimeSeriesRequest:
         time.sleep(self.duration_millis / 1000)
         raise RPCException("This is meant to error!")
+
+
+class SilentErrorRPC(RPCEndpoint[TimeSeriesRequest, TimeSeriesRequest]):
+    duration_millis = 100
+
+    @classmethod
+    def response_class(cls) -> Type[TimeSeriesRequest]:
+        return TimeSeriesRequest
+
+    @classmethod
+    def version(cls) -> str:
+        return "v1"
+
+    def _execute(self, in_msg: TimeSeriesRequest) -> TimeSeriesRequest:
+        # Mirrors an invalid client query (e.g. an empty-string filter on a
+        # hexint column) which is raised with should_report=False.
+        raise ColumnTypeError("Invalid hexint", should_report=False)
 
 
 class TimeoutRPC(RPCEndpoint[TimeSeriesRequest, TimeSeriesRequest]):
@@ -177,6 +195,22 @@ def test_error_metrics() -> None:
         metric_names_to_metric = {m.name: m for m in metrics_backend.calls}  # type: ignore
         assert metric_names_to_metric["rpc.request_error"].value == 1  # type: ignore
         sentry_sdk_mock.assert_called()
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_should_report_false_not_captured() -> None:
+    # Exceptions raised with should_report=False (e.g. invalid client queries)
+    # must not be reported to Sentry, even though they still count as errors.
+    with patch("snuba.web.rpc.sentry_sdk.capture_exception") as sentry_sdk_mock:
+        metrics_backend = TestingMetricsBackend()
+        rpc_call = SilentErrorRPC(metrics_backend=metrics_backend)
+        with pytest.raises(ColumnTypeError):
+            rpc_call.execute(_get_in_msg())
+
+        metric_names_to_metric = {m.name: m for m in metrics_backend.calls}  # type: ignore
+        assert metric_names_to_metric["rpc.request_error"].value == 1  # type: ignore
+        sentry_sdk_mock.assert_not_called()
 
 
 def test_list_all_endpoint_names() -> None:
