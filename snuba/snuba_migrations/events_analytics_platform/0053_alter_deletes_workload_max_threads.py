@@ -2,7 +2,49 @@ from typing import Sequence
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
+from snuba.migrations.migration_utilities import get_clickhouse_version_for_storage_set
 from snuba.migrations.operations import OperationTarget
+
+
+class _AlterWorkloadOp(operations.RunSql):
+    """Version-aware RunSql that picks the correct thread setting at execution time."""
+
+    def __init__(self) -> None:
+        # Initialize with the CH 25.8+ statement so format_sql() returns real SQL
+        # during dry-run / __eq__. The setting name is reselected at execute() time
+        # based on the live ClickHouse version.
+        super().__init__(
+            storage_set=StorageSetKey.EVENTS_ANALYTICS_PLATFORM,
+            statement=self._build_statement("max_concurrent_threads"),
+            target=OperationTarget.LOCAL,
+        )
+
+    @staticmethod
+    def _build_statement(thread_setting: str) -> str:
+        return f"""
+            CREATE OR REPLACE WORKLOAD low_priority_deletes
+            IN all
+            SETTINGS
+                priority = 100,
+                max_requests = 2,
+                {thread_setting} = 4;
+        """
+
+    def execute(self) -> None:
+        ch_version = get_clickhouse_version_for_storage_set(self._storage_set, None)
+
+        # max_threads was renamed to max_concurrent_threads in ClickHouse 25.8+
+        if ch_version >= (25, 8):
+            thread_setting = "max_concurrent_threads"
+        else:
+            thread_setting = "max_threads"
+
+        resolved = operations.RunSql(
+            storage_set=self._storage_set,
+            statement=self._build_statement(thread_setting),
+            target=OperationTarget.LOCAL,
+        )
+        resolved.execute()
 
 
 class Migration(migration.ClickhouseNodeMigration):
@@ -10,25 +52,10 @@ class Migration(migration.ClickhouseNodeMigration):
     storage_set_key = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
 
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:
-        alter_workload = """
-            CREATE OR REPLACE WORKLOAD low_priority_deletes
-            IN all
-            SETTINGS
-                priority = 100,
-                max_requests = 2,
-                max_threads = 4;
-        """
-
-        return [
-            operations.RunSql(
-                storage_set=self.storage_set_key,
-                statement=alter_workload,
-                target=OperationTarget.LOCAL,
-            ),
-        ]
+        return [_AlterWorkloadOp()]
 
     def backwards_ops(self) -> Sequence[operations.SqlOperation]:
-        # Restore original settings without max_threads
+        # Restore original settings without thread limit
         alter_workload = """
             CREATE OR REPLACE WORKLOAD low_priority_deletes
             IN all

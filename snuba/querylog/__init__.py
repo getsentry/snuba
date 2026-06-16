@@ -35,6 +35,7 @@ _ITEM_TYPE_TO_APP_FEATURE: dict[str, str] = {
     "TRACE_ITEM_TYPE_ATTACHMENT": "attachments",
     "TRACE_ITEM_TYPE_PREPROD": "preprod",
     "TRACE_ITEM_TYPE_USER_SESSION": "sessions",
+    "TRACE_ITEM_TYPE_PROCESSING_ERROR": "processing_errors",
     "TRACE_ITEM_TYPE_UNSPECIFIED": "null",
 }
 
@@ -139,7 +140,7 @@ def _record_cogs(
     if cluster_name.startswith("snuba-events-analytics-platform"):
         if random() < (state.get_config("snuba_api_cogs_probability") or 0):
             record_cogs(
-                resource_id="clickhouse",
+                resource_id="eap_clickhouse",
                 app_feature=_get_eap_app_feature(request),
                 amount=bytes_scanned,
                 usage_type=UsageUnit.BYTES,

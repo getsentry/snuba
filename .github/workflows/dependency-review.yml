@@ -15,9 +15,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: "Checkout Repository"
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - name: Dependency Review
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v4
         with:
           # Possible values: "critical", "high", "moderate", "low"
           fail-on-severity: high
+          # python-ecdsa Minerva timing attack on P-256: no upstream fix
+          # available across all versions; we already ship a vulnerable
+          # version transitively via python-jose.
+          allow-ghsas: GHSA-wj6h-64fc-37mp

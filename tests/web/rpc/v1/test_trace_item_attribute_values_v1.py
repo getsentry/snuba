@@ -95,6 +95,13 @@ def setup_teardown(eap: None, redis_db: None) -> Generator[List[bytes], None, No
         ),
         gen_item_message(
             start_timestamp=start_timestamp,
+            attributes={
+                "tag1": AnyValue(string_value="derpderp"),
+                "tag2": AnyValue(string_value="derp"),
+            },
+        ),
+        gen_item_message(
+            start_timestamp=start_timestamp,
             attributes={"tag2": AnyValue(string_value="hehe")},
         ),
         gen_item_message(
@@ -135,7 +142,8 @@ class TestTraceItemAttributes(BaseApiTest):
             key=AttributeKey(name="tag1", type=AttributeKey.TYPE_STRING),
         )
         response = AttributeValuesRequest().execute(message)
-        assert response.values == ["blah", "derpderp", "durp", "herp", "herpderp"]
+        assert response.values == ["derpderp", "blah", "durp", "herp", "herpderp"]
+        assert response.counts == [2, 1, 1, 1, 1]
 
     def test_with_value_substring_match(self, setup_teardown: Any) -> None:
         message = TraceItemAttributeValuesRequest(
@@ -146,6 +154,7 @@ class TestTraceItemAttributes(BaseApiTest):
         )
         response = AttributeValuesRequest().execute(message)
         assert response.values == ["derpderp", "herp", "herpderp"]
+        assert response.counts == [2, 1, 1]
 
     def test_empty_results(self) -> None:
         req = TraceItemAttributeValuesRequest(
@@ -162,6 +171,7 @@ class TestTraceItemAttributes(BaseApiTest):
         )
         res = AttributeValuesRequest().execute(req)
         assert res.values == []
+        assert res.counts == []
 
     def test_item_id_substring_match(self, setup_teardown: List[bytes]) -> None:
         first_msg_bytes = setup_teardown[0]
@@ -182,6 +192,7 @@ class TestTraceItemAttributes(BaseApiTest):
         )
         res = AttributeValuesRequest().execute(req)
         assert res.values == [item_id]
+        assert res.counts == [1]
 
     def test_deprecated_alias_attribute(self) -> None:
         """db.system.name request returns values stored only under deprecated key db.system."""
@@ -218,3 +229,25 @@ class TestTraceItemAttributes(BaseApiTest):
         )
         response = AttributeValuesRequest().execute(message)
         assert sorted(response.values) == ["postgresql", "redis"]
+        assert response.counts == [1, 1]
+
+    def test_pagination(self, setup_teardown: Any) -> None:
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=1,
+            key=AttributeKey(name="tag1", type=AttributeKey.TYPE_STRING),
+        )
+        response = AttributeValuesRequest().execute(message)
+        assert response.values == ["derpderp"]
+        assert response.counts == [2]
+
+        for expected in ["blah", "durp", "herp", "herpderp"]:
+            message = TraceItemAttributeValuesRequest(
+                meta=COMMON_META,
+                limit=1,
+                key=AttributeKey(name="tag1", type=AttributeKey.TYPE_STRING),
+                page_token=response.page_token,
+            )
+            response = AttributeValuesRequest().execute(message)
+            assert response.values == [expected]
+            assert response.counts == [1]

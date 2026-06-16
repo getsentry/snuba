@@ -11,7 +11,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Reliability,
 )
 
-from snuba.query.expressions import FunctionCall
+from snuba.query.expressions import Column, FunctionCall, JsonPath, Literal, SubscriptableReference
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     get_field_existence_expression,
@@ -254,14 +254,11 @@ def test_attribute_key_to_expression_type_array() -> None:
     attr_key = AttributeKey(type=AttributeKey.TYPE_ARRAY, name="user_ids")
     expr = attribute_key_to_expression(attr_key)
     assert isinstance(expr, FunctionCall)
-    assert expr.function_name == "arrayMap"
+    assert expr.function_name == "toJSONString"
     assert expr.alias == "user_ids_TYPE_ARRAY"
     fmt = ClickhouseExpressionFormatter()
     sql = expr.accept(fmt)
-    assert (
-        sql
-        == "(arrayMap(x -> coalesce(x.`String`::Nullable(String), toString(x.`Int`::Nullable(Int64)), toString(x.`Double`::Nullable(Float64)), x.`Bool`::Nullable(String)), attributes_array.`user_ids`::Array(JSON)) AS user_ids_TYPE_ARRAY)"
-    )
+    assert sql == "(toJSONString(attributes_array.`user_ids`::Array(JSON)) AS user_ids_TYPE_ARRAY)"
 
 
 def test_get_field_existence_expression_array_map() -> None:
@@ -270,6 +267,35 @@ def test_get_field_existence_expression_array_map() -> None:
     expr = get_field_existence_expression(field)
     assert isinstance(expr, FunctionCall)
     assert expr.function_name == "notEmpty"
+
+
+def test_get_field_existence_expression_coalesce() -> None:
+    """Coalesced attributes should check existence for all underlying keys with OR."""
+    attr_col = Column(alias=None, table_name=None, column_name="attributes_string")
+    canonical_ref = SubscriptableReference(
+        column=attr_col,
+        key=Literal(alias=None, value="http.response.body.size"),
+        alias=None,
+    )
+    deprecated_ref = SubscriptableReference(
+        column=attr_col,
+        key=Literal(alias=None, value="http.response_content_length"),
+        alias=None,
+    )
+    coalesce_field = FunctionCall(
+        alias="test",
+        function_name="coalesce",
+        parameters=(canonical_ref, deprecated_ref),
+    )
+    expr = get_field_existence_expression(coalesce_field)
+    assert isinstance(expr, FunctionCall)
+    assert expr.function_name == "or"
+    assert len(expr.parameters) == 2
+    lhs, rhs = expr.parameters
+    assert isinstance(lhs, FunctionCall) and lhs.function_name == "mapContains"
+    assert isinstance(rhs, FunctionCall) and rhs.function_name == "mapContains"
+    assert lhs.parameters[1] == Literal(alias=None, value="http.response.body.size")
+    assert rhs.parameters[1] == Literal(alias=None, value="http.response_content_length")
 
 
 def test_aggregation_to_expression_uniq_type_array() -> None:
@@ -286,6 +312,11 @@ def test_aggregation_to_expression_uniq_type_array() -> None:
     inner = expr.parameters[0]
     assert isinstance(inner, FunctionCall)
     assert inner.function_name == "uniqArrayIfOrNull"
+    # Must be the stored Array(JSON) path, not toJSONString (String) from attribute_key_to_expression
+    first = inner.parameters[0]
+    assert isinstance(first, JsonPath)
+    assert first.path == "user_ids"
+    assert first.return_type == "Array(JSON)"
 
 
 def test_aggregation_to_expression_sum_type_array_raises() -> None:
