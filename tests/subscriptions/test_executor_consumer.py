@@ -1,6 +1,7 @@
 import json
 import time
 import uuid
+from concurrent.futures import Future
 from datetime import datetime, timedelta
 from typing import Iterator, Mapping, Optional
 from unittest import mock
@@ -42,6 +43,7 @@ from snuba.utils.streams.configuration_builder import (
     get_default_kafka_configuration,
 )
 from snuba.utils.streams.topics import Topic as SnubaTopic
+from snuba.web import QueryException, QueryTooLongException
 from tests.backends.metrics import Increment, TestingMetricsBackend
 
 
@@ -97,7 +99,7 @@ def test_executor_consumer() -> None:
     # We need to wait for the consumer to receive partitions otherwise,
     # when we try to consume messages, we will not find anything.
     # Subscription is an async process.
-    assert assigned == True, "Did not receive assignment within 10 attempts"
+    assert assigned, "Did not receive assignment within 10 attempts"
 
     consumer_group = str(uuid.uuid1().hex)
     auto_offset_reset = "latest"
@@ -283,6 +285,55 @@ def test_execute_query_exception() -> None:
 
     assert isinstance(message.value, BrokerValue)
     assert next_step.submit.call_count == 0
+
+    strategy.close()
+    strategy.join()
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_poll_skips_non_retryable_query_exception() -> None:
+    """
+    A QueryException whose cause is not a retryable ClickhouseError (e.g.
+    QueryTooLongException) must be logged and skipped, not re-raised, and must
+    not fall through to submitting an unassigned transformed_message (which
+    previously raised UnboundLocalError). See SNUBA-9E1.
+    """
+    metrics = TestingMetricsBackend()
+    next_step = mock.Mock()
+
+    strategy = ExecuteQuery(
+        dataset=get_dataset("events"),
+        entity_names=["events"],
+        max_concurrent_queries=2,
+        stale_threshold_seconds=None,
+        metrics=metrics,
+        next_step=next_step,
+    )
+
+    exc = QueryException("boom")
+    exc.__cause__ = QueryTooLongException("query is too long")
+
+    future: "Future[object]" = Future()
+    future.set_exception(exc)
+
+    message = Message(BrokerValue("payload", Partition(Topic("test"), 0), 0, datetime(1970, 1, 1)))
+    result_future = mock.Mock()
+    result_future.future = future
+
+    strategy._ExecuteQuery__queue.append((message, result_future))  # type: ignore[attr-defined]
+
+    strategy.poll()
+
+    assert next_step.submit.call_count == 0
+    assert (
+        Increment(
+            "subscription_executor_nonretryable_error",
+            1,
+            {"error_type": "QueryTooLongException"},
+        )
+        in metrics.calls
+    )
 
     strategy.close()
     strategy.join()

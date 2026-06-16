@@ -359,7 +359,13 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                     tags=self._timer.tags,
                 )
             else:
-                sentry_sdk.capture_exception(error)
+                # `should_report=False` marks an exception (e.g. an invalid
+                # query from a client, like an empty-string filter on a hexint
+                # column) that we deliberately do not want surfaced in Sentry.
+                # Honor that flag here, matching the legacy HTTP path in
+                # `snuba/web/views.py`.
+                if getattr(error, "should_report", True):
+                    sentry_sdk.capture_exception(error)
                 self.metrics.increment(
                     "request_error",
                     tags=self._timer.tags,
@@ -431,7 +437,12 @@ def run_rpc_handler(name: str, version: str, data: bytes) -> ProtobufMessage | E
     except (RPCRequestException, QueryException) as e:
         return convert_rpc_exception_to_proto(e)
     except Exception as e:
-        sentry_sdk.capture_exception(e)
+        # Don't report exceptions that opted out via `should_report=False`
+        # (e.g. invalid client queries). `execute` re-raises after
+        # `__after_execute`, so this is the second capture site for the same
+        # error and must honor the flag too.
+        if getattr(e, "should_report", True):
+            sentry_sdk.capture_exception(e)
         return convert_rpc_exception_to_proto(
             RPCRequestException(
                 status_code=500,
