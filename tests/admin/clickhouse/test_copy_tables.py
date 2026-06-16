@@ -53,7 +53,7 @@ SETTINGS index_granularity = 8192
 """
 
 OUTCOMES_DAILY_MV = """
-CREATE MATERIALIZED VIEW IF NOT EXISTS {db}.outcomes_mv_daily_local_v2 ON CLUSTER 'test_cluster' TO {db}.outcomes_daily_local_v2
+CREATE MATERIALIZED VIEW IF NOT EXISTS {db}.outcomes_mv_daily_local_v3 ON CLUSTER 'test_cluster' TO {db}.outcomes_daily_local_v2
 (
     `org_id` UInt64,
     `project_id` UInt64,
@@ -74,7 +74,7 @@ AS SELECT
     ifNull(reason, 'none') AS reason,
     category,
     count() AS times_seen,
-    sum(quantity) AS quantity
+    sum(quantity64) AS quantity
 FROM {db}.outcomes_raw_local
 GROUP BY
     org_id,
@@ -88,7 +88,7 @@ GROUP BY
 
 TABLE_DATA = [
     ("outcomes_daily_local_v2", "outcomes_daily", OUTCOMES_DAILY_TABLE, True),
-    ("outcomes_mv_daily_local_v2", "outcomes_daily", OUTCOMES_DAILY_MV, False),
+    ("outcomes_mv_daily_local_v3", "outcomes_daily", OUTCOMES_DAILY_MV, False),
 ]
 
 
@@ -192,8 +192,8 @@ def test_create_tables_order() -> None:
         "migrations_dist",
         "outcomes_daily_dist_v2",
         "outcomes_hourly_dist",
-        "outcomes_mv_daily_local_v2",
-        "outcomes_mv_hourly_local",
+        "outcomes_mv_daily_local_v3",
+        "outcomes_mv_hourly_local_v2",
         "outcomes_raw_dist",
     ]
 
