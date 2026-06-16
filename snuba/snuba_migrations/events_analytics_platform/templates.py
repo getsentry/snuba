@@ -61,6 +61,10 @@ def get_eap_items_columns(
         Column("sampling_weight", UInt(64, modifiers=Modifiers(codecs=["ZSTD(1)"]))),
         Column("sampling_factor", Float(64, modifiers=Modifiers(codecs=["ZSTD(1)"]))),
         Column("retention_days", UInt(16, modifiers=Modifiers(codecs=["T64", "ZSTD(1)"]))),
+        # Added to the downsample MVs by migration 0057_add_name_column_and_index
+        # (mv_5). Kept here so regenerated views keep projecting it; it is copied
+        # straight through (not in TRANSFORMED_COLUMNS).
+        Column("indexed_name", String(modifiers=Modifiers(codecs=["ZSTD(1)"]))),
         Column("attributes_bool", Map(String(), Bool())),
         Column("attributes_int", Map(String(), Int(64))),
     ]

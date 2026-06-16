@@ -10,7 +10,11 @@ from snuba.snuba_migrations.events_analytics_platform.templates import (
 )
 
 sampling_weights = SAMPLING_WEIGHTS
-old_version = 4
+# master is at mv_5 (migration 0057_add_name_column_and_index added the
+# `indexed_name` column to the downsample MVs), so this migration bumps 5 -> 6.
+# The restored `old_version` (mv_5) keeps the perturbed hash, matching the
+# definition currently on master.
+old_version = 5
 new_version = old_version + 1
 
 columns = get_eap_items_columns()
