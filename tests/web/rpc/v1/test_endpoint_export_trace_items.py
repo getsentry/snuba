@@ -75,7 +75,12 @@ def _assert_attributes_keys(trace_items: list[TraceItem]) -> None:
                 "sentry._internal.ingested_at",
                 "sentry._internal.received_at",
             }
-        )
+        ) - {
+            # Array attributes are only exported for the allowlisted attributes_array
+            # paths; arbitrary array attributes are no longer read from the full
+            # attributes_array JSON column.
+            "i_am_an_array",
+        }
         assert actual_keys == expected_keys
 
 
