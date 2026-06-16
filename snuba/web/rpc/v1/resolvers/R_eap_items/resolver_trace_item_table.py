@@ -38,10 +38,16 @@ from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, if_cond, in_cond, literal, literals_array, or_cond
 from snuba.query.dsl import column as snuba_column
 from snuba.query.expressions import (
+    Column as ColumnExpr,
+)
+from snuba.query.expressions import (
     DangerousRawSQL,
     Expression,
     FunctionCall,
     SubscriptableReference,
+)
+from snuba.query.expressions import (
+    Literal as LiteralExpr,
 )
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -137,13 +143,25 @@ def _apply_virtual_columns(
     mapped_column_to_context = {c.to_column_name: c for c in virtual_column_contexts}
 
     def transform_expressions(expression: Expression) -> Expression:
-        # virtual columns will show up as `attr_str[virtual_column_name]` or `attr_num[virtual_column_name]`
-        if not isinstance(expression, SubscriptableReference):
+        # The attribute reads either as attributes_string[key] (SELECT / group by) or
+        # as arrayElement(attributes_string, key) — the form map-backed filters build
+        # directly (see _map_backed_operands). Both must map to the virtual value.
+        if isinstance(expression, SubscriptableReference):
+            if expression.column.column_name != "attributes_string":
+                return expression
+            key = str(expression.key.value)
+        elif (
+            isinstance(expression, FunctionCall)
+            and expression.function_name == "arrayElement"
+            and isinstance(expression.parameters[0], ColumnExpr)
+            and expression.parameters[0].column_name == "attributes_string"
+            and isinstance(expression.parameters[1], LiteralExpr)
+        ):
+            key = str(expression.parameters[1].value)
+        else:
             return expression
 
-        if expression.column.column_name != "attributes_string":
-            return expression
-        context = mapped_column_to_context.get(str(expression.key.value))
+        context = mapped_column_to_context.get(key)
         if context:
             attribute_expression = attribute_key_to_expression(
                 AttributeKey(

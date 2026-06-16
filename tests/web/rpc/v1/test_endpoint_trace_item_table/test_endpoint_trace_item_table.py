@@ -3268,6 +3268,50 @@ class TestTraceItemTable(BaseApiTest):
             AttributeValue(val_str="a") for _ in range(10)
         ] + [AttributeValue(val_str="default") for _ in range(5)]
 
+    def test_virtual_column_filter_uses_value_map(self) -> None:
+        # Regression: a filter on a virtual column must compare against the mapped
+        # value. Map-backed filters build arrayElement(attributes_string, key)
+        # directly (see _map_backed_operands), so _apply_virtual_columns has to
+        # rewrite that form too, not only the SubscriptableReference used by
+        # SELECT / group by — otherwise the filter matches the raw key/value and
+        # returns nothing.
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_item(span_ts, {"device.class": "1"}, 3)
+        write_eap_item(span_ts, {"device.class": "2"}, 5)
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="device.class.label")),
+            ],
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="device.class.label"),
+                    op=ComparisonFilter.OP_EQUALS,
+                    value=AttributeValue(val_str="low"),
+                )
+            ),
+            virtual_column_contexts=[
+                VirtualColumnContext(
+                    from_column_name="device.class",
+                    to_column_name="device.class.label",
+                    value_map={"1": "low", "2": "medium"},
+                    default_value="Unknown",
+                ),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values[0].results == [
+            AttributeValue(val_str="low") for _ in range(3)
+        ]
+
     def test_normal_mode_end_to_end(self) -> None:
         items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
