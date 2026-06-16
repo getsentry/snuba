@@ -394,7 +394,7 @@ def _scalar_value(v: AttributeValue) -> bool | str | int | float | None:
             return v.val_double
         case "val_int":
             return v.val_int
-        case None:
+        case "val_null" | None:
             return None
         case other:
             raise NotImplementedError(f"not a scalar AttributeValue type: {other}")

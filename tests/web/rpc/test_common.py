@@ -408,6 +408,16 @@ class TestAnalyzerSafeFilters:
         self._assert_clean(expr)
         assert isinstance(expr, FunctionCall) and expr.function_name == "mapContains"
 
+    def test_in_null_value_builds_without_raising(self) -> None:
+        # null isn't the column default, so the guard helper must treat it as a
+        # non-default scalar rather than raising (see _scalar_value / val_null).
+        expr = self._build(ComparisonFilter.OP_IN, is_null=True)
+        assert "in" in self._fn_names(expr)
+
+    def test_not_in_null_value_builds_without_raising(self) -> None:
+        expr = self._build(ComparisonFilter.OP_NOT_IN, is_null=True)
+        assert {"not", "in"} <= self._fn_names(expr)
+
     def test_like_keeps_guard(self) -> None:
         expr = self._build(ComparisonFilter.OP_LIKE, value="%ok%")
         self._assert_clean(expr)
