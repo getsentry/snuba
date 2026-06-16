@@ -4282,14 +4282,13 @@ def test_build_query_with_order_by_optimization_disabled_because_multiproject() 
     request = _apply_labels_to_columns(request)
 
     query = build_query(request)
+    # The full sort-key expansion is disabled (multi-project), but ordering by
+    # sentry.timestamp still targets the raw `timestamp` column rather than a CAST so
+    # ClickHouse can read in primary-key order.
     assert query.get_orderby() == [
         OrderBy(
             direction=OrderByDirection.DESC,
-            expression=f.cast(
-                snuba_column("timestamp"),
-                "String",
-                alias="sentry.timestamp_TYPE_STRING",
-            ),
+            expression=snuba_column("timestamp"),
         ),
     ]
 
@@ -4325,14 +4324,13 @@ def test_build_query_with_order_by_optimization_disabled_because_groupby() -> No
     request = _apply_labels_to_columns(request)
 
     query = build_query(request)
+    # The full sort-key expansion is disabled (group by present), but ordering by
+    # sentry.timestamp still targets the raw `timestamp` column rather than a CAST so
+    # ClickHouse can read in primary-key order.
     assert query.get_orderby() == [
         OrderBy(
             direction=OrderByDirection.DESC,
-            expression=f.cast(
-                snuba_column("timestamp"),
-                "String",
-                alias="sentry.timestamp_TYPE_STRING",
-            ),
+            expression=snuba_column("timestamp"),
         ),
     ]
 

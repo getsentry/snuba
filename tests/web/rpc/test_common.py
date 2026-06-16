@@ -32,6 +32,8 @@ from snuba import settings
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.protos.common import ATTRIBUTES_TO_COALESCE
+from snuba.query.dsl import Functions as f
+from snuba.query.dsl import and_cond, column
 from snuba.query.expressions import (
     Expression,
     FunctionCall,
@@ -39,12 +41,15 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
+from snuba.query.logical import Query
 from snuba.web.rpc.common.common import (
     _any_attribute_filter_to_expression,
     attribute_key_to_expression,
+    dedupe_and_conditions,
     next_monday,
     prev_monday,
     trace_item_filters_to_expression,
+    treeify_or_and_conditions,
     use_sampling_factor,
 )
 from snuba.web.rpc.common.exceptions import (
@@ -267,6 +272,146 @@ class TestExistsFilterCoalesced:
         expr = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
         assert isinstance(expr, FunctionCall)
         assert expr.function_name == "mapContains"
+
+
+class TestSentryTimestampFilter:
+    """Range filters on `sentry.timestamp` must target the raw DateTime `timestamp`
+    column (index- and partition-prunable) rather than CAST(timestamp, 'Float64')."""
+
+    @staticmethod
+    def _range_filter(op: "ComparisonFilter.Op.ValueType") -> TraceItemFilter:
+        return TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_DOUBLE, name="sentry.timestamp"),
+                op=op,
+                value=AttributeValue(val_double=1781040732),
+            )
+        )
+
+    @pytest.mark.parametrize(
+        "op,expected_function",
+        [
+            (ComparisonFilter.OP_LESS_THAN, "less"),
+            (ComparisonFilter.OP_LESS_THAN_OR_EQUALS, "lessOrEquals"),
+            (ComparisonFilter.OP_GREATER_THAN, "greater"),
+            (ComparisonFilter.OP_GREATER_THAN_OR_EQUALS, "greaterOrEquals"),
+        ],
+    )
+    def test_range_filter_uses_raw_timestamp_column(
+        self, op: "ComparisonFilter.Op.ValueType", expected_function: str
+    ) -> None:
+        expr = trace_item_filters_to_expression(self._range_filter(op), attribute_key_to_expression)
+        assert isinstance(expr, FunctionCall)
+        assert expr.function_name == expected_function
+
+        # LHS is the bare `timestamp` column, not a CAST.
+        from snuba.query.expressions import Column as SnubaColumn
+
+        lhs = expr.parameters[0]
+        assert isinstance(lhs, SnubaColumn)
+        assert lhs.column_name == "timestamp"
+
+        # RHS is toDateTime(value) so it compares against a DateTime, enabling
+        # primary-key and partition (toMonday(timestamp)) pruning.
+        rhs = expr.parameters[1]
+        assert isinstance(rhs, FunctionCall)
+        assert rhs.function_name == "toDateTime"
+
+    @pytest.mark.parametrize(
+        "op,expected_second",
+        [
+            # `timestamp` is second-resolution, so fractional bounds round to the
+            # integer second that preserves `CAST(timestamp, 'Float64') OP value`:
+            # `<`/`>=` round up, `<=`/`>` round down.
+            (ComparisonFilter.OP_LESS_THAN, 1781040733),
+            (ComparisonFilter.OP_LESS_THAN_OR_EQUALS, 1781040732),
+            (ComparisonFilter.OP_GREATER_THAN, 1781040732),
+            (ComparisonFilter.OP_GREATER_THAN_OR_EQUALS, 1781040733),
+        ],
+    )
+    def test_fractional_range_filter_rounds_to_preserve_semantics(
+        self, op: "ComparisonFilter.Op.ValueType", expected_second: int
+    ) -> None:
+        fractional = TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_DOUBLE, name="sentry.timestamp"),
+                op=op,
+                value=AttributeValue(val_double=1781040732.7),
+            )
+        )
+        expr = trace_item_filters_to_expression(fractional, attribute_key_to_expression)
+        assert isinstance(expr, FunctionCall)
+        rhs = expr.parameters[1]
+        assert isinstance(rhs, FunctionCall)
+        assert rhs.function_name == "toDateTime"
+        literal = rhs.parameters[0]
+        assert isinstance(literal, Literal)
+        expected = datetime.fromtimestamp(expected_second, tz=timezone.utc).strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+        assert literal.value == expected
+
+    def test_equals_filter_unchanged(self) -> None:
+        """Non-range comparisons keep the existing CAST-based behavior."""
+        expr = trace_item_filters_to_expression(
+            self._range_filter(ComparisonFilter.OP_EQUALS), attribute_key_to_expression
+        )
+        # equals path wraps in the null-aware OR; the LHS of the equals is still the CAST.
+        assert isinstance(expr, FunctionCall)
+        assert expr.function_name == "or"
+        equals_expr = expr.parameters[0]
+        assert isinstance(equals_expr, FunctionCall)
+        assert equals_expr.function_name == "equals"
+        cast_expr = equals_expr.parameters[0]
+        assert isinstance(cast_expr, FunctionCall)
+        assert cast_expr.function_name == "cast"
+
+
+class TestDedupeAndConditions:
+    """dedupe_and_conditions removes structurally-identical top-level AND conjuncts.
+    treeify_or_and_conditions runs it, so every endpoint that treeifies gets it."""
+
+    @staticmethod
+    def _conjuncts(condition: object) -> list[FunctionCall]:
+        out: list[FunctionCall] = []
+        if isinstance(condition, FunctionCall) and condition.function_name == "and":
+            for param in condition.parameters:
+                out.extend(TestDedupeAndConditions._conjuncts(param))
+        elif isinstance(condition, FunctionCall):
+            out.append(condition)
+        return out
+
+    def test_duplicate_conjunct_removed(self) -> None:
+        a = f.greaterOrEquals(column("timestamp"), f.toDateTime("2026-06-09 21:30:00"))
+        b = f.equals(column("project_id"), 1)
+        query = Query(from_clause=None, condition=and_cond(a, b, a))
+
+        dedupe_and_conditions(query)
+
+        conjuncts = self._conjuncts(query.get_condition())
+        assert len(conjuncts) == 2
+        assert a in conjuncts and b in conjuncts
+
+    def test_no_duplicates_leaves_condition_untouched(self) -> None:
+        a = f.greaterOrEquals(column("timestamp"), f.toDateTime("2026-06-09 21:30:00"))
+        b = f.less(column("timestamp"), f.toDateTime("2026-06-10 21:40:00"))
+        original = and_cond(a, b)
+        query = Query(from_clause=None, condition=original)
+
+        dedupe_and_conditions(query)
+
+        # Unchanged object identity: we only rebuild when a duplicate is found.
+        assert query.get_condition() is original
+
+    def test_treeify_also_dedupes(self) -> None:
+        a = f.equals(column("project_id"), 1)
+        b = f.equals(column("organization_id"), 2)
+        query = Query(from_clause=None, condition=and_cond(a, b, a))
+
+        treeify_or_and_conditions(query)
+
+        conjuncts = self._conjuncts(query.get_condition())
+        assert len(conjuncts) == 2
 
 
 class TestAnalyzerSafeFilters:

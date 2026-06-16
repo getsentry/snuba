@@ -1,4 +1,5 @@
 import json
+import math
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, TypeVar, cast
 
@@ -12,8 +13,10 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 
 from snuba import settings, state
+from snuba.clickhouse import DATETIME_FORMAT
 from snuba.protos.common import (
     ATTRIBUTES_TO_COALESCE,
+    COLUMN_PREFIX,
     PROTO_TYPE_TO_ATTRIBUTE_COLUMN,
     PROTO_TYPE_TO_CLICKHOUSE_TYPE,
     MalformedAttributeException,
@@ -237,7 +240,12 @@ def treeify_or_and_conditions(query: Query) -> None:
 
     Note: does not apply to the conditions of a from_clause subquery (the nested one)
         this is bc transform_expressions is not implemented for composite queries
+
+    This also removes structurally-identical conjuncts from the top-level WHERE AND
+    (`A AND A` == `A`); see dedupe_and_conditions. Nothing downstream in the query
+    pipeline dedupes conditions, so without this the duplicate would reach ClickHouse.
     """
+    dedupe_and_conditions(query)
 
     def transform(exp: Expression) -> Expression:
         if not isinstance(exp, FunctionCall):
@@ -251,6 +259,42 @@ def treeify_or_and_conditions(query: Query) -> None:
             return exp
 
     query.transform_expressions(transform)
+
+
+def dedupe_and_conditions(query: Query) -> None:
+    """Remove structurally-identical conjuncts from the query's top-level AND.
+
+    ``A AND A`` is equivalent to ``A``, so dropping exact duplicates never changes
+    results. The motivating case: when a client sends a ``sentry.timestamp`` range
+    filter whose bounds equal the mandatory time-range condition, both now produce
+    byte-identical expressions (see timestamp_seconds_to_datetime_literal) and
+    collapse to a single condition. Distinct ranges are left untouched (the AND of
+    them naturally yields the tightest window).
+
+    Conditions nested inside OR/NOT subtrees are treated as opaque leaves -- we only
+    flatten the top-level AND. The query is left unchanged unless a duplicate is
+    actually found, so existing queries keep their exact condition tree.
+    """
+    condition = query.get_condition()
+    if condition is None:
+        return
+
+    def flatten_and(exp: Expression) -> list[Expression]:
+        if isinstance(exp, FunctionCall) and exp.function_name == "and":
+            flattened: list[Expression] = []
+            for param in exp.parameters:
+                flattened.extend(flatten_and(param))
+            return flattened
+        return [exp]
+
+    conjuncts = flatten_and(condition)
+    deduped: list[Expression] = []
+    for conjunct in conjuncts:
+        if conjunct not in deduped:
+            deduped.append(conjunct)
+
+    if len(deduped) != len(conjuncts):
+        query.set_ast_condition(combine_and_conditions(deduped))
 
 
 # Map column -> the Nullable type its values resolve to, used to emit a typed
@@ -725,6 +769,51 @@ def trace_item_filters_to_expression(
         else:
             v_expression = _attribute_value_to_expression(v)
 
+        # `sentry.timestamp` is a normalized column that `attribute_key_to_expression`
+        # maps to `CAST(timestamp, 'Float64')`. Wrapping the primary-key/partition
+        # column in a CAST prevents ClickHouse from using it for granule and partition
+        # pruning, so range filters on it scan far more data than necessary. It also
+        # duplicates the mandatory time-range condition (timestamp_in_range_condition)
+        # that is already applied on the raw column. For range comparisons, compare
+        # against the raw DateTime `timestamp` column instead so the condition is
+        # index- and partition-prunable. We reuse timestamp_seconds_to_datetime_literal
+        # so a bound equal to the mandatory range is byte-identical to it and gets
+        # collapsed by dedupe_timestamp_conditions.
+        if k.name == f"{COLUMN_PREFIX}timestamp" and value_type in (
+            "val_int",
+            "val_float",
+            "val_double",
+        ):
+            scalar_value = _scalar_value(v)
+            assert isinstance(scalar_value, (int, float))
+            raw_timestamp = column("timestamp")
+            # `timestamp` is a second-resolution DateTime, so a fractional bound must be
+            # rounded to the integer second that preserves the original
+            # `CAST(timestamp, 'Float64') OP value` result: `<`/`>=` round up (ceil) and
+            # `<=`/`>` round down (floor). Integer bounds are left unchanged, so the
+            # rewritten mandatory-range bounds stay byte-identical and
+            # dedupe_timestamp_conditions can still collapse them.
+            if op == ComparisonFilter.OP_LESS_THAN:
+                return f.less(
+                    raw_timestamp,
+                    timestamp_seconds_to_datetime_literal(math.ceil(scalar_value)),
+                )
+            if op == ComparisonFilter.OP_LESS_THAN_OR_EQUALS:
+                return f.lessOrEquals(
+                    raw_timestamp,
+                    timestamp_seconds_to_datetime_literal(math.floor(scalar_value)),
+                )
+            if op == ComparisonFilter.OP_GREATER_THAN:
+                return f.greater(
+                    raw_timestamp,
+                    timestamp_seconds_to_datetime_literal(math.floor(scalar_value)),
+                )
+            if op == ComparisonFilter.OP_GREATER_THAN_OR_EQUALS:
+                return f.greaterOrEquals(
+                    raw_timestamp,
+                    timestamp_seconds_to_datetime_literal(math.ceil(scalar_value)),
+                )
+
         if op == ComparisonFilter.OP_EQUALS:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
 
@@ -955,20 +1044,20 @@ def project_id_and_org_conditions(meta: RequestMeta) -> Expression:
     )
 
 
+def timestamp_seconds_to_datetime_literal(ts_seconds: int) -> Expression:
+    """Build the canonical ``toDateTime('YYYY-MM-DD HH:MM:SS')`` expression for a unix
+    timestamp. The mandatory time-range bounds and rewritten ``sentry.timestamp`` range
+    filters share this form so equal bounds produce structurally identical expressions
+    (which lets dedupe_timestamp_conditions collapse the duplicates)."""
+    return f.toDateTime(
+        datetime.fromtimestamp(ts_seconds, tz=timezone.utc).strftime(DATETIME_FORMAT)
+    )
+
+
 def timestamp_in_range_condition(start_ts: int, end_ts: int) -> Expression:
     return and_cond(
-        f.less(
-            column("timestamp"),
-            f.toDateTime(
-                datetime.fromtimestamp(end_ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-            ),
-        ),
-        f.greaterOrEquals(
-            column("timestamp"),
-            f.toDateTime(
-                datetime.fromtimestamp(start_ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-            ),
-        ),
+        f.less(column("timestamp"), timestamp_seconds_to_datetime_literal(end_ts)),
+        f.greaterOrEquals(column("timestamp"), timestamp_seconds_to_datetime_literal(start_ts)),
     )
 
 
