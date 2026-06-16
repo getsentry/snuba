@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 
 from snuba.attribution import get_app_id
@@ -33,7 +35,7 @@ def test_events_processing() -> None:
 
     query = parse_snql_query(query_body["query"], events_dataset)
     request = Request(
-        id="",
+        id=uuid.uuid4(),
         original_body=query_body,
         query=query,
         query_settings=HTTPQuerySettings(referrer=""),
@@ -50,6 +52,7 @@ def test_events_processing() -> None:
         )
     )
     clickhouse_query = StorageProcessingStage().execute(pipeline_result).data
+    assert clickhouse_query is not None
 
     assert clickhouse_query.get_selected_columns() == [
         SelectedExpression(
@@ -99,7 +102,7 @@ def test_platform_tag_promotion() -> None:
 
     query = parse_snql_query(query_body["query"], events_dataset)
     request = Request(
-        id="",
+        id=uuid.uuid4(),
         original_body=query_body,
         query=query,
         query_settings=HTTPQuerySettings(referrer=""),
@@ -116,6 +119,7 @@ def test_platform_tag_promotion() -> None:
         )
     )
     clickhouse_query = StorageProcessingStage().execute(pipeline_result).data
+    assert clickhouse_query is not None
 
     assert clickhouse_query.get_selected_columns() == [
         SelectedExpression(
