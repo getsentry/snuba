@@ -37,7 +37,7 @@ class Migration(migration.ClickhouseNodeMigration):
     legacy UInt32 quantity column. The destination tables are unchanged.
     """
 
-    blocking = True
+    blocking = False
 
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [
