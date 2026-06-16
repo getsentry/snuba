@@ -14,6 +14,7 @@ from sentry_protos.snuba.v1.trace_item_pb2 import TraceItem as TraceItemMessage
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.trace_item_attribute_values import AttributeValuesRequest
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -260,5 +261,24 @@ class TestTraceItemAttributes(BaseApiTest):
             key=AttributeKey(name="sentry.is_segment", type=AttributeKey.TYPE_BOOLEAN),
         )
         response = AttributeValuesRequest().execute(message)
-        assert response.values == ["True", "False"]
+        assert response.values == ["true", "false"]
         assert response.counts == [8, 1]
+
+    def test_substring_match_on_boolean_rejected(self, setup_teardown: Any) -> None:
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=5,
+            key=AttributeKey(name="sentry.is_segment", type=AttributeKey.TYPE_BOOLEAN),
+            value_substring_match="tru",
+        )
+        with pytest.raises(BadSnubaRPCRequestException):
+            AttributeValuesRequest().execute(message)
+
+    def test_unsupported_attribute_type_rejected(self, setup_teardown: Any) -> None:
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=5,
+            key=AttributeKey(name="sentry.duration_ms", type=AttributeKey.TYPE_DOUBLE),
+        )
+        with pytest.raises(BadSnubaRPCRequestException):
+            AttributeValuesRequest().execute(message)
