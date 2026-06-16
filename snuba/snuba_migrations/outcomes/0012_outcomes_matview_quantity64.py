@@ -35,8 +35,6 @@ class Migration(migration.ClickhouseNodeMigration):
     Updates the hourly and daily materialized views to aggregate quantity from the
     non-overflowing quantity64 raw column (sum(quantity64) AS quantity) instead of the
     legacy UInt32 quantity column. The destination tables are unchanged.
-
-    Note that the consumer needs to be stopped for this migration.
     """
 
     blocking = True
