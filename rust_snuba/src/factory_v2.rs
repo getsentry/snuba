@@ -190,8 +190,8 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             self.max_batch_size,
             self.max_batch_time,
             compute_batch_size,
-            // we need to enable this to deal with storages where we skip 100% of values, such as
-            // gen-metrics-gauges in s4s. we still need to commit there
+            // we need to enable this to deal with storages where we skip 100% of values.
+            // we still need to commit there
         )
         .flush_empty_batches(true);
 
