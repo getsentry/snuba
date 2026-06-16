@@ -263,7 +263,7 @@ struct EAPItem {
 
     /// Per-item-type primary name attribute, promoted to a dedicated column.
     /// Sourced from `sentry.op` for spans and `sentry.name` for metrics.
-    name: String,
+    indexed_name: String,
 
     #[serde(flatten)]
     attributes: AttributeMap,
@@ -285,12 +285,12 @@ impl TryFrom<TraceItem> for EAPItem {
         let timestamp = from.timestamp.context("Expected a timestamp")?;
 
         // Promote the per-item-type primary name attribute into a dedicated
-        // `name` column: `sentry.op` for spans, `sentry.name` for metrics.
-        // Read it before `from.attributes` is consumed by the loop below;
-        // the attribute is also still written to the attribute maps.
+        // `indexed_name` column: `sentry.op` for spans, `sentry.name` for
+        // metrics. Read it before `from.attributes` is consumed by the loop
+        // below; the attribute is also still written to the attribute maps.
         let item_type =
             TraceItemType::try_from(from.item_type).unwrap_or(TraceItemType::Unspecified);
-        let name = match item_type {
+        let indexed_name = match item_type {
             TraceItemType::Span => Some("sentry.op"),
             TraceItemType::Metric => Some("sentry.name"),
             _ => None,
@@ -309,7 +309,7 @@ impl TryFrom<TraceItem> for EAPItem {
             trace_id: Uuid::parse_str(&from.trace_id)?,
             item_id: read_item_id(from.item_id)?,
             timestamp: timestamp.seconds as u32,
-            name,
+            indexed_name,
             attributes: Default::default(),
             retention_days: Default::default(),
             downsampled_retention_days: Default::default(),
@@ -491,7 +491,7 @@ pub struct EAPItemRow {
     trace_id: Uuid,
     item_id: u128,
 
-    name: String,
+    indexed_name: String,
 
     sampling_weight: u64,
     sampling_factor: f64,
@@ -537,7 +537,7 @@ impl EAPItemRow {
         "timestamp",
         "trace_id",
         "item_id",
-        "name",
+        "indexed_name",
         "sampling_weight",
         "sampling_factor",
         "client_sample_rate",
@@ -572,7 +572,7 @@ impl TryFrom<EAPItem> for EAPItemRow {
                 timestamp: item.timestamp,
                 trace_id: item.trace_id,
                 item_id: item.item_id,
-                name: item.name,
+                indexed_name: item.indexed_name,
                 sampling_weight: item.sampling_weight,
                 sampling_factor: item.sampling_factor,
                 client_sample_rate: item.client_sample_rate,
@@ -1004,11 +1004,11 @@ mod tests {
     #[test]
     fn test_column_names_match_struct_layout() {
         let names = EAPItemRow::COLUMN_NAMES;
-        // 12 scalars + name + attributes_bool + attributes_int + 80 buckets + attributes_array
+        // 12 scalars + indexed_name + attributes_bool + attributes_int + 80 buckets + attributes_array
         assert_eq!(names.len(), 96);
         assert_eq!(names[0], "organization_id");
         assert_eq!(names[5], "item_id");
-        assert_eq!(names[6], "name");
+        assert_eq!(names[6], "indexed_name");
         assert_eq!(names[7], "sampling_weight");
         assert_eq!(names[8], "sampling_factor");
         assert_eq!(names[9], "client_sample_rate");
@@ -1242,7 +1242,7 @@ mod tests {
     }
 
     #[test]
-    fn test_name_from_sentry_op_for_spans() {
+    fn test_indexed_name_from_sentry_op_for_spans() {
         let item_id = Uuid::new_v4();
         let mut trace_item = generate_trace_item(item_id);
         trace_item.item_type = TraceItemType::Span.into();
@@ -1254,11 +1254,11 @@ mod tests {
         );
 
         let eap_item = EAPItem::try_from(trace_item).unwrap();
-        assert_eq!(eap_item.name, "db.query");
+        assert_eq!(eap_item.indexed_name, "db.query");
     }
 
     #[test]
-    fn test_name_from_sentry_name_for_metrics() {
+    fn test_indexed_name_from_sentry_name_for_metrics() {
         let item_id = Uuid::new_v4();
         let mut trace_item = generate_trace_item(item_id);
         trace_item.item_type = TraceItemType::Metric.into();
@@ -1270,22 +1270,22 @@ mod tests {
         );
 
         let eap_item = EAPItem::try_from(trace_item).unwrap();
-        assert_eq!(eap_item.name, "my.metric");
+        assert_eq!(eap_item.indexed_name, "my.metric");
     }
 
     #[test]
-    fn test_name_empty_when_source_attribute_missing() {
+    fn test_indexed_name_empty_when_source_attribute_missing() {
         let item_id = Uuid::new_v4();
         let mut trace_item = generate_trace_item(item_id);
         trace_item.item_type = TraceItemType::Span.into();
         // No sentry.op attribute set.
 
         let eap_item = EAPItem::try_from(trace_item).unwrap();
-        assert_eq!(eap_item.name, "");
+        assert_eq!(eap_item.indexed_name, "");
     }
 
     #[test]
-    fn test_name_serialized_in_row_binary() {
+    fn test_indexed_name_serialized_in_row_binary() {
         let item_id = Uuid::new_v4();
         let mut trace_item = generate_trace_item(item_id);
         trace_item.item_type = TraceItemType::Span.into();
@@ -1309,7 +1309,7 @@ mod tests {
         let batch = process_message_row_binary_typed(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
 
-        assert_eq!(batch.rows[0].name, "http.server");
+        assert_eq!(batch.rows[0].indexed_name, "http.server");
     }
 
     #[test]
