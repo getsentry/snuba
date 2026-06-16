@@ -1,8 +1,9 @@
 import uuid
 from collections import defaultdict
+from collections.abc import Callable, Iterable
 from dataclasses import replace
 from datetime import datetime
-from typing import Any, Callable, Dict, Iterable, Optional
+from typing import Any
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -86,7 +87,7 @@ def _get_attribute_key_to_expression_function(
 
 
 def _convert_result_timeseries(
-    request: TimeSeriesRequest, data: list[Dict[str, Any]]
+    request: TimeSeriesRequest, data: list[dict[str, Any]]
 ) -> Iterable[TimeSeries]:
     """This function takes the results of the clickhouse query and converts it to a list of TimeSeries objects. It also handles
     zerofilling data points where data was not present for a specific bucket.
@@ -129,9 +130,9 @@ def _convert_result_timeseries(
     """
 
     # the aggregations that we will include in the result
-    aggregation_labels = set([expr.label for expr in request.expressions])
+    aggregation_labels = {expr.label for expr in request.expressions}
 
-    group_by_labels = set([attr.name for attr in request.group_by])
+    group_by_labels = {attr.name for attr in request.group_by}
 
     # create a mapping with (all the group by attribute key,val pairs as strs, label name)
     # In the example in the docstring it would look like:
@@ -144,7 +145,7 @@ def _convert_result_timeseries(
     #       time_converted_to_integer_timestamp: row_data_for_that_time_bucket
     #   }
     # }
-    result_timeseries_timestamp_to_row: defaultdict[tuple[str, str], dict[int, Dict[str, Any]]] = (
+    result_timeseries_timestamp_to_row: defaultdict[tuple[str, str], dict[int, dict[str, Any]]] = (
         defaultdict(dict)
     )
 
@@ -217,9 +218,9 @@ def _remove_non_requested_expressions(
     expressions: Iterable[ProtoExpression],
     result_timeseries: dict[tuple[str, str], TimeSeries],
 ) -> None:
-    requested_expressions = set([expr.label for expr in expressions])
+    requested_expressions = {expr.label for expr in expressions}
     to_remove = []
-    for timeseries_key in result_timeseries.keys():
+    for timeseries_key in result_timeseries:
         if timeseries_key[1] not in requested_expressions:
             to_remove.append(timeseries_key)
     for timeseries_key in to_remove:
@@ -339,7 +340,7 @@ def _proto_expression_to_ast_expression(
 
 
 def build_query(
-    request: TimeSeriesRequest, sampling_tier: Optional[Tier] = None, timer: Optional[Timer] = None
+    request: TimeSeriesRequest, sampling_tier: Tier | None = None, timer: Timer | None = None
 ) -> Query:
     entity = Entity(
         key=EntityKey("eap_items"),
@@ -442,8 +443,8 @@ def build_query(
 def _build_snuba_request(
     request: TimeSeriesRequest,
     query_settings: HTTPQuerySettings,
-    sampling_tier: Optional[Tier] = None,
-    timer: Optional[Timer] = None,
+    sampling_tier: Tier | None = None,
+    timer: Timer | None = None,
 ) -> SnubaRequest:
     if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
         team = "ourlogs"

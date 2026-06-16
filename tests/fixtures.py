@@ -3,9 +3,10 @@ from __future__ import annotations
 import calendar
 import json
 import uuid
-from datetime import datetime, timedelta, timezone
+from collections.abc import Mapping
+from datetime import UTC, datetime, timedelta
 from hashlib import md5
-from typing import Any, Mapping, Tuple
+from typing import Any
 
 from snuba import settings
 from snuba.processor import InsertEvent
@@ -19,7 +20,7 @@ def get_raw_event() -> InsertEvent:
 
     event_id = str(uuid.uuid4().hex)
     message = "Caught exception!"
-    unique = "%s:%s" % (str(PROJECT_ID), event_id)
+    unique = f"{str(PROJECT_ID)}:{event_id}"
     primary_hash = md5(unique.encode("utf-8")).hexdigest()
     platform = "java"
     event_datetime = (now - timedelta(seconds=2)).strftime(
@@ -190,12 +191,12 @@ def get_raw_event() -> InsertEvent:
 
 
 def get_raw_transaction(span_id: str | None = None) -> Mapping[str, Any]:
-    now = datetime.utcnow().replace(minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
+    now = datetime.utcnow().replace(minute=0, second=0, microsecond=0, tzinfo=UTC)
     start_timestamp = now - timedelta(seconds=3)
     end_timestamp = now - timedelta(seconds=2)
     event_received = now - timedelta(seconds=1)
     trace_id = uuid.UUID("7400045b-25c4-43b8-8591-4600aa83ad04")
-    span_id = "8841662216cc598b" if not span_id else span_id
+    span_id = span_id if span_id else "8841662216cc598b"
     unique = "100"
     primary_hash = md5(unique.encode("utf-8")).hexdigest()
     app_start_type = "warm.prewarmed"
@@ -296,11 +297,7 @@ def get_raw_transaction(span_id: str | None = None) -> Mapping[str, Any]:
 
 def get_replay_event(replay_id: str | None = None) -> Mapping[str, Any]:
     replay_id = replay_id if replay_id else str(uuid.UUID("e5e062bf2e1d4afd96fd2f90b6770431"))
-    now = (
-        datetime.utcnow()
-        .replace(minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
-        .timestamp()
-    )
+    now = datetime.utcnow().replace(minute=0, second=0, microsecond=0, tzinfo=UTC).timestamp()
 
     return {
         "type": "replay_event",
@@ -359,14 +356,14 @@ def get_replay_event(replay_id: str | None = None) -> Mapping[str, Any]:
     }
 
 
-def get_raw_error_message() -> Tuple[int, str, InsertEvent, Any]:
+def get_raw_error_message() -> tuple[int, str, InsertEvent, Any]:
     """
     Get an error message which can be passed to the processors.
     """
     return (2, "insert", get_raw_event(), {})
 
 
-def get_raw_transaction_message() -> Tuple[int, str, Mapping[str, Any]]:
+def get_raw_transaction_message() -> tuple[int, str, Mapping[str, Any]]:
     """
     Get a transaction message which can be passed to the processors.
     """

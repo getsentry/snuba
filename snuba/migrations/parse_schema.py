@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
+from typing import Any
 
 from clickhouse_driver import Client
 from parsimonious.grammar import Grammar
@@ -89,8 +90,7 @@ def merge_modifiers(
     existing_modifiers = col_type.get_modifiers()
     if existing_modifiers is None:
         return col_type.set_modifiers(modifiers)
-    else:
-        return col_type.set_modifiers(existing_modifiers.merge(modifiers))
+    return col_type.set_modifiers(existing_modifiers.merge(modifiers))
 
 
 _TYPES: dict[str, type[ColumnType[MigrationModifiers]]] = {
@@ -105,7 +105,7 @@ _TYPES: dict[str, type[ColumnType[MigrationModifiers]]] = {
 }
 
 
-class Visitor(NodeVisitor):  # type: ignore
+class Visitor(NodeVisitor):  # type: ignore[misc]
     def visit_basic_type(
         self, node: Node, visited_children: Iterable[Any]
     ) -> ColumnType[MigrationModifiers]:
@@ -420,6 +420,6 @@ def get_local_schema(conn: Client, table_name: str) -> Mapping[str, ColumnType[M
     return {
         column_name: _get_column(column_type, default_type, default_expr, codec_expr)
         for column_name, column_type, default_type, default_expr, _comment, codec_expr in [
-            cols[:6] for cols in conn.execute("DESCRIBE TABLE %s" % table_name).results
+            cols[:6] for cols in conn.execute(f"DESCRIBE TABLE {table_name}").results
         ]
     }

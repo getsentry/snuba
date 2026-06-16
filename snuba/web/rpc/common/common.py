@@ -1,6 +1,7 @@
 import json
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, TypeVar, cast
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from typing import Any, TypeVar, cast
 
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
@@ -241,10 +242,9 @@ def treeify_or_and_conditions(query: Query) -> None:
 
         if exp.function_name == "and":
             return combine_and_conditions(exp.parameters)
-        elif exp.function_name == "or":
+        if exp.function_name == "or":
             return combine_or_conditions(exp.parameters)
-        else:
-            return exp
+        return exp
 
     query.transform_expressions(transform)
 
@@ -564,7 +564,7 @@ def trace_item_filters_to_expression(
         filters = item_filter.and_filter.filters
         if len(filters) == 0:
             return literal(True)
-        elif len(filters) == 1:
+        if len(filters) == 1:
             return trace_item_filters_to_expression(filters[0], attribute_key_to_expression)
         return and_cond(
             *(trace_item_filters_to_expression(x, attribute_key_to_expression) for x in filters)
@@ -574,7 +574,7 @@ def trace_item_filters_to_expression(
         filters = item_filter.or_filter.filters
         if len(filters) == 0:
             raise BadSnubaRPCRequestException("Invalid trace item filter, empty 'or' clause")
-        elif len(filters) == 1:
+        if len(filters) == 1:
             return trace_item_filters_to_expression(filters[0], attribute_key_to_expression)
         return or_cond(
             *(trace_item_filters_to_expression(x, attribute_key_to_expression) for x in filters)
@@ -584,7 +584,7 @@ def trace_item_filters_to_expression(
         filters = item_filter.not_filter.filters
         if len(filters) == 0:
             raise BadSnubaRPCRequestException("Invalid trace item filter, empty 'not' clause")
-        elif len(filters) == 1:
+        if len(filters) == 1:
             return not_cond(
                 trace_item_filters_to_expression(filters[0], attribute_key_to_expression)
             )
@@ -622,18 +622,15 @@ def trace_item_filters_to_expression(
                 return _type_array_includes_scalar_expression(
                     k_expression, v, item_filter.comparison_filter.ignore_case
                 )
-            else:
-                expr = (
-                    f.equals(f.lower(k_expression), f.lower(v_expression))
-                    if item_filter.comparison_filter.ignore_case
-                    else f.equals(k_expression, v_expression)
-                )
-                # we redefine the way equals works for nulls
-                # now null=null is true
-                expr_with_null = or_cond(
-                    expr, and_cond(f.isNull(k_expression), f.isNull(v_expression))
-                )
-                return expr_with_null
+            expr = (
+                f.equals(f.lower(k_expression), f.lower(v_expression))
+                if item_filter.comparison_filter.ignore_case
+                else f.equals(k_expression, v_expression)
+            )
+            # we redefine the way equals works for nulls
+            # now null=null is true
+            expr_with_null = or_cond(expr, and_cond(f.isNull(k_expression), f.isNull(v_expression)))
+            return expr_with_null
         if op == ComparisonFilter.OP_NOT_EQUALS:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
             if k.type == AttributeKey.Type.TYPE_ARRAY:
@@ -642,18 +639,15 @@ def trace_item_filters_to_expression(
                         k_expression, v, item_filter.comparison_filter.ignore_case
                     )
                 )
-            else:
-                expr = (
-                    f.notEquals(f.lower(k_expression), f.lower(v_expression))
-                    if item_filter.comparison_filter.ignore_case
-                    else f.notEquals(k_expression, v_expression)
-                )
-                # we redefine the way not equals works for nulls
-                # now null!=null is true
-                expr_with_null = or_cond(
-                    expr, f.xor(f.isNull(k_expression), f.isNull(v_expression))
-                )
-                return expr_with_null
+            expr = (
+                f.notEquals(f.lower(k_expression), f.lower(v_expression))
+                if item_filter.comparison_filter.ignore_case
+                else f.notEquals(k_expression, v_expression)
+            )
+            # we redefine the way not equals works for nulls
+            # now null!=null is true
+            expr_with_null = or_cond(expr, f.xor(f.isNull(k_expression), f.isNull(v_expression)))
+            return expr_with_null
         if op == ComparisonFilter.OP_LIKE:
             if k.type == AttributeKey.Type.TYPE_ARRAY:
                 like_fn = f.ilike if item_filter.comparison_filter.ignore_case else f.like
@@ -791,15 +785,11 @@ def timestamp_in_range_condition(start_ts: int, end_ts: int) -> Expression:
     return and_cond(
         f.less(
             column("timestamp"),
-            f.toDateTime(
-                datetime.fromtimestamp(end_ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-            ),
+            f.toDateTime(datetime.fromtimestamp(end_ts, tz=UTC).strftime("%Y-%m-%d %H:%M:%S")),
         ),
         f.greaterOrEquals(
             column("timestamp"),
-            f.toDateTime(
-                datetime.fromtimestamp(start_ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-            ),
+            f.toDateTime(datetime.fromtimestamp(start_ts, tz=UTC).strftime("%Y-%m-%d %H:%M:%S")),
         ),
     )
 
@@ -847,11 +837,12 @@ def get_field_existence_expression(field: Expression) -> Expression:
         """
         if isinstance(field, SubscriptableReference):
             return field
-        elif isinstance(field, FunctionCall) and len(field.parameters) > 0:
-            if len(field.parameters) > 0 and isinstance(
-                field.parameters[0], SubscriptableReference
-            ):
-                return field.parameters[0]
+        if (
+            isinstance(field, FunctionCall)
+            and len(field.parameters) > 0
+            and isinstance(field.parameters[0], SubscriptableReference)
+        ):
+            return field.parameters[0]
 
         return None
 

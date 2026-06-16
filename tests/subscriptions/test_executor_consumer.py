@@ -1,8 +1,8 @@
 import json
 import time
 import uuid
+from collections.abc import Iterator, Mapping
 from datetime import datetime, timedelta
-from typing import Iterator, Mapping, Optional
 from unittest import mock
 
 import pytest
@@ -97,7 +97,7 @@ def test_executor_consumer() -> None:
     # We need to wait for the consumer to receive partitions otherwise,
     # when we try to consume messages, we will not find anything.
     # Subscription is an async process.
-    assert assigned == True, "Did not receive assignment within 10 attempts"
+    assert assigned, "Did not receive assignment within 10 attempts"
 
     consumer_group = str(uuid.uuid1().hex)
     auto_offset_reset = "latest"
@@ -115,7 +115,7 @@ def test_executor_consumer() -> None:
         TestingMetricsBackend(),
         None,
     )
-    for i in range(1, 5):
+    for _i in range(1, 5):
         # Give time to the executor to subscribe
         time.sleep(1)
         executor._run_once()
@@ -172,8 +172,8 @@ def test_executor_consumer() -> None:
 
 def generate_message(
     entity_key: EntityKey,
-    subscription_identifier: Optional[SubscriptionIdentifier] = None,
-    bad_query: Optional[bool] = False,
+    subscription_identifier: SubscriptionIdentifier | None = None,
+    bad_query: bool | None = False,
 ) -> Iterator[Message[KafkaPayload]]:
     codec = SubscriptionScheduledTaskEncoder()
     epoch = datetime(1970, 1, 1)

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Sequence, Type, cast
+from typing import cast
 
 from snuba.clickhouse.translators.snuba.allowed import DefaultNoneColumnMapper
 from snuba.clickhouse.translators.snuba.function_call_mappers import (
@@ -62,14 +63,14 @@ class QueryValidator(ABC, metaclass=RegisteredClass):
         return cls.__name__
 
     @classmethod
-    def get_from_name(cls, name: str) -> Type["QueryValidator"]:
-        return cast(Type["QueryValidator"], cls.class_from_name(name))
+    def get_from_name(cls, name: str) -> type[QueryValidator]:
+        return cast(type["QueryValidator"], cls.class_from_name(name))
 
     @abstractmethod
     def validate(
         self,
         query: Query,
-        alias: Optional[str] = None,
+        alias: str | None = None,
     ) -> None:
         """
         Validate that the query is correct. If the query is not valid, raise an
@@ -99,7 +100,7 @@ class EntityRequiredColumnValidator(QueryValidator):
         self.required_columns = set(required_filter_columns)
         self.required_str_columns = set(required_str_columns) if required_str_columns else set()
 
-    def validate(self, query: Query, alias: Optional[str] = None) -> None:
+    def validate(self, query: Query, alias: str | None = None) -> None:
         condition = query.get_condition()
         top_level = get_first_level_and_conditions(condition) if condition else []
 
@@ -158,7 +159,7 @@ class EntityContainsColumnsValidator(QueryValidator):
                 elif isinstance(col_mapping, DefaultNoneColumnMapper):
                     self.mapped_columns.update(col_mapping.column_names)
 
-    def validate(self, query: Query, alias: Optional[str] = None) -> None:
+    def validate(self, query: Query, alias: str | None = None) -> None:
         if self.validation_mode == ColumnValidationMode.DO_NOTHING:
             return
 
@@ -175,7 +176,7 @@ class EntityContainsColumnsValidator(QueryValidator):
             error_message = f"Tag keys ({', '.join(missing)}) not resolved"
             if self.validation_mode == ColumnValidationMode.ERROR:
                 raise InvalidQueryException(error_message)
-            elif self.validation_mode == ColumnValidationMode.WARN:
+            if self.validation_mode == ColumnValidationMode.WARN:
                 logger.warning(error_message, exc_info=True)
 
 
@@ -201,7 +202,7 @@ class NoTimeBasedConditionValidator(QueryValidator):
             param_type=datetime,
         )
 
-    def validate(self, query: Query, alias: Optional[str] = None) -> None:
+    def validate(self, query: Query, alias: str | None = None) -> None:
         condition = query.get_condition()
         top_level = get_first_level_and_conditions(condition) if condition else []
         for cond in top_level:
@@ -231,7 +232,7 @@ class SubscriptionAllowedClausesValidator(QueryValidator):
 
     @staticmethod
     def _validate_groupby_fields_have_matching_conditions(
-        query: Query, alias: Optional[str] = None
+        query: Query, alias: str | None = None
     ) -> None:
         """
         Method that insures that for every field in the group by clause, there should be a
@@ -273,7 +274,7 @@ class SubscriptionAllowedClausesValidator(QueryValidator):
     def validate(
         self,
         query: Query,
-        alias: Optional[str] = None,
+        alias: str | None = None,
     ) -> None:
         selected = query.get_selected_columns()
         if len(selected) > self.max_allowed_aggregations:
@@ -304,7 +305,7 @@ class GranularityValidator(QueryValidator):
         self.minimum = minimum
         self.required = required
 
-    def validate(self, query: Query, alias: Optional[str] = None) -> None:
+    def validate(self, query: Query, alias: str | None = None) -> None:
         granularity = query.get_granularity()
         if granularity is None:
             if self.required:
@@ -336,7 +337,7 @@ class TagConditionValidator(QueryValidator):
             array_ops=[ConditionFunctions.IN, ConditionFunctions.NOT_IN],
         )
 
-    def validate(self, query: Query, alias: Optional[str] = None) -> None:
+    def validate(self, query: Query, alias: str | None = None) -> None:
         condition = query.get_condition()
         if not condition:
             return
@@ -383,7 +384,7 @@ class DatetimeConditionValidator(QueryValidator):
                 )
                 self.matchers.append(matcher)
 
-    def validate(self, query: Query, alias: Optional[str] = None) -> None:
+    def validate(self, query: Query, alias: str | None = None) -> None:
         if not isinstance(query, LogicalQuery):
             return  # TODO: This doesn't work for queries with multiple entities.
 
@@ -461,7 +462,7 @@ class IllegalAggregateInConditionValidator(QueryValidator):
             [String(f"{func_name}If") for func_name in common_aggregate_functions]
         )
 
-    def validate(self, query: Query, alias: Optional[str] = None) -> None:
+    def validate(self, query: Query, alias: str | None = None) -> None:
         def find_illegal_aggregate_functions(
             expression: Expression,
         ) -> list[MatchResult]:

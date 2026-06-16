@@ -1,6 +1,6 @@
 import uuid
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -29,7 +29,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, TraceItem
 
 from snuba import state
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_get_traces import EndpointGetTraces
@@ -46,7 +46,7 @@ from tests.web.rpc.v1.test_utils import (
 )
 
 _TRACE_IDS = [uuid.uuid4().hex for _ in range(10)]
-_BASE_TIME = datetime.now(tz=timezone.utc).replace(
+_BASE_TIME = datetime.now(tz=UTC).replace(
     minute=0,
     second=0,
     microsecond=0,
@@ -92,11 +92,11 @@ _ADDITIONAL_SPANS = [
 
 @pytest.fixture(autouse=False)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
-    items_storage = get_storage(StorageKey("eap_items"))
+    items_storage = get_writable_storage(StorageKey("eap_items"))
     state.set_config("enable_trace_sampling", True)
 
-    write_raw_unprocessed_events(items_storage, _SPANS)  # type: ignore
-    write_raw_unprocessed_events(items_storage, _ADDITIONAL_SPANS)  # type: ignore
+    write_raw_unprocessed_events(items_storage, _SPANS)
+    write_raw_unprocessed_events(items_storage, _ADDITIONAL_SPANS)
 
 
 @pytest.mark.clickhouse_db
@@ -165,7 +165,7 @@ class TestEndpointGetTraces(BaseApiTest):
                         ),
                     ],
                 )
-                for start_timestamp in reversed(sorted(trace_id_per_start_timestamp.keys()))
+                for start_timestamp in sorted(trace_id_per_start_timestamp.keys(), reverse=True)
             ],
             page_token=PageToken(offset=len(_TRACE_IDS + _ADDITIONAL_TRACE_IDS)),
             meta=ResponseMeta(
@@ -493,7 +493,7 @@ class TestEndpointGetTraces(BaseApiTest):
                         ),
                     ],
                 )
-                for start_timestamp in reversed(sorted(trace_id_per_start_timestamp.keys()))
+                for start_timestamp in sorted(trace_id_per_start_timestamp.keys(), reverse=True)
             ],
             page_token=PageToken(offset=len(_TRACE_IDS)),
             meta=ResponseMeta(
@@ -566,7 +566,7 @@ class TestEndpointGetTraces(BaseApiTest):
                         ),
                     ],
                 )
-                for start_timestamp in reversed(sorted(trace_id_per_start_timestamp.keys()))
+                for start_timestamp in sorted(trace_id_per_start_timestamp.keys(), reverse=True)
             ],
             page_token=PageToken(offset=len(_TRACE_IDS)),
             meta=ResponseMeta(
@@ -640,7 +640,7 @@ class TestEndpointGetTraces(BaseApiTest):
                         ),
                     ],
                 )
-                for start_timestamp in reversed(sorted(trace_id_per_start_timestamp.keys()))
+                for start_timestamp in sorted(trace_id_per_start_timestamp.keys(), reverse=True)
             ],
             page_token=PageToken(offset=len(_TRACE_IDS)),
             meta=ResponseMeta(

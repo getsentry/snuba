@@ -1,6 +1,7 @@
 import typing
 import uuid
-from typing import Any, Dict, Mapping, Optional, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 from snuba import settings
 from snuba.attribution import get_app_id
@@ -153,7 +154,7 @@ def _delete_from_table(
         for col, values in conditions.items():
             column_validator.validate(col, values)
     except InvalidColumnType as e:
-        raise InvalidQueryException(e.message)
+        raise InvalidQueryException(e.message) from e
 
     try:
         _enforce_max_rows(query)
@@ -255,7 +256,7 @@ def _enforce_max_rows(delete_query: Query) -> int:
         updates the from_clause to have the correct table.
         """
         dist_table_name = (
-            get_writable_storage((storage_key)).get_table_writer().get_schema().get_table_name()
+            get_writable_storage(storage_key).get_table_writer().get_schema().get_table_name()
         )
         from_clause = delete_query.get_from_clause()
         return Table(
@@ -308,7 +309,7 @@ def _execute_query(
     query: Query,
     storage: WritableTableStorage,
     table: str,
-    cluster_name: Optional[str],
+    cluster_name: str | None,
     attribution_info: AttributionInfo,
     query_settings: HTTPQuerySettings,
 ) -> Result:
@@ -324,7 +325,7 @@ def _execute_query(
     result = None
     error = None
 
-    stats: Dict[str, Any] = {
+    stats: dict[str, Any] = {
         "clickhouse_table": table,
         "referrer": attribution_info.referrer,
         "cluster_name": cluster_name or "<unknown>",
@@ -387,7 +388,7 @@ def _execute_query(
                 result_or_error=result_or_error,
             )
         if result:
-            return result
+            return result  # noqa: B012 quota balance must run before returning/raising
         raise error or Exception("No error or result when running query, this should never happen")
 
 

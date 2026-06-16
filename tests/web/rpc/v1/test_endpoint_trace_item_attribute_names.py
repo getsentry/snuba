@@ -11,7 +11,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import ExistsFilter, TraceItemFilter
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
     EndpointTraceItemAttributeNames,
@@ -58,9 +58,9 @@ def populate_eap_spans_storage(num_rows: int) -> None:
             attributes=attributes,
         )
 
-    items_storage = get_storage(StorageKey("eap_items"))
+    items_storage = get_writable_storage(StorageKey("eap_items"))
     messages = [generate_span_event_message(i) for i in range(num_rows)]
-    write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+    write_raw_unprocessed_events(items_storage, messages)
 
 
 @pytest.fixture(autouse=True)

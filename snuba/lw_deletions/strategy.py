@@ -3,8 +3,9 @@ import json
 import logging
 import time
 import typing
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta
-from typing import List, Mapping, Optional, Sequence, TypeVar
+from typing import TypeVar
 
 import rapidjson
 from arroyo.backends.kafka import KafkaPayload
@@ -72,7 +73,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         self.__partition_column = deletion_settings.partition_column
         self.__formatter: Formatter = formatter
         self.__metrics = metrics
-        self.__last_ongoing_mutations_check: Optional[float] = None
+        self.__last_ongoing_mutations_check: float | None = None
         self.__redis_client = get_redis_client(RedisClientKey.CONFIG)
 
     def poll(self) -> None:
@@ -89,7 +90,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         if not str_config:
             return conditions  # allowlist not set → allow all
 
-        org_ids_delete_allowlist = set(int(org_id) for org_id in str_config.split(","))
+        org_ids_delete_allowlist = {int(org_id) for org_id in str_config.split(",")}
 
         allowed = []
         for cond in conditions:
@@ -116,12 +117,12 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             # backpressure is applied while we wait for the
             # currently ongoing mutations to finish
             self.__metrics.increment("too_many_ongoing_mutations")
-            raise MessageRejected
+            raise MessageRejected from None
         except QueryException as err:
             cause = err.__cause__
             if isinstance(cause, AllocationPolicyViolations):
                 self.__metrics.increment("allocation_policy_violation")
-                raise MessageRejected
+                raise MessageRejected from None
 
         self.__next_step.submit(message)
 
@@ -156,7 +157,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         parts.sort()
         return hashlib.md5("|".join(parts).encode()).hexdigest()[:16]
 
-    def _get_partition_dates(self, table: str) -> List[str]:
+    def _get_partition_dates(self, table: str) -> list[str]:
         from snuba.util import decode_part_str
 
         cluster = self.__storage.get_cluster()
@@ -224,6 +225,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         query_settings: HTTPQuerySettings,
         conditions: Sequence[ConditionsBag],
     ) -> None:
+        assert self.__partition_column is not None
         partition_dates = self._get_partition_dates(table)
         if not partition_dates:
             logger.warning(
@@ -256,7 +258,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
 
             self._check_ongoing_mutations(skip_throttle=True)
             partition_condition = equals(
-                FunctionCall(None, "toMonday", (column(self.__partition_column),)),  # type: ignore[arg-type]
+                FunctionCall(None, "toMonday", (column(self.__partition_column),)),
                 literal(partition_date),
             )
             partition_where = combine_and_conditions([where_clause, partition_condition])
@@ -275,7 +277,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         table: str,
         query: Query,
         query_settings: HTTPQuerySettings,
-        partition_week: Optional[str] = None,
+        partition_week: str | None = None,
     ) -> None:
         tags = {"table": table}
         if partition_week:
@@ -302,7 +304,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
                 if cause.code in LW_DELETE_NON_RETRYABLE_CLICKHOUSE_ERROR_CODES:
                     logger.exception("Error running delete query %r", exc)
                 else:
-                    raise LWDeleteQueryException(exc.message)
+                    raise LWDeleteQueryException(exc.message) from exc
 
     def _check_ongoing_mutations(self, skip_throttle: bool = False) -> None:
         now = time.time()
@@ -336,7 +338,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
     def terminate(self) -> None:
         self.__next_step.terminate()
 
-    def join(self, timeout: Optional[float] = None) -> None:
+    def join(self, timeout: float | None = None) -> None:
         self.__next_step.join(timeout)
 
 

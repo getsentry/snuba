@@ -1,4 +1,4 @@
-from typing import List, Sequence
+from collections.abc import Sequence
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages.tags_hash_map import get_array_vals_hash
@@ -9,7 +9,7 @@ from snuba.utils.schemas import Array, Column, Date, String, UInt
 
 num_attr_buckets = 40
 
-columns: List[Column[Modifiers]] = [
+columns: list[Column[Modifiers]] = [
     Column("organization_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("item_type", UInt(8)),
@@ -23,9 +23,7 @@ columns: List[Column[Modifiers]] = [
         Array(
             UInt(64),
             Modifiers(
-                materialized=get_array_vals_hash(
-                    "arrayConcat(attributes_string, attributes_float)"
-                )
+                materialized=get_array_vals_hash("arrayConcat(attributes_string, attributes_float)")
             ),
         ),
     ),
@@ -45,12 +43,8 @@ columns: List[Column[Modifiers]] = [
 ]
 
 
-_attr_num_names = ", ".join(
-    [f"mapKeys(attributes_float_{i})" for i in range(num_attr_buckets)]
-)
-_attr_str_names = ", ".join(
-    [f"mapKeys(attributes_string_{i})" for i in range(num_attr_buckets)]
-)
+_attr_num_names = ", ".join([f"mapKeys(attributes_float_{i})" for i in range(num_attr_buckets)])
+_attr_str_names = ", ".join([f"mapKeys(attributes_string_{i})" for i in range(num_attr_buckets)])
 
 
 MV_QUERY = f"""
@@ -67,7 +61,6 @@ FROM eap_items_1_local
 
 
 class Migration(migration.ClickhouseNodeMigration):
-
     blocking = False
     storage_set_key = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
     granularity = "8192"

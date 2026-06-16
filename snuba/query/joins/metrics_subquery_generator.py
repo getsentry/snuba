@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Generator, Mapping
+from collections.abc import Generator, Mapping
 
 from snuba.query import ProcessableQuery, SelectedExpression
 from snuba.query.composite import CompositeQuery
@@ -120,7 +120,7 @@ def _push_down_groupby_branches(
     return cut_subexpression.main_expression
 
 
-def _alias_generator() -> Generator[str, None, None]:
+def _alias_generator() -> Generator[str]:
     i = 0
     while True:
         i += 1
@@ -201,7 +201,7 @@ def generate_metrics_subqueries(query: CompositeQuery[Entity]) -> None:
     if isinstance(from_clause, CompositeQuery):
         generate_subqueries(from_clause)
         return
-    elif isinstance(from_clause, ProcessableQuery):
+    if isinstance(from_clause, ProcessableQuery):
         return
 
     # Now this has to be a join, so we can work with it.

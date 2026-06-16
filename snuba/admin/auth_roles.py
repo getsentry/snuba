@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod, abstractproperty
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
-from typing import Generic, Sequence, Set, TypeVar
+from typing import Generic, TypeVar
 
 from snuba import settings
 from snuba.migrations.runner import get_active_migration_groups
@@ -127,7 +128,7 @@ MIGRATIONS_RESOURCES = {
 @dataclass(frozen=True)
 class Role:
     name: str
-    actions: Set[MigrationAction | ToolAction]
+    actions: set[MigrationAction | ToolAction]
 
 
 def generate_tool_test_role(tool: str) -> Role:

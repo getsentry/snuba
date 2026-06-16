@@ -1,22 +1,15 @@
 import ipaddress
 import re
 from abc import ABC, abstractmethod
+from collections.abc import Iterable, MutableMapping, Sequence
 from datetime import datetime, timedelta
 from enum import Enum
 from hashlib import md5
 from typing import (
     Any,
-    Dict,
-    FrozenSet,
-    Iterable,
-    MutableMapping,
     NamedTuple,
-    Optional,
-    Sequence,
-    Tuple,
     TypedDict,
     TypeVar,
-    Union,
 )
 
 import simplejson as json
@@ -35,10 +28,10 @@ NIL_UUID = "00000000-0000-0000-0000-000000000000"
 class InsertBatch(NamedTuple):
     rows: Sequence[WriterTableRow]
     # origin_timestamp is the timestamp of the event when was received by Relay
-    origin_timestamp: Optional[datetime]
+    origin_timestamp: datetime | None
     # sentry_received_timestamp is the timestamp of the event when received by the ingest
     # consumer in Sentry
-    sentry_received_timestamp: Optional[datetime] = None
+    sentry_received_timestamp: datetime | None = None
 
 
 # Indicates that we need an encoder that will interpolate
@@ -53,7 +46,7 @@ class ReplacementBatch(NamedTuple):
     values: Sequence[Any]
 
 
-ProcessedMessage = Union[InsertBatch, ReplacementBatch]
+ProcessedMessage = InsertBatch | ReplacementBatch
 
 
 class MessageProcessor(ABC):
@@ -65,7 +58,7 @@ class MessageProcessor(ABC):
     @abstractmethod
     def process_message(
         self, message: Any, metadata: KafkaMessageMetadata
-    ) -> Optional[ProcessedMessage]:
+    ) -> ProcessedMessage | None:
         raise NotImplementedError
 
 
@@ -91,13 +84,13 @@ class ReplacementType(str, Enum):
     EXCLUDE_GROUPS = "exclude_groups"
 
 
-REPLACEMENT_EVENT_TYPES: FrozenSet[ReplacementType] = frozenset(
+REPLACEMENT_EVENT_TYPES: frozenset[ReplacementType] = frozenset(
     ReplacementType.__members__.values()
 )
 
 
 class InsertEvent(TypedDict):
-    group_id: Optional[int]
+    group_id: int | None
     event_id: str
     organization_id: int
     project_id: int
@@ -114,7 +107,7 @@ TValue = TypeVar("TValue")
 
 
 def _as_dict_safe(
-    value: Union[None, Iterable[Optional[Tuple[Optional[TKey], TValue]]], Dict[TKey, TValue]],
+    value: None | Iterable[tuple[TKey | None, TValue] | None] | dict[TKey, TValue],
 ) -> MutableMapping[TKey, TValue]:
     if value is None:
         return {}
@@ -127,7 +120,7 @@ def _as_dict_safe(
     return rv
 
 
-def _collapse_uint16(n: Any) -> Optional[int]:
+def _collapse_uint16(n: Any) -> int | None:
     if n is None:
         return None
 
@@ -138,7 +131,7 @@ def _collapse_uint16(n: Any) -> Optional[int]:
     return i
 
 
-def _collapse_uint32(n: Any) -> Optional[int]:
+def _collapse_uint32(n: Any) -> int | None:
     if n is None:
         return None
 
@@ -149,7 +142,7 @@ def _collapse_uint32(n: Any) -> Optional[int]:
     return i
 
 
-def _boolify(s: Any) -> Optional[bool]:
+def _boolify(s: Any) -> bool | None:
     if s is None:
         return None
 
@@ -160,17 +153,17 @@ def _boolify(s: Any) -> Optional[bool]:
 
     if s in ("yes", "true", "1"):
         return True
-    elif s in ("false", "no", "0"):
+    if s in ("false", "no", "0"):
         return False
 
     return None
 
 
-def _unicodify(s: Any) -> Optional[str]:
+def _unicodify(s: Any) -> str | None:
     if s is None:
         return None
 
-    if isinstance(s, dict) or isinstance(s, list):
+    if isinstance(s, (dict, list)):
         return json.dumps(s)
 
     return str(s).encode("utf8", errors="backslashreplace").decode("utf8")
@@ -185,7 +178,7 @@ def _hashify(h: str) -> str:
 epoch = datetime(1970, 1, 1)
 
 
-def _ensure_valid_date(dt: Optional[datetime]) -> Optional[datetime]:
+def _ensure_valid_date(dt: datetime | None) -> datetime | None:
     if dt is None:
         return None
     seconds = (dt - epoch).total_seconds()
@@ -196,7 +189,7 @@ def _ensure_valid_date(dt: Optional[datetime]) -> Optional[datetime]:
 
 def _ensure_valid_ip(
     ip: Any,
-) -> Optional[Union[ipaddress.IPv4Address, ipaddress.IPv6Address]]:
+) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
     """
     IP addresses in e.g. `user.ip_address` might be invalid due to PII stripping.
     """

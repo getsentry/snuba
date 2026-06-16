@@ -53,4 +53,7 @@ def test_translate_composite(mock_storage: Storage, mock_query_storage: QuerySto
         limit=100,
     )
     storage_query = try_translate_storage_query(input_query)
-    assert isinstance(storage_query.get_from_clause().get_from_clause(), Table)  # type: ignore
+    assert isinstance(storage_query, CompositeQuery)
+    from_clause = storage_query.get_from_clause()
+    assert isinstance(from_clause, CompositeQuery)
+    assert isinstance(from_clause.get_from_clause(), Table)

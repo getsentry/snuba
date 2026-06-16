@@ -1,15 +1,10 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping, MutableMapping, Sequence
 from pathlib import Path
 from typing import (
     Any,
-    Mapping,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Set,
-    Tuple,
     TypedDict,
 )
 
@@ -89,8 +84,8 @@ ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
 
 ALLOCATION_POLICY_ENABLED = True
 DEFAULT_DATASET_NAME = "events"
-DISABLED_ENTITIES: Set[str] = set()
-DISABLED_DATASETS: Set[str] = set()
+DISABLED_ENTITIES: set[str] = set()
+DISABLED_DATASETS: set[str] = set()
 
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
@@ -223,7 +218,7 @@ RECORD_COGS = False
 
 # Runtime Config Options
 CONFIG_MEMOIZE_TIMEOUT = 10
-CONFIG_STATE: Mapping[str, Optional[Any]] = {}
+CONFIG_STATE: Mapping[str, Any | None] = {}
 
 # Sentry Options
 SENTRY_DSN: str | None = None
@@ -283,7 +278,7 @@ BATCH_JOIN_TIMEOUT = int(os.environ.get("BATCH_JOIN_TIMEOUT", 10))
 ENFORCE_RETENTION: bool = False
 LOWER_RETENTION_DAYS = 30
 DEFAULT_RETENTION_DAYS = 90
-VALID_RETENTION_DAYS = set([30, 90])
+VALID_RETENTION_DAYS = {30, 90}
 
 MAX_PREWHERE_CONDITIONS = 1
 
@@ -304,7 +299,7 @@ REPLACER_PROCESSING_TIMEOUT_THRESHOLD_KEY_TTL = 60 * 60  # 1 hour in seconds
 
 TURBO_SAMPLE_RATE = 0.1
 
-PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
+PROJECT_STACKTRACE_BLACKLIST: set[int] = set()
 PRETTY_FORMAT_EXPRESSIONS = os.environ.get("PRETTY_FORMAT_EXPRESSIONS", "1") == "1"
 
 # By default, allocation policies won't block requests from going through in a production
@@ -334,10 +329,10 @@ COLUMN_SPLIT_MAX_RESULTS = 5000
 
 # The migration groups that can be skipped are listed in OPTIONAL_GROUPS.
 # Migrations for skipped groups will not be run.
-SKIPPED_MIGRATION_GROUPS: Set[str] = set()
+SKIPPED_MIGRATION_GROUPS: set[str] = set()
 
 # Dataset readiness states supported in this environment
-SUPPORTED_STATES: Set[str] = {
+SUPPORTED_STATES: set[str] = {
     "deprecate",
     "limited",
     "experimental",
@@ -353,7 +348,7 @@ MAX_RESOLUTION_FOR_JITTER = 60
 # These contexts will not be stored in the transactions table
 # Example: {123: {"context1", "context2"}}
 # where 123 is the project id.
-TRANSACT_SKIP_CONTEXT_STORE: Mapping[int, Set[str]] = {}
+TRANSACT_SKIP_CONTEXT_STORE: Mapping[int, set[str]] = {}
 
 # Map the Zookeeper path for the replicated merge tree to something else
 CLICKHOUSE_ZOOKEEPER_OVERRIDE: Mapping[str, str] = {}
@@ -460,11 +455,11 @@ SLICED_CLUSTERS: Sequence[Mapping[str, Any]] = []
 
 # Mapping of (logical topic names, slice id) pairs to custom physical topic names
 # This is only for sliced Kafka topics
-SLICED_KAFKA_TOPIC_MAP: Mapping[Tuple[str, int], str] = {}
+SLICED_KAFKA_TOPIC_MAP: Mapping[tuple[str, int], str] = {}
 
 # Mapping of (logical topic names, slice id) pairs to broker config
 # This is only for sliced Kafka topics
-SLICED_KAFKA_BROKER_CONFIG: Mapping[Tuple[str, int], Mapping[str, Any]] = {}
+SLICED_KAFKA_BROKER_CONFIG: Mapping[tuple[str, int], Mapping[str, Any]] = {}
 
 # When dataset yamls (i.e. dataset, storages, entities) are loaded into memory, should we validate
 # the jsonschema or not? In production we shouldn't need to do it, in CI we should. This is for performance
@@ -476,13 +471,15 @@ VALIDATE_DATASET_YAMLS_ON_STARTUP = False
 MAX_ONGOING_MUTATIONS_FOR_DELETE = 5
 MAX_PARTS_MUTATING_FOR_DELETE = 20
 LW_DELETES_PARTITION_TRACKING_TTL = 86400
-SNQL_DISABLED_DATASETS: set[str] = set([])
+SNQL_DISABLED_DATASETS: set[str] = set()
 
 ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS: int = 0  # 0 means no limit
 ENABLE_TRACE_PAGINATION_DEFAULT = 1
 
 
-def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
+# `locals()` default captures this module's namespace so settings can be injected as
+# module-level globals; calling it in the body would return the function's locals instead.
+def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:  # noqa: B008
     """Load settings from the path provided in the SNUBA_SETTINGS environment
     variable if provided. Users can provide a short name like `test` that will
     be expanded to `settings_test.py` in the main Snuba directory, or they can

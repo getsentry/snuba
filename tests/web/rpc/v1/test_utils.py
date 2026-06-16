@@ -1,6 +1,6 @@
 import uuid
-from datetime import UTC, datetime, timedelta, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
@@ -13,7 +13,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue, TraceItem
 
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from tests.helpers import write_raw_unprocessed_events
 
@@ -82,7 +82,7 @@ _DEFAULT_ATTRIBUTES = {
 }
 
 # current UTC time rounded down to the start of the current hour, then minus 180 minutes.
-BASE_TIME = datetime.now(tz=timezone.utc).replace(
+BASE_TIME = datetime.now(tz=UTC).replace(
     minute=0,
     second=0,
     microsecond=0,
@@ -91,10 +91,10 @@ BASE_TIME = datetime.now(tz=timezone.utc).replace(
 
 def write_eap_item(
     start_timestamp: datetime,
-    raw_attributes: dict[str, str | float | int | bool] = {},
+    raw_attributes: dict[str, str | float | int | bool] | None = None,
     count: int = 1,
     server_sample_rate: float = 1.0,
-    item_id: Optional[bytes] = None,
+    item_id: bytes | None = None,
 ) -> None:
     """
     This is a helper function to write a single or multiple eap-spans to the database.
@@ -106,16 +106,19 @@ def write_eap_item(
         count: the number of these spans to write.
     """
 
+    if raw_attributes is None:
+        raw_attributes = {}
+
     def convert_attribute_value(value: Any) -> AnyValue:
         if isinstance(value, str):
             return AnyValue(string_value=value)
-        elif isinstance(value, int):
+        if isinstance(value, int):
             return AnyValue(int_value=value)
-        elif isinstance(value, bool):
+        if isinstance(value, bool):
             return AnyValue(bool_value=value)
-        elif isinstance(value, float):
+        if isinstance(value, float):
             return AnyValue(double_value=value)
-        elif isinstance(value, list):
+        if isinstance(value, list):
             return AnyValue(
                 array_value=ArrayValue(values=[convert_attribute_value(v) for v in value])
             )
@@ -126,7 +129,7 @@ def write_eap_item(
         attributes[key] = convert_attribute_value(value)
 
     write_raw_unprocessed_events(
-        get_storage(StorageKey("eap_items")),  # type: ignore
+        get_writable_storage(StorageKey("eap_items")),
         [
             gen_item_message(
                 start_timestamp=start_timestamp,
@@ -141,17 +144,19 @@ def write_eap_item(
 
 def gen_item_message(
     start_timestamp: datetime,
-    attributes: dict[str, AnyValue] = {},
+    attributes: dict[str, AnyValue] | None = None,
     type: TraceItemType.ValueType = TraceItemType.TRACE_ITEM_TYPE_SPAN,
-    trace_id: Optional[str] = None,
+    trace_id: str | None = None,
     server_sample_rate: float = 1.0,
     client_sample_rate: float = 1.0,
-    end_timestamp: Optional[datetime] = None,
+    end_timestamp: datetime | None = None,
     remove_default_attributes: bool = False,
-    item_id: Optional[bytes] = None,
-    project_id: Optional[int] = None,
-    organization_id: Optional[int] = None,
+    item_id: bytes | None = None,
+    project_id: int | None = None,
+    organization_id: int | None = None,
 ) -> bytes:
+    if attributes is None:
+        attributes = {}
     item_timestamp = Timestamp()
     item_timestamp.FromDatetime(start_timestamp)
     received = Timestamp()
@@ -320,12 +325,12 @@ def create_cross_item_test_data() -> tuple[list[str], list[bytes], datetime, dat
 
 def write_cross_item_data_to_storage(items: list[bytes]) -> None:
     """Write cross-item test data to storage."""
-    from snuba.datasets.storages.factory import get_storage
+    from snuba.datasets.storages.factory import get_writable_storage
     from snuba.datasets.storages.storage_key import StorageKey
     from tests.helpers import write_raw_unprocessed_events
 
-    storage = get_storage(StorageKey("eap_items"))
-    write_raw_unprocessed_events(storage, items)  # type: ignore
+    storage = get_writable_storage(StorageKey("eap_items"))
+    write_raw_unprocessed_events(storage, items)
 
 
 def track_storage_selections() -> tuple[list[StorageKey], Any]:

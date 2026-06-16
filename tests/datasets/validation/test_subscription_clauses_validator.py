@@ -23,13 +23,9 @@ from snuba.query.validation.validators import SubscriptionAllowedClausesValidato
 tests = [
     pytest.param(
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
-                SelectedExpression(
-                    "time", Column("_snuba_timestamp", None, "timestamp")
-                ),
+                SelectedExpression("time", Column("_snuba_timestamp", None, "timestamp")),
             ],
             condition=binary_condition(
                 "equals",
@@ -92,9 +88,7 @@ tests = [
     ),
     pytest.param(
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
             ],
@@ -110,7 +104,7 @@ tests = [
 ]
 
 
-@pytest.mark.parametrize("query", tests)  # type: ignore
+@pytest.mark.parametrize("query", tests)
 def test_subscription_clauses_validation(query: LogicalQuery) -> None:
     entity = get_entity(query.get_from_clause().key)
     subscription_validators = entity.get_subscription_validators()
@@ -145,9 +139,7 @@ invalid_tests = [
     ),
     pytest.param(
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
             ],
@@ -166,9 +158,7 @@ invalid_tests = [
     ),
     pytest.param(
         LogicalQuery(
-            QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
-            ),
+            QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
             selected_columns=[
                 SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
             ],
@@ -177,11 +167,7 @@ invalid_tests = [
                 Column("_snuba_project_id", None, "project_id"),
                 Literal(None, 1),
             ),
-            order_by=[
-                OrderBy(
-                    OrderByDirection.ASC, Column("_snuba_timestamp", None, "timestamp")
-                )
-            ],
+            order_by=[OrderBy(OrderByDirection.ASC, Column("_snuba_timestamp", None, "timestamp"))],
         ),
         id="no orderby clauses",
     ),
@@ -296,7 +282,7 @@ invalid_tests = [
 ]
 
 
-@pytest.mark.parametrize("query", invalid_tests)  # type: ignore
+@pytest.mark.parametrize("query", invalid_tests)
 def test_subscription_clauses_validation_failure(query: LogicalQuery) -> None:
     entity = get_entity(query.get_from_clause().key)
     subscription_validators = entity.get_subscription_validators()

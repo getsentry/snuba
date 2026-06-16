@@ -1,6 +1,6 @@
 import logging
 from enum import Enum
-from typing import Optional, Tuple, cast
+from typing import cast
 
 from snuba import environment
 from snuba.clickhouse.query import Query
@@ -149,7 +149,7 @@ class MappingOptimizer(ClickhouseQueryProcessor):
     def __classify_combined_conditions(self, condition: Expression) -> ConditionClass:
         if not isinstance(condition, FunctionExpr):
             return ConditionClass.IRRELEVANT
-        elif condition.function_name in (BooleanFunctions.AND, BooleanFunctions.OR):
+        if condition.function_name in (BooleanFunctions.AND, BooleanFunctions.OR):
             conditions = (
                 get_first_level_and_conditions(condition)
                 if condition.function_name == BooleanFunctions.AND
@@ -158,12 +158,10 @@ class MappingOptimizer(ClickhouseQueryProcessor):
             classified = {self.__classify_combined_conditions(c) for c in conditions}
             if ConditionClass.NOT_OPTIMIZABLE in classified:
                 return ConditionClass.NOT_OPTIMIZABLE
-            elif ConditionClass.OPTIMIZABLE in classified:
+            if ConditionClass.OPTIMIZABLE in classified:
                 return ConditionClass.OPTIMIZABLE
-            else:
-                return ConditionClass.IRRELEVANT
-        else:
-            return self.__classify_condition(condition)
+            return ConditionClass.IRRELEVANT
+        return self.__classify_condition(condition)
 
     def __classify_condition(self, condition: Expression) -> ConditionClass:
         # Expects this to be an individual condition
@@ -199,7 +197,7 @@ class MappingOptimizer(ClickhouseQueryProcessor):
                     return ConditionClass.NOT_OPTIMIZABLE
 
             return ConditionClass.OPTIMIZABLE
-        elif equals_condition_match is None and in_condition_match is None:
+        if equals_condition_match is None and in_condition_match is None:
             # If this condition is not matching an optimizable condition,
             # check that it does not reference the optimizable column.
             # If it does, it means we should not optimize this query.
@@ -210,8 +208,7 @@ class MappingOptimizer(ClickhouseQueryProcessor):
                 ):
                     return ConditionClass.NOT_OPTIMIZABLE
             return ConditionClass.IRRELEVANT
-        else:
-            return ConditionClass.IRRELEVANT
+        return ConditionClass.IRRELEVANT
 
     def __replace_with_hash(self, condition: Expression) -> Expression:
         equals_condition_match = self.__equals_condition_pattern.match(condition)
@@ -245,7 +242,7 @@ class MappingOptimizer(ClickhouseQueryProcessor):
                     ),
                 ),
             )
-        elif (
+        if (
             in_condition_match is not None
             and in_condition_match.string(KEY_COL_MAPPING_PARAM) == f"{self.__column_name}.key"
         ):
@@ -322,13 +319,13 @@ class MappingOptimizer(ClickhouseQueryProcessor):
         """
         if not isinstance(condition, FunctionExpr):
             return condition
-        elif condition.function_name == BooleanFunctions.OR:
+        if condition.function_name == BooleanFunctions.OR:
             sub_conditions = get_first_level_or_conditions(condition)
             pruned_conditions = [
                 self._get_condition_without_redundant_checks(c, query) for c in sub_conditions
             ]
             return combine_or_conditions(pruned_conditions)
-        elif condition.function_name == BooleanFunctions.AND:
+        if condition.function_name == BooleanFunctions.AND:
             sub_conditions = get_first_level_and_conditions(condition)
             tag_eq_match_keys = set()
             matched_tag_exists_conditions = {}
@@ -344,7 +341,7 @@ class MappingOptimizer(ClickhouseQueryProcessor):
                         tag_eq_match_keys.add(eq_match.scalar(KEY_MAPPING_PARAM))
             useful_conditions = []
             for condition_id, cond in enumerate(sub_conditions):
-                tag_exist_match = matched_tag_exists_conditions.get(condition_id, None)
+                tag_exist_match = matched_tag_exists_conditions.get(condition_id)
                 if tag_exist_match:
                     requested_tag = tag_exist_match.scalar("key")
                     if requested_tag in tag_eq_match_keys:
@@ -353,19 +350,17 @@ class MappingOptimizer(ClickhouseQueryProcessor):
                         continue
                 useful_conditions.append(self._get_condition_without_redundant_checks(cond, query))
             return combine_and_conditions(useful_conditions)
-        else:
-            return condition
+        return condition
 
     def __get_reduced_and_classified_query_clause(
-        self, clause: Optional[Expression], query: Query
-    ) -> Tuple[Optional[Expression], ConditionClass]:
+        self, clause: Expression | None, query: Query
+    ) -> tuple[Expression | None, ConditionClass]:
         cond_class = ConditionClass.IRRELEVANT
         if clause is not None:
             new_clause = self._get_condition_without_redundant_checks(clause, query)
             cond_class = self.__classify_combined_conditions(new_clause)
             return new_clause, cond_class
-        else:
-            return clause, cond_class
+        return clause, cond_class
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         if not get_config(self.__killswitch, 1):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Optional, Sequence, cast
+from collections.abc import Sequence
+from typing import cast
 
 import sentry_sdk
 
@@ -41,8 +42,8 @@ class EntityProcessingExecutor:
         self,
         storages: Sequence[EntityStorageConnection],
         selector: QueryStorageSelector,
-        post_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
-        partition_key_column_name: Optional[str] = None,
+        post_processors: Sequence[ClickhouseQueryProcessor] | None = None,
+        partition_key_column_name: str | None = None,
     ) -> None:
         # A list of storages and the translation mappers they are associated with.
         # This list will only contain one storage and mappers for single storage entities.

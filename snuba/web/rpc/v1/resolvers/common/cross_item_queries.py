@@ -1,7 +1,7 @@
 import uuid
 
 from google.protobuf.json_format import MessageToDict
-from proto import Message  # type: ignore
+from proto import Message  # type: ignore[import-untyped]
 from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import GetTracesRequest
 from sentry_protos.snuba.v1.request_common_pb2 import (
     RequestMeta,
@@ -67,7 +67,7 @@ def get_trace_ids_sql_for_cross_item_query(
     """
     filter_expressions = []
     if trace_filters:
-        converted_trace_filters = [trace_filter for trace_filter in trace_filters]
+        converted_trace_filters = list(trace_filters)
         if isinstance(trace_filters[0], GetTracesRequest.TraceFilter):
             converted_trace_filters = [
                 TraceItemFilterWithType(

@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from google.protobuf import json_format, struct_pb2
@@ -28,7 +28,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba import settings
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.protos.common import ATTRIBUTES_TO_COALESCE
 from snuba.query.expressions import FunctionCall, Lambda, Literal
@@ -425,7 +425,7 @@ class TestAnyAttributeFilterIntegration:
 
     @pytest.fixture(autouse=True)
     def setup(self, eap: None, redis_db: None) -> None:
-        self.base_time = datetime.now(tz=timezone.utc).replace(
+        self.base_time = datetime.now(tz=UTC).replace(
             minute=0, second=0, microsecond=0
         ) - timedelta(hours=1)
         self.start_ts = Timestamp(seconds=int((self.base_time - timedelta(hours=1)).timestamp()))
@@ -456,8 +456,8 @@ class TestAnyAttributeFilterIntegration:
                 },
             ),
         ]
-        storage = get_storage(StorageKey("eap_items"))
-        write_raw_unprocessed_events(storage, messages)  # type: ignore
+        storage = get_writable_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(storage, messages)
 
     def _execute(self, filt: TraceItemFilter) -> list[str]:
         """Run a TraceItemTable query with the given filter, returning

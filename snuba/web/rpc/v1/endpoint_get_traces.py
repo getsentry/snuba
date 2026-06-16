@@ -1,6 +1,7 @@
 import uuid
 from collections import defaultdict
-from typing import Any, Callable, Dict, Iterable, Optional, Type
+from collections.abc import Callable, Iterable
+from typing import Any
 
 from google.protobuf.internal.containers import RepeatedCompositeFieldContainer
 from google.protobuf.json_format import MessageToDict
@@ -157,7 +158,7 @@ def _get_attribute_expression(
 
 def _attribute_to_expression(
     trace_attribute: TraceAttribute,
-    condition: Optional[Expression],
+    condition: Expression | None,
     request_meta: RequestMeta,
 ) -> Expression:
     def _get_root_span_attribute(
@@ -300,7 +301,7 @@ def _attribute_to_expression(
                 clickhouse_type,
                 alias=alias,
             )
-        elif key == TraceAttribute.Key.KEY_END_TIMESTAMP:
+        if key == TraceAttribute.Key.KEY_END_TIMESTAMP:
             return f.cast(
                 f.max(
                     if_cond(
@@ -327,43 +328,41 @@ def _attribute_to_expression(
                 clickhouse_type,
                 alias=alias,
             )
-        elif key == TraceAttribute.Key.KEY_TOTAL_ITEM_COUNT:
+        if key == TraceAttribute.Key.KEY_TOTAL_ITEM_COUNT:
             return f.count(alias=alias)
-        elif key == TraceAttribute.Key.KEY_FILTERED_ITEM_COUNT:
+        if key == TraceAttribute.Key.KEY_FILTERED_ITEM_COUNT:
             if condition:
                 return f.countIf(condition, alias=alias)
-            else:
-                return f.count(alias=alias)
-        elif key == TraceAttribute.Key.KEY_ROOT_SPAN_NAME:
+            return f.count(alias=alias)
+        if key == TraceAttribute.Key.KEY_ROOT_SPAN_NAME:
             return _get_root_span_attribute("sentry.raw_description", AttributeKey.Type.TYPE_STRING)
-        elif key == TraceAttribute.Key.KEY_ROOT_SPAN_DURATION_MS:
+        if key == TraceAttribute.Key.KEY_ROOT_SPAN_DURATION_MS:
             return _get_root_span_attribute("sentry.duration_ms", AttributeKey.Type.TYPE_DOUBLE)
-        elif key == TraceAttribute.Key.KEY_ROOT_SPAN_PROJECT_ID:
+        if key == TraceAttribute.Key.KEY_ROOT_SPAN_PROJECT_ID:
             return _get_root_span_attribute("sentry.project_id", AttributeKey.Type.TYPE_INT)
-        elif key == TraceAttribute.Key.KEY_EARLIEST_SPAN_NAME:
+        if key == TraceAttribute.Key.KEY_EARLIEST_SPAN_NAME:
             return _get_earliest_span_attribute(
                 "sentry.raw_description", AttributeKey.Type.TYPE_STRING
             )
-        elif key == TraceAttribute.Key.KEY_EARLIEST_SPAN_PROJECT_ID:
+        if key == TraceAttribute.Key.KEY_EARLIEST_SPAN_PROJECT_ID:
             return _get_earliest_span_attribute("sentry.project_id", AttributeKey.Type.TYPE_INT)
-        elif key == TraceAttribute.Key.KEY_EARLIEST_SPAN_DURATION_MS:
+        if key == TraceAttribute.Key.KEY_EARLIEST_SPAN_DURATION_MS:
             return _get_earliest_span_attribute("sentry.duration_ms", AttributeKey.Type.TYPE_DOUBLE)
-        elif key == TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN:
+        if key == TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN:
             return _get_earliest_frontend_span_attribute(
                 "sentry.raw_description", AttributeKey.Type.TYPE_STRING
             )
-        elif key == TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN_PROJECT_ID:
+        if key == TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN_PROJECT_ID:
             return _get_earliest_frontend_span_attribute(
                 "sentry.project_id", AttributeKey.Type.TYPE_INT
             )
-        elif key == TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN_DURATION_MS:
+        if key == TraceAttribute.Key.KEY_EARLIEST_FRONTEND_SPAN_DURATION_MS:
             return _get_earliest_frontend_span_attribute(
                 "sentry.duration_ms", AttributeKey.Type.TYPE_DOUBLE
             )
-        elif key == TraceAttribute.Key.KEY_TRACE_ID:
+        if key == TraceAttribute.Key.KEY_TRACE_ID:
             return column("trace_id", alias="hex_trace_id")
-        else:
-            return f.cast(column(attribute_name), clickhouse_type, alias=alias)
+        return f.cast(column(attribute_name), clickhouse_type, alias=alias)
 
     raise BadSnubaRPCRequestException(f"{key} had an unknown or unset type: {trace_attribute.type}")
 
@@ -371,9 +370,11 @@ def _attribute_to_expression(
 def _build_snuba_request(
     request: GetTracesRequest,
     query: Query,
-    clickhouse_settings: dict[str, Any] = {},
+    clickhouse_settings: dict[str, Any] | None = None,
     query_settings: QuerySettings | None = None,
 ) -> SnubaRequest:
+    if clickhouse_settings is None:
+        clickhouse_settings = {}
     query_settings = query_settings or (
         setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
     )
@@ -402,7 +403,7 @@ def _build_snuba_request(
 
 def _convert_results(
     request: GetTracesRequest,
-    data: Iterable[Dict[str, Any]],
+    data: Iterable[dict[str, Any]],
 ) -> list[GetTracesResponse.Trace]:
     res: list[GetTracesResponse.Trace] = []
     column_ordering = {
@@ -446,8 +447,8 @@ def _get_page_token(
 
 
 def _validate_order_by(in_msg: GetTracesRequest) -> None:
-    order_by_cols = set([ob.key for ob in in_msg.order_by])
-    selected_columns = set([c.key for c in in_msg.attributes])
+    order_by_cols = {ob.key for ob in in_msg.order_by}
+    selected_columns = {c.key for c in in_msg.attributes}
     if not order_by_cols.issubset(selected_columns):
         raise BadSnubaRPCRequestException(
             f"Ordered by columns {order_by_cols} not selected: {selected_columns}"
@@ -460,11 +461,11 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         return "v1"
 
     @classmethod
-    def request_class(cls) -> Type[GetTracesRequest]:
+    def request_class(cls) -> type[GetTracesRequest]:
         return GetTracesRequest
 
     @classmethod
-    def response_class(cls) -> Type[GetTracesResponse]:
+    def response_class(cls) -> type[GetTracesResponse]:
         return GetTracesResponse
 
     def _execute_with_subquery_optimization(self, in_msg: GetTracesRequest) -> GetTracesResponse:
@@ -515,11 +516,10 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         # Get a dict of trace IDs and timestamps.
         if use_cross_item_path:
             return self._execute_with_subquery_optimization(in_msg)
-        else:
-            trace_ids, trace_ids_query_result = self._get_trace_ids_for_single_item_query(
-                request=in_msg
-            )
-            query_results.append(trace_ids_query_result)
+        trace_ids, trace_ids_query_result = self._get_trace_ids_for_single_item_query(
+            request=in_msg
+        )
+        query_results.append(trace_ids_query_result)
 
         if len(trace_ids) == 0:
             response_meta = extract_response_meta(
@@ -553,7 +553,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     def _is_cross_event_query(
         self, filters: RepeatedCompositeFieldContainer[GetTracesRequest.TraceFilter]
     ) -> bool:
-        return len(set([f.item_type for f in filters])) > 1
+        return len({f.item_type for f in filters}) > 1
 
     def _get_trace_item_filter_expressions(
         self, filters: RepeatedCompositeFieldContainer[GetTracesRequest.TraceFilter]
@@ -677,9 +677,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             trace_item_filters_expression = next(iter(filter_expressions_by_item_type.values()))
             item_type = next(iter(filter_expressions_by_item_type.keys()))
         elif len(filter_expressions_by_item_type) > 1:
-            trace_item_filters_expression = or_cond(
-                *[expression for expression in filter_expressions_by_item_type.values()]
-            )
+            trace_item_filters_expression = or_cond(*list(filter_expressions_by_item_type.values()))
         else:
             item_type = TraceItemType.TRACE_ITEM_TYPE_SPAN
 
@@ -793,9 +791,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             trace_item_filters_expression = next(iter(filter_expressions_by_item_type.values()))
             item_type = next(iter(filter_expressions_by_item_type.keys()))
         elif len(filter_expressions_by_item_type) > 1:
-            trace_item_filters_expression = or_cond(
-                *[expression for expression in filter_expressions_by_item_type.values()]
-            )
+            trace_item_filters_expression = or_cond(*list(filter_expressions_by_item_type.values()))
         else:
             item_type = TraceItemType.TRACE_ITEM_TYPE_SPAN
 

@@ -30,11 +30,9 @@ logger = logging.getLogger("snuba.query.bytes_scanned_window_policy")
 
 
 # we don't limit the amount of bytes subscriptions can scan at this time
-_PASS_THROUGH_REFERRERS = set(
-    [
-        "subscriptions_executor",
-    ]
-)
+_PASS_THROUGH_REFERRERS = {
+    "subscriptions_executor",
+}
 
 
 UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY = int(1e12)
@@ -186,7 +184,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             if override == DEFAULT_OVERRIDE_LIMIT:
                 return int(self.get_config_value("project_referrer_scan_limit"))
             return int(override)
-        elif customer_tenant_key == "organization_id":
+        if customer_tenant_key == "organization_id":
             org_referrer_override = self.get_config_value(
                 "organization_referrer_scan_limit_override",
                 {"organization_id": customer_tenant_value, "referrer": referrer},
@@ -351,32 +349,31 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                     suggestion=SUGGESTION,
                 )
 
-            else:
-                explanation[
-                    "reason"
-                ] = f"""{customer_tenant_key} {customer_tenant_value} is over the bytes scanned limit of {scan_limit} for referrer {referrer}.
+            explanation[
+                "reason"
+            ] = f"""{customer_tenant_key} {customer_tenant_value} is over the bytes scanned limit of {scan_limit} for referrer {referrer}.
                 This policy is exceeded when a customer is abusing a specific feature in a way that puts load on clickhouse. If this is happening to
                 "many customers, that may mean the feature is written in an inefficient way"""
-                explanation["granted_quota"] = granted_quota.granted
-                explanation["limit"] = scan_limit
-                # This is technically a high cardinality tag value however these rejections
-                # should not happen often therefore it should be safe to output these rejections as metris
+            explanation["granted_quota"] = granted_quota.granted
+            explanation["limit"] = scan_limit
+            # This is technically a high cardinality tag value however these rejections
+            # should not happen often therefore it should be safe to output these rejections as metris
 
-                self.metrics.increment(
-                    "bytes_scanned_rejection",
-                    tags={"tenant": f"{customer_tenant_key}__{customer_tenant_value}__{referrer}"},
-                )
-                return QuotaAllowance(
-                    can_run=False,
-                    max_threads=0,
-                    explanation=explanation,
-                    is_throttled=True,
-                    throttle_threshold=throttle_threshold,
-                    rejection_threshold=scan_limit,
-                    quota_used=used_quota,
-                    quota_unit=QUOTA_UNIT,
-                    suggestion=SUGGESTION,
-                )
+            self.metrics.increment(
+                "bytes_scanned_rejection",
+                tags={"tenant": f"{customer_tenant_key}__{customer_tenant_value}__{referrer}"},
+            )
+            return QuotaAllowance(
+                can_run=False,
+                max_threads=0,
+                explanation=explanation,
+                is_throttled=True,
+                throttle_threshold=throttle_threshold,
+                rejection_threshold=scan_limit,
+                quota_used=used_quota,
+                quota_unit=QUOTA_UNIT,
+                suggestion=SUGGESTION,
+            )
 
         # this checks to see if you reached the throttle threshold
         if granted_quota.granted < scan_limit - throttle_threshold:
@@ -420,13 +417,11 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 and result_or_error.error.__cause__.code == errors.ErrorCodes.TIMEOUT_EXCEEDED
             ):
                 return int(self.get_config_value("clickhouse_timeout_bytes_scanned_penalization"))
-            else:
-                return 0
+            return 0
+        assert result_or_error.query_result is not None
         progress_bytes_scanned = cast(
             int,
-            result_or_error.query_result.result.get("profile", {}).get(  # type: ignore[union-attr]
-                "progress_bytes", None
-            ),
+            (result_or_error.query_result.result.get("profile") or {}).get("progress_bytes", None),
         )
         if isinstance(progress_bytes_scanned, (int, float)):
             self.metrics.increment(

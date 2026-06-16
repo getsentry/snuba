@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages.tags_hash_map import get_array_vals_hash
@@ -8,7 +8,6 @@ from snuba.utils.schemas import Array, Column, UInt
 
 
 class Migration(migration.ClickhouseNodeMigration):
-
     blocking = False
     storage_set_key = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
     granularity = "8192"
@@ -30,9 +29,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     name=self.str_hash_map_col,
                     type=Array(
                         UInt(64),
-                        Modifiers(
-                            materialized=get_array_vals_hash("mapKeys(attrs_string)")
-                        ),
+                        Modifiers(materialized=get_array_vals_hash("mapKeys(attrs_string)")),
                     ),
                 ),
                 after="attrs_string",
@@ -45,9 +42,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     self.str_hash_map_col,
                     type=Array(
                         UInt(64),
-                        Modifiers(
-                            materialized=get_array_vals_hash("mapKeys(attrs_string)")
-                        ),
+                        Modifiers(materialized=get_array_vals_hash("mapKeys(attrs_string)")),
                     ),
                 ),
                 after="attrs_string",

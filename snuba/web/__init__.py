@@ -1,14 +1,15 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, TypedDict, cast
+from typing import Any, TypedDict, cast
 
 from snuba.reader import Column, Result, Row, transform_rows
 from snuba.utils.serializable_exception import JsonSerializable, SerializableException
 
 
 class QueryExtraData(TypedDict):
-    stats: Dict[str, Any]
+    stats: dict[str, Any]
     sql: str
     experiments: Mapping[str, Any]
 
@@ -33,9 +34,7 @@ class QueryException(SerializableException):
         super().__init__(message, should_report, **extra_data)
 
     @classmethod
-    def from_args(
-        cls, exception_type: str, message: str, extra: QueryExtraData
-    ) -> "QueryException":
+    def from_args(cls, exception_type: str, message: str, extra: QueryExtraData) -> QueryException:
         return cls(
             exception_type=exception_type,
             message=message,
@@ -66,7 +65,10 @@ class QueryResult:
 
     @property
     def quota_allowance(self) -> Mapping[str, Mapping[str, Any]]:
-        return self.extra.get("stats", {}).get("quota_allowance", {})
+        result: Mapping[str, Mapping[str, Any]] = self.extra.get("stats", {}).get(
+            "quota_allowance", {}
+        )
+        return result
 
 
 def transform_column_names(result: QueryResult, mapping: Mapping[str, list[str]]) -> None:

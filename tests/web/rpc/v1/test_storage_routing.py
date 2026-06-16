@@ -42,12 +42,12 @@ RANDOM_REQUEST_ID = str(uuid.uuid4())
 
 class AnyInt(int):
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, int) or isinstance(other, self.__class__)
+        return isinstance(other, (int, self.__class__))
 
 
 class AnyFloat(float):
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, int) or isinstance(other, self.__class__)
+        return isinstance(other, (int, self.__class__))
 
 
 def _get_in_msg() -> TimeSeriesRequest:

@@ -1,7 +1,8 @@
 import logging
 import time
+from collections.abc import Mapping, MutableMapping, Sequence
 from threading import Thread
-from typing import Any, Dict, Mapping, MutableMapping, Optional, Sequence, TypedDict
+from typing import Any, TypedDict
 
 import rapidjson
 from confluent_kafka import KafkaError, Producer
@@ -50,8 +51,8 @@ class DeleteQueryMessage(TypedDict, total=False):
     storage_name: str
     conditions: ConditionsType
     tenant_ids: Mapping[str, str | int]
-    attribute_conditions: Optional[Dict[str, WireAttributeCondition]]
-    attribute_conditions_item_type: Optional[int]
+    attribute_conditions: dict[str, WireAttributeCondition] | None
+    attribute_conditions_item_type: int | None
 
 
 PRODUCER_MAP: MutableMapping[str, Producer] = {}
@@ -95,7 +96,7 @@ def flush_producers() -> None:
     Thread(target=_flush_producers, name="flush_producers", daemon=True).start()
 
 
-def _delete_query_delivery_callback(error: Optional[KafkaError], message: KafkaMessage) -> None:
+def _delete_query_delivery_callback(error: KafkaError | None, message: KafkaMessage) -> None:
     metrics.increment(
         "delete_query.delivery_callback",
         tags={"status": "failure" if error else "success"},
@@ -155,7 +156,7 @@ def _validate_attribute_conditions(
     try:
         item_type_name = get_trace_item_type_name(attribute_conditions.item_type)
     except ValueError as e:
-        raise InvalidQueryException(str(e))
+        raise InvalidQueryException(str(e)) from e
 
     # Check if this specific item_type has any allowed attributes configured
     if item_type_name not in allowed_attrs_config:
@@ -183,9 +184,9 @@ def _validate_attribute_conditions(
 @with_span()
 def delete_from_storage(
     storage: WritableTableStorage,
-    column_conditions: Dict[str, list[Any]],
+    column_conditions: dict[str, list[Any]],
     attribution_info: Mapping[str, Any],
-    attribute_conditions: Optional[AttributeConditions] = None,
+    attribute_conditions: AttributeConditions | None = None,
 ) -> dict[str, Result]:
     """
     This method does a series of validation checks (outline below),
@@ -218,7 +219,7 @@ def delete_from_storage(
         for col, values in column_conditions.items():
             column_validator.validate(col, values)
     except InvalidColumnType as e:
-        raise InvalidQueryException(e.message)
+        raise InvalidQueryException(e.message) from e
 
     # validate attribute conditions if provided
     if attribute_conditions:
@@ -258,8 +259,8 @@ def construct_query(storage: WritableTableStorage, table: str, condition: Expres
 
 def _serialize_attribute_conditions(
     attribute_conditions: AttributeConditions,
-) -> Dict[str, WireAttributeCondition]:
-    result: Dict[str, WireAttributeCondition] = {}
+) -> dict[str, WireAttributeCondition]:
+    result: dict[str, WireAttributeCondition] = {}
     for key, (attr_key_enum, values) in attribute_conditions.attributes.items():
         result[key] = {
             "attr_key_type": attr_key_enum.type,

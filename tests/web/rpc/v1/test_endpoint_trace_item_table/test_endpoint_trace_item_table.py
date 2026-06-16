@@ -57,7 +57,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
 
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import OrderBy, OrderByDirection
 from snuba.query.dsl import Functions as f
@@ -95,7 +95,7 @@ _SPAN_COUNT = 120
 
 @pytest.fixture(autouse=False)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
-    items_storage = get_storage(StorageKey("eap_items"))
+    items_storage = get_writable_storage(StorageKey("eap_items"))
     messages = [
         gen_item_message(
             start_timestamp=BASE_TIME + timedelta(minutes=i),
@@ -134,7 +134,7 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
         )
         for i in range(_SPAN_COUNT)
     ]
-    write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+    write_raw_unprocessed_events(items_storage, messages)
 
 
 @pytest.mark.clickhouse_db
@@ -1449,7 +1449,7 @@ class TestTraceItemTable(BaseApiTest):
         # first I write new messages with different value of kylestags,
         # theres a different number of messages for each tag so that
         # each will have a different sum value when i do aggregate
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME + timedelta(minutes=1)
         messages = (
             [
@@ -1474,7 +1474,7 @@ class TestTraceItemTable(BaseApiTest):
                 for i in range(30)
             ]
         )
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)
 
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -1546,7 +1546,7 @@ class TestTraceItemTable(BaseApiTest):
         # first I write new messages with different value of kylestags,
         # theres a different number of messages for each tag so that
         # each will have a different sum value when i do aggregate
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = (
             [
@@ -1573,7 +1573,7 @@ class TestTraceItemTable(BaseApiTest):
                 for i in range(30)
             ]
         )
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)
 
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -1641,7 +1641,7 @@ class TestTraceItemTable(BaseApiTest):
         """
         This test sums only if the traceitem contains kylestag = val2
         """
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = (
             [
@@ -1666,7 +1666,7 @@ class TestTraceItemTable(BaseApiTest):
                 for i in range(3)
             ]
         )
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)
 
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -1726,7 +1726,7 @@ class TestTraceItemTable(BaseApiTest):
         ]
 
     def test_reliability_with_conditional_aggregation(self) -> None:
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = [
             gen_item_message(
@@ -1738,7 +1738,7 @@ class TestTraceItemTable(BaseApiTest):
                 server_sample_rate=0.85,
             ),
         ]
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)
 
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -1833,7 +1833,7 @@ class TestTraceItemTable(BaseApiTest):
         # first I write new messages with different value of kylestags,
         # theres a different number of messages for each tag so that
         # each will have a different sum value when i do aggregate
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = (
             [
@@ -1858,7 +1858,7 @@ class TestTraceItemTable(BaseApiTest):
                 for i in range(30)
             ]
         )
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)
 
         base_message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -2056,7 +2056,7 @@ class TestTraceItemTable(BaseApiTest):
         # first I write new messages with different value of kylestags,
         # theres a different number of messages for each tag so that
         # each will have a different sum value when i do aggregate
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = (
             [
@@ -2081,7 +2081,7 @@ class TestTraceItemTable(BaseApiTest):
                 for i in range(30)
             ]
         )
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)
 
         base_message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -2230,7 +2230,7 @@ class TestTraceItemTable(BaseApiTest):
         # first I write new messages with different value of kylestags,
         # theres a different number of messages for each tag so that
         # each will have a different sum value when i do aggregate
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = (
             [
@@ -2255,7 +2255,7 @@ class TestTraceItemTable(BaseApiTest):
                 for i in range(30)
             ]
         )
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)
 
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -2334,7 +2334,7 @@ class TestTraceItemTable(BaseApiTest):
         This simulates a SQL HAVING clause with complex expressions.
         """
         # Write test data with different success/failure patterns for different services
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
 
         # Service A: High success rate (9 success, 1 failure = 10% failure rate)
@@ -2401,7 +2401,7 @@ class TestTraceItemTable(BaseApiTest):
         ]
 
         all_messages = service_a_messages + service_b_messages + service_c_messages
-        write_raw_unprocessed_events(items_storage, all_messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, all_messages)
 
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -3269,7 +3269,7 @@ class TestTraceItemTable(BaseApiTest):
         ] + [AttributeValue(val_str="default") for _ in range(5)]
 
     def test_normal_mode_end_to_end(self) -> None:
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = [
             gen_item_message(
@@ -3278,7 +3278,7 @@ class TestTraceItemTable(BaseApiTest):
             )
             for _ in range(3600)
         ]
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)
 
         best_effort_message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -3299,7 +3299,7 @@ class TestTraceItemTable(BaseApiTest):
         EndpointTraceItemTable().execute(best_effort_message)
 
     def test_downsampling_uses_hexintcolumnprocessor(self) -> None:
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = [
             gen_item_message(
@@ -3308,7 +3308,7 @@ class TestTraceItemTable(BaseApiTest):
             )
             for _ in range(3600)
         ]
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)
 
         best_effort_message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -3552,7 +3552,7 @@ class TestTraceItemTable(BaseApiTest):
         * Second batch: game_size = 500 to 850, game_size_unit_mult = 10^6 (MB)
         * Query for avg(game_size * game_size_unit_mult) and verify the result.
         """
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
 
         data_points_gb = list(range(1, 10 + 1))
         data_points_mb = list(range(500, 850 + 1))
@@ -3578,7 +3578,7 @@ class TestTraceItemTable(BaseApiTest):
             )
             for val in data_points_mb
         ]
-        write_raw_unprocessed_events(items_storage, gb_messages + mb_messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, gb_messages + mb_messages)
 
         # Calculate expected average of (game_size * game_size_unit_mult)
         all_products = [val * 10**9 for val in data_points_gb] + [
@@ -3654,9 +3654,9 @@ class TestArrayWildcardSearch(BaseApiTest):
     def test_like_filter_on_array_attribute(self) -> None:
         """Wildcard search on array attributes using LIKE returns matching items."""
         span_ts = BASE_TIME - timedelta(minutes=1)
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         write_raw_unprocessed_events(
-            items_storage,  # type: ignore
+            items_storage,
             [
                 gen_item_message(
                     span_ts, attributes={"tags": _str_array("auth-error", "timeout", "retry")}
@@ -3701,9 +3701,9 @@ class TestArrayWildcardSearch(BaseApiTest):
     def test_not_like_filter_on_array_attribute(self) -> None:
         """NOT_LIKE on array attributes excludes items where any element matches."""
         span_ts = BASE_TIME - timedelta(minutes=1)
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         write_raw_unprocessed_events(
-            items_storage,  # type: ignore
+            items_storage,
             [
                 gen_item_message(span_ts, attributes={"tags": _str_array("auth-error", "timeout")}),
                 gen_item_message(span_ts, attributes={"tags": _str_array("success", "cached")}),
@@ -3744,9 +3744,9 @@ class TestArrayWildcardSearch(BaseApiTest):
     def test_trace_item_table_array_op_equals_includes_string_ignore_case(self) -> None:
         """OP_EQUALS with ignore_case matches a string in a TYPE_ARRAY (element-wise)."""
         span_ts = BASE_TIME - timedelta(minutes=1)
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         write_raw_unprocessed_events(
-            items_storage,  # type: ignore
+            items_storage,
             [
                 gen_item_message(span_ts, attributes={"tags": _str_array("ERROR", "other")}),
                 gen_item_message(
@@ -3793,9 +3793,9 @@ class TestArrayWildcardSearch(BaseApiTest):
     def test_trace_item_table_array_op_equals_includes_int(self) -> None:
         """OP_EQUALS on TYPE_ARRAY with val_int=45 returns rows where some element is 45."""
         span_ts = BASE_TIME - timedelta(minutes=1)
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         write_raw_unprocessed_events(
-            items_storage,  # type: ignore
+            items_storage,
             [
                 gen_item_message(span_ts, attributes={"frame_linenos": _int_array(1, 45, 200)}),
                 gen_item_message(span_ts, attributes={"frame_linenos": _int_array(10, 20)}),
@@ -3893,9 +3893,9 @@ class TestArrayWildcardSearch(BaseApiTest):
     ) -> None:
         """OP_EQUALS on TYPE_ARRAY: each scalar AttributeValue type matches a stored element"""
         span_ts = BASE_TIME - timedelta(minutes=1)
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         write_raw_unprocessed_events(
-            items_storage,  # type: ignore
+            items_storage,
             [
                 gen_item_message(span_ts, attributes=match_attrs),
                 gen_item_message(span_ts, attributes=no_match_attrs),
@@ -3938,9 +3938,9 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
     def test_select_array_column_returns_val_array(self) -> None:
         """TYPE_ARRAY columns are returned as val_array on TraceItemTable."""
         span_ts = BASE_TIME - timedelta(minutes=1)
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         write_raw_unprocessed_events(
-            items_storage,  # type: ignore
+            items_storage,
             [
                 gen_item_message(
                     span_ts,
@@ -4018,7 +4018,7 @@ class TestUtils:
                         label="avg(custom_measurement_2)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     ),
-                    label=None,  # type: ignore
+                    label=None,  # type: ignore[arg-type]
                 ),
             ],
             order_by=[],
@@ -4046,7 +4046,7 @@ class TestUtils:
                         label="avg(custom_measurement_2)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     ),
-                    label=None,  # type: ignore
+                    label=None,  # type: ignore[arg-type]
                 ),
             ],
             order_by=[],

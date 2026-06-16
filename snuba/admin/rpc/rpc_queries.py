@@ -1,14 +1,14 @@
-from typing import Any, List, Set
+from typing import Any
 
 from snuba import settings
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
-def _validate_projects_in_query(project_ids: List[int]) -> None:
+def _validate_projects_in_query(project_ids: list[int]) -> None:
     if settings.DEBUG and len(settings.ADMIN_ALLOWED_PROD_PROJECTS) == 0:
         return
-    allowed_projects: Set[int] = set(settings.ADMIN_ALLOWED_PROD_PROJECTS)
-    query_projects: Set[int] = set(project_ids)
+    allowed_projects: set[int] = set(settings.ADMIN_ALLOWED_PROD_PROJECTS)
+    query_projects: set[int] = set(project_ids)
     if len(query_projects - allowed_projects) > 0:
         raise BadSnubaRPCRequestException(f"Project IDs {query_projects} are not allowed")
 

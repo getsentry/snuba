@@ -26,26 +26,25 @@ def _main() -> None:
     )
     if diff_result.returncode != 0:
         raise ExecError(diff_result.stdout)
-    else:
-        lines = diff_result.stdout.splitlines()
-        if len(lines) > 0:
-            print("-- start migrations")
-            print()
-        for line in lines:
-            migration_filename = os.path.basename(line)
-            migration_group = MigrationGroup(os.path.basename(os.path.dirname(line)))
-            migration_id, _ = os.path.splitext(migration_filename)
-            runner = Runner()
-            migration_key = MigrationKey(migration_group, migration_id)
-            print(f"-- forward migration {migration_group.value} : {migration_id}")
-            runner.run_migration(migration_key, dry_run=True)
-            print(f"-- end forward migration {migration_group.value} : {migration_id}")
+    lines = diff_result.stdout.splitlines()
+    if len(lines) > 0:
+        print("-- start migrations")
+        print()
+    for line in lines:
+        migration_filename = os.path.basename(line)
+        migration_group = MigrationGroup(os.path.basename(os.path.dirname(line)))
+        migration_id, _ = os.path.splitext(migration_filename)
+        runner = Runner()
+        migration_key = MigrationKey(migration_group, migration_id)
+        print(f"-- forward migration {migration_group.value} : {migration_id}")
+        runner.run_migration(migration_key, dry_run=True)
+        print(f"-- end forward migration {migration_group.value} : {migration_id}")
 
-            print("\n\n\n")
-            migration_key = MigrationKey(migration_group, migration_id)
-            print(f"-- backward migration {migration_group.value} : {migration_id}")
-            runner.reverse_migration(migration_key, dry_run=True)
-            print(f"-- end backward migration {migration_group.value} : {migration_id}")
+        print("\n\n\n")
+        migration_key = MigrationKey(migration_group, migration_id)
+        print(f"-- backward migration {migration_group.value} : {migration_id}")
+        runner.reverse_migration(migration_key, dry_run=True)
+        print(f"-- end backward migration {migration_group.value} : {migration_id}")
 
 
 if __name__ == "__main__":

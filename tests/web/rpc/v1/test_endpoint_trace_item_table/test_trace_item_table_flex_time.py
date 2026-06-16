@@ -21,7 +21,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import ExistsFilter, TraceItem
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 from sentry_relay.consts import DataCategory
 
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_flex_time import (
@@ -45,7 +45,7 @@ class LogOutcomeDataPoint:
 
 
 def _store_logs_and_outcomes(data_points: list[LogOutcomeDataPoint]) -> None:
-    items_storage = get_storage(StorageKey("eap_items"))
+    items_storage = get_writable_storage(StorageKey("eap_items"))
 
     messages = []
     outcome_data = []
@@ -84,7 +84,7 @@ def _store_logs_and_outcomes(data_points: list[LogOutcomeDataPoint]) -> None:
             )
             messages.append(message)
         outcome_data.append((data_point.time, data_point.num_outcomes))
-    write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+    write_raw_unprocessed_events(items_storage, messages)
 
     store_outcomes_data(outcome_data, DataCategory.LOG_ITEM, org_id=_ORG_ID, project_id=_PROJECT_ID)
 
@@ -398,7 +398,7 @@ class TestTraceItemTableFlexTime:
             elif times_queried == 2:
                 assert result_size == 120
             else:
-                assert False
+                raise AssertionError()
 
         assert times_queried == expected_times_queried
 

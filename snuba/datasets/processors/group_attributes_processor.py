@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Optional
 
 from sentry_kafka_schemas.schema_types.group_attributes_v1 import (
     GroupAttributesSnapshot,
@@ -17,7 +16,7 @@ metrics = MetricsWrapper(environment.metrics, "group_attributes.processor")
 class GroupAttributesMessageProcessor(DatasetMessageProcessor):
     def process_message(
         self, message: GroupAttributesSnapshot, metadata: KafkaMessageMetadata
-    ) -> Optional[ProcessedMessage]:
+    ) -> ProcessedMessage | None:
         return InsertBatch(
             [
                 {

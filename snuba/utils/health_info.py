@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Dict, Mapping, Union
 
 import simplejson as json
 
@@ -20,13 +20,13 @@ logger = logging.getLogger("snuba.health")
 class HealthInfo:
     body: str
     status: int
-    content_type: Dict[str, str]
+    content_type: dict[str, str]
 
 
-def get_health_info(thorough: Union[bool, str]) -> HealthInfo:
+def get_health_info(thorough: bool | str) -> HealthInfo:
     start = time.time()
 
-    body: Mapping[str, Union[str, bool]] = {"status": "ok"}
+    body: Mapping[str, str | bool] = {"status": "ok"}
     payload = json.dumps(body)
 
     metrics.timing(

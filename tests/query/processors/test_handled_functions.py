@@ -28,7 +28,7 @@ def test_handled_processor() -> None:
                 FunctionCall(
                     "result",
                     "isHandled",
-                    tuple(),
+                    (),
                 ),
             ),
         ],
@@ -106,7 +106,7 @@ def test_not_handled_processor() -> None:
                 FunctionCall(
                     "result",
                     "notHandled",
-                    tuple(),
+                    (),
                 ),
             ),
         ],

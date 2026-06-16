@@ -46,12 +46,11 @@ class OptionalAttributeAggregationTransformer(LogicalQueryProcessor):
                 and exp.column.column_name in self._attribute_column_names
             ):
                 return exp
-            elif isinstance(exp, FunctionCall) and exp.parameters:
-                for param in exp.parameters:
-                    result = find_subscriptable_reference(param)
-                    if result:
-                        return result
-            elif isinstance(exp, CurriedFunctionCall):
+            if (
+                isinstance(exp, FunctionCall)
+                and exp.parameters
+                or isinstance(exp, CurriedFunctionCall)
+            ):
                 for param in exp.parameters:
                     result = find_subscriptable_reference(param)
                     if result:

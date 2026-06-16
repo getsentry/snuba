@@ -13,13 +13,12 @@ class UserColumnProcessor(ClickhouseQueryProcessor):
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         def process_column(exp: Expression) -> Expression:
-            if isinstance(exp, Column):
-                if exp.column_name == "user":
-                    return FunctionCall(
-                        exp.alias,
-                        "nullIf",
-                        (Column(None, None, "user"), Literal(None, "")),
-                    )
+            if isinstance(exp, Column) and exp.column_name == "user":
+                return FunctionCall(
+                    exp.alias,
+                    "nullIf",
+                    (Column(None, None, "user"), Literal(None, "")),
+                )
 
             return exp
 

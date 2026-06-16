@@ -1,8 +1,5 @@
-from __future__ import absolute_import
-
 import logging
 import os
-from typing import Optional
 
 import sentry_sdk
 import structlog
@@ -46,7 +43,7 @@ def drop_level(logger: logging.Logger, method_name: str, event_dict: EventDict) 
     return event_dict
 
 
-def setup_logging(level: Optional[str] = None) -> None:
+def setup_logging(level: str | None = None) -> None:
     if level is None:
         level = settings.LOG_LEVEL
 

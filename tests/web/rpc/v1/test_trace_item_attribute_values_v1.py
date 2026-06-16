@@ -1,5 +1,6 @@
-from datetime import UTC, datetime, timedelta, timezone
-from typing import Any, Generator, List
+from collections.abc import Generator
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -12,16 +13,14 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 from sentry_protos.snuba.v1.trace_item_pb2 import TraceItem as TraceItemMessage
 
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.trace_item_attribute_values import AttributeValuesRequest
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import gen_item_message
 
-BASE_TIME = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0) - timedelta(
-    minutes=180
-)
+BASE_TIME = datetime.now(UTC).replace(minute=0, second=0, microsecond=0) - timedelta(minutes=180)
 COMMON_META = RequestMeta(
     project_ids=[1, 2, 3],
     organization_id=1,
@@ -54,8 +53,8 @@ COMMON_META = RequestMeta(
 
 
 @pytest.fixture(autouse=True)
-def setup_teardown(eap: None, redis_db: None) -> Generator[List[bytes], None, None]:
-    items_storage = get_storage(StorageKey("eap_items"))
+def setup_teardown(eap: None, redis_db: None) -> Generator[list[bytes]]:
+    items_storage = get_writable_storage(StorageKey("eap_items"))
     start_timestamp = BASE_TIME
     messages = [
         gen_item_message(
@@ -117,7 +116,7 @@ def setup_teardown(eap: None, redis_db: None) -> Generator[List[bytes], None, No
             },
         ),
     ]
-    write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+    write_raw_unprocessed_events(items_storage, messages)
     yield messages
 
 
@@ -173,7 +172,7 @@ class TestTraceItemAttributes(BaseApiTest):
         assert res.values == []
         assert res.counts == []
 
-    def test_item_id_substring_match(self, setup_teardown: List[bytes]) -> None:
+    def test_item_id_substring_match(self, setup_teardown: list[bytes]) -> None:
         first_msg_bytes = setup_teardown[0]
         first_msg = TraceItemMessage()
         first_msg.ParseFromString(first_msg_bytes)
@@ -197,9 +196,9 @@ class TestTraceItemAttributes(BaseApiTest):
     def test_deprecated_alias_attribute(self) -> None:
         """db.system.name request returns values stored only under deprecated key db.system."""
 
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         write_raw_unprocessed_events(
-            items_storage,  # type: ignore
+            items_storage,
             [
                 gen_item_message(
                     start_timestamp=BASE_TIME,

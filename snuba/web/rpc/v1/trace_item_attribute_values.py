@@ -1,5 +1,4 @@
 import uuid
-from typing import Type
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
@@ -177,11 +176,11 @@ class AttributeValuesRequest(
         return "v1"
 
     @classmethod
-    def request_class(cls) -> Type[TraceItemAttributeValuesRequest]:
+    def request_class(cls) -> type[TraceItemAttributeValuesRequest]:
         return TraceItemAttributeValuesRequest
 
     @classmethod
-    def response_class(cls) -> Type[TraceItemAttributeValuesResponse]:
+    def response_class(cls) -> type[TraceItemAttributeValuesResponse]:
         return TraceItemAttributeValuesResponse
 
     def _execute(self, in_msg: TraceItemAttributeValuesRequest) -> TraceItemAttributeValuesResponse:

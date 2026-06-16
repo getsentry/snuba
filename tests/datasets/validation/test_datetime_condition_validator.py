@@ -1,5 +1,4 @@
 import datetime
-from typing import Optional
 from unittest.mock import MagicMock
 
 import pytest
@@ -42,7 +41,7 @@ required_column_tests = [
 
 
 @pytest.mark.parametrize("condition", required_column_tests)
-def test_datetime_column_validation(condition: Optional[Expression]) -> None:
+def test_datetime_column_validation(condition: Expression | None) -> None:
     query = LogicalQuery(
         QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
         selected_columns=[
@@ -84,7 +83,7 @@ invalid_tests = [
 def test_invalid_datetime_column_validation() -> None:
     old_logger = logger.warning
     mock_logger = MagicMock()
-    logger.warning = mock_logger  # type: ignore
+    logger.warning = mock_logger  # type: ignore[method-assign]
     for condition, message in invalid_tests:
         query = LogicalQuery(
             QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
@@ -100,4 +99,4 @@ def test_invalid_datetime_column_validation() -> None:
         mock_logger.assert_called_with(message)
         mock_logger.reset_mock()
 
-    logger.warning = old_logger  # type: ignore
+    logger.warning = old_logger  # type: ignore[method-assign]
