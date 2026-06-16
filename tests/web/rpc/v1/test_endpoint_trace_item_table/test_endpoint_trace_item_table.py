@@ -1118,6 +1118,38 @@ class TestTraceItemTable(BaseApiTest):
         )
         EndpointTraceItemTable().execute(message)
 
+    def test_order_by_timestamp_does_not_error_with_aggregation_and_groupby(self) -> None:
+        # Regression test: an aggregation query that groups by and orders by
+        # `sentry.timestamp`. `sentry.timestamp` is ordered on the raw `timestamp`
+        # column for read-in-order; the GROUP BY must use the same raw column so
+        # ClickHouse does not reject the query with "Column `timestamp` is not under
+        # aggregate function and not in GROUP BY" (Code 215).
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_COUNT,
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp"),
+                    )
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
+                    ),
+                    descending=True,
+                ),
+            ],
+        )
+        EndpointTraceItemTable().execute(message)
+
     def test_aggregation_on_attribute_column_backward_compat(
         self,
         setup_teardown: Any,

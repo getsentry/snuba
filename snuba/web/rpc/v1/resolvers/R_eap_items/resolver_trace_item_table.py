@@ -255,6 +255,24 @@ def aggregation_filter_to_expression(
             raise BadSnubaRPCRequestException(f"Unsupported aggregation filter type: {default}")
 
 
+def _groupby_order_by_expression(attr_key: AttributeKey) -> Expression:
+    """
+    Maps an attribute key used in GROUP BY / ORDER BY to its expression.
+
+    `sentry.timestamp` is grouped and ordered on the raw primary-key `timestamp`
+    column rather than the `CAST(timestamp, 'Float64')` that
+    `attribute_key_to_expression` produces, so ClickHouse can read in primary-key
+    order. The GROUP BY and ORDER BY must use the *same* expression: grouping by
+    the bare `timestamp` identifier keeps the SELECT's `CAST(timestamp, 'Float64')`
+    valid (it is a function of the grouped column) while letting ORDER BY sort on
+    the raw column. If the two diverged, ClickHouse would reject the query with
+    "Column `timestamp` is not under aggregate function and not in GROUP BY".
+    """
+    if attr_key.name == "sentry.timestamp":
+        return snuba_column("timestamp")
+    return attribute_key_to_expression(attr_key)
+
+
 def _convert_order_by(
     groupby: List[Expression],
     order_by: Sequence[TraceItemTableRequest.OrderBy],
@@ -301,11 +319,10 @@ def _convert_order_by(
             # cast is monotonic, so ordering by the raw DateTime column yields the same
             # order while staying read-in-order friendly. (The i == 0 / single-project /
             # no-groupby branch above already expands to the full table sort key; this
-            # covers `sentry.timestamp` ordering anywhere else.)
-            if x.column.key.name == "sentry.timestamp":
-                expression: Expression = snuba_column("timestamp")
-            else:
-                expression = attribute_key_to_expression(x.column.key)
+            # covers `sentry.timestamp` ordering anywhere else.) The GROUP BY uses the
+            # same expression (see `_groupby_order_by_expression`) so an aggregation
+            # query that orders by `sentry.timestamp` stays valid.
+            expression = _groupby_order_by_expression(x.column.key)
             res.append(
                 OrderBy(
                     direction=direction,
@@ -593,7 +610,7 @@ def build_query(
     if page_token_filter:
         additional_conditions.append(page_token_filter)
 
-    groupby = [attribute_key_to_expression(attr_key) for attr_key in request.group_by]
+    groupby = [_groupby_order_by_expression(attr_key) for attr_key in request.group_by]
 
     res = Query(
         from_clause=entity,
