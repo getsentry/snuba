@@ -3312,6 +3312,48 @@ class TestTraceItemTable(BaseApiTest):
             AttributeValue(val_str="low") for _ in range(3)
         ]
 
+    def test_virtual_column_like_filter_uses_backing_existence(self) -> None:
+        # LIKE (and null / default-value guards) build a mapContains existence
+        # check on the request key; for a virtual column that key is absent in
+        # storage, so _apply_virtual_columns must rewrite the existence guard to
+        # the backing column too — otherwise it matches nothing.
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_item(span_ts, {"device.class": "1"}, 3)
+        write_eap_item(span_ts, {"device.class": "2"}, 5)
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="device.class.label")),
+            ],
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="device.class.label"),
+                    op=ComparisonFilter.OP_LIKE,
+                    value=AttributeValue(val_str="%low%"),
+                )
+            ),
+            virtual_column_contexts=[
+                VirtualColumnContext(
+                    from_column_name="device.class",
+                    to_column_name="device.class.label",
+                    value_map={"1": "low", "2": "medium"},
+                    default_value="Unknown",
+                ),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values[0].results == [
+            AttributeValue(val_str="low") for _ in range(3)
+        ]
+
     def test_normal_mode_end_to_end(self) -> None:
         items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
