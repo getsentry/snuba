@@ -64,6 +64,7 @@ def setup_teardown(eap: None, redis_db: None) -> Generator[List[bytes], None, No
             attributes={
                 "tag1": AnyValue(string_value="herp"),
                 "tag2": AnyValue(string_value="herp"),
+                "custom_flag": AnyValue(bool_value=True),
             },
         ),
         gen_item_message(
@@ -71,6 +72,7 @@ def setup_teardown(eap: None, redis_db: None) -> Generator[List[bytes], None, No
             attributes={
                 "tag1": AnyValue(string_value="herpderp"),
                 "tag2": AnyValue(string_value="herp"),
+                "custom_flag": AnyValue(bool_value=False),
             },
         ),
         gen_item_message(
@@ -263,6 +265,20 @@ class TestTraceItemAttributes(BaseApiTest):
         response = AttributeValuesRequest().execute(message)
         assert response.values == ["true", "false"]
         assert response.counts == [8, 1]
+
+    def test_boolean_existence_check(self, setup_teardown: Any) -> None:
+        # `custom_flag` is set on exactly two items (one True, one False); the
+        # other items do not have the key. The existence check must exclude the
+        # items missing the key, otherwise they'd be miscounted as "false".
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=5,
+            key=AttributeKey(name="custom_flag", type=AttributeKey.TYPE_BOOLEAN),
+        )
+        response = AttributeValuesRequest().execute(message)
+        # Equal counts, so ties break on attr_value ASC ("false" before "true").
+        assert response.values == ["false", "true"]
+        assert response.counts == [1, 1]
 
     def test_substring_match_on_boolean_rejected(self, setup_teardown: Any) -> None:
         message = TraceItemAttributeValuesRequest(

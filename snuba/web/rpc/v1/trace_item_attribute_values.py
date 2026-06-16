@@ -65,9 +65,12 @@ def _build_conditions(request: TraceItemAttributeValuesRequest) -> Expression:
     except KeyError:
         raise BadSnubaRPCRequestException("Only string and boolean attributes can be used")
 
+    # Use mapContains (not has) for key existence: it's the correct ClickHouse
+    # function for Map columns and is handled by HashBucketFunctionTransformer
+    # for the bucketed string/float maps as well as the un-bucketed bool map.
     key_existence = combine_or_conditions(
         [
-            f.has(column(attributes_column), name)
+            f.mapContains(column(attributes_column), name)
             for name in _map_key_names_for_existence_check(request.key)
         ]
     )
