@@ -1,4 +1,5 @@
 import json
+import math
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, TypeVar, cast
 
@@ -12,6 +13,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 
 from snuba import settings, state
+from snuba.clickhouse import DATETIME_FORMAT
 from snuba.protos.common import (
     COLUMN_PREFIX,
     MalformedAttributeException,
@@ -720,15 +722,32 @@ def trace_item_filters_to_expression(
             scalar_value = _scalar_value(v)
             assert isinstance(scalar_value, (int, float))
             raw_timestamp = column("timestamp")
-            raw_value = timestamp_seconds_to_datetime_literal(int(scalar_value))
+            # `timestamp` is a second-resolution DateTime, so a fractional bound must be
+            # rounded to the integer second that preserves the original
+            # `CAST(timestamp, 'Float64') OP value` result: `<`/`>=` round up (ceil) and
+            # `<=`/`>` round down (floor). Integer bounds are left unchanged, so the
+            # rewritten mandatory-range bounds stay byte-identical and
+            # dedupe_timestamp_conditions can still collapse them.
             if op == ComparisonFilter.OP_LESS_THAN:
-                return f.less(raw_timestamp, raw_value)
+                return f.less(
+                    raw_timestamp,
+                    timestamp_seconds_to_datetime_literal(math.ceil(scalar_value)),
+                )
             if op == ComparisonFilter.OP_LESS_THAN_OR_EQUALS:
-                return f.lessOrEquals(raw_timestamp, raw_value)
+                return f.lessOrEquals(
+                    raw_timestamp,
+                    timestamp_seconds_to_datetime_literal(math.floor(scalar_value)),
+                )
             if op == ComparisonFilter.OP_GREATER_THAN:
-                return f.greater(raw_timestamp, raw_value)
+                return f.greater(
+                    raw_timestamp,
+                    timestamp_seconds_to_datetime_literal(math.floor(scalar_value)),
+                )
             if op == ComparisonFilter.OP_GREATER_THAN_OR_EQUALS:
-                return f.greaterOrEquals(raw_timestamp, raw_value)
+                return f.greaterOrEquals(
+                    raw_timestamp,
+                    timestamp_seconds_to_datetime_literal(math.ceil(scalar_value)),
+                )
 
         if op == ComparisonFilter.OP_EQUALS:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
@@ -908,7 +927,7 @@ def timestamp_seconds_to_datetime_literal(ts_seconds: int) -> Expression:
     filters share this form so equal bounds produce structurally identical expressions
     (which lets dedupe_timestamp_conditions collapse the duplicates)."""
     return f.toDateTime(
-        datetime.fromtimestamp(ts_seconds, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        datetime.fromtimestamp(ts_seconds, tz=timezone.utc).strftime(DATETIME_FORMAT)
     )
 
 

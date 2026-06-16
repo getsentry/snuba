@@ -343,6 +343,40 @@ class TestSentryTimestampFilter:
         assert isinstance(rhs, FunctionCall)
         assert rhs.function_name == "toDateTime"
 
+    @pytest.mark.parametrize(
+        "op,expected_second",
+        [
+            # `timestamp` is second-resolution, so fractional bounds round to the
+            # integer second that preserves `CAST(timestamp, 'Float64') OP value`:
+            # `<`/`>=` round up, `<=`/`>` round down.
+            (ComparisonFilter.OP_LESS_THAN, 1781040733),
+            (ComparisonFilter.OP_LESS_THAN_OR_EQUALS, 1781040732),
+            (ComparisonFilter.OP_GREATER_THAN, 1781040732),
+            (ComparisonFilter.OP_GREATER_THAN_OR_EQUALS, 1781040733),
+        ],
+    )
+    def test_fractional_range_filter_rounds_to_preserve_semantics(
+        self, op: "ComparisonFilter.Op.ValueType", expected_second: int
+    ) -> None:
+        fractional = TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_DOUBLE, name="sentry.timestamp"),
+                op=op,
+                value=AttributeValue(val_double=1781040732.7),
+            )
+        )
+        expr = trace_item_filters_to_expression(fractional, attribute_key_to_expression)
+        assert isinstance(expr, FunctionCall)
+        rhs = expr.parameters[1]
+        assert isinstance(rhs, FunctionCall)
+        assert rhs.function_name == "toDateTime"
+        literal = rhs.parameters[0]
+        assert isinstance(literal, Literal)
+        expected = datetime.fromtimestamp(expected_second, tz=timezone.utc).strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+        assert literal.value == expected
+
     def test_equals_filter_unchanged(self) -> None:
         """Non-range comparisons keep the existing CAST-based behavior."""
         expr = trace_item_filters_to_expression(
