@@ -82,7 +82,23 @@ pub fn process_message(
         }
     }
 
+    msg.quantity64 = msg.quantity;
+
     InsertBatch::from_rows([msg], None)
+}
+
+// The `quantity` column is a u32, but incoming messages may carry a value that
+// only fits in a u64, so we parse as u64 and narrow it for the u32 column while
+// preserving the full value in `quantity64`. Values larger than u32::MAX are
+// saturated to u32::MAX so the u32 column never wraps around to a bogus value.
+fn serialize_quantity_as_u32<S>(value: &Option<u64>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    match value {
+        Some(v) => serializer.serialize_some(&u32::try_from(*v).unwrap_or(u32::MAX)),
+        None => serializer.serialize_none(),
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -96,7 +112,11 @@ struct Outcome {
     timestamp: StringToIntDatetime,
     outcome: u8,
     category: Option<u8>,
-    quantity: Option<u32>,
+    #[serde(serialize_with = "serialize_quantity_as_u32")]
+    quantity: Option<u64>,
+    // Only derived from `quantity` in `process_message`
+    #[serde(skip_deserializing)]
+    quantity64: Option<u64>,
     reason: Option<String>,
     event_id: Option<Uuid>,
 }
@@ -127,7 +147,32 @@ mod tests {
         let result = process_message(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
 
-        let expected = b"{\"org_id\":1,\"project_id\":1,\"key_id\":null,\"timestamp\":1680029444,\"outcome\":4,\"category\":1,\"quantity\":3,\"reason\":null,\"event_id\":null}\n";
+        let expected = b"{\"org_id\":1,\"project_id\":1,\"key_id\":null,\"timestamp\":1680029444,\"outcome\":4,\"category\":1,\"quantity\":3,\"quantity64\":3,\"reason\":null,\"event_id\":null}\n";
+
+        assert_eq!(result.rows.into_encoded_rows(), expected);
+    }
+
+    #[test]
+    fn test_outcome_quantity_overflow() {
+        // A quantity larger than u32::MAX should saturate in the u32 `quantity`
+        // column while `quantity64` keeps the full value.
+        let data = r#"{
+            "org_id": 1,
+            "outcome": 4,
+            "project_id": 1,
+            "quantity": 5000000000,
+            "timestamp": "2023-03-28T18:50:44.000011Z"
+          }"#;
+        let payload = KafkaPayload::new(None, None, Some(data.as_bytes().to_vec()));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        let result = process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+
+        let expected = b"{\"org_id\":1,\"project_id\":1,\"key_id\":null,\"timestamp\":1680029444,\"outcome\":4,\"category\":1,\"quantity\":4294967295,\"quantity64\":5000000000,\"reason\":null,\"event_id\":null}\n";
 
         assert_eq!(result.rows.into_encoded_rows(), expected);
     }
