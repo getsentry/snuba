@@ -99,11 +99,6 @@ class Migration(migration.ClickhouseNodeMigration):
 
     def backwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [
-            operations.DropTable(
-                storage_set=StorageSetKey.OUTCOMES,
-                table_name="outcomes_mv_hourly_local_v2",
-                target=operations.OperationTarget.LOCAL,
-            ),
             operations.CreateMaterializedView(
                 storage_set=StorageSetKey.OUTCOMES,
                 view_name="outcomes_mv_hourly_local",
@@ -127,7 +122,7 @@ class Migration(migration.ClickhouseNodeMigration):
             ),
             operations.DropTable(
                 storage_set=StorageSetKey.OUTCOMES,
-                table_name="outcomes_mv_daily_local_v3",
+                table_name="outcomes_mv_hourly_local_v2",
                 target=operations.OperationTarget.LOCAL,
             ),
             operations.CreateMaterializedView(
@@ -149,6 +144,11 @@ class Migration(migration.ClickhouseNodeMigration):
                     FROM outcomes_raw_local
                     GROUP BY org_id, project_id, key_id, timestamp, outcome, reason, category
                 """,
+                target=operations.OperationTarget.LOCAL,
+            ),
+            operations.DropTable(
+                storage_set=StorageSetKey.OUTCOMES,
+                table_name="outcomes_mv_daily_local_v3",
                 target=operations.OperationTarget.LOCAL,
             ),
         ]
