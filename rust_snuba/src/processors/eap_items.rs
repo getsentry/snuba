@@ -262,7 +262,7 @@ struct EAPItem {
     item_id: u128,
 
     /// Per-item-type primary name attribute, promoted to a dedicated column.
-    /// Sourced from `sentry.op` for spans and `sentry.name` for metrics.
+    /// Sourced from `sentry.op` for spans and `sentry.metric.name` for metrics.
     indexed_name: String,
 
     #[serde(flatten)]
@@ -285,14 +285,14 @@ impl TryFrom<TraceItem> for EAPItem {
         let timestamp = from.timestamp.context("Expected a timestamp")?;
 
         // Promote the per-item-type primary name attribute into a dedicated
-        // `indexed_name` column: `sentry.op` for spans, `sentry.name` for
-        // metrics. Read it before `from.attributes` is consumed by the loop
+        // `indexed_name` column: `sentry.op` for spans, `sentry.metric.name`
+        // for metrics. Read it before `from.attributes` is consumed by the loop
         // below; the attribute is also still written to the attribute maps.
         let item_type =
             TraceItemType::try_from(from.item_type).unwrap_or(TraceItemType::Unspecified);
         let indexed_name = match item_type {
             TraceItemType::Span => Some("sentry.op"),
-            TraceItemType::Metric => Some("sentry.name"),
+            TraceItemType::Metric => Some("sentry.metric.name"),
             _ => None,
         }
         .and_then(|key| from.attributes.get(key))
@@ -1258,12 +1258,12 @@ mod tests {
     }
 
     #[test]
-    fn test_indexed_name_from_sentry_name_for_metrics() {
+    fn test_indexed_name_from_sentry_metric_name_for_metrics() {
         let item_id = Uuid::new_v4();
         let mut trace_item = generate_trace_item(item_id);
         trace_item.item_type = TraceItemType::Metric.into();
         trace_item.attributes.insert(
-            "sentry.name".to_string(),
+            "sentry.metric.name".to_string(),
             AnyValue {
                 value: Some(Value::StringValue("my.metric".to_string())),
             },
