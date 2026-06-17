@@ -21,6 +21,8 @@ schema:
       { name: sampling_factor, type: Float, args: { size: 64 } },
       { name: retention_days, type: UInt, args: { size: 16 } },
 
+      { name: indexed_name, type: String },
+
       { name: attributes_bool, type: Map, args: { key: { type: String }, value: { type: Bool } } },
       { name: attributes_int, type: Map, args: { key: { type: String }, value: { type: Int, args: { size: 64 } } } },
 
