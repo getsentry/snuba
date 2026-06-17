@@ -373,7 +373,9 @@ jobs:
       MATRIX_INSTANCE_TOTAL: 16
       TEST_GROUP_STRATEGY: ROUND_ROBIN
       # Run pytest with xdist inside each shard to use the idle cores; mirrors getsentry/sentry backend CI.
+      # Each worker gets its own snuba container + ClickHouse DB so tests don't collide on shared state (max 7 workers).
       XDIST_WORKERS: 2
+      XDIST_PER_WORKER_SNUBA: '1'
 
     steps:
       - name: Checkout code
@@ -431,6 +433,10 @@ jobs:
             --network devservices \
             ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}
           docker exec snuba-snuba-1 snuba migrations migrate --force
+
+      - name: Bootstrap per-worker Snuba instances
+        # Replaces the single shared snuba with one container + ClickHouse DB per xdist worker so they don't collide.
+        run: python3 sentry/.github/workflows/scripts/bootstrap-snuba.py
 
       - name: Run snuba tests
         if: needs.files-changed.outputs.api_changes == 'false'
