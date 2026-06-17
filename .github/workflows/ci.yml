@@ -374,7 +374,7 @@ jobs:
       TEST_GROUP_STRATEGY: ROUND_ROBIN
       # Run pytest with xdist inside each shard to use the idle cores; mirrors getsentry/sentry backend CI.
       # Each worker gets its own snuba container + ClickHouse DB so tests don't collide on shared state (max 7 workers).
-      XDIST_WORKERS: 2
+      XDIST_WORKERS: 3
       XDIST_PER_WORKER_SNUBA: '1'
 
     steps:
