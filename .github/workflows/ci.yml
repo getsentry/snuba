@@ -372,6 +372,8 @@ jobs:
       # XXX: `MATRIX_INSTANCE_TOTAL` must be hardcoded to the length of `strategy.matrix.instance`.
       MATRIX_INSTANCE_TOTAL: 16
       TEST_GROUP_STRATEGY: ROUND_ROBIN
+      # Run pytest with xdist inside each shard to use the idle cores; mirrors getsentry/sentry backend CI.
+      XDIST_WORKERS: 2
 
     steps:
       - name: Checkout code
@@ -434,9 +436,14 @@ jobs:
         if: needs.files-changed.outputs.api_changes == 'false'
         working-directory: sentry
         run: |
-          pytest -k 'not __In' tests \
+          # Only these dirs carry the `snuba_ci` marker; collecting all of tests/ just to find them is wasteful.
+          pytest -k 'not __In' \
+            tests/sentry/snuba \
+            tests/sentry/workflow_engine/endpoints \
+            tests/snuba/rules/conditions \
             -m snuba_ci \
-            -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
+            -n "$XDIST_WORKERS" --dist=loadfile --reuse-db \
+            -vv
 
       - name: Run full tests
         if: needs.files-changed.outputs.api_changes == 'true'
@@ -457,12 +464,21 @@ jobs:
               tests/sentry/api/endpoints/test_organization_traces.py \
               tests/sentry/api/endpoints/test_organization_spans_fields.py \
               tests/sentry/sentry_metrics/querying \
-              -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
+              -n "$XDIST_WORKERS" --dist=loadfile --reuse-db \
+              -vv
 
       - name: Run CI module tests
         if: needs.files-changed.outputs.api_changes == 'true'
         working-directory: sentry
-        run: pytest -k 'not __In' tests -vv -m snuba_ci
+        run: |
+          # Only these dirs carry the `snuba_ci` marker; collecting all of tests/ just to find them is wasteful.
+          pytest -k 'not __In' \
+            tests/sentry/snuba \
+            tests/sentry/workflow_engine/endpoints \
+            tests/snuba/rules/conditions \
+            -m snuba_ci \
+            -n "$XDIST_WORKERS" --dist=loadfile --reuse-db \
+            -vv
 
   clickhouse-versions:
     needs: [linting, snuba-image, docker-deps]
