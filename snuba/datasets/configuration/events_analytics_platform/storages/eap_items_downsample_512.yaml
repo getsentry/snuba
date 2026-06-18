@@ -22,6 +22,8 @@ schema:
       { name: retention_days, type: UInt, args: { size: 16 } },
 
       { name: indexed_name, type: String },
+      { name: conversation_id, type: UUID },
+      { name: session_id, type: UUID },
 
       { name: attributes_bool, type: Map, args: { key: { type: String }, value: { type: Bool } } },
       { name: attributes_int, type: Map, args: { key: { type: String }, value: { type: Int, args: { size: 64 } } } },
@@ -115,7 +117,7 @@ query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: UUIDColumnProcessor
     args:
-      columns: [trace_id]
+      columns: [trace_id, conversation_id, session_id]
   - processor: HexIntColumnProcessor
     args:
       columns: [item_id]
