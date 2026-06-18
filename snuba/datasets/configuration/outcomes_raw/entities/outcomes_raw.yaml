@@ -15,8 +15,7 @@ schema:
     { name: outcome, type: UInt, args: { size: 8 } },
     { name: reason, type: String, args: { schema_modifiers: [nullable] } },
     { name: event_id, type: UUID, args: { schema_modifiers: [nullable] } },
-    { name: quantity, type: UInt, args: { size: 32 } },
-    { name: quantity64, type: UInt, args: { size: 64 } },
+    { name: quantity, type: UInt, args: { size: 64 } },
     { name: category, type: UInt, args: { size: 8 } },
   ]
 
@@ -24,10 +23,17 @@ required_time_column: timestamp
 storages:
   - storage: outcomes_raw
     is_writable: false
+    translation_mappers:
+      columns:
+        - mapper: ColumnToColumn
+          args:
+            from_table_name:
+            from_col_name: quantity
+            to_table_name:
+            to_col_name: quantity64
 storage_selector:
   selector: DefaultQueryStorageSelector
 query_processors:
-  - processor: Quantity64Processor
   - processor: BasicFunctionsProcessor
   - processor: TimeSeriesProcessor
     args:
