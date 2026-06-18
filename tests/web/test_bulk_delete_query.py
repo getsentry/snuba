@@ -11,6 +11,7 @@ from confluent_kafka.admin import AdminClient
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba import settings
+from snuba.clusters.cluster import UndefinedClickhouseCluster
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.lw_deletions.types import AttributeConditions
@@ -354,9 +355,11 @@ def test_count_storage_key_mapping_without_readonly_cluster() -> None:
     """When the read-only cluster is not configured in this environment, the
     mapping is empty so counts fall back to the read/write table rather than
     failing against a missing cluster."""
-    from snuba.clusters.cluster import UndefinedClickhouseCluster
     from snuba.web.bulk_delete_query import _count_storage_key_by_local_table
 
+    # UndefinedClickhouseCluster is imported at module scope (before pytest
+    # collection) so its class identity matches bulk_delete_query's `except`
+    # binding even when another test reloads snuba.clusters.cluster.
     storage = get_writable_storage(StorageKey("eap_items"))
     with patch(
         "snuba.web.bulk_delete_query.get_cluster",
