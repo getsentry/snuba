@@ -126,6 +126,19 @@ class ClickhousePool(ABC):
     def close(self) -> None:
         raise NotImplementedError
 
+    @abstractmethod
+    def get_reader(
+        self,
+        cache_partition_id: Optional[str],
+        query_settings_prefix: Optional[str],
+    ) -> Reader:
+        """
+        Build the reader that pairs with this driver, wrapping this pool. Each
+        concrete pool returns its matching reader, so the reader and the pool
+        can never disagree about the driver.
+        """
+        raise NotImplementedError
+
 
 class ClickhouseNativePool(ClickhousePool):
     def __init__(
@@ -413,6 +426,17 @@ class ClickhouseNativePool(ClickhousePool):
                     conn.disconnect()
         except queue.Empty:
             pass
+
+    def get_reader(
+        self,
+        cache_partition_id: Optional[str],
+        query_settings_prefix: Optional[str],
+    ) -> Reader:
+        return NativeDriverReader(
+            cache_partition_id=cache_partition_id,
+            client=self,
+            query_settings_prefix=query_settings_prefix,
+        )
 
 
 def transform_date(value: date) -> str:
