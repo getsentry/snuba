@@ -165,6 +165,22 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
             formatted = (c.accept(self) for c in get_first_level_or_conditions(exp))
             return f"({' OR '.join(formatted)})"
 
+        elif exp.function_name == "mapContains" and len(exp.parameters) == 2:
+            # `mapContains` is an alias that ClickHouse renamed to `mapContainsKey`
+            # between 25.3 and 25.8. On a mixed-version cluster the analyzer
+            # canonicalizes the alias differently on each node, so a distributed
+            # read can't match the remote block's column name to the initiator's
+            # expected name and fails with "Code: 10 ... Not found column ... in
+            # block" (or "mapContainsKey does not exist" on 25.3). `has(mapKeys(...))`
+            # is semantically identical but built only from primary (non-alias)
+            # functions that are present and stably named in every supported
+            # version, so the column name is identical on every node. Verified
+            # against 25.3.8 and 25.8 distributed reads in both directions.
+            col, key = exp.parameters
+            return self._alias(
+                f"has(mapKeys({col.accept(self)}), {key.accept(self)})", exp.alias
+            )
+
         ret = f"{escape_identifier(exp.function_name)}({self.__visit_params(exp.parameters)})"
         return self._alias(ret, exp.alias)
 
