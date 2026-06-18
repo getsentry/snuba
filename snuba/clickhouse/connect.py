@@ -13,7 +13,12 @@ from clickhouse_connect.driver.httputil import get_pool_manager
 
 from snuba import environment, settings, state
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.clickhouse.native import ClickhouseProfile, ClickhouseResult, Params
+from snuba.clickhouse.native import (
+    ClickhousePool,
+    ClickhouseProfile,
+    ClickhouseResult,
+    Params,
+)
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger("snuba.clickhouse.connect")
@@ -32,13 +37,15 @@ MAX_SEND_RECEIVE_TIMEOUT_SECONDS = 30
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
 
 
-class ClickhouseConnectPool(object):
+class ClickhouseConnectPool(ClickhousePool):
     """
     HTTP based ClickHouse client backed by ``clickhouse-connect``.
 
-    It exposes the same ``execute`` / ``execute_robust`` interface as
-    :class:`snuba.clickhouse.native.ClickhousePool` so it can be used as a
-    drop-in replacement behind a runtime config flag.
+    It subclasses :class:`snuba.clickhouse.native.ClickhousePool` and overrides
+    the ``execute`` / ``execute_robust`` / ``close`` interface so it is a true
+    drop-in replacement. The decision of which pool to instantiate is made by
+    the connection cache (see :mod:`snuba.clusters.cluster`), one level above
+    the individual drivers.
 
     Unlike the native pool, this class does not maintain its own queue of
     connections: ``clickhouse-connect`` manages an HTTP connection pool (via
@@ -61,8 +68,11 @@ class ClickhouseConnectPool(object):
         max_pool_size: int = settings.CLICKHOUSE_MAX_POOL_SIZE,
         client_settings: Mapping[str, Any] = {},
     ) -> None:
+        # Intentionally does not call ClickhousePool.__init__: the native queue
+        # of connections is not used here. ``port`` mirrors the base class
+        # attribute (it holds the HTTP port for this driver).
         self.host = host
-        self.http_port = http_port
+        self.port = http_port
         self.user = user
         self.password = password
         self.database = database
@@ -100,7 +110,7 @@ class ClickhouseConnectPool(object):
                     )
                     self.__client = clickhouse_connect.get_client(
                         host=self.host,
-                        port=self.http_port,
+                        port=self.port,
                         username=self.user,
                         password=self.password,
                         database=self.database,
@@ -255,7 +265,7 @@ class ClickhouseConnectPool(object):
                 "connection_error",
                 tags={
                     "host": self.host,
-                    "port": str(self.http_port),
+                    "port": str(self.port),
                     "user": self.user,
                     "database": self.database,
                 },

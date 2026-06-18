@@ -89,10 +89,11 @@ def test_too_many_simultaneous_queries_not_retried() -> None:
     client.query.side_effect = DatabaseError("too many", code=TOO_MANY_SIMULTANEOUS_QUERIES)
 
     pool = _make_pool(client)
-    with pytest.raises(ClickhouseError) as exc_info:
+    try:
         pool.execute("SELECT 1")
-
-    assert exc_info.value.code == TOO_MANY_SIMULTANEOUS_QUERIES
+        raise AssertionError("expected a ClickhouseError to be raised")
+    except ClickhouseError as error:
+        assert error.code == TOO_MANY_SIMULTANEOUS_QUERIES
     # No retry on top of clickhouse-connect's own handling.
     assert client.query.call_count == 1
 
