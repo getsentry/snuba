@@ -363,6 +363,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         self,
         client_settings: ClickhouseClientSettings,
         node: ClickhouseNode,
+        use_connect: Optional[bool] = None,
     ) -> ClickhousePool:
         """
         Get a Clickhouse connection using the client settings provided. Reuse any
@@ -374,7 +375,13 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         clickhouse-connect (HTTP) pool is returned, otherwise the native pool.
         The choice applies to every caller (reads, migrations, replacer,
         optimize, ...), not just the read path.
+
+        ``use_connect`` lets a caller resolve the driver once and reuse the same
+        value (e.g. so the reader and its pool can't disagree if the config
+        flips mid-call); when omitted the runtime config is read here.
         """
+        if use_connect is None:
+            use_connect = use_clickhouse_connect_driver()
         return self.__connection_cache.get_node_connection(
             client_settings,
             node,
@@ -385,16 +392,19 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             self.__ca_certs,
             self.__verify,
             http_port=self.__http_port,
-            use_connect=use_clickhouse_connect_driver(),
+            use_connect=use_connect,
         )
 
-    def __build_reader(self, cache_partition_id: Optional[str], client: ClickhousePool) -> Reader:
+    def __build_reader(
+        self, cache_partition_id: Optional[str], client: ClickhousePool, use_connect: bool
+    ) -> Reader:
         """
-        Wrap a connection in the reader matching the driver currently selected
-        by the runtime config. Both reader classes adapt the same
-        ClickhouseResult, so they differ only in which pool they wrap.
+        Wrap a connection in the reader matching the selected driver. Both reader
+        classes adapt the same ClickhouseResult, so they differ only in which
+        pool they wrap. ``use_connect`` is resolved once by the caller so the
+        reader and the pool always agree.
         """
-        if use_clickhouse_connect_driver():
+        if use_connect:
             # Imported here so the native code path never imports
             # clickhouse-connect.
             from snuba.clickhouse.connect import HTTPDriverReader
@@ -418,11 +428,16 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         # the driver can still switch at runtime.
         if self.__delete_local_node is None:
             self.__delete_local_node = self.get_local_nodes()[0]
+        # Resolve the driver once so the reader and its pool always match.
+        use_connect = use_clickhouse_connect_driver()
         return self.__build_reader(
             cache_partition_id=f"{self.__cache_partition_id}_deletes",
             client=self.get_node_connection(
-                ClickhouseClientSettings.DELETE, self.__delete_local_node
+                ClickhouseClientSettings.DELETE,
+                self.__delete_local_node,
+                use_connect=use_connect,
             ),
+            use_connect=use_connect,
         )
 
     def get_reader(self) -> Reader:
@@ -432,9 +447,14 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         runtime config. The config is read on each call, so the driver can be
         switched at runtime.
         """
+        # Resolve the driver once so the reader and its pool always match.
+        use_connect = use_clickhouse_connect_driver()
         return self.__build_reader(
             cache_partition_id=self.__cache_partition_id,
-            client=self.get_query_connection(ClickhouseClientSettings.QUERY),
+            client=self.get_node_connection(
+                ClickhouseClientSettings.QUERY, self.__query_node, use_connect=use_connect
+            ),
+            use_connect=use_connect,
         )
 
     def get_batch_writer(
