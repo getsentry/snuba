@@ -337,6 +337,9 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         self.__connection_cache = connection_cache
         self.__cache_partition_id = cache_partition_id
         self.__query_settings_prefix = query_settings_prefix
+        # The local node used by the deleter is static cluster topology; cache
+        # it so get_deleter() does not re-run a system.clusters lookup per call.
+        self.__delete_local_node: Optional[ClickhouseNode] = None
 
     def __str__(self) -> str:
         return str(self.__query_node)
@@ -409,12 +412,17 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         )
 
     def get_deleter(self) -> Reader:
-        # we need the connection to the storage nodes, not
-        # the distributed nodes
-        local_node = self.get_local_nodes()[0]
+        # we need the connection to the storage nodes, not the distributed
+        # nodes. The node lookup is cached (it can run a system.clusters query
+        # on multi-node clusters) while the reader/pool are resolved per call so
+        # the driver can still switch at runtime.
+        if self.__delete_local_node is None:
+            self.__delete_local_node = self.get_local_nodes()[0]
         return self.__build_reader(
             cache_partition_id=f"{self.__cache_partition_id}_deletes",
-            client=self.get_node_connection(ClickhouseClientSettings.DELETE, local_node),
+            client=self.get_node_connection(
+                ClickhouseClientSettings.DELETE, self.__delete_local_node
+            ),
         )
 
     def get_reader(self) -> Reader:
