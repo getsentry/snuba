@@ -179,9 +179,7 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
             formatted = (c.accept(self) for c in get_first_level_or_conditions(exp))
             return f"({' OR '.join(formatted)})"
 
-        function_name = _CANONICAL_FUNCTION_NAMES.get(
-            exp.function_name, exp.function_name
-        )
+        function_name = _CANONICAL_FUNCTION_NAMES.get(exp.function_name, exp.function_name)
         ret = f"{escape_identifier(function_name)}({self.__visit_params(exp.parameters)})"
         return self._alias(ret, exp.alias)
 
