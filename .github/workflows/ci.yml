@@ -604,8 +604,10 @@ jobs:
           target: application-distroless
           load: true
           tags: snuba-distroless:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Read the shared snuba-ci registry buildcache instead of type=gha. The old type=gha,mode=max was
+          # ~7.7GB and thrashed the 10GB Actions cache (evicting the venv cache); distroless shares the heavy
+          # Rust/base stages with the snuba-ci image, so this also cuts the build from ~14m to ~1m.
+          cache-from: type=registry,ref=ghcr.io/getsentry/snuba-ci:buildcache
 
       - name: Verify --help works
         run: docker run --rm snuba-distroless:test --help
