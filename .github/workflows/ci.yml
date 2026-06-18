@@ -572,7 +572,6 @@ jobs:
           target: application-distroless
           load: true
           tags: snuba-distroless:test
-          # Read-only (no cache-to, so no write penalty); shares the snuba-ci buildcache instead of the old type=gha.
           cache-from: type=registry,ref=ghcr.io/getsentry/snuba-ci:buildcache
 
       - name: Verify --help works
