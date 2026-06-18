@@ -1,6 +1,7 @@
 from copy import deepcopy
 
 import pytest
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
@@ -19,9 +20,11 @@ from snuba.query.processors.logical.indexed_name_optimizer import (
 )
 from snuba.query.query_settings import HTTPQuerySettings
 
-SPAN = 1
-METRIC = 8
-LOG = 2
+# Use the protobuf enum values directly so the tests stay in sync with the
+# production dependency the optimizer keys off of.
+SPAN = TraceItemType.TRACE_ITEM_TYPE_SPAN
+METRIC = TraceItemType.TRACE_ITEM_TYPE_METRIC
+LOG = TraceItemType.TRACE_ITEM_TYPE_LOG
 
 
 def _attr_str(key: str, alias: str | None = None) -> SubscriptableReference:
