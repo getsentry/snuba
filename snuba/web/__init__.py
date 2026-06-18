@@ -1,4 +1,3 @@
-# TEMP(xdist-experiment): forces api_changes==true so the full sentry-test path runs in CI for timing; remove before merge.
 from __future__ import annotations
 
 from dataclasses import dataclass
