@@ -78,7 +78,7 @@ def optimize(
 ) -> None:
     from datetime import datetime
 
-    from snuba.clickhouse.native import ClickhousePool
+    from snuba.clickhouse.native import ClickhouseNativePool, ClickhousePool
     from snuba.clickhouse.optimize.optimize import logger
 
     setup_logging(log_level)
@@ -100,8 +100,9 @@ def optimize(
     # passing this information won't be necessary, and running this command once
     # will ensure that optimize is performed on all of the individual nodes for
     # that cluster.
+    connection: ClickhousePool
     if clickhouse_host and clickhouse_port:
-        connection = ClickhousePool(
+        connection = ClickhouseNativePool(
             clickhouse_host,
             clickhouse_port,
             clickhouse_user,

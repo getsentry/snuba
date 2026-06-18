@@ -219,10 +219,12 @@ def test_pool_size_runtime_override() -> None:
     assert kwargs["maxsize"] == 42
 
 
-def test_http_driver_reader_is_a_native_driver_reader() -> None:
-    # HTTPDriverReader reuses the native reader's result handling; it just
-    # exists as its own type so the driver in use is explicit.
+def test_http_driver_reader_is_a_clickhouse_reader_sibling() -> None:
+    # HTTPDriverReader and NativeDriverReader share the ClickhouseReader base
+    # but are siblings: HTTPDriverReader is NOT a NativeDriverReader.
+    from snuba.clickhouse.native import ClickhouseReader
+
     pool = _make_pool(mock.Mock())
     reader = HTTPDriverReader(cache_partition_id=None, client=pool, query_settings_prefix=None)
-    assert isinstance(reader, NativeDriverReader)
-    assert isinstance(reader, HTTPDriverReader)
+    assert isinstance(reader, ClickhouseReader)
+    assert not isinstance(reader, NativeDriverReader)

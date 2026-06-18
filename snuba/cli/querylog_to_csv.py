@@ -7,7 +7,7 @@ import structlog
 
 from snuba import settings
 from snuba.admin.notifications.slack.client import SlackClient
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.native import ClickhouseNativePool
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.environment import setup_logging, setup_sentry
 
@@ -160,7 +160,7 @@ def querylog_to_csv(
     query = get_query_results(event_type, [database], tables, start_time, end_time)
 
     (clickhouse_user, clickhouse_password) = get_credentials()
-    connection = ClickhousePool(
+    connection = ClickhouseNativePool(
         host=clickhouse_host,
         port=clickhouse_port,
         user=clickhouse_user,

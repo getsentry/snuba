@@ -1,12 +1,12 @@
 import pytest
 
-from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
+from snuba.clickhouse.native import ClickhouseNativePool, NativeDriverReader
 from snuba.web.db_query import _get_cache_partition
 
 
 @pytest.mark.redis_db
 def test_cache_partition() -> None:
-    pool = ClickhousePool("127.0.0.1", 9000, "", "", "")
+    pool = ClickhouseNativePool("127.0.0.1", 9000, "", "", "")
     reader1 = NativeDriverReader(None, pool, None)
     reader2 = NativeDriverReader(None, pool, None)
 

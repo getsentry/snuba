@@ -6,7 +6,7 @@ from typing import MutableMapping
 from sql_metadata import Parser, QueryType  # type: ignore
 
 from snuba import settings
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.native import ClickhouseNativePool, ClickhousePool
 from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.storages.factory import get_storage
@@ -96,7 +96,7 @@ def _build_validated_pool(
     # directly from this module. The regression test
     # test_no_direct_clickhouse_pool_construction_in_admin enforces this.
     _validate_node(clickhouse_host, clickhouse_port, cluster, storage_name)
-    return ClickhousePool(
+    return ClickhouseNativePool(
         clickhouse_host,
         clickhouse_port,
         username,

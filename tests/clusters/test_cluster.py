@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 
 from snuba import settings
-from snuba.clickhouse.native import ClickhousePool, ClickhouseResult
+from snuba.clickhouse.native import ClickhouseNativePool, ClickhouseResult
 from snuba.clusters import cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages.factory import get_storage
@@ -177,7 +177,7 @@ def test_disabled_cluster() -> None:
 @pytest.mark.clickhouse_db
 def test_get_local_nodes() -> None:
     importlib.reload(cluster)
-    with patch.object(ClickhousePool, "execute") as execute:
+    with patch.object(ClickhouseNativePool, "execute") as execute:
         execute.return_value = ClickhouseResult([("host_1", 9000, 1, 1), ("host_2", 9000, 2, 1)])
 
         local_cluster = get_storage(StorageKey("errors")).get_cluster()

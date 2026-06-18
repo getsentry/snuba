@@ -316,7 +316,7 @@ def test_clusterless_rejects_unvalidated_host(
             "_validate_node",
             side_effect=InvalidNodeError("host not in cluster"),
         ) as mock_validate,
-        patch.object(common, "ClickhousePool") as mock_pool,
+        patch.object(common, "ClickhouseNativePool") as mock_pool,
     ):
         # Clear any cached connection for this storage so the cache lookup
         # can't short-circuit validation.
@@ -416,7 +416,7 @@ def _find_clickhouse_pool_calls(tree: ast.AST) -> list[tuple[ast.Call, list[str]
                 if isinstance(func, ast.Attribute)
                 else None
             )
-            if name == "ClickhousePool":
+            if name == "ClickhouseNativePool":
                 results.append((node, list(self.scope)))
             self.generic_visit(node)
 

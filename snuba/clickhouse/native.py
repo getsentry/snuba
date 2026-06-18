@@ -4,6 +4,7 @@ import logging
 import queue
 import re
 import time
+from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -72,7 +73,61 @@ def capture_logging() -> Generator[StringIO, None, None]:
     buffer.close()
 
 
-class ClickhousePool(object):
+class ClickhousePool(ABC):
+    """
+    Abstract base for a pool of ClickHouse connections.
+
+    Concrete implementations:
+      - :class:`ClickhouseNativePool` — native protocol via clickhouse-driver
+      - ``ClickhouseConnectPool`` (snuba.clickhouse.connect) — HTTP protocol via
+        clickhouse-connect
+
+    Callers receive connections typed as ``ClickhousePool`` and only rely on the
+    methods/attributes declared here, so the two drivers are interchangeable.
+    """
+
+    host: str
+    port: int
+    user: str
+    password: str
+    database: str
+
+    @abstractmethod
+    def execute(
+        self,
+        query: str,
+        params: Params = None,
+        with_column_types: bool = False,
+        query_id: Optional[str] = None,
+        settings: Optional[Mapping[str, Any]] = None,
+        types_check: bool = False,
+        columnar: bool = False,
+        capture_trace: bool = False,
+        retryable: bool = True,
+    ) -> ClickhouseResult:
+        raise NotImplementedError
+
+    @abstractmethod
+    def execute_robust(
+        self,
+        query: str,
+        params: Params = None,
+        with_column_types: bool = False,
+        query_id: Optional[str] = None,
+        settings: Optional[Mapping[str, Any]] = None,
+        types_check: bool = False,
+        columnar: bool = False,
+        capture_trace: bool = False,
+        retryable: bool = True,
+    ) -> ClickhouseResult:
+        raise NotImplementedError
+
+    @abstractmethod
+    def close(self) -> None:
+        raise NotImplementedError
+
+
+class ClickhouseNativePool(ClickhousePool):
     def __init__(
         self,
         host: str,
@@ -400,7 +455,14 @@ transform_column_types = build_result_transformer(
 )
 
 
-class NativeDriverReader(Reader):
+class ClickhouseReader(Reader):
+    """
+    Shared base for the ClickHouse readers. It adapts a :class:`ClickhouseResult`
+    (returned identically by both drivers) into the JSON-flavored ``Result``.
+    The concrete :class:`NativeDriverReader` and ``HTTPDriverReader`` differ only
+    in which pool they wrap.
+    """
+
     def __init__(
         self,
         cache_partition_id: Optional[str],
@@ -481,3 +543,7 @@ class NativeDriverReader(Reader):
             ),
             with_totals=with_totals,
         )
+
+
+class NativeDriverReader(ClickhouseReader):
+    """Reader that executes queries over the native protocol (ClickhouseNativePool)."""

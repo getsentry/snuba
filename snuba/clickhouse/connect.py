@@ -16,8 +16,8 @@ from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.native import (
     ClickhousePool,
     ClickhouseProfile,
+    ClickhouseReader,
     ClickhouseResult,
-    NativeDriverReader,
     Params,
 )
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -73,9 +73,9 @@ class ClickhouseConnectPool(ClickhousePool):
         max_pool_size: int = settings.CLICKHOUSE_MAX_POOL_SIZE,
         client_settings: Mapping[str, Any] = {},
     ) -> None:
-        # Intentionally does not call ClickhousePool.__init__: the native queue
-        # of connections is not used here. ``port`` mirrors the base class
-        # attribute (it holds the default HTTP port for this driver).
+        # No native connection queue here; clickhouse-connect manages its own
+        # HTTP pool. ``port`` is the abstract base attribute (it holds the
+        # default HTTP port for this driver).
         self.host = host
         self.port = DEFAULT_CLICKHOUSE_HTTP_PORT
         self.user = user
@@ -240,8 +240,8 @@ class ClickhouseConnectPool(ClickhousePool):
         """
         Execute a clickhouse query.
 
-        Unlike :class:`snuba.clickhouse.native.ClickhousePool`, this method
-        does not implement any retry logic of its own. Retries (stale
+        Unlike :class:`snuba.clickhouse.native.ClickhouseNativePool`, this
+        method does not implement any retry logic of its own. Retries (stale
         keep-alive sockets, transport errors and HTTP 429/503/504 responses)
         are handled internally by clickhouse-connect. Notably this means the
         native pool's ``TOO_MANY_SIMULTANEOUS_QUERIES`` backoff is *not*
@@ -317,13 +317,12 @@ class ClickhouseConnectPool(ClickhousePool):
             self.__client = None
 
 
-class HTTPDriverReader(NativeDriverReader):
+class HTTPDriverReader(ClickhouseReader):
     """
     Reader that executes queries over HTTP via :class:`ClickhouseConnectPool`.
 
-    Both drivers return the same :class:`ClickhouseResult`, so the result
-    handling is identical to :class:`NativeDriverReader`. This class exists as
-    its own type so the driver in use is explicit and so the cluster can pick
-    between the two readers based on the ``use_clickhouse_connect_driver``
-    runtime config.
+    It shares all result handling with :class:`NativeDriverReader` through the
+    common :class:`ClickhouseReader` base; it exists as its own type so the
+    driver in use is explicit and so the cluster can pick between the two
+    readers based on the ``use_clickhouse_connect_driver`` runtime config.
     """

@@ -69,7 +69,7 @@ def cleanup(
     setup_sentry()
 
     from snuba.cleanup import logger, run_cleanup
-    from snuba.clickhouse.native import ClickhousePool
+    from snuba.clickhouse.native import ClickhouseNativePool, ClickhousePool
 
     storage = get_writable_storage(StorageKey(storage_name))
 
@@ -81,8 +81,9 @@ def cleanup(
     cluster = storage.get_cluster()
     database = cluster.get_database()
 
+    connection: ClickhousePool
     if clickhouse_host and clickhouse_port:
-        connection = ClickhousePool(
+        connection = ClickhouseNativePool(
             clickhouse_host,
             clickhouse_port,
             clickhouse_user,

@@ -20,7 +20,11 @@ import structlog
 
 from snuba import settings, state
 from snuba.clickhouse.http import HTTPBatchWriter, InsertStatement, JSONRow
-from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
+from snuba.clickhouse.native import (
+    ClickhouseNativePool,
+    ClickhousePool,
+    NativeDriverReader,
+)
 from snuba.clusters.storage_sets import (
     DEV_STORAGE_SETS,
     StorageSetKey,
@@ -227,7 +231,7 @@ class ConnectionCache:
                 "native",
             )
             if cache_key not in self.__cache:
-                self.__cache[cache_key] = ClickhousePool(
+                self.__cache[cache_key] = ClickhouseNativePool(
                     node.host_name,
                     node.port,
                     user,
