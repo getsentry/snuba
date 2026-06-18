@@ -627,6 +627,7 @@ where
         self.work_tx = None;
         let deadline = timeout.map(Deadline::new);
 
+        let mut timed_out = false;
         loop {
             let commit_request = self.next_step.poll()?;
             self.commit_request_carried_over =
@@ -639,15 +640,32 @@ where
             }
             if let Some(deadline) = &deadline {
                 if deadline.has_elapsed() {
-                    tracing::warn!(
-                        "inserter sink join timed out; partial batch left unacked (will replay)"
-                    );
+                    timed_out = true;
                     break;
                 }
             }
             // Let the actor make progress on its runtime threads.
             std::thread::sleep(Duration::from_millis(1));
         }
+
+        if timed_out {
+            // Stop the actor so it can't durably flush a window whose offsets we
+            // can no longer observe within the deadline: aborting cancels an
+            // in-flight INSERT that hasn't landed (→ that window simply replays)
+            // rather than leaving it running to commit rows we'll never ack. A
+            // flush that already landed server-side replays as a duplicate —
+            // the same at-least-once shutdown exposure the old writer had, to be
+            // closed by the (deferred) insert_deduplication_token.
+            tracing::warn!(
+                "inserter sink join timed out; aborting actor, partial batch will replay"
+            );
+            if let Some(handle) = self.actor.take() {
+                handle.abort();
+            }
+        }
+        // Final drain: emit any `Ready` the actor produced right around the
+        // deadline so its offsets are committed instead of replaying.
+        self.drain_outcomes()?;
 
         // Pass the *remaining* time, not the original timeout — the wait loop
         // above may already have consumed part of it, so reusing `timeout` here
