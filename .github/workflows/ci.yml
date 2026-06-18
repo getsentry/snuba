@@ -277,15 +277,20 @@ jobs:
     timeout-minutes: 40
     strategy:
       matrix:
-        snuba_settings:
-          [
-            "test",
-            "test_rust",
-            "test_distributed",
-            "test_distributed_migrations",
-            "test_migrations",
-            "test_migrations_distributed"
-          ]
+        # test_distributed is the heaviest entry (full suite against distributed ClickHouse),
+        # so we split it across two runners by a stable hash of the test node id (see conftest.py).
+        include:
+          - snuba_settings: test
+          - snuba_settings: test_rust
+          - snuba_settings: test_distributed
+            shard: 0
+            shard_total: 2
+          - snuba_settings: test_distributed
+            shard: 1
+            shard_total: 2
+          - snuba_settings: test_distributed_migrations
+          - snuba_settings: test_migrations
+          - snuba_settings: test_migrations_distributed
     steps:
       - name: Checkout code
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -335,8 +340,11 @@ jobs:
         if: ${{ matrix.snuba_settings == 'test_rust' }}
 
       - name: Docker Snuba tests
+        env:
+          SNUBA_TEST_SHARD: ${{ matrix.shard || 0 }}
+          SNUBA_TEST_SHARD_TOTAL: ${{ matrix.shard_total || 1 }}
         run: |
-          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=${{ matrix.snuba_settings }} docker compose -f docker-compose.gcb.yml run --rm snuba-test
+          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=${{ matrix.snuba_settings }} docker compose -f docker-compose.gcb.yml run --rm -e SNUBA_TEST_SHARD -e SNUBA_TEST_SHARD_TOTAL snuba-test
         if: ${{ matrix.snuba_settings == 'test' || matrix.snuba_settings  == 'test_distributed' }}
 
       - name: Docker Snuba Migrations tests

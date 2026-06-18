@@ -1,4 +1,6 @@
+import hashlib
 import json
+import os
 import traceback
 from typing import (
     Any,
@@ -87,7 +89,24 @@ def create_databases() -> None:
             connection.execute(f"CREATE DATABASE {database_name};")
 
 
-def pytest_collection_modifyitems(items: Sequence[Any]) -> None:
+def pytest_collection_modifyitems(config: pytest.Config, items: List[Any]) -> None:
+    # Optional CI sharding: split tests across N runners by a stable hash of the test FILE.
+    # We shard by file (not node id) so a file's tests stay together and keep their order;
+    # some files have intra-file ordering deps (e.g. test_querylog_audit_log reloads a module
+    # in the first test that later tests rely on). Inert unless SNUBA_TEST_SHARD_TOTAL > 1.
+    # Lives here, not the root conftest, which .dockerignore drops.
+    total = int(os.environ.get("SNUBA_TEST_SHARD_TOTAL", "1"))
+    if total > 1:
+        shard = int(os.environ.get("SNUBA_TEST_SHARD", "0"))
+        selected: List[Any] = []
+        deselected: List[Any] = []
+        for item in items:
+            file_id = item.nodeid.split("::", 1)[0]
+            digest = int(hashlib.md5(file_id.encode()).hexdigest(), 16)
+            (selected if digest % total == shard else deselected).append(item)
+        items[:] = selected
+        config.hook.pytest_deselected(items=deselected)
+
     for item in items:
         if item.get_closest_marker("eap"):
             item.fixturenames.append("eap")
