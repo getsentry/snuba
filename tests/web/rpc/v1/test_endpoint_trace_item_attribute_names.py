@@ -1,3 +1,4 @@
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -13,8 +14,11 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.query.expressions import FunctionCall, Lambda, Literal
 from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
+    UNSEARCHABLE_ATTRIBUTE_KEYS,
     EndpointTraceItemAttributeNames,
+    get_co_occurring_attributes,
 )
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -235,6 +239,68 @@ class TestTraceItemAttributeNames(BaseApiTest):
             ),
         ]
         assert res.attributes == expected
+
+    def test_co_occurring_attrs_excludes_unsearchable_keys_without_in_set(self) -> None:
+        """Regression guard for SNUBA-B82 (mixed-version distributed reads).
+
+        The unsearchable-key exclusion must be emitted as ``NOT has(array(...), x)``,
+        never as ``NOT (x IN (...))``. A constant ``IN`` set makes ClickHouse build a
+        prepared set whose server-generated ``__set_String_<hash>_<hash>`` identifier
+        lands in the (arrayJoin'd) result-block column name. On a mixed-version cluster
+        the two sides hash the set differently, so the column names disagree across
+        ``Remote`` and the distributed read fails with
+        ``Code: 10 ... Not found column ... While executing Remote.``. ``has`` over a
+        constant array keeps the array inline in the column name, which is byte-stable
+        across versions.
+        """
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                request_id=str(uuid.uuid4()),
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
+            ),
+            limit=TOTAL_GENERATED_ATTR_PER_TYPE,
+            type=AttributeKey.Type.TYPE_STRING,
+        )
+
+        query = get_co_occurring_attributes(req).query
+
+        # distinct(arrayJoin(arrayFilter((attr) -> not(has(array(...), attr.2)), ...)))
+        distinct = query.get_selected_columns()[0].expression
+        assert isinstance(distinct, FunctionCall) and distinct.function_name == "distinct"
+        array_join = distinct.parameters[0]
+        assert isinstance(array_join, FunctionCall) and array_join.function_name == "arrayJoin"
+        array_filter = array_join.parameters[0]
+        assert (
+            isinstance(array_filter, FunctionCall) and array_filter.function_name == "arrayFilter"
+        )
+        predicate = array_filter.parameters[0]
+        assert isinstance(predicate, Lambda)
+
+        body = predicate.transformation
+        assert isinstance(body, FunctionCall) and body.function_name == "not"
+        has_call = body.parameters[0]
+        assert isinstance(has_call, FunctionCall) and has_call.function_name == "has"
+
+        keys_array, needle = has_call.parameters
+        assert isinstance(keys_array, FunctionCall) and keys_array.function_name == "array"
+        key_values = [p.value for p in keys_array.parameters if isinstance(p, Literal)]
+        assert key_values == UNSEARCHABLE_ATTRIBUTE_KEYS
+        assert isinstance(needle, FunctionCall) and needle.function_name == "tupleElement"
+
+        # No IN set may be built over the unsearchable keys (that would reintroduce
+        # the __set_* prepared-set identifier and the mixed-version failure).
+        unsearchable = set(UNSEARCHABLE_ATTRIBUTE_KEYS)
+        for exp in query.get_all_expressions():
+            if isinstance(exp, FunctionCall) and exp.function_name == "in":
+                for param in exp.parameters:
+                    if isinstance(param, FunctionCall) and param.function_name == "array":
+                        values = {p.value for p in param.parameters if isinstance(p, Literal)}
+                        assert values != unsearchable
 
     def test_simple_boolean(self) -> None:
         req = TraceItemAttributeNamesRequest(
