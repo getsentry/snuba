@@ -192,19 +192,15 @@ async fn run_inserter_actor(
 
     macro_rules! on_flush_err {
         ($e:expr) => {{
+            // Fail-stop: surface the error and stop the actor immediately. We do
+            // NOT keep consuming/inserting later rows. The strategy fails the
+            // consumer on this error (→ restart + replay from the last committed
+            // offset), so any rows written ahead would be durably inserted but
+            // have their offsets uncommitted, producing duplicates on replay.
+            // The in-flight window never flushed successfully, so it replays
+            // cleanly. This matches the old writer's fail-stop + replay model.
             let _ = out_tx.send(FlushOutcome::Err($e.to_string()));
-            // `write` panics if reused after an error — rebuild, and drop the
-            // doomed window so its offsets are never pushed (→ replay).
-            inserter = make_inserter(
-                &client,
-                &table,
-                &storage_name,
-                max_rows,
-                max_bytes,
-                max_batch_time,
-            );
-            acc = Acc::default();
-            skip_deadline = Deadline::new(max_batch_time);
+            return;
         }};
     }
 
@@ -220,7 +216,6 @@ async fn run_inserter_actor(
                     let start = SystemTime::now();
                     if let Err(e) = inserter.write(&*row).await {
                         on_flush_err!(e);
-                        continue;
                     }
                     match inserter.commit().await {
                         Ok(q) if q.rows > 0 => {
@@ -489,7 +484,10 @@ where
             std::thread::sleep(Duration::from_millis(1));
         }
 
-        let next_commit = self.next_step.join(timeout)?;
+        // Pass the *remaining* time, not the original timeout — the wait loop
+        // above may already have consumed part of it, so reusing `timeout` here
+        // could block for up to 2x the caller's budget.
+        let next_commit = self.next_step.join(deadline.map(|d| d.remaining()))?;
         Ok(merge_commit_request(
             self.commit_request_carried_over.take(),
             next_commit,
