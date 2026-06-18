@@ -174,3 +174,44 @@ def test_send_receive_timeout_default_when_unset() -> None:
 
     _, kwargs = get_client.call_args
     assert kwargs["send_receive_timeout"] == 30
+
+
+def test_pool_size_defaults_to_setting() -> None:
+    import clickhouse_connect
+
+    from snuba import settings
+
+    pool = ClickhouseConnectPool(
+        host="host", http_port=8123, user="test", password="test", database="test"
+    )
+
+    with (
+        mock.patch.object(clickhouse_connect, "get_client"),
+        mock.patch("snuba.clickhouse.connect.get_pool_manager") as get_pool_manager,
+    ):
+        pool._get_client()
+
+    _, kwargs = get_pool_manager.call_args
+    assert kwargs["maxsize"] == settings.CLICKHOUSE_MAX_POOL_SIZE
+
+
+@pytest.mark.redis_db
+def test_pool_size_runtime_override() -> None:
+    import clickhouse_connect
+
+    from snuba import state
+
+    state.set_config("clickhouse_connect_pool_size", 42)
+
+    pool = ClickhouseConnectPool(
+        host="host", http_port=8123, user="test", password="test", database="test"
+    )
+
+    with (
+        mock.patch.object(clickhouse_connect, "get_client"),
+        mock.patch("snuba.clickhouse.connect.get_pool_manager") as get_pool_manager,
+    ):
+        pool._get_client()
+
+    _, kwargs = get_pool_manager.call_args
+    assert kwargs["maxsize"] == 42

@@ -11,7 +11,7 @@ from clickhouse_connect.driver.client import Client
 from clickhouse_connect.driver.exceptions import ClickHouseError, OperationalError
 from clickhouse_connect.driver.httputil import get_pool_manager
 
-from snuba import environment, settings
+from snuba import environment, settings, state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.native import ClickhouseProfile, ClickhouseResult, Params
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -83,10 +83,17 @@ class ClickhouseConnectPool(object):
         if self.__client is None:
             with self.__lock:
                 if self.__client is None:
+                    # Default to the configured CLICKHOUSE_MAX_POOL_SIZE, but
+                    # allow it to be overridden at runtime. The value is read
+                    # once when the (cached) client is first created.
+                    pool_size = (
+                        state.get_int_config("clickhouse_connect_pool_size", self.max_pool_size)
+                        or self.max_pool_size
+                    )
                     pool_mgr = get_pool_manager(
                         ca_cert=self.ca_certs,
                         verify=bool(self.verify),
-                        maxsize=self.max_pool_size,
+                        maxsize=pool_size,
                         # All requests go to a single host, so a single pool is
                         # enough. Keep a small margin for safety.
                         num_pools=2,
