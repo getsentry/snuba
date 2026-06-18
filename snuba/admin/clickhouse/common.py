@@ -6,8 +6,14 @@ from typing import MutableMapping
 from sql_metadata import Parser, QueryType  # type: ignore
 
 from snuba import settings
-from snuba.clickhouse.native import ClickhouseNativePool, ClickhousePool
-from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
+from snuba.clickhouse.native import ClickhousePool
+from snuba.clusters.cluster import (
+    ClickhouseClientSettings,
+    ClickhouseCluster,
+    ClickhouseNode,
+    connection_cache,
+    use_clickhouse_connect_driver,
+)
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -89,21 +95,29 @@ def _build_validated_pool(
     password: str,
     client_settings: ClickhouseClientSettings,
 ) -> ClickhousePool:
-    # Single chokepoint for admin ClickhousePool construction. ClickhousePool
-    # ships the user/password in the first hello packet of the native protocol,
-    # so an unvalidated host means credentials reach whatever listener answers.
-    # All admin helpers must go through here — never call ClickhousePool
-    # directly from this module. The regression test
-    # test_no_direct_clickhouse_pool_construction_in_admin enforces this.
+    # Single chokepoint for admin ClickhousePool acquisition. A pool ships the
+    # user/password to the node (the native protocol's first hello packet, or
+    # the HTTP auth header), so an unvalidated host means credentials reach
+    # whatever listener answers. All admin helpers must go through here — never
+    # acquire a pool from the connection cache directly in this module. The
+    # regression test test_no_direct_clickhouse_pool_construction_in_admin
+    # enforces this.
     _validate_node(clickhouse_host, clickhouse_port, cluster, storage_name)
-    return ClickhouseNativePool(
-        clickhouse_host,
-        clickhouse_port,
+    # Go through the shared connection cache so the driver (native vs
+    # clickhouse-connect/HTTP) is selected by the runtime config, behind the
+    # abstract ClickhousePool type, just like the cluster's own connections.
+    return connection_cache.get_node_connection(
+        client_settings,
+        ClickhouseNode(clickhouse_host, clickhouse_port),
         username,
         password,
         database,
+        secure=False,
+        ca_certs=None,
+        verify=False,
+        http_port=cluster.get_http_port(),
+        use_connect=use_clickhouse_connect_driver(),
         max_pool_size=2,
-        client_settings=client_settings.value.settings,
     )
 
 

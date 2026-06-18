@@ -78,8 +78,13 @@ def optimize(
 ) -> None:
     from datetime import datetime
 
-    from snuba.clickhouse.native import ClickhouseNativePool, ClickhousePool
+    from snuba.clickhouse.native import ClickhousePool
     from snuba.clickhouse.optimize.optimize import logger
+    from snuba.clusters.cluster import (
+        ClickhouseNode,
+        connection_cache,
+        use_clickhouse_connect_driver,
+    )
 
     setup_logging(log_level)
     setup_sentry()
@@ -102,16 +107,21 @@ def optimize(
     # that cluster.
     connection: ClickhousePool
     if clickhouse_host and clickhouse_port:
-        connection = ClickhouseNativePool(
-            clickhouse_host,
-            clickhouse_port,
+        # Go through the shared connection cache so the driver (native vs
+        # clickhouse-connect/HTTP) is selected by the runtime config, behind
+        # the abstract ClickhousePool type. The OPTIMIZE timeout is carried by
+        # the client settings profile the cache reads.
+        connection = connection_cache.get_node_connection(
+            ClickhouseClientSettings.OPTIMIZE,
+            ClickhouseNode(clickhouse_host, clickhouse_port),
             clickhouse_user,
             clickhouse_password,
             database,
-            clickhouse_secure,
-            clickhouse_ca_certs,
-            clickhouse_verify,
-            send_receive_timeout=ClickhouseClientSettings.OPTIMIZE.value.timeout,
+            secure=clickhouse_secure,
+            ca_certs=clickhouse_ca_certs,
+            verify=clickhouse_verify,
+            http_port=storage.get_cluster().get_http_port(),
+            use_connect=use_clickhouse_connect_driver(),
         )
     elif not storage.get_cluster().is_single_node():
         raise click.ClickException("Provide Clickhouse host and port for optimize")

@@ -7,8 +7,13 @@ import structlog
 
 from snuba import settings
 from snuba.admin.notifications.slack.client import SlackClient
-from snuba.clickhouse.native import ClickhouseNativePool
-from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.clusters.cluster import (
+    DEFAULT_CLICKHOUSE_HTTP_PORT,
+    ClickhouseClientSettings,
+    ClickhouseNode,
+    connection_cache,
+    use_clickhouse_connect_driver,
+)
 from snuba.environment import setup_logging, setup_sentry
 
 logger = structlog.get_logger().bind(module=__name__)
@@ -160,13 +165,21 @@ def querylog_to_csv(
     query = get_query_results(event_type, [database], tables, start_time, end_time)
 
     (clickhouse_user, clickhouse_password) = get_credentials()
-    connection = ClickhouseNativePool(
-        host=clickhouse_host,
-        port=clickhouse_port,
-        user=clickhouse_user,
-        password=clickhouse_password,
-        database=database,
-        client_settings=ClickhouseClientSettings.QUERY.value.settings,
+    # Go through the shared connection cache so the driver (native vs
+    # clickhouse-connect/HTTP) is selected by the runtime config, behind the
+    # abstract ClickhousePool type. There is no cluster here to read an
+    # http_port from, so fall back to the well-known default.
+    connection = connection_cache.get_node_connection(
+        ClickhouseClientSettings.QUERY,
+        ClickhouseNode(clickhouse_host, clickhouse_port),
+        clickhouse_user,
+        clickhouse_password,
+        database,
+        secure=False,
+        ca_certs=None,
+        verify=False,
+        http_port=DEFAULT_CLICKHOUSE_HTTP_PORT,
+        use_connect=use_clickhouse_connect_driver(),
     )
     results = connection.execute(query)
     filename = format_filename(table)

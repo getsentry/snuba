@@ -37,6 +37,11 @@ from snuba.writer import BatchWriter
 
 logger = structlog.get_logger().bind(module=__name__)
 
+# Well-known default ClickHouse HTTP port, used by by-host helpers (e.g. CLI
+# tools) that only know a node's native address and have no cluster config to
+# read an http_port from.
+DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
+
 
 class ClickhouseClientSettingsType(NamedTuple):
     settings: Mapping[str, Any]
@@ -197,6 +202,7 @@ CacheKey = Tuple[
     Optional[str],
     Optional[bool],
     int,
+    int,
     str,
 ]
 
@@ -218,12 +224,18 @@ class ConnectionCache:
         verify: Optional[bool],
         http_port: int,
         use_connect: bool,
+        max_pool_size: int = settings.CLICKHOUSE_MAX_POOL_SIZE,
     ) -> ClickhousePool:
         """
         Return a cached connection pool for the node, typed as the abstract
         :class:`ClickhousePool`. When ``use_connect`` is set the
         clickhouse-connect (HTTP) pool is built, otherwise the native one. Both
         variants are cached side by side (the driver is part of the cache key).
+
+        This is the single place pools are instantiated, so every caller — the
+        cluster query/node connections as well as the admin and CLI by-host
+        helpers — goes through it and gets the runtime-selected driver behind
+        the abstract :class:`ClickhousePool` type.
         """
         with self.__lock:
             client_settings_dict, timeout = client_settings.value
@@ -241,6 +253,7 @@ class ConnectionCache:
                 # two clusters sharing a node/credentials but using different
                 # HTTP ports from colliding on the same cached pool.
                 http_port,
+                max_pool_size,
                 "http" if use_connect else "native",
             )
             if cache_key not in self.__cache:
@@ -261,6 +274,7 @@ class ConnectionCache:
                         secure=secure,
                         ca_certs=ca_certs,
                         verify=verify,
+                        max_pool_size=max_pool_size,
                     )
                 else:
                     pool = ClickhouseNativePool(
@@ -274,6 +288,7 @@ class ConnectionCache:
                         secure=secure,
                         ca_certs=ca_certs,
                         verify=verify,
+                        max_pool_size=max_pool_size,
                     )
                 self.__cache[cache_key] = pool
 
