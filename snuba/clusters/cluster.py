@@ -18,7 +18,7 @@ from typing import (
 
 import structlog
 
-from snuba import settings
+from snuba import settings, state
 from snuba.clickhouse.http import HTTPBatchWriter, InsertStatement, JSONRow
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
 from snuba.clusters.storage_sets import (
@@ -166,6 +166,21 @@ class Cluster(ABC, Generic[TWriterOptions]):
 ClickhouseWriterOptions = Optional[Mapping[str, Any]]
 
 
+def use_clickhouse_connect_driver() -> bool:
+    """
+    Whether the read path should use the clickhouse-connect (HTTP) driver
+    instead of the native protocol.
+
+    Controlled by a runtime config flag (defaulting to the
+    ``USE_CLICKHOUSE_CONNECT_DRIVER`` setting) so the migration can be rolled
+    out and rolled back without a deploy.
+    """
+    default = 1 if settings.USE_CLICKHOUSE_CONNECT_DRIVER else 0
+    return bool(state.get_int_config("use_clickhouse_connect_driver", default))
+
+
+# The driver discriminator is part of the cache key so that the native and the
+# HTTP pool for the same node can be cached side by side.
 CacheKey = Tuple[
     ClickhouseNode,
     ClickhouseClientSettings,
@@ -175,6 +190,7 @@ CacheKey = Tuple[
     bool,
     Optional[str],
     Optional[bool],
+    str,
 ]
 
 
@@ -194,6 +210,7 @@ class ConnectionCache:
         ca_certs: Optional[str],
         verify: Optional[bool],
     ) -> ClickhousePool:
+        """Return a cached native (clickhouse-driver) connection pool."""
         with self.__lock:
             client_settings_dict, timeout = client_settings.value
             cache_key = (
@@ -205,16 +222,10 @@ class ConnectionCache:
                 secure,
                 ca_certs,
                 verify,
+                "native",
             )
             if cache_key not in self.__cache:
-                # Imported here so that importing this module does not import
-                # clickhouse-connect until a connection is actually requested.
-                from snuba.clickhouse.connect import (
-                    ClickhouseConnectPool,
-                    DriverSelectingPool,
-                )
-
-                native_pool = ClickhousePool(
+                self.__cache[cache_key] = ClickhousePool(
                     node.host_name,
                     node.port,
                     user,
@@ -226,9 +237,40 @@ class ConnectionCache:
                     ca_certs=ca_certs,
                     verify=verify,
                 )
-                # The connect pool always talks to the default ClickHouse HTTP
-                # port (it is not configurable).
-                connect_pool = ClickhouseConnectPool(
+
+            return self.__cache[cache_key]
+
+    def get_http_node_connection(
+        self,
+        client_settings: ClickhouseClientSettings,
+        node: ClickhouseNode,
+        user: str,
+        password: str,
+        database: str,
+        secure: bool,
+        ca_certs: Optional[str],
+        verify: Optional[bool],
+    ) -> ClickhousePool:
+        """Return a cached clickhouse-connect (HTTP) connection pool."""
+        # Imported here so that importing this module does not import
+        # clickhouse-connect until an HTTP connection is actually requested.
+        from snuba.clickhouse.connect import ClickhouseConnectPool
+
+        with self.__lock:
+            client_settings_dict, timeout = client_settings.value
+            cache_key = (
+                node,
+                client_settings,
+                user,
+                password,
+                database,
+                secure,
+                ca_certs,
+                verify,
+                "http",
+            )
+            if cache_key not in self.__cache:
+                self.__cache[cache_key] = ClickhouseConnectPool(
                     host=node.host_name,
                     user=user,
                     password=password,
@@ -239,9 +281,6 @@ class ConnectionCache:
                     ca_certs=ca_certs,
                     verify=verify,
                 )
-                # Always hand out a DriverSelectingPool and let it decide, at
-                # query time, which driver each query goes to.
-                self.__cache[cache_key] = DriverSelectingPool(native_pool, connect_pool)
 
             return self.__cache[cache_key]
 
@@ -307,6 +346,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         self.__cluster_name = cluster_name
         self.__distributed_cluster_name = distributed_cluster_name
         self.__reader: Optional[Reader] = None
+        self.__http_reader: Optional[Reader] = None
         self.__deleter: Optional[Reader] = None
         self.__connection_cache = connection_cache
         self.__cache_partition_id = cache_partition_id
@@ -352,6 +392,24 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             self.__verify,
         )
 
+    def __get_http_query_connection(
+        self,
+        client_settings: ClickhouseClientSettings,
+    ) -> ClickhousePool:
+        """
+        Get a clickhouse-connect (HTTP) connection to the query node.
+        """
+        return self.__connection_cache.get_http_node_connection(
+            client_settings,
+            self.__query_node,
+            self.__user,
+            self.__password,
+            self.__database,
+            self.__secure,
+            self.__ca_certs,
+            self.__verify,
+        )
+
     def get_deleter(self) -> Reader:
         if not self.__deleter:
             # we need the connection to the storage nodes, not
@@ -365,6 +423,26 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         return self.__deleter
 
     def get_reader(self) -> Reader:
+        """
+        Return a reader for the query node, choosing the HTTP
+        (clickhouse-connect) or the native driver based on the
+        ``use_clickhouse_connect_driver`` runtime config. Both readers are
+        built at most once and reused; flipping the config only changes which
+        of the two is returned.
+        """
+        if use_clickhouse_connect_driver():
+            if not self.__http_reader:
+                # Imported here so the native code path never imports
+                # clickhouse-connect.
+                from snuba.clickhouse.connect import HTTPDriverReader
+
+                self.__http_reader = HTTPDriverReader(
+                    cache_partition_id=self.__cache_partition_id,
+                    client=self.__get_http_query_connection(ClickhouseClientSettings.QUERY),
+                    query_settings_prefix=self.__query_settings_prefix,
+                )
+            return self.__http_reader
+
         if not self.__reader:
             self.__reader = NativeDriverReader(
                 cache_partition_id=self.__cache_partition_id,

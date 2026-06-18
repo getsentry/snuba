@@ -260,6 +260,43 @@ def test_cache_connections() -> None:
     ) != cluster_3.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_get_reader_selects_driver() -> None:
+    from snuba import state
+    from snuba.clickhouse.connect import HTTPDriverReader
+    from snuba.clickhouse.native import NativeDriverReader
+
+    test_cluster = cluster.ClickhouseCluster(
+        "127.0.0.1",
+        8000,
+        "default",
+        "",
+        "default",
+        8001,
+        False,
+        None,
+        False,
+        {"events"},
+        True,
+    )
+
+    # Default: native driver.
+    state.set_config("use_clickhouse_connect_driver", 0)
+    native_reader = test_cluster.get_reader()
+    assert isinstance(native_reader, NativeDriverReader)
+    assert not isinstance(native_reader, HTTPDriverReader)
+
+    # Flip on at runtime: HTTP driver.
+    state.set_config("use_clickhouse_connect_driver", 1)
+    http_reader = test_cluster.get_reader()
+    assert isinstance(http_reader, HTTPDriverReader)
+
+    # Flip back: the same cached native reader is returned (built at most once).
+    state.set_config("use_clickhouse_connect_driver", 0)
+    assert test_cluster.get_reader() is native_reader
+
+
 @patch("snuba.settings.SLICED_CLUSTERS", SLICED_CLUSTERS_CONFIG)
 @pytest.mark.clickhouse_db
 def test_sliced_cluster() -> None:

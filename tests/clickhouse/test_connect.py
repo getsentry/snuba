@@ -3,11 +3,9 @@ from unittest import mock
 
 import pytest
 
-from snuba.clickhouse.connect import (
-    ClickhouseConnectPool,
-    DriverSelectingPool,
-)
+from snuba.clickhouse.connect import ClickhouseConnectPool, HTTPDriverReader
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.clickhouse.native import NativeDriverReader
 
 # Error code returned by ClickHouse when the maximum number of simultaneous
 # queries has been exceeded.
@@ -214,70 +212,10 @@ def test_pool_size_runtime_override() -> None:
     assert kwargs["maxsize"] == 42
 
 
-def _make_selecting_pool() -> tuple[DriverSelectingPool, mock.Mock, mock.Mock]:
-    native_pool = mock.Mock()
-    native_pool.host = "host"
-    native_pool.port = 9000
-    native_pool.user = "test"
-    native_pool.password = "test"
-    native_pool.database = "test"
-    connect_pool = mock.Mock()
-    selecting = DriverSelectingPool(native_pool, connect_pool)
-    return selecting, native_pool, connect_pool
-
-
-@pytest.mark.redis_db
-def test_selecting_pool_routes_to_native_by_default() -> None:
-    selecting, native_pool, connect_pool = _make_selecting_pool()
-
-    selecting.execute("SELECT 1")
-    selecting.execute_robust("SELECT 2")
-
-    assert native_pool.execute.call_count == 1
-    assert native_pool.execute_robust.call_count == 1
-    assert connect_pool.execute.call_count == 0
-    assert connect_pool.execute_robust.call_count == 0
-
-
-@pytest.mark.redis_db
-def test_selecting_pool_routes_to_connect_when_enabled() -> None:
-    from snuba import state
-
-    state.set_config("use_clickhouse_connect_driver", 1)
-
-    selecting, native_pool, connect_pool = _make_selecting_pool()
-
-    selecting.execute("SELECT 1")
-    selecting.execute_robust("SELECT 2")
-
-    assert connect_pool.execute.call_count == 1
-    assert connect_pool.execute_robust.call_count == 1
-    assert native_pool.execute.call_count == 0
-    assert native_pool.execute_robust.call_count == 0
-
-
-@pytest.mark.redis_db
-def test_selecting_pool_switches_at_runtime_without_recreating() -> None:
-    from snuba import state
-
-    selecting, native_pool, connect_pool = _make_selecting_pool()
-
-    selecting.execute("native")
-    state.set_config("use_clickhouse_connect_driver", 1)
-    selecting.execute("connect")
-    state.set_config("use_clickhouse_connect_driver", 0)
-    selecting.execute("native again")
-
-    # The same two underlying pools are reused throughout; only the routing
-    # changes.
-    assert native_pool.execute.call_count == 2
-    assert connect_pool.execute.call_count == 1
-
-
-def test_selecting_pool_close_closes_both() -> None:
-    selecting, native_pool, connect_pool = _make_selecting_pool()
-
-    selecting.close()
-
-    assert native_pool.close.call_count == 1
-    assert connect_pool.close.call_count == 1
+def test_http_driver_reader_is_a_native_driver_reader() -> None:
+    # HTTPDriverReader reuses the native reader's result handling; it just
+    # exists as its own type so the driver in use is explicit.
+    pool = _make_pool(mock.Mock())
+    reader = HTTPDriverReader(cache_partition_id=None, client=pool, query_settings_prefix=None)
+    assert isinstance(reader, NativeDriverReader)
+    assert isinstance(reader, HTTPDriverReader)

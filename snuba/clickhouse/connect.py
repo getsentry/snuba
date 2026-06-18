@@ -17,6 +17,7 @@ from snuba.clickhouse.native import (
     ClickhousePool,
     ClickhouseProfile,
     ClickhouseResult,
+    NativeDriverReader,
     Params,
 )
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -39,19 +40,6 @@ DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
 # forwards whatever settings it is given to the server, so to preserve parity
 # we tell clickhouse-connect to drop unrecognized settings instead of failing.
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
-
-
-def use_clickhouse_connect_driver() -> bool:
-    """
-    Whether queries should be routed through the clickhouse-connect (HTTP)
-    driver instead of the native protocol.
-
-    Controlled by a runtime config flag (defaulting to the
-    ``USE_CLICKHOUSE_CONNECT_DRIVER`` setting) so the migration can be rolled
-    out and rolled back without a deploy.
-    """
-    default = 1 if settings.USE_CLICKHOUSE_CONNECT_DRIVER else 0
-    return bool(state.get_int_config("use_clickhouse_connect_driver", default))
 
 
 class ClickhouseConnectPool(ClickhousePool):
@@ -329,87 +317,13 @@ class ClickhouseConnectPool(ClickhousePool):
             self.__client = None
 
 
-class DriverSelectingPool(ClickhousePool):
+class HTTPDriverReader(NativeDriverReader):
     """
-    A :class:`ClickhousePool` that forwards each query to either the native or
-    the clickhouse-connect (HTTP) pool, chosen at query time from the
-    ``use_clickhouse_connect_driver`` runtime config.
+    Reader that executes queries over HTTP via :class:`ClickhouseConnectPool`.
 
-    Both underlying pools are created once (up front) and reused. Flipping the
-    runtime config never creates a pool on the fly; it only changes which of
-    the two already-created pools a given query is routed to.
+    Both drivers return the same :class:`ClickhouseResult`, so the result
+    handling is identical to :class:`NativeDriverReader`. This class exists as
+    its own type so the driver in use is explicit and so the cluster can pick
+    between the two readers based on the ``use_clickhouse_connect_driver``
+    runtime config.
     """
-
-    def __init__(
-        self,
-        native_pool: ClickhousePool,
-        connect_pool: ClickhouseConnectPool,
-    ) -> None:
-        # Intentionally does not call ClickhousePool.__init__: this pool owns no
-        # connections of its own, it only forwards to the two real pools.
-        self.__native_pool = native_pool
-        self.__connect_pool = connect_pool
-        # Expose the attributes callers read directly off a pool (host/port/...)
-        # from the native pool.
-        self.host = native_pool.host
-        self.port = native_pool.port
-        self.user = native_pool.user
-        self.password = native_pool.password
-        self.database = native_pool.database
-
-    def _selected_pool(self) -> ClickhousePool:
-        if use_clickhouse_connect_driver():
-            return self.__connect_pool
-        return self.__native_pool
-
-    def execute(
-        self,
-        query: str,
-        params: Params = None,
-        with_column_types: bool = False,
-        query_id: Optional[str] = None,
-        settings: Optional[Mapping[str, Any]] = None,
-        types_check: bool = False,
-        columnar: bool = False,
-        capture_trace: bool = False,
-        retryable: bool = True,
-    ) -> ClickhouseResult:
-        return self._selected_pool().execute(
-            query,
-            params=params,
-            with_column_types=with_column_types,
-            query_id=query_id,
-            settings=settings,
-            types_check=types_check,
-            columnar=columnar,
-            capture_trace=capture_trace,
-            retryable=retryable,
-        )
-
-    def execute_robust(
-        self,
-        query: str,
-        params: Params = None,
-        with_column_types: bool = False,
-        query_id: Optional[str] = None,
-        settings: Optional[Mapping[str, Any]] = None,
-        types_check: bool = False,
-        columnar: bool = False,
-        capture_trace: bool = False,
-        retryable: bool = True,
-    ) -> ClickhouseResult:
-        return self._selected_pool().execute_robust(
-            query,
-            params=params,
-            with_column_types=with_column_types,
-            query_id=query_id,
-            settings=settings,
-            types_check=types_check,
-            columnar=columnar,
-            capture_trace=capture_trace,
-            retryable=retryable,
-        )
-
-    def close(self) -> None:
-        self.__native_pool.close()
-        self.__connect_pool.close()
