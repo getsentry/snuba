@@ -307,6 +307,7 @@ def test_clusterless_rejects_unvalidated_host(
     InvalidNodeError and no credentials ever leave the process.
     """
     from snuba.admin.clickhouse import common
+    from snuba.clusters.cluster import connection_cache
 
     helper = getattr(common, helper_name)
 
@@ -316,7 +317,9 @@ def test_clusterless_rejects_unvalidated_host(
             "_validate_node",
             side_effect=InvalidNodeError("host not in cluster"),
         ) as mock_validate,
-        patch.object(common.connection_cache, "get_node_connection") as mock_pool,
+        # connection_cache is the shared singleton; patching the method on the
+        # object affects the reference bound inside common as well.
+        patch.object(connection_cache, "get_node_connection") as mock_pool,
     ):
         # Clear any cached connection for this storage so the cache lookup
         # can't short-circuit validation.

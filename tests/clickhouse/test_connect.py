@@ -1,10 +1,11 @@
-from typing import Any
+from typing import Any, cast
 from unittest import mock
 
 import pytest
 
 from snuba.clickhouse.connect import ClickhouseConnectPool
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.clickhouse.formatter.nodes import FormattedQuery
 
 # Error code returned by ClickHouse when the maximum number of simultaneous
 # queries has been exceeded.
@@ -253,7 +254,7 @@ def test_with_totals_handled_over_http() -> None:
     pool = _make_pool(client)
     reader = ClickhouseReader(cache_partition_id=None, client=pool, query_settings_prefix=None)
 
-    result = reader.execute(FakeFormattedQuery(), with_totals=True)
+    result = reader.execute(cast(FormattedQuery, FakeFormattedQuery()), with_totals=True)
 
     # The trailing row is split out as totals; only the real rows remain in data.
     assert result["data"] == [
@@ -314,7 +315,7 @@ def test_connect_type_names_drive_reader_transforms() -> None:
 
     pool = _make_pool(client)
     reader = ClickhouseReader(cache_partition_id=None, client=pool, query_settings_prefix=None)
-    result = reader.execute(FakeFormattedQuery())
+    result = reader.execute(cast(FormattedQuery, FakeFormattedQuery()))
 
     # Date/DateTime (incl. the parametrized tz variant) become ISO strings and
     # UUID (incl. Nullable) becomes a string. Had the regexes failed to match
