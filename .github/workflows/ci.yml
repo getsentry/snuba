@@ -604,8 +604,7 @@ jobs:
           target: application-distroless
           load: true
           tags: snuba-distroless:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # EXPERIMENT: no layer cache. type=gha,mode=max was ~7.7GB, evicting the venv cache from the 10GB budget.
 
       - name: Verify --help works
         run: docker run --rm snuba-distroless:test --help
