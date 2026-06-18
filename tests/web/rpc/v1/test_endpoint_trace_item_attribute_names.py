@@ -261,8 +261,9 @@ class TestTraceItemAttributeNames(BaseApiTest):
             )
         assert res.attributes == expected
 
-    def test_sorted_by_frequency_then_name(self) -> None:
-        """Attributes are returned sorted by frequency DESC, with name ASC as a tiebreaker."""
+    def test_default_order_is_alphabetical(self) -> None:
+        """Without order_by, the endpoint keeps its historical name-ascending order
+        regardless of frequency, so existing consumers are unaffected."""
         req = TraceItemAttributeNamesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -278,22 +279,52 @@ class TestTraceItemAttributeNames(BaseApiTest):
         res = EndpointTraceItemAttributeNames().execute(req)
         attr_names = [attr.name for attr in res.attributes]
 
-        # "foo"/"bar"/"baz" occur on every span (frequency 3) while each
-        # "a_tag_*" occurs on a single span (frequency 1), so the common
-        # attributes must sort ahead of the high-cardinality ones.
+        # Fully alphabetical: the high-frequency "foo" does NOT jump ahead of "a_tag_000".
+        assert attr_names == sorted(attr_names)
+        assert attr_names.index("a_tag_000") < attr_names.index("foo")
+        # No counts are returned on the default path.
+        assert all(not attr.HasField("count") for attr in res.attributes)
+
+    def test_order_by_count_desc(self) -> None:
+        """order_by COLUMN_COUNT descending returns the most frequent keys first
+        (name ascending as a tiebreaker) and populates counts in the response."""
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
+            ),
+            limit=1000,
+            type=AttributeKey.Type.TYPE_STRING,
+            order_by=TraceItemAttributeNamesRequest.OrderBy(
+                column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT,
+                descending=True,
+            ),
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+        attr_names = [attr.name for attr in res.attributes]
+
+        # "foo"/"bar"/"baz" occur on every span (frequency 3) while each "a_tag_*"
+        # occurs once, so the common attributes must sort ahead of the rare ones.
         for common in ("foo", "bar", "baz"):
             assert attr_names.index(common) < attr_names.index("a_tag_000"), (
                 f"high-frequency '{common}' should sort before low-frequency 'a_tag_000'"
             )
 
-        # All "a_tag_*" share the same frequency, so they tie-break alphabetically.
-        a_tags = [name for name in attr_names if name.startswith("a_tag_")]
-        assert a_tags == sorted(a_tags), (
-            "attributes with equal frequency should be sorted alphabetically"
-        )
+        # Counts are returned, and reflect how many spans each key occurs on.
+        counts = {attr.name: attr.count for attr in res.attributes if attr.HasField("count")}
+        assert counts["foo"] == TOTAL_GENERATED_SPANS
+        assert counts["a_tag_000"] == 1
 
-    def test_equal_frequency_sorted_alphabetically(self) -> None:
-        """When every matching attribute has the same frequency, ordering is alphabetical."""
+        # Equal-frequency keys tie-break alphabetically.
+        a_tags = [name for name in attr_names if name.startswith("a_tag_")]
+        assert a_tags == sorted(a_tags)
+
+    def test_order_by_count_equal_frequency_tiebreak(self) -> None:
+        """Under count ordering, keys with equal frequency tie-break alphabetically."""
         req = TraceItemAttributeNamesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -306,6 +337,10 @@ class TestTraceItemAttributeNames(BaseApiTest):
             limit=TOTAL_GENERATED_ATTR_PER_TYPE,
             type=AttributeKey.Type.TYPE_STRING,
             value_substring_match="a_tag",
+            order_by=TraceItemAttributeNamesRequest.OrderBy(
+                column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT,
+                descending=True,
+            ),
         )
         res = EndpointTraceItemAttributeNames().execute(req)
         attr_names = [attr.name for attr in res.attributes]

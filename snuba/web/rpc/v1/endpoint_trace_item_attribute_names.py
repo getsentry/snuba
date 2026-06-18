@@ -54,6 +54,19 @@ UNSEARCHABLE_ATTRIBUTE_KEYS = [
 NON_STORED_ATTRIBUTE_KEYS = ["sentry.service"]
 
 
+def _order_by_count(request: TraceItemAttributeNamesRequest) -> bool:
+    """Whether the caller opted into frequency ordering via ``order_by`` (sort:-count()).
+
+    When ``order_by`` is unset, ``column`` defaults to COLUMN_UNSPECIFIED, so the
+    endpoint keeps its historical name-ascending ordering and existing consumers
+    are unaffected.
+    """
+    return (
+        request.order_by.column
+        == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT
+    )
+
+
 class AttributeKeyCollector(ProtoVisitor):
     def __init__(self) -> None:
         self.keys: set[str] = set()
@@ -150,7 +163,8 @@ def get_co_occurring_attributes(
 
       The query at the end looks something like this:
 
-          SELECT arrayJoin(arrayFilter(attr -> ((NOT ((attr.2) IN ['test_tag_1_0'])) AND startsWith(attr.2, 'test_')), arrayMap(x -> ('TYPE_STRING', x), attributes_string))) AS attr_key, count() AS count
+          -- Default ordering (order_by unset or COLUMN_NAME): distinct keys by name
+          SELECT distinct(arrayJoin(arrayFilter(attr -> ((NOT ((attr.2) IN ['test_tag_1_0'])) AND startsWith(attr.2, 'test_')), arrayMap(x -> ('TYPE_STRING', x), attributes_string)))) AS attr_key
           FROM eap_item_co_occurring_attrs_1_local
           WHERE (item_type = 1) AND (project_id IN [1]) AND (organization_id = 1) AND (date < toDateTime(toDate('2025-03-17', 'Universal'))) AND (date >= toDateTime(toDate('2025-03-10', 'Universal')))
 
@@ -158,9 +172,13 @@ def get_co_occurring_attributes(
           AND hasAll(attribute_keys_hash, [cityHash64('test_tag_1_0')])
           --
 
-          GROUP BY attr_key
-          ORDER BY count DESC, attr_key ASC
+          ORDER BY attr_key ASC
           LIMIT 10000
+
+          -- Opt-in frequency ordering (order_by.column = COLUMN_COUNT) instead groups
+          -- and counts the keys, returning the most common first:
+          --   SELECT arrayJoin(...) AS attr_key, count() AS count
+          --   ... GROUP BY attr_key ORDER BY count DESC, attr_key ASC
 
       **Explanation:**
 
@@ -186,7 +204,9 @@ def get_co_occurring_attributes(
               )
       ) AS attr_key
       ```
-    4. . The outer query groups and counts the attributes sent by the inner query, returning co-occurring attributes sorted by frequency (most common first)
+    4. . The outer query returns the co-occurring attribute keys. By default they are
+       deduplicated and ordered by name; when COLUMN_COUNT ordering is requested they
+       are grouped, counted, and ordered by frequency (most common first).
 
       **The following things make this query more performant than searching the source table:**
 
@@ -294,30 +314,60 @@ def get_co_occurring_attributes(
             f.like(f.tupleElement(column("attr"), 2), f"%{request.value_substring_match}%"),
         )
 
+    attr_key_expression = f.arrayJoin(
+        f.arrayFilter(
+            Lambda(None, ("attr",), attr_filter),
+            array_func,
+        ),
+        alias="attr_key",
+    )
+
+    if _order_by_count(request):
+        # Opt-in frequency ordering: group by key and count how many rows
+        # (co-occurring attribute sets) contain each key.
+        selected_columns = [
+            SelectedExpression(name="attr_key", expression=attr_key_expression),
+            SelectedExpression(name="count", expression=f.count(alias="count")),
+        ]
+        groupby: list[Expression] | None = [column("attr_key")]
+        order_by = [
+            OrderBy(
+                direction=(
+                    OrderByDirection.DESC
+                    if request.order_by.descending
+                    else OrderByDirection.ASC
+                ),
+                expression=column("count"),
+            ),
+            # stable tiebreak for keys with the same frequency
+            OrderBy(direction=OrderByDirection.ASC, expression=column("attr_key")),
+        ]
+    else:
+        # Default (order_by unset or COLUMN_NAME): distinct keys ordered by name.
+        # Unspecified ordering keeps the historical name-ascending result so that
+        # existing consumers are unaffected.
+        name_descending = (
+            request.order_by.column
+            == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_NAME
+            and request.order_by.descending
+        )
+        selected_columns = [
+            SelectedExpression(name="attr_key", expression=f.distinct(attr_key_expression)),
+        ]
+        groupby = None
+        order_by = [
+            OrderBy(
+                direction=OrderByDirection.DESC if name_descending else OrderByDirection.ASC,
+                expression=column("attr_key"),
+            ),
+        ]
+
     query = Query(
         from_clause=storage,
-        selected_columns=[
-            SelectedExpression(
-                name="attr_key",
-                expression=f.arrayJoin(
-                    f.arrayFilter(
-                        Lambda(None, ("attr",), attr_filter),
-                        array_func,
-                    ),
-                    alias="attr_key",
-                ),
-            ),
-            SelectedExpression(
-                name="count",
-                expression=f.count(alias="count"),
-            ),
-        ],
-        groupby=[column("attr_key")],
+        selected_columns=selected_columns,
+        groupby=groupby,
         condition=condition,
-        order_by=[
-            OrderBy(direction=OrderByDirection.DESC, expression=column("count")),
-            OrderBy(direction=OrderByDirection.ASC, expression=column("attr_key")),
-        ],
+        order_by=order_by,
         # chosen arbitrarily to be a high number
         limit=request.limit,
         offset=request.page_token.offset if request.page_token.HasField("offset") else 0,
@@ -350,31 +400,44 @@ def convert_co_occurring_results_to_attributes(
     query_res: QueryResult,
 ) -> list[TraceItemAttributeNamesResponse.Attribute]:
     def t(row: Row) -> TraceItemAttributeNamesResponse.Attribute:
-        # our query to snuba selects two columns: attr_key and count.
-        # count is only used to order the results (by frequency); the response
-        # only carries the attribute name and type.
         attr_type, attr_name = row["attr_key"]
         assert isinstance(attr_type, str)
-        return TraceItemAttributeNamesResponse.Attribute(
+        attribute = TraceItemAttributeNamesResponse.Attribute(
             name=attr_name, type=getattr(AttributeKey.Type, attr_type)
         )
+        # `count` is only selected when ordering by frequency. Surface it in the
+        # response for real attributes; the synthetic non-stored ones carry an
+        # infinite sentinel so they sort first and get no count.
+        count = row.get("count")
+        if count is not None and count != float("inf"):
+            attribute.count = int(count)
+        return attribute
 
     data = query_res.result.get("data", [])
     if request.type in (AttributeKey.TYPE_UNSPECIFIED, AttributeKey.TYPE_STRING):
-        # Add non-stored attributes with a very high count so they sort first,
-        # since these are typically important service-level attributes.
-        data.extend(
-            [
-                {"attr_key": ("TYPE_STRING", key_name), "count": float("inf")}
-                for key_name in NON_STORED_ATTRIBUTE_KEYS
-                if request.value_substring_match in key_name
-            ]
-        )
-        # Re-sort with the synthetic attributes included, matching the
-        # ClickHouse ordering: frequency DESC, then attribute name ASC.
-        data.sort(
-            key=lambda row: (-row.get("count", 0), tuple(row.get("attr_key", ("TYPE_STRING", ""))))
-        )
+        if _order_by_count(request):
+            # Inject non-stored attributes with an infinite count so they sort
+            # first, then re-sort to match the ClickHouse ordering. Two stable
+            # passes give "count <direction>, then name ASC".
+            data.extend(
+                [
+                    {"attr_key": ("TYPE_STRING", key_name), "count": float("inf")}
+                    for key_name in NON_STORED_ATTRIBUTE_KEYS
+                    if request.value_substring_match in key_name
+                ]
+            )
+            data.sort(key=lambda row: tuple(row.get("attr_key", ("TYPE_STRING", ""))))
+            data.sort(key=lambda row: row.get("count", 0), reverse=request.order_by.descending)
+        else:
+            # Default name ordering: inject non-stored attributes and sort by name.
+            data.extend(
+                [
+                    {"attr_key": ("TYPE_STRING", key_name)}
+                    for key_name in NON_STORED_ATTRIBUTE_KEYS
+                    if request.value_substring_match in key_name
+                ]
+            )
+            data.sort(key=lambda row: tuple(row.get("attr_key", ("TYPE_STRING", ""))))
 
     return list(map(t, data))
 
