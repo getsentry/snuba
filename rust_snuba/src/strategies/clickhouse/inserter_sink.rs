@@ -10,6 +10,11 @@
 //! peak memory is bounded by one batch (`max_batch_size`) of rows plus the
 //! inserter's serialized byte buffer — not by total row count.
 //!
+//! Wire format is plain `RowBinary` (crate validation is off — see
+//! `build_client`: the `attributes_array` JSON column can't be sent under
+//! `RowBinaryWithNamesAndTypes`). The crate still emits the column list from the
+//! `Row` derive in the INSERT, so column mapping is correct.
+//!
 //! The inserter owns the flush boundary: it is configured with our batch
 //! settings (`with_max_rows`/`with_max_bytes` + `with_period`), and we drive it
 //! with [`Inserter::commit`] (never `force_commit`). When `commit()` reports a
@@ -154,6 +159,16 @@ fn build_client(cfg: &ClickhouseConfig) -> clickhouse::Client {
         .with_user(cfg.user.clone())
         .with_password(cfg.password.clone())
         .with_database(cfg.database.clone())
+        // Validation OFF → plain `RowBinary` (no names+types header). The
+        // `eap_items.attributes_array` column is a native `JSON(max_dynamic_paths=N)`
+        // type; under `RowBinaryWithNamesAndTypes` the server validates the
+        // header types and rejects our `String` field for that column
+        // ("Type of 'attributes_array' must be JSON(...)"). Plain RowBinary plus
+        // `input_format_binary_read_json_as_string=1` (below) writes the JSON as
+        // a string and lets ClickHouse parse it into the JSON column — exactly
+        // what the old hand-rolled writer did. The crate still emits the column
+        // list (from the `Row` derive) in the INSERT, so mapping stays correct.
+        .with_validation(false)
         // Mirror the old writer's URL params: synchronous distributed insert and
         // "treat binary strings bound for JSON columns as JSON text".
         .with_setting("insert_distributed_sync", "1")

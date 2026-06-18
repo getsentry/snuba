@@ -1646,9 +1646,11 @@ mod tests {
         };
 
         // Production path: build the typed row, then insert it through the
-        // official clickhouse-crate inserter (RowBinaryWithNamesAndTypes +
-        // schema validation). Exercises the real EAPItemRow → live-schema
-        // mapping (UUID, Map columns, DateTime, UInt128, …).
+        // official clickhouse-crate inserter. Exercises the real EAPItemRow →
+        // live-schema mapping (UUID, Map columns, DateTime, UInt128, the
+        // JSON attributes_array column, …). Validation is off (plain RowBinary
+        // + input_format_binary_read_json_as_string) — see build_client in
+        // inserter_sink.rs for why the JSON column requires this.
         let batch = process_message_eap_row(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
         let row = batch.row.expect("row should be present");
@@ -1658,6 +1660,7 @@ mod tests {
             .with_user(user)
             .with_password(password)
             .with_database(database.clone())
+            .with_validation(false)
             .with_setting("input_format_binary_read_json_as_string", "1");
         let mut inserter = client
             .inserter::<EAPItemRow>("eap_items_1_local")
