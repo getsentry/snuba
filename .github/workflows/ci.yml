@@ -191,7 +191,8 @@ jobs:
         env:
           IMAGE: ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}
           CACHE_REF: ghcr.io/getsentry/snuba-ci:buildcache
-          PUSH_CACHE: ${{ github.event.pull_request.head.repo.fork != true }}
+          # Write the cache on master only; PRs read-only, so a cache miss never costs more than baseline.
+          PUSH_CACHE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
         run: |
           cache_to=""
           if [ "$PUSH_CACHE" = "true" ]; then
@@ -571,7 +572,7 @@ jobs:
           target: application-distroless
           load: true
           tags: snuba-distroless:test
-          # Read the shared snuba-ci registry buildcache instead of type=gha, whose ~7.7GB mode=max thrashed the 10GB Actions cache.
+          # Read-only (no cache-to, so no write penalty); shares the snuba-ci buildcache instead of the old type=gha.
           cache-from: type=registry,ref=ghcr.io/getsentry/snuba-ci:buildcache
 
       - name: Verify --help works
