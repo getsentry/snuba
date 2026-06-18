@@ -89,9 +89,7 @@ def cleanup(
         # the abstract ClickhousePool type.
         connection = connection_cache.get_node_connection(
             ClickhouseClientSettings.CLEANUP,
-            ClickhouseNode(
-                clickhouse_host, clickhouse_port, http_port=cluster.get_http_port()
-            ),
+            ClickhouseNode(clickhouse_host, clickhouse_port, http_port=cluster.get_http_port()),
             clickhouse_user,
             clickhouse_password,
             database,
