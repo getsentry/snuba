@@ -1,5 +1,107 @@
 # Changelog
 
+## 26.6.0
+
+### New Features ✨
+
+#### Eap
+
+- Route EAP RO storages through their \_dist_ro tables by @phacops in [#7996](https://github.com/getsentry/snuba/pull/7996)
+- Add \_dist_ro Distributed tables for EAP read-only routing by @phacops in [#7995](https://github.com/getsentry/snuba/pull/7995)
+
+#### Other
+
+- (allocation-policy) Per-org overrides for bytes-scanned policy by @phacops in [#7975](https://github.com/getsentry/snuba/pull/7975)
+- (attribute-values) Add counts to response and orderby by @wmak in [#7960](https://github.com/getsentry/snuba/pull/7960)
+- (cbrs) Add per-organization ClickHouse setting overrides by @phacops in [#8010](https://github.com/getsentry/snuba/pull/8010)
+- (search_issues) Add ClickhouseSettingsOverride query processor by @MeredithAnya in [#8015](https://github.com/getsentry/snuba/pull/8015)
+- Map SilencedDLQMessage to InvalidMessageReason::Ignored by @lcian in [#8019](https://github.com/getsentry/snuba/pull/8019)
+
+### Bug Fixes 🐛
+
+- (admin) Validate host/port before constructing any admin ClickhousePool by @phacops in [#8003](https://github.com/getsentry/snuba/pull/8003)
+- (eap) Include bool keys in attribute_keys_hash by @phacops in [#7991](https://github.com/getsentry/snuba/pull/7991)
+- (web) Return HTTP 404 for unknown dataset names by @phacops in [#8021](https://github.com/getsentry/snuba/pull/8021)
+
+### Internal Changes 🔧
+
+#### Clickhouse
+
+- Lower minimum ClickHouse version to 23.8.11.29 by @phacops in [#7994](https://github.com/getsentry/snuba/pull/7994)
+- LZ4-compress INSERT bodies in ClickhouseWriterStep by @phacops in [#7993](https://github.com/getsentry/snuba/pull/7993)
+
+#### Deps
+
+- Bump sentry-conventions to 0.11.0 by @constantinius in [#8013](https://github.com/getsentry/snuba/pull/8013)
+- Bump getsentry/self-hosted from 3701f1e1927e2a91b912af34952f95f2b69fc4e3 to 53b2a6fb5c032adb61945963d8051673f4d5d306 by @dependabot in [#8004](https://github.com/getsentry/snuba/pull/8004)
+- Bump actions/checkout from 6.0.2 to 6.0.3 by @dependabot in [#8005](https://github.com/getsentry/snuba/pull/8005)
+- Bump getsentry/sentry-options/.github/workflows/validate-schema.yml from 98749eaae09ad60bf8a10c59b531e0890695a991 to ceed9df987a4085bd3e662d188a55216d40a92d1 by @dependabot in [#8006](https://github.com/getsentry/snuba/pull/8006)
+- Bump getsentry/craft from 2.26.6 to 2.26.8 by @dependabot in [#8007](https://github.com/getsentry/snuba/pull/8007)
+- Bump astral-sh/setup-uv from 8.1.0 to 8.2.0 by @dependabot in [#8008](https://github.com/getsentry/snuba/pull/8008)
+
+#### Eap
+
+- Stop reading whole attributes_array column in export endpoint by @phacops in [#8024](https://github.com/getsentry/snuba/pull/8024)
+- Drop uncompressed insert body before retry loop by @phacops in [#8009](https://github.com/getsentry/snuba/pull/8009)
+
+#### Other
+
+- (admin) Replace team-sns with team-events-analytics-platform in IAM policy by @phacops in [#7999](https://github.com/getsentry/snuba/pull/7999)
+- (eap-items) Add SilencedDLQMessage by @MeredithAnya in [#8012](https://github.com/getsentry/snuba/pull/8012)
+- (eap-outcomes) Spread out producing outcomes by @MeredithAnya in [#7997](https://github.com/getsentry/snuba/pull/7997)
+- (health) Remove ClickHouse checks from healthcheck by @phacops in [#8011](https://github.com/getsentry/snuba/pull/8011)
+- (inc-2150) Handle future TimeoutError by @MeredithAnya in [#7919](https://github.com/getsentry/snuba/pull/7919)
+- (inc-2173) Tier 1 killswitch, force downsample by @MeredithAnya in [#8002](https://github.com/getsentry/snuba/pull/8002)
+- (issue-platform) Add index on group_id by @MeredithAnya in [#8023](https://github.com/getsentry/snuba/pull/8023)
+- (outcomes) Add quantity_64 column by @MeredithAnya in [#8014](https://github.com/getsentry/snuba/pull/8014)
+- Upgrade ClickHouse version bounds and fix migrations for CH 25.8 compatibility by @phacops in [#7800](https://github.com/getsentry/snuba/pull/7800)
+- Bump new development version by @sentry-release-bot[bot] in [7027ba56](https://github.com/getsentry/snuba/commit/7027ba56718a0d788ceb08ec2a323b8051359165)
+
+### Other
+
+- dep: upgrade granian to 2.7.6 by @gi0baro in [#8031](https://github.com/getsentry/snuba/pull/8031)
+
+## 26.5.2
+
+### New Features ✨
+
+- (eap) Route select queries to read-only cluster by @phacops in [#7969](https://github.com/getsentry/snuba/pull/7969)
+- (replacer) Expose --max-poll-interval-ms and --health-check-file into the CLI by @aldy505 in [#7961](https://github.com/getsentry/snuba/pull/7961)
+
+### Bug Fixes 🐛
+
+- (admin) Use readonly user for non-sudo clusterless system queries by @phacops in [#7974](https://github.com/getsentry/snuba/pull/7974)
+- (docker) Detect snuba subcommands via listdir instead of --help probe by @oioki in [#7968](https://github.com/getsentry/snuba/pull/7968)
+
+### Internal Changes 🔧
+
+#### Deps
+
+- Bump actions/cache from 5.0.4 to 5.0.5 by @dependabot in [#7981](https://github.com/getsentry/snuba/pull/7981)
+- Bump actions/labeler from 6.0.1 to 6.1.0 by @dependabot in [#7982](https://github.com/getsentry/snuba/pull/7982)
+- Bump getsentry/craft from 2.25.0 to 2.26.6 by @dependabot in [#7983](https://github.com/getsentry/snuba/pull/7983)
+- Bump getsentry/self-hosted from 871c182cb0a99dc1fad72cc7ce7889b514b0c5f0 to 3701f1e1927e2a91b912af34952f95f2b69fc4e3 by @dependabot in [#7984](https://github.com/getsentry/snuba/pull/7984)
+- Bump getsentry/action-validate-gocd-pipelines from 80fde540c1403d52e17783368930fa28bd93447f to 5662a2b631d4e2aa1bfc21e878f9e131c31c40c1 by @dependabot in [#7985](https://github.com/getsentry/snuba/pull/7985)
+- Bump actions/dependency-review-action from 4.9.0 to 5.0.0 by @dependabot in [#7986](https://github.com/getsentry/snuba/pull/7986)
+- Bump actions/upload-artifact from 7.0.0 to 7.0.1 by @dependabot in [#7987](https://github.com/getsentry/snuba/pull/7987)
+- Bump docker/setup-buildx-action from 4.0.0 to 4.1.0 by @dependabot in [#7988](https://github.com/getsentry/snuba/pull/7988)
+- Bump actions/create-github-app-token from 3.1.1 to 3.2.0 by @dependabot in [#7989](https://github.com/getsentry/snuba/pull/7989)
+- Bump docker/build-push-action from 7.1.0 to 7.2.0 by @dependabot in [#7990](https://github.com/getsentry/snuba/pull/7990)
+- Update sentry-conventions to 0.10.0 by @mjq in [#7978](https://github.com/getsentry/snuba/pull/7978)
+
+#### Eap Items
+
+- Encode RowBinary inserts in the processor by @phacops in [#7979](https://github.com/getsentry/snuba/pull/7979)
+- Normalize client and server sample rates by @phacops in [#7973](https://github.com/getsentry/snuba/pull/7973)
+- Stop double writing booleans into float columns by @phacops in [#7689](https://github.com/getsentry/snuba/pull/7689)
+
+#### Other
+
+- (eap) Add workflow attributes to attributes_array allowlist by @phacops in [#7976](https://github.com/getsentry/snuba/pull/7976)
+- (metrics) Tag dropped_out_of_range_timestamp with item_type and is_future by @MeredithAnya in [#7970](https://github.com/getsentry/snuba/pull/7970)
+- Bump sentry-protos to 0.17.0 by @getsentry-bot in [#7977](https://github.com/getsentry/snuba/pull/7977)
+- Bump sentry-options to 1.0.11 by @kenzoengineer in [#7957](https://github.com/getsentry/snuba/pull/7957)
+
 ## 26.5.1
 
 ### New Features ✨

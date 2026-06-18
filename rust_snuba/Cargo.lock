@@ -557,15 +557,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc0b364ead1874514c8c2855ab558056ebfeb775653e7ae45ff72f28f8f3166c"
 
 [[package]]
-name = "bstr"
-version = "1.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63044e1ae8e69f3b5a92c736ca6269b8d12fa7efe39bf34ddb06d102cf0e2cab"
-dependencies = [
- "memchr",
-]
-
-[[package]]
 name = "bumpalo"
 version = "3.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -709,44 +700,6 @@ name = "clap_lex"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "98cc8fbded0c607b7ba9dd60cd98df59af97e84d24e49c8557331cfc26d301ce"
-
-[[package]]
-name = "clickhouse"
-version = "0.13.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a9a81a1dffadd762ee662635ce409232258ce9beebd7cc0fa227df0b5e7efc0"
-dependencies = [
- "bstr",
- "bytes",
- "cityhash-rs",
- "clickhouse-derive",
- "futures",
- "futures-channel",
- "http-body-util",
- "hyper 1.6.0",
- "hyper-util",
- "lz4_flex",
- "replace_with",
- "sealed",
- "serde",
- "static_assertions",
- "thiserror 1.0.58",
- "tokio",
- "url",
- "uuid",
-]
-
-[[package]]
-name = "clickhouse-derive"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d70f3e2893f7d3e017eeacdc9a708fbc29a10488e3ebca21f9df6a5d2b616dbb"
-dependencies = [
- "proc-macro2",
- "quote",
- "serde_derive_internals 0.29.1",
- "syn 2.0.117",
-]
 
 [[package]]
 name = "cmake"
@@ -2405,6 +2358,9 @@ name = "lz4_flex"
 version = "0.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "373f5eceeeab7925e0c1098212f2fbc4d416adec9d35051a6ab251e824c1854a"
+dependencies = [
+ "twox-hash",
+]
 
 [[package]]
 name = "matchers"
@@ -3355,12 +3311,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "replace_with"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51743d3e274e2b18df81c4dc6caf8a5b8e15dbe799e0dca05c7617380094e884"
-
-[[package]]
 name = "reqwest"
 version = "0.11.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3449,7 +3399,7 @@ dependencies = [
  "bytes",
  "cadence",
  "chrono",
- "clickhouse",
+ "cityhash-rs",
  "criterion",
  "ctrlc",
  "data-encoding",
@@ -3458,6 +3408,7 @@ dependencies = [
  "hyper 1.6.0",
  "insta",
  "json-schema-diff",
+ "lz4_flex",
  "md5",
  "once_cell",
  "parking_lot",
@@ -3631,7 +3582,7 @@ checksum = "c767fd6fa65d9ccf9cf026122c1b555f2ef9a4f0cea69da4d7dbc3e258d30967"
 dependencies = [
  "proc-macro2",
  "quote",
- "serde_derive_internals 0.26.0",
+ "serde_derive_internals",
  "syn 1.0.109",
 ]
 
@@ -3640,17 +3591,6 @@ name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
-
-[[package]]
-name = "sealed"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22f968c5ea23d555e670b449c1c5e7b2fc399fdaec1d304a17cd48e288abc107"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.117",
-]
 
 [[package]]
 name = "security-framework"
@@ -3693,7 +3633,7 @@ dependencies = [
  "sentry-anyhow",
  "sentry-backtrace",
  "sentry-contexts",
- "sentry-core 0.41.0",
+ "sentry-core",
  "sentry-debug-images",
  "sentry-log",
  "sentry-panic",
@@ -3710,7 +3650,7 @@ checksum = "1fce8e095bb4e66cbf92f7eb3fb0ff7014f7943de3e4f55b3ef69261cf32d913"
 dependencies = [
  "anyhow",
  "sentry-backtrace",
- "sentry-core 0.41.0",
+ "sentry-core",
 ]
 
 [[package]]
@@ -3721,7 +3661,7 @@ checksum = "eb4416302fa5325181a120e0fe7d4afd83cd95e52a9b86afa34a8161383fe0dc"
 dependencies = [
  "backtrace",
  "regex",
- "sentry-core 0.41.0",
+ "sentry-core",
 ]
 
 [[package]]
@@ -3734,7 +3674,7 @@ dependencies = [
  "libc",
  "os_info",
  "rustc_version",
- "sentry-core 0.41.0",
+ "sentry-core",
  "uname",
 ]
 
@@ -3745,22 +3685,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "00e9bd2cadaeda3af41e9fa5d14645127d6f6a4aec73da3ae38e477ecafd3682"
 dependencies = [
  "rand 0.9.3",
- "sentry-types 0.41.0",
+ "sentry-types",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "sentry-core"
-version = "0.46.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0b1e7ca40f965db239da279bf278d87b7407469b98835f27f0c8e59ed189b06"
-dependencies = [
- "rand 0.9.3",
- "sentry-types 0.46.2",
- "serde",
- "serde_json",
- "url",
 ]
 
 [[package]]
@@ -3770,14 +3697,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e1e074fe9a0970c91999b23ed3195e6e30990d589fba3a68f20a1686af0f5cda"
 dependencies = [
  "findshlibs",
- "sentry-core 0.41.0",
+ "sentry-core",
 ]
 
 [[package]]
 name = "sentry-kafka-schemas"
-version = "2.1.24"
+version = "2.1.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c70862ad35fe018f967e8fb1571b1f0b2efe3c4fe687c8cc983d4416c84030aa"
+checksum = "1d8b0dd52fc3cc4f82fdd369bc572a286c842c2bbc4babd5c309c581c3805be8"
 dependencies = [
  "jsonschema 0.18.3",
  "prettyplease",
@@ -3800,7 +3727,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a693f27e3f63ae085cf7c176b5c44038af27c8a0170d01db30ccf776c2d40ce3"
 dependencies = [
  "log",
- "sentry-core 0.41.0",
+ "sentry-core",
 ]
 
 [[package]]
@@ -3839,7 +3766,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4651d34f3ba649d9e6dc1268443cae6728b8f741c2f0264004f8ecf5b247330d"
 dependencies = [
  "sentry-backtrace",
- "sentry-core 0.41.0",
+ "sentry-core",
 ]
 
 [[package]]
@@ -3850,7 +3777,7 @@ checksum = "c25c47d36bc80c74d26d568ffe970c37b337c061b7234ad6f2d159439c16f000"
 dependencies = [
  "bitflags 2.11.0",
  "sentry-backtrace",
- "sentry-core 0.41.0",
+ "sentry-core",
  "tracing-core",
  "tracing-subscriber",
 ]
@@ -3873,27 +3800,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "sentry-types"
-version = "0.46.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "567711f01f86a842057e1fc17779eba33a336004227e1a1e7e6cc2599e22e259"
-dependencies = [
- "debugid",
- "hex",
- "rand 0.9.3",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "time",
- "url",
- "uuid",
-]
-
-[[package]]
 name = "sentry_arroyo"
-version = "2.39.2"
+version = "2.40.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51da50a6e546268b9694e5f9421b505a55b04ddd9f151623be2ce3d1c8e7f2a8"
+checksum = "ead64064bc67db796b37b2ad465c6798a80343a11fc23186cb78f06c116added"
 dependencies = [
  "chrono",
  "coarsetime",
@@ -3901,7 +3811,7 @@ dependencies = [
  "parking_lot",
  "rand 0.8.6",
  "rdkafka",
- "sentry-core 0.46.2",
+ "sentry-core",
  "serde",
  "serde_json",
  "thiserror 1.0.58",
@@ -3981,17 +3891,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
-]
-
-[[package]]
-name = "serde_derive_internals"
-version = "0.29.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18d26a20a969b9e3fdf2fc2d9f21eda6c40e2de84c9408bb5d3b05d499aae711"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.117",
 ]
 
 [[package]]
@@ -4218,12 +4117,6 @@ name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
-
-[[package]]
-name = "static_assertions"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "statsdproxy"
@@ -4741,6 +4634,12 @@ name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
+
+[[package]]
+name = "twox-hash"
+version = "2.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ea3136b675547379c4bd395ca6b938e5ad3c3d20fad76e7fe85f9e0d011419c"
 
 [[package]]
 name = "typenum"

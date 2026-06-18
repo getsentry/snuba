@@ -13,9 +13,16 @@ use sentry_arroyo::types::{Message, Topic, TopicOrPartition};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
+/// Number of messages to produce before pausing to avoid flooding the producer queue.
+const THROTTLE_BATCH_SIZE: u64 = 20_000;
+/// How long to pause once THROTTLE_BATCH_SIZE messages have been produced.
+const THROTTLE_SLEEP: Duration = Duration::from_millis(500);
+
 struct ProduceOutcome {
     producer: Arc<dyn Producer<KafkaPayload>>,
     destination: Topic,
+    throttle_batch_size: u64,
+    throttle_sleep: Duration,
 }
 
 impl ProduceOutcome {
@@ -23,6 +30,8 @@ impl ProduceOutcome {
         ProduceOutcome {
             producer,
             destination,
+            throttle_batch_size: THROTTLE_BATCH_SIZE,
+            throttle_sleep: THROTTLE_SLEEP,
         }
     }
 }
@@ -36,11 +45,14 @@ impl TaskRunner<AggregatedOutcomesBatch, AggregatedOutcomesBatch, anyhow::Error>
     ) -> RunTaskFunc<AggregatedOutcomesBatch, anyhow::Error> {
         let producer = self.producer.clone();
         let destination: TopicOrPartition = self.destination.into();
+        let throttle_batch_size = self.throttle_batch_size;
+        let throttle_sleep = self.throttle_sleep;
 
         Box::pin(async move {
             let produce_start = SystemTime::now();
 
             let bucket_interval = message.payload().bucket_interval;
+            let mut produced_count: u64 = 0;
             for (key, stats) in &message.payload().buckets {
                 let ts_secs = key.time_offset * bucket_interval;
                 let timestamp = if ts_secs == 0 {
@@ -70,6 +82,13 @@ impl TaskRunner<AggregatedOutcomesBatch, AggregatedOutcomesBatch, anyhow::Error>
                     let error: &dyn std::error::Error = &err;
                     tracing::error!(error, "Error producing outcome");
                     return Err(RunTaskError::RetryableError);
+                }
+
+                // Pace produces to avoid flooding the producer queue with a single
+                // large batch all at once.
+                produced_count += 1;
+                if produced_count % throttle_batch_size == 0 {
+                    tokio::time::sleep(throttle_sleep).await;
                 }
             }
 
@@ -206,6 +225,78 @@ mod tests {
 
         let produced = produced_payloads.lock().unwrap();
         assert_eq!(produced.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn throttles_large_batches() {
+        use std::time::Instant;
+
+        let produced_payloads = Arc::new(Mutex::new(Vec::new()));
+
+        struct MockProducer {
+            payloads: Arc<Mutex<Vec<KafkaPayload>>>,
+        }
+
+        impl Producer<KafkaPayload> for MockProducer {
+            fn produce(
+                &self,
+                _topic: &TopicOrPartition,
+                payload: KafkaPayload,
+            ) -> Result<(), ProducerError> {
+                self.payloads.lock().unwrap().push(payload);
+                Ok(())
+            }
+        }
+
+        // Build a batch with 5 distinct buckets.
+        let num_buckets: u64 = 5;
+        let mut batch = AggregatedOutcomesBatch::new(60);
+        for i in 0..num_buckets {
+            batch.buckets.insert(
+                BucketKey {
+                    time_offset: 100,
+                    org_id: 1,
+                    project_id: 100,
+                    key_id: i,
+                    category: 1,
+                },
+                BucketStats::new(1),
+            );
+        }
+
+        // Throttle after every 2 messages, sleeping 50ms each time. With 5
+        // messages the sleep fires after the 2nd and 4th produce -> 2 sleeps.
+        let throttle_batch_size = 2;
+        let throttle_sleep = Duration::from_millis(100);
+        let task_runner = ProduceOutcome {
+            producer: Arc::new(MockProducer {
+                payloads: produced_payloads.clone(),
+            }),
+            destination: Topic::new("test-outcomes"),
+            throttle_batch_size,
+            throttle_sleep,
+        };
+
+        let start = Instant::now();
+        task_runner
+            .get_task(Message::new_any_message(batch, BTreeMap::new()))
+            .await
+            .unwrap();
+        let elapsed = start.elapsed();
+
+        // All buckets were produced.
+        assert_eq!(
+            produced_payloads.lock().unwrap().len(),
+            num_buckets as usize
+        );
+
+        // Two throttle pauses should have elapsed so expected_time
+        // should be at least 200ms
+        let expected_time = Duration::from_millis(200);
+        assert!(
+            elapsed >= expected_time,
+            "expected at least {expected_time:?} of throttling, got {elapsed:?}"
+        );
     }
 
     #[test]

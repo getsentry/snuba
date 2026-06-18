@@ -25,7 +25,7 @@ jobs:
       with:
         app_id: ${{ secrets.FAST_REVERT_BOT_APP_ID }}
         private_key: ${{ secrets.GH_FAST_REVERT_PRIVATE_KEY }}
-    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+    - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       with:
         token: ${{ steps.token.outputs.token }}
     - uses: getsentry/action-fast-revert@35b4b6c1f8f91b5911159568b3b15e531b5b8174 # v2.0.1

@@ -20,6 +20,7 @@ schema:
       { name: sampling_weight, type: UInt, args: { size: 64 } },
       { name: sampling_factor, type: Float, args: { size: 64 } },
       { name: retention_days, type: UInt, args: { size: 16 } },
+      { name: indexed_name, type: String },
       { name: downsampled_retention_days, type: UInt, args: { size: 16 } },
 
       { name: attributes_bool, type: Map, args: { key: { type: String }, value: { type: Bool } } },
@@ -107,7 +108,7 @@ schema:
       { name: attributes_float_39, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
     ]
   local_table_name: eap_items_1_local
-  dist_table_name: eap_items_1_dist
+  dist_table_name: eap_items_1_dist_ro
   partition_format: [retention_days, date]
 
 query_processors:

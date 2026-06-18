@@ -15,7 +15,7 @@ jobs:
     outputs:
       schemas: ${{ steps.changes.outputs.schemas }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - name: Check for relevant file changes
         uses: getsentry/paths-filter@4512585405083f25c027a35db413c2b3b9006d50 # v2.11.1
         id: changes
@@ -28,7 +28,7 @@ jobs:
     if: needs.files-changed.outputs.schemas == 'true'
     needs: files-changed
     name: Validate Schema Evolution
-    uses: getsentry/sentry-options/.github/workflows/validate-schema.yml@98749eaae09ad60bf8a10c59b531e0890695a991
+    uses: getsentry/sentry-options/.github/workflows/validate-schema.yml@0b115be89b102d76beff8106bd4054365954282e
     secrets: inherit
     with:
       schemas-path: sentry-options/schemas

@@ -19,7 +19,7 @@ jobs:
       api_changes: ${{ steps.changes.outputs.api_changes }}
       devservices_changes: ${{ steps.changes.outputs.devservices_changes }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Check for backend file changes
         uses: getsentry/paths-filter@66f7f1844185eb7fb6738ea4ea59d74bb99199e5 # v2
@@ -33,10 +33,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         name: Checkout code
 
-      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           enable-cache: false
 
@@ -53,7 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         name: Checkout code
       - name: Internal github app token
         id: token
@@ -63,7 +63,7 @@ jobs:
           app_id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private_key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
 
-      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           # we just cache the venv-dir directly in action-setup-venv
           enable-cache: false
@@ -75,7 +75,7 @@ jobs:
           # NOTE: can't pass --only-dev yet since we're missing some mypy stub packages
           install-cmd: uv sync --frozen --active
 
-      - uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: ~/.cache/pre-commit
           key: cache-epoch-1|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml', 'uv.lock') }}
@@ -119,7 +119,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         name: Checkout code
 
       - name: Install protoc
@@ -141,10 +141,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         name: Checkout code
 
-      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           # we just cache the venv-dir directly in action-setup-venv
           enable-cache: false
@@ -167,7 +167,7 @@ jobs:
       branch: ${{ steps.branch.outputs.branch }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Get branch name
         id: branch
@@ -192,7 +192,7 @@ jobs:
       # otherwise third-party contributors would have to provide a working,
       # authenticated GHCR, which seems impossible to ensure in the general
       # case.
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: snuba-ci
           path: /tmp/snuba-ci.tar
@@ -204,11 +204,11 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Restore Docker dependency image cache
         id: cache-restore
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: /tmp/docker-deps
           key: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
@@ -221,7 +221,7 @@ jobs:
             docker load --input /tmp/docker-deps/deps.tar
           fi
           images=(
-            "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.3.6.10034.altinitystable"
+            "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.3.8.10041.altinitystable"
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:6.2.0"
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-zookeeper:6.2.0"
             "ghcr.io/getsentry/docker-redis-cluster:7.0.10"
@@ -241,7 +241,7 @@ jobs:
 
       - name: Save Docker dependency image cache
         if: steps.load-pull.outputs.pulled == '1'
-        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: /tmp/docker-deps
           key: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
@@ -264,7 +264,7 @@ jobs:
           ]
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Download snuba-ci image from artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -278,7 +278,7 @@ jobs:
           docker image ls -a
 
       - name: Restore Docker dependency image cache
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: /tmp/docker-deps
           key: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
@@ -290,7 +290,7 @@ jobs:
             docker load --input /tmp/docker-deps/deps.tar
           fi
           images=(
-            "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.3.6.10034.altinitystable"
+            "ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:25.3.8.10041.altinitystable"
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:6.2.0"
             "ghcr.io/getsentry/image-mirror-confluentinc-cp-zookeeper:6.2.0"
             "ghcr.io/getsentry/docker-redis-cluster:7.0.10"
@@ -351,7 +351,7 @@ jobs:
     name: Front end tests for snuba admin
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         name: Checkout code
       - uses: volta-cli/action@615a78f6c83e116339c53b94f3f82b4d6c0b7d18 # v5.0.0
       - name: Set up and run tests through yarn
@@ -366,16 +366,16 @@ jobs:
     timeout-minutes: 60
     strategy:
       matrix:
-        instance: [0, 1, 2, 3]
+        instance: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
     env:
       MIGRATIONS_TEST_MIGRATE: 1
       # XXX: `MATRIX_INSTANCE_TOTAL` must be hardcoded to the length of `strategy.matrix.instance`.
-      MATRIX_INSTANCE_TOTAL: 4
+      MATRIX_INSTANCE_TOTAL: 16
       TEST_GROUP_STRATEGY: ROUND_ROBIN
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Download snuba-ci image from artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -389,7 +389,7 @@ jobs:
           docker image ls -a
 
       - name: Checkout sentry
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: getsentry/sentry
           path: sentry
@@ -474,13 +474,14 @@ jobs:
       matrix:
         version:
           [
-            "25.3.6.10034.altinitystable",
+            "25.3.8.10041.altinitystable",
+            "25.8.16.10001.altinitystable",
           ]
         test_type: [snuba-test, snuba-test-migrations]
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Download snuba-ci image from artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -494,7 +495,7 @@ jobs:
           docker image ls -a
 
       - name: Restore Docker dependency image cache
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: /tmp/docker-deps
           key: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
@@ -537,13 +538,13 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
 
       - name: Build distroless image
-        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: .
           target: application-distroless
@@ -591,7 +592,7 @@ jobs:
     needs: files-changed
     if: ${{ needs.files-changed.outputs.devservices_changes == 'true' }}
     steps:
-    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+    - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       name: Checkout repository
 
     - name: Get devservices version

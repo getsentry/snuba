@@ -8,6 +8,7 @@ from typing import (
     Callable,
     Dict,
     List,
+    NamedTuple,
     Optional,
     TypeAlias,
     TypedDict,
@@ -69,6 +70,40 @@ MetricsBackendType: TypeAlias = Callable[
 CBRS_HASH = "cbrs"
 RoutedRequestType = Union[TimeSeriesRequest, TraceItemTableRequest]
 ClickhouseQuerySettings = Dict[str, Any]
+
+
+class _OrgOverridableSetting(NamedTuple):
+    """One entry in the per-org ClickHouse setting override allowlist.
+
+    `unset_sentinel` is the value stored when no override is configured — chosen
+    so it cannot collide with a legitimate value an operator might want to set
+    (e.g. ClickHouse treats max_threads=0 as 'use all available cores', so 0 is
+    a real value and -1 is the sentinel). `description` is the operator-facing
+    string shown in the admin UI for this setting's override.
+    """
+
+    value_type: type
+    unset_sentinel: Any
+    description: str
+
+
+# Allowlist of ClickHouse settings that operators may override per-organization
+# via routing-strategy config. Each entry adds an `organization_<name>_override`
+# Configuration to every routing strategy, keyed by organization_id. The override
+# is applied after _update_routing_decision and replaces any prior value.
+ORG_OVERRIDABLE_CLICKHOUSE_SETTINGS: dict[str, _OrgOverridableSetting] = {
+    "max_threads": _OrgOverridableSetting(
+        value_type=int,
+        unset_sentinel=-1,
+        description=(
+            "Per-organization_id override for the ClickHouse max_threads setting. "
+            "Replaces any value set by allocation policies or the routing strategy, "
+            "including raising it above the policy-derived value. Default -1 means "
+            "no override; note that 0 is a legitimate value (ClickHouse interprets "
+            "max_threads=0 as 'use all available physical cores')."
+        ),
+    ),
+}
 
 
 @dataclass
@@ -259,6 +294,16 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 default=100,
             ),
         ]
+        for setting_name, setting in ORG_OVERRIDABLE_CLICKHOUSE_SETTINGS.items():
+            self._default_config_definitions.append(
+                RoutingStrategyConfig(
+                    name=f"organization_{setting_name}_override",
+                    description=setting.description,
+                    value_type=setting.value_type,
+                    default=setting.unset_sentinel,
+                    param_types={"organization_id": int},
+                )
+            )
         self._overridden_additional_config_definitions = (
             self._get_overridden_additional_config_defaults(default_config_overrides)
         )
@@ -268,6 +313,18 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
 
     def _get_default_config_definitions(self) -> list[Configuration]:
         return cast(list[Configuration], self._default_config_definitions)
+
+    def _get_default_routing_decision_tier(self) -> Tier:
+        tier_int = state.get_int_config("default_tier", 1)
+
+        if tier_int == 512:
+            return Tier.TIER_512
+        elif tier_int == 64:
+            return Tier.TIER_64
+        elif tier_int == 8:
+            return Tier.TIER_8
+        else:
+            return Tier.TIER_1
 
     def additional_config_definitions(self) -> list[Configuration]:
         return self._overridden_additional_config_definitions
@@ -363,6 +420,22 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
     ) -> None:
         raise NotImplementedError
 
+    def _get_org_clickhouse_setting_overrides(
+        self, tenant_ids: dict[str, str | int]
+    ) -> dict[str, Any]:
+        org_id = tenant_ids.get("organization_id")
+        if org_id is None:
+            return {}
+        overrides: dict[str, Any] = {}
+        for setting_name, setting in ORG_OVERRIDABLE_CLICKHOUSE_SETTINGS.items():
+            value = self.get_config_value(
+                f"organization_{setting_name}_override",
+                {"organization_id": org_id},
+            )
+            if value != setting.unset_sentinel:
+                overrides[setting_name] = value
+        return overrides
+
     def _get_combined_allocation_policies_recommendations(
         self, policy_recommendations: List[QuotaAllowance]
     ) -> CombinedAllocationPoliciesRecommendations:
@@ -410,6 +483,8 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             OutcomesBasedRoutingStrategy,
         )
 
+        default_tier = self._get_default_routing_decision_tier()
+
         with sentry_sdk.start_span(op="decide_tier") as span:
             try:
                 routing_context.timer.mark(_START_ESTIMATION_MARK)
@@ -426,7 +501,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 routing_decision = RoutingDecision(
                     routing_context=routing_context,
                     strategy=self,
-                    tier=Tier.TIER_1,
+                    tier=default_tier,
                     clickhouse_settings=combined_allocation_policies_recommendations["settings"],
                     can_run=combined_allocation_policies_recommendations["can_run"],
                     is_throttled=combined_allocation_policies_recommendations["is_throttled"],
@@ -434,11 +509,18 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
 
                 routing_context.cluster_load_info = (
                     get_cluster_loadinfo()
-                    if state.get_config("storage_routing.enable_get_cluster_loadinfo", True)
+                    if state.get_config("storage_routing.enable_get_cluster_loadinfo", False)
                     else None
                 )
 
                 self._update_routing_decision(routing_decision)
+
+                org_overrides = self._get_org_clickhouse_setting_overrides(
+                    routing_context.tenant_ids
+                )
+                if org_overrides:
+                    routing_decision.clickhouse_settings.update(org_overrides)
+                    routing_context.extra_info["org_clickhouse_setting_overrides"] = org_overrides
 
                 routing_context.timer.mark(_END_ESTIMATION_MARK)
                 self._record_value_in_span_and_DD(
@@ -457,7 +539,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 routing_decision = RoutingDecision(
                     routing_context=routing_context,
                     strategy=OutcomesBasedRoutingStrategy(),
-                    tier=Tier.TIER_1,
+                    tier=default_tier,
                     can_run=True,
                 )
 

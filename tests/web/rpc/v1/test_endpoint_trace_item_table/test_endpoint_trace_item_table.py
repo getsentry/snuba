@@ -1118,6 +1118,38 @@ class TestTraceItemTable(BaseApiTest):
         )
         EndpointTraceItemTable().execute(message)
 
+    def test_order_by_timestamp_does_not_error_with_aggregation_and_groupby(self) -> None:
+        # Regression test: an aggregation query that groups by and orders by
+        # `sentry.timestamp`. `sentry.timestamp` is ordered on the raw `timestamp`
+        # column for read-in-order; the GROUP BY must use the same raw column so
+        # ClickHouse does not reject the query with "Column `timestamp` is not under
+        # aggregate function and not in GROUP BY" (Code 215).
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_COUNT,
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp"),
+                    )
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
+                    ),
+                    descending=True,
+                ),
+            ],
+        )
+        EndpointTraceItemTable().execute(message)
+
     def test_aggregation_on_attribute_column_backward_compat(
         self,
         setup_teardown: Any,
@@ -3268,6 +3300,92 @@ class TestTraceItemTable(BaseApiTest):
             AttributeValue(val_str="a") for _ in range(10)
         ] + [AttributeValue(val_str="default") for _ in range(5)]
 
+    def test_virtual_column_filter_uses_value_map(self) -> None:
+        # Regression: a filter on a virtual column must compare against the mapped
+        # value. Map-backed filters build arrayElement(attributes_string, key)
+        # directly (see _map_backed_operands), so _apply_virtual_columns has to
+        # rewrite that form too, not only the SubscriptableReference used by
+        # SELECT / group by — otherwise the filter matches the raw key/value and
+        # returns nothing.
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_item(span_ts, {"device.class": "1"}, 3)
+        write_eap_item(span_ts, {"device.class": "2"}, 5)
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="device.class.label")),
+            ],
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="device.class.label"),
+                    op=ComparisonFilter.OP_EQUALS,
+                    value=AttributeValue(val_str="low"),
+                )
+            ),
+            virtual_column_contexts=[
+                VirtualColumnContext(
+                    from_column_name="device.class",
+                    to_column_name="device.class.label",
+                    value_map={"1": "low", "2": "medium"},
+                    default_value="Unknown",
+                ),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values[0].results == [
+            AttributeValue(val_str="low") for _ in range(3)
+        ]
+
+    def test_virtual_column_like_filter_uses_backing_existence(self) -> None:
+        # LIKE (and null / default-value guards) build a mapContains existence
+        # check on the request key; for a virtual column that key is absent in
+        # storage, so _apply_virtual_columns must rewrite the existence guard to
+        # the backing column too — otherwise it matches nothing.
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_item(span_ts, {"device.class": "1"}, 3)
+        write_eap_item(span_ts, {"device.class": "2"}, 5)
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="device.class.label")),
+            ],
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="device.class.label"),
+                    op=ComparisonFilter.OP_LIKE,
+                    value=AttributeValue(val_str="%low%"),
+                )
+            ),
+            virtual_column_contexts=[
+                VirtualColumnContext(
+                    from_column_name="device.class",
+                    to_column_name="device.class.label",
+                    value_map={"1": "low", "2": "medium"},
+                    default_value="Unknown",
+                ),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values[0].results == [
+            AttributeValue(val_str="low") for _ in range(3)
+        ]
+
     def test_normal_mode_end_to_end(self) -> None:
         items_storage = get_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
@@ -4196,14 +4314,13 @@ def test_build_query_with_order_by_optimization_disabled_because_multiproject() 
     request = _apply_labels_to_columns(request)
 
     query = build_query(request)
+    # The full sort-key expansion is disabled (multi-project), but ordering by
+    # sentry.timestamp still targets the raw `timestamp` column rather than a CAST so
+    # ClickHouse can read in primary-key order.
     assert query.get_orderby() == [
         OrderBy(
             direction=OrderByDirection.DESC,
-            expression=f.cast(
-                snuba_column("timestamp"),
-                "String",
-                alias="sentry.timestamp_TYPE_STRING",
-            ),
+            expression=snuba_column("timestamp"),
         ),
     ]
 
@@ -4239,14 +4356,13 @@ def test_build_query_with_order_by_optimization_disabled_because_groupby() -> No
     request = _apply_labels_to_columns(request)
 
     query = build_query(request)
+    # The full sort-key expansion is disabled (group by present), but ordering by
+    # sentry.timestamp still targets the raw `timestamp` column rather than a CAST so
+    # ClickHouse can read in primary-key order.
     assert query.get_orderby() == [
         OrderBy(
             direction=OrderByDirection.DESC,
-            expression=f.cast(
-                snuba_column("timestamp"),
-                "String",
-                alias="sentry.timestamp_TYPE_STRING",
-            ),
+            expression=snuba_column("timestamp"),
         ),
     ]
 
