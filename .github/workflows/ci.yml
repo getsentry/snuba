@@ -189,8 +189,7 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build snuba CI image
-        # Registry layer cache (not type=gha): no 10GB cap, so it actually holds the Rust target dir.
-        # cache-from is best-effort (forks fall back to a cold build); cache-to only runs with creds.
+        # GHCR registry layer cache (no 10GB cap like type=gha); cache-from is best-effort, cache-to only runs with creds.
         env:
           IMAGE: ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}
           CACHE_REF: ghcr.io/getsentry/snuba-ci:buildcache
@@ -277,8 +276,7 @@ jobs:
     timeout-minutes: 40
     strategy:
       matrix:
-        # test_distributed is the heaviest entry (full suite against distributed ClickHouse),
-        # so we split it across two runners by a stable hash of the test node id (see conftest.py).
+        # test_distributed is the heaviest entry; split across two runners by a stable file hash (see conftest.py).
         include:
           - snuba_settings: test
           - snuba_settings: test_rust
@@ -404,8 +402,7 @@ jobs:
       # XXX: `MATRIX_INSTANCE_TOTAL` must be hardcoded to the length of `strategy.matrix.instance`.
       MATRIX_INSTANCE_TOTAL: 16
       TEST_GROUP_STRATEGY: ROUND_ROBIN
-      # Run pytest with xdist inside each shard to use the idle cores; mirrors getsentry/sentry backend CI.
-      # Each worker gets its own snuba container + ClickHouse DB so tests don't collide on shared state (max 7 workers).
+      # xdist inside each shard (mirrors sentry backend CI); each worker gets its own snuba + ClickHouse DB, max 7 workers.
       XDIST_WORKERS: 2
       XDIST_PER_WORKER_SNUBA: '1'
 
@@ -604,9 +601,7 @@ jobs:
           target: application-distroless
           load: true
           tags: snuba-distroless:test
-          # Read the shared snuba-ci registry buildcache instead of type=gha. The old type=gha,mode=max was
-          # ~7.7GB and thrashed the 10GB Actions cache (evicting the venv cache); distroless shares the heavy
-          # Rust/base stages with the snuba-ci image, so this also cuts the build from ~14m to ~1m.
+          # Read the shared snuba-ci registry buildcache instead of type=gha, whose ~7.7GB mode=max thrashed the 10GB Actions cache.
           cache-from: type=registry,ref=ghcr.io/getsentry/snuba-ci:buildcache
 
       - name: Verify --help works

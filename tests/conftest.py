@@ -90,11 +90,7 @@ def create_databases() -> None:
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: List[Any]) -> None:
-    # Optional CI sharding: split tests across N runners by a stable hash of the test FILE.
-    # We shard by file (not node id) so a file's tests stay together and keep their order;
-    # some files have intra-file ordering deps (e.g. test_querylog_audit_log reloads a module
-    # in the first test that later tests rely on). Inert unless SNUBA_TEST_SHARD_TOTAL > 1.
-    # Lives here, not the root conftest, which .dockerignore drops.
+    # Optional CI sharding by a stable hash of the test file (keeps a file's tests together); inert unless SNUBA_TEST_SHARD_TOTAL > 1.
     total = int(os.environ.get("SNUBA_TEST_SHARD_TOTAL", "1"))
     if total > 1:
         shard = int(os.environ.get("SNUBA_TEST_SHARD", "0"))
