@@ -9,3 +9,4 @@ pub mod noop;
 pub mod processor;
 pub mod python;
 pub mod replacements;
+pub mod stuck_partition_watchdog;

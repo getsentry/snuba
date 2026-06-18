@@ -35,6 +35,7 @@ use crate::strategies::processor::{
 };
 use crate::strategies::python::PythonTransformStep;
 use crate::strategies::replacements::ProduceReplacements;
+use crate::strategies::stuck_partition_watchdog::{ReconnectSignal, StuckPartitionWatchdog};
 use crate::types::{BytesInsertBatch, CogsData, RowData};
 
 pub struct ConsumerStrategyFactoryV2 {
@@ -65,6 +66,9 @@ pub struct ConsumerStrategyFactoryV2 {
     pub use_row_binary: bool,
     pub blq_producer_config: Option<KafkaConfig>,
     pub blq_topic: Option<Topic>,
+    /// Lets the stuck-partition watchdog ask the processor to shut down (and be
+    /// restarted by the supervisor) so the consumer reconnects to the broker.
+    pub reconnect_signal: ReconnectSignal,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
@@ -310,8 +314,8 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                 Box::new(next_step)
             };
 
-        if let Some(path) = &self.health_check_file {
-            {
+        let next_step: Box<dyn ProcessingStrategy<KafkaPayload>> =
+            if let Some(path) = &self.health_check_file {
                 if self.health_check == "snuba" {
                     tracing::info!(
                         "Using Snuba HealthCheck for consumer group: {}",
@@ -321,10 +325,17 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                 } else {
                     Box::new(HealthCheck::new(next_step, path))
                 }
-            }
-        } else {
-            Box::new(next_step)
-        }
+            } else {
+                Box::new(next_step)
+            };
+
+        // Outermost strategy: it must see every message (to record per-partition
+        // activity) and be polled on every run-loop iteration (to evaluate
+        // stuckness). Detection is a no-op unless enabled via runtime config.
+        Box::new(StuckPartitionWatchdog::new(
+            next_step,
+            self.reconnect_signal.clone(),
+        ))
     }
 }
 

@@ -25,6 +25,7 @@ use crate::metrics::global_tags::set_global_tag;
 use crate::metrics::statsd::StatsDBackend;
 use crate::processors;
 use crate::rebalancing;
+use crate::strategies::stuck_partition_watchdog::ReconnectSignal;
 use crate::types::{InsertOrReplacement, KafkaMessageMetadata};
 
 #[pyfunction]
@@ -263,6 +264,11 @@ pub fn consumer_impl(
         rebalancing::delay_kafka_rebalance(secs)
     }
 
+    // The watchdog (built inside the factory) uses this to request a graceful
+    // shutdown when it detects a stuck partition. The actual ProcessorHandle is
+    // injected below, once the StreamProcessor exists.
+    let reconnect_signal = ReconnectSignal::new();
+
     let factory = ConsumerStrategyFactoryV2 {
         storage_config: first_storage,
         env_config,
@@ -291,9 +297,13 @@ pub fn consumer_impl(
         use_row_binary,
         blq_producer_config: blq_producer_config.clone(),
         blq_topic: dlq_topic,
+        reconnect_signal: reconnect_signal.clone(),
     };
 
     let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);
+
+    // Give the watchdog a handle so it can trigger a shutdown/reconnect.
+    reconnect_signal.set_handle(processor.get_handle());
 
     let mut handle = processor.get_handle();
 

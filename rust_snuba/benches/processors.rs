@@ -106,6 +106,7 @@ fn create_factory(
         use_row_binary: false,
         blq_producer_config: None,
         blq_topic: None,
+        reconnect_signal: Default::default(),
     };
     Box::new(factory)
 }
