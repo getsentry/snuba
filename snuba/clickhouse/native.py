@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from io import StringIO
 from typing import (
+    TYPE_CHECKING,
     Any,
     Dict,
     Generator,
@@ -32,6 +33,9 @@ from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.reader import Reader, Result, build_result_transformer
 from snuba.utils.metrics.gauge import ThreadSafeGauge
 from snuba.utils.metrics.wrapper import MetricsWrapper
+
+if TYPE_CHECKING:
+    from snuba.clickhouse.connect import ClickhouseConnectPool
 
 ignore_logger("clickhouse_driver.connection")
 
@@ -88,6 +92,7 @@ class ClickhousePool(object):
         max_pool_size: int = settings.CLICKHOUSE_MAX_POOL_SIZE,
         pool_get_timeout_seconds: float = settings.CLICKHOUSE_POOL_GET_TIMEOUT_SECONDS,
         client_settings: Mapping[str, Any] = {},
+        http_port: Optional[int] = None,
     ) -> None:
         self.host = host
         self.port = port
@@ -101,13 +106,57 @@ class ClickhousePool(object):
         self.send_receive_timeout = send_receive_timeout
         self.pool_get_timeout_seconds = pool_get_timeout_seconds
         self.client_settings = client_settings
+        self.http_port = http_port
+        self.max_pool_size = max_pool_size
 
         self.pool: queue.LifoQueue[Optional[Client]] = queue.LifoQueue(max_pool_size)
         self.__gauge = ThreadSafeGauge(metrics, "connections")
 
+        # When the runtime config flag is enabled (and an HTTP port is known)
+        # queries are transparently routed to clickhouse-connect over HTTP
+        # instead of the native protocol. The connect pool is created lazily.
+        self.__connect_pool: Optional["ClickhouseConnectPool"] = None
+
         # Fill the queue up so that doing get() on it will block properly
         for _ in range(max_pool_size):
             self.pool.put(None)
+
+    def _use_clickhouse_connect(self) -> bool:
+        """
+        Whether queries should be routed through clickhouse-connect (HTTP)
+        instead of the native protocol. Controlled by a runtime config flag so
+        the migration can be rolled out (and rolled back) without a deploy.
+
+        Only possible when the HTTP port is known for this connection.
+        """
+        # ``getattr`` keeps this safe for test doubles that subclass
+        # ClickhousePool without calling ``__init__``.
+        if getattr(self, "http_port", None) is None:
+            return False
+        default = 1 if settings.USE_CLICKHOUSE_CONNECT_DRIVER else 0
+        return bool(state.get_int_config("use_clickhouse_connect_driver", default))
+
+    def _get_connect_pool(self) -> "ClickhouseConnectPool":
+        if self.__connect_pool is None:
+            # Imported lazily to avoid a circular import at module load time.
+            from snuba.clickhouse.connect import ClickhouseConnectPool
+
+            assert self.http_port is not None
+            self.__connect_pool = ClickhouseConnectPool(
+                host=self.host,
+                http_port=self.http_port,
+                user=self.user,
+                password=self.password,
+                database=self.database,
+                secure=self.secure,
+                ca_certs=self.ca_certs,
+                verify=self.verify,
+                connect_timeout=self.connect_timeout,
+                send_receive_timeout=self.send_receive_timeout,
+                max_pool_size=self.max_pool_size,
+                client_settings=self.client_settings,
+            )
+        return self.__connect_pool
 
     # This will actually return an int if an INSERT query is run, but we never capture the
     # output of INSERT queries so I left this as a Sequence.
@@ -131,6 +180,19 @@ class ClickhousePool(object):
         return relatively quickly with an error in case of more persistent
         failures.
         """
+        if self._use_clickhouse_connect():
+            return self._get_connect_pool().execute(
+                query,
+                params=params,
+                with_column_types=with_column_types,
+                query_id=query_id,
+                settings=settings,
+                types_check=types_check,
+                columnar=columnar,
+                capture_trace=capture_trace,
+                retryable=retryable,
+            )
+
         try:
             conn = self.pool.get(block=True, timeout=self.pool_get_timeout_seconds)
         except queue.Empty:
@@ -280,6 +342,19 @@ class ClickhousePool(object):
         query successfully or else quit altogether. Note that each retry in this
         loop will be doubled by the retry in execute()
         """
+        if self._use_clickhouse_connect():
+            return self._get_connect_pool().execute_robust(
+                query,
+                params=params,
+                with_column_types=with_column_types,
+                query_id=query_id,
+                settings=settings,
+                types_check=types_check,
+                columnar=columnar,
+                capture_trace=capture_trace,
+                retryable=retryable,
+            )
+
         total_attempts = 3 if retryable else 1
         attempts_remaining = total_attempts
 
@@ -351,6 +426,10 @@ class ClickhousePool(object):
         )
 
     def close(self) -> None:
+        if self.__connect_pool is not None:
+            self.__connect_pool.close()
+            self.__connect_pool = None
+
         try:
             while True:
                 conn = self.pool.get(block=False)

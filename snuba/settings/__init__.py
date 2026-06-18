@@ -99,6 +99,11 @@ CLICKHOUSE_MAX_POOL_SIZE = 25
 # pool.get() when ClickHouse is hung but not dropping connections.
 CLICKHOUSE_POOL_GET_TIMEOUT_SECONDS = 5
 
+# Default for routing ClickHouse queries through clickhouse-connect (over the
+# HTTP protocol) instead of the native clickhouse-driver protocol. This default
+# can be overridden at runtime with the `use_clickhouse_connect_driver` config.
+USE_CLICKHOUSE_CONNECT_DRIVER = False
+
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
         "host": os.environ.get("CLICKHOUSE_HOST", "127.0.0.1"),

@@ -175,6 +175,7 @@ CacheKey = Tuple[
     bool,
     Optional[str],
     Optional[bool],
+    Optional[int],
 ]
 
 
@@ -193,6 +194,7 @@ class ConnectionCache:
         secure: bool,
         ca_certs: Optional[str],
         verify: Optional[bool],
+        http_port: Optional[int] = None,
     ) -> ClickhousePool:
         with self.__lock:
             settings, timeout = client_settings.value
@@ -205,6 +207,7 @@ class ConnectionCache:
                 secure,
                 ca_certs,
                 verify,
+                http_port,
             )
             if cache_key not in self.__cache:
                 self.__cache[cache_key] = ClickhousePool(
@@ -218,6 +221,7 @@ class ConnectionCache:
                     secure=secure,
                     ca_certs=ca_certs,
                     verify=verify,
+                    http_port=http_port,
                 )
 
             return self.__cache[cache_key]
@@ -327,6 +331,11 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             self.__secure,
             self.__ca_certs,
             self.__verify,
+            # The HTTP port is uniform across the cluster, so it is safe to use
+            # the cluster's configured http_port for every node. This is what
+            # enables the clickhouse-connect (HTTP) code path to be selected at
+            # runtime; over the native protocol it is simply ignored.
+            self.__http_port,
         )
 
     def get_deleter(self) -> Reader:
