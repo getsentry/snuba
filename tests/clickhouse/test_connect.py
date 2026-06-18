@@ -261,3 +261,67 @@ def test_with_totals_handled_over_http() -> None:
         {"project_id": 2, "count()": 20},
     ]
     assert result["totals"] == {"project_id": 0, "count()": 30}
+
+
+def test_connect_type_names_drive_reader_transforms() -> None:
+    # The connect pool exposes clickhouse-connect's column_type.name in the
+    # result meta, and the driver-agnostic ClickhouseReader runs that through
+    # the same Date / DateTime / UUID regex transforms used for the native
+    # driver. This pins that clickhouse-connect's type-name format matches what
+    # those regexes expect (including parametrized types like DateTime('UTC')
+    # and Nullable(UUID)), so transformations are not silently skipped on the
+    # HTTP path.
+    from datetime import date, datetime
+    from uuid import UUID as UUIDClass
+
+    from clickhouse_connect.datatypes.registry import get_from_name
+
+    from snuba.clickhouse.native import ClickhouseReader
+
+    class FakeFormattedQuery:
+        def get_sql(self) -> str:
+            return "SELECT d, dt, dt_tz, uid, nuid"
+
+    # Column types named exactly as clickhouse-connect produces them. The
+    # assertion documents that clickhouse-connect uses the canonical ClickHouse
+    # type strings (the same the native driver returns), so the reader regexes
+    # match identically for both drivers.
+    col_types = [
+        get_from_name("Date"),
+        get_from_name("DateTime"),
+        get_from_name("DateTime('UTC')"),
+        get_from_name("UUID"),
+        get_from_name("Nullable(UUID)"),
+    ]
+    assert [c.name for c in col_types] == [
+        "Date",
+        "DateTime",
+        "DateTime('UTC')",
+        "UUID",
+        "Nullable(UUID)",
+    ]
+
+    d = date(2023, 1, 2)
+    dt = datetime(2023, 1, 2, 3, 4, 5)
+    uid = UUIDClass("00000000-0000-0000-0000-000000000001")
+
+    client = mock.Mock()
+    client.query.return_value = FakeQueryResult(
+        result_set=[[d, dt, dt, uid, uid]],
+        column_names=("d", "dt", "dt_tz", "uid", "nuid"),
+        column_types=tuple(col_types),
+    )
+
+    pool = _make_pool(client)
+    reader = ClickhouseReader(cache_partition_id=None, client=pool, query_settings_prefix=None)
+    result = reader.execute(FakeFormattedQuery())
+
+    # Date/DateTime (incl. the parametrized tz variant) become ISO strings and
+    # UUID (incl. Nullable) becomes a string. Had the regexes failed to match
+    # the connect type names, these would still be the original objects.
+    row = result["data"][0]
+    assert row["d"] == "2023-01-02T00:00:00+00:00"
+    assert row["dt"] == "2023-01-02T03:04:05+00:00"
+    assert row["dt_tz"] == "2023-01-02T03:04:05+00:00"
+    assert row["uid"] == "00000000-0000-0000-0000-000000000001"
+    assert row["nuid"] == "00000000-0000-0000-0000-000000000001"
