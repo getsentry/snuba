@@ -292,8 +292,8 @@ def test_get_field_existence_expression_coalesce() -> None:
     assert expr.function_name == "or"
     assert len(expr.parameters) == 2
     lhs, rhs = expr.parameters
-    assert isinstance(lhs, FunctionCall) and lhs.function_name == "mapContains"
-    assert isinstance(rhs, FunctionCall) and rhs.function_name == "mapContains"
+    assert isinstance(lhs, FunctionCall) and lhs.function_name == "has"
+    assert isinstance(rhs, FunctionCall) and rhs.function_name == "has"
     assert lhs.parameters[1] == Literal(alias=None, value="http.response.body.size")
     assert rhs.parameters[1] == Literal(alias=None, value="http.response_content_length")
 
