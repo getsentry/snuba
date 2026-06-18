@@ -26,10 +26,11 @@ logger = logging.getLogger("snuba.clickhouse.connect")
 
 metrics = MetricsWrapper(environment.metrics, "clickhouse.connect")
 
-# The native pool caps its send/receive timeout at 35s; for the HTTP path we
-# cap it at 30s. Any larger (or unset) timeout coming from a client settings
-# profile is clamped down to this value.
-MAX_SEND_RECEIVE_TIMEOUT_SECONDS = 30
+# Fallback send/receive timeout (seconds) used when a client settings profile
+# does not specify one. Matches clickhouse-connect's own default. Per-profile
+# timeouts (e.g. 30s for reads, longer for migrations) are honored as-is, the
+# same way the native driver uses them.
+DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS = 300
 
 # The clickhouse-connect driver always talks to the default ClickHouse HTTP
 # port. The HTTP port is intentionally not configurable here.
@@ -122,16 +123,15 @@ class ClickhouseConnectPool(ClickhousePool):
                         secure=self.secure,
                         verify=bool(self.verify),
                         ca_cert=self.ca_certs,
-                        connect_timeout=min(self.connect_timeout, MAX_SEND_RECEIVE_TIMEOUT_SECONDS),
-                        # Cap the read timeout at 30s regardless of what the
-                        # client settings profile asks for (some profiles, e.g.
-                        # MIGRATE, use very large timeouts that are not
-                        # appropriate for the HTTP query path).
-                        send_receive_timeout=min(
+                        connect_timeout=self.connect_timeout,
+                        # Honor the per-profile timeout as-is, like the native
+                        # driver does (reads get 30s, migrations/DDL keep their
+                        # longer timeouts). Fall back to the default when a
+                        # profile does not set one.
+                        send_receive_timeout=(
                             self.send_receive_timeout
                             if self.send_receive_timeout is not None
-                            else MAX_SEND_RECEIVE_TIMEOUT_SECONDS,
-                            MAX_SEND_RECEIVE_TIMEOUT_SECONDS,
+                            else DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS
                         ),
                         settings=dict(self.client_settings),
                         pool_mgr=pool_mgr,

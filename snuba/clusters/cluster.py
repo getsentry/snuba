@@ -65,7 +65,9 @@ class ClickhouseClientSettings(Enum):
     )
     DELETE = ClickhouseClientSettingsType({"mutations_sync": 1}, None)
     OPTIMIZE = ClickhouseClientSettingsType({}, settings.OPTIMIZE_QUERY_TIMEOUT)
-    QUERY = ClickhouseClientSettingsType({}, None)
+    # Read queries get a 30s timeout. Migrations, DDL and other long-running
+    # operations keep their own (default or longer) timeouts above/below.
+    QUERY = ClickhouseClientSettingsType({}, 30)
     QUERYLOG = ClickhouseClientSettingsType({}, None)
     TRACING = ClickhouseClientSettingsType({"readonly": 2}, None)
     REPLACE = ClickhouseClientSettingsType(

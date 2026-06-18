@@ -129,18 +129,18 @@ def test_generic_clickhouse_error_wrapped() -> None:
     assert client.query.call_count == 1
 
 
-def test_send_receive_timeout_capped_at_30s() -> None:
+def test_timeouts_are_passed_through() -> None:
     import clickhouse_connect
 
+    # The per-profile timeout is honored as-is (no capping), the same way the
+    # native driver uses it. A large timeout (e.g. from MIGRATE) is preserved.
     pool = ClickhouseConnectPool(
         host="host",
         user="test",
         password="test",
         database="test",
         connect_timeout=60,
-        # A large timeout (e.g. coming from the MIGRATE settings profile) must
-        # be clamped down to 30s on the HTTP path.
-        send_receive_timeout=300,
+        send_receive_timeout=300000,
     )
 
     with (
@@ -150,8 +150,8 @@ def test_send_receive_timeout_capped_at_30s() -> None:
         pool._get_client()
 
     _, kwargs = get_client.call_args
-    assert kwargs["send_receive_timeout"] == 30
-    assert kwargs["connect_timeout"] == 30
+    assert kwargs["send_receive_timeout"] == 300000
+    assert kwargs["connect_timeout"] == 60
 
 
 def test_send_receive_timeout_default_when_unset() -> None:
@@ -172,7 +172,14 @@ def test_send_receive_timeout_default_when_unset() -> None:
         pool._get_client()
 
     _, kwargs = get_client.call_args
-    assert kwargs["send_receive_timeout"] == 30
+    assert kwargs["send_receive_timeout"] == 300
+
+
+def test_read_query_client_settings_use_30s_timeout() -> None:
+    # Read queries (the QUERY profile) get a 30s timeout on both drivers.
+    from snuba.clusters.cluster import ClickhouseClientSettings
+
+    assert ClickhouseClientSettings.QUERY.value.timeout == 30
 
 
 def test_pool_size_defaults_to_setting() -> None:
