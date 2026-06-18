@@ -35,6 +35,7 @@ from snuba.query.dsl import (
     in_cond,
     literal,
     literals_array,
+    map_key_exists,
     not_cond,
     or_cond,
 )
@@ -328,7 +329,7 @@ def add_existence_check_to_subscriptable_references(query: Query) -> None:
             alias=exp.alias,
             function_name="if",
             parameters=(
-                f.mapContains(exp.column, exp.key),
+                map_key_exists(exp.column, exp.key),
                 SubscriptableReference(None, exp.column, exp.key),
                 _typed_null_for_map_column(exp.column.column_name),
             ),
@@ -355,17 +356,17 @@ def _contains_subscriptable_reference(exp: Expression) -> bool:
 def _map_backed_operands(k: AttributeKey) -> tuple[Expression, Expression]:
     """Build ``(value, exists)`` for a map-backed key directly, NULL-free.
 
-    The legacy ``if(mapContains, arrayElement, NULL)`` form puts a NULL constant
+    The legacy ``if(<exists>, arrayElement, NULL)`` form puts a NULL constant
     into the predicate; the new ClickHouse analyzer canonicalizes that NULL
     inconsistently between an aggregate's projection name and its computed block
     (notably inside ``in(...)``), so the column isn't found ("Code: 10 ... Not
-    found column ... in block"). We write ``mapContains`` + ``arrayElement``
-    directly, so no NULL appears:
+    found column ... in block"). We write a ``has(mapKeys(...))`` existence check
+    (see ``map_key_exists``) + ``arrayElement`` directly, so no NULL appears:
 
-        value  = arrayElement(k)                                  # single key
-        value  = multiIf(mapContains(k1), arrayElement(k1), ...,  # coalesced:
-                         arrayElement(kn))                         # first present
-        exists = mapContains(k1) OR ... OR mapContains(kn)
+        value  = arrayElement(k)                                       # single key
+        value  = multiIf(has(mapKeys(k1)), arrayElement(k1), ...,      # coalesced:
+                         arrayElement(kn))                             # first present
+        exists = has(mapKeys(k1)) OR ... OR has(mapKeys(kn))
 
     Callers build ``cmp(value, v)``, wrapped in ``and(exists, ...)`` only when the
     literal could be the column default (see ``_comparison_can_match_column_default``)
@@ -390,7 +391,7 @@ def _map_backed_operands(k: AttributeKey) -> tuple[Expression, Expression]:
         return elem
 
     values = [_value(name) for name in names]
-    existences = [f.mapContains(column(col_name), literal(name)) for name in names]
+    existences = [map_key_exists(column(col_name), literal(name)) for name in names]
 
     exists = combine_or_conditions(existences) if len(existences) > 1 else existences[0]
     if len(values) == 1:
@@ -448,7 +449,7 @@ def _comparison_can_match_column_default(
     attr_type: AttributeKey.Type.ValueType, v: AttributeValue, value_type: str
 ) -> bool:
     """True if any compared literal is the column default ('' / 0), which an
-    absent key also reads as — so the ``mapContains`` guard is needed to avoid
+    absent key also reads as — so the existence guard is needed to avoid
     matching absent keys. When no literal is the default the guard is dropped (the
     simplest form). LIKE/NOT_LIKE always guard; null comparisons are separate."""
     default: str | int = "" if attr_type == AttributeKey.Type.TYPE_STRING else 0
@@ -832,7 +833,7 @@ def trace_item_filters_to_expression(
                     else (value, v_expression)
                 )
                 cmp = f.equals(lhs, rhs)
-                # mapContains guard only needed when '' / 0 could match an absent key.
+                # existence guard only needed when '' / 0 could match an absent key.
                 if _comparison_can_match_column_default(k.type, v, value_type):
                     return and_cond(exists, cmp)
                 return cmp
@@ -1119,10 +1120,10 @@ def get_field_existence_expression(field: Expression) -> Expression:
 
     subscriptable_field = get_subscriptable_field(field)
     if subscriptable_field is not None:
-        return f.mapContains(subscriptable_field.column, subscriptable_field.key)
+        return map_key_exists(subscriptable_field.column, subscriptable_field.key)
 
     if isinstance(field, FunctionCall) and field.function_name == "arrayElement":
-        return f.mapContains(field.parameters[0], field.parameters[1])
+        return map_key_exists(field.parameters[0], field.parameters[1])
 
     if isinstance(field, FunctionCall) and field.function_name == "arrayMap":
         # Array attributes in the JSON column return empty arrays (not NULL)

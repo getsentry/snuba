@@ -125,6 +125,23 @@ def column(column_name: str, table_name: str | None = None, alias: str | None = 
     return Column(alias, table_name, column_name)
 
 
+def map_key_exists(
+    map_column: Expression, key: Expression | OptionalScalarType, alias: str | None = None
+) -> FunctionCall:
+    """Existence check for a key in a ClickHouse ``Map`` column: ``has(mapKeys(col), key)``.
+
+    Uses only primary (non-alias) functions, so the result-block column name is
+    stable across ClickHouse versions on distributed reads. For the bucketed EAP
+    attribute maps, ``HashBucketFunctionTransformer`` routes it to the matching
+    bucket.
+    """
+    return FunctionCall(
+        alias,
+        "has",
+        (FunctionCall(None, "mapKeys", (map_column,)), _arg_to_literal_expr(key)),
+    )
+
+
 def literal(value: OptionalScalarType, alias: str | None = None) -> Literal:
     return Literal(alias, value)
 
