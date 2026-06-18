@@ -16,11 +16,9 @@ from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.native import (
     ClickhousePool,
     ClickhouseProfile,
-    ClickhouseReader,
     ClickhouseResult,
     Params,
 )
-from snuba.reader import Reader
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger("snuba.clickhouse.connect")
@@ -316,25 +314,3 @@ class ClickhouseConnectPool(ClickhousePool):
         if self.__client is not None:
             self.__client.close()
             self.__client = None
-
-    def get_reader(
-        self,
-        cache_partition_id: Optional[str],
-        query_settings_prefix: Optional[str],
-    ) -> Reader:
-        return HTTPDriverReader(
-            cache_partition_id=cache_partition_id,
-            client=self,
-            query_settings_prefix=query_settings_prefix,
-        )
-
-
-class HTTPDriverReader(ClickhouseReader):
-    """
-    Reader that executes queries over HTTP via :class:`ClickhouseConnectPool`.
-
-    It shares all result handling with :class:`NativeDriverReader` through the
-    common :class:`ClickhouseReader` base; it exists as its own type so the
-    driver in use is explicit and so the cluster can pick between the two
-    readers based on the ``use_clickhouse_connect_driver`` runtime config.
-    """

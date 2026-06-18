@@ -262,10 +262,10 @@ def test_cache_connections() -> None:
 
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
-def test_get_reader_selects_driver() -> None:
+def test_get_node_connection_selects_driver() -> None:
     from snuba import state
-    from snuba.clickhouse.connect import HTTPDriverReader
-    from snuba.clickhouse.native import NativeDriverReader
+    from snuba.clickhouse.connect import ClickhouseConnectPool
+    from snuba.clickhouse.native import ClickhouseNativePool, ClickhouseReader
 
     test_cluster = cluster.ClickhouseCluster(
         "127.0.0.1",
@@ -281,20 +281,25 @@ def test_get_reader_selects_driver() -> None:
         True,
     )
 
-    # Default: native driver.
+    # The driver is selected at the pool level; the reader is the single
+    # driver-agnostic ClickhouseReader regardless.
+    # Default: native pool.
     state.set_config("use_clickhouse_connect_driver", 0)
-    native_reader = test_cluster.get_reader()
-    assert isinstance(native_reader, NativeDriverReader)
-    assert not isinstance(native_reader, HTTPDriverReader)
+    native_pool = test_cluster.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
+    assert isinstance(native_pool, ClickhouseNativePool)
+    assert isinstance(test_cluster.get_reader(), ClickhouseReader)
 
-    # Flip on at runtime: HTTP driver.
+    # Flip on at runtime: HTTP pool.
     state.set_config("use_clickhouse_connect_driver", 1)
-    http_reader = test_cluster.get_reader()
-    assert isinstance(http_reader, HTTPDriverReader)
+    http_pool = test_cluster.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
+    assert isinstance(http_pool, ClickhouseConnectPool)
 
-    # Flip back: native driver again.
+    # Flip back: native pool again.
     state.set_config("use_clickhouse_connect_driver", 0)
-    assert not isinstance(test_cluster.get_reader(), HTTPDriverReader)
+    assert isinstance(
+        test_cluster.get_query_connection(cluster.ClickhouseClientSettings.QUERY),
+        ClickhouseNativePool,
+    )
 
 
 @patch("snuba.settings.SLICED_CLUSTERS", SLICED_CLUSTERS_CONFIG)

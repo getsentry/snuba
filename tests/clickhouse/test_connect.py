@@ -3,9 +3,8 @@ from unittest import mock
 
 import pytest
 
-from snuba.clickhouse.connect import ClickhouseConnectPool, HTTPDriverReader
+from snuba.clickhouse.connect import ClickhouseConnectPool
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.clickhouse.native import NativeDriverReader
 
 # Error code returned by ClickHouse when the maximum number of simultaneous
 # queries has been exceeded.
@@ -219,12 +218,11 @@ def test_pool_size_runtime_override() -> None:
     assert kwargs["maxsize"] == 42
 
 
-def test_http_driver_reader_is_a_clickhouse_reader_sibling() -> None:
-    # HTTPDriverReader and NativeDriverReader share the ClickhouseReader base
-    # but are siblings: HTTPDriverReader is NOT a NativeDriverReader.
+def test_clickhouse_reader_wraps_connect_pool() -> None:
+    # The single driver-agnostic ClickhouseReader wraps the abstract pool, so it
+    # works with the connect pool just like the native one.
     from snuba.clickhouse.native import ClickhouseReader
 
     pool = _make_pool(mock.Mock())
-    reader = HTTPDriverReader(cache_partition_id=None, client=pool, query_settings_prefix=None)
+    reader = ClickhouseReader(cache_partition_id=None, client=pool, query_settings_prefix=None)
     assert isinstance(reader, ClickhouseReader)
-    assert not isinstance(reader, NativeDriverReader)
