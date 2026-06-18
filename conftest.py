@@ -13,7 +13,9 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     # hash of the node id. Inert unless SNUBA_TEST_SHARD_TOTAL > 1 is set.
     total = int(os.environ.get("SNUBA_TEST_SHARD_TOTAL", "1"))
     shard = int(os.environ.get("SNUBA_TEST_SHARD", "0"))
-    print(f"[shard-config] SNUBA_TEST_SHARD={shard} SNUBA_TEST_SHARD_TOTAL={total}", file=sys.stderr)
+    print(
+        f"[shard-config] SNUBA_TEST_SHARD={shard} SNUBA_TEST_SHARD_TOTAL={total}", file=sys.stderr
+    )
     if total <= 1:
         return
     selected: list[pytest.Item] = []
