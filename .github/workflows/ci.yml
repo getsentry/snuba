@@ -604,8 +604,9 @@ jobs:
           target: application-distroless
           load: true
           tags: snuba-distroless:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # EXPERIMENT: read the shared snuba-ci registry buildcache (off the 10GB GHA budget) instead of type=gha.
+          # Distroless shares the expensive build_rust_snuba/application_base stages with the snuba-ci image.
+          cache-from: type=registry,ref=ghcr.io/getsentry/snuba-ci:buildcache
 
       - name: Verify --help works
         run: docker run --rm snuba-distroless:test --help
