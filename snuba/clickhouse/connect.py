@@ -32,8 +32,7 @@ metrics = MetricsWrapper(environment.metrics, "clickhouse.connect")
 # same way the native driver uses them.
 DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS = 300
 
-# The clickhouse-connect driver always talks to the default ClickHouse HTTP
-# port. The HTTP port is intentionally not configurable here.
+# Default ClickHouse HTTP port, used when a caller does not pass one.
 DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
 
 # clickhouse-connect raises a ProgrammingError by default when it is asked to
@@ -65,6 +64,7 @@ class ClickhouseConnectPool(ClickhousePool):
         user: str,
         password: str,
         database: str,
+        http_port: int = DEFAULT_CLICKHOUSE_HTTP_PORT,
         secure: bool = False,
         ca_certs: Optional[str] = None,
         verify: Optional[bool] = False,
@@ -75,9 +75,9 @@ class ClickhouseConnectPool(ClickhousePool):
     ) -> None:
         # No native connection queue here; clickhouse-connect manages its own
         # HTTP pool. ``port`` is the abstract base attribute (it holds the
-        # default HTTP port for this driver).
+        # cluster's configured HTTP port for this driver).
         self.host = host
-        self.port = DEFAULT_CLICKHOUSE_HTTP_PORT
+        self.port = http_port
         self.user = user
         self.password = password
         self.database = database

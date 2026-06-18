@@ -215,8 +215,15 @@ class ConnectionCache:
         secure: bool,
         ca_certs: Optional[str],
         verify: Optional[bool],
+        http_port: int,
+        use_connect: bool,
     ) -> ClickhousePool:
-        """Return a cached native (clickhouse-driver) connection pool."""
+        """
+        Return a cached connection pool for the node, typed as the abstract
+        :class:`ClickhousePool`. When ``use_connect`` is set the
+        clickhouse-connect (HTTP) pool is built, otherwise the native one. Both
+        variants are cached side by side (the driver is part of the cache key).
+        """
         with self.__lock:
             client_settings_dict, timeout = client_settings.value
             cache_key = (
@@ -228,65 +235,41 @@ class ConnectionCache:
                 secure,
                 ca_certs,
                 verify,
-                "native",
+                "http" if use_connect else "native",
             )
             if cache_key not in self.__cache:
-                self.__cache[cache_key] = ClickhouseNativePool(
-                    node.host_name,
-                    node.port,
-                    user,
-                    password,
-                    database,
-                    client_settings=client_settings_dict,
-                    send_receive_timeout=timeout,
-                    secure=secure,
-                    ca_certs=ca_certs,
-                    verify=verify,
-                )
+                pool: ClickhousePool
+                if use_connect:
+                    # Imported here so that the native code path never imports
+                    # clickhouse-connect.
+                    from snuba.clickhouse.connect import ClickhouseConnectPool
 
-            return self.__cache[cache_key]
-
-    def get_http_node_connection(
-        self,
-        client_settings: ClickhouseClientSettings,
-        node: ClickhouseNode,
-        user: str,
-        password: str,
-        database: str,
-        secure: bool,
-        ca_certs: Optional[str],
-        verify: Optional[bool],
-    ) -> ClickhousePool:
-        """Return a cached clickhouse-connect (HTTP) connection pool."""
-        # Imported here so that importing this module does not import
-        # clickhouse-connect until an HTTP connection is actually requested.
-        from snuba.clickhouse.connect import ClickhouseConnectPool
-
-        with self.__lock:
-            client_settings_dict, timeout = client_settings.value
-            cache_key = (
-                node,
-                client_settings,
-                user,
-                password,
-                database,
-                secure,
-                ca_certs,
-                verify,
-                "http",
-            )
-            if cache_key not in self.__cache:
-                self.__cache[cache_key] = ClickhouseConnectPool(
-                    host=node.host_name,
-                    user=user,
-                    password=password,
-                    database=database,
-                    client_settings=client_settings_dict,
-                    send_receive_timeout=timeout,
-                    secure=secure,
-                    ca_certs=ca_certs,
-                    verify=verify,
-                )
+                    pool = ClickhouseConnectPool(
+                        host=node.host_name,
+                        http_port=http_port,
+                        user=user,
+                        password=password,
+                        database=database,
+                        client_settings=client_settings_dict,
+                        send_receive_timeout=timeout,
+                        secure=secure,
+                        ca_certs=ca_certs,
+                        verify=verify,
+                    )
+                else:
+                    pool = ClickhouseNativePool(
+                        node.host_name,
+                        node.port,
+                        user,
+                        password,
+                        database,
+                        client_settings=client_settings_dict,
+                        send_receive_timeout=timeout,
+                        secure=secure,
+                        ca_certs=ca_certs,
+                        verify=verify,
+                    )
+                self.__cache[cache_key] = pool
 
             return self.__cache[cache_key]
 
@@ -389,18 +372,6 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         The choice applies to every caller (reads, migrations, replacer,
         optimize, ...), not just the read path.
         """
-        if use_clickhouse_connect_driver():
-            return self.__connection_cache.get_http_node_connection(
-                client_settings,
-                node,
-                self.__user,
-                self.__password,
-                self.__database,
-                self.__secure,
-                self.__ca_certs,
-                self.__verify,
-            )
-
         return self.__connection_cache.get_node_connection(
             client_settings,
             node,
@@ -410,6 +381,8 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             self.__secure,
             self.__ca_certs,
             self.__verify,
+            http_port=self.__http_port,
+            use_connect=use_clickhouse_connect_driver(),
         )
 
     def __build_reader(self, cache_partition_id: Optional[str], client: ClickhousePool) -> Reader:
