@@ -315,6 +315,10 @@ class ClickhouseConnectPool(ClickhousePool):
         )
 
     def close(self) -> None:
-        if self.__client is not None:
-            self.__client.close()
-            self.__client = None
+        # Take the same lock _get_client uses so a concurrent lazy init can't
+        # race with teardown (one thread closing the client while another is
+        # creating or about to use it).
+        with self.__lock:
+            if self.__client is not None:
+                self.__client.close()
+                self.__client = None

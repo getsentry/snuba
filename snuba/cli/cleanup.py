@@ -70,11 +70,7 @@ def cleanup(
 
     from snuba.cleanup import logger, run_cleanup
     from snuba.clickhouse.native import ClickhousePool
-    from snuba.clusters.cluster import (
-        ClickhouseNode,
-        connection_cache,
-        use_clickhouse_connect_driver,
-    )
+    from snuba.clusters.cluster import ClickhouseNode, connection_cache
 
     storage = get_writable_storage(StorageKey(storage_name))
 
@@ -101,7 +97,6 @@ def cleanup(
             ca_certs=clickhouse_ca_certs,
             verify=clickhouse_verify,
             http_port=cluster.get_http_port(),
-            use_connect=use_clickhouse_connect_driver(),
         )
     elif not cluster.is_single_node():
         raise click.ClickException("Provide ClickHouse host and port for cleanup")

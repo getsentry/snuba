@@ -222,21 +222,23 @@ class ConnectionCache:
         ca_certs: Optional[str],
         verify: Optional[bool],
         http_port: int,
-        use_connect: bool,
     ) -> ClickhousePool:
         """
         Return a cached connection pool for the node, typed as the abstract
-        :class:`ClickhousePool`. When ``use_connect`` is set the
+        :class:`ClickhousePool`. The driver is decided here, from the
+        ``use_clickhouse_connect_driver`` runtime config: when it is enabled the
         clickhouse-connect (HTTP) pool is built, otherwise the native one. Both
         variants are cached side by side (the driver is part of the cache key).
 
-        This is the single place pools are instantiated, so every caller — the
-        cluster query/node connections as well as the admin and CLI by-host
-        helpers — goes through it and gets one shared, runtime-selected pool
-        behind the abstract :class:`ClickhousePool` type. Pool sizing is left to
-        the pools themselves (the connect pool reads the
-        ``clickhouse_connect_pool_size`` runtime config).
+        This is the single place pools are instantiated and the single place the
+        driver is selected, so every caller — the cluster query/node connections
+        as well as the admin and CLI by-host helpers — goes through it and gets
+        one shared, runtime-selected pool behind the abstract
+        :class:`ClickhousePool` type. Pool sizing is left to the pools themselves
+        (the connect pool reads the ``clickhouse_connect_pool_size`` runtime
+        config).
         """
+        use_connect = use_clickhouse_connect_driver()
         with self.__lock:
             client_settings_dict, timeout = client_settings.value
             cache_key = (
@@ -387,11 +389,10 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         connection to the same node with the same settings otherwise establish a new
         connection.
 
-        This is the single place where the driver is selected: when the
-        ``use_clickhouse_connect_driver`` runtime config is enabled the
-        clickhouse-connect (HTTP) pool is returned, otherwise the native pool.
-        The choice applies to every caller (reads, migrations, replacer,
-        optimize, ...), not just the read path.
+        The driver is selected inside ``ConnectionCache.get_node_connection``
+        from the ``use_clickhouse_connect_driver`` runtime config (HTTP pool
+        when enabled, native otherwise). The choice applies to every caller
+        (reads, migrations, replacer, optimize, ...), not just the read path.
         """
         return self.__connection_cache.get_node_connection(
             client_settings,
@@ -403,7 +404,6 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             self.__ca_certs,
             self.__verify,
             http_port=self.__http_port,
-            use_connect=use_clickhouse_connect_driver(),
         )
 
     def get_deleter(self) -> Reader:

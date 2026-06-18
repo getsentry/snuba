@@ -13,7 +13,6 @@ from snuba.clusters.cluster import (
     ClickhouseClientSettings,
     ClickhouseNode,
     connection_cache,
-    use_clickhouse_connect_driver,
 )
 from snuba.environment import setup_logging, setup_sentry
 
@@ -182,7 +181,6 @@ def querylog_to_csv(
         ca_certs=None,
         verify=False,
         http_port=http_port,
-        use_connect=use_clickhouse_connect_driver(),
     )
     results = connection.execute(query)
     filename = format_filename(table)

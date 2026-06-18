@@ -116,7 +116,6 @@ def _build_validated_pool(
         ca_certs=None,
         verify=False,
         http_port=cluster.get_http_port(),
-        use_connect=use_clickhouse_connect_driver(),
     )
 
 

@@ -128,7 +128,6 @@ class FakeClickhouseCluster(ClickhouseCluster):
         self,
         client_settings: ClickhouseClientSettings,
         node: ClickhouseNode,
-        use_connect: Optional[bool] = None,
     ) -> ClickhouseNativePool:
         settings, timeout = client_settings.value
         cache_key = (node, client_settings)
