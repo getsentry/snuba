@@ -175,7 +175,6 @@ CacheKey = Tuple[
     bool,
     Optional[str],
     Optional[bool],
-    Optional[int],
 ]
 
 
@@ -194,7 +193,6 @@ class ConnectionCache:
         secure: bool,
         ca_certs: Optional[str],
         verify: Optional[bool],
-        http_port: Optional[int] = None,
     ) -> ClickhousePool:
         with self.__lock:
             client_settings_dict, timeout = client_settings.value
@@ -207,7 +205,6 @@ class ConnectionCache:
                 secure,
                 ca_certs,
                 verify,
-                http_port,
             )
             if cache_key not in self.__cache:
                 # Imported here so that importing this module does not import
@@ -229,24 +226,18 @@ class ConnectionCache:
                     ca_certs=ca_certs,
                     verify=verify,
                 )
-                # The connect pool can only be built when the HTTP port is
-                # known; otherwise the selecting pool simply always routes to
-                # the native pool.
-                connect_pool = (
-                    ClickhouseConnectPool(
-                        host=node.host_name,
-                        http_port=http_port,
-                        user=user,
-                        password=password,
-                        database=database,
-                        client_settings=client_settings_dict,
-                        send_receive_timeout=timeout,
-                        secure=secure,
-                        ca_certs=ca_certs,
-                        verify=verify,
-                    )
-                    if http_port is not None
-                    else None
+                # The connect pool always talks to the default ClickHouse HTTP
+                # port (it is not configurable).
+                connect_pool = ClickhouseConnectPool(
+                    host=node.host_name,
+                    user=user,
+                    password=password,
+                    database=database,
+                    client_settings=client_settings_dict,
+                    send_receive_timeout=timeout,
+                    secure=secure,
+                    ca_certs=ca_certs,
+                    verify=verify,
                 )
                 # Always hand out a DriverSelectingPool and let it decide, at
                 # query time, which driver each query goes to.
@@ -359,11 +350,6 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             self.__secure,
             self.__ca_certs,
             self.__verify,
-            # The HTTP port is uniform across the cluster, so it is safe to use
-            # the cluster's configured http_port for every node. The connection
-            # cache uses it to build the clickhouse-connect (HTTP) pool that
-            # backs the driver-selecting connection.
-            self.__http_port,
         )
 
     def get_deleter(self) -> Reader:

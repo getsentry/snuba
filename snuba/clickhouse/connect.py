@@ -30,6 +30,10 @@ metrics = MetricsWrapper(environment.metrics, "clickhouse.connect")
 # profile is clamped down to this value.
 MAX_SEND_RECEIVE_TIMEOUT_SECONDS = 30
 
+# The clickhouse-connect driver always talks to the default ClickHouse HTTP
+# port. The HTTP port is intentionally not configurable here.
+DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
+
 # clickhouse-connect raises a ProgrammingError by default when it is asked to
 # send a setting it considers unknown or readonly. The native driver simply
 # forwards whatever settings it is given to the server, so to preserve parity
@@ -69,7 +73,6 @@ class ClickhouseConnectPool(ClickhousePool):
     def __init__(
         self,
         host: str,
-        http_port: int,
         user: str,
         password: str,
         database: str,
@@ -83,9 +86,9 @@ class ClickhouseConnectPool(ClickhousePool):
     ) -> None:
         # Intentionally does not call ClickhousePool.__init__: the native queue
         # of connections is not used here. ``port`` mirrors the base class
-        # attribute (it holds the HTTP port for this driver).
+        # attribute (it holds the default HTTP port for this driver).
         self.host = host
-        self.port = http_port
+        self.port = DEFAULT_CLICKHOUSE_HTTP_PORT
         self.user = user
         self.password = password
         self.database = database
@@ -335,16 +338,12 @@ class DriverSelectingPool(ClickhousePool):
     Both underlying pools are created once (up front) and reused. Flipping the
     runtime config never creates a pool on the fly; it only changes which of
     the two already-created pools a given query is routed to.
-
-    ``connect_pool`` may be ``None`` when the HTTP port is not known for the
-    target. In that case every query is routed to the native pool, so the
-    cluster can always hand out a DriverSelectingPool without special casing.
     """
 
     def __init__(
         self,
         native_pool: ClickhousePool,
-        connect_pool: Optional[ClickhouseConnectPool],
+        connect_pool: ClickhouseConnectPool,
     ) -> None:
         # Intentionally does not call ClickhousePool.__init__: this pool owns no
         # connections of its own, it only forwards to the two real pools.
@@ -359,7 +358,7 @@ class DriverSelectingPool(ClickhousePool):
         self.database = native_pool.database
 
     def _selected_pool(self) -> ClickhousePool:
-        if self.__connect_pool is not None and use_clickhouse_connect_driver():
+        if use_clickhouse_connect_driver():
             return self.__connect_pool
         return self.__native_pool
 
@@ -413,5 +412,4 @@ class DriverSelectingPool(ClickhousePool):
 
     def close(self) -> None:
         self.__native_pool.close()
-        if self.__connect_pool is not None:
-            self.__connect_pool.close()
+        self.__connect_pool.close()

@@ -36,7 +36,6 @@ class FakeQueryResult:
 def _make_pool(client: mock.Mock) -> ClickhouseConnectPool:
     pool = ClickhouseConnectPool(
         host="host",
-        http_port=8123,
         user="test",
         password="test",
         database="test",
@@ -137,7 +136,6 @@ def test_send_receive_timeout_capped_at_30s() -> None:
 
     pool = ClickhouseConnectPool(
         host="host",
-        http_port=8123,
         user="test",
         password="test",
         database="test",
@@ -163,7 +161,6 @@ def test_send_receive_timeout_default_when_unset() -> None:
 
     pool = ClickhouseConnectPool(
         host="host",
-        http_port=8123,
         user="test",
         password="test",
         database="test",
@@ -185,9 +182,7 @@ def test_pool_size_defaults_to_setting() -> None:
 
     from snuba import settings
 
-    pool = ClickhouseConnectPool(
-        host="host", http_port=8123, user="test", password="test", database="test"
-    )
+    pool = ClickhouseConnectPool(host="host", user="test", password="test", database="test")
 
     with (
         mock.patch.object(clickhouse_connect, "get_client"),
@@ -207,9 +202,7 @@ def test_pool_size_runtime_override() -> None:
 
     state.set_config("clickhouse_connect_pool_size", 42)
 
-    pool = ClickhouseConnectPool(
-        host="host", http_port=8123, user="test", password="test", database="test"
-    )
+    pool = ClickhouseConnectPool(host="host", user="test", password="test", database="test")
 
     with (
         mock.patch.object(clickhouse_connect, "get_client"),
@@ -288,26 +281,3 @@ def test_selecting_pool_close_closes_both() -> None:
 
     assert native_pool.close.call_count == 1
     assert connect_pool.close.call_count == 1
-
-
-@pytest.mark.redis_db
-def test_selecting_pool_without_connect_pool_always_native() -> None:
-    from snuba import state
-
-    # No connect pool available (e.g. HTTP port unknown): queries must always
-    # go to native, even when the runtime flag is on.
-    state.set_config("use_clickhouse_connect_driver", 1)
-
-    native_pool = mock.Mock()
-    native_pool.host = "host"
-    native_pool.port = 9000
-    native_pool.user = "test"
-    native_pool.password = "test"
-    native_pool.database = "test"
-    selecting = DriverSelectingPool(native_pool, None)
-
-    selecting.execute("SELECT 1")
-    selecting.close()  # must not raise despite the missing connect pool
-
-    assert native_pool.execute.call_count == 1
-    assert native_pool.close.call_count == 1
