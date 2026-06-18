@@ -8,7 +8,7 @@ import clickhouse_connect
 import sentry_sdk
 from clickhouse_connect import common as clickhouse_connect_common
 from clickhouse_connect.driver.client import Client
-from clickhouse_connect.driver.exceptions import DatabaseError, OperationalError
+from clickhouse_connect.driver.exceptions import ClickHouseError, OperationalError
 from clickhouse_connect.driver.httputil import get_pool_manager
 
 from snuba import environment, settings
@@ -19,6 +19,11 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 logger = logging.getLogger("snuba.clickhouse.connect")
 
 metrics = MetricsWrapper(environment.metrics, "clickhouse.connect")
+
+# The native pool caps its send/receive timeout at 35s; for the HTTP path we
+# cap it at 30s. Any larger (or unset) timeout coming from a client settings
+# profile is clamped down to this value.
+MAX_SEND_RECEIVE_TIMEOUT_SECONDS = 30
 
 # clickhouse-connect raises a ProgrammingError by default when it is asked to
 # send a setting it considers unknown or readonly. The native driver simply
@@ -96,11 +101,16 @@ class ClickhouseConnectPool(object):
                         secure=self.secure,
                         verify=bool(self.verify),
                         ca_cert=self.ca_certs,
-                        connect_timeout=self.connect_timeout,
-                        send_receive_timeout=(
+                        connect_timeout=min(self.connect_timeout, MAX_SEND_RECEIVE_TIMEOUT_SECONDS),
+                        # Cap the read timeout at 30s regardless of what the
+                        # client settings profile asks for (some profiles, e.g.
+                        # MIGRATE, use very large timeouts that are not
+                        # appropriate for the HTTP query path).
+                        send_receive_timeout=min(
                             self.send_receive_timeout
                             if self.send_receive_timeout is not None
-                            else 300
+                            else MAX_SEND_RECEIVE_TIMEOUT_SECONDS,
+                            MAX_SEND_RECEIVE_TIMEOUT_SECONDS,
                         ),
                         settings=dict(self.client_settings),
                         pool_mgr=pool_mgr,
@@ -231,6 +241,9 @@ class ClickhouseConnectPool(object):
                 capture_trace,
             )
         except OperationalError as e:
+            # Connection/transport level failures. Mirrors the native pool's
+            # handling of NetworkError/SocketTimeoutError by emitting the
+            # connection_error metric before surfacing the error.
             metrics.increment(
                 "connection_error",
                 tags={
@@ -241,7 +254,12 @@ class ClickhouseConnectPool(object):
                 },
             )
             raise ClickhouseError(str(e), code=getattr(e, "code", None) or -1) from e
-        except DatabaseError as e:
+        except ClickHouseError as e:
+            # ClickHouseError is the base class for every clickhouse-connect
+            # error (DatabaseError, ProgrammingError, DataError, ...). The
+            # native pool likewise wraps the whole clickhouse_driver errors.Error
+            # family into ClickhouseError, preserving the server error code when
+            # there is one.
             raise ClickhouseError(str(e), code=getattr(e, "code", None) or -1) from e
 
     def execute_robust(

@@ -110,3 +110,67 @@ def test_operational_error_mapped_without_extra_retries() -> None:
         pool.execute("SELECT 1", retryable=True)
 
     assert client.query.call_count == 1
+
+
+def test_generic_clickhouse_error_wrapped() -> None:
+    # Any clickhouse-connect error (here a ProgrammingError) must be wrapped in
+    # a snuba ClickhouseError, matching how the native pool wraps the whole
+    # clickhouse_driver errors.Error family.
+    from clickhouse_connect.driver.exceptions import ProgrammingError
+
+    client = mock.Mock()
+    client.query.side_effect = ProgrammingError("bad query")
+
+    pool = _make_pool(client)
+    with pytest.raises(ClickhouseError):
+        pool.execute("SELECT 1")
+
+    assert client.query.call_count == 1
+
+
+def test_send_receive_timeout_capped_at_30s() -> None:
+    import clickhouse_connect
+
+    pool = ClickhouseConnectPool(
+        host="host",
+        http_port=8123,
+        user="test",
+        password="test",
+        database="test",
+        connect_timeout=60,
+        # A large timeout (e.g. coming from the MIGRATE settings profile) must
+        # be clamped down to 30s on the HTTP path.
+        send_receive_timeout=300,
+    )
+
+    with (
+        mock.patch.object(clickhouse_connect, "get_client") as get_client,
+        mock.patch("snuba.clickhouse.connect.get_pool_manager"),
+    ):
+        pool._get_client()
+
+    _, kwargs = get_client.call_args
+    assert kwargs["send_receive_timeout"] == 30
+    assert kwargs["connect_timeout"] == 30
+
+
+def test_send_receive_timeout_default_when_unset() -> None:
+    import clickhouse_connect
+
+    pool = ClickhouseConnectPool(
+        host="host",
+        http_port=8123,
+        user="test",
+        password="test",
+        database="test",
+        send_receive_timeout=None,
+    )
+
+    with (
+        mock.patch.object(clickhouse_connect, "get_client") as get_client,
+        mock.patch("snuba.clickhouse.connect.get_pool_manager"),
+    ):
+        pool._get_client()
+
+    _, kwargs = get_client.call_args
+    assert kwargs["send_receive_timeout"] == 30
