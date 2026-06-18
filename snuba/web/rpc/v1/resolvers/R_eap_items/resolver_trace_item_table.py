@@ -144,11 +144,12 @@ def _apply_virtual_columns(
     mapped_column_to_context = {c.to_column_name: c for c in virtual_column_contexts}
 
     def transform_expressions(expression: Expression) -> Expression:
-        # An attribute read appears as attributes_string[key] (SELECT / group by) or
-        # as arrayElement / mapContains over attributes_string — the forms map-backed
-        # filters build directly (see _map_backed_operands). For a virtual column the
-        # value forms map to the value transform and the mapContains existence guard
-        # maps to the backing column, so filters resolve against from_column_name.
+        # An attribute read appears as attributes_string[key] (SELECT / group by),
+        # as arrayElement over attributes_string (value), or as the existence guard
+        # has(mapKeys(attributes_string), key) (see snuba.query.dsl.map_key_exists).
+        # For a virtual column the value forms map to the value transform and the
+        # existence guard maps to the backing column, so filters resolve against
+        # from_column_name.
         is_existence = False
         if isinstance(expression, SubscriptableReference):
             if expression.column.column_name != "attributes_string":
@@ -156,13 +157,25 @@ def _apply_virtual_columns(
             key = str(expression.key.value)
         elif (
             isinstance(expression, FunctionCall)
-            and expression.function_name in ("arrayElement", "mapContains")
+            and expression.function_name == "has"
+            and len(expression.parameters) == 2
+            and isinstance(expression.parameters[0], FunctionCall)
+            and expression.parameters[0].function_name == "mapKeys"
+            and len(expression.parameters[0].parameters) == 1
+            and isinstance(expression.parameters[0].parameters[0], ColumnExpr)
+            and expression.parameters[0].parameters[0].column_name == "attributes_string"
+            and isinstance(expression.parameters[1], LiteralExpr)
+        ):
+            key = str(expression.parameters[1].value)
+            is_existence = True
+        elif (
+            isinstance(expression, FunctionCall)
+            and expression.function_name == "arrayElement"
             and isinstance(expression.parameters[0], ColumnExpr)
             and expression.parameters[0].column_name == "attributes_string"
             and isinstance(expression.parameters[1], LiteralExpr)
         ):
             key = str(expression.parameters[1].value)
-            is_existence = expression.function_name == "mapContains"
         else:
             return expression
 

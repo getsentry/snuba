@@ -255,26 +255,6 @@ test_expressions = [
         "if(condition > 0, t1.col1, -1337)",
     ),  # DangerousRawSQL in function call
     (DangerousRawSQL(None, ""), "", ""),  # Empty DangerousRawSQL (edge case)
-    (
-        FunctionCall(
-            None,
-            "mapContains",
-            (Column(None, None, "attributes_float_5"), Literal(None, "sentry.duration_ms")),
-        ),
-        "has(mapKeys(attributes_float_5), 'sentry.duration_ms')",
-        "has(mapKeys(attributes_float_5), '$S')",
-    ),  # mapContains is emitted as has(mapKeys(...)) so the result-block column
-    # name stays identical across ClickHouse versions on distributed reads
-    # (mapContains is an alias 25.8 rewrites to the 25.3-nonexistent mapContainsKey)
-    (
-        FunctionCall(
-            "exists",
-            "mapContains",
-            (Column(None, None, "attributes_string_3"), Literal(None, "release")),
-        ),
-        "(has(mapKeys(attributes_string_3), 'release') AS exists)",
-        "(has(mapKeys(attributes_string_3), '$S') AS exists)",
-    ),  # alias is preserved on the rewritten expression
 ]
 
 
