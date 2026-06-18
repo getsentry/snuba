@@ -49,7 +49,7 @@ def is_valid_node(host: str, port: int, cluster: ClickhouseCluster, storage_name
             },
         )
 
-    return any(node.host_name == host and node.port == port for node in nodes)
+    return any(node.host_name == host and node.native_port == port for node in nodes)
 
 
 def _get_storage(storage_name: str) -> ReadableTableStorage:
@@ -77,7 +77,7 @@ def _validate_node(
                 "host": clickhouse_host,
                 "port": clickhouse_port,
                 "query_host": cluster.get_query_node().host_name,
-                "query_port": cluster.get_query_node().port,
+                "query_port": cluster.get_query_node().native_port,
             },
         )
 
@@ -108,14 +108,13 @@ def _build_validated_pool(
     # abstract ClickhousePool type, just like the cluster's own connections.
     return connection_cache.get_node_connection(
         client_settings,
-        ClickhouseNode(clickhouse_host, clickhouse_port),
+        ClickhouseNode(clickhouse_host, clickhouse_port, http_port=cluster.get_http_port()),
         username,
         password,
         database,
         secure=False,
         ca_certs=None,
         verify=False,
-        http_port=cluster.get_http_port(),
     )
 
 

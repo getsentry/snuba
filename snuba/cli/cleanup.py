@@ -89,14 +89,15 @@ def cleanup(
         # the abstract ClickhousePool type.
         connection = connection_cache.get_node_connection(
             ClickhouseClientSettings.CLEANUP,
-            ClickhouseNode(clickhouse_host, clickhouse_port),
+            ClickhouseNode(
+                clickhouse_host, clickhouse_port, http_port=cluster.get_http_port()
+            ),
             clickhouse_user,
             clickhouse_password,
             database,
             secure=clickhouse_secure,
             ca_certs=clickhouse_ca_certs,
             verify=clickhouse_verify,
-            http_port=cluster.get_http_port(),
         )
     elif not cluster.is_single_node():
         raise click.ClickException("Provide ClickHouse host and port for cleanup")

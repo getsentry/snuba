@@ -173,14 +173,13 @@ def querylog_to_csv(
     http_port = int(os.environ.get("CLICKHOUSE_HTTP_PORT", DEFAULT_CLICKHOUSE_HTTP_PORT))
     connection = connection_cache.get_node_connection(
         ClickhouseClientSettings.QUERY,
-        ClickhouseNode(clickhouse_host, clickhouse_port),
+        ClickhouseNode(clickhouse_host, clickhouse_port, http_port=http_port),
         clickhouse_user,
         clickhouse_password,
         database,
         secure=False,
         ca_certs=None,
         verify=False,
-        http_port=http_port,
     )
     results = connection.execute(query)
     filename = format_filename(table)

@@ -109,14 +109,17 @@ def optimize(
         # the client settings profile the cache reads.
         connection = connection_cache.get_node_connection(
             ClickhouseClientSettings.OPTIMIZE,
-            ClickhouseNode(clickhouse_host, clickhouse_port),
+            ClickhouseNode(
+                clickhouse_host,
+                clickhouse_port,
+                http_port=storage.get_cluster().get_http_port(),
+            ),
             clickhouse_user,
             clickhouse_password,
             database,
             secure=clickhouse_secure,
             ca_certs=clickhouse_ca_certs,
             verify=clickhouse_verify,
-            http_port=storage.get_cluster().get_http_port(),
         )
     elif not storage.get_cluster().is_single_node():
         raise click.ClickException("Provide Clickhouse host and port for optimize")

@@ -27,7 +27,9 @@ def check_dangerous_operation(op: SqlOperation, columns_state: ColumnStatesMapTy
             table = op.get_table_name()
             nodes = op.get_nodes()
             for node in nodes:
-                old_type = columns_state.get((node.host_name, node.port, table, col.name), None)
+                old_type = columns_state.get(
+                    (node.host_name, node.native_port, table, col.name), None
+                )
                 if old_type:
                     _check_dangerous(old_type, col.type)
     except DangerousOperationError as err:

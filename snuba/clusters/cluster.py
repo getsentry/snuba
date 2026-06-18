@@ -114,12 +114,17 @@ class ClickhouseClientSettings(Enum):
 @dataclass(frozen=True)
 class ClickhouseNode:
     host_name: str
-    port: int
+    native_port: int
     shard: Optional[int] = None
     replica: Optional[int] = None
+    # The node's HTTP port, used by the clickhouse-connect (HTTP) driver. It is
+    # optional because nodes built outside a cluster context (e.g. in tests, or
+    # the replacer's load balancer, which never open HTTP connections) do not
+    # need one. Cluster-produced nodes always carry the cluster's HTTP port.
+    http_port: Optional[int] = None
 
     def __str__(self) -> str:
-        return f"{self.host_name}:{self.port}"
+        return f"{self.host_name}:{self.native_port}"
 
 
 class ClickhouseNodeType(Enum):
@@ -191,7 +196,9 @@ def use_clickhouse_connect_driver() -> bool:
 
 
 # The driver discriminator is part of the cache key so that the native and the
-# HTTP pool for the same node can be cached side by side.
+# HTTP pool for the same node can be cached side by side. The node's HTTP port
+# is part of ``ClickhouseNode`` itself, so it does not need a separate key
+# element.
 CacheKey = Tuple[
     ClickhouseNode,
     ClickhouseClientSettings,
@@ -201,7 +208,6 @@ CacheKey = Tuple[
     bool,
     Optional[str],
     Optional[bool],
-    int,
     str,
 ]
 
@@ -221,14 +227,15 @@ class ConnectionCache:
         secure: bool,
         ca_certs: Optional[str],
         verify: Optional[bool],
-        http_port: int,
     ) -> ClickhousePool:
         """
         Return a cached connection pool for the node, typed as the abstract
         :class:`ClickhousePool`. The driver is decided here, from the
         ``use_clickhouse_connect_driver`` runtime config: when it is enabled the
-        clickhouse-connect (HTTP) pool is built, otherwise the native one. Both
-        variants are cached side by side (the driver is part of the cache key).
+        clickhouse-connect (HTTP) pool is built (connecting on the node's
+        ``http_port``), otherwise the native one (connecting on the node's
+        ``native_port``). Both variants are cached side by side (the driver is
+        part of the cache key).
 
         This is the single place pools are instantiated and the single place the
         driver is selected, so every caller — the cluster query/node connections
@@ -250,11 +257,6 @@ class ConnectionCache:
                 secure,
                 ca_certs,
                 verify,
-                # The HTTP pool connects on ``http_port`` rather than the
-                # native ``node.port``, so it must be part of the key to avoid
-                # two clusters sharing a node/credentials but using different
-                # HTTP ports from colliding on the same cached pool.
-                http_port,
                 "http" if use_connect else "native",
             )
             if cache_key not in self.__cache:
@@ -266,7 +268,14 @@ class ConnectionCache:
 
                     pool = ClickhouseConnectPool(
                         host=node.host_name,
-                        http_port=http_port,
+                        # Fall back to the default HTTP port only for nodes that
+                        # were built without one (e.g. by-host helpers that have
+                        # no cluster http_port to draw on).
+                        http_port=(
+                            node.http_port
+                            if node.http_port is not None
+                            else DEFAULT_CLICKHOUSE_HTTP_PORT
+                        ),
                         user=user,
                         password=password,
                         database=database,
@@ -279,7 +288,7 @@ class ConnectionCache:
                 else:
                     pool = ClickhouseNativePool(
                         node.host_name,
-                        node.port,
+                        node.native_port,
                         user,
                         password,
                         database,
@@ -343,7 +352,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         self.__port = port
         self.__max_connections = max_connections or _DEFAULT_MAX_CONNECTIONS
         self.__block_connections = block_connections
-        self.__query_node = ClickhouseNode(host, port)
+        self.__query_node = ClickhouseNode(host, port, http_port=http_port)
         self.__user = user
         self.__password = password
         self.__database = database
@@ -403,7 +412,6 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             self.__secure,
             self.__ca_certs,
             self.__verify,
-            http_port=self.__http_port,
         )
 
     def get_deleter(self) -> Reader:
@@ -503,14 +511,23 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
     def get_connection_id(self) -> ConnectionId:
         return ConnectionId(
             hostname=self.__query_node.host_name,
-            tcp_port=self.__query_node.port,
+            tcp_port=self.__query_node.native_port,
             http_port=self.__http_port,
             database_name=self.__database,
         )
 
     def __get_cluster_nodes(self, cluster_name: str) -> Sequence[ClickhouseNode]:
+        # system.clusters only reports the native port; every node in the
+        # cluster shares the cluster's configured HTTP port, so stamp it on each
+        # discovered node so it is self-describing for the HTTP driver.
         return [
-            ClickhouseNode(*host)
+            ClickhouseNode(
+                host_name=host[0],
+                native_port=host[1],
+                shard=host[2],
+                replica=host[3],
+                http_port=self.__http_port,
+            )
             for host in self.get_query_connection(ClickhouseClientSettings.QUERY)
             .execute(
                 "select host_name, port, shard_num, replica_num from system.clusters where cluster=%(cluster_name)s",

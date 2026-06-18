@@ -183,7 +183,7 @@ def test_get_local_nodes() -> None:
         local_cluster = get_storage(StorageKey("errors")).get_cluster()
         assert len(local_cluster.get_local_nodes()) == 1
         assert local_cluster.get_local_nodes()[0].host_name == "host_1"
-        assert local_cluster.get_local_nodes()[0].port == 9000
+        assert local_cluster.get_local_nodes()[0].native_port == 9000
         assert local_cluster.get_local_nodes()[0].shard is None
         assert local_cluster.get_local_nodes()[0].replica is None
 
