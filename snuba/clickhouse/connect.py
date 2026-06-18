@@ -158,6 +158,14 @@ class ClickhouseConnectPool(ClickhousePool):
         if query_id is not None:
             query_settings["query_id"] = query_id
         if capture_trace:
+            # We still ask the server to emit trace logs, but unlike the native
+            # driver clickhouse-connect does not surface them (it only reads the
+            # X-ClickHouse-Summary header), so ``trace_output`` ends up empty on
+            # this path. See the note in _execute_once. Practically this means
+            # the snuba-admin trace view and its profile-events parsing return
+            # nothing when the HTTP driver is enabled; every other admin query
+            # path is driver-agnostic. Reconstructing traces over HTTP would
+            # require querying system.text_log by query_id (a separate feature).
             query_settings["send_logs_level"] = "trace"
         return query_settings or None
 
@@ -210,6 +218,10 @@ class ClickhouseConnectPool(ClickhousePool):
 
         results: Sequence[Any] = query_result.result_set
 
+        # trace_output is always empty here: clickhouse-connect has no mechanism
+        # for capturing the server's send_logs_level output (it only parses the
+        # X-ClickHouse-Summary header for the profile above). This is a known,
+        # accepted limitation of the HTTP path — see _build_query_settings.
         if with_column_types:
             meta = [
                 (name, column_type.name)
