@@ -177,9 +177,7 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
             # version, so the column name is identical on every node. Verified
             # against 25.3.8 and 25.8 distributed reads in both directions.
             col, key = exp.parameters
-            return self._alias(
-                f"has(mapKeys({col.accept(self)}), {key.accept(self)})", exp.alias
-            )
+            return self._alias(f"has(mapKeys({col.accept(self)}), {key.accept(self)})", exp.alias)
 
         ret = f"{escape_identifier(exp.function_name)}({self.__visit_params(exp.parameters)})"
         return self._alias(ret, exp.alias)
