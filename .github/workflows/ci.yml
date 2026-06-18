@@ -281,13 +281,25 @@ jobs:
         # so we split it across two runners by a stable hash of the test node id (see conftest.py).
         include:
           - snuba_settings: test
+            shard: 0
+            shard_total: 2
+          - snuba_settings: test
+            shard: 1
+            shard_total: 2
           - snuba_settings: test_rust
           - snuba_settings: test_distributed
             shard: 0
-            shard_total: 2
+            shard_total: 4
           - snuba_settings: test_distributed
             shard: 1
-            shard_total: 2
+            shard_total: 4
+          - snuba_settings: test_distributed
+            shard: 2
+            shard_total: 4
+          - snuba_settings: test_distributed
+            shard: 3
+            shard_total: 4
+          # test_migrations_distributed left unsharded: migration tests are order-sensitive, risky to split.
           - snuba_settings: test_distributed_migrations
           - snuba_settings: test_migrations
           - snuba_settings: test_migrations_distributed
@@ -398,11 +410,12 @@ jobs:
     timeout-minutes: 60
     strategy:
       matrix:
-        instance: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+        # Trimmed 16 to 10: xdist + per-worker snuba made each shard fast enough; reclaimed runners go to the test_distributed/test/clickhouse sharding.
+        instance: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
     env:
       MIGRATIONS_TEST_MIGRATE: 1
       # XXX: `MATRIX_INSTANCE_TOTAL` must be hardcoded to the length of `strategy.matrix.instance`.
-      MATRIX_INSTANCE_TOTAL: 16
+      MATRIX_INSTANCE_TOTAL: 10
       TEST_GROUP_STRATEGY: ROUND_ROBIN
       # Run pytest with xdist inside each shard to use the idle cores; mirrors getsentry/sentry backend CI.
       # Each worker gets its own snuba container + ClickHouse DB so tests don't collide on shared state (max 7 workers).
@@ -526,12 +539,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version:
-          [
-            "25.3.8.10041.altinitystable",
-            "25.8.16.10001.altinitystable",
-          ]
-        test_type: [snuba-test, snuba-test-migrations]
+        # snuba-test (the full suite) is sharded 2-way per version; snuba-test-migrations stays whole (order-sensitive).
+        include:
+          - { version: "25.3.8.10041.altinitystable", test_type: snuba-test, shard: 0, shard_total: 2 }
+          - { version: "25.3.8.10041.altinitystable", test_type: snuba-test, shard: 1, shard_total: 2 }
+          - { version: "25.8.16.10001.altinitystable", test_type: snuba-test, shard: 0, shard_total: 2 }
+          - { version: "25.8.16.10001.altinitystable", test_type: snuba-test, shard: 1, shard_total: 2 }
+          - { version: "25.3.8.10041.altinitystable", test_type: snuba-test-migrations }
+          - { version: "25.8.16.10001.altinitystable", test_type: snuba-test-migrations }
 
     steps:
       - name: Checkout code
@@ -577,9 +592,12 @@ jobs:
           docker network create --attachable cloudbuild
 
       - name: Docker Snuba Test other ClickHouse versions
+        env:
+          SNUBA_TEST_SHARD: ${{ matrix.shard || 0 }}
+          SNUBA_TEST_SHARD_TOTAL: ${{ matrix.shard_total || 1 }}
         run: |
           export CLICKHOUSE_IMAGE=ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:${{matrix.version}}
-          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm ${{ matrix.test_type }}
+          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm -e SNUBA_TEST_SHARD -e SNUBA_TEST_SHARD_TOTAL ${{ matrix.test_type }}
 
       - name: Upload to codecov
         run: |
@@ -604,8 +622,9 @@ jobs:
           target: application-distroless
           load: true
           tags: snuba-distroless:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Read the shared snuba-ci registry buildcache (off the 10GB GHA budget; the old type=gha,mode=max
+          # was ~7.7GB and evicted the venv cache). Distroless shares the heavy Rust/base stages with snuba-ci.
+          cache-from: type=registry,ref=ghcr.io/getsentry/snuba-ci:buildcache
 
       - name: Verify --help works
         run: docker run --rm snuba-distroless:test --help
