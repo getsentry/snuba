@@ -196,6 +196,7 @@ CacheKey = Tuple[
     bool,
     Optional[str],
     Optional[bool],
+    int,
     str,
 ]
 
@@ -235,6 +236,11 @@ class ConnectionCache:
                 secure,
                 ca_certs,
                 verify,
+                # The HTTP pool connects on ``http_port`` rather than the
+                # native ``node.port``, so it must be part of the key to avoid
+                # two clusters sharing a node/credentials but using different
+                # HTTP ports from colliding on the same cached pool.
+                http_port,
                 "http" if use_connect else "native",
             )
             if cache_key not in self.__cache:
