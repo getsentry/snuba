@@ -163,6 +163,9 @@ jobs:
     name: Build snuba CI image
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
     outputs:
       branch: ${{ steps.branch.outputs.branch }}
     steps:
@@ -175,16 +178,37 @@ jobs:
         # it can be used as a docker tag
         run: echo "branch=$(echo ${GITHUB_REF#refs/heads/} | tr / -)" >> "$GITHUB_OUTPUT"
 
-      - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
-        with:
-          image_name: 'snuba-ci'
-          platforms: 'linux/amd64'
-          dockerfile_path: 'Dockerfile'
-          ghcr: false
-          tag_nightly: false
-          tag_latest: false
-          tags: 'ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}'
-          outputs: 'type=docker,dest=/tmp/snuba-ci.tar'
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR for build cache
+        # Forks have no packages:write; they read the (public) cache anonymously and skip writing it.
+        if: ${{ github.event.pull_request.head.repo.fork != true }}
+        run: docker login --username '${{ github.actor }}' --password-stdin ghcr.io <<< "$GHCR_TOKEN"
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build snuba CI image
+        # Registry layer cache (not type=gha): no 10GB cap, so it actually holds the Rust target dir.
+        # cache-from is best-effort (forks fall back to a cold build); cache-to only runs with creds.
+        env:
+          IMAGE: ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}
+          CACHE_REF: ghcr.io/getsentry/snuba-ci:buildcache
+          PUSH_CACHE: ${{ github.event.pull_request.head.repo.fork != true }}
+        run: |
+          cache_to=""
+          if [ "$PUSH_CACHE" = "true" ]; then
+            cache_to="--cache-to type=registry,ref=${CACHE_REF},mode=max,image-manifest=true,oci-mediatypes=true"
+          fi
+          docker buildx build \
+            --platform linux/amd64 \
+            --file Dockerfile \
+            --target testing \
+            --tag "$IMAGE" \
+            --cache-from "type=registry,ref=${CACHE_REF}" \
+            $cache_to \
+            --output "type=docker,dest=/tmp/snuba-ci.tar" \
+            .
 
       - name: Publish snuba-ci image to artifacts
       # we publish to github artifacts separately so that third-party
