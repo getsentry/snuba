@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import time
 from threading import Lock
 from typing import Any, Mapping, Optional, Sequence
 
@@ -12,7 +11,7 @@ from clickhouse_connect.driver.client import Client
 from clickhouse_connect.driver.exceptions import DatabaseError, OperationalError
 from clickhouse_connect.driver.httputil import get_pool_manager
 
-from snuba import environment, settings, state
+from snuba import environment, settings
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.native import ClickhouseProfile, ClickhouseResult, Params
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -20,11 +19,6 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 logger = logging.getLogger("snuba.clickhouse.connect")
 
 metrics = MetricsWrapper(environment.metrics, "clickhouse.connect")
-
-# Error code returned by ClickHouse when the maximum number of simultaneous
-# queries has been exceeded. Kept as a local constant to avoid depending on
-# clickhouse_driver from the HTTP code path.
-TOO_MANY_SIMULTANEOUS_QUERIES = 202
 
 # clickhouse-connect raises a ProgrammingError by default when it is asked to
 # send a setting it considers unknown or readonly. The native driver simply
@@ -117,8 +111,6 @@ class ClickhouseConnectPool(object):
                         # single client across threads, so sessions must be
                         # disabled to allow concurrent queries.
                         autogenerate_session_id=False,
-                        # We do our own retrying in execute()/execute_robust().
-                        query_retries=0,
                     )
         return self.__client
 
@@ -215,57 +207,42 @@ class ClickhouseConnectPool(object):
         retryable: bool = True,
     ) -> ClickhouseResult:
         """
-        Execute a clickhouse query with a single quick retry in case of
-        connection failure. Mirrors ``ClickhousePool.execute``.
+        Execute a clickhouse query.
+
+        Unlike :class:`snuba.clickhouse.native.ClickhousePool`, this method
+        does not implement any retry logic of its own. Retries (stale
+        keep-alive sockets, transport errors and HTTP 429/503/504 responses)
+        are handled internally by clickhouse-connect. Notably this means the
+        native pool's ``TOO_MANY_SIMULTANEOUS_QUERIES`` backoff is *not*
+        replicated: clickhouse-connect does not retry that error, so it is
+        surfaced directly to the caller.
+
+        The ``retryable`` argument is accepted for interface parity with the
+        native pool but has no effect here.
         """
-        attempts_remaining = 3 if retryable else 1
-
-        while attempts_remaining > 0:
-            attempts_remaining -= 1
-            try:
-                return self._execute_once(
-                    query,
-                    params,
-                    with_column_types,
-                    query_id,
-                    settings,
-                    columnar,
-                    capture_trace,
-                )
-            except OperationalError as e:
-                metrics.increment(
-                    "connection_error",
-                    tags={
-                        "host": self.host,
-                        "port": str(self.http_port),
-                        "user": self.user,
-                        "database": self.database,
-                    },
-                )
-                if attempts_remaining <= 0:
-                    raise ClickhouseError(str(e), code=getattr(e, "code", None) or -1) from e
-                # Short sleep to give the load balancer a chance to mark a bad
-                # host as down.
-                time.sleep(0.1)
-            except DatabaseError as e:
-                code = getattr(e, "code", None)
-                if code == TOO_MANY_SIMULTANEOUS_QUERIES:
-                    if attempts_remaining <= 0:
-                        raise ClickhouseError(str(e), code=code) from e
-
-                    sleep_interval_seconds = state.get_config(
-                        "simultaneous_queries_sleep_seconds", None
-                    )
-                    if not sleep_interval_seconds:
-                        raise ClickhouseError(str(e), code=code) from e
-
-                    attempts_remaining = min(attempts_remaining, 1)  # only retry once
-                    time.sleep(sleep_interval_seconds)
-                    continue
-
-                raise ClickhouseError(str(e), code=code or -1) from e
-
-        return ClickhouseResult()
+        try:
+            return self._execute_once(
+                query,
+                params,
+                with_column_types,
+                query_id,
+                settings,
+                columnar,
+                capture_trace,
+            )
+        except OperationalError as e:
+            metrics.increment(
+                "connection_error",
+                tags={
+                    "host": self.host,
+                    "port": str(self.http_port),
+                    "user": self.user,
+                    "database": self.database,
+                },
+            )
+            raise ClickhouseError(str(e), code=getattr(e, "code", None) or -1) from e
+        except DatabaseError as e:
+            raise ClickhouseError(str(e), code=getattr(e, "code", None) or -1) from e
 
     def execute_robust(
         self,
@@ -280,58 +257,20 @@ class ClickhouseConnectPool(object):
         retryable: bool = True,
     ) -> ClickhouseResult:
         """
-        Execute a clickhouse query with a bit more tenacity, making more retry
-        attempts and waiting a second between retries. Mirrors
-        ``ClickhousePool.execute_robust``.
+        Mirrors :meth:`ClickhousePool.execute_robust`. Since retries are
+        delegated to clickhouse-connect, this is equivalent to :meth:`execute`.
         """
-        total_attempts = 3 if retryable else 1
-        attempts_remaining = total_attempts
-
-        while True:
-            try:
-                return self.execute(
-                    query,
-                    params=params,
-                    with_column_types=with_column_types,
-                    query_id=query_id,
-                    settings=settings,
-                    types_check=types_check,
-                    columnar=columnar,
-                    capture_trace=capture_trace,
-                )
-            except OperationalError as e:
-                logger.warning(
-                    "ClickHouse query execution failed: %s (%d tries left)",
-                    str(e),
-                    attempts_remaining,
-                )
-                attempts_remaining -= 1
-                if attempts_remaining <= 0:
-                    raise ClickhouseError(str(e), code=getattr(e, "code", None) or -1) from e
-                time.sleep(1)
-                continue
-            except ClickhouseError as e:
-                logger.warning(
-                    "ClickHouse query execution failed: %s (%d tries left)",
-                    str(e),
-                    attempts_remaining,
-                )
-                if e.code == TOO_MANY_SIMULTANEOUS_QUERIES:
-                    attempts_remaining -= 1
-                    if attempts_remaining <= 0:
-                        raise e
-                    sleep_interval_seconds = state.get_config(
-                        "simultaneous_queries_sleep_seconds", 1
-                    )
-                    assert sleep_interval_seconds is not None
-                    # Linear backoff. Adds one second at each iteration.
-                    time.sleep(
-                        float((total_attempts - attempts_remaining) * sleep_interval_seconds)
-                    )
-                    continue
-                else:
-                    # Quit immediately for other types of server errors.
-                    raise e
+        return self.execute(
+            query,
+            params=params,
+            with_column_types=with_column_types,
+            query_id=query_id,
+            settings=settings,
+            types_check=types_check,
+            columnar=columnar,
+            capture_trace=capture_trace,
+            retryable=retryable,
+        )
 
     def close(self) -> None:
         if self.__client is not None:

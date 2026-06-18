@@ -3,12 +3,12 @@ from unittest import mock
 
 import pytest
 
-from snuba import state
-from snuba.clickhouse.connect import (
-    TOO_MANY_SIMULTANEOUS_QUERIES,
-    ClickhouseConnectPool,
-)
+from snuba.clickhouse.connect import ClickhouseConnectPool
 from snuba.clickhouse.errors import ClickhouseError
+
+# Error code returned by ClickHouse when the maximum number of simultaneous
+# queries has been exceeded.
+TOO_MANY_SIMULTANEOUS_QUERIES = 202
 
 
 class FakeColumnType:
@@ -79,25 +79,27 @@ def test_execute_passes_query_id_and_settings() -> None:
     assert kwargs["settings"]["max_threads"] == 4
 
 
-@pytest.mark.redis_db
-def test_too_many_simultaneous_queries_retry() -> None:
+def test_too_many_simultaneous_queries_not_retried() -> None:
+    # We delegate all retries to clickhouse-connect, which does not retry the
+    # TOO_MANY_SIMULTANEOUS_QUERIES error. It should be surfaced directly,
+    # mapped to a ClickhouseError that preserves the error code.
     from clickhouse_connect.driver.exceptions import DatabaseError
-
-    state.set_config("simultaneous_queries_sleep_seconds", 0.01)
 
     client = mock.Mock()
     client.query.side_effect = DatabaseError("too many", code=TOO_MANY_SIMULTANEOUS_QUERIES)
 
     pool = _make_pool(client)
-    with pytest.raises(ClickhouseError):
+    with pytest.raises(ClickhouseError) as exc_info:
         pool.execute("SELECT 1")
 
-    # Initial attempt + one retry once the concurrency limit is hit.
-    assert client.query.call_count == 2
+    assert exc_info.value.code == TOO_MANY_SIMULTANEOUS_QUERIES
+    # No retry on top of clickhouse-connect's own handling.
+    assert client.query.call_count == 1
 
 
-@pytest.mark.redis_db
-def test_operational_error_retries() -> None:
+def test_operational_error_mapped_without_extra_retries() -> None:
+    # Connection-level retries are clickhouse-connect's responsibility; we only
+    # map the surfaced error onto ClickhouseError without retrying again.
     from clickhouse_connect.driver.exceptions import OperationalError
 
     client = mock.Mock()
@@ -107,4 +109,4 @@ def test_operational_error_retries() -> None:
     with pytest.raises(ClickhouseError):
         pool.execute("SELECT 1", retryable=True)
 
-    assert client.query.call_count == 3
+    assert client.query.call_count == 1
