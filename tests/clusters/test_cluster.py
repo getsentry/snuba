@@ -292,9 +292,9 @@ def test_get_reader_selects_driver() -> None:
     http_reader = test_cluster.get_reader()
     assert isinstance(http_reader, HTTPDriverReader)
 
-    # Flip back: the same cached native reader is returned (built at most once).
+    # Flip back: native driver again.
     state.set_config("use_clickhouse_connect_driver", 0)
-    assert test_cluster.get_reader() is native_reader
+    assert not isinstance(test_cluster.get_reader(), HTTPDriverReader)
 
 
 @patch("snuba.settings.SLICED_CLUSTERS", SLICED_CLUSTERS_CONFIG)

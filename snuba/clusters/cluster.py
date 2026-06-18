@@ -345,9 +345,6 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         self.__single_node = single_node
         self.__cluster_name = cluster_name
         self.__distributed_cluster_name = distributed_cluster_name
-        self.__reader: Optional[Reader] = None
-        self.__http_reader: Optional[Reader] = None
-        self.__deleter: Optional[Reader] = None
         self.__connection_cache = connection_cache
         self.__cache_partition_id = cache_partition_id
         self.__query_settings_prefix = query_settings_prefix
@@ -379,7 +376,24 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         Get a Clickhouse connection using the client settings provided. Reuse any
         connection to the same node with the same settings otherwise establish a new
         connection.
+
+        This is the single place where the driver is selected: when the
+        ``use_clickhouse_connect_driver`` runtime config is enabled the
+        clickhouse-connect (HTTP) pool is returned, otherwise the native pool.
+        The choice applies to every caller (reads, migrations, replacer,
+        optimize, ...), not just the read path.
         """
+        if use_clickhouse_connect_driver():
+            return self.__connection_cache.get_http_node_connection(
+                client_settings,
+                node,
+                self.__user,
+                self.__password,
+                self.__database,
+                self.__secure,
+                self.__ca_certs,
+                self.__verify,
+            )
 
         return self.__connection_cache.get_node_connection(
             client_settings,
@@ -392,64 +406,49 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             self.__verify,
         )
 
-    def __get_http_query_connection(
-        self,
-        client_settings: ClickhouseClientSettings,
-    ) -> ClickhousePool:
+    def __build_reader(self, cache_partition_id: Optional[str], client: ClickhousePool) -> Reader:
         """
-        Get a clickhouse-connect (HTTP) connection to the query node.
+        Wrap a connection in the reader matching the driver currently selected
+        by the runtime config. Both reader classes adapt the same
+        ClickhouseResult, so they differ only in which pool they wrap.
         """
-        return self.__connection_cache.get_http_node_connection(
-            client_settings,
-            self.__query_node,
-            self.__user,
-            self.__password,
-            self.__database,
-            self.__secure,
-            self.__ca_certs,
-            self.__verify,
+        if use_clickhouse_connect_driver():
+            # Imported here so the native code path never imports
+            # clickhouse-connect.
+            from snuba.clickhouse.connect import HTTPDriverReader
+
+            return HTTPDriverReader(
+                cache_partition_id=cache_partition_id,
+                client=client,
+                query_settings_prefix=self.__query_settings_prefix,
+            )
+
+        return NativeDriverReader(
+            cache_partition_id=cache_partition_id,
+            client=client,
+            query_settings_prefix=self.__query_settings_prefix,
         )
 
     def get_deleter(self) -> Reader:
-        if not self.__deleter:
-            # we need the connection to the storage nodes, not
-            # the distributed nodes
-            local_node = self.get_local_nodes()[0]
-            self.__deleter = NativeDriverReader(
-                cache_partition_id=f"{self.__cache_partition_id}_deletes",
-                client=self.get_node_connection(ClickhouseClientSettings.DELETE, local_node),
-                query_settings_prefix=self.__query_settings_prefix,
-            )
-        return self.__deleter
+        # we need the connection to the storage nodes, not
+        # the distributed nodes
+        local_node = self.get_local_nodes()[0]
+        return self.__build_reader(
+            cache_partition_id=f"{self.__cache_partition_id}_deletes",
+            client=self.get_node_connection(ClickhouseClientSettings.DELETE, local_node),
+        )
 
     def get_reader(self) -> Reader:
         """
-        Return a reader for the query node, choosing the HTTP
-        (clickhouse-connect) or the native driver based on the
-        ``use_clickhouse_connect_driver`` runtime config. Both readers are
-        built at most once and reused; flipping the config only changes which
-        of the two is returned.
+        Return a reader for the query node, using the HTTP (clickhouse-connect)
+        or the native driver based on the ``use_clickhouse_connect_driver``
+        runtime config. The config is read on each call, so the driver can be
+        switched at runtime.
         """
-        if use_clickhouse_connect_driver():
-            if not self.__http_reader:
-                # Imported here so the native code path never imports
-                # clickhouse-connect.
-                from snuba.clickhouse.connect import HTTPDriverReader
-
-                self.__http_reader = HTTPDriverReader(
-                    cache_partition_id=self.__cache_partition_id,
-                    client=self.__get_http_query_connection(ClickhouseClientSettings.QUERY),
-                    query_settings_prefix=self.__query_settings_prefix,
-                )
-            return self.__http_reader
-
-        if not self.__reader:
-            self.__reader = NativeDriverReader(
-                cache_partition_id=self.__cache_partition_id,
-                client=self.get_query_connection(ClickhouseClientSettings.QUERY),
-                query_settings_prefix=self.__query_settings_prefix,
-            )
-        return self.__reader
+        return self.__build_reader(
+            cache_partition_id=self.__cache_partition_id,
+            client=self.get_query_connection(ClickhouseClientSettings.QUERY),
+        )
 
     def get_batch_writer(
         self,
