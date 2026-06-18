@@ -59,6 +59,33 @@ jobs:
           google_workload_identity_provider: projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool
           google_service_account: gha-gcr-push@sac-prod-sa.iam.gserviceaccount.com
 
+  # Distroless image published to Google AR (amd64) for parity with the
+  # production image. Mirrors build-production, producing
+  # us-docker.pkg.dev/sentryio/snuba-mr/image:<sha>-distroless.
+  build-distroless-production:
+    runs-on: ubuntu-24.04
+    name: Build and push distroless production image
+    permissions:
+      contents: read
+      id-token: write
+    if: ${{ github.ref_name == 'master' }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
+        with:
+          image_name: 'snuba'
+          platforms: linux/amd64
+          dockerfile_path: './Dockerfile'
+          build_target: 'application-distroless'
+          tag_suffix: -distroless
+          ghcr: false
+          tag_nightly: false
+          tag_latest: false
+          google_ar: true
+          google_ar_image_name: us-docker.pkg.dev/sentryio/snuba-mr/image
+          google_workload_identity_provider: projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool
+          google_service_account: gha-gcr-push@sac-prod-sa.iam.gserviceaccount.com
+
   # Distroless image — for testing before switching production
   build-distroless-multiplatform:
     strategy:

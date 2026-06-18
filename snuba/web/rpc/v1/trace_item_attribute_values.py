@@ -47,12 +47,29 @@ def _map_key_names_for_existence_check(request_key: AttributeKey) -> list[str]:
     return names
 
 
+# Attribute value types this endpoint can enumerate, mapped to the ClickHouse
+# attribute map they live in. The response proto only carries strings, so every
+# supported type must also have a well-defined string form (see _execute).
+_ATTRIBUTE_TYPE_TO_COLUMN: dict["AttributeKey.Type.ValueType", str] = {
+    AttributeKey.TYPE_STRING: "attributes_string",
+    AttributeKey.TYPE_BOOLEAN: "attributes_bool",
+}
+
+
 def _build_conditions(request: TraceItemAttributeValuesRequest) -> Expression:
     attribute_key = attribute_key_to_expression(request.key)
 
+    try:
+        attributes_column = _ATTRIBUTE_TYPE_TO_COLUMN[request.key.type]
+    except KeyError as e:
+        raise BadSnubaRPCRequestException("Only string and boolean attributes can be used") from e
+
+    # Use mapContains (not has) for key existence: it's the correct ClickHouse
+    # function for Map columns and is handled by HashBucketFunctionTransformer
+    # for the bucketed string/float maps as well as the un-bucketed bool map.
     key_existence = combine_or_conditions(
         [
-            f.has(column("attributes_string"), name)
+            f.mapContains(column(attributes_column), name)
             for name in _map_key_names_for_existence_check(request.key)
         ]
     )
@@ -62,6 +79,10 @@ def _build_conditions(request: TraceItemAttributeValuesRequest) -> Expression:
         conditions.append(f.equals(column("item_type"), request.meta.trace_item_type))
 
     if request.value_substring_match:
+        if request.key.type != AttributeKey.TYPE_STRING:
+            raise BadSnubaRPCRequestException(
+                "substring matches can only be used on string attributes"
+            )
         conditions.append(
             f.like(
                 attribute_key,
@@ -199,9 +220,14 @@ class AttributeValuesRequest(
             request=snuba_request,
             timer=self._timer,
         )
+        # The response proto only carries strings. Boolean values are serialized
+        # to the lowercase "true"/"false" form used across the EAP filter API so
+        # that returned values round-trip as filter inputs.
+        is_boolean = in_msg.key.type == AttributeKey.TYPE_BOOLEAN
         values, counts = [], []
         for row in res.result.get("data", []):
-            values.append(row["attr_value"])
+            value = row["attr_value"]
+            values.append(str(bool(value)).lower() if is_boolean else value)
             counts.append(row.get("count()", 0))
         if len(values) == 0:
             return TraceItemAttributeValuesResponse(

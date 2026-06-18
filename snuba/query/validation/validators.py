@@ -365,6 +365,24 @@ class TagConditionValidator(QueryValidator):
                             )
 
 
+def _is_valid_datetime_literal(value: object) -> bool:
+    """
+    A datetime condition is valid when the literal is either a `datetime`
+    object or a string that parses as one (e.g. ``2023-01-25T20:03:13+00:00``,
+    which is how the legacy JSON API and Sentry routinely express datetimes).
+    A bare epoch like ``1726374214000`` does not parse and is rejected.
+    """
+    if isinstance(value, datetime):
+        return True
+    if isinstance(value, str):
+        try:
+            datetime.fromisoformat(value)
+        except ValueError:
+            return False
+        return True
+    return False
+
+
 class DatetimeConditionValidator(QueryValidator):
     def __init__(self) -> None:
         self.matchers: list[Or[Expression]] = []
@@ -403,10 +421,8 @@ class DatetimeConditionValidator(QueryValidator):
                     if match:
                         rhs = match.expression("rhs")
                         if isinstance(rhs, Literal):
-                            if not isinstance(rhs.value, datetime):
+                            if not _is_valid_datetime_literal(rhs.value):
                                 lhs = match.expression("column")
-                                # TODO: change this to a proper exception after ensuring the product isn't
-                                # passing bad queries
                                 metrics.increment(
                                     "datetime_condition_error",
                                     tags={
@@ -414,18 +430,16 @@ class DatetimeConditionValidator(QueryValidator):
                                         "entity": query.get_from_clause().key.value,
                                     },
                                 )
-                                logger.warning(
+                                raise InvalidQueryException(
                                     f"{lhs} requires datetime conditions: '{rhs.value}' is not a valid datetime"
                                 )
                         elif isinstance(rhs, FunctionCall):
                             # The matcher only matches array/tuples of literals
                             for param in rhs.parameters:
-                                if isinstance(param, Literal) and not isinstance(
-                                    param.value, datetime
+                                if isinstance(param, Literal) and not _is_valid_datetime_literal(
+                                    param.value
                                 ):
                                     lhs = match.expression("column")
-                                    # TODO: change this to a proper exception after ensuring the product isn't
-                                    # passing bad queries
                                     metrics.increment(
                                         "datetime_condition_error",
                                         tags={
@@ -433,7 +447,7 @@ class DatetimeConditionValidator(QueryValidator):
                                             "entity": query.get_from_clause().key.value,
                                         },
                                     )
-                                    logger.warning(
+                                    raise InvalidQueryException(
                                         f"{lhs} requires datetime conditions: '{param.value}' is not a valid datetime"
                                     )
 
