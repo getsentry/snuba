@@ -61,10 +61,7 @@ def _order_by_count(request: TraceItemAttributeNamesRequest) -> bool:
     endpoint keeps its historical name-ascending ordering and existing consumers
     are unaffected.
     """
-    return (
-        request.order_by.column
-        == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT
-    )
+    return request.order_by.column == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT
 
 
 class AttributeKeyCollector(ProtoVisitor):
@@ -333,9 +330,7 @@ def get_co_occurring_attributes(
         order_by = [
             OrderBy(
                 direction=(
-                    OrderByDirection.DESC
-                    if request.order_by.descending
-                    else OrderByDirection.ASC
+                    OrderByDirection.DESC if request.order_by.descending else OrderByDirection.ASC
                 ),
                 expression=column("count"),
             ),
@@ -347,8 +342,7 @@ def get_co_occurring_attributes(
         # Unspecified ordering keeps the historical name-ascending result so that
         # existing consumers are unaffected.
         name_descending = (
-            request.order_by.column
-            == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_NAME
+            request.order_by.column == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_NAME
             and request.order_by.descending
         )
         selected_columns = [
