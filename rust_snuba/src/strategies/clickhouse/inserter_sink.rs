@@ -113,6 +113,15 @@ impl Acc {
 
 /// Push the accumulated window downstream as a ready flush, then reset the
 /// accumulator — the rows are now durable.
+///
+/// Invariant: `rows` (the count actually flushed) must equal the retained
+/// window `acc.rows.len()`. We hold it because we `commit()` after every single
+/// `write()`, and the crate's flush ends the *entire* current INSERT (it never
+/// flushes a strict subset) — so a flush always covers exactly the retained
+/// window, and emitting all of `acc.committable` only ever advances offsets for
+/// rows that are now durable. The assert guards against a future change (e.g.
+/// batching multiple writes before a commit) silently breaking that and
+/// committing offsets past not-yet-durable rows.
 fn emit_ready(
     out_tx: &mpsc::UnboundedSender<FlushOutcome>,
     acc: &mut Acc,
@@ -120,6 +129,12 @@ fn emit_ready(
     rows: u64,
     elapsed: Duration,
 ) {
+    debug_assert_eq!(
+        rows as usize,
+        acc.rows.len(),
+        "flush count must equal the retained window; committing more offsets \
+         than were made durable would lose data",
+    );
     acc.rows.clear();
     let committable = std::mem::take(&mut acc.committable);
     let meta = std::mem::take(&mut acc.meta);
