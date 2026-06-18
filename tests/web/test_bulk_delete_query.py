@@ -292,3 +292,74 @@ def test_attribute_conditions_feature_flag_enabled() -> None:
     finally:
         # Clean up: disable the feature flag
         set_config("permit_delete_by_attribute", 0)
+
+
+@pytest.mark.redis_db
+def test_eap_items_counts_each_table_against_its_readonly_replica() -> None:
+    """
+    The downsampled EAP tables hold different row counts than the read/write
+    table, so each must be counted individually (rather than re-running the same
+    count against eap_items_1_dist N times, which was an N+1). Counting is a
+    read-only query, so each count targets the table's read-only `*_ro` replica
+    storage, keeping it off the read/write cluster.
+    """
+    storage = get_writable_storage(StorageKey("eap_items"))
+    conditions = {"project_id": [1], "item_type": [TRACE_ITEM_TYPE_OCCURRENCE]}
+    attribute_conditions = AttributeConditions(
+        item_type=TRACE_ITEM_TYPE_OCCURRENCE,
+        attributes={
+            "group_id": (AttributeKey(type=AttributeKey.Type.TYPE_INT, name="group_id"), [12345])
+        },
+    )
+    attr_info = get_attribution_info()
+
+    set_config("permit_delete_by_attribute", 1)
+    try:
+        with patch(
+            "snuba.web.bulk_delete_query._enforce_max_rows", return_value=10
+        ) as mock_enforce:
+            with patch("snuba.web.bulk_delete_query.produce_delete_query"):
+                delete_from_storage(storage, conditions, attr_info, attribute_conditions)
+
+        count_storage_keys = [
+            call.kwargs["count_storage_key"] for call in mock_enforce.call_args_list
+        ]
+        # One count per table, each against a distinct read-only replica storage
+        # (not the same table N times, which was the N+1).
+        assert len(count_storage_keys) == 4
+        assert len(set(count_storage_keys)) == 4
+        # Every count runs against a read-only replica storage, never the
+        # read/write storage that the delete itself targets.
+        assert {key.value for key in count_storage_keys} == {
+            "eap_items_ro",
+            "eap_items_downsample_8_ro",
+            "eap_items_downsample_64_ro",
+            "eap_items_downsample_512_ro",
+        }
+    finally:
+        set_config("permit_delete_by_attribute", 0)
+
+
+def test_count_storage_key_mapping_without_readonly_storage_set() -> None:
+    """A storage without a read-only storage set (search_issues) has no replica
+    to count against, so the mapping is empty and the caller falls back to the
+    read/write table."""
+    from snuba.web.bulk_delete_query import _count_storage_key_by_local_table
+
+    storage = get_writable_storage(StorageKey("search_issues"))
+    assert _count_storage_key_by_local_table(storage) == {}
+
+
+def test_count_storage_key_mapping_without_readonly_cluster() -> None:
+    """When the read-only cluster is not configured in this environment, the
+    mapping is empty so counts fall back to the read/write table rather than
+    failing against a missing cluster."""
+    from snuba.clusters.cluster import UndefinedClickhouseCluster
+    from snuba.web.bulk_delete_query import _count_storage_key_by_local_table
+
+    storage = get_writable_storage(StorageKey("eap_items"))
+    with patch(
+        "snuba.web.bulk_delete_query.get_cluster",
+        side_effect=UndefinedClickhouseCluster("not configured"),
+    ):
+        assert _count_storage_key_by_local_table(storage) == {}
