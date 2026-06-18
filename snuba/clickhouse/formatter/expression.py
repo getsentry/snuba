@@ -28,6 +28,20 @@ from snuba.query.parsing import ParsingContext
 _BETWEEN_SQUARE_BRACKETS_REGEX = re.compile(r"(?<=\[)(.*?)(?=\])")
 _SIMPLE_TYPE_RE = re.compile(r"^[a-zA-Z0-9_()\s,]+$")
 
+# ClickHouse function aliases that newer server versions canonicalize to their
+# primary name when they build the result block header. Distributed reads match
+# the remote block's columns to the initiator's expected header *by name*, so on
+# a mixed-version cluster (e.g. mid-upgrade) the two ends disagree on the column
+# name and the query fails with "Code: 10. DB::Exception: Not found column ... in
+# block. There are only columns: ...". Emitting the canonical name ourselves makes
+# every server version name the column identically, regardless of which side
+# initiates the distributed query. ``mapContains`` is a pure alias of
+# ``mapContainsKey`` (present in all supported versions), so this is a no-op
+# semantically.
+_CANONICAL_FUNCTION_NAMES = {
+    "mapContains": "mapContainsKey",
+}
+
 
 @lru_cache(maxsize=128)
 def _is_simple_type(type_str: str) -> bool:
@@ -165,7 +179,10 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
             formatted = (c.accept(self) for c in get_first_level_or_conditions(exp))
             return f"({' OR '.join(formatted)})"
 
-        ret = f"{escape_identifier(exp.function_name)}({self.__visit_params(exp.parameters)})"
+        function_name = _CANONICAL_FUNCTION_NAMES.get(
+            exp.function_name, exp.function_name
+        )
+        ret = f"{escape_identifier(function_name)}({self.__visit_params(exp.parameters)})"
         return self._alias(ret, exp.alias)
 
     def visit_curried_function_call(self, exp: CurriedFunctionCall) -> str:

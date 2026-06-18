@@ -255,6 +255,16 @@ test_expressions = [
         "if(condition > 0, t1.col1, -1337)",
     ),  # DangerousRawSQL in function call
     (DangerousRawSQL(None, ""), "", ""),  # Empty DangerousRawSQL (edge case)
+    (
+        FunctionCall(
+            None,
+            "mapContains",
+            (Column(None, None, "attributes_float_5"), Literal(None, "sentry.duration_ms")),
+        ),
+        "mapContainsKey(attributes_float_5, 'sentry.duration_ms')",
+        "mapContainsKey(attributes_float_5, '$S')",
+    ),  # mapContains is normalized to its canonical alias mapContainsKey so the
+    # column name agrees across ClickHouse versions on distributed reads
 ]
 
 
