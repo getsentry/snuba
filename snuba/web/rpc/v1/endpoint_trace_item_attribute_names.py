@@ -399,38 +399,32 @@ def convert_co_occurring_results_to_attributes(
         attribute = TraceItemAttributeNamesResponse.Attribute(
             name=attr_name, type=getattr(AttributeKey.Type, attr_type)
         )
-        # `count` is only selected when ordering by frequency. Surface it in the
-        # response for real attributes; the synthetic non-stored ones carry an
-        # infinite sentinel so they sort first and get no count.
+        # `count` is only selected when ordering by frequency; surface it for the
+        # real attributes. The synthetic non-stored attributes have no count.
         count = row.get("count")
-        if count is not None and count != float("inf"):
+        if count is not None:
             attribute.count = int(count)
         return attribute
 
     data = query_res.result.get("data", [])
     if request.type in (AttributeKey.TYPE_UNSPECIFIED, AttributeKey.TYPE_STRING):
+        non_stored = [
+            {"attr_key": ("TYPE_STRING", key_name)}
+            for key_name in NON_STORED_ATTRIBUTE_KEYS
+            if request.value_substring_match in key_name
+        ]
+        non_stored.sort(key=lambda row: tuple(row["attr_key"]))
         if _order_by_count(request):
-            # Inject non-stored attributes with an infinite count so they sort
-            # first, then re-sort to match the ClickHouse ordering. Two stable
-            # passes give "count <direction>, then name ASC".
-            data.extend(
-                [
-                    {"attr_key": ("TYPE_STRING", key_name), "count": float("inf")}
-                    for key_name in NON_STORED_ATTRIBUTE_KEYS
-                    if request.value_substring_match in key_name
-                ]
-            )
+            # Order the real (counted) rows to match ClickHouse: count in the
+            # requested direction, then name ASC (two stable passes). The synthetic
+            # non-stored attributes have no real count, so pin them first regardless
+            # of sort direction rather than relying on a sentinel value.
             data.sort(key=lambda row: tuple(row.get("attr_key", ("TYPE_STRING", ""))))
             data.sort(key=lambda row: row.get("count", 0), reverse=request.order_by.descending)
+            data = non_stored + data
         else:
-            # Default name ordering: inject non-stored attributes and sort by name.
-            data.extend(
-                [
-                    {"attr_key": ("TYPE_STRING", key_name)}
-                    for key_name in NON_STORED_ATTRIBUTE_KEYS
-                    if request.value_substring_match in key_name
-                ]
-            )
+            # Default name ordering: merge non-stored in and sort everything by name.
+            data.extend(non_stored)
             data.sort(key=lambda row: tuple(row.get("attr_key", ("TYPE_STRING", ""))))
 
     return list(map(t, data))

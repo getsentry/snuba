@@ -349,3 +349,33 @@ class TestTraceItemAttributeNames(BaseApiTest):
         assert attr_names == [
             f"a_tag_{str(i).zfill(3)}" for i in range(TOTAL_GENERATED_ATTR_PER_TYPE)
         ]
+
+    def test_order_by_count_pins_non_stored_first_both_directions(self) -> None:
+        """Synthetic non-stored attributes (e.g. sentry.service) are pinned first under
+        count ordering regardless of direction (regression: ascending placed them last)."""
+        for descending in (True, False):
+            req = TraceItemAttributeNamesRequest(
+                meta=RequestMeta(
+                    project_ids=[1, 2, 3],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    start_timestamp=Timestamp(
+                        seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
+                    ),
+                    end_timestamp=Timestamp(
+                        seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
+                    ),
+                ),
+                limit=1000,
+                type=AttributeKey.Type.TYPE_STRING,
+                order_by=TraceItemAttributeNamesRequest.OrderBy(
+                    column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT,
+                    descending=descending,
+                ),
+            )
+            res = EndpointTraceItemAttributeNames().execute(req)
+            attr_names = [attr.name for attr in res.attributes]
+            assert attr_names[0] == "sentry.service", (
+                f"non-stored attr should be first when descending={descending}, got {attr_names[:3]}"
+            )
