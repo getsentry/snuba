@@ -335,12 +335,16 @@ class DriverSelectingPool(ClickhousePool):
     Both underlying pools are created once (up front) and reused. Flipping the
     runtime config never creates a pool on the fly; it only changes which of
     the two already-created pools a given query is routed to.
+
+    ``connect_pool`` may be ``None`` when the HTTP port is not known for the
+    target. In that case every query is routed to the native pool, so the
+    cluster can always hand out a DriverSelectingPool without special casing.
     """
 
     def __init__(
         self,
         native_pool: ClickhousePool,
-        connect_pool: ClickhouseConnectPool,
+        connect_pool: Optional[ClickhouseConnectPool],
     ) -> None:
         # Intentionally does not call ClickhousePool.__init__: this pool owns no
         # connections of its own, it only forwards to the two real pools.
@@ -355,7 +359,7 @@ class DriverSelectingPool(ClickhousePool):
         self.database = native_pool.database
 
     def _selected_pool(self) -> ClickhousePool:
-        if use_clickhouse_connect_driver():
+        if self.__connect_pool is not None and use_clickhouse_connect_driver():
             return self.__connect_pool
         return self.__native_pool
 
@@ -409,4 +413,5 @@ class DriverSelectingPool(ClickhousePool):
 
     def close(self) -> None:
         self.__native_pool.close()
-        self.__connect_pool.close()
+        if self.__connect_pool is not None:
+            self.__connect_pool.close()

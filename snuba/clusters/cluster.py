@@ -210,6 +210,13 @@ class ConnectionCache:
                 http_port,
             )
             if cache_key not in self.__cache:
+                # Imported here so that importing this module does not import
+                # clickhouse-connect until a connection is actually requested.
+                from snuba.clickhouse.connect import (
+                    ClickhouseConnectPool,
+                    DriverSelectingPool,
+                )
+
                 native_pool = ClickhousePool(
                     node.host_name,
                     node.port,
@@ -222,21 +229,11 @@ class ConnectionCache:
                     ca_certs=ca_certs,
                     verify=verify,
                 )
-                if http_port is None:
-                    # No HTTP port: the connect driver can't be used, so there
-                    # is nothing to select between.
-                    self.__cache[cache_key] = native_pool
-                else:
-                    # Build both pools once and let the selector decide, at
-                    # query time, which one to route to. Imported here so that
-                    # constructing the cache does not import clickhouse-connect
-                    # until a connection is actually requested.
-                    from snuba.clickhouse.connect import (
-                        ClickhouseConnectPool,
-                        DriverSelectingPool,
-                    )
-
-                    connect_pool = ClickhouseConnectPool(
+                # The connect pool can only be built when the HTTP port is
+                # known; otherwise the selecting pool simply always routes to
+                # the native pool.
+                connect_pool = (
+                    ClickhouseConnectPool(
                         host=node.host_name,
                         http_port=http_port,
                         user=user,
@@ -248,7 +245,12 @@ class ConnectionCache:
                         ca_certs=ca_certs,
                         verify=verify,
                     )
-                    self.__cache[cache_key] = DriverSelectingPool(native_pool, connect_pool)
+                    if http_port is not None
+                    else None
+                )
+                # Always hand out a DriverSelectingPool and let it decide, at
+                # query time, which driver each query goes to.
+                self.__cache[cache_key] = DriverSelectingPool(native_pool, connect_pool)
 
             return self.__cache[cache_key]
 
