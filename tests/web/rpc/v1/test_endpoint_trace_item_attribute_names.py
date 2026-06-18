@@ -260,3 +260,55 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 )
             )
         assert res.attributes == expected
+
+    def test_sorted_by_frequency_then_name(self) -> None:
+        """Attributes are returned sorted by frequency DESC, with name ASC as a tiebreaker."""
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
+            ),
+            limit=1000,
+            type=AttributeKey.Type.TYPE_STRING,
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+        attr_names = [attr.name for attr in res.attributes]
+
+        # "foo"/"bar"/"baz" occur on every span (frequency 3) while each
+        # "a_tag_*" occurs on a single span (frequency 1), so the common
+        # attributes must sort ahead of the high-cardinality ones.
+        for common in ("foo", "bar", "baz"):
+            assert attr_names.index(common) < attr_names.index("a_tag_000"), (
+                f"high-frequency '{common}' should sort before low-frequency 'a_tag_000'"
+            )
+
+        # All "a_tag_*" share the same frequency, so they tie-break alphabetically.
+        a_tags = [name for name in attr_names if name.startswith("a_tag_")]
+        assert a_tags == sorted(a_tags), (
+            "attributes with equal frequency should be sorted alphabetically"
+        )
+
+    def test_equal_frequency_sorted_alphabetically(self) -> None:
+        """When every matching attribute has the same frequency, ordering is alphabetical."""
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
+            ),
+            limit=TOTAL_GENERATED_ATTR_PER_TYPE,
+            type=AttributeKey.Type.TYPE_STRING,
+            value_substring_match="a_tag",
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+        attr_names = [attr.name for attr in res.attributes]
+        assert attr_names == [
+            f"a_tag_{str(i).zfill(3)}" for i in range(TOTAL_GENERATED_ATTR_PER_TYPE)
+        ]

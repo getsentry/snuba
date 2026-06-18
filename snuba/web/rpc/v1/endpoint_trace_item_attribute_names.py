@@ -150,7 +150,7 @@ def get_co_occurring_attributes(
 
       The query at the end looks something like this:
 
-          SELECT distinct(arrayJoin(arrayFilter(attr -> ((NOT ((attr.2) IN ['test_tag_1_0'])) AND startsWith(attr.2, 'test_')), arrayMap(x -> ('TYPE_STRING', x), attributes_string)))) AS attr_key
+          SELECT arrayJoin(arrayFilter(attr -> ((NOT ((attr.2) IN ['test_tag_1_0'])) AND startsWith(attr.2, 'test_')), arrayMap(x -> ('TYPE_STRING', x), attributes_string))) AS attr_key, count() AS count
           FROM eap_item_co_occurring_attrs_1_local
           WHERE (item_type = 1) AND (project_id IN [1]) AND (organization_id = 1) AND (date < toDateTime(toDate('2025-03-17', 'Universal'))) AND (date >= toDateTime(toDate('2025-03-10', 'Universal')))
 
@@ -158,7 +158,8 @@ def get_co_occurring_attributes(
           AND hasAll(attribute_keys_hash, [cityHash64('test_tag_1_0')])
           --
 
-          ORDER BY attr_key ASC
+          GROUP BY attr_key
+          ORDER BY count DESC, attr_key ASC
           LIMIT 10000
 
       **Explanation:**
@@ -185,7 +186,7 @@ def get_co_occurring_attributes(
               )
       ) AS attr_key
       ```
-    4. . The outer query deduplicates the attributes sent by the inner query to return to the user distinct co-occurring attributes
+    4. . The outer query groups and counts the attributes sent by the inner query, returning co-occurring attributes sorted by frequency (most common first)
 
       **The following things make this query more performant than searching the source table:**
 
@@ -298,19 +299,23 @@ def get_co_occurring_attributes(
         selected_columns=[
             SelectedExpression(
                 name="attr_key",
-                expression=f.distinct(
-                    f.arrayJoin(
-                        f.arrayFilter(
-                            Lambda(None, ("attr",), attr_filter),
-                            array_func,
-                        ),
-                        alias="attr_key",
-                    )
+                expression=f.arrayJoin(
+                    f.arrayFilter(
+                        Lambda(None, ("attr",), attr_filter),
+                        array_func,
+                    ),
+                    alias="attr_key",
                 ),
             ),
+            SelectedExpression(
+                name="count",
+                expression=f.count(alias="count"),
+            ),
         ],
+        groupby=[column("attr_key")],
         condition=condition,
         order_by=[
+            OrderBy(direction=OrderByDirection.DESC, expression=column("count")),
             OrderBy(direction=OrderByDirection.ASC, expression=column("attr_key")),
         ],
         # chosen arbitrarily to be a high number
@@ -345,11 +350,10 @@ def convert_co_occurring_results_to_attributes(
     query_res: QueryResult,
 ) -> list[TraceItemAttributeNamesResponse.Attribute]:
     def t(row: Row) -> TraceItemAttributeNamesResponse.Attribute:
-        # our query to snuba only selected 1 column, attr_key
-        # so the result should only have 1 item per row
-        vals = row.values()
-        assert len(vals) == 1
-        attr_type, attr_name = list(vals)[0]
+        # our query to snuba selects two columns: attr_key and count.
+        # count is only used to order the results (by frequency); the response
+        # only carries the attribute name and type.
+        attr_type, attr_name = row["attr_key"]
         assert isinstance(attr_type, str)
         return TraceItemAttributeNamesResponse.Attribute(
             name=attr_name, type=getattr(AttributeKey.Type, attr_type)
@@ -357,14 +361,20 @@ def convert_co_occurring_results_to_attributes(
 
     data = query_res.result.get("data", [])
     if request.type in (AttributeKey.TYPE_UNSPECIFIED, AttributeKey.TYPE_STRING):
+        # Add non-stored attributes with a very high count so they sort first,
+        # since these are typically important service-level attributes.
         data.extend(
             [
-                {"attr_key": ("TYPE_STRING", key_name)}
+                {"attr_key": ("TYPE_STRING", key_name), "count": float("inf")}
                 for key_name in NON_STORED_ATTRIBUTE_KEYS
                 if request.value_substring_match in key_name
             ]
         )
-        data.sort(key=lambda row: tuple(row.get("attr_key", ("TYPE_STRING", ""))))
+        # Re-sort with the synthetic attributes included, matching the
+        # ClickHouse ordering: frequency DESC, then attribute name ASC.
+        data.sort(
+            key=lambda row: (-row.get("count", 0), tuple(row.get("attr_key", ("TYPE_STRING", ""))))
+        )
 
     return list(map(t, data))
 
