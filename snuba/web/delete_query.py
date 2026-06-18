@@ -199,7 +199,7 @@ FROM (
     )
 """
     return int(
-        cluster.get_query_connection(ClickhouseClientSettings.QUERY).execute(query).results[0][0]
+        cluster.get_query_connection(ClickhouseClientSettings.INTERNAL).execute(query).results[0][0]
     )
 
 
@@ -218,7 +218,7 @@ FROM clusterAllReplicas('{cluster.get_clickhouse_cluster_name()}', 'system', met
 WHERE metric = 'PartMutation'
 """
     return int(
-        cluster.get_query_connection(ClickhouseClientSettings.QUERY).execute(query).results[0][0]
+        cluster.get_query_connection(ClickhouseClientSettings.INTERNAL).execute(query).results[0][0]
     )
 
 

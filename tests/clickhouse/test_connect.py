@@ -182,6 +182,16 @@ def test_read_query_client_settings_use_30s_timeout() -> None:
     assert ClickhouseClientSettings.QUERY.value.timeout == 30
 
 
+def test_internal_profile_is_unbounded() -> None:
+    # The 30s read timeout must not leak onto internal/maintenance queries
+    # (topology discovery, routing load lookups, delete throttling checks, the
+    # span-export job, table copies). They use the INTERNAL profile, which stays
+    # unbounded so long-running operations aren't capped at 30s.
+    from snuba.clusters.cluster import ClickhouseClientSettings
+
+    assert ClickhouseClientSettings.INTERNAL.value.timeout is None
+
+
 def test_pool_size_defaults_to_setting() -> None:
     import clickhouse_connect
 

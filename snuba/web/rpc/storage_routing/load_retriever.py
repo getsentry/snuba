@@ -131,12 +131,12 @@ def get_cluster_loadinfo(
             """
 
         cluster_load = float(
-            cluster.get_query_connection(ClickhouseClientSettings.QUERY)
+            cluster.get_query_connection(ClickhouseClientSettings.INTERNAL)
             .execute(cluster_load_query)
             .results[0][0]
         )
         concurrent_queries = int(
-            cluster.get_query_connection(ClickhouseClientSettings.QUERY)
+            cluster.get_query_connection(ClickhouseClientSettings.INTERNAL)
             .execute(concurrent_queries_query)
             .results[0][0]
         )

@@ -74,9 +74,16 @@ class ClickhouseClientSettings(Enum):
     )
     DELETE = ClickhouseClientSettingsType({"mutations_sync": 1}, None)
     OPTIMIZE = ClickhouseClientSettingsType({}, settings.OPTIMIZE_QUERY_TIMEOUT)
-    # Read queries get a 30s timeout. Migrations, DDL and other long-running
-    # operations keep their own (default or longer) timeouts above/below.
+    # User-facing read queries get a 30s timeout. Migrations, DDL and other
+    # long-running operations keep their own (default or longer) timeouts
+    # above/below.
     QUERY = ClickhouseClientSettingsType({}, 30)
+    # Internal/maintenance queries that are NOT user-facing reads and must not
+    # inherit QUERY's 30s cap: cluster topology discovery (system.clusters),
+    # storage-routing load lookups, delete-throttling system-table checks, the
+    # span-export job and admin table copies. These can legitimately run long,
+    # so they stay unbounded (their behavior before QUERY got a read timeout).
+    INTERNAL = ClickhouseClientSettingsType({}, None)
     QUERYLOG = ClickhouseClientSettingsType({}, None)
     TRACING = ClickhouseClientSettingsType({"readonly": 2}, None)
     REPLACE = ClickhouseClientSettingsType(
@@ -528,7 +535,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
                 replica=host[3],
                 http_port=self.__http_port,
             )
-            for host in self.get_query_connection(ClickhouseClientSettings.QUERY)
+            for host in self.get_query_connection(ClickhouseClientSettings.INTERNAL)
             .execute(
                 "select host_name, port, shard_num, replica_num from system.clusters where cluster=%(cluster_name)s",
                 {"cluster_name": cluster_name},
