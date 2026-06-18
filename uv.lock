@@ -953,7 +953,7 @@ wheels = [
 
 [[package]]
 name = "sentry-kafka-schemas"
-version = "2.1.24"
+version = "2.1.35"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
     { name = "fastjsonschema", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -964,7 +964,7 @@ dependencies = [
     { name = "typing-extensions", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_kafka_schemas-2.1.24-py2.py3-none-any.whl", hash = "sha256:50ca2ce88598b2a2eacdeb609a783153c6a7bb4e3f5e3bc4121690b8a3c2f293" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_kafka_schemas-2.1.35-py2.py3-none-any.whl", hash = "sha256:067da6d401082cc5948005211179a58c5d5b9d559c6ce60b82eac47e02d31a5d" },
 ]
 
 [[package]]
@@ -1176,7 +1176,7 @@ requires-dist = [
     { name = "rust-snuba", editable = "rust_snuba" },
     { name = "sentry-arroyo", specifier = ">=2.39.2" },
     { name = "sentry-conventions", specifier = ">=0.12.0" },
-    { name = "sentry-kafka-schemas", specifier = ">=2.1.24" },
+    { name = "sentry-kafka-schemas", specifier = ">=2.1.35" },
     { name = "sentry-protos", specifier = ">=0.17.0" },
     { name = "sentry-redis-tools", specifier = ">=0.5.1" },
     { name = "sentry-relay", specifier = ">=0.9.25" },
