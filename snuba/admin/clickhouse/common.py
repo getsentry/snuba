@@ -117,8 +117,16 @@ def _build_validated_pool(
         verify=False,
         http_port=cluster.get_http_port(),
         use_connect=use_clickhouse_connect_driver(),
-        max_pool_size=2,
     )
+
+
+def _driver_cache_token() -> str:
+    # Part of the admin connection cache keys so that flipping the
+    # use_clickhouse_connect_driver runtime flag re-resolves admin connections
+    # to the new driver, instead of returning a pool pinned to whichever driver
+    # was active when the entry was first cached. This keeps admin traffic
+    # switchable at runtime, like the cluster query/reader paths.
+    return "connect" if use_clickhouse_connect_driver() else "native"
 
 
 def get_ro_node_connection(
@@ -129,7 +137,7 @@ def get_ro_node_connection(
 ) -> ClickhousePool:
     storage = _get_storage(storage_name)
 
-    key = f"{storage.get_storage_key()}-{clickhouse_host}"
+    key = f"{storage.get_storage_key()}-{clickhouse_host}-{_driver_cache_token()}"
     if key in NODE_CONNECTIONS:
         return NODE_CONNECTIONS[key]
 
@@ -176,8 +184,9 @@ CLUSTER_CONNECTIONS: MutableMapping[str, ClickhousePool] = {}
 def get_ro_query_node_connection(
     storage_name: str, client_settings: ClickhouseClientSettings
 ) -> ClickhousePool:
-    if storage_name in CLUSTER_CONNECTIONS:
-        return CLUSTER_CONNECTIONS[storage_name]
+    key = f"{storage_name}-{_driver_cache_token()}"
+    if key in CLUSTER_CONNECTIONS:
+        return CLUSTER_CONNECTIONS[key]
 
     storage = _get_storage(storage_name)
     cluster = storage.get_cluster()
@@ -186,7 +195,7 @@ def get_ro_query_node_connection(
         connection_id.hostname, connection_id.tcp_port, storage_name, client_settings
     )
 
-    CLUSTER_CONNECTIONS[storage_name] = connection
+    CLUSTER_CONNECTIONS[key] = connection
     return connection
 
 
@@ -198,7 +207,7 @@ def get_sudo_node_connection(
 ) -> ClickhousePool:
     storage = _get_storage(storage_name)
 
-    key = f"{storage.get_storage_key()}-{clickhouse_host}-sudo"
+    key = f"{storage.get_storage_key()}-{clickhouse_host}-sudo-{_driver_cache_token()}"
     if key in NODE_CONNECTIONS:
         return NODE_CONNECTIONS[key]
 
@@ -230,7 +239,7 @@ def get_clusterless_node_connection(
     cluster = storage.get_cluster()
     database = cluster.get_database()
 
-    key = f"{storage.get_storage_key()}-{clickhouse_host}-clusterless-{database}"
+    key = f"{storage.get_storage_key()}-{clickhouse_host}-clusterless-{database}-{_driver_cache_token()}"
     if key in NODE_CONNECTIONS:
         return NODE_CONNECTIONS[key]
 
@@ -259,7 +268,7 @@ def get_ro_clusterless_node_connection(
     cluster = storage.get_cluster()
     database = cluster.get_database()
 
-    key = f"{storage.get_storage_key()}-{clickhouse_host}-clusterless-ro-{database}"
+    key = f"{storage.get_storage_key()}-{clickhouse_host}-clusterless-ro-{database}-{_driver_cache_token()}"
     if key in NODE_CONNECTIONS:
         return NODE_CONNECTIONS[key]
 

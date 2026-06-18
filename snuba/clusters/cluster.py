@@ -202,7 +202,6 @@ CacheKey = Tuple[
     Optional[str],
     Optional[bool],
     int,
-    int,
     str,
 ]
 
@@ -224,7 +223,6 @@ class ConnectionCache:
         verify: Optional[bool],
         http_port: int,
         use_connect: bool,
-        max_pool_size: int = settings.CLICKHOUSE_MAX_POOL_SIZE,
     ) -> ClickhousePool:
         """
         Return a cached connection pool for the node, typed as the abstract
@@ -234,8 +232,10 @@ class ConnectionCache:
 
         This is the single place pools are instantiated, so every caller — the
         cluster query/node connections as well as the admin and CLI by-host
-        helpers — goes through it and gets the runtime-selected driver behind
-        the abstract :class:`ClickhousePool` type.
+        helpers — goes through it and gets one shared, runtime-selected pool
+        behind the abstract :class:`ClickhousePool` type. Pool sizing is left to
+        the pools themselves (the connect pool reads the
+        ``clickhouse_connect_pool_size`` runtime config).
         """
         with self.__lock:
             client_settings_dict, timeout = client_settings.value
@@ -253,7 +253,6 @@ class ConnectionCache:
                 # two clusters sharing a node/credentials but using different
                 # HTTP ports from colliding on the same cached pool.
                 http_port,
-                max_pool_size,
                 "http" if use_connect else "native",
             )
             if cache_key not in self.__cache:
@@ -274,7 +273,6 @@ class ConnectionCache:
                         secure=secure,
                         ca_certs=ca_certs,
                         verify=verify,
-                        max_pool_size=max_pool_size,
                     )
                 else:
                     pool = ClickhouseNativePool(
@@ -288,7 +286,6 @@ class ConnectionCache:
                         secure=secure,
                         ca_certs=ca_certs,
                         verify=verify,
-                        max_pool_size=max_pool_size,
                     )
                 self.__cache[cache_key] = pool
 

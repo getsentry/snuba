@@ -226,3 +226,38 @@ def test_clickhouse_reader_wraps_connect_pool() -> None:
     pool = _make_pool(mock.Mock())
     reader = ClickhouseReader(cache_partition_id=None, client=pool, query_settings_prefix=None)
     assert isinstance(reader, ClickhouseReader)
+
+
+def test_with_totals_handled_over_http() -> None:
+    # WITH TOTALS works on the HTTP driver through clickhouse-connect's own
+    # parsing: its Native-format reader concatenates every response block,
+    # including the trailing totals block, into result_set, so the totals row
+    # arrives last — exactly what the driver-agnostic ClickhouseReader expects
+    # when it pops the last row as "totals". No native-driver-specific handling
+    # is involved.
+    from snuba.clickhouse.native import ClickhouseReader
+
+    class FakeFormattedQuery:
+        def get_sql(self) -> str:
+            return "SELECT project_id, count() FROM t GROUP BY project_id WITH TOTALS"
+
+    client = mock.Mock()
+    # Two data rows followed by the totals row, the way clickhouse-connect
+    # surfaces a WITH TOTALS response over HTTP.
+    client.query.return_value = FakeQueryResult(
+        result_set=[[1, 10], [2, 20], [0, 30]],
+        column_names=("project_id", "count()"),
+        column_types=(FakeColumnType("UInt64"), FakeColumnType("UInt64")),
+    )
+
+    pool = _make_pool(client)
+    reader = ClickhouseReader(cache_partition_id=None, client=pool, query_settings_prefix=None)
+
+    result = reader.execute(FakeFormattedQuery(), with_totals=True)
+
+    # The trailing row is split out as totals; only the real rows remain in data.
+    assert result["data"] == [
+        {"project_id": 1, "count()": 10},
+        {"project_id": 2, "count()": 20},
+    ]
+    assert result["totals"] == {"project_id": 0, "count()": 30}

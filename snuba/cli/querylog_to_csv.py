@@ -1,4 +1,5 @@
 import csv
+import os
 from datetime import datetime
 from typing import NamedTuple, Optional, Sequence, Tuple
 
@@ -168,7 +169,9 @@ def querylog_to_csv(
     # Go through the shared connection cache so the driver (native vs
     # clickhouse-connect/HTTP) is selected by the runtime config, behind the
     # abstract ClickhousePool type. There is no cluster here to read an
-    # http_port from, so fall back to the well-known default.
+    # http_port from, so use the configured CLICKHOUSE_HTTP_PORT (the same env
+    # var the cluster config reads), defaulting to the well-known port.
+    http_port = int(os.environ.get("CLICKHOUSE_HTTP_PORT", DEFAULT_CLICKHOUSE_HTTP_PORT))
     connection = connection_cache.get_node_connection(
         ClickhouseClientSettings.QUERY,
         ClickhouseNode(clickhouse_host, clickhouse_port),
@@ -178,7 +181,7 @@ def querylog_to_csv(
         secure=False,
         ca_certs=None,
         verify=False,
-        http_port=DEFAULT_CLICKHOUSE_HTTP_PORT,
+        http_port=http_port,
         use_connect=use_clickhouse_connect_driver(),
     )
     results = connection.execute(query)

@@ -69,12 +69,14 @@ class ClickhouseConnectPool(ClickhousePool):
         verify: Optional[bool] = False,
         connect_timeout: int = 1,
         send_receive_timeout: Optional[int] = 35,
-        max_pool_size: int = settings.CLICKHOUSE_MAX_POOL_SIZE,
         client_settings: Mapping[str, Any] = {},
     ) -> None:
         # No native connection queue here; clickhouse-connect manages its own
         # HTTP pool. ``port`` is the abstract base attribute (it holds the
-        # cluster's configured HTTP port for this driver).
+        # cluster's configured HTTP port for this driver). The pool size is not
+        # a construction parameter: it is always taken from the
+        # ``clickhouse_connect_pool_size`` runtime config (see _get_client), so
+        # it can be tuned at runtime without rebuilding pools.
         self.host = host
         self.port = http_port
         self.user = user
@@ -85,7 +87,6 @@ class ClickhouseConnectPool(ClickhousePool):
         self.verify = verify
         self.connect_timeout = connect_timeout
         self.send_receive_timeout = send_receive_timeout
-        self.max_pool_size = max_pool_size
         self.client_settings = client_settings
 
         self.__client: Optional[Client] = None
@@ -97,12 +98,15 @@ class ClickhouseConnectPool(ClickhousePool):
         if self.__client is None:
             with self.__lock:
                 if self.__client is None:
-                    # Default to the configured CLICKHOUSE_MAX_POOL_SIZE, but
-                    # allow it to be overridden at runtime. The value is read
-                    # once when the (cached) client is first created.
+                    # Pool size always comes from the clickhouse_connect_pool_size
+                    # runtime config, falling back to the configured
+                    # CLICKHOUSE_MAX_POOL_SIZE. The value is read once, when the
+                    # (cached) client is first created.
                     pool_size = (
-                        state.get_int_config("clickhouse_connect_pool_size", self.max_pool_size)
-                        or self.max_pool_size
+                        state.get_int_config(
+                            "clickhouse_connect_pool_size", settings.CLICKHOUSE_MAX_POOL_SIZE
+                        )
+                        or settings.CLICKHOUSE_MAX_POOL_SIZE
                     )
                     pool_mgr = get_pool_manager(
                         ca_cert=self.ca_certs,
