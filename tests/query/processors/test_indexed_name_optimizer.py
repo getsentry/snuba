@@ -15,7 +15,6 @@ from snuba.query.dsl import (
     in_cond,
     literal,
     literals_array,
-    or_cond,
 )
 from snuba.query.expressions import (
     Column,
@@ -29,6 +28,7 @@ from snuba.query.processors.logical.indexed_name_optimizer import (
     IndexedNameOptimizer,
 )
 from snuba.query.query_settings import HTTPQuerySettings
+from snuba.state import set_config
 
 # Use the protobuf enum values directly so the tests stay in sync with the
 # production dependency the optimizer keys off of.
@@ -74,13 +74,10 @@ test_data = [
         _query(
             and_cond(
                 equals(column("item_type"), literal(SPAN)),
-                or_cond(
-                    equals(column("indexed_name"), literal("db.query")),
-                    equals(_attr_arr("sentry.op"), literal("db.query")),
-                ),
+                equals(column("indexed_name"), literal("db.query")),
             )
         ),
-        id="span sentry.op (arrayElement) gets an indexed_name OR fallback",
+        id="span sentry.op (arrayElement) rewritten to indexed_name",
     ),
     pytest.param(
         _query(
@@ -92,13 +89,10 @@ test_data = [
         _query(
             and_cond(
                 equals(column("item_type"), literal(SPAN)),
-                or_cond(
-                    equals(column("indexed_name"), literal("db.query")),
-                    equals(_attr_str("sentry.op"), literal("db.query")),
-                ),
+                equals(column("indexed_name"), literal("db.query")),
             )
         ),
-        id="span sentry.op (SubscriptableReference) gets an indexed_name OR fallback",
+        id="span sentry.op (SubscriptableReference) rewritten to indexed_name",
     ),
     pytest.param(
         _query(
@@ -110,13 +104,10 @@ test_data = [
         _query(
             and_cond(
                 equals(column("item_type"), literal(METRIC)),
-                or_cond(
-                    equals(column("indexed_name"), literal("my.metric")),
-                    equals(_attr_arr("sentry.metric.name"), literal("my.metric")),
-                ),
+                equals(column("indexed_name"), literal("my.metric")),
             )
         ),
-        id="metric sentry.metric.name gets an indexed_name OR fallback",
+        id="metric sentry.metric.name rewritten to indexed_name",
     ),
     pytest.param(
         _query(
@@ -131,19 +122,31 @@ test_data = [
         _query(
             and_cond(
                 equals(column("item_type"), literal(SPAN)),
-                or_cond(
-                    in_cond(
-                        column("indexed_name"),
-                        literals_array(None, [literal("db.query"), literal("http.client")]),
-                    ),
-                    in_cond(
-                        _attr_arr("sentry.op"),
-                        literals_array(None, [literal("db.query"), literal("http.client")]),
-                    ),
+                in_cond(
+                    column("indexed_name"),
+                    literals_array(None, [literal("db.query"), literal("http.client")]),
                 ),
             )
         ),
-        id="span sentry.op IN gets an indexed_name OR fallback",
+        id="span sentry.op IN rewritten to indexed_name",
+    ),
+    pytest.param(
+        # The rewrite is a value substitution, so it applies to any operator the
+        # access appears under (the index only helps equals/in, but substituting
+        # is always correct once indexed_name is populated).
+        _query(
+            and_cond(
+                equals(column("item_type"), literal(SPAN)),
+                FunctionCall(None, "notEquals", (_attr_arr("sentry.op"), literal("db.query"))),
+            )
+        ),
+        _query(
+            and_cond(
+                equals(column("item_type"), literal(SPAN)),
+                FunctionCall(None, "notEquals", (column("indexed_name"), literal("db.query"))),
+            )
+        ),
+        id="any operator on the access is rewritten (notEquals)",
     ),
     pytest.param(
         _query(
@@ -197,97 +200,6 @@ test_data = [
     ),
     pytest.param(
         _query(
-            and_cond(
-                equals(column("item_type"), literal(SPAN)),
-                FunctionCall(
-                    None,
-                    "notEquals",
-                    (_attr_arr("sentry.op"), literal("db.query")),
-                ),
-            )
-        ),
-        _query(
-            and_cond(
-                equals(column("item_type"), literal(SPAN)),
-                FunctionCall(
-                    None,
-                    "notEquals",
-                    (_attr_arr("sentry.op"), literal("db.query")),
-                ),
-            )
-        ),
-        id="negated filter is left untouched (OR fallback would be incorrect)",
-    ),
-    pytest.param(
-        _query(
-            and_cond(
-                equals(column("item_type"), literal(SPAN)),
-                equals(_attr_arr("sentry.op"), literal("")),
-            )
-        ),
-        _query(
-            and_cond(
-                equals(column("item_type"), literal(SPAN)),
-                equals(_attr_arr("sentry.op"), literal("")),
-            )
-        ),
-        id="empty-string equals is left untouched (indexed_name='' over-matches)",
-    ),
-    pytest.param(
-        _query(
-            and_cond(
-                equals(column("item_type"), literal(SPAN)),
-                in_cond(
-                    _attr_arr("sentry.op"),
-                    literals_array(None, [literal("db.query"), literal("")]),
-                ),
-            )
-        ),
-        _query(
-            and_cond(
-                equals(column("item_type"), literal(SPAN)),
-                in_cond(
-                    _attr_arr("sentry.op"),
-                    literals_array(None, [literal("db.query"), literal("")]),
-                ),
-            )
-        ),
-        id="IN containing the empty string is left untouched",
-    ),
-    pytest.param(
-        # The guarded form the RPC emits when the value is the column default:
-        # and(mapContains(...), equals(arrayElement(...), '')). The empty value
-        # makes the indexed_name probe unsafe, so the whole thing is left alone.
-        _query(
-            and_cond(
-                equals(column("item_type"), literal(SPAN)),
-                and_cond(
-                    FunctionCall(
-                        None,
-                        "mapContains",
-                        (column("attributes_string"), literal("sentry.op")),
-                    ),
-                    equals(_attr_arr("sentry.op"), literal("")),
-                ),
-            )
-        ),
-        _query(
-            and_cond(
-                equals(column("item_type"), literal(SPAN)),
-                and_cond(
-                    FunctionCall(
-                        None,
-                        "mapContains",
-                        (column("attributes_string"), literal("sentry.op")),
-                    ),
-                    equals(_attr_arr("sentry.op"), literal("")),
-                ),
-            )
-        ),
-        id="guarded empty-value form is left untouched",
-    ),
-    pytest.param(
-        _query(
             condition=equals(column("item_type"), literal(SPAN)),
             selected_columns=[
                 SelectedExpression("op", _attr_str("sentry.op", alias="op")),
@@ -296,23 +208,42 @@ test_data = [
         _query(
             condition=equals(column("item_type"), literal(SPAN)),
             selected_columns=[
-                SelectedExpression("op", _attr_str("sentry.op", alias="op")),
+                SelectedExpression("op", Column("op", None, "indexed_name")),
             ],
         ),
-        id="SELECT references are left on the bucket (index only helps WHERE)",
+        id="select preserves alias on rewrite",
     ),
 ]
 
 
+@pytest.mark.redis_db
 @pytest.mark.parametrize("pre_format, expected_query", test_data)
 def test_indexed_name_optimizer(pre_format: Query, expected_query: Query) -> None:
+    set_config(IndexedNameOptimizer.CONFIG_KEY, 1)
     copy = deepcopy(pre_format)
     IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
     assert copy.get_selected_columns() == expected_query.get_selected_columns()
     assert copy.get_condition() == expected_query.get_condition()
 
 
+@pytest.mark.redis_db
+def test_disabled_by_default_leaves_query_untouched() -> None:
+    set_config(IndexedNameOptimizer.CONFIG_KEY, 0)
+    query = _query(
+        and_cond(
+            equals(column("item_type"), literal(SPAN)),
+            equals(_attr_arr("sentry.op"), literal("db.query")),
+        )
+    )
+    copy = deepcopy(query)
+    IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
+    assert copy.get_condition() == query.get_condition()
+    assert copy.get_selected_columns() == query.get_selected_columns()
+
+
+@pytest.mark.redis_db
 def test_contradictory_item_types_left_untouched() -> None:
+    set_config(IndexedNameOptimizer.CONFIG_KEY, 1)
     query = _query(
         and_cond(
             equals(column("item_type"), literal(SPAN)),
