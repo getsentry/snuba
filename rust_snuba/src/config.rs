@@ -301,7 +301,10 @@ mod tests {
         assert!(!serialized.contains("https://secret@sentry.io/1"));
 
         // Non-sensitive values are preserved.
-        assert_eq!(redacted["storages"][0]["clickhouse_cluster"]["host"], "localhost");
+        assert_eq!(
+            redacted["storages"][0]["clickhouse_cluster"]["host"],
+            "localhost"
+        );
         assert_eq!(
             redacted["storages"][0]["clickhouse_cluster"]["password"],
             REDACTED
