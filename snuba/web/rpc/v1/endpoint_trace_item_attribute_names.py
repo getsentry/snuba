@@ -21,7 +21,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Storage
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond, column, in_cond, not_cond, or_cond
+from snuba.query.dsl import and_cond, column, not_cond, or_cond
 from snuba.query.expressions import Argument, Expression, FunctionCall, Lambda
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -161,7 +161,7 @@ def get_co_occurring_attributes(
       The query at the end looks something like this:
 
           -- Default ordering (order_by unset or COLUMN_NAME): distinct keys by name
-          SELECT distinct(arrayJoin(arrayFilter(attr -> ((NOT ((attr.2) IN ['test_tag_1_0'])) AND startsWith(attr.2, 'test_')), arrayMap(x -> ('TYPE_STRING', x), attributes_string)))) AS attr_key
+          SELECT distinct(arrayJoin(arrayFilter(attr -> ((NOT has(['test_tag_1_0'], attr.2)) AND startsWith(attr.2, 'test_')), arrayMap(x -> ('TYPE_STRING', x), attributes_string)))) AS attr_key
           FROM eap_item_co_occurring_attrs_1_local
           WHERE (item_type = 1) AND (project_id IN [1]) AND (organization_id = 1) AND (date < toDateTime(toDate('2025-03-17', 'Universal'))) AND (date >= toDateTime(toDate('2025-03-10', 'Universal')))
 
@@ -196,7 +196,7 @@ def get_co_occurring_attributes(
       -- each of the co-occurring attributes becomes a row sent to the outer query
       arrayJoin(
               arrayFilter(
-                  attr -> NOT in(attr, ['test_tag_1_0']),
+                  attr -> NOT has(['test_tag_1_0'], attr),
                   attributes_string
               )
       ) AS attr_key
@@ -299,10 +299,20 @@ def get_co_occurring_attributes(
     else:
         array_func = f.arrayConcat(string_array, double_array, bool_array)
 
+    # Exclude the unsearchable keys with NOT has(array(...), x) rather than
+    # NOT (x IN (...)). A constant IN-set makes ClickHouse build an internal
+    # prepared set whose server-generated identifier (__set_String_<hash>_<hash>)
+    # is baked into the result-block column name. Because this filter lives inside
+    # the arrayJoin'd SELECT expression, that name is matched by string across
+    # `Remote`; on a mixed-version cluster the two sides hash the set differently,
+    # so the names disagree and distributed reads fail with
+    # "Code: 10 ... Not found column ... While executing Remote." (SNUBA-B82).
+    # has() over a constant array keeps the array inline in the column name, which
+    # is byte-stable across versions. The set here is tiny so there's no perf cost.
     attr_filter = not_cond(
-        in_cond(
-            f.tupleElement(column("attr"), 2),
+        f.has(
             f.array(*UNSEARCHABLE_ATTRIBUTE_KEYS),
+            f.tupleElement(column("attr"), 2),
         )
     )
     if request.value_substring_match:
