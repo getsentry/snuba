@@ -38,10 +38,11 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.expressions import FunctionCall, Literal
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
+    inline_in_to_has,
     trace_item_filters_to_expression,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.endpoint_get_traces import EndpointGetTraces, _inline_in_sets
+from snuba.web.rpc.v1.endpoint_get_traces import EndpointGetTraces
 from tests.base import BaseApiTest
 from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
@@ -963,7 +964,7 @@ def test_filtered_item_count_inlines_in_sets() -> None:
     before = _in_calls_over_arrays(filter_expr)
     assert before, "expected the project_id filter to build an in() over a constant array"
 
-    rewritten = _inline_in_sets(filter_expr)
+    rewritten = inline_in_to_has(filter_expr)
 
     # After inlining, no IN over a constant array survives.
     assert not _in_calls_over_arrays(rewritten), (

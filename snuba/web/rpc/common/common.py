@@ -50,6 +50,44 @@ from snuba.query.expressions import (
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
+def inline_in_to_has(expression: Expression) -> Expression:
+    """Rewrite ``in(x, array(...))`` as ``has(array(...), x)`` for SELECT-clause use.
+
+    A constant ``IN`` set makes ClickHouse build an internal prepared set whose
+    server-generated identifier (``__set_<Type>_<hash>_<hash>``) is baked into the
+    result-block column name. When such an expression lands in a SELECT-clause
+    expression — a conditional aggregate (``countIf``/``sumIf``/...), a ``HAVING``
+    aggregate, or an ``arrayJoin`` projection — that name is matched by string across
+    ``Remote`` nodes. On a mixed-version ClickHouse cluster the two sides hash the set
+    differently, so the names disagree and the distributed read fails with
+    ``Code: 10 ... Not found column ... While executing Remote.`` (SNUBA-9W6,
+    SNUBA-B82).
+
+    ``has`` over a constant array keeps the array inline in the column name, which is
+    byte-stable across versions, and ``has(array, x)`` is equivalent to ``x IN (array)``
+    for scalar membership. The surrounding NULL-handling wrapper built by
+    ``trace_item_filters_to_expression`` is preserved untouched.
+
+    Only apply this to expressions destined for a SELECT clause / projection / aggregate
+    condition / ``HAVING`` / ``GROUP BY`` / ``ORDER BY`` computed column. Do NOT apply it
+    to WHERE-clause conditions: there the prepared ``IN`` set is what lets ClickHouse
+    prune partitions and primary-key ranges, so replacing it with ``has`` would force
+    full scans.
+    """
+
+    def rewrite(exp: Expression) -> Expression:
+        if isinstance(exp, FunctionCall) and exp.function_name == "in" and len(exp.parameters) == 2:
+            lhs, rhs = exp.parameters
+            # Only constant arrays (literals_array -> array(...)) build a prepared set.
+            if isinstance(rhs, FunctionCall) and rhs.function_name == "array":
+                # Build the FunctionCall directly (rather than f.has(..., alias=...)) so the
+                # original Optional[str] alias is preserved without a type error.
+                return FunctionCall(exp.alias, "has", (rhs, lhs))
+        return exp
+
+    return expression.transform(rewrite)
+
+
 def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
     """Convert an AttributeKey proto to a Snuba Expression.
 

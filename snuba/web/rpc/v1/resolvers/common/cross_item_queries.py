@@ -28,6 +28,7 @@ from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     base_conditions_and,
+    inline_in_to_has,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
@@ -88,8 +89,15 @@ def get_trace_ids_sql_for_cross_item_query(
             )
 
     if len(filter_expressions) > 1:
+        # The countIf goes in the HAVING clause (a SELECT-clause aggregate), so inline any
+        # constant IN-set to keep its result-block column name stable across mixed-version
+        # ClickHouse nodes. The WHERE-clause or_cond below keeps its prepared IN-sets for
+        # partition/primary-key pruning.
         trace_item_filters_and_expression = and_cond(
-            *[f.greater(f.countIf(expression), 0) for expression in filter_expressions]
+            *[
+                f.greater(f.countIf(inline_in_to_has(expression)), 0)
+                for expression in filter_expressions
+            ]
         )
         trace_item_filters_or_expression = or_cond(*filter_expressions)
     elif len(filter_expressions) == 1:

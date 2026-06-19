@@ -35,7 +35,7 @@ from snuba.query.dsl import (
     literals_array,
     or_cond,
 )
-from snuba.query.expressions import DangerousRawSQL, Expression, FunctionCall
+from snuba.query.expressions import DangerousRawSQL, Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.request import Request as SnubaRequest
@@ -44,6 +44,7 @@ from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     base_conditions_and,
+    inline_in_to_has,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
@@ -368,37 +369,6 @@ def _attribute_to_expression(
     raise BadSnubaRPCRequestException(f"{key} had an unknown or unset type: {trace_attribute.type}")
 
 
-def _inline_in_sets(expression: Expression) -> Expression:
-    """Rewrite ``in(x, array(...))`` as ``has(array(...), x)``.
-
-    A constant ``IN`` set makes ClickHouse build an internal prepared set whose
-    server-generated identifier (``__set_<Type>_<hash>_<hash>``) is baked into the
-    result-block column name. The ``filtered_item_count`` aggregate embeds the trace
-    item filter inside a ``countIf`` in the SELECT clause, so that name is matched by
-    string across ``Remote`` nodes. On a mixed-version ClickHouse cluster the two
-    sides hash the set differently, so the names disagree and the distributed read
-    fails with ``Code: 10 ... Not found column ... While executing Remote.``
-    (SNUBA-9W6).
-
-    ``has`` over a constant array keeps the array inline in the column name, which is
-    byte-stable across versions. ``has(array, x)`` is equivalent to ``x IN (array)``
-    for scalar membership, and the surrounding NULL-handling wrapper built by
-    ``trace_item_filters_to_expression`` is preserved untouched.
-    """
-
-    def rewrite(exp: Expression) -> Expression:
-        if isinstance(exp, FunctionCall) and exp.function_name == "in" and len(exp.parameters) == 2:
-            lhs, rhs = exp.parameters
-            # Only constant arrays (literals_array -> array(...)) build a prepared set.
-            if isinstance(rhs, FunctionCall) and rhs.function_name == "array":
-                # Build the FunctionCall directly (rather than f.has(..., alias=...)) so the
-                # original Optional[str] alias is preserved without a type error.
-                return FunctionCall(exp.alias, "has", (rhs, lhs))
-        return exp
-
-    return expression.transform(rewrite)
-
-
 def _build_snuba_request(
     request: GetTracesRequest,
     query: Query,
@@ -716,9 +686,9 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
 
         # filtered_item_count embeds this filter inside a SELECT-clause countIf, so any
         # constant IN-set must be inlined to keep the result-block column name stable
-        # across mixed-version ClickHouse nodes on distributed reads (see _inline_in_sets).
+        # across mixed-version ClickHouse nodes on distributed reads (see inline_in_to_has).
         if trace_item_filters_expression is not None:
-            trace_item_filters_expression = _inline_in_sets(trace_item_filters_expression)
+            trace_item_filters_expression = inline_in_to_has(trace_item_filters_expression)
 
         selected_columns: list[SelectedExpression] = []
         start_timestamp_requested = False
@@ -838,9 +808,9 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
 
         # filtered_item_count embeds this filter inside a SELECT-clause countIf, so any
         # constant IN-set must be inlined to keep the result-block column name stable
-        # across mixed-version ClickHouse nodes on distributed reads (see _inline_in_sets).
+        # across mixed-version ClickHouse nodes on distributed reads (see inline_in_to_has).
         if trace_item_filters_expression is not None:
-            trace_item_filters_expression = _inline_in_sets(trace_item_filters_expression)
+            trace_item_filters_expression = inline_in_to_has(trace_item_filters_expression)
 
         selected_columns: list[SelectedExpression] = []
         start_timestamp_requested = False

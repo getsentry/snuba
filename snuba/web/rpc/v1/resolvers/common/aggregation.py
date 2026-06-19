@@ -30,6 +30,7 @@ from snuba.query.expressions import (
 )
 from snuba.web.rpc.common.common import (
     get_field_existence_expression,
+    inline_in_to_has,
     trace_item_filters_to_expression,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -66,8 +67,11 @@ def _get_condition_in_aggregation(
 ) -> Expression:
     condition_in_aggregation: Expression = literal(True)
     if isinstance(aggregation, AttributeConditionalAggregation):
-        condition_in_aggregation = trace_item_filters_to_expression(
-            aggregation.filter, attribute_key_to_expression
+        # This condition is embedded in SELECT-clause conditional aggregates (countIf,
+        # sumIf, ...), so inline any constant IN-set to keep the result-block column name
+        # stable across mixed-version ClickHouse nodes on distributed reads.
+        condition_in_aggregation = inline_in_to_has(
+            trace_item_filters_to_expression(aggregation.filter, attribute_key_to_expression)
         )
     return condition_in_aggregation
 
