@@ -7,10 +7,20 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Entity as QueryEntity
-from snuba.query.dsl import and_cond, column, equals, literal
+from snuba.query.dsl import (
+    and_cond,
+    arrayElement,
+    column,
+    equals,
+    in_cond,
+    literal,
+    literals_array,
+    or_cond,
+)
 from snuba.query.expressions import (
     Column,
     Expression,
+    FunctionCall,
     Literal,
     SubscriptableReference,
 )
@@ -27,7 +37,14 @@ METRIC = TraceItemType.TRACE_ITEM_TYPE_METRIC
 LOG = TraceItemType.TRACE_ITEM_TYPE_LOG
 
 
+def _attr_arr(key: str) -> FunctionCall:
+    """The ``arrayElement(attributes_string, key)`` form the EAP RPC builder
+    emits for a map-backed string filter (see ``_map_backed_operands``)."""
+    return arrayElement(None, column("attributes_string"), literal(key))
+
+
 def _attr_str(key: str, alias: str | None = None) -> SubscriptableReference:
+    """The hand-written SnQL ``attributes_string[key]`` form."""
     return SubscriptableReference(
         alias=alias,
         column=column("attributes_string"),
@@ -51,43 +68,94 @@ test_data = [
         _query(
             and_cond(
                 equals(column("item_type"), literal(SPAN)),
+                equals(_attr_arr("sentry.op"), literal("db.query")),
+            )
+        ),
+        _query(
+            and_cond(
+                equals(column("item_type"), literal(SPAN)),
+                or_cond(
+                    equals(column("indexed_name"), literal("db.query")),
+                    equals(_attr_arr("sentry.op"), literal("db.query")),
+                ),
+            )
+        ),
+        id="span sentry.op (arrayElement) gets an indexed_name OR fallback",
+    ),
+    pytest.param(
+        _query(
+            and_cond(
+                equals(column("item_type"), literal(SPAN)),
                 equals(_attr_str("sentry.op"), literal("db.query")),
             )
         ),
         _query(
             and_cond(
                 equals(column("item_type"), literal(SPAN)),
-                equals(Column(None, None, "indexed_name"), literal("db.query")),
+                or_cond(
+                    equals(column("indexed_name"), literal("db.query")),
+                    equals(_attr_str("sentry.op"), literal("db.query")),
+                ),
             )
         ),
-        id="span sentry.op rewritten to indexed_name",
+        id="span sentry.op (SubscriptableReference) gets an indexed_name OR fallback",
     ),
     pytest.param(
         _query(
             and_cond(
                 equals(column("item_type"), literal(METRIC)),
-                equals(_attr_str("sentry.metric.name"), literal("my.metric")),
+                equals(_attr_arr("sentry.metric.name"), literal("my.metric")),
             )
         ),
         _query(
             and_cond(
                 equals(column("item_type"), literal(METRIC)),
-                equals(Column(None, None, "indexed_name"), literal("my.metric")),
+                or_cond(
+                    equals(column("indexed_name"), literal("my.metric")),
+                    equals(_attr_arr("sentry.metric.name"), literal("my.metric")),
+                ),
             )
         ),
-        id="metric sentry.metric.name rewritten to indexed_name",
+        id="metric sentry.metric.name gets an indexed_name OR fallback",
     ),
     pytest.param(
         _query(
             and_cond(
                 equals(column("item_type"), literal(SPAN)),
-                equals(_attr_str("sentry.metric.name"), literal("my.metric")),
+                in_cond(
+                    _attr_arr("sentry.op"),
+                    literals_array(None, [literal("db.query"), literal("http.client")]),
+                ),
             )
         ),
         _query(
             and_cond(
                 equals(column("item_type"), literal(SPAN)),
-                equals(_attr_str("sentry.metric.name"), literal("my.metric")),
+                or_cond(
+                    in_cond(
+                        column("indexed_name"),
+                        literals_array(None, [literal("db.query"), literal("http.client")]),
+                    ),
+                    in_cond(
+                        _attr_arr("sentry.op"),
+                        literals_array(None, [literal("db.query"), literal("http.client")]),
+                    ),
+                ),
+            )
+        ),
+        id="span sentry.op IN gets an indexed_name OR fallback",
+    ),
+    pytest.param(
+        _query(
+            and_cond(
+                equals(column("item_type"), literal(SPAN)),
+                equals(_attr_arr("sentry.metric.name"), literal("my.metric")),
+            )
+        ),
+        _query(
+            and_cond(
+                equals(column("item_type"), literal(SPAN)),
+                equals(_attr_arr("sentry.metric.name"), literal("my.metric")),
             )
         ),
         id="span query with metric key is left untouched",
@@ -96,36 +164,127 @@ test_data = [
         _query(
             and_cond(
                 equals(column("item_type"), literal(SPAN)),
-                equals(_attr_str("foo"), literal("bar")),
+                equals(_attr_arr("foo"), literal("bar")),
             )
         ),
         _query(
             and_cond(
                 equals(column("item_type"), literal(SPAN)),
-                equals(_attr_str("foo"), literal("bar")),
+                equals(_attr_arr("foo"), literal("bar")),
             )
         ),
         id="non-indexed attribute is left untouched",
     ),
     pytest.param(
-        _query(equals(_attr_str("sentry.op"), literal("db.query"))),
-        _query(equals(_attr_str("sentry.op"), literal("db.query"))),
+        _query(equals(_attr_arr("sentry.op"), literal("db.query"))),
+        _query(equals(_attr_arr("sentry.op"), literal("db.query"))),
         id="no item_type condition leaves bucket lookup",
     ),
     pytest.param(
         _query(
             and_cond(
                 equals(column("item_type"), literal(LOG)),
-                equals(_attr_str("sentry.op"), literal("db.query")),
+                equals(_attr_arr("sentry.op"), literal("db.query")),
             )
         ),
         _query(
             and_cond(
                 equals(column("item_type"), literal(LOG)),
-                equals(_attr_str("sentry.op"), literal("db.query")),
+                equals(_attr_arr("sentry.op"), literal("db.query")),
             )
         ),
         id="unsupported item_type leaves bucket lookup",
+    ),
+    pytest.param(
+        _query(
+            and_cond(
+                equals(column("item_type"), literal(SPAN)),
+                FunctionCall(
+                    None,
+                    "notEquals",
+                    (_attr_arr("sentry.op"), literal("db.query")),
+                ),
+            )
+        ),
+        _query(
+            and_cond(
+                equals(column("item_type"), literal(SPAN)),
+                FunctionCall(
+                    None,
+                    "notEquals",
+                    (_attr_arr("sentry.op"), literal("db.query")),
+                ),
+            )
+        ),
+        id="negated filter is left untouched (OR fallback would be incorrect)",
+    ),
+    pytest.param(
+        _query(
+            and_cond(
+                equals(column("item_type"), literal(SPAN)),
+                equals(_attr_arr("sentry.op"), literal("")),
+            )
+        ),
+        _query(
+            and_cond(
+                equals(column("item_type"), literal(SPAN)),
+                equals(_attr_arr("sentry.op"), literal("")),
+            )
+        ),
+        id="empty-string equals is left untouched (indexed_name='' over-matches)",
+    ),
+    pytest.param(
+        _query(
+            and_cond(
+                equals(column("item_type"), literal(SPAN)),
+                in_cond(
+                    _attr_arr("sentry.op"),
+                    literals_array(None, [literal("db.query"), literal("")]),
+                ),
+            )
+        ),
+        _query(
+            and_cond(
+                equals(column("item_type"), literal(SPAN)),
+                in_cond(
+                    _attr_arr("sentry.op"),
+                    literals_array(None, [literal("db.query"), literal("")]),
+                ),
+            )
+        ),
+        id="IN containing the empty string is left untouched",
+    ),
+    pytest.param(
+        # The guarded form the RPC emits when the value is the column default:
+        # and(mapContains(...), equals(arrayElement(...), '')). The empty value
+        # makes the indexed_name probe unsafe, so the whole thing is left alone.
+        _query(
+            and_cond(
+                equals(column("item_type"), literal(SPAN)),
+                and_cond(
+                    FunctionCall(
+                        None,
+                        "mapContains",
+                        (column("attributes_string"), literal("sentry.op")),
+                    ),
+                    equals(_attr_arr("sentry.op"), literal("")),
+                ),
+            )
+        ),
+        _query(
+            and_cond(
+                equals(column("item_type"), literal(SPAN)),
+                and_cond(
+                    FunctionCall(
+                        None,
+                        "mapContains",
+                        (column("attributes_string"), literal("sentry.op")),
+                    ),
+                    equals(_attr_arr("sentry.op"), literal("")),
+                ),
+            )
+        ),
+        id="guarded empty-value form is left untouched",
     ),
     pytest.param(
         _query(
@@ -137,10 +296,10 @@ test_data = [
         _query(
             condition=equals(column("item_type"), literal(SPAN)),
             selected_columns=[
-                SelectedExpression("op", Column("op", None, "indexed_name")),
+                SelectedExpression("op", _attr_str("sentry.op", alias="op")),
             ],
         ),
-        id="select preserves alias on rewrite",
+        id="SELECT references are left on the bucket (index only helps WHERE)",
     ),
 ]
 
@@ -159,18 +318,21 @@ def test_contradictory_item_types_left_untouched() -> None:
             equals(column("item_type"), literal(SPAN)),
             and_cond(
                 equals(column("item_type"), literal(METRIC)),
-                equals(_attr_str("sentry.op"), literal("db.query")),
+                equals(_attr_arr("sentry.op"), literal("db.query")),
             ),
         )
     )
     copy = deepcopy(query)
     IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
-    # ambiguous item_type -> no rewrite; the subscriptable access survives
+    # ambiguous item_type -> no rewrite; no indexed_name reference is introduced.
     condition = copy.get_condition()
     assert condition is not None
+    assert not any(isinstance(e, Column) and e.column_name == "indexed_name" for e in condition)
+    # the original bucket lookup survives untouched.
     assert any(
-        isinstance(e, SubscriptableReference)
-        and isinstance(e.key, Literal)
-        and e.key.value == "sentry.op"
+        isinstance(e, FunctionCall)
+        and e.function_name == "arrayElement"
+        and isinstance(e.parameters[1], Literal)
+        and e.parameters[1].value == "sentry.op"
         for e in condition
     )
