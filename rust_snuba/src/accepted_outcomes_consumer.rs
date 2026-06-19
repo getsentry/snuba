@@ -125,6 +125,12 @@ pub fn accepted_outcomes_consumer_impl(
 
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
 
+    tracing::info!(
+        consumer_group,
+        "Consumer config: {}",
+        consumer_config.redacted_for_logging()
+    );
+
     assert_eq!(consumer_config.storages.len(), 1);
 
     let mut _sentry_guard = None;
