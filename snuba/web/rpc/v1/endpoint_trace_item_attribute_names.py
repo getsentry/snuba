@@ -64,6 +64,18 @@ def _order_by_count(request: TraceItemAttributeNamesRequest) -> bool:
     return request.order_by.column == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT
 
 
+def _order_by_name_descending(request: TraceItemAttributeNamesRequest) -> bool:
+    """Whether the caller explicitly requested name ordering in descending order.
+
+    Only ``COLUMN_NAME`` + ``descending`` flips the default; unset ordering stays
+    name-ascending for backwards compatibility.
+    """
+    return (
+        request.order_by.column == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_NAME
+        and request.order_by.descending
+    )
+
+
 class AttributeKeyCollector(ProtoVisitor):
     def __init__(self) -> None:
         self.keys: set[str] = set()
@@ -351,10 +363,7 @@ def get_co_occurring_attributes(
         # Default (order_by unset or COLUMN_NAME): distinct keys ordered by name.
         # Unspecified ordering keeps the historical name-ascending result so that
         # existing consumers are unaffected.
-        name_descending = (
-            request.order_by.column == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_NAME
-            and request.order_by.descending
-        )
+        name_descending = _order_by_name_descending(request)
         selected_columns = [
             SelectedExpression(name="attr_key", expression=f.distinct(attr_key_expression)),
         ]
@@ -433,9 +442,14 @@ def convert_co_occurring_results_to_attributes(
             data.sort(key=lambda row: row.get("count", 0), reverse=request.order_by.descending)
             data = non_stored + data
         else:
-            # Default name ordering: merge non-stored in and sort everything by name.
+            # Default name ordering: merge the synthetic non-stored keys in and re-sort
+            # by name, honoring the requested direction so it matches the ClickHouse
+            # ORDER BY (a COLUMN_NAME descending request must stay descending here too).
             data.extend(non_stored)
-            data.sort(key=lambda row: tuple(row.get("attr_key", ("TYPE_STRING", ""))))
+            data.sort(
+                key=lambda row: tuple(row.get("attr_key", ("TYPE_STRING", ""))),
+                reverse=_order_by_name_descending(request),
+            )
 
     return list(map(t, data))
 

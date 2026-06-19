@@ -445,3 +445,27 @@ class TestTraceItemAttributeNames(BaseApiTest):
             assert attr_names[0] == "sentry.service", (
                 f"non-stored attr should be first when descending={descending}, got {attr_names[:3]}"
             )
+
+    def test_order_by_name_descending(self) -> None:
+        """COLUMN_NAME + descending returns names in descending order, including the
+        synthetic non-stored keys merged in (regression: re-sort forced them ascending)."""
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
+            ),
+            limit=1000,
+            type=AttributeKey.Type.TYPE_STRING,
+            order_by=TraceItemAttributeNamesRequest.OrderBy(
+                column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_NAME,
+                descending=True,
+            ),
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+        attr_names = [attr.name for attr in res.attributes]
+        assert "sentry.service" in attr_names
+        assert attr_names == sorted(attr_names, reverse=True)
