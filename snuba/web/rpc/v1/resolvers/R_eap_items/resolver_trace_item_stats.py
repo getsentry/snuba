@@ -24,7 +24,15 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import arrayJoin, column, count, if_cond, literal, tupleElement
+from snuba.query.dsl import (
+    arrayJoin,
+    column,
+    count,
+    if_cond,
+    literal,
+    map_key_exists,
+    tupleElement,
+)
 from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.logical import Query
@@ -132,7 +140,7 @@ def _grab_specific_attributes_query(attributes: Iterable[AttributeKey]) -> Expre
         attribute_map = column("attributes_string")
         individual_attribute_select.append(
             if_cond(
-                f.mapContains(attribute_map, attribute.name),
+                map_key_exists(attribute_map, attribute.name),
                 f.array(
                     f.tuple(
                         literal(attribute.name),

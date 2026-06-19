@@ -1,3 +1,4 @@
+from snuba.query.dsl import map_key_exists
 from snuba.query.expressions import (
     CurriedFunctionCall,
     Expression,
@@ -13,7 +14,7 @@ class OptionalAttributeAggregationTransformer(LogicalQueryProcessor):
     """When aggregating dynamic fields, we have to take into account that not every row will have said field.
     This processor adjusts the query to account for the dynamic value not being present
 
-    avg(attr_num["num_clicks"]) -- becomes --> avgIf(attr_num["num_clicks"], mapContains(attr_num, num_clicks))
+    avg(attr_num["num_clicks"]) -- becomes --> avgIf(attr_num["num_clicks"], has(mapKeys(attr_num), num_clicks))
 
 
     Example:
@@ -67,13 +68,9 @@ class OptionalAttributeAggregationTransformer(LogicalQueryProcessor):
                         function_name=f"{exp.function_name}If",
                         parameters=(
                             *exp.parameters,
-                            FunctionCall(
-                                alias=None,
-                                function_name="mapContains",
-                                parameters=(
-                                    subscriptable_ref.column,
-                                    subscriptable_ref.key,
-                                ),
+                            map_key_exists(
+                                subscriptable_ref.column,
+                                subscriptable_ref.key,
                             ),
                         ),
                     )
@@ -90,13 +87,9 @@ class OptionalAttributeAggregationTransformer(LogicalQueryProcessor):
                             ),
                             parameters=(
                                 *exp.parameters,
-                                FunctionCall(
-                                    alias=None,
-                                    function_name="mapContains",
-                                    parameters=(
-                                        subscriptable_ref.column,
-                                        subscriptable_ref.key,
-                                    ),
+                                map_key_exists(
+                                    subscriptable_ref.column,
+                                    subscriptable_ref.key,
                                 ),
                             ),
                         )

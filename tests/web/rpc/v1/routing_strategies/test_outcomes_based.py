@@ -1,6 +1,7 @@
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from unittest import mock
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -18,6 +19,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 from snuba import state
 from snuba.downsampled_storage_tiers import Tier
 from snuba.utils.metrics.timer import Timer
+from snuba.web import QueryResult
 from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
     OutcomesBasedRoutingStrategy,
@@ -253,6 +255,41 @@ def test_outcomes_based_routing_normal_mode(store_outcomes_fixture: Any) -> None
     assert routing_decision.tier == Tier.TIER_1
     assert routing_decision.clickhouse_settings == {"max_threads": 10}
     assert routing_decision.can_run
+
+
+@pytest.mark.redis_db
+def test_routing_query_is_exempt_from_allocation_policies() -> None:
+    # The outcomes estimation query that decides the tier must never be rejected by the
+    # outcomes storage's allocation policies (SNUBA-A3V). It is marked as a cross-org
+    # / system query so the per-tenant policies (e.g. ConcurrentRateLimitAllocationPolicy)
+    # let it pass through instead of rejecting it under load.
+    strategy = OutcomesBasedRoutingStrategy()
+    request = TraceItemTableRequest(meta=_get_request_meta())
+
+    captured_requests = []
+
+    def fake_run_query(dataset: Any, request: Any, timer: Any) -> Any:
+        captured_requests.append(request)
+        return QueryResult(
+            result={"data": [{"num_items": 0}]},
+            extra={"stats": {}, "sql": "", "experiments": {}},
+        )
+
+    with mock.patch(
+        "snuba.web.rpc.storage_routing.routing_strategies.outcomes_based.run_query",
+        side_effect=fake_run_query,
+    ):
+        strategy.get_ingested_items_for_timerange(
+            RoutingContext(
+                in_msg=request,
+                timer=Timer("test"),
+                query_id=uuid.uuid4().hex,
+            )
+        )
+
+    assert len(captured_requests) == 1
+    tenant_ids = captured_requests[0].attribution_info.tenant_ids
+    assert tenant_ids["cross_org_query"] == 1
 
 
 @pytest.mark.eap
