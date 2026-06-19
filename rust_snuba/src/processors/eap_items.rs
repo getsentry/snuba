@@ -415,6 +415,22 @@ struct AttributeMap {
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     attributes_array: HashMap<String, Vec<EAPValue>>,
 
+    // Typed map columns for array-valued attributes (migration 0059). Arrays are
+    // double-written here alongside the legacy `attributes_array` JSON column so
+    // the read path can filter/aggregate on values and enumerate keys via
+    // `mapKeys(...)` like the scalar attribute maps.
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attributes_array_string: HashMap<String, Vec<String>>,
+
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attributes_array_int: HashMap<String, Vec<i64>>,
+
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attributes_array_float: HashMap<String, Vec<f64>>,
+
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attributes_array_bool: HashMap<String, Vec<bool>>,
+
     #(
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     attributes_string_~N: HashMap<String, String>,
@@ -461,19 +477,57 @@ impl AttributeMap {
     }
 
     pub fn insert_array(&mut self, k: String, v: ArrayValue) {
+        // Legacy JSON representation, preserving mixed-type ordering.
         let mut values: Vec<EAPValue> = Vec::default();
+
+        // Typed buckets, one per element type, for the `attributes_array_*`
+        // columns. Homogeneous arrays — the common case — populate exactly one
+        // bucket; mixed arrays are split across buckets by element type.
+        let mut strings: Vec<String> = Vec::default();
+        let mut ints: Vec<i64> = Vec::default();
+        let mut floats: Vec<f64> = Vec::default();
+        let mut bools: Vec<bool> = Vec::default();
 
         for value in v.values {
             match value.value {
-                Some(Value::StringValue(string)) => values.push(EAPValue::String(string)),
-                Some(Value::DoubleValue(double)) => values.push(EAPValue::Double(double)),
-                Some(Value::IntValue(int)) => values.push(EAPValue::Int(int)),
-                Some(Value::BoolValue(bool)) => values.push(EAPValue::Bool(bool)),
+                Some(Value::StringValue(string)) => {
+                    strings.push(string.clone());
+                    values.push(EAPValue::String(string));
+                }
+                Some(Value::DoubleValue(double)) => {
+                    floats.push(double);
+                    values.push(EAPValue::Double(double));
+                }
+                Some(Value::IntValue(int)) => {
+                    // Double-write ints as floats too, mirroring the scalar
+                    // `insert_int`: the read path resolves numeric attributes to
+                    // the float columns.
+                    ints.push(int);
+                    floats.push(int as f64);
+                    values.push(EAPValue::Int(int));
+                }
+                Some(Value::BoolValue(bool)) => {
+                    bools.push(bool);
+                    values.push(EAPValue::Bool(bool));
+                }
                 Some(Value::BytesValue(_)) => (),
                 Some(Value::KvlistValue(_)) => (),
                 Some(Value::ArrayValue(_)) => (),
                 None => (),
             }
+        }
+
+        if !strings.is_empty() {
+            self.attributes_array_string.insert(k.clone(), strings);
+        }
+        if !ints.is_empty() {
+            self.attributes_array_int.insert(k.clone(), ints);
+        }
+        if !floats.is_empty() {
+            self.attributes_array_float.insert(k.clone(), floats);
+        }
+        if !bools.is_empty() {
+            self.attributes_array_bool.insert(k.clone(), bools);
         }
 
         self.attributes_array.insert(k, values);
@@ -510,6 +564,11 @@ pub struct EAPItemRow {
     )*
 
     attributes_array: String,
+
+    attributes_array_string: Vec<(String, Vec<String>)>,
+    attributes_array_int: Vec<(String, Vec<i64>)>,
+    attributes_array_float: Vec<(String, Vec<f64>)>,
+    attributes_array_bool: Vec<(String, Vec<bool>)>,
 }
 }
 
@@ -551,6 +610,10 @@ impl EAPItemRow {
         concat!("attributes_float_", stringify!(N)),
         )*
         "attributes_array",
+        "attributes_array_string",
+        "attributes_array_int",
+        "attributes_array_float",
+        "attributes_array_bool",
     ];
 }
 }
@@ -586,6 +649,18 @@ impl TryFrom<EAPItem> for EAPItemRow {
                 attributes_float_~N: item.attributes.attributes_float_~N.into_iter().collect(),
                 )*
                 attributes_array,
+                attributes_array_string: item
+                    .attributes
+                    .attributes_array_string
+                    .into_iter()
+                    .collect(),
+                attributes_array_int: item.attributes.attributes_array_int.into_iter().collect(),
+                attributes_array_float: item
+                    .attributes
+                    .attributes_array_float
+                    .into_iter()
+                    .collect(),
+                attributes_array_bool: item.attributes.attributes_array_bool.into_iter().collect(),
             });
         }
     }
@@ -1004,8 +1079,9 @@ mod tests {
     #[test]
     fn test_column_names_match_struct_layout() {
         let names = EAPItemRow::COLUMN_NAMES;
-        // 12 scalars + indexed_name + attributes_bool + attributes_int + 80 buckets + attributes_array
-        assert_eq!(names.len(), 96);
+        // 12 scalars + indexed_name + attributes_bool + attributes_int + 80
+        // buckets + attributes_array + 4 typed array maps
+        assert_eq!(names.len(), 100);
         assert_eq!(names[0], "organization_id");
         assert_eq!(names[5], "item_id");
         assert_eq!(names[6], "indexed_name");
@@ -1021,6 +1097,11 @@ mod tests {
         assert_eq!(names[93], "attributes_string_39");
         assert_eq!(names[94], "attributes_float_39");
         assert_eq!(names[95], "attributes_array");
+        // Typed array map columns follow the JSON column.
+        assert_eq!(names[96], "attributes_array_string");
+        assert_eq!(names[97], "attributes_array_int");
+        assert_eq!(names[98], "attributes_array_float");
+        assert_eq!(names[99], "attributes_array_bool");
     }
 
     #[test]
@@ -1239,6 +1320,109 @@ mod tests {
         // Array attributes are serialized as JSON string in the attributes_array column
         assert!(row.attributes_array.contains("my_array"));
         assert!(row.attributes_array.contains("elem"));
+
+        // ...and double-written to the typed `attributes_array_string` column.
+        assert!(row
+            .attributes_array_string
+            .iter()
+            .any(|(k, v)| k == "my_array" && v == &vec!["elem".to_string()]));
+    }
+
+    #[test]
+    fn test_array_typed_columns_double_write() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+
+        // Homogeneous arrays of each element type.
+        trace_item.attributes.insert(
+            "strs".to_string(),
+            AnyValue {
+                value: Some(Value::ArrayValue(ArrayValue {
+                    values: vec![
+                        AnyValue {
+                            value: Some(Value::StringValue("a".to_string())),
+                        },
+                        AnyValue {
+                            value: Some(Value::StringValue("b".to_string())),
+                        },
+                    ],
+                })),
+            },
+        );
+        trace_item.attributes.insert(
+            "ints".to_string(),
+            AnyValue {
+                value: Some(Value::ArrayValue(ArrayValue {
+                    values: vec![
+                        AnyValue {
+                            value: Some(Value::IntValue(1)),
+                        },
+                        AnyValue {
+                            value: Some(Value::IntValue(2)),
+                        },
+                    ],
+                })),
+            },
+        );
+        trace_item.attributes.insert(
+            "floats".to_string(),
+            AnyValue {
+                value: Some(Value::ArrayValue(ArrayValue {
+                    values: vec![AnyValue {
+                        value: Some(Value::DoubleValue(1.5)),
+                    }],
+                })),
+            },
+        );
+        trace_item.attributes.insert(
+            "bools".to_string(),
+            AnyValue {
+                value: Some(Value::ArrayValue(ArrayValue {
+                    values: vec![AnyValue {
+                        value: Some(Value::BoolValue(true)),
+                    }],
+                })),
+            },
+        );
+
+        let item = EAPItem::try_from(trace_item).unwrap();
+        let attrs = &item.attributes;
+
+        assert_eq!(
+            attrs.attributes_array_string.get("strs").unwrap(),
+            &vec!["a".to_string(), "b".to_string()]
+        );
+        assert_eq!(
+            attrs.attributes_array_int.get("ints").unwrap(),
+            &vec![1i64, 2]
+        );
+        // Ints are double-written as floats too, mirroring scalar `insert_int`.
+        assert_eq!(
+            attrs.attributes_array_float.get("ints").unwrap(),
+            &vec![1.0f64, 2.0]
+        );
+        assert_eq!(
+            attrs.attributes_array_float.get("floats").unwrap(),
+            &vec![1.5f64]
+        );
+        assert_eq!(
+            attrs.attributes_array_bool.get("bools").unwrap(),
+            &vec![true]
+        );
+
+        // Non-numeric typed maps are not cross-populated.
+        assert!(attrs.attributes_array_int.get("strs").is_none());
+        assert!(attrs.attributes_array_bool.get("ints").is_none());
+
+        // The legacy JSON column is still populated (double write).
+        assert_eq!(
+            attrs.attributes_array.get("strs").unwrap()[0],
+            EAPValue::String("a".to_string())
+        );
+        assert_eq!(
+            attrs.attributes_array.get("ints").unwrap()[0],
+            EAPValue::Int(1)
+        );
     }
 
     #[test]
