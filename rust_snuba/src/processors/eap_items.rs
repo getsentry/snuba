@@ -1411,8 +1411,8 @@ mod tests {
         );
 
         // Non-numeric typed maps are not cross-populated.
-        assert!(attrs.attributes_array_int.get("strs").is_none());
-        assert!(attrs.attributes_array_bool.get("ints").is_none());
+        assert!(!attrs.attributes_array_int.contains_key("strs"));
+        assert!(!attrs.attributes_array_bool.contains_key("ints"));
 
         // The legacy JSON column is still populated (double write).
         assert_eq!(
