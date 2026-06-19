@@ -50,7 +50,7 @@ from snuba.query.expressions import (
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
-def _in_or_has(value: Expression, array: Expression, *, as_has: bool) -> Expression:
+def _in_or_has(value: Expression, array: Expression, *, as_has: bool) -> FunctionCall:
     """Build the membership test ``value IN array``.
 
     Returns ``in(value, array)`` by default, so ClickHouse keeps a prepared set for
