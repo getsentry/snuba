@@ -391,7 +391,9 @@ def _inline_in_sets(expression: Expression) -> Expression:
             lhs, rhs = exp.parameters
             # Only constant arrays (literals_array -> array(...)) build a prepared set.
             if isinstance(rhs, FunctionCall) and rhs.function_name == "array":
-                return f.has(rhs, lhs, alias=exp.alias)
+                # Build the FunctionCall directly (rather than f.has(..., alias=...)) so the
+                # original Optional[str] alias is preserved without a type error.
+                return FunctionCall(exp.alias, "has", (rhs, lhs))
         return exp
 
     return expression.transform(rewrite)
