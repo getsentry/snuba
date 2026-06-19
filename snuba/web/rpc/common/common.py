@@ -50,42 +50,23 @@ from snuba.query.expressions import (
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
-def inline_in_to_has(expression: Expression) -> Expression:
-    """Rewrite ``in(x, array(...))`` as ``has(array(...), x)`` for SELECT-clause use.
+def _in_or_has(value: Expression, array: Expression, *, as_has: bool) -> Expression:
+    """Build the membership test ``value IN array``.
 
-    A constant ``IN`` set makes ClickHouse build an internal prepared set whose
-    server-generated identifier (``__set_<Type>_<hash>_<hash>``) is baked into the
-    result-block column name. When such an expression lands in a SELECT-clause
-    expression — a conditional aggregate (``countIf``/``sumIf``/...), a ``HAVING``
-    aggregate, or an ``arrayJoin`` projection — that name is matched by string across
-    ``Remote`` nodes. On a mixed-version ClickHouse cluster the two sides hash the set
-    differently, so the names disagree and the distributed read fails with
-    ``Code: 10 ... Not found column ... While executing Remote.`` (SNUBA-9W6,
-    SNUBA-B82).
-
-    ``has`` over a constant array keeps the array inline in the column name, which is
-    byte-stable across versions, and ``has(array, x)`` is equivalent to ``x IN (array)``
-    for scalar membership. The surrounding NULL-handling wrapper built by
-    ``trace_item_filters_to_expression`` is preserved untouched.
-
-    Only apply this to expressions destined for a SELECT clause / projection / aggregate
-    condition / ``HAVING`` / ``GROUP BY`` / ``ORDER BY`` computed column. Do NOT apply it
-    to WHERE-clause conditions: there the prepared ``IN`` set is what lets ClickHouse
-    prune partitions and primary-key ranges, so replacing it with ``has`` would force
-    full scans.
+    Returns ``in(value, array)`` by default, so ClickHouse keeps a prepared set for
+    partition/primary-key pruning — correct for WHERE clauses. When ``as_has`` is set,
+    returns ``has(array, value)`` instead, for expressions that land in a SELECT clause
+    / projection / aggregate condition / ``HAVING``. There the prepared set's
+    server-generated ``__set_<Type>_<hash>_<hash>`` identifier leaks into the
+    result-block column name and is not byte-stable across mixed-version distributed
+    ClickHouse nodes, which fails the read with
+    ``Code: 10 ... Not found column ... While executing Remote.`` (SNUBA-9W6, SNUBA-B82).
+    ``has`` over a constant array keeps the array inline in the column name and is
+    equivalent to ``value IN (array)`` for scalar membership.
     """
-
-    def rewrite(exp: Expression) -> Expression:
-        if isinstance(exp, FunctionCall) and exp.function_name == "in" and len(exp.parameters) == 2:
-            lhs, rhs = exp.parameters
-            # Only constant arrays (literals_array -> array(...)) build a prepared set.
-            if isinstance(rhs, FunctionCall) and rhs.function_name == "array":
-                # Build the FunctionCall directly (rather than f.has(..., alias=...)) so the
-                # original Optional[str] alias is preserved without a type error.
-                return FunctionCall(exp.alias, "has", (rhs, lhs))
-        return exp
-
-    return expression.transform(rewrite)
+    if as_has:
+        return f.has(array, value)
+    return in_cond(value, array)
 
 
 def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
@@ -450,16 +431,18 @@ def _analyzer_safe_in_expression(
     negated: bool,
     ignore_case: bool = False,
     guard: bool = True,
+    membership_as_has: bool = False,
 ) -> Expression:
     """``IN`` / ``NOT IN`` as ``[not] in(value, set)``, wrapped in
     ``and(exists, ...)`` only when ``guard`` is set (see ``_map_backed_operands``
     and ``_comparison_can_match_column_default``). The value lists carry only
     scalars, so the set never contains NULL — the legacy ``has(set, NULL)`` branch
-    was always ``false``."""
+    was always ``false``. ``membership_as_has`` emits ``has(set, value)`` instead of
+    ``in(value, set)`` for SELECT-clause use (see ``_in_or_has``)."""
     value, exists = _map_backed_operands(k)
     if ignore_case:
         value = f.lower(value)
-    membership = in_cond(value, v_expression)
+    membership = _in_or_has(value, v_expression, as_has=membership_as_has)
     present = and_cond(exists, membership) if guard else membership
     return not_cond(present) if negated else present
 
@@ -745,11 +728,18 @@ def _any_attribute_filter_to_expression(
 def trace_item_filters_to_expression(
     item_filter: TraceItemFilter,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    membership_as_has: bool = False,
 ) -> Expression:
     """
     Trace Item Filters are things like (span.id=12345 AND start_timestamp >= "june 4th, 2024")
     This maps those filters into an expression which can be used in a WHERE clause
     :param item_filter:
+    :param membership_as_has: build ``IN``/``NOT IN`` membership as ``has(array, x)``
+        rather than ``x IN (array)``. Pass ``True`` only when the result lands in a
+        SELECT clause / projection / aggregate condition / ``HAVING`` — there a constant
+        ``IN`` set leaks an unstable ``__set_*`` identifier into the result-block column
+        name and breaks mixed-version distributed reads (see ``_in_or_has``). Leave the
+        default for WHERE clauses, where the prepared ``IN`` set drives pruning.
     :return:
     """
     if item_filter.HasField("and_filter"):
@@ -757,9 +747,14 @@ def trace_item_filters_to_expression(
         if len(filters) == 0:
             return literal(True)
         elif len(filters) == 1:
-            return trace_item_filters_to_expression(filters[0], attribute_key_to_expression)
+            return trace_item_filters_to_expression(
+                filters[0], attribute_key_to_expression, membership_as_has
+            )
         return and_cond(
-            *(trace_item_filters_to_expression(x, attribute_key_to_expression) for x in filters)
+            *(
+                trace_item_filters_to_expression(x, attribute_key_to_expression, membership_as_has)
+                for x in filters
+            )
         )
 
     if item_filter.HasField("or_filter"):
@@ -767,9 +762,14 @@ def trace_item_filters_to_expression(
         if len(filters) == 0:
             raise BadSnubaRPCRequestException("Invalid trace item filter, empty 'or' clause")
         elif len(filters) == 1:
-            return trace_item_filters_to_expression(filters[0], attribute_key_to_expression)
+            return trace_item_filters_to_expression(
+                filters[0], attribute_key_to_expression, membership_as_has
+            )
         return or_cond(
-            *(trace_item_filters_to_expression(x, attribute_key_to_expression) for x in filters)
+            *(
+                trace_item_filters_to_expression(x, attribute_key_to_expression, membership_as_has)
+                for x in filters
+            )
         )
 
     if item_filter.HasField("not_filter"):
@@ -778,11 +778,18 @@ def trace_item_filters_to_expression(
             raise BadSnubaRPCRequestException("Invalid trace item filter, empty 'not' clause")
         elif len(filters) == 1:
             return not_cond(
-                trace_item_filters_to_expression(filters[0], attribute_key_to_expression)
+                trace_item_filters_to_expression(
+                    filters[0], attribute_key_to_expression, membership_as_has
+                )
             )
         return not_cond(
             and_cond(
-                *(trace_item_filters_to_expression(x, attribute_key_to_expression) for x in filters)
+                *(
+                    trace_item_filters_to_expression(
+                        x, attribute_key_to_expression, membership_as_has
+                    )
+                    for x in filters
+                )
             )
         )
 
@@ -1003,10 +1010,11 @@ def trace_item_filters_to_expression(
                     negated=False,
                     ignore_case=ignore_case,
                     guard=_comparison_can_match_column_default(k.type, v, value_type),
+                    membership_as_has=membership_as_has,
                 )
             if ignore_case:
                 k_expression = f.lower(k_expression)
-            expr = in_cond(k_expression, v_expression)
+            expr = _in_or_has(k_expression, v_expression, as_has=membership_as_has)
             expr_with_null = or_cond(
                 expr,
                 and_cond(f.isNull(k_expression), f.has(v_expression, literal(None))),
@@ -1037,10 +1045,11 @@ def trace_item_filters_to_expression(
                     negated=True,
                     ignore_case=ignore_case,
                     guard=_comparison_can_match_column_default(k.type, v, value_type),
+                    membership_as_has=membership_as_has,
                 )
             if ignore_case:
                 k_expression = f.lower(k_expression)
-            expr = not_cond(in_cond(k_expression, v_expression))
+            expr = not_cond(_in_or_has(k_expression, v_expression, as_has=membership_as_has))
             expr_with_null = or_cond(
                 expr,
                 and_cond(

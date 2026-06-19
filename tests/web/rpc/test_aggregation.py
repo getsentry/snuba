@@ -333,15 +333,15 @@ def test_aggregation_to_expression_sum_type_array_raises() -> None:
         aggregation_to_expression(agg, attribute_key_to_expression)
 
 
-def test_conditional_aggregation_inlines_in_sets() -> None:
-    """Regression guard for SNUBA-9W6 (mixed-version distributed reads).
+def test_conditional_aggregation_uses_has_for_in_sets() -> None:
+    """Regression guard for SNUBA-9W6 / SNUBA-A1W (mixed-version distributed reads).
 
     A conditional aggregation's filter is embedded in a SELECT-clause ``countIf``/
     ``sumIf``. A constant ``IN`` set there bakes a server-generated
     ``__set_<Type>_<hash>_<hash>`` identifier into the result-block column name; on a
     mixed-version cluster the two sides hash it differently and the distributed read
-    fails with ``Code: 10 ... Not found column ... While executing Remote.``. The set
-    must be inlined as ``has(array(...), x)`` instead.
+    fails with ``Code: 10 ... Not found column ... While executing Remote.``. The
+    membership must therefore be built as ``has(array(...), x)`` instead.
     """
     project_ids = [11, 22, 33]
     agg = AttributeConditionalAggregation(

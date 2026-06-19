@@ -28,7 +28,6 @@ from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     base_conditions_and,
-    inline_in_to_has,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
@@ -66,7 +65,13 @@ def get_trace_ids_sql_for_cross_item_query(
     Returns:
         tuple: (sql_string, query_result) where query_result contains metadata like sampling_tier
     """
+    # filter_expressions feed the WHERE or_cond (keep the prepared IN-sets for
+    # partition/primary-key pruning); having_filter_expressions feed the HAVING countIf
+    # (a SELECT-clause aggregate), where the membership must be has(array, x) so its
+    # result-block column name is stable across mixed-version ClickHouse nodes
+    # (membership_as_has, see common._in_or_has).
     filter_expressions = []
+    having_filter_expressions = []
     if trace_filters:
         converted_trace_filters = [trace_filter for trace_filter in trace_filters]
         if isinstance(trace_filters[0], GetTracesRequest.TraceFilter):
@@ -78,26 +83,30 @@ def get_trace_ids_sql_for_cross_item_query(
             ]
 
         for trace_filter in converted_trace_filters:
+            item_type_cond = f.equals(column("item_type"), trace_filter.item_type)
             filter_expressions.append(
                 and_cond(
-                    f.equals(column("item_type"), trace_filter.item_type),
+                    item_type_cond,
                     trace_item_filters_to_expression(
                         trace_filter.filter,
                         attribute_key_to_expression,
                     ),
                 )
             )
+            having_filter_expressions.append(
+                and_cond(
+                    item_type_cond,
+                    trace_item_filters_to_expression(
+                        trace_filter.filter,
+                        attribute_key_to_expression,
+                        membership_as_has=True,
+                    ),
+                )
+            )
 
     if len(filter_expressions) > 1:
-        # The countIf goes in the HAVING clause (a SELECT-clause aggregate), so inline any
-        # constant IN-set to keep its result-block column name stable across mixed-version
-        # ClickHouse nodes. The WHERE-clause or_cond below keeps its prepared IN-sets for
-        # partition/primary-key pruning.
         trace_item_filters_and_expression = and_cond(
-            *[
-                f.greater(f.countIf(inline_in_to_has(expression)), 0)
-                for expression in filter_expressions
-            ]
+            *[f.greater(f.countIf(expression), 0) for expression in having_filter_expressions]
         )
         trace_item_filters_or_expression = or_cond(*filter_expressions)
     elif len(filter_expressions) == 1:

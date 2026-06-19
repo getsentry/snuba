@@ -44,7 +44,6 @@ from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     base_conditions_and,
-    inline_in_to_has,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
@@ -561,6 +560,11 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     ) -> dict[TraceItemType.ValueType, Expression]:
         """
         Returns a dict mapping item types to a filter expression for that item type.
+
+        These expressions are only ever embedded in the ``filtered_item_count`` countIf
+        in the SELECT clause, so membership is built as ``has(array, x)``
+        (``membership_as_has``) to keep the result-block column name stable across
+        mixed-version distributed ClickHouse nodes (see common._in_or_has).
         """
         filters_by_item_type: dict[TraceItemType.ValueType, list[TraceItemFilter]] = defaultdict(
             list
@@ -579,6 +583,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                         ),
                     ),
                     attribute_key_to_expression,
+                    membership_as_has=True,
                 ),
             )
 
@@ -683,12 +688,6 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             )
         else:
             item_type = TraceItemType.TRACE_ITEM_TYPE_SPAN
-
-        # filtered_item_count embeds this filter inside a SELECT-clause countIf, so any
-        # constant IN-set must be inlined to keep the result-block column name stable
-        # across mixed-version ClickHouse nodes on distributed reads (see inline_in_to_has).
-        if trace_item_filters_expression is not None:
-            trace_item_filters_expression = inline_in_to_has(trace_item_filters_expression)
 
         selected_columns: list[SelectedExpression] = []
         start_timestamp_requested = False
@@ -805,12 +804,6 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             )
         else:
             item_type = TraceItemType.TRACE_ITEM_TYPE_SPAN
-
-        # filtered_item_count embeds this filter inside a SELECT-clause countIf, so any
-        # constant IN-set must be inlined to keep the result-block column name stable
-        # across mixed-version ClickHouse nodes on distributed reads (see inline_in_to_has).
-        if trace_item_filters_expression is not None:
-            trace_item_filters_expression = inline_in_to_has(trace_item_filters_expression)
 
         selected_columns: list[SelectedExpression] = []
         start_timestamp_requested = False
