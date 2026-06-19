@@ -57,10 +57,7 @@ class IndexedNameOptimizer(LogicalQueryProcessor):
 
         item_types: set[int] = set()
         for cond in get_first_level_and_conditions(condition):
-            if (
-                not isinstance(cond, FunctionCall)
-                or cond.function_name != ConditionFunctions.EQ
-            ):
+            if not isinstance(cond, FunctionCall) or cond.function_name != ConditionFunctions.EQ:
                 continue
             if len(cond.parameters) != 2:
                 continue
