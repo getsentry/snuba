@@ -8,7 +8,7 @@ import sentry_sdk
 import structlog
 from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.gnu_backtrace import GnuBacktraceIntegration
-from sentry_sdk.integrations.logging import LoggingIntegration
+from sentry_sdk.integrations.logging import LoggingIntegration, ignore_logger
 from sentry_sdk.integrations.redis import RedisIntegration
 from sentry_sdk.integrations.threading import ThreadingIntegration
 from sentry_sdk.types import Event, Hint
@@ -73,8 +73,37 @@ def setup_logging(level: Optional[str] = None) -> None:
     )
 
 
+# Kafka error codes that indicate the consumer was (briefly) evicted from its
+# group during a rebalance. Offset commits that fail with one of these self-heal
+# once the new generation re-commits, so the resulting "Commit failed" logs are
+# transient operational noise rather than actionable errors (see SNUBA-9WM).
+_TRANSIENT_REBALANCE_CODES = (
+    "UNKNOWN_MEMBER_ID",
+    "REBALANCE_IN_PROGRESS",
+    "ILLEGAL_GENERATION",
+)
+
+
+def _is_transient_rebalance_commit_log(hint: Hint) -> bool:
+    record = hint.get("log_record")
+    if not isinstance(record, logging.LogRecord):
+        return False
+    if record.name != "arroyo.backends.kafka.consumer":
+        return False
+    message = record.getMessage()
+    return "Commit failed" in message and any(
+        code in message for code in _TRANSIENT_REBALANCE_CODES
+    )
+
+
 def before_send(event: Event, hint: Hint) -> Event | None:
     """Filter out AllocationPolicyViolations and RPCAllocationPolicyException from being sent to Sentry"""
+    # Drop transient Kafka offset-commit failures caused by consumer-group
+    # rebalances. They are expected during deploys/scaling and recover on their
+    # own, so they should not be surfaced as Sentry issues (SNUBA-9WM).
+    if _is_transient_rebalance_commit_log(hint):
+        return None
+
     if "exc_info" in hint:
         _, exc_value, _ = hint["exc_info"]
         # Check if it's an AllocationPolicyViolations in the cause chain
@@ -116,6 +145,13 @@ def setup_sentry() -> None:
             "metric_code_locations": True,
         },
     )
+
+    # The dogstatsd client logs "[Errno 111] Connection refused" (and similar)
+    # at WARNING whenever the local statsd agent socket is briefly unavailable
+    # (agent restarts, socket churn). These are metrics-transport failures that
+    # don't affect query handling, so don't turn them into Sentry issues
+    # (SNUBA-A3N).
+    ignore_logger("datadog.dogstatsd")
 
     from snuba.utils.profiler import run_ondemand_profiler
 
