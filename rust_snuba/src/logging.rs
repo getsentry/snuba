@@ -9,34 +9,22 @@ pub fn setup_logging() {
         .or_else(|_| EnvFilter::try_new("info"))
         .unwrap();
 
-    // Capture errors & warnings as exceptions, and also send everything at or above INFO as logs
-    // instead of breadcrumbs.
-    //
-    // A few targets emit high-volume transient operational noise that we keep as
-    // logs but don't want to surface as Sentry issues. Match on the tracing
-    // target (the emitting module path) so these stay observable without
-    // creating ongoing issues.
+    // Only errors are forwarded to Sentry as issues. Warnings are operational
+    // noise far more often than they're actionable (e.g. consumer
+    // rebalance/shutdown timeouts), so they're kept as logs alongside
+    // everything at or above INFO, instead of breadcrumbs.
     let sentry_layer = sentry::integrations::tracing::layer().event_filter(|metadata| {
-        let target = metadata.target();
         match *metadata.level() {
             // The usage accountant is a best-effort billing side channel. Its
-            // Kafka producer logs "Purged in queue/flight" errors whenever the
+            // Kafka producer logs "Purged in queue/flight" at ERROR whenever the
             // producer is flushed during a consumer shutdown/rebalance. These
-            // are transient and don't affect ingestion (SNUBA-474, SNUBA-475).
-            Level::ERROR | Level::WARN if target.starts_with("sentry_usage_accountant") => {
+            // are transient and don't affect ingestion, so keep them as logs
+            // rather than issues (SNUBA-474, SNUBA-475).
+            Level::ERROR if metadata.target().starts_with("sentry_usage_accountant") => {
                 EventFilter::Log
             }
-            // Arroyo logs task-join timeouts at WARN while draining in-flight
-            // work during shutdown. Expected on every deploy/rebalance, so
-            // they're not actionable (SNUBA-4VF, SNUBA-4WS).
-            Level::WARN
-                if target == "sentry_arroyo::processing::strategies::run_task_in_threads"
-                    || target == "sentry_arroyo::processing::strategies::reduce" =>
-            {
-                EventFilter::Log
-            }
-            Level::ERROR | Level::WARN => EventFilter::Event | EventFilter::Log,
-            Level::INFO => EventFilter::Log,
+            Level::ERROR => EventFilter::Event | EventFilter::Log,
+            Level::WARN | Level::INFO => EventFilter::Log,
             Level::DEBUG | Level::TRACE => EventFilter::Ignore,
         }
     });
