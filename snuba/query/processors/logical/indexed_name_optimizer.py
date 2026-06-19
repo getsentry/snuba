@@ -2,7 +2,10 @@ from typing import Optional
 
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
-from snuba.query.conditions import get_first_level_and_conditions
+from snuba.query.conditions import (
+    ConditionFunctions,
+    get_first_level_and_conditions,
+)
 from snuba.query.expressions import (
     Column,
     Expression,
@@ -54,7 +57,10 @@ class IndexedNameOptimizer(LogicalQueryProcessor):
 
         item_types: set[int] = set()
         for cond in get_first_level_and_conditions(condition):
-            if not isinstance(cond, FunctionCall) or cond.function_name != "equals":
+            if (
+                not isinstance(cond, FunctionCall)
+                or cond.function_name != ConditionFunctions.EQ
+            ):
                 continue
             if len(cond.parameters) != 2:
                 continue
