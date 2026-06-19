@@ -130,8 +130,12 @@ class IndexedNameOptimizer(LogicalQueryProcessor):
         if key is None:
             return
 
+        # Bind to a str-typed local: mypy widens a narrowed enclosing-scope
+        # variable back to its declared Optional[str] inside the nested closure.
+        indexed_key: str = key
+
         def transform(exp: Expression) -> Expression:
-            indexed_ref = self._indexed_name_ref(exp, key)
+            indexed_ref = self._indexed_name_ref(exp, indexed_key)
             return indexed_ref if indexed_ref is not None else exp
 
         query.transform_expressions(transform)
