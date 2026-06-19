@@ -21,7 +21,11 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
     ResponseMeta,
     TraceItemType,
 )
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    AttributeKey,
+    AttributeValue,
+    IntArray,
+)
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
     TraceItemFilter,
@@ -31,8 +35,13 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, TraceItem
 from snuba import state
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.query.expressions import FunctionCall, Literal
+from snuba.web.rpc.common.common import (
+    attribute_key_to_expression,
+    trace_item_filters_to_expression,
+)
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.endpoint_get_traces import EndpointGetTraces
+from snuba.web.rpc.v1.endpoint_get_traces import EndpointGetTraces, _inline_in_sets
 from tests.base import BaseApiTest
 from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
@@ -909,6 +918,69 @@ def trace_filter(
         item_type=item_type,
         filter=filter,
     )
+
+
+def _in_calls_over_arrays(expression: Any) -> list[FunctionCall]:
+    """All ``in(x, array(...))`` calls in ``expression`` — the form that builds a
+    constant prepared set (``__set_*``)."""
+    return [
+        exp
+        for exp in expression
+        if isinstance(exp, FunctionCall)
+        and exp.function_name == "in"
+        and len(exp.parameters) == 2
+        and isinstance(exp.parameters[1], FunctionCall)
+        and exp.parameters[1].function_name == "array"
+    ]
+
+
+def test_filtered_item_count_inlines_in_sets() -> None:
+    """Regression guard for SNUBA-9W6 (mixed-version distributed reads).
+
+    ``KEY_FILTERED_ITEM_COUNT`` becomes a ``countIf`` in the SELECT clause whose
+    condition is the trace item filter. A constant ``IN`` set there makes ClickHouse
+    bake a server-generated ``__set_<Type>_<hash>_<hash>`` identifier into the
+    result-block column name. On a mixed-version cluster the two sides hash the set
+    differently, so the column names disagree across ``Remote`` and the distributed
+    read fails with ``Code: 10 ... Not found column ... While executing Remote.``.
+    The set must therefore be inlined as ``has(array(...), x)``, which keeps the
+    array in the column name and is byte-stable across versions.
+    """
+    project_ids = [11, 22, 33, 44]
+    filter_expr = trace_item_filters_to_expression(
+        TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(name="sentry.project_id", type=AttributeKey.TYPE_INT),
+                op=ComparisonFilter.OP_IN,
+                value=AttributeValue(val_int_array=IntArray(values=project_ids)),
+            ),
+        ),
+        attribute_key_to_expression,
+    )
+
+    # The raw filter builds an IN over the constant project-id array (the source of
+    # the unstable __set_* identifier).
+    before = _in_calls_over_arrays(filter_expr)
+    assert before, "expected the project_id filter to build an in() over a constant array"
+
+    rewritten = _inline_in_sets(filter_expr)
+
+    # After inlining, no IN over a constant array survives.
+    assert not _in_calls_over_arrays(rewritten), (
+        "in() over a constant array must be rewritten to has() to avoid __set_* identifiers"
+    )
+
+    # ...and a has(array(<project_ids>), x) is emitted instead.
+    has_over_project_ids = [
+        exp
+        for exp in rewritten
+        if isinstance(exp, FunctionCall)
+        and exp.function_name == "has"
+        and isinstance(exp.parameters[0], FunctionCall)
+        and exp.parameters[0].function_name == "array"
+        and [p.value for p in exp.parameters[0].parameters if isinstance(p, Literal)] == project_ids
+    ]
+    assert has_over_project_ids, "expected has(array(<project_ids>), x) after inlining"
 
 
 @pytest.mark.clickhouse_db
