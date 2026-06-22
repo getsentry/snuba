@@ -11,7 +11,7 @@ from snuba.snuba_migrations.events_analytics_platform.templates import (
     get_eap_items_columns,
     swap_downsample_materialized_views,
 )
-from snuba.utils.schemas import UUID
+from snuba.utils.schemas import UUID, Array, Bool, Float, Int, Map, String
 
 storage_set = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
 ro_storage_set = StorageSetKey.EVENTS_ANALYTICS_PLATFORM_RO
@@ -36,30 +36,54 @@ index_type = "bloom_filter"
 index_granularity = 1
 new_column_indexes = [(f"bf_{column.name}", column.name) for column in new_columns]
 
-# master is at mv_6 (migration 0058_nest_downsample_tiers), so this migration
-# bumps 6 -> 7. The downsample materialized views select an explicit column list
-# from eap_items_1_local, so the new columns have to be added to the views (not
-# just the tables) for them to be populated on the downsampled read paths.
-mv_old_version = 6
+# master is at mv_7 (migration 0059_add_array_attribute_map_columns), so this
+# migration bumps 7 -> 8. The downsample materialized views select an explicit
+# column list from eap_items_1_local, so the new columns have to be added to the
+# views (not just the tables) for them to be populated on the downsampled read
+# paths.
+mv_old_version = 7
 mv_new_version = mv_old_version + 1
+
+# The four array-attribute map columns added by migration
+# 0059_add_array_attribute_map_columns (which created mv_7), appended after the
+# last base column (`attributes_float_39`). They are reconstructed here — rather
+# than added to ``get_eap_items_columns`` — so this migration can rebuild the
+# views with the exact mv_7 column set. Adding them to the shared helper would
+# break the earlier migrations (0058) that call it and run before 0059 existed.
+_codec = Modifiers(codecs=["ZSTD(1)"])
+array_attribute_columns: List[Column[Modifiers]] = [
+    Column("attributes_array_string", Map(String(), Array(String()), modifiers=_codec)),
+    Column("attributes_array_int", Map(String(), Array(Int(64)), modifiers=_codec)),
+    Column("attributes_array_float", Map(String(), Array(Float(64)), modifiers=_codec)),
+    Column("attributes_array_bool", Map(String(), Array(Bool()), modifiers=_codec)),
+]
+
+
+def _mv7_columns() -> List[Column[Modifiers]]:
+    """The mv_7 downsample-view column list: the base columns plus the
+    array-attribute map columns added by migration 0059."""
+    columns = get_eap_items_columns()
+    columns.extend(array_attribute_columns)
+    return columns
 
 
 def _mv_columns_with_new() -> List[Column[Modifiers]]:
-    """The mv_6 column list with the new columns inserted after `trace_id`.
+    """The mv_7 column list with the new columns inserted after `trace_id`.
 
-    Built locally instead of in ``get_eap_items_columns`` because migration 0058
-    runs before this one and also calls ``get_eap_items_columns``; adding the new
-    columns there would make 0058 build its views referencing columns that do not
-    exist yet when it runs.
+    Built locally instead of in ``get_eap_items_columns`` because earlier
+    migrations (0058, 0059) also call ``get_eap_items_columns`` and run before
+    this one; adding the new columns there would make them build their views
+    referencing columns that do not exist yet when they run.
     """
-    columns = get_eap_items_columns()
+    columns = _mv7_columns()
     insert_at = next(i for i, c in enumerate(columns) if c.name == "trace_id") + 1
     return columns[:insert_at] + list(new_columns) + columns[insert_at:]
 
 
 def _query_for_weight(columns: List[Column[Modifiers]]) -> Callable[[int], str]:
-    # Predicate matches the current (mv_6) nested-subset sampling introduced by
-    # migration 0058: a single, un-perturbed hash on item_id.
+    # Predicate matches the current (mv_7) nested-subset sampling introduced by
+    # migration 0058 and carried through 0059: a single, un-perturbed hash on
+    # item_id.
     def inner(sampling_weight: int) -> str:
         return downsample_mv_select(
             columns,
@@ -158,9 +182,9 @@ class Migration(migration.ClickhouseNodeMigration):
         return ops
 
     def backwards_ops(self) -> List[SqlOperation]:
-        # Restore the previous materialized views (which do not reference the new
-        # columns) before dropping the columns the new views read from.
-        base_columns = get_eap_items_columns()
+        # Restore the previous (mv_7) materialized views (which do not reference
+        # the new columns) before dropping the columns the new views read from.
+        base_columns = _mv7_columns()
         ops: List[SqlOperation] = list(
             swap_downsample_materialized_views(
                 columns=base_columns,
