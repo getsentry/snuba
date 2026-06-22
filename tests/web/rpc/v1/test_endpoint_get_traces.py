@@ -21,7 +21,11 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
     ResponseMeta,
     TraceItemType,
 )
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    AttributeKey,
+    AttributeValue,
+    IntArray,
+)
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
     TraceItemFilter,
@@ -31,6 +35,11 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, TraceItem
 from snuba import state
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.query.expressions import FunctionCall, Literal
+from snuba.web.rpc.common.common import (
+    attribute_key_to_expression,
+    trace_item_filters_to_expression,
+)
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_get_traces import EndpointGetTraces
 from tests.base import BaseApiTest
@@ -909,6 +918,69 @@ def trace_filter(
         item_type=item_type,
         filter=filter,
     )
+
+
+def _in_calls_over_arrays(expression: Any) -> list[FunctionCall]:
+    """All ``in(x, array(...))`` calls in ``expression`` — the form that builds a
+    constant prepared set (``__set_*``)."""
+    return [
+        exp
+        for exp in expression
+        if isinstance(exp, FunctionCall)
+        and exp.function_name == "in"
+        and len(exp.parameters) == 2
+        and isinstance(exp.parameters[1], FunctionCall)
+        and exp.parameters[1].function_name == "array"
+    ]
+
+
+def test_filter_membership_as_has_for_select_clause() -> None:
+    """Regression guard for SNUBA-9W6 (mixed-version distributed reads).
+
+    The ``filtered_item_count`` filter (and every conditional aggregate) is embedded in
+    a SELECT-clause ``countIf``. A constant ``IN`` set there bakes a server-generated
+    ``__set_<Type>_<hash>_<hash>`` identifier into the result-block column name; on a
+    mixed-version cluster the two sides hash it differently and the distributed read
+    fails with ``Code: 10 ... Not found column ... While executing Remote.``.
+
+    ``trace_item_filters_to_expression(..., membership_as_has=True)`` therefore builds
+    the membership as ``has(array(...), x)`` — byte-stable across versions — while the
+    default keeps ``x IN (array)`` so WHERE clauses retain their prepared set for
+    partition/primary-key pruning.
+    """
+    project_ids = [11, 22, 33, 44]
+    proto_filter = TraceItemFilter(
+        comparison_filter=ComparisonFilter(
+            key=AttributeKey(name="sentry.project_id", type=AttributeKey.TYPE_INT),
+            op=ComparisonFilter.OP_IN,
+            value=AttributeValue(val_int_array=IntArray(values=project_ids)),
+        ),
+    )
+
+    # Default (WHERE) form keeps the prepared IN-set over the constant array.
+    where_expr = trace_item_filters_to_expression(proto_filter, attribute_key_to_expression)
+    assert _in_calls_over_arrays(where_expr), (
+        "WHERE-form filters must keep in() over the constant array (needed for pruning)"
+    )
+
+    # SELECT-clause form (membership_as_has=True) builds has(array, x) and no IN-set.
+    select_expr = trace_item_filters_to_expression(
+        proto_filter, attribute_key_to_expression, membership_as_has=True
+    )
+    assert not _in_calls_over_arrays(select_expr), (
+        "membership_as_has must build has() instead of in() over a constant array "
+        "to avoid the unstable __set_* identifier"
+    )
+    has_over_project_ids = [
+        exp
+        for exp in select_expr
+        if isinstance(exp, FunctionCall)
+        and exp.function_name == "has"
+        and isinstance(exp.parameters[0], FunctionCall)
+        and exp.parameters[0].function_name == "array"
+        and [p.value for p in exp.parameters[0].parameters if isinstance(p, Literal)] == project_ids
+    ]
+    assert has_over_project_ids, "expected has(array(<project_ids>), x) with membership_as_has"
 
 
 @pytest.mark.clickhouse_db
