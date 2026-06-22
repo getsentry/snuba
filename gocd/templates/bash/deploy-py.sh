@@ -2,10 +2,18 @@
 
 eval $(regions-project-env-vars --region="${SENTRY_REGION}")
 
+# Temporarily run the distroless image variant in s4s2 to validate it before
+# switching production. The "-distroless" tag is published to the same registry
+# by .github/workflows/image.yml (build-distroless-production).
+IMAGE_TAG="${GO_REVISION_SNUBA_REPO}"
+if [ "${SENTRY_REGION}" = "s4s2" ]; then
+  IMAGE_TAG="${GO_REVISION_SNUBA_REPO}-distroless"
+fi
+
 /devinfra/scripts/get-cluster-credentials \
 && k8s-deploy \
   --label-selector="${LABEL_SELECTOR}" \
-  --image="us-docker.pkg.dev/sentryio/snuba-mr/image:${GO_REVISION_SNUBA_REPO}" \
+  --image="us-docker.pkg.dev/sentryio/snuba-mr/image:${IMAGE_TAG}" \
   --container-name="api" \
   --container-name="dlq-consumer" \
   --container-name="eap-items-subscriptions-executor" \
@@ -31,7 +39,7 @@ eval $(regions-project-env-vars --region="${SENTRY_REGION}")
   --container-name="transactions-subscriptions-scheduler" \
 && k8s-deploy \
   --label-selector="${LABEL_SELECTOR}" \
-  --image="us-docker.pkg.dev/sentryio/snuba-mr/image:${GO_REVISION_SNUBA_REPO}" \
+  --image="us-docker.pkg.dev/sentryio/snuba-mr/image:${IMAGE_TAG}" \
   --type="cronjob" \
   --container-name="optimize" \
   --container-name="cleanup" \

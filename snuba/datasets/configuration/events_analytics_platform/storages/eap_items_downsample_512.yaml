@@ -108,6 +108,11 @@ schema:
       { name: attributes_float_37, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
       { name: attributes_float_38, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
       { name: attributes_float_39, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
+
+      { name: attributes_array_string, type: Map, args: { key: { type: String }, value: { type: Array, args: { inner_type: { type: String } } } } },
+      { name: attributes_array_int, type: Map, args: { key: { type: String }, value: { type: Array, args: { inner_type: { type: Int, args: { size: 64 } } } } } },
+      { name: attributes_array_float, type: Map, args: { key: { type: String }, value: { type: Array, args: { inner_type: { type: Float, args: { size: 64 } } } } } },
+      { name: attributes_array_bool, type: Map, args: { key: { type: String }, value: { type: Array, args: { inner_type: { type: Bool } } } } },
     ]
   local_table_name: eap_items_1_downsample_512_local
   dist_table_name: eap_items_1_downsample_512_dist
