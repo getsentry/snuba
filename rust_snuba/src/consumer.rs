@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -77,6 +77,14 @@ pub fn consumer(
         )
     })
 }
+
+/// Outcome of a single consumer run inside the restart loop, used to resolve
+/// the race between the periodic-restart timer firing and the run ending for
+/// another reason (e.g. `stop_at_timestamp`). Whichever side records its
+/// outcome first via compare-and-swap wins.
+const OUTCOME_UNDECIDED: u8 = 0;
+const OUTCOME_RESTART: u8 = 1;
+const OUTCOME_STOP: u8 = 2;
 
 #[allow(clippy::too_many_arguments)]
 pub fn consumer_impl(
@@ -166,11 +174,9 @@ pub fn consumer_impl(
         .quantized_rebalance_consumer_group_delay_secs;
 
     // `shutdown_requested` is set by the Ctrl-C handler to permanently stop the
-    // process. `restart_triggered` is set by the periodic-restart timer to ask
-    // the loop below to rebuild the consumer (reconnecting to Kafka) without
-    // exiting the process.
+    // process. Whether a given run should restart (vs exit) is tracked per
+    // iteration via an `OUTCOME_*` atomic in the loop below.
     let shutdown_requested = Arc::new(AtomicBool::new(false));
-    let restart_triggered = Arc::new(AtomicBool::new(false));
 
     // The Ctrl-C handler can only be installed once per process, but the
     // consumer (and therefore its `ProcessorHandle`) is rebuilt on every
@@ -189,7 +195,11 @@ pub fn consumer_impl(
         let rebalance_delay_secs = rebalance_delay_secs.clone();
         ctrlc::set_handler(move || {
             shutdown_requested.store(true, Ordering::SeqCst);
-            if let Some(secs) = *rebalance_delay_secs.lock().unwrap() {
+            // Copy the delay out and release the lock before the (potentially
+            // multi-minute) sleep, so the main loop never blocks waiting for
+            // this handler to release the lock.
+            let delay = *rebalance_delay_secs.lock().unwrap();
+            if let Some(secs) = delay {
                 rebalancing::delay_kafka_rebalance(secs);
             }
             if let Some(handle) = current_handle.lock().unwrap().as_mut() {
@@ -376,6 +386,12 @@ pub fn consumer_impl(
         }
         first_run = false;
 
+        // Tracks whether this run ends in a restart or a stop. The timer and the
+        // main thread both record their outcome via compare-and-swap, so a timer
+        // firing concurrently with a non-restart shutdown can't turn it into a
+        // restart (and vice versa) — whichever records first wins.
+        let restart_outcome = Arc::new(AtomicU8::new(OUTCOME_UNDECIDED));
+
         // Periodically restart the consumer to reconnect to Kafka when the
         // periodic-restart feature flag is enabled for this consumer group.
         // After the configured interval (default 15 minutes) we signal a
@@ -394,7 +410,7 @@ pub fn consumer_impl(
             );
             let (stop_tx, stop_rx) = mpsc::channel::<()>();
             let mut restart_handle = handle.clone();
-            let restart_triggered = restart_triggered.clone();
+            let restart_outcome = restart_outcome.clone();
             let consumer_group = consumer_group.to_owned();
             let join = thread::spawn(move || {
                 // Wake up either when the interval elapses or when we are asked
@@ -402,12 +418,6 @@ pub fn consumer_impl(
                 if stop_rx.recv_timeout(interval) != Err(mpsc::RecvTimeoutError::Timeout) {
                     return;
                 }
-                tracing::info!(
-                    consumer_group,
-                    interval_secs = interval.as_secs(),
-                    "Periodic restart interval elapsed; signaling shutdown to reconnect to Kafka",
-                );
-                counter!("periodic_restart");
                 // Honor the same rebalance quantization the Ctrl-C handler uses
                 // so a periodic restart does not trigger extra Kafka rebalances
                 // for groups that also enable quantized rebalancing. We wait on
@@ -420,13 +430,41 @@ pub fn consumer_impl(
                         return;
                     }
                 }
-                restart_triggered.store(true, Ordering::SeqCst);
-                restart_handle.signal_shutdown();
+                // Only signal a restart if the main thread hasn't already
+                // decided this run is stopping for another reason.
+                if restart_outcome
+                    .compare_exchange(
+                        OUTCOME_UNDECIDED,
+                        OUTCOME_RESTART,
+                        Ordering::SeqCst,
+                        Ordering::SeqCst,
+                    )
+                    .is_ok()
+                {
+                    tracing::info!(
+                        consumer_group,
+                        interval_secs = interval.as_secs(),
+                        "Periodic restart interval elapsed; signaling shutdown to reconnect to Kafka",
+                    );
+                    counter!("periodic_restart");
+                    restart_handle.signal_shutdown();
+                }
             });
             (stop_tx, join)
         });
 
         let result = processor.run();
+
+        // Record that this run is stopping unless the timer already claimed a
+        // restart. Doing this before stopping the timer ensures a timer that
+        // fires concurrently with a non-restart shutdown won't trigger a
+        // restart.
+        let _ = restart_outcome.compare_exchange(
+            OUTCOME_UNDECIDED,
+            OUTCOME_STOP,
+            Ordering::SeqCst,
+            Ordering::SeqCst,
+        );
 
         // The run has ended: stop the restart timer (if it hasn't already fired)
         // and join it so we never leave an orphaned sleeping thread behind.
@@ -440,7 +478,7 @@ pub fn consumer_impl(
                 if shutdown_requested.load(Ordering::SeqCst) {
                     break;
                 }
-                if restart_triggered.swap(false, Ordering::SeqCst) {
+                if restart_outcome.load(Ordering::SeqCst) == OUTCOME_RESTART {
                     counter!("consumer_reconnect");
                     tracing::info!("Restarting consumer to reconnect to Kafka");
                     continue;
