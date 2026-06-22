@@ -387,6 +387,29 @@ fn read_item_id(from: Vec<u8>) -> anyhow::Result<u128> {
     Ok(u128::from_le_bytes(bytes))
 }
 
+/// Append `(key, values)` to a typed `Map(String, Array(T))` column, skipping
+/// empty arrays. `remaining` is the number of typed buckets this attribute key
+/// still has to be written to; the key is moved into the last one and cloned
+/// for any earlier buckets. Homogeneous arrays — the common case — touch a
+/// single bucket and move the key with no clone.
+fn push_typed_array<T>(
+    dest: &mut Vec<(String, Vec<T>)>,
+    key: &mut String,
+    remaining: &mut usize,
+    values: Vec<T>,
+) {
+    if values.is_empty() {
+        return;
+    }
+    *remaining -= 1;
+    let key = if *remaining == 0 {
+        std::mem::take(key)
+    } else {
+        key.clone()
+    };
+    dest.push((key, values));
+}
+
 macro_rules! seq_attrs {
     ($($tt:tt)*) => {
         seq!(N in 0..40 {
@@ -414,22 +437,6 @@ struct AttributeMap {
 
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     attributes_array: HashMap<String, Vec<EAPValue>>,
-
-    // Typed map columns for array-valued attributes (migration 0059). Arrays are
-    // double-written here alongside the legacy `attributes_array` JSON column so
-    // the read path can filter/aggregate on values and enumerate keys via
-    // `mapKeys(...)` like the scalar attribute maps.
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    attributes_array_string: HashMap<String, Vec<String>>,
-
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    attributes_array_int: HashMap<String, Vec<i64>>,
-
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    attributes_array_float: HashMap<String, Vec<f64>>,
-
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    attributes_array_bool: HashMap<String, Vec<bool>>,
 
     #(
     #[serde(skip_serializing_if = "HashMap::is_empty")]
@@ -477,57 +484,19 @@ impl AttributeMap {
     }
 
     pub fn insert_array(&mut self, k: String, v: ArrayValue) {
-        // Legacy JSON representation, preserving mixed-type ordering.
         let mut values: Vec<EAPValue> = Vec::default();
-
-        // Typed buckets, one per element type, for the `attributes_array_*`
-        // columns. Homogeneous arrays — the common case — populate exactly one
-        // bucket; mixed arrays are split across buckets by element type.
-        let mut strings: Vec<String> = Vec::default();
-        let mut ints: Vec<i64> = Vec::default();
-        let mut floats: Vec<f64> = Vec::default();
-        let mut bools: Vec<bool> = Vec::default();
 
         for value in v.values {
             match value.value {
-                Some(Value::StringValue(string)) => {
-                    strings.push(string.clone());
-                    values.push(EAPValue::String(string));
-                }
-                Some(Value::DoubleValue(double)) => {
-                    floats.push(double);
-                    values.push(EAPValue::Double(double));
-                }
-                Some(Value::IntValue(int)) => {
-                    // Double-write ints as floats too, mirroring the scalar
-                    // `insert_int`: the read path resolves numeric attributes to
-                    // the float columns.
-                    ints.push(int);
-                    floats.push(int as f64);
-                    values.push(EAPValue::Int(int));
-                }
-                Some(Value::BoolValue(bool)) => {
-                    bools.push(bool);
-                    values.push(EAPValue::Bool(bool));
-                }
+                Some(Value::StringValue(string)) => values.push(EAPValue::String(string)),
+                Some(Value::DoubleValue(double)) => values.push(EAPValue::Double(double)),
+                Some(Value::IntValue(int)) => values.push(EAPValue::Int(int)),
+                Some(Value::BoolValue(bool)) => values.push(EAPValue::Bool(bool)),
                 Some(Value::BytesValue(_)) => (),
                 Some(Value::KvlistValue(_)) => (),
                 Some(Value::ArrayValue(_)) => (),
                 None => (),
             }
-        }
-
-        if !strings.is_empty() {
-            self.attributes_array_string.insert(k.clone(), strings);
-        }
-        if !ints.is_empty() {
-            self.attributes_array_int.insert(k.clone(), ints);
-        }
-        if !floats.is_empty() {
-            self.attributes_array_float.insert(k.clone(), floats);
-        }
-        if !bools.is_empty() {
-            self.attributes_array_bool.insert(k.clone(), bools);
         }
 
         self.attributes_array.insert(k, values);
@@ -625,6 +594,50 @@ impl TryFrom<EAPItem> for EAPItemRow {
     fn try_from(item: EAPItem) -> Result<Self, Self::Error> {
         let attributes_array = serde_json::to_string(&item.attributes.attributes_array)?;
 
+        // Derive the typed `Map(String, Array(T))` columns from the same array
+        // attributes, double-writing alongside the `attributes_array` JSON column
+        // (serialized just above) so the read path can filter/aggregate on values
+        // and enumerate keys via `mapKeys(...)`. We consume the `EAPValue`
+        // representation here and move its values into the typed buckets rather
+        // than cloning them. Arrays are typically homogeneous, so a key usually
+        // lands in a single bucket and is moved, not cloned.
+        let mut attributes_array_string: Vec<(String, Vec<String>)> = Vec::new();
+        let mut attributes_array_int: Vec<(String, Vec<i64>)> = Vec::new();
+        let mut attributes_array_float: Vec<(String, Vec<f64>)> = Vec::new();
+        let mut attributes_array_bool: Vec<(String, Vec<bool>)> = Vec::new();
+        for (mut key, values) in item.attributes.attributes_array {
+            let mut strings: Vec<String> = Vec::new();
+            let mut ints: Vec<i64> = Vec::new();
+            let mut floats: Vec<f64> = Vec::new();
+            let mut bools: Vec<bool> = Vec::new();
+            for value in values {
+                match value {
+                    EAPValue::String(s) => strings.push(s),
+                    EAPValue::Int(i) => ints.push(i),
+                    EAPValue::Double(d) => floats.push(d),
+                    EAPValue::Bool(b) => bools.push(b),
+                }
+            }
+            let mut remaining = usize::from(!strings.is_empty())
+                + usize::from(!ints.is_empty())
+                + usize::from(!floats.is_empty())
+                + usize::from(!bools.is_empty());
+            push_typed_array(
+                &mut attributes_array_string,
+                &mut key,
+                &mut remaining,
+                strings,
+            );
+            push_typed_array(&mut attributes_array_int, &mut key, &mut remaining, ints);
+            push_typed_array(
+                &mut attributes_array_float,
+                &mut key,
+                &mut remaining,
+                floats,
+            );
+            push_typed_array(&mut attributes_array_bool, &mut key, &mut remaining, bools);
+        }
+
         // `return` is needed because `seq_attrs!` expands with a trailing semicolon,
         // which makes the struct expression a statement rather than a tail expression.
         seq_attrs! {
@@ -649,18 +662,10 @@ impl TryFrom<EAPItem> for EAPItemRow {
                 attributes_float_~N: item.attributes.attributes_float_~N.into_iter().collect(),
                 )*
                 attributes_array,
-                attributes_array_string: item
-                    .attributes
-                    .attributes_array_string
-                    .into_iter()
-                    .collect(),
-                attributes_array_int: item.attributes.attributes_array_int.into_iter().collect(),
-                attributes_array_float: item
-                    .attributes
-                    .attributes_array_float
-                    .into_iter()
-                    .collect(),
-                attributes_array_bool: item.attributes.attributes_array_bool.into_iter().collect(),
+                attributes_array_string,
+                attributes_array_int,
+                attributes_array_float,
+                attributes_array_bool,
             });
         }
     }
@@ -1385,44 +1390,32 @@ mod tests {
             },
         );
 
-        let item = EAPItem::try_from(trace_item).unwrap();
-        let attrs = &item.attributes;
+        let row = EAPItemRow::try_from(EAPItem::try_from(trace_item).unwrap()).unwrap();
+
+        fn get<'a, T>(col: &'a [(String, T)], key: &str) -> Option<&'a T> {
+            col.iter().find(|(k, _)| k == key).map(|(_, v)| v)
+        }
 
         assert_eq!(
-            attrs.attributes_array_string.get("strs").unwrap(),
-            &vec!["a".to_string(), "b".to_string()]
+            get(&row.attributes_array_string, "strs"),
+            Some(&vec!["a".to_string(), "b".to_string()])
         );
+        assert_eq!(get(&row.attributes_array_int, "ints"), Some(&vec![1i64, 2]));
         assert_eq!(
-            attrs.attributes_array_int.get("ints").unwrap(),
-            &vec![1i64, 2]
+            get(&row.attributes_array_float, "floats"),
+            Some(&vec![1.5f64])
         );
-        // Ints are double-written as floats too, mirroring scalar `insert_int`.
-        assert_eq!(
-            attrs.attributes_array_float.get("ints").unwrap(),
-            &vec![1.0f64, 2.0]
-        );
-        assert_eq!(
-            attrs.attributes_array_float.get("floats").unwrap(),
-            &vec![1.5f64]
-        );
-        assert_eq!(
-            attrs.attributes_array_bool.get("bools").unwrap(),
-            &vec![true]
-        );
+        assert_eq!(get(&row.attributes_array_bool, "bools"), Some(&vec![true]));
 
-        // Non-numeric typed maps are not cross-populated.
-        assert!(!attrs.attributes_array_int.contains_key("strs"));
-        assert!(!attrs.attributes_array_bool.contains_key("ints"));
+        // Ints are NOT double-written to the float column.
+        assert_eq!(get(&row.attributes_array_float, "ints"), None);
+        // Typed maps are not cross-populated across element types.
+        assert_eq!(get(&row.attributes_array_int, "strs"), None);
+        assert_eq!(get(&row.attributes_array_bool, "ints"), None);
 
         // The legacy JSON column is still populated (double write).
-        assert_eq!(
-            attrs.attributes_array.get("strs").unwrap()[0],
-            EAPValue::String("a".to_string())
-        );
-        assert_eq!(
-            attrs.attributes_array.get("ints").unwrap()[0],
-            EAPValue::Int(1)
-        );
+        assert!(row.attributes_array.contains("strs"));
+        assert!(row.attributes_array.contains("ints"));
     }
 
     #[test]
