@@ -1,5 +1,5 @@
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -196,6 +196,7 @@ pub fn consumer_impl(
     // Kafka) and runs it until it shuts down. A shutdown caused by the periodic
     // restart timer loops back around to rebuild the consumer; any other
     // graceful shutdown (Ctrl-C, `stop_at_timestamp`, ...) exits the loop.
+    let mut first_run = true;
     loop {
         let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
         let max_batch_size = consumer_config.max_batch_size;
@@ -345,10 +346,22 @@ pub fn consumer_impl(
             break;
         }
 
-        // Quantize the (re)join when configured, matching the Ctrl-C/leave path.
-        if let Some(secs) = rebalance_delay_secs {
-            rebalancing::delay_kafka_rebalance(secs);
+        // Quantize the initial join when configured, matching the original
+        // startup behaviour. We only do this on the first run: on a periodic
+        // restart the timer below already quantized the corresponding "leave",
+        // so delaying the rejoin too would keep the consumer offline for two
+        // delay periods instead of one.
+        if first_run {
+            if let Some(secs) = rebalance_delay_secs {
+                rebalancing::delay_kafka_rebalance(secs);
+            }
+            // A shutdown may have arrived during the delay; stop now instead of
+            // starting the consumer and spawning a needless restart timer.
+            if shutdown_requested.load(Ordering::SeqCst) {
+                break;
+            }
         }
+        first_run = false;
 
         // Periodically restart the consumer to reconnect to Kafka when the
         // periodic-restart feature flag is enabled for this consumer group.
@@ -356,35 +369,54 @@ pub fn consumer_impl(
         // graceful shutdown; the restart loop then rebuilds the consumer, which
         // re-establishes its Kafka connection. See `crate::auto_restart` for the
         // controlling runtime config keys.
-        if let Some(restart_interval) = auto_restart::get_restart_interval(consumer_group) {
+        //
+        // The timer waits on a channel rather than a bare sleep so that, when
+        // the run ends for any reason, we can stop and join it below instead of
+        // leaking a sleeping thread.
+        let restart_timer = auto_restart::get_restart_interval(consumer_group).map(|interval| {
             tracing::info!(
                 consumer_group,
-                interval_secs = restart_interval.as_secs(),
+                interval_secs = interval.as_secs(),
                 "Periodic Kafka reconnect enabled; consumer will restart after the configured interval",
             );
+            let (stop_tx, stop_rx) = mpsc::channel::<()>();
             let mut restart_handle = handle.clone();
             let restart_triggered = restart_triggered.clone();
             let consumer_group = consumer_group.to_owned();
-            thread::spawn(move || {
-                thread::sleep(restart_interval);
-                tracing::info!(
-                    consumer_group,
-                    interval_secs = restart_interval.as_secs(),
-                    "Periodic restart interval elapsed; signaling shutdown to reconnect to Kafka",
-                );
-                counter!("periodic_restart");
-                // Honor the same rebalance quantization the Ctrl-C handler uses
-                // so a periodic restart does not trigger extra Kafka rebalances
-                // for consumer groups that also enable quantized rebalancing.
-                if let Some(secs) = rebalance_delay_secs {
-                    rebalancing::delay_kafka_rebalance(secs);
+            let join = thread::spawn(move || {
+                // Wake up either when the interval elapses or when we are asked
+                // to stop (the run ended for another reason).
+                if let Err(mpsc::RecvTimeoutError::Timeout) = stop_rx.recv_timeout(interval) {
+                    tracing::info!(
+                        consumer_group,
+                        interval_secs = interval.as_secs(),
+                        "Periodic restart interval elapsed; signaling shutdown to reconnect to Kafka",
+                    );
+                    counter!("periodic_restart");
+                    // Honor the same rebalance quantization the Ctrl-C handler
+                    // uses so a periodic restart does not trigger extra Kafka
+                    // rebalances for groups that also enable quantized
+                    // rebalancing.
+                    if let Some(secs) = rebalance_delay_secs {
+                        rebalancing::delay_kafka_rebalance(secs);
+                    }
+                    restart_triggered.store(true, Ordering::SeqCst);
+                    restart_handle.signal_shutdown();
                 }
-                restart_triggered.store(true, Ordering::SeqCst);
-                restart_handle.signal_shutdown();
             });
+            (stop_tx, join)
+        });
+
+        let result = processor.run();
+
+        // The run has ended: stop the restart timer (if it hasn't already fired)
+        // and join it so we never leave an orphaned sleeping thread behind.
+        if let Some((stop_tx, join)) = restart_timer {
+            drop(stop_tx);
+            let _ = join.join();
         }
 
-        match processor.run() {
+        match result {
             Ok(()) => {
                 if shutdown_requested.load(Ordering::SeqCst) {
                     break;
