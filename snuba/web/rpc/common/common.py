@@ -616,6 +616,8 @@ def _type_array_includes_scalar_expression(
 
 def _any_attribute_filter_to_expression(
     filt: AnyAttributeFilter,
+    *,
+    membership_as_has: bool = False,
 ) -> Expression:
     """Build an expression that searches across attribute values.
 
@@ -626,7 +628,10 @@ def _any_attribute_filter_to_expression(
 
         arrayExists(x -> <comparison>(x, value), mapValues(column))
 
-    wrapped with NOT(...) for negative ops.
+    wrapped with NOT(...) for negative ops. ``membership_as_has`` builds the IN/NOT_IN
+    comparison as ``has(array, x)`` rather than ``in(x, array)`` so the (arrayExists'd)
+    expression carries no ``__set_*`` prepared-set identifier — required when it lands
+    in a SELECT-clause aggregate on a mixed-version distributed read (see ``_in_or_has``).
     """
     # 1. Extract and validate the comparison value
     v = filt.value
@@ -704,12 +709,13 @@ def _any_attribute_filter_to_expression(
                 lowered = [literal(s.lower()) for s in v.val_str_array.values]
             else:
                 lowered = [literal(elem.val_str.lower()) for elem in v.val_array.values]
-            comparison = in_cond(
+            comparison = _in_or_has(
                 f.lower(x),
                 literals_array(None, lowered),
+                as_has=membership_as_has,
             )
         else:
-            comparison = in_cond(x, v_expression)
+            comparison = _in_or_has(x, v_expression, as_has=membership_as_has)
     else:
         raise BadSnubaRPCRequestException(
             f"Unsupported any_attribute_filter op: {AnyAttributeFilter.Op.Name(filt.op)}"
@@ -1074,7 +1080,9 @@ def trace_item_filters_to_expression(
     if item_filter.HasField("any_attribute_filter"):
         if not state.get_int_config("enable_any_attribute_filter", 1):
             return literal(True)
-        return _any_attribute_filter_to_expression(item_filter.any_attribute_filter)
+        return _any_attribute_filter_to_expression(
+            item_filter.any_attribute_filter, membership_as_has=membership_as_has
+        )
 
     return literal(True)
 
