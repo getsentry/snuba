@@ -322,6 +322,12 @@ pub fn consumer_impl(
                 "Periodic restart interval elapsed; signaling shutdown to reconnect to Kafka",
             );
             counter!("periodic_restart");
+            // Honor the same rebalance quantization the Ctrl-C handler uses so a
+            // periodic restart does not trigger extra Kafka rebalances for
+            // consumer groups that also enable quantized rebalancing.
+            if let Some(secs) = rebalance_delay_secs {
+                rebalancing::delay_kafka_rebalance(secs);
+            }
             restart_handle.signal_shutdown();
         });
     }
