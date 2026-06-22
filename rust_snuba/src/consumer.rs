@@ -473,6 +473,11 @@ pub fn consumer_impl(
             let _ = join.join();
         }
 
+        // This processor has stopped; clear the shared handle so the Ctrl-C
+        // handler doesn't signal a defunct processor while the next one is being
+        // built. The next iteration republishes a fresh handle before running.
+        *current_handle.lock().unwrap() = None;
+
         match result {
             Ok(()) => {
                 if shutdown_requested.load(Ordering::SeqCst) {
