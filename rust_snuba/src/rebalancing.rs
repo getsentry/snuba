@@ -2,6 +2,21 @@ use crate::runtime_config;
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+/// Computes how long to wait so that the next rebalance step lands on a
+/// `configured_delay_secs` "tick". See [`delay_kafka_rebalance`] for why we
+/// quantize rebalances. Exposed separately so callers that need an
+/// interruptible wait (e.g. a thread that may be asked to stop early) can wait
+/// on this duration themselves instead of using the blocking sleep below.
+pub fn quantized_rebalance_delay(configured_delay_secs: u64) -> Duration {
+    let current_time = SystemTime::now();
+    let time_elapsed_in_slot = match current_time.duration_since(UNIX_EPOCH) {
+        Ok(duration) => duration.as_secs(),
+        Err(_) => 0,
+    } % configured_delay_secs;
+
+    Duration::from_secs(configured_delay_secs - time_elapsed_in_slot)
+}
+
 pub fn delay_kafka_rebalance(configured_delay_secs: u64) {
     /*
      *  Introduces a configurable delay to the consumer topic
@@ -13,19 +28,10 @@ pub fn delay_kafka_rebalance(configured_delay_secs: u64) {
      * fewer "stop the world rebalancing" occurrences and more time
      * for the consumer group to stabilize and make progress.
      */
-    let current_time = SystemTime::now();
-    let time_elapsed_in_slot = match current_time.duration_since(UNIX_EPOCH) {
-        Ok(duration) => duration.as_secs(),
-        Err(_) => 0,
-    } % configured_delay_secs;
-    tracing::info!(
-        "Delaying rebalance by {} seconds",
-        configured_delay_secs - time_elapsed_in_slot
-    );
+    let delay = quantized_rebalance_delay(configured_delay_secs);
+    tracing::info!("Delaying rebalance by {} seconds", delay.as_secs());
 
-    thread::sleep(Duration::from_secs(
-        configured_delay_secs - time_elapsed_in_slot,
-    ));
+    thread::sleep(delay);
 }
 
 pub fn get_rebalance_delay_secs(consumer_group: &str) -> Option<u64> {

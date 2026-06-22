@@ -156,13 +156,14 @@ pub fn consumer_impl(
         procspawn::init();
     }
 
-    let mut rebalance_delay_secs = consumer_config
+    // The "quantized rebalance" delay may be set statically in the consumer
+    // config and/or overridden live via runtime config. We capture the static
+    // value once (it comes from the immutable startup config) and refresh the
+    // runtime override on every restart in the loop below, so live updates take
+    // effect without a full process restart.
+    let static_rebalance_delay_secs = consumer_config
         .raw_topic
         .quantized_rebalance_consumer_group_delay_secs;
-    let config_rebalance_delay_secs = rebalancing::get_rebalance_delay_secs(consumer_group);
-    if let Some(secs) = config_rebalance_delay_secs {
-        rebalance_delay_secs = Some(secs);
-    }
 
     // `shutdown_requested` is set by the Ctrl-C handler to permanently stop the
     // process. `restart_triggered` is set by the periodic-restart timer to ask
@@ -174,15 +175,21 @@ pub fn consumer_impl(
     // The Ctrl-C handler can only be installed once per process, but the
     // consumer (and therefore its `ProcessorHandle`) is rebuilt on every
     // restart. We share the live handle through a mutex so the handler always
-    // signals the consumer that is currently running.
+    // signals the consumer that is currently running. The current rebalance
+    // delay is shared the same way so the handler quantizes its "leave" using
+    // the latest configured value.
     let current_handle: Arc<Mutex<Option<ProcessorHandle>>> = Arc::new(Mutex::new(None));
+    let rebalance_delay_secs = Arc::new(Mutex::new(
+        rebalancing::get_rebalance_delay_secs(consumer_group).or(static_rebalance_delay_secs),
+    ));
 
     {
         let shutdown_requested = shutdown_requested.clone();
         let current_handle = current_handle.clone();
+        let rebalance_delay_secs = rebalance_delay_secs.clone();
         ctrlc::set_handler(move || {
             shutdown_requested.store(true, Ordering::SeqCst);
-            if let Some(secs) = rebalance_delay_secs {
+            if let Some(secs) = *rebalance_delay_secs.lock().unwrap() {
                 rebalancing::delay_kafka_rebalance(secs);
             }
             if let Some(handle) = current_handle.lock().unwrap().as_mut() {
@@ -198,6 +205,12 @@ pub fn consumer_impl(
     // graceful shutdown (Ctrl-C, `stop_at_timestamp`, ...) exits the loop.
     let mut first_run = true;
     loop {
+        // Refresh the rebalance delay from runtime config so live updates take
+        // effect on each restart, and publish it for the Ctrl-C handler.
+        let current_rebalance_delay_secs =
+            rebalancing::get_rebalance_delay_secs(consumer_group).or(static_rebalance_delay_secs);
+        *rebalance_delay_secs.lock().unwrap() = current_rebalance_delay_secs;
+
         let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
         let max_batch_size = consumer_config.max_batch_size;
         let max_batch_time = Duration::from_millis(consumer_config.max_batch_time_ms);
@@ -352,7 +365,7 @@ pub fn consumer_impl(
         // so delaying the rejoin too would keep the consumer offline for two
         // delay periods instead of one.
         if first_run {
-            if let Some(secs) = rebalance_delay_secs {
+            if let Some(secs) = current_rebalance_delay_secs {
                 rebalancing::delay_kafka_rebalance(secs);
             }
             // A shutdown may have arrived during the delay; stop now instead of
@@ -386,23 +399,29 @@ pub fn consumer_impl(
             let join = thread::spawn(move || {
                 // Wake up either when the interval elapses or when we are asked
                 // to stop (the run ended for another reason).
-                if let Err(mpsc::RecvTimeoutError::Timeout) = stop_rx.recv_timeout(interval) {
-                    tracing::info!(
-                        consumer_group,
-                        interval_secs = interval.as_secs(),
-                        "Periodic restart interval elapsed; signaling shutdown to reconnect to Kafka",
-                    );
-                    counter!("periodic_restart");
-                    // Honor the same rebalance quantization the Ctrl-C handler
-                    // uses so a periodic restart does not trigger extra Kafka
-                    // rebalances for groups that also enable quantized
-                    // rebalancing.
-                    if let Some(secs) = rebalance_delay_secs {
-                        rebalancing::delay_kafka_rebalance(secs);
-                    }
-                    restart_triggered.store(true, Ordering::SeqCst);
-                    restart_handle.signal_shutdown();
+                if stop_rx.recv_timeout(interval) != Err(mpsc::RecvTimeoutError::Timeout) {
+                    return;
                 }
+                tracing::info!(
+                    consumer_group,
+                    interval_secs = interval.as_secs(),
+                    "Periodic restart interval elapsed; signaling shutdown to reconnect to Kafka",
+                );
+                counter!("periodic_restart");
+                // Honor the same rebalance quantization the Ctrl-C handler uses
+                // so a periodic restart does not trigger extra Kafka rebalances
+                // for groups that also enable quantized rebalancing. We wait on
+                // the stop channel rather than sleeping, so that if the run ends
+                // for another reason during this delay we can bail immediately
+                // instead of blocking the join below.
+                if let Some(secs) = current_rebalance_delay_secs {
+                    let delay = rebalancing::quantized_rebalance_delay(secs);
+                    if stop_rx.recv_timeout(delay) != Err(mpsc::RecvTimeoutError::Timeout) {
+                        return;
+                    }
+                }
+                restart_triggered.store(true, Ordering::SeqCst);
+                restart_handle.signal_shutdown();
             });
             (stop_tx, join)
         });
