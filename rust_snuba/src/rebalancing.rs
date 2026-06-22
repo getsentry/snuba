@@ -8,6 +8,13 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 /// interruptible wait (e.g. a thread that may be asked to stop early) can wait
 /// on this duration themselves instead of using the blocking sleep below.
 pub fn quantized_rebalance_delay(configured_delay_secs: u64) -> Duration {
+    // A delay of zero means "no quantization". Guard against it explicitly:
+    // it's a valid configuration, and the modulo below would otherwise divide
+    // by zero and panic.
+    if configured_delay_secs == 0 {
+        return Duration::ZERO;
+    }
+
     let current_time = SystemTime::now();
     let time_elapsed_in_slot = match current_time.duration_since(UNIX_EPOCH) {
         Ok(duration) => duration.as_secs(),
@@ -46,6 +53,18 @@ pub fn get_rebalance_delay_secs(consumer_group: &str) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_quantized_rebalance_delay_zero_does_not_panic() {
+        assert_eq!(quantized_rebalance_delay(0), Duration::ZERO);
+    }
+
+    #[test]
+    fn test_quantized_rebalance_delay_is_within_the_configured_window() {
+        let delay = quantized_rebalance_delay(60);
+        assert!(delay > Duration::ZERO);
+        assert!(delay <= Duration::from_secs(60));
+    }
 
     #[test]
     fn test_delay_config() {
