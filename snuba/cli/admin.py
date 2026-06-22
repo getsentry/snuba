@@ -1,4 +1,4 @@
-# ci timing test - remove before merge
+# ci timing test (warm run) - remove before merge
 import os
 from typing import Optional
 
