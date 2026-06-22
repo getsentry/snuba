@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::thread;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
@@ -6,6 +7,7 @@ use chrono::{DateTime, Utc};
 use sentry_arroyo::backends::kafka::config::KafkaConfig;
 use sentry_arroyo::backends::kafka::producer::KafkaProducer;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::counter;
 use sentry_arroyo::metrics;
 use sentry_arroyo::processing::dlq::{DlqLimit, DlqPolicy, KafkaDlqProducer};
 
@@ -18,6 +20,7 @@ use pyo3::types::PyBytes;
 
 use sentry_options::init_with_schemas;
 
+use crate::auto_restart;
 use crate::config;
 use crate::factory_v2::ConsumerStrategyFactoryV2;
 use crate::logging::{setup_logging, setup_sentry};
@@ -296,6 +299,32 @@ pub fn consumer_impl(
     let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);
 
     let mut handle = processor.get_handle();
+
+    // Periodically restart the consumer to reconnect to Kafka when the
+    // periodic-restart feature flag is enabled for this consumer group. After
+    // the configured interval (default 15 minutes) we signal a graceful
+    // shutdown; the process orchestrator then restarts the consumer, which
+    // re-establishes its Kafka connection. See `crate::auto_restart` for the
+    // controlling runtime config keys.
+    if let Some(restart_interval) = auto_restart::get_restart_interval(consumer_group) {
+        tracing::info!(
+            consumer_group,
+            interval_secs = restart_interval.as_secs(),
+            "Periodic Kafka reconnect enabled; consumer will restart after the configured interval",
+        );
+        let mut restart_handle = handle.clone();
+        let consumer_group = consumer_group.to_owned();
+        thread::spawn(move || {
+            thread::sleep(restart_interval);
+            tracing::info!(
+                consumer_group,
+                interval_secs = restart_interval.as_secs(),
+                "Periodic restart interval elapsed; signaling shutdown to reconnect to Kafka",
+            );
+            counter!("periodic_restart");
+            restart_handle.signal_shutdown();
+        });
+    }
 
     match rebalance_delay_secs {
         Some(secs) => {
