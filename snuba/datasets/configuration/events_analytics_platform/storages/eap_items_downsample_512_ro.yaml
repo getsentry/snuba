@@ -16,14 +16,14 @@ schema:
       { name: item_type, type: UInt, args: { size: 8 } },
       { name: timestamp, type: DateTime },
       { name: trace_id, type: UUID },
+      { name: conversation_id, type: UUID },
+      { name: session_id, type: UUID },
       { name: item_id, type: UInt, args: { size: 128 } },
       { name: sampling_weight, type: UInt, args: { size: 64 } },
       { name: sampling_factor, type: Float, args: { size: 64 } },
       { name: retention_days, type: UInt, args: { size: 16 } },
 
       { name: indexed_name, type: String },
-      { name: conversation_id, type: UUID },
-      { name: session_id, type: UUID },
 
       { name: attributes_bool, type: Map, args: { key: { type: String }, value: { type: Bool } } },
       { name: attributes_int, type: Map, args: { key: { type: String }, value: { type: Int, args: { size: 64 } } } },

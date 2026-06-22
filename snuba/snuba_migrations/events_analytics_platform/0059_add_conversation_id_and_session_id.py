@@ -19,15 +19,15 @@ table_name_prefix = "eap_items_1"
 sampling_weights = SAMPLING_WEIGHTS
 
 # Two new identifier columns, stored as UUID to match the existing `trace_id`
-# column. They are added right after `indexed_name` so the on-disk order stays
-# stable: indexed_name, conversation_id, session_id.
+# column. They are added right after `trace_id` so the on-disk order stays
+# stable: trace_id, conversation_id, session_id.
 new_columns: List[Column[Modifiers]] = [
     Column("conversation_id", UUID()),
     Column("session_id", UUID()),
 ]
 # `after` targets chained so the final order is
-# indexed_name -> conversation_id -> session_id.
-add_column_after = ["indexed_name", "conversation_id"]
+# trace_id -> conversation_id -> session_id.
+add_column_after = ["trace_id", "conversation_id"]
 
 # Bloom-filter indexes on the new columns (mirrors `bf_indexed_name` from
 # migration 0057) so equality lookups can skip granules. Indexes live on the
@@ -45,7 +45,7 @@ mv_new_version = mv_old_version + 1
 
 
 def _mv_columns_with_new() -> List[Column[Modifiers]]:
-    """The mv_6 column list with the new columns inserted after `indexed_name`.
+    """The mv_6 column list with the new columns inserted after `trace_id`.
 
     Built locally instead of in ``get_eap_items_columns`` because migration 0058
     runs before this one and also calls ``get_eap_items_columns``; adding the new
@@ -53,7 +53,7 @@ def _mv_columns_with_new() -> List[Column[Modifiers]]:
     exist yet when it runs.
     """
     columns = get_eap_items_columns()
-    insert_at = next(i for i, c in enumerate(columns) if c.name == "indexed_name") + 1
+    insert_at = next(i for i, c in enumerate(columns) if c.name == "trace_id") + 1
     return columns[:insert_at] + list(new_columns) + columns[insert_at:]
 
 
