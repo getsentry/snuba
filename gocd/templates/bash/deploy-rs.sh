@@ -2,10 +2,15 @@
 
 eval $(regions-project-env-vars --region="${SENTRY_REGION}")
 
+IMAGE_TAG="${GO_REVISION_SNUBA_REPO}"
+if [ "${SENTRY_REGION}" = "s4s2" ]; then
+  IMAGE_TAG="${GO_REVISION_SNUBA_REPO}-distroless"
+fi
+
 /devinfra/scripts/get-cluster-credentials \
 && k8s-deploy \
   --label-selector="${LABEL_SELECTOR}" \
-  --image="us-docker.pkg.dev/sentryio/snuba-mr/image:${GO_REVISION_SNUBA_REPO}" \
+  --image="us-docker.pkg.dev/sentryio/snuba-mr/image:${IMAGE_TAG}" \
   --container-name="consumer" \
   --container-name="eap-accepted-outcomes-consumer" \
   --container-name="eap-items-consumer" \
