@@ -70,7 +70,7 @@ def test_before_send_drops_allocation_policy_violations() -> None:
 
 def test_before_send_drops_rpc_allocation_policy_exception() -> None:
     try:
-        raise RPCAllocationPolicyException("rejected")
+        raise RPCAllocationPolicyException("rejected", {})
     except RPCAllocationPolicyException as err:
         assert before_send({"message": "rejected"}, _hint_for(err)) is None
 
