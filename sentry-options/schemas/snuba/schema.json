@@ -26,6 +26,11 @@
       "type": "integer",
       "default": 120,
       "description": "BLQ hysteresis in seconds. Once routing stale, keep routing messages at least (stale_threshold - static_friction) old. Set to 0 to disable friction."
+    },
+    "enable_any_attribute_filter": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable translating any_attribute_filter trace-item filters into ClickHouse predicates. When false, an any_attribute_filter is treated as always-true (no filtering applied)."
     }
   }
 }

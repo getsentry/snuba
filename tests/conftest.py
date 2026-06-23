@@ -47,6 +47,14 @@ def pytest_configure() -> None:
     """
     assert settings.TESTING, "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
 
+    # Point sentry-options at the in-repo schemas so init() succeeds regardless
+    # of the working directory tests are launched from. (Without this it relies
+    # on the ./sentry-options relative fallback.)
+    os.environ.setdefault(
+        "SENTRY_OPTIONS_DIR",
+        os.path.join(os.path.dirname(__file__), os.pardir, "sentry-options"),
+    )
+
     initialize_snuba()
     setup_sentry()
     initialize_snuba()

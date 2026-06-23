@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from google.protobuf import json_format, struct_pb2
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
     TraceItemTableRequest,
@@ -1082,3 +1083,31 @@ class TestEmptyVsAbsentComparison:
     def test_not_like_wildcard_matches_only_absent(self) -> None:
         # Present rows all `like '%'`, so only the absent key survives NOT LIKE.
         assert self._execute(ComparisonFilter.OP_NOT_LIKE, value="%") == ["green"]
+
+
+class TestAnyAttributeFilterOption:
+    """The `enable_any_attribute_filter` sentry-option gates whether
+    any_attribute_filter is translated into a predicate or treated as
+    always-true. It replaces the former `enable_any_attribute_filter`
+    runtime config."""
+
+    @staticmethod
+    def _filter() -> TraceItemFilter:
+        return TraceItemFilter(
+            any_attribute_filter=AnyAttributeFilter(
+                op=AnyAttributeFilter.OP_EQUALS,
+                value=AttributeValue(val_str="foo"),
+            )
+        )
+
+    def test_enabled_by_default_translates_filter(self) -> None:
+        # Schema default is true: the filter is translated, not short-circuited.
+        result = trace_item_filters_to_expression(self._filter(), attribute_key_to_expression)
+        assert isinstance(result, FunctionCall)
+        assert result.function_name == "arrayExists"
+
+    def test_disabled_returns_always_true(self) -> None:
+        with override_options("snuba", {"enable_any_attribute_filter": False}):
+            result = trace_item_filters_to_expression(self._filter(), attribute_key_to_expression)
+        assert isinstance(result, Literal)
+        assert result.value is True

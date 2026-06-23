@@ -31,6 +31,7 @@ dependencies = [
     "sentry-arroyo>=2.39.2",
     "sentry-conventions>=0.12.0",
     "sentry-kafka-schemas>=2.1.35",
+    "sentry-options>=1.1.1",
     "sentry-protos>=0.32.0",
     "sentry-redis-tools>=0.5.1",
     "sentry-relay>=0.9.25",
