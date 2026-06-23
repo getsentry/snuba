@@ -56,6 +56,17 @@ def setup_logging(level: Optional[str] = None) -> None:
         force=True,
     )
 
+    # google-auth's httplib2 transport emits a spurious WARNING on every token
+    # refresh: "httplib2 transport does not support per-request timeout. Set the
+    # timeout when constructing the httplib2.Http instance." Since google-auth
+    # >= 2.39.0 the transport is always handed a per-request timeout (e.g. when
+    # refreshing service-account tokens against the GKE metadata server), and the
+    # warning fires regardless of how the Http instance was built -- googleapiclient
+    # already constructs it with a construction-time timeout, so there is nothing
+    # to "fix" on our side. The message is pure noise (132k+ events on snuba-admin
+    # with zero user impact), so drop everything below ERROR for this logger. (SNUBA-8P5)
+    logging.getLogger("google_auth_httplib2").setLevel(logging.ERROR)
+
     structlog.configure(
         cache_logger_on_first_use=True,
         wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
