@@ -50,6 +50,25 @@ from snuba.query.expressions import (
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
+def _in_or_has(value: Expression, array: Expression, *, as_has: bool) -> FunctionCall:
+    """Build the membership test ``value IN array``.
+
+    Returns ``in(value, array)`` by default, so ClickHouse keeps a prepared set for
+    partition/primary-key pruning — correct for WHERE clauses. When ``as_has`` is set,
+    returns ``has(array, value)`` instead, for expressions that land in a SELECT clause
+    / projection / aggregate condition / ``HAVING``. There the prepared set's
+    server-generated ``__set_<Type>_<hash>_<hash>`` identifier leaks into the
+    result-block column name and is not byte-stable across mixed-version distributed
+    ClickHouse nodes, which fails the read with
+    ``Code: 10 ... Not found column ... While executing Remote.`` (SNUBA-9W6, SNUBA-B82).
+    ``has`` over a constant array keeps the array inline in the column name and is
+    equivalent to ``value IN (array)`` for scalar membership.
+    """
+    if as_has:
+        return f.has(array, value)
+    return in_cond(value, array)
+
+
 def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
     """Convert an AttributeKey proto to a Snuba Expression.
 
@@ -412,16 +431,18 @@ def _analyzer_safe_in_expression(
     negated: bool,
     ignore_case: bool = False,
     guard: bool = True,
+    membership_as_has: bool = False,
 ) -> Expression:
     """``IN`` / ``NOT IN`` as ``[not] in(value, set)``, wrapped in
     ``and(exists, ...)`` only when ``guard`` is set (see ``_map_backed_operands``
     and ``_comparison_can_match_column_default``). The value lists carry only
     scalars, so the set never contains NULL — the legacy ``has(set, NULL)`` branch
-    was always ``false``."""
+    was always ``false``. ``membership_as_has`` emits ``has(set, value)`` instead of
+    ``in(value, set)`` for SELECT-clause use (see ``_in_or_has``)."""
     value, exists = _map_backed_operands(k)
     if ignore_case:
         value = f.lower(value)
-    membership = in_cond(value, v_expression)
+    membership = _in_or_has(value, v_expression, as_has=membership_as_has)
     present = and_cond(exists, membership) if guard else membership
     return not_cond(present) if negated else present
 
@@ -595,6 +616,8 @@ def _type_array_includes_scalar_expression(
 
 def _any_attribute_filter_to_expression(
     filt: AnyAttributeFilter,
+    *,
+    membership_as_has: bool = False,
 ) -> Expression:
     """Build an expression that searches across attribute values.
 
@@ -605,7 +628,10 @@ def _any_attribute_filter_to_expression(
 
         arrayExists(x -> <comparison>(x, value), mapValues(column))
 
-    wrapped with NOT(...) for negative ops.
+    wrapped with NOT(...) for negative ops. ``membership_as_has`` builds the IN/NOT_IN
+    comparison as ``has(array, x)`` rather than ``in(x, array)`` so the (arrayExists'd)
+    expression carries no ``__set_*`` prepared-set identifier — required when it lands
+    in a SELECT-clause aggregate on a mixed-version distributed read (see ``_in_or_has``).
     """
     # 1. Extract and validate the comparison value
     v = filt.value
@@ -683,12 +709,13 @@ def _any_attribute_filter_to_expression(
                 lowered = [literal(s.lower()) for s in v.val_str_array.values]
             else:
                 lowered = [literal(elem.val_str.lower()) for elem in v.val_array.values]
-            comparison = in_cond(
+            comparison = _in_or_has(
                 f.lower(x),
                 literals_array(None, lowered),
+                as_has=membership_as_has,
             )
         else:
-            comparison = in_cond(x, v_expression)
+            comparison = _in_or_has(x, v_expression, as_has=membership_as_has)
     else:
         raise BadSnubaRPCRequestException(
             f"Unsupported any_attribute_filter op: {AnyAttributeFilter.Op.Name(filt.op)}"
@@ -707,11 +734,18 @@ def _any_attribute_filter_to_expression(
 def trace_item_filters_to_expression(
     item_filter: TraceItemFilter,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    membership_as_has: bool = False,
 ) -> Expression:
     """
     Trace Item Filters are things like (span.id=12345 AND start_timestamp >= "june 4th, 2024")
     This maps those filters into an expression which can be used in a WHERE clause
     :param item_filter:
+    :param membership_as_has: build ``IN``/``NOT IN`` membership as ``has(array, x)``
+        rather than ``x IN (array)``. Pass ``True`` only when the result lands in a
+        SELECT clause / projection / aggregate condition / ``HAVING`` — there a constant
+        ``IN`` set leaks an unstable ``__set_*`` identifier into the result-block column
+        name and breaks mixed-version distributed reads (see ``_in_or_has``). Leave the
+        default for WHERE clauses, where the prepared ``IN`` set drives pruning.
     :return:
     """
     if item_filter.HasField("and_filter"):
@@ -719,9 +753,14 @@ def trace_item_filters_to_expression(
         if len(filters) == 0:
             return literal(True)
         elif len(filters) == 1:
-            return trace_item_filters_to_expression(filters[0], attribute_key_to_expression)
+            return trace_item_filters_to_expression(
+                filters[0], attribute_key_to_expression, membership_as_has
+            )
         return and_cond(
-            *(trace_item_filters_to_expression(x, attribute_key_to_expression) for x in filters)
+            *(
+                trace_item_filters_to_expression(x, attribute_key_to_expression, membership_as_has)
+                for x in filters
+            )
         )
 
     if item_filter.HasField("or_filter"):
@@ -729,9 +768,14 @@ def trace_item_filters_to_expression(
         if len(filters) == 0:
             raise BadSnubaRPCRequestException("Invalid trace item filter, empty 'or' clause")
         elif len(filters) == 1:
-            return trace_item_filters_to_expression(filters[0], attribute_key_to_expression)
+            return trace_item_filters_to_expression(
+                filters[0], attribute_key_to_expression, membership_as_has
+            )
         return or_cond(
-            *(trace_item_filters_to_expression(x, attribute_key_to_expression) for x in filters)
+            *(
+                trace_item_filters_to_expression(x, attribute_key_to_expression, membership_as_has)
+                for x in filters
+            )
         )
 
     if item_filter.HasField("not_filter"):
@@ -740,11 +784,18 @@ def trace_item_filters_to_expression(
             raise BadSnubaRPCRequestException("Invalid trace item filter, empty 'not' clause")
         elif len(filters) == 1:
             return not_cond(
-                trace_item_filters_to_expression(filters[0], attribute_key_to_expression)
+                trace_item_filters_to_expression(
+                    filters[0], attribute_key_to_expression, membership_as_has
+                )
             )
         return not_cond(
             and_cond(
-                *(trace_item_filters_to_expression(x, attribute_key_to_expression) for x in filters)
+                *(
+                    trace_item_filters_to_expression(
+                        x, attribute_key_to_expression, membership_as_has
+                    )
+                    for x in filters
+                )
             )
         )
 
@@ -965,10 +1016,11 @@ def trace_item_filters_to_expression(
                     negated=False,
                     ignore_case=ignore_case,
                     guard=_comparison_can_match_column_default(k.type, v, value_type),
+                    membership_as_has=membership_as_has,
                 )
             if ignore_case:
                 k_expression = f.lower(k_expression)
-            expr = in_cond(k_expression, v_expression)
+            expr = _in_or_has(k_expression, v_expression, as_has=membership_as_has)
             expr_with_null = or_cond(
                 expr,
                 and_cond(f.isNull(k_expression), f.has(v_expression, literal(None))),
@@ -999,10 +1051,11 @@ def trace_item_filters_to_expression(
                     negated=True,
                     ignore_case=ignore_case,
                     guard=_comparison_can_match_column_default(k.type, v, value_type),
+                    membership_as_has=membership_as_has,
                 )
             if ignore_case:
                 k_expression = f.lower(k_expression)
-            expr = not_cond(in_cond(k_expression, v_expression))
+            expr = not_cond(_in_or_has(k_expression, v_expression, as_has=membership_as_has))
             expr_with_null = or_cond(
                 expr,
                 and_cond(
@@ -1027,7 +1080,9 @@ def trace_item_filters_to_expression(
     if item_filter.HasField("any_attribute_filter"):
         if not state.get_int_config("enable_any_attribute_filter", 1):
             return literal(True)
-        return _any_attribute_filter_to_expression(item_filter.any_attribute_filter)
+        return _any_attribute_filter_to_expression(
+            item_filter.any_attribute_filter, membership_as_has=membership_as_has
+        )
 
     return literal(True)
 

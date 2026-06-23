@@ -5,9 +5,11 @@ checks-githubactions-checkruns \
   getsentry/snuba \
   ${GO_REVISION_SNUBA_REPO} \
   "Tests and code coverage (test)" \
-  "Tests and code coverage (test_distributed)" \
+  "Tests and code coverage (test_distributed, 0, 2)" \
+  "Tests and code coverage (test_distributed, 1, 2)" \
   "Tests and code coverage (test_distributed_migrations)" \
   "Build and push production image" \
+  "Build and push distroless production image" \
   "Dataset Config Validation" \
   "sentry (0)" \
   "sentry (1)" \

@@ -733,6 +733,60 @@ class TestAnyAttributeFilter:
         with pytest.raises(BadSnubaRPCRequestException, match="does not have a value"):
             _any_attribute_filter_to_expression(filt)
 
+    @staticmethod
+    def _in_over_arrays(expr: Expression) -> list[FunctionCall]:
+        return [
+            e
+            for e in expr
+            if isinstance(e, FunctionCall)
+            and e.function_name == "in"
+            and len(e.parameters) == 2
+            and isinstance(e.parameters[1], FunctionCall)
+            and e.parameters[1].function_name == "array"
+        ]
+
+    @staticmethod
+    def _has_over(expr: Expression, values: list[str]) -> list[FunctionCall]:
+        return [
+            e
+            for e in expr
+            if isinstance(e, FunctionCall)
+            and e.function_name == "has"
+            and isinstance(e.parameters[0], FunctionCall)
+            and e.parameters[0].function_name == "array"
+            and [p.value for p in e.parameters[0].parameters if isinstance(p, Literal)] == values
+        ]
+
+    @pytest.mark.parametrize("op", [AnyAttributeFilter.OP_IN, AnyAttributeFilter.OP_NOT_IN])
+    def test_membership_as_has_for_select_clause(self, op: AnyAttributeFilter.Op.ValueType) -> None:
+        """Regression guard for SNUBA-9W6 / SNUBA-A1W (mixed-version distributed reads).
+
+        An any-attribute ``IN``/``NOT_IN`` builds ``in(x, array(...))`` inside an
+        ``arrayExists`` lambda. When that filter lands in a SELECT-clause aggregate, the
+        constant ``IN`` set's ``__set_<hash>`` identifier leaks into the result-block
+        column name and breaks reads across mixed-version ``Remote`` nodes. With
+        ``membership_as_has=True`` the comparison must be ``has(array(...), x)`` instead;
+        the default (WHERE) keeps ``in()`` so the prepared set still drives pruning.
+        """
+        values = ["error", "internal_error"]
+        filt = AnyAttributeFilter(
+            op=op,
+            value=AttributeValue(
+                val_array=Array(values=[AttributeValue(val_str=v) for v in values])
+            ),
+        )
+
+        # Default (WHERE) keeps the in() set inside arrayExists.
+        where_expr = _any_attribute_filter_to_expression(filt)
+        assert self._in_over_arrays(where_expr), "WHERE form must keep in() over the constant array"
+
+        # SELECT-clause form uses has(array, x) and builds no in() set.
+        select_expr = _any_attribute_filter_to_expression(filt, membership_as_has=True)
+        assert not self._in_over_arrays(select_expr), (
+            "membership_as_has must replace in() over a constant array with has()"
+        )
+        assert self._has_over(select_expr, values), "expected has(array(values), x) in the lambda"
+
 
 @pytest.mark.eap
 @pytest.mark.redis_db
