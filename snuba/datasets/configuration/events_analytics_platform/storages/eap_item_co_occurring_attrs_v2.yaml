@@ -19,7 +19,9 @@ schema:
       { name: attribute_keys_hash, type: Array, args: { inner_type: { type: UInt, args: { size: 64 } } } },
       { name: attributes_string, type: Array, args: { inner_type: { type: String } } },
       { name: attributes_float, type: Array, args: { inner_type: { type: String } } },
+      { name: attributes_int, type: Array, args: { inner_type: { type: String } } },
       { name: attributes_bool, type: Array, args: { inner_type: { type: String } } },
+      { name: attributes_array, type: Array, args: { inner_type: { type: String } } },
       { name: count, type: UInt, args: { size: 64 } },
       { name: last_seen, type: SimpleAggregateFunction, args: { func: max, arg_types: [{ type: DateTime }] } },
     ]
