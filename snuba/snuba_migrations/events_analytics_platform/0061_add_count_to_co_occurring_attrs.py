@@ -5,7 +5,15 @@ from snuba.datasets.storages.tags_hash_map import get_array_vals_hash
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget, SqlOperation
-from snuba.utils.schemas import Array, Column, Date, String, UInt
+from snuba.utils.schemas import (
+    Array,
+    Column,
+    Date,
+    DateTime,
+    SimpleAggregateFunction,
+    String,
+    UInt,
+)
 
 num_attr_buckets = 40
 
@@ -44,6 +52,10 @@ columns: List[Column[Modifiers]] = [
         ),
     ),
     Column("count", UInt(64)),
+    # the most recent timestamp at which this set of attributes was seen.
+    # SummingMergeTree applies the `max` aggregate function on merge, so this
+    # keeps the latest timestamp across all the rows that get collapsed.
+    Column("last_seen", SimpleAggregateFunction("max", [DateTime()])),
 ]
 
 _attr_num_names = ", ".join([f"mapKeys(attributes_float_{i})" for i in range(num_attr_buckets)])
@@ -59,7 +71,8 @@ SELECT
     arrayConcat({_attr_str_names}) AS attributes_string,
     mapKeys(attributes_bool) AS attributes_bool,
     arrayConcat({_attr_num_names}) AS attributes_float,
-    1 AS count
+    1 AS count,
+    timestamp AS last_seen
 FROM eap_items_1_local
 """
 
