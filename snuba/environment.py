@@ -123,7 +123,17 @@ def before_send(event: Event, hint: Hint) -> Event | None:
         seen.add(id(exc))
         if isinstance(exc, noise_types):
             return None  # Don't send to Sentry
-        exc = exc.__cause__ or exc.__context__
+        # Follow the chain the way Python itself displays it: an explicit cause
+        # (`raise ... from other`) wins, otherwise the implicit context -- unless
+        # it was suppressed via `raise ... from None`, in which case we must not
+        # follow __context__ or we could drop an unrelated event whose suppressed
+        # context happens to contain a noise type.
+        if exc.__cause__ is not None:
+            exc = exc.__cause__
+        elif not exc.__suppress_context__:
+            exc = exc.__context__
+        else:
+            exc = None
 
     return event
 
