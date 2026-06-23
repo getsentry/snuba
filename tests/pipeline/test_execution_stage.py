@@ -1,9 +1,9 @@
 import uuid
 
 import pytest
+from sentry_options.testing import override_options
 
 from snuba import settings as snubasettings
-from snuba import state
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.columns import ColumnSet
@@ -236,16 +236,15 @@ def test_max_query_size_bytes(ch_query: Query) -> None:
     timer = Timer("test")
     metadata = get_fake_metadata()
 
-    state.set_config(MAX_QUERY_SIZE_BYTES_CONFIG, 1)
-
-    res = ExecutionStage(attinfo, query_metadata=metadata).execute(
-        QueryPipelineResult(
-            data=ch_query,
-            query_settings=settings,
-            timer=timer,
-            error=None,
+    with override_options("snuba", {MAX_QUERY_SIZE_BYTES_CONFIG: 1}):
+        res = ExecutionStage(attinfo, query_metadata=metadata).execute(
+            QueryPipelineResult(
+                data=ch_query,
+                query_settings=settings,
+                timer=timer,
+                error=None,
+            )
         )
-    )
 
     assert res.data is None
     assert isinstance(res.error, QueryException)
@@ -267,18 +266,22 @@ def test_disable_max_query_size_check(ch_query: Query) -> None:
         else "test_cluster"
     )
 
-    # Lowering this should make the query too big...
-    state.set_config(MAX_QUERY_SIZE_BYTES_CONFIG, 1)
-    # Unless we disable the check for this cluster.
-    state.set_config(DISABLE_MAX_QUERY_SIZE_CHECK_FOR_CLUSTERS_CONFIG, cluster_name)
-
-    res = ExecutionStage(attinfo, query_metadata=metadata).execute(
-        QueryPipelineResult(
-            data=ch_query,
-            query_settings=settings,
-            timer=timer,
-            error=None,
+    # Lowering this should make the query too big, unless we disable the check
+    # for this cluster.
+    with override_options(
+        "snuba",
+        {
+            MAX_QUERY_SIZE_BYTES_CONFIG: 1,
+            DISABLE_MAX_QUERY_SIZE_CHECK_FOR_CLUSTERS_CONFIG: cluster_name,
+        },
+    ):
+        res = ExecutionStage(attinfo, query_metadata=metadata).execute(
+            QueryPipelineResult(
+                data=ch_query,
+                query_settings=settings,
+                timer=timer,
+                error=None,
+            )
         )
-    )
 
     assert res.data

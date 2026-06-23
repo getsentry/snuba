@@ -52,6 +52,7 @@ from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
 from snuba.query.allocation_policies.utils import get_max_bytes_to_read
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import record_query
+from snuba.state.sentry_options import get_int_option
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import import_submodules_in_directory
@@ -315,7 +316,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         return cast(list[Configuration], self._default_config_definitions)
 
     def _get_default_routing_decision_tier(self) -> Tier:
-        tier_int = state.get_int_config("default_tier", 1)
+        tier_int = get_int_option("default_tier", 1)
 
         if tier_int == 512:
             return Tier.TIER_512

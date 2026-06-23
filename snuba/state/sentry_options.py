@@ -62,3 +62,54 @@ def get_option(key: str, default: OptionValue) -> OptionValue:
         return sentry_options.options(SNUBA_OPTIONS_NAMESPACE).get(key)
     except sentry_options.OptionsError:
         return default
+
+
+def get_bool_option(key: str, default: bool) -> bool:
+    """Read ``key`` as a bool. Replaces ``state.get_int_config`` used as a flag.
+
+    The schema type for these keys is ``boolean``, so ``get`` returns a real
+    ``bool``; the int/str coercion below only guards against a misconfigured
+    value and otherwise falls back to ``default``.
+    """
+    value = get_option(key, default)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    return default
+
+
+def get_int_option(key: str, default: int) -> int:
+    """Read ``key`` as an int. Counterpart to ``state.get_int_config``."""
+    value = get_option(key, default)
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, (int, float, str)):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+    return default
+
+
+def get_float_option(key: str, default: float) -> float:
+    """Read ``key`` as a float. Counterpart to ``state.get_float_config``."""
+    value = get_option(key, default)
+    if isinstance(value, bool):
+        return float(value)
+    if isinstance(value, (int, float, str)):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+    return default
+
+
+def get_str_option(key: str, default: str) -> str:
+    """Read ``key`` as a str. Counterpart to ``state.get_str_config``."""
+    value = get_option(key, default)
+    if isinstance(value, str):
+        return value
+    return default

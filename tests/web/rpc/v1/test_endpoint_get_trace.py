@@ -7,6 +7,7 @@ from unittest.mock import patch
 import pytest
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.endpoint_get_trace_pb2 import (
     GetTraceRequest,
     GetTraceResponse,
@@ -28,10 +29,10 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, TraceItem
 
-from snuba import state
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.settings import ENABLE_TRACE_PAGINATION_DEFAULT
+from snuba.state.sentry_options import get_bool_option
 from snuba.web.rpc.common.common import ATTRIBUTES_ARRAY_ALLOWLIST
 from snuba.web.rpc.v1.endpoint_get_trace import (
     APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
@@ -232,7 +233,7 @@ class TestGetTrace(BaseApiTest):
             ],
             page_token=(
                 PageToken(end_pagination=True)
-                if state.get_int_config("enable_trace_pagination", ENABLE_TRACE_PAGINATION_DEFAULT)
+                if get_bool_option("enable_trace_pagination", bool(ENABLE_TRACE_PAGINATION_DEFAULT))
                 else None
             ),
         )
@@ -327,7 +328,7 @@ class TestGetTrace(BaseApiTest):
             ],
             page_token=(
                 PageToken(end_pagination=True)
-                if state.get_int_config("enable_trace_pagination", ENABLE_TRACE_PAGINATION_DEFAULT)
+                if get_bool_option("enable_trace_pagination", bool(ENABLE_TRACE_PAGINATION_DEFAULT))
                 else None
             ),
         )
@@ -364,23 +365,13 @@ class TestGetTrace(BaseApiTest):
             items=[item],
         )
 
-        state.set_config(
-            APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
-            1.0,
-        )
+        with override_options("snuba", {APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY: 1.0}):
+            query = _build_query(message, item)
+            assert query.get_final()
 
-        query = _build_query(message, item)
-
-        assert query.get_final()
-
-        state.set_config(
-            APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
-            0.0,
-        )
-
-        query = _build_query(message, item)
-
-        assert not query.get_final()
+        with override_options("snuba", {APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY: 0.0}):
+            query = _build_query(message, item)
+            assert not query.get_final()
 
     def test_with_logs(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
@@ -449,7 +440,7 @@ class TestGetTrace(BaseApiTest):
             ],
             page_token=(
                 PageToken(end_pagination=True)
-                if state.get_int_config("enable_trace_pagination", ENABLE_TRACE_PAGINATION_DEFAULT)
+                if get_bool_option("enable_trace_pagination", bool(ENABLE_TRACE_PAGINATION_DEFAULT))
                 else None
             ),
         )
@@ -578,7 +569,6 @@ def test_process_results_keeps_empty_string_attribute() -> None:
 class TestGetTracePagination(BaseApiTest):
     def test_pagination_with_user_limit(self, setup_teardown: Any) -> None:
         """Test that pagination respects user-provided limit"""
-        state.set_config("enable_trace_pagination", 1)
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
         three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
         mylimit = 10
@@ -640,7 +630,6 @@ class TestGetTracePagination(BaseApiTest):
         with patch(
             "snuba.web.rpc.v1.endpoint_get_trace.ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS", configmax
         ):
-            state.set_config("enable_trace_pagination", 1)
             """
             import snuba.web.rpc.v1.endpoint_get_trace as endpoint_get_trace
 

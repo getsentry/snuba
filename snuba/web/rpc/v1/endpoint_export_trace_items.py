@@ -19,7 +19,6 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue, TraceItem
 
-from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
@@ -32,6 +31,7 @@ from snuba.query.dsl import column, literal
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
+from snuba.state.sentry_options import get_int_option
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
@@ -502,7 +502,7 @@ class EndpointExportTraceItems(RPCEndpoint[ExportTraceItemsRequest, ExportTraceI
 
     def _execute(self, in_msg: ExportTraceItemsRequest) -> ExportTraceItemsResponse:
         default_page_size = (
-            state.get_int_config("export_trace_items_default_page_size", _DEFAULT_PAGE_SIZE)
+            get_int_option("export_trace_items_default_page_size", _DEFAULT_PAGE_SIZE)
             or _DEFAULT_PAGE_SIZE
         )
         if in_msg.limit > 0:

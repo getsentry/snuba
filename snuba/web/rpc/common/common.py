@@ -1,7 +1,7 @@
 import json
 import math
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, TypeVar, cast
+from typing import Any, Callable, TypeVar
 
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
@@ -12,7 +12,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     TraceItemFilter,
 )
 
-from snuba import settings, state
+from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.protos.common import (
     ATTRIBUTES_TO_COALESCE,
@@ -47,7 +47,7 @@ from snuba.query.expressions import (
     Lambda,
     SubscriptableReference,
 )
-from snuba.state.sentry_options import get_option
+from snuba.state.sentry_options import get_int_option, get_option
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
@@ -236,12 +236,9 @@ def use_sampling_factor(meta: RequestMeta) -> bool:
     """
     Since we started writing the sampling factor on a specific date, we should only use it on queries that start after that date.
     """
-    use_sampling_factor_timestamp_seconds = cast(
-        int,
-        state.get_int_config(
-            "use_sampling_factor_timestamp_seconds",
-            settings.USE_SAMPLING_FACTOR_TIMESTAMP_SECONDS,
-        ),
+    use_sampling_factor_timestamp_seconds = get_int_option(
+        "use_sampling_factor_timestamp_seconds",
+        settings.USE_SAMPLING_FACTOR_TIMESTAMP_SECONDS,
     )
     if use_sampling_factor_timestamp_seconds == 0:
         return False

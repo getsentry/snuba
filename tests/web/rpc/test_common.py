@@ -89,9 +89,9 @@ class TestCommon:
                 )
             )
         )
-        snuba_set_config("use_sampling_factor_timestamp_seconds", 10)
-        assert use_sampling_factor(RequestMeta(start_timestamp=Timestamp(seconds=10)))
-        assert not use_sampling_factor(RequestMeta(start_timestamp=Timestamp(seconds=9)))
+        with override_options("snuba", {"use_sampling_factor_timestamp_seconds": 10}):
+            assert use_sampling_factor(RequestMeta(start_timestamp=Timestamp(seconds=10)))
+            assert not use_sampling_factor(RequestMeta(start_timestamp=Timestamp(seconds=9)))
 
 
 class TestTraceItemFiltersArrayLike:

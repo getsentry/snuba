@@ -31,6 +31,66 @@
       "type": "boolean",
       "default": true,
       "description": "Enable translating any_attribute_filter trace-item filters into ClickHouse predicates. When false, an any_attribute_filter is treated as always-true (no filtering applied)."
+    },
+    "aggregation_deprecation_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable the deprecation check that rejects deprecated aggregation expressions in EAP time-series requests. When false, the check is skipped."
+    },
+    "enable_trace_pagination": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable pagination (page tokens / limit) in the EndpointGetTrace RPC. When false, the endpoint returns the full trace without pagination."
+    },
+    "use.low.cardinality.processor": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable the low-cardinality query processor that hints ClickHouse to treat certain columns as low cardinality. When false, the processor is a no-op."
+    },
+    "cross_item_queries_no_sample_outer": {
+      "type": "boolean",
+      "default": true,
+      "description": "For cross-item EAP queries with trace filters, skip sampling on the outer query (the inner trace-id query still samples). When false, the outer query samples at the routing tier."
+    },
+    "default_tier": {
+      "type": "integer",
+      "default": 1,
+      "description": "Default storage routing tier for EAP queries when no other tier is selected. Maps to a Tier enum value (e.g. 1, 8, 64, 512)."
+    },
+    "export_trace_items_default_page_size": {
+      "type": "integer",
+      "default": 10000,
+      "description": "Default page size used by the ExportTraceItems RPC when the request does not specify one."
+    },
+    "use_sampling_factor_timestamp_seconds": {
+      "type": "integer",
+      "default": 1744131600,
+      "description": "Unix timestamp (seconds) cutoff controlling when the sampling-factor codepath applies for EAP queries."
+    },
+    "EndpointGetTrace.apply_final_rollout_percentage": {
+      "type": "number",
+      "default": 0.0,
+      "description": "Rollout percentage (0.0-1.0) for applying the FINAL keyword in EndpointGetTrace queries."
+    },
+    "rpc_logging_sample_rate": {
+      "type": "number",
+      "default": 0.0,
+      "description": "Sample rate (0.0-1.0) for logging RPC requests. 0 disables RPC request logging."
+    },
+    "rpc_logging_flush_logs": {
+      "type": "number",
+      "default": 0.0,
+      "description": "When greater than 0, flush buffered RPC logs. 0 disables flushing."
+    },
+    "ExecutionStage.max_query_size_bytes": {
+      "type": "integer",
+      "default": 131072,
+      "description": "Maximum allowed serialized ClickHouse query size in bytes before the execution stage rejects it."
+    },
+    "ExecutionStage.disable_max_query_size_check_for_clusters": {
+      "type": "string",
+      "default": "",
+      "description": "Comma-separated list of ClickHouse cluster names for which the max-query-size check is disabled. Empty means the check applies to all clusters."
     }
   }
 }

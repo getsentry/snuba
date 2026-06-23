@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_kafka_schemas import get_codec
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
@@ -240,32 +241,28 @@ def test_routing_strategy_selects_tier_1_if_highest_accuracy_mode() -> None:
 
 @pytest.mark.redis_db
 def test_routing_decision_forced_downsample_killswitch() -> None:
-    state.set_config("default_tier", 8)
-
-    try:
-        ts = Timestamp()
-        ts.GetCurrentTime()
-        tstart = Timestamp(seconds=ts.seconds - 3600)
-        in_msg = TimeSeriesRequest(
-            meta=RequestMeta(
-                request_id=RANDOM_REQUEST_ID,
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=tstart,
-                end_timestamp=ts,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            granularity_secs=60,
-        )
-        routing_context = deepcopy(ROUTING_CONTEXT)
-        routing_context.in_msg = in_msg
-        in_msg.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
+    ts = Timestamp()
+    ts.GetCurrentTime()
+    tstart = Timestamp(seconds=ts.seconds - 3600)
+    in_msg = TimeSeriesRequest(
+        meta=RequestMeta(
+            request_id=RANDOM_REQUEST_ID,
+            project_ids=[1, 2, 3],
+            organization_id=1,
+            cogs_category="something",
+            referrer="something",
+            start_timestamp=tstart,
+            end_timestamp=ts,
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        ),
+        granularity_secs=60,
+    )
+    routing_context = deepcopy(ROUTING_CONTEXT)
+    routing_context.in_msg = in_msg
+    in_msg.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_HIGHEST_ACCURACY
+    with override_options("snuba", {"default_tier": 8}):
         routing_decision = AlwaysTier1RoutingStrategy().get_routing_decision(routing_context)
-        assert routing_decision.tier == Tier.TIER_8
-    finally:
-        state.delete_config("default_tier")
+    assert routing_decision.tier == Tier.TIER_8
 
 
 @pytest.mark.redis_db
