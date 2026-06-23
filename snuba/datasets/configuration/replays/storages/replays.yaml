@@ -214,6 +214,12 @@ query_processors:
   - processor: ArrayJoinKeyValueOptimizer
     args:
       column_name: tags
+  - processor: ClickhouseSettingsOverride
+    args:
+      overwrite_existing: false
+      settings:
+        max_execution_time: 25
+        timeout_before_checking_execution_speed: 0
 
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
