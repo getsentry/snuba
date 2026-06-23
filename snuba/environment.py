@@ -78,21 +78,53 @@ def setup_logging(level: Optional[str] = None) -> None:
 
 
 def before_send(event: Event, hint: Hint) -> Event | None:
-    """Filter out AllocationPolicyViolations and RPCAllocationPolicyException from being sent to Sentry"""
-    if "exc_info" in hint:
-        _, exc_value, _ = hint["exc_info"]
-        # Check if it's an AllocationPolicyViolations in the cause chain
-        if exc_value is not None:
-            from snuba.web.rpc.common.exceptions import RPCAllocationPolicyException
+    """
+    Drop transient/operational exceptions that recover on their own and aren't
+    actionable as Sentry issues. They are still captured as logs/breadcrumbs.
 
-            if isinstance(exc_value, RPCAllocationPolicyException):
-                return None  # Don't send to Sentry
+    - ``AllocationPolicyViolations`` / ``RPCAllocationPolicyException``: expected
+      query rejections, not bugs.
+    - arroyo ``ChildProcessTerminated``: a multiprocessing worker in a consumer
+      was killed by a signal (almost always an OOM-kill of the worker, sometimes
+      a native crash). arroyo logs this at ERROR via ``logger.exception`` and
+      then re-raises it, so a single worker death surfaces as several ERROR-level
+      Sentry issues (e.g. SNUBA-BA7/BA8/BA9/BAD/B1T, grouped by wherever the
+      SIGCHLD happened to interrupt the run loop) even though the consumer simply
+      shuts down and is restarted by the orchestrator. Because these are
+      ERROR-level they are not covered by the WARN->log policy, so filter them by
+      type here. The underlying worker death is still observable via logs and
+      arroyo's ``sigchld.detected`` metric.
+    """
+    if "exc_info" not in hint:
+        return event
 
-            cause = getattr(exc_value, "__cause__", None)
-            from snuba.query.allocation_policies import AllocationPolicyViolations
+    _, exc_value, _ = hint["exc_info"]
+    if exc_value is None:
+        return event
 
-            if isinstance(cause, AllocationPolicyViolations):
-                return None  # Don't send to Sentry
+    from arroyo.processing.strategies.run_task_with_multiprocessing import (
+        ChildProcessTerminated,
+    )
+
+    from snuba.query.allocation_policies import AllocationPolicyViolations
+    from snuba.web.rpc.common.exceptions import RPCAllocationPolicyException
+
+    noise_types = (
+        RPCAllocationPolicyException,
+        AllocationPolicyViolations,
+        ChildProcessTerminated,
+    )
+
+    # Walk the exception chain (the exception itself plus its __cause__ /
+    # __context__) and drop the event if any link is a known noise type.
+    seen: set[int] = set()
+    exc: Optional[BaseException] = exc_value
+    while exc is not None and id(exc) not in seen:
+        seen.add(id(exc))
+        if isinstance(exc, noise_types):
+            return None  # Don't send to Sentry
+        exc = exc.__cause__ or exc.__context__
+
     return event
 
 
