@@ -31,7 +31,9 @@ def test_before_send_drops_child_process_terminated() -> None:
     try:
         raise ChildProcessTerminated(17)
     except ChildProcessTerminated as err:
-        assert before_send({"message": "Caught exception, shutting down..."}, _hint_for(err)) is None
+        assert (
+            before_send({"message": "Caught exception, shutting down..."}, _hint_for(err)) is None
+        )
 
 
 def test_before_send_drops_child_process_terminated_in_cause_chain() -> None:
