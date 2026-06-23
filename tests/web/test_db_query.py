@@ -4,6 +4,7 @@ from typing import Any, Mapping, MutableMapping, Optional
 from unittest import mock
 
 import pytest
+from sentry_options.testing import override_options
 
 from snuba import state
 from snuba.attribution.appid import AppID
@@ -397,8 +398,6 @@ def test_bypass_cache_referrer() -> None:
     query_metadata_list: list[ClickhouseQueryMetadata] = []
     stats: dict[str, Any] = {"clickhouse_table": "errors_local"}
 
-    state.set_config("enable_bypass_cache_referrers", 1)
-
     attribution_info = AttributionInfo(
         app_id=AppID(key="key"),
         tenant_ids={
@@ -413,7 +412,10 @@ def test_bypass_cache_referrer() -> None:
 
     # cache should not be used for "some_bypass_cache_referrer" so if the
     # bypass does not work, the test will try to use a bad cache
-    with mock.patch("snuba.settings.BYPASS_CACHE_REFERRERS", ["some_bypass_cache_referrer"]):
+    with (
+        override_options("snuba", {"enable_bypass_cache_referrers": True}),
+        mock.patch("snuba.settings.BYPASS_CACHE_REFERRERS", ["some_bypass_cache_referrer"]),
+    ):
         with mock.patch("snuba.web.db_query._get_cache_partition"):
             result = db_query(
                 clickhouse_query=query,

@@ -101,6 +101,26 @@
       "type": "boolean",
       "default": false,
       "description": "When true, the consumer healthcheck strategy treats commit requests (progress) as healthy and touches the healthcheck file accordingly."
+    },
+    "enable_cache_partitioning": {
+      "type": "boolean",
+      "default": true,
+      "description": "When true, query results use the per-storage cache partition; when false they fall back to the default cache partition."
+    },
+    "randomize_query_id": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, assign a random ClickHouse query_id per execution instead of the deterministic content-based id."
+    },
+    "retry_duplicate_query_id": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, retry a query that ClickHouse rejected because another query with the same id is already running."
+    },
+    "enable_bypass_cache_referrers": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, referrers in settings.BYPASS_CACHE_REFERRERS skip the read-through query cache."
     }
   }
 }

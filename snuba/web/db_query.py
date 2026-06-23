@@ -58,6 +58,7 @@ from snuba.state.cache.redis.backend import (
 )
 from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import RateLimitExceeded
+from snuba.state.sentry_options import get_bool_option
 from snuba.util import force_bytes
 from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.metrics.timer import Timer
@@ -201,7 +202,7 @@ def get_query_cache_key(formatted_query: FormattedQuery) -> str:
 
 
 def _get_cache_partition(reader: Reader) -> Cache[Result]:
-    enable_cache_partitioning = state.get_config("enable_cache_partitioning", 1)
+    enable_cache_partitioning = get_bool_option("enable_cache_partitioning", True)
     if not enable_cache_partitioning:
         return cache_partitions[DEFAULT_CACHE_PARTITION_ID]
 
@@ -235,7 +236,7 @@ def execute_query_with_query_id(
     robust: bool,
     referrer: str,
 ) -> Result:
-    if state.get_config("randomize_query_id", False):
+    if get_bool_option("randomize_query_id", False):
         query_id = uuid.uuid4().hex
     else:
         query_id = get_query_cache_key(formatted_query)
@@ -254,7 +255,7 @@ def execute_query_with_query_id(
             referrer,
         )
     except ClickhouseError as e:
-        if e.code != ErrorCodes.QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING or not state.get_config(
+        if e.code != ErrorCodes.QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING or not get_bool_option(
             "retry_duplicate_query_id", False
         ):
             raise
@@ -291,8 +292,8 @@ def execute_query_with_readthrough_caching(
     query_id: str,
     referrer: str,
 ) -> Result:
-    if referrer in settings.BYPASS_CACHE_REFERRERS and state.get_config(
-        "enable_bypass_cache_referrers"
+    if referrer in settings.BYPASS_CACHE_REFERRERS and get_bool_option(
+        "enable_bypass_cache_referrers", False
     ):
         query_id = f"randomized-{uuid.uuid4().hex}"
         clickhouse_query_settings["query_id"] = query_id
