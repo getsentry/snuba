@@ -3,7 +3,7 @@
 eval $(regions-project-env-vars --region="${SENTRY_REGION}")
 
 IMAGE_TAG="${GO_REVISION_SNUBA_REPO}"
-if [ "${SENTRY_REGION}" = "s4s2" ]; then
+if [ "${SENTRY_REGION}" = "s4s2" ] || [ "${SENTRY_REGION}" = "de" ]; then
   IMAGE_TAG="${GO_REVISION_SNUBA_REPO}-distroless"
 fi
 
