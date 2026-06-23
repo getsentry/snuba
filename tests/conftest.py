@@ -1,4 +1,6 @@
+import hashlib
 import json
+import os
 import traceback
 from typing import (
     Any,
@@ -87,7 +89,20 @@ def create_databases() -> None:
             connection.execute(f"CREATE DATABASE {database_name};")
 
 
-def pytest_collection_modifyitems(items: Sequence[Any]) -> None:
+def pytest_collection_modifyitems(config: pytest.Config, items: List[Any]) -> None:
+    # Optional CI sharding by a stable hash of the test file (keeps a file's tests together); inert unless SNUBA_TEST_SHARD_TOTAL > 1.
+    total = int(os.environ.get("SNUBA_TEST_SHARD_TOTAL", "1"))
+    if total > 1:
+        shard = int(os.environ.get("SNUBA_TEST_SHARD", "0"))
+        selected: List[Any] = []
+        deselected: List[Any] = []
+        for item in items:
+            file_id = item.nodeid.split("::", 1)[0]
+            digest = int(hashlib.md5(file_id.encode()).hexdigest(), 16)
+            (selected if digest % total == shard else deselected).append(item)
+        items[:] = selected
+        config.hook.pytest_deselected(items=deselected)
+
     for item in items:
         if item.get_closest_marker("eap"):
             item.fixturenames.append("eap")
@@ -171,6 +186,10 @@ def redis_db(request: pytest.FixtureRequest) -> Generator[None, None, None]:
 
     for redis_client in all_redis_clients():
         redis_client.flushdb()
+
+    # Drop the in-memory memoize cache of Redis-backed configs so stale entries
+    # from a prior redis_db test don't survive the flush above.
+    state.get_raw_configs.clear()  # type: ignore[attr-defined]
 
     yield
 

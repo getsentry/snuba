@@ -12,12 +12,12 @@ pub struct DogStatsDBackend;
 
 impl DogStatsDBackend {
     pub fn new_udp(host: &str, port: u16, prefix: &str, tags: &[(&str, String)]) -> Self {
-        let addr = format!("{}:{}", host, port);
+        let addr = format!("{host}:{port}");
         Self::build(&addr, prefix, tags)
     }
 
     pub fn new_uds(socket_path: &str, prefix: &str, tags: &[(&str, String)]) -> Self {
-        let addr = format!("unixgram://{}", socket_path);
+        let addr = format!("unixgram://{socket_path}");
         Self::build(&addr, prefix, tags)
     }
 

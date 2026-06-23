@@ -8,8 +8,8 @@ use pyo3::prelude::*;
 use pyo3::types::PyAnyMethods;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::processing::strategies::{
-    merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
-    StrategyError, SubmitError,
+    merge_commit_request, CommitRequest, InvalidMessage, InvalidMessageReason, MessageRejected,
+    ProcessingStrategy, StrategyError, SubmitError,
 };
 use sentry_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition, Topic};
 use sentry_arroyo::utils::timing::Deadline;
@@ -85,7 +85,10 @@ impl PythonTransformStep {
                 })
                 .collect();
 
-            let mut payload = BytesInsertBatch::from_rows(RowData::from_encoded_rows(payload))
+            let row_data = RowData::from_encoded_rows(payload);
+            let num_bytes = row_data.encoded_rows.len();
+            let mut payload = BytesInsertBatch::from_rows(row_data)
+                .with_num_bytes(num_bytes)
                 .with_message_timestamp(message_timestamp)
                 .with_commit_log_offsets(CommitLogOffsets(commit_log_offsets));
 
@@ -195,6 +198,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                                     index: metadata.partition,
                                 },
                                 offset: metadata.offset,
+                                reason: InvalidMessageReason::Invalid,
                             });
                         }
                         _ => {

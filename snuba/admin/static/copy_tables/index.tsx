@@ -58,6 +58,8 @@ function CopyTables(props: {
   }
 
   const [targetHostInput, setTargetHostInput] = useState("");
+  const [skipOnCluster, setSkipOnCluster] = useState(false);
+  const [clusterNameInput, setClusterNameInput] = useState("");
 
   function executeCopyTableQuery(shouldExecute: boolean) {
     const query: CopyTableRequest = {
@@ -69,6 +71,14 @@ function CopyTables(props: {
     const trimmed = targetHostInput.trim();
     if (trimmed) {
       query.target_host = trimmed;
+    }
+    if (skipOnCluster) {
+      query.skip_on_cluster = true;
+    } else {
+      const trimmedCluster = clusterNameInput.trim();
+      if (trimmedCluster) {
+        query.cluster_name = trimmedCluster;
+      }
     }
     return props.api
       .executeCopyTable(query)
@@ -119,6 +129,30 @@ function CopyTables(props: {
                 value={targetHostInput}
                 onChange={(e) => setTargetHostInput(e.target.value)}
               />
+            </div>
+            <div style={{ marginTop: 16 }}>
+              <label style={checkboxLabelStyle}>
+                <input
+                  type="checkbox"
+                  checked={skipOnCluster}
+                  onChange={(e) => setSkipOnCluster(e.target.checked)}
+                  style={{ marginRight: 8 }}
+                />
+                Run without ON CLUSTER
+              </label>
+              <p style={targetHelpTextStyle}>If checked, CREATE statements will not include ON CLUSTER.</p>
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <label style={inputLabelStyle}>Override cluster name (optional)</label>
+              <input
+                type="text"
+                style={{ ...textInputStyle, ...(skipOnCluster ? disabledInputStyle : {}) }}
+                placeholder="e.g. my_cluster"
+                value={clusterNameInput}
+                disabled={skipOnCluster}
+                onChange={(e) => setClusterNameInput(e.target.value)}
+              />
+              <p style={targetHelpTextStyle}>If specified, overrides the auto-detected cluster name.</p>
             </div>
           </div>
         </div>
@@ -293,6 +327,25 @@ const successStyle = {
 
 const unverifiedHostsContainerStyle = {
   marginTop: 15,
+}
+
+const checkboxLabelStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  fontSize: '14px',
+  cursor: 'pointer',
+}
+
+const inputLabelStyle = {
+  display: 'block',
+  fontSize: '13px',
+  marginBottom: 4,
+}
+
+const disabledInputStyle = {
+  opacity: 0.5,
+  cursor: 'not-allowed',
+  backgroundColor: COLORS.BG_GRAY_LIGHTER,
 }
 
 export default CopyTables;

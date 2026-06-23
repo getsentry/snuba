@@ -66,7 +66,11 @@ def setup_logging(level: Optional[str] = None) -> None:
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
             structlog.processors.TimeStamper(fmt="iso", utc=True),
-            SentryProcessor(),
+            # Mirror the LoggingIntegration policy on the structlog path: only
+            # ERROR and above become Sentry issues, WARNING and below stay as
+            # logs/breadcrumbs. (This is structlog-sentry's default, set
+            # explicitly so the policy is obvious and robust to upstream changes.)
+            SentryProcessor(event_level=logging.ERROR),
             drop_level,
             JSONRenderer(),
         ],
@@ -100,7 +104,11 @@ def setup_sentry() -> None:
         integrations=[
             FlaskIntegration(),
             GnuBacktraceIntegration(),
-            LoggingIntegration(event_level=logging.WARNING),
+            # Only forward ERROR and above to Sentry as issues. Warnings are
+            # operational noise far more often than they're actionable (e.g.
+            # consumer rebalance/shutdown timeouts) and are still captured as
+            # logs/breadcrumbs.
+            LoggingIntegration(event_level=logging.ERROR),
             RedisIntegration(),
             ThreadingIntegration(propagate_hub=True),
         ],

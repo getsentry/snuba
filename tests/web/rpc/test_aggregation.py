@@ -6,12 +6,15 @@ from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
+    AttributeValue,
     ExtrapolationMode,
     Function,
+    IntArray,
     Reliability,
 )
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import ComparisonFilter, TraceItemFilter
 
-from snuba.query.expressions import FunctionCall
+from snuba.query.expressions import Column, FunctionCall, JsonPath, Literal, SubscriptableReference
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     get_field_existence_expression,
@@ -254,14 +257,11 @@ def test_attribute_key_to_expression_type_array() -> None:
     attr_key = AttributeKey(type=AttributeKey.TYPE_ARRAY, name="user_ids")
     expr = attribute_key_to_expression(attr_key)
     assert isinstance(expr, FunctionCall)
-    assert expr.function_name == "arrayMap"
+    assert expr.function_name == "toJSONString"
     assert expr.alias == "user_ids_TYPE_ARRAY"
     fmt = ClickhouseExpressionFormatter()
     sql = expr.accept(fmt)
-    assert (
-        sql
-        == "(arrayMap(x -> coalesce(x.`String`::Nullable(String), toString(x.`Int`::Nullable(Int64)), toString(x.`Double`::Nullable(Float64)), x.`Bool`::Nullable(String)), attributes_array.`user_ids`::Array(JSON)) AS user_ids_TYPE_ARRAY)"
-    )
+    assert sql == "(toJSONString(attributes_array.`user_ids`::Array(JSON)) AS user_ids_TYPE_ARRAY)"
 
 
 def test_get_field_existence_expression_array_map() -> None:
@@ -270,6 +270,35 @@ def test_get_field_existence_expression_array_map() -> None:
     expr = get_field_existence_expression(field)
     assert isinstance(expr, FunctionCall)
     assert expr.function_name == "notEmpty"
+
+
+def test_get_field_existence_expression_coalesce() -> None:
+    """Coalesced attributes should check existence for all underlying keys with OR."""
+    attr_col = Column(alias=None, table_name=None, column_name="attributes_string")
+    canonical_ref = SubscriptableReference(
+        column=attr_col,
+        key=Literal(alias=None, value="http.response.body.size"),
+        alias=None,
+    )
+    deprecated_ref = SubscriptableReference(
+        column=attr_col,
+        key=Literal(alias=None, value="http.response_content_length"),
+        alias=None,
+    )
+    coalesce_field = FunctionCall(
+        alias="test",
+        function_name="coalesce",
+        parameters=(canonical_ref, deprecated_ref),
+    )
+    expr = get_field_existence_expression(coalesce_field)
+    assert isinstance(expr, FunctionCall)
+    assert expr.function_name == "or"
+    assert len(expr.parameters) == 2
+    lhs, rhs = expr.parameters
+    assert isinstance(lhs, FunctionCall) and lhs.function_name == "has"
+    assert isinstance(rhs, FunctionCall) and rhs.function_name == "has"
+    assert lhs.parameters[1] == Literal(alias=None, value="http.response.body.size")
+    assert rhs.parameters[1] == Literal(alias=None, value="http.response_content_length")
 
 
 def test_aggregation_to_expression_uniq_type_array() -> None:
@@ -286,6 +315,11 @@ def test_aggregation_to_expression_uniq_type_array() -> None:
     inner = expr.parameters[0]
     assert isinstance(inner, FunctionCall)
     assert inner.function_name == "uniqArrayIfOrNull"
+    # Must be the stored Array(JSON) path, not toJSONString (String) from attribute_key_to_expression
+    first = inner.parameters[0]
+    assert isinstance(first, JsonPath)
+    assert first.path == "user_ids"
+    assert first.return_type == "Array(JSON)"
 
 
 def test_aggregation_to_expression_sum_type_array_raises() -> None:
@@ -297,3 +331,57 @@ def test_aggregation_to_expression_sum_type_array_raises() -> None:
     )
     with pytest.raises(BadSnubaRPCRequestException, match="not supported for array attribute"):
         aggregation_to_expression(agg, attribute_key_to_expression)
+
+
+def test_conditional_aggregation_uses_has_for_in_sets() -> None:
+    """Regression guard for SNUBA-9W6 / SNUBA-A1W (mixed-version distributed reads).
+
+    A conditional aggregation's filter is embedded in a SELECT-clause ``countIf``/
+    ``sumIf``. A constant ``IN`` set there bakes a server-generated
+    ``__set_<Type>_<hash>_<hash>`` identifier into the result-block column name; on a
+    mixed-version cluster the two sides hash it differently and the distributed read
+    fails with ``Code: 10 ... Not found column ... While executing Remote.``. The
+    membership must therefore be built as ``has(array(...), x)`` instead.
+    """
+    project_ids = [11, 22, 33]
+    agg = AttributeConditionalAggregation(
+        aggregate=Function.FUNCTION_SUM,
+        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="my.field"),
+        label="sum(my.field)",
+        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+        filter=TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(name="sentry.project_id", type=AttributeKey.TYPE_INT),
+                op=ComparisonFilter.OP_IN,
+                value=AttributeValue(val_int_array=IntArray(values=project_ids)),
+            )
+        ),
+    )
+
+    expr = aggregation_to_expression(agg, attribute_key_to_expression)
+
+    # No in() over a constant array may survive (it would reintroduce the __set_* id).
+    in_over_arrays = [
+        e
+        for e in expr
+        if isinstance(e, FunctionCall)
+        and e.function_name == "in"
+        and len(e.parameters) == 2
+        and isinstance(e.parameters[1], FunctionCall)
+        and e.parameters[1].function_name == "array"
+    ]
+    assert not in_over_arrays, (
+        "conditional aggregation must not embed an in() over a constant array"
+    )
+
+    # ...and the membership is emitted as has(array(<project_ids>), x).
+    has_over_pids = [
+        e
+        for e in expr
+        if isinstance(e, FunctionCall)
+        and e.function_name == "has"
+        and isinstance(e.parameters[0], FunctionCall)
+        and e.parameters[0].function_name == "array"
+        and [p.value for p in e.parameters[0].parameters if isinstance(p, Literal)] == project_ids
+    ]
+    assert has_over_pids, "expected has(array(<project_ids>), x) in the conditional aggregate"

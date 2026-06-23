@@ -156,7 +156,6 @@ class OutcomesFlexTimeRoutingStrategy(BaseRoutingStrategy):
         return original_time_window
 
     def _update_routing_decision(self, routing_decision: RoutingDecision) -> None:
-
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
 
         # if type is unknown, just route to tier 1, no adjustment

@@ -1,3 +1,5 @@
+#![deny(clippy::unwrap_used, clippy::expect_used)]
+
 pub mod eap_items;
 mod errors;
 mod functions;
@@ -8,7 +10,7 @@ mod profiles;
 mod querylog;
 mod release_health_metrics;
 mod replays;
-mod utils;
+pub mod utils;
 
 use crate::config::ProcessorConfig;
 use crate::types::{InsertBatch, InsertOrReplacement, KafkaMessageMetadata};
@@ -79,6 +81,7 @@ pub fn get_cogs_label(processor_name: &str) -> Option<String> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use std::time::SystemTime;
 
@@ -157,6 +160,10 @@ mod tests {
                     settings.add_redaction(
                         ".*.*[\"sentry._internal.ingested_at\"]",
                         "<ingestion timestamp>",
+                    );
+                    settings.add_redaction(
+                        ".*.*[\"sentry._internal.received_at\"]",
+                        "<received timestamp>",
                     );
                 }
 

@@ -21,6 +21,8 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeAggregation
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+
 Tin = TypeVar("Tin", bound=ProtobufMessage)
 
 
@@ -167,14 +169,40 @@ def _convert_aggregation_to_conditional_aggregation(
     if input.HasField("aggregation"):
         aggregation = input.aggregation
         input.ClearField("aggregation")
-        input.conditional_aggregation.CopyFrom(
-            AttributeConditionalAggregation(
-                aggregate=aggregation.aggregate,
-                key=aggregation.key,
-                label=aggregation.label,
-                extrapolation_mode=aggregation.extrapolation_mode,
-            )
-        )
+        match aggregation.WhichOneof("default_value"):
+            case None:
+                input.conditional_aggregation.CopyFrom(
+                    AttributeConditionalAggregation(
+                        aggregate=aggregation.aggregate,
+                        key=aggregation.key,
+                        label=aggregation.label,
+                        extrapolation_mode=aggregation.extrapolation_mode,
+                    )
+                )
+            case "default_value_double":
+                input.conditional_aggregation.CopyFrom(
+                    AttributeConditionalAggregation(
+                        aggregate=aggregation.aggregate,
+                        key=aggregation.key,
+                        label=aggregation.label,
+                        extrapolation_mode=aggregation.extrapolation_mode,
+                        default_value_double=aggregation.default_value_double,
+                    )
+                )
+            case "default_value_int64":
+                input.conditional_aggregation.CopyFrom(
+                    AttributeConditionalAggregation(
+                        aggregate=aggregation.aggregate,
+                        key=aggregation.key,
+                        label=aggregation.label,
+                        extrapolation_mode=aggregation.extrapolation_mode,
+                        default_value_int64=aggregation.default_value_int64,
+                    )
+                )
+            case default:
+                raise BadSnubaRPCRequestException(
+                    f"Unknown default_value in formula. Expected default_value_double or default_value_int64 but got {default}"
+                )
 
 
 class AggregationToConditionalAggregationVisitor(ProtoVisitor):

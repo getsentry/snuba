@@ -3,7 +3,6 @@ from __future__ import annotations
 import atexit
 import functools
 import logging
-import random
 import time
 from datetime import datetime
 from typing import (
@@ -63,11 +62,8 @@ from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
 from snuba.utils.health_info import (
-    check_down_file_exists,
     get_health_info,
-    get_shutdown,
     metrics,
-    shutdown_time,
 )
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.util import with_span
@@ -202,25 +198,13 @@ def handle_internal_server_error(exception: InternalServerError) -> Response:
 
 @application.route("/health_envoy")
 def health_envoy() -> Response:
-    """K8s can decide to shut down the pod, at which point it will write the down file.
-    This down file signals that we have to drain the pod, and not accept any new traffic.
-    In SaaS, envoy is the thing that will decided to route traffic to this node or not. It
-    uses this endpoint to make that decision.
-
-    This differs from the generic health endpoint because the pod can still be healthy
-    but just not accepting traffic. That way k8s will not restart it until it is drained
+    """Always returns 200. The historical down-file drain mechanism (consulted
+    here via uwsgi worker introspection) was retired with the granian migration
+    in PR #7566 and is no longer used by ops infra. The endpoint is kept as a
+    no-op so existing envoy callers don't 404 — remove once the envoy config no
+    longer references it.
     """
-
-    down_file_exists = check_down_file_exists()
-
-    if not down_file_exists:
-        status = 200
-    else:
-        status = 503
-
-    if status != 200:
-        metrics.increment("healthcheck_envoy_failed")
-    return Response(json.dumps({}), status, {"Content-Type": "application/json"})
+    return Response(json.dumps({}), 200, {"Content-Type": "application/json"})
 
 
 @application.route("/health")
@@ -255,6 +239,37 @@ def _trace_transaction(dataset_name: str) -> None:
         )
         scope.transaction.set_tag("dataset", dataset_name)
         scope.transaction.set_tag("referrer", http_request.referrer)
+
+
+def _set_snql_api_error_tags(body: Dict[str, Any], http_referrer: str | None) -> None:
+    """Set Sentry tags for SnQL API error tracking.
+
+    Tags all errors in the SnQL API with:
+    - source: snql_api
+    - referrer: from HTTP header or request body
+    - tenant_ids: as context and individual tags
+
+    This function is wrapped in a try-except to ensure that any failure
+    in setting tags does not crash the API request.
+    """
+    try:
+        sentry_sdk.set_tag("source", "snql_api")
+
+        # Extract and tag referrer
+        referrer = http_referrer or body.get("tenant_ids", {}).get("referrer", "<unknown>")
+        sentry_sdk.set_tag("referrer", referrer)
+
+        # Extract and set tenant_ids as context for better error tracking
+        tenant_ids = body.get("tenant_ids", {})
+        if tenant_ids:
+            sentry_sdk.set_context("tenant_ids", tenant_ids)
+            # Also set individual tenant_id tags for easier filtering
+            for key, value in tenant_ids.items():
+                if key != "referrer":  # Skip referrer as it's already a tag
+                    sentry_sdk.set_tag(f"tenant_id.{key}", str(value))
+    except Exception as e:
+        # Log the error but don't let it crash the API request
+        logger.warning("Failed to set Sentry tags for SnQL API", exc_info=e)
 
 
 @application.route("/query", methods=["GET", "POST"])
@@ -293,6 +308,7 @@ def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response
         body = parse_request_body(http_request)
         dataset_name = get_dataset_name(dataset)
         _trace_transaction(dataset_name)
+        _set_snql_api_error_tags(body, http_request.referrer)
         return dataset_query(dataset_name, body, timer)
     else:
         assert False, "unexpected fallthrough"
@@ -314,7 +330,6 @@ def mql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response,
 @util.time_request("delete_query")
 def storage_delete(*, storage: WritableTableStorage, timer: Timer) -> Union[Response, str]:
     if http_request.method == "DELETE":
-        check_shutdown({"storage": storage.get_storage_key()})
         body = parse_request_body(http_request)
 
         try:
@@ -403,27 +418,12 @@ def dump_payload(payload: MutableMapping[str, Any]) -> str:
         return json.dumps(sanitized_payload, default=str)
 
 
-def check_shutdown(tags: Dict[str, Any]) -> None:
-    # Try to detect if new requests are being sent to the api
-    # after the shutdown command has been issued, and if so
-    # how long after. I don't want to do a disk check for
-    # every query, so randomly sample until the shutdown file
-    # is detected, and then log everything
-    if get_shutdown() or random.random() < 0.05:
-        if get_shutdown() or check_down_file_exists():
-            metrics.increment("post.shutdown.query", tags=tags)
-            diff = time.time() - (shutdown_time() or 0.0)  # this should never be None
-            metrics.timing("post.shutdown.query.delay", diff, tags=tags)
-
-
 @with_span()
 def dataset_query(
     dataset_name: str, body: Dict[str, Any], timer: Timer, is_mql: bool = False
 ) -> Response:
     assert http_request.method == "POST"
     referrer = http_request.referrer or "<unknown>"  # mypy
-
-    check_shutdown({"dataset": dataset_name})
 
     try:
         request, result = parse_and_run_query(body, timer, is_mql, dataset_name, referrer)

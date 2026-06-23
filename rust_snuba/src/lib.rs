@@ -1,3 +1,6 @@
+pub(crate) const SNUBA_SCHEMA: &str =
+    include_str!("../../sentry-options/schemas/snuba/schema.json");
+
 mod accepted_outcomes_consumer;
 mod config;
 mod consumer;
@@ -28,8 +31,8 @@ fn rust_snuba(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 // Ideally, we would have a normal rust crate we can use in examples and benchmarks,
 // plus a pyo3 specific crate as `cdylib`.
 pub use config::{
-    BrokerConfig, ClickhouseConfig, EnvConfig, MessageProcessorConfig, ProcessorConfig,
-    StorageConfig, TopicConfig,
+    BatchSizeCalculation, BrokerConfig, ClickhouseConfig, EnvConfig, MessageProcessorConfig,
+    ProcessorConfig, StorageConfig, TopicConfig,
 };
 pub use factory_v2::ConsumerStrategyFactoryV2;
 pub use metrics::statsd::DogStatsDBackend;

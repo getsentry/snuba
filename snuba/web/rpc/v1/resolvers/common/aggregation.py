@@ -19,6 +19,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Reliability,
 )
 
+from snuba.protos.common import type_array_to_stored_array_json_path
 from snuba.query.dsl import CurriedFunctions as cf
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column, literal
@@ -65,8 +66,12 @@ def _get_condition_in_aggregation(
 ) -> Expression:
     condition_in_aggregation: Expression = literal(True)
     if isinstance(aggregation, AttributeConditionalAggregation):
+        # This condition is embedded in SELECT-clause conditional aggregates (countIf,
+        # sumIf, ...), so build any constant IN-set as has(array, x) to keep the
+        # result-block column name stable across mixed-version ClickHouse nodes on
+        # distributed reads (membership_as_has, see common._in_or_has).
         condition_in_aggregation = trace_item_filters_to_expression(
-            aggregation.filter, attribute_key_to_expression
+            aggregation.filter, attribute_key_to_expression, membership_as_has=True
         )
     return condition_in_aggregation
 
@@ -129,6 +134,9 @@ def _resolve_field_and_existence(
         else:
             raise RuntimeError("expected existence_checks to never be empty, but it is")
         return field, existence
+    elif aggregation.key.type == AttributeKey.Type.TYPE_ARRAY:
+        field = type_array_to_stored_array_json_path(aggregation.key)
+        return field, f.notEmpty(field)
     else:
         field = attribute_key_to_expression(aggregation.key)
         return field, get_field_existence_expression(field)

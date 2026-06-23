@@ -80,6 +80,12 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     help="Bucket interval in seconds for accepted outcomes aggregation.",
 )
 @click.option(
+    "--commit-frequency-sec",
+    default=10,
+    type=int,
+    help="How frequently to emit commit requests in seconds.",
+)
+@click.option(
     "--log-level",
     "log_level",
     type=click.Choice(["error", "warn", "info", "debug", "trace"], False),
@@ -141,6 +147,7 @@ def accepted_outcomes_consumer(
     max_batch_size: int,
     max_batch_time_ms: int,
     bucket_interval: int,
+    commit_frequency_sec: int,
     log_level: str,
     concurrency: Optional[int],
     max_poll_interval_ms: int,
@@ -155,6 +162,7 @@ def accepted_outcomes_consumer(
     """
 
     assert bucket_interval >= 1, "bucket_interval must be greater than 0"
+    assert commit_frequency_sec >= 1, "commit_frequency_sec must be greater than 0"
 
     consumer_config = resolve_consumer_config(
         storage_names=[storage_name],
@@ -198,6 +206,7 @@ def accepted_outcomes_consumer(
         max_batch_size,
         max_batch_time_ms,
         bucket_interval,
+        commit_frequency_sec,
     )
 
     sys.exit(exitcode)

@@ -12,12 +12,14 @@ use sentry_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrate
 use sentry_arroyo::processing::StreamProcessor;
 use sentry_arroyo::types::{Partition, Topic};
 
+use sentry_options::init_with_schemas;
+
 use pyo3::prelude::*;
 
 use crate::config;
 use crate::logging::{setup_logging, setup_sentry};
+use crate::metrics::global_tags::set_global_tag;
 use crate::metrics::statsd::DogStatsDBackend;
-use crate::runtime_config::get_str_config;
 use crate::strategies::accepted_outcomes::aggregator::OutcomesAggregator;
 use crate::strategies::accepted_outcomes::commit_outcomes::CommitOutcomes;
 use crate::strategies::accepted_outcomes::produce_outcome::ProduceAcceptedOutcome;
@@ -27,15 +29,18 @@ pub struct AcceptedOutcomesStrategyFactory {
     bucket_interval: u64,
     max_batch_size: usize,
     max_batch_time_ms: Duration,
+    commit_frequency: Duration,
     produce_topic: Topic,
     producer: Arc<KafkaProducer>,
     concurrency: ConcurrencyConfig,
-    skip_produce: bool,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for AcceptedOutcomesStrategyFactory {
-    fn update_partitions(&self, _partitions: &HashMap<Partition, u64>) {
-        // No-op for now
+    fn update_partitions(&self, partitions: &HashMap<Partition, u64>) {
+        match partitions.keys().map(|partition| partition.index).min() {
+            Some(min) => set_global_tag("min_partition".to_owned(), min.to_string()),
+            None => set_global_tag("min_partition".to_owned(), "none".to_owned()),
+        }
     }
 
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
@@ -44,9 +49,8 @@ impl ProcessingStrategyFactory<KafkaPayload> for AcceptedOutcomesStrategyFactory
             self.producer.clone(),
             self.produce_topic,
             &self.concurrency,
-            self.skip_produce,
         );
-        let commit = CommitOutcomes::new(produce);
+        let commit = CommitOutcomes::new(produce, Some(self.commit_frequency));
         Box::new(OutcomesAggregator::new(
             commit,
             self.max_batch_size,
@@ -74,6 +78,7 @@ pub fn accepted_outcomes_consumer(
     max_batch_size: usize,
     max_batch_time_ms: u64,
     bucket_interval: u64,
+    commit_frequency_sec: u64,
 ) -> usize {
     py.allow_threads(|| {
         accepted_outcomes_consumer_impl(
@@ -91,6 +96,7 @@ pub fn accepted_outcomes_consumer(
             max_batch_size,
             max_batch_time_ms,
             bucket_interval,
+            commit_frequency_sec,
         )
     })
 }
@@ -111,8 +117,11 @@ pub fn accepted_outcomes_consumer_impl(
     max_batch_size: usize,
     max_batch_time_ms: u64,
     bucket_interval: u64,
+    commit_frequency_sec: u64,
 ) -> usize {
     setup_logging();
+    init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)])
+        .expect("failed to initialize sentry-options");
 
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
 
@@ -219,21 +228,15 @@ pub fn accepted_outcomes_consumer_impl(
         KafkaConfig::new_producer_config(vec![], Some(topic_config.broker_config));
     let producer = Arc::new(KafkaProducer::new(producer_config));
     let produce_topic = Topic::new(&topic_config.physical_topic_name);
-    // Default to skipping produce for now
-    let skip_produce = get_str_config("accepted_outcomes_skip_produce")
-        .ok()
-        .flatten()
-        .unwrap_or("1".to_string())
-        == "1";
 
     let factory = AcceptedOutcomesStrategyFactory {
         bucket_interval,
         max_batch_size,
         max_batch_time_ms: Duration::from_millis(max_batch_time_ms),
+        commit_frequency: Duration::from_secs(commit_frequency_sec),
         produce_topic,
         producer,
         concurrency: ConcurrencyConfig::new(concurrency),
-        skip_produce,
     };
     let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);
 

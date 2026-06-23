@@ -121,3 +121,75 @@ class TestApiCodes(BaseApiTest):
             assert metadata["slo"] == slo, exception
             execute_mock.reset_mock()
             record_query.reset_mock()
+
+    @patch("snuba.settings.RECORD_QUERIES", True)
+    @patch("snuba.state.record_query")
+    @patch("snuba.web.db_query.execute_query")
+    @patch("snuba.web.db_query._apply_allocation_policies_quota")
+    @pytest.mark.events_db
+    @pytest.mark.redis_db
+    def test_too_many_bytes_from_allocation_policy(
+        self, apply_policies_mock: MagicMock, execute_mock: MagicMock, record_query: MagicMock
+    ) -> None:
+        """Test that TOO_MANY_BYTES from allocation policy is classified as RATE_LIMITED in SLO metrics"""
+
+        # Mock allocation policy to set the flag
+        def set_policy_flag(
+            query_settings: Any,
+            attribution_info: Any,
+            formatted_query: Any,
+            stats: Any,
+            *args: Any,
+            **kwargs: Any,
+        ) -> None:
+            # Set the flag in the stats dict (which is passed by reference)
+            stats["max_bytes_to_read_set_by_policy"] = True
+            stats["quota_allowance"] = {}
+
+        apply_policies_mock.side_effect = set_policy_flag
+
+        # Mock execute_query to raise TOO_MANY_BYTES error
+        execute_mock.side_effect = ClickhouseError("Too many bytes", code=ErrorCodes.TOO_MANY_BYTES)
+
+        response = self.post()
+
+        # Verify the response has rate-limited type (because calculated_cause becomes RateLimitExceeded)
+        data = json.loads(response.data)
+        assert data["error"]["type"] == "rate-limited", (
+            f"Expected rate-limited, got {data['error']['type']}"
+        )
+
+        # Verify SLO metrics - this is the critical part for the fix
+        metadata = record_query.call_args[0][0]
+        assert metadata["request_status"] == "rate-limited", (
+            "TOO_MANY_BYTES from policy should be RATE_LIMITED"
+        )
+        assert metadata["slo"] == "for", "Rate limited requests should not count against SLO"
+
+    @patch("snuba.settings.RECORD_QUERIES", True)
+    @patch("snuba.state.record_query")
+    @patch("snuba.web.db_query.execute_query")
+    @pytest.mark.events_db
+    @pytest.mark.redis_db
+    def test_too_many_bytes_without_allocation_policy(
+        self, execute_mock: MagicMock, record_query: MagicMock
+    ) -> None:
+        """Test that TOO_MANY_BYTES without allocation policy is classified as ERROR in SLO metrics"""
+        # Mock execute_query to raise TOO_MANY_BYTES error
+        # No allocation policy mock, so max_bytes_to_read_set_by_policy will not be set
+        execute_mock.side_effect = ClickhouseError("Too many bytes", code=ErrorCodes.TOO_MANY_BYTES)
+
+        response = self.post()
+
+        # Verify the response has clickhouse error type (because calculated_cause stays as ClickhouseError)
+        data = json.loads(response.data)
+        assert data["error"]["type"] == "clickhouse", (
+            f"Expected clickhouse, got {data['error']['type']}"
+        )
+
+        # Verify SLO metrics - this is the critical part for the fix
+        metadata = record_query.call_args[0][0]
+        assert metadata["request_status"] == "error", (
+            "TOO_MANY_BYTES without policy should be ERROR"
+        )
+        assert metadata["slo"] == "against", "Error requests should count against SLO"
