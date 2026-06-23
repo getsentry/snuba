@@ -1,8 +1,9 @@
 import re
 from typing import Sequence, Union
 
-from snuba.clickhouse.native import ClickhousePool
-from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
+from snuba.clusters.cluster import UndefinedClickhouseCluster, get_cluster
+from snuba.datasets.schemas.tables import TableSchema
+from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.migrations.migration import (
     ClickhouseNodeMigration,
     ClickhouseNodeMigrationLegacy,
@@ -37,6 +38,14 @@ class NoDistClusterNodes(Exception):
 class DistributedEngineParseError(Exception):
     """
     Can't parse the distributed engine string value
+    """
+
+    pass
+
+
+class InvalidDistributedOperation(Exception):
+    """
+    Can't find the local table name for a distributed table on a dist op
     """
 
     pass
@@ -196,29 +205,27 @@ def conflicts_drop_column_op(local_drop: DropColumn, dist_drop: DropColumn) -> b
     return False
 
 
-def _get_dist_connection(dist_op: SqlOperation) -> ClickhousePool:
-    cluster = get_cluster(dist_op._storage_set)
-    nodes = cluster.get_distributed_nodes()
-    if not nodes:
-        raise NoDistClusterNodes(f"No distributed nodes for {dist_op._storage_set}")
-    node = nodes[0]
-    connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
-    return connection
-
-
 def _get_local_table_name(dist_op: Union[CreateTable, AddColumn, DropColumn]) -> str:
     """
     Returns the local table name for a distributed table.
     """
-    clickhouse = _get_dist_connection(dist_op)
-    dist_table_name = dist_op.table_name
-    engine = clickhouse.execute(
-        f"SELECT engine_full FROM system.tables WHERE name = '{dist_table_name}' AND database = '{clickhouse.database}'"
-    ).results
-    if not engine:
-        raise DistributedEngineParseError(f"No engine found for table {dist_table_name}")
-    engine_str = engine[0][0]
-    return _extract_local_table_name(engine_str)
+    for storage_key in get_all_storage_keys():
+        try:
+            storage = get_storage(storage_key)
+            if storage.get_storage_set_key() != dist_op._storage_set:
+                continue
+            schema = storage.get_schema()
+            if isinstance(schema, TableSchema):
+                # In local mode we want to verify that the pairing of
+                # dist/local tables is correct, so using get_dist_table_name
+                # instead of get_table_name here
+                if schema.get_dist_table_name() == dist_op.table_name:
+                    return schema.get_local_table_name()
+        except UndefinedClickhouseCluster:
+            continue
+    raise InvalidDistributedOperation(
+        f"No storage found for distributed table {dist_op.table_name}"
+    )
 
 
 def _extract_local_table_name(engine_str: str) -> str:

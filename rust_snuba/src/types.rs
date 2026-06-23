@@ -1,5 +1,7 @@
 use std::cmp::min;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::collections::HashSet;
 
 use chrono::{DateTime, Utc};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
@@ -49,7 +51,7 @@ impl CogsData {
 }
 
 /// Returns the friendly name for a TraceItemType, e.g. "span" instead of "TRACE_ITEM_TYPE_SPAN".
-fn item_type_name(item_type: TraceItemType) -> String {
+pub fn item_type_name(item_type: TraceItemType) -> String {
     item_type
         .as_str_name()
         .strip_prefix("TRACE_ITEM_TYPE_")
@@ -145,18 +147,18 @@ impl LatencyRecorder {
         (write_time as f64 - (self.sum_timestamps / self.num_values as f64)) as u64
     }
 
-    fn send_metric(&self, write_time: DateTime<Utc>, metric_name: &str) {
+    fn send_metric(&self, write_time: DateTime<Utc>, metric_name: &str, metric_prefix: &str) {
         if self.num_values == 0 {
             return;
         }
 
         timer!(
-            format_args!("insertions.max_{}_ms", metric_name),
+            format_args!("{}.max_{}_ms", metric_prefix, metric_name),
             self.max_value_ms(write_time)
         );
 
         timer!(
-            format_args!("insertions.{}_ms", metric_name),
+            format_args!("{}.{}_ms", metric_prefix, metric_name),
             self.avg_value_ms(write_time),
         );
     }
@@ -218,6 +220,27 @@ impl InsertBatch {
         })
     }
 
+    /// Constructor for processors that have already serialized their rows into
+    /// the wire format (e.g. the RowBinary path encodes each `EAPItemRow`
+    /// inside the processor instead of carrying the typed struct downstream).
+    /// `num_rows` is the count those bytes represent.
+    pub fn from_encoded_rows(
+        encoded_rows: Vec<u8>,
+        num_rows: usize,
+        origin_timestamp: Option<DateTime<Utc>>,
+    ) -> Self {
+        Self {
+            rows: RowData {
+                encoded_rows,
+                num_rows,
+            },
+            origin_timestamp,
+            sentry_received_timestamp: None,
+            cogs_data: None,
+            item_type_metrics: None,
+        }
+    }
+
     /// In case the processing function wants to skip the message, we return an empty batch.
     /// But instead of having the caller send an empty batch, lets make an explicit api for
     /// skipping. This way we can change the implementation later if we want to. Skipping ensures
@@ -254,6 +277,9 @@ pub struct BytesInsertBatch<R> {
     cogs_data: CogsData,
 
     item_type_metrics: ItemTypeMetrics,
+
+    /// Total encoded byte size of the batch, used for byte-based batch size limiting
+    num_bytes: usize,
 }
 
 impl<R> BytesInsertBatch<R> {
@@ -281,6 +307,7 @@ impl<R> BytesInsertBatch<R> {
             commit_log_offsets,
             cogs_data,
             item_type_metrics: Default::default(),
+            num_bytes: 0,
         }
     }
 
@@ -288,7 +315,7 @@ impl<R> BytesInsertBatch<R> {
     /// Use builder methods to set optional fields as needed.
     ///
     /// # Example
-    /// ```ignore
+    /// ```text
     /// let batch = BytesInsertBatch::from_rows(rows)
     ///     .with_message_timestamp(timestamp)
     ///     .with_cogs_data(cogs_data);
@@ -302,6 +329,7 @@ impl<R> BytesInsertBatch<R> {
             commit_log_offsets: Default::default(),
             cogs_data: Default::default(),
             item_type_metrics: Default::default(),
+            num_bytes: 0,
         }
     }
 
@@ -341,6 +369,17 @@ impl<R> BytesInsertBatch<R> {
         self
     }
 
+    /// Set the total encoded byte size of the batch
+    pub fn with_num_bytes(mut self, num_bytes: usize) -> Self {
+        self.num_bytes = num_bytes;
+        self
+    }
+
+    /// Get the total encoded byte size of the batch
+    pub fn num_bytes(&self) -> usize {
+        self.num_bytes
+    }
+
     pub fn commit_log_offsets(&self) -> &CommitLogOffsets {
         &self.commit_log_offsets
     }
@@ -358,6 +397,7 @@ impl<R> BytesInsertBatch<R> {
             commit_log_offsets: self.commit_log_offsets.clone(),
             cogs_data: self.cogs_data.clone(),
             item_type_metrics: self.item_type_metrics.clone(),
+            num_bytes: self.num_bytes,
         }
     }
 
@@ -370,6 +410,7 @@ impl<R> BytesInsertBatch<R> {
             commit_log_offsets: self.commit_log_offsets,
             cogs_data: self.cogs_data,
             item_type_metrics: self.item_type_metrics,
+            num_bytes: self.num_bytes,
         };
 
         (self.rows, new)
@@ -378,11 +419,15 @@ impl<R> BytesInsertBatch<R> {
     pub fn record_message_latency(&self) {
         let write_time = Utc::now();
 
-        self.message_timestamp.send_metric(write_time, "latency");
+        self.message_timestamp
+            .send_metric(write_time, "latency", "insertions");
         self.origin_timestamp
-            .send_metric(write_time, "end_to_end_latency");
-        self.sentry_received_timestamp
-            .send_metric(write_time, "sentry_received_latency");
+            .send_metric(write_time, "end_to_end_latency", "insertions");
+        self.sentry_received_timestamp.send_metric(
+            write_time,
+            "sentry_received_latency",
+            "insertions",
+        );
     }
 
     pub fn emit_item_type_metrics(&self) {
@@ -414,6 +459,7 @@ impl BytesInsertBatch<RowData> {
     pub fn merge(mut self, other: BytesInsertBatch<RowData>) -> Self {
         self.rows.encoded_rows.extend(other.rows.encoded_rows);
         self.rows.num_rows += other.rows.num_rows;
+        self.num_bytes += other.num_bytes;
         self.commit_log_offsets.merge(other.commit_log_offsets);
         self.message_timestamp.merge(other.message_timestamp);
         self.origin_timestamp.merge(other.origin_timestamp);
@@ -532,5 +578,148 @@ mod tests {
             metrics1.bytes_processed.get(&TraceItemType::Log),
             Some(&275)
         ); // 200 + 75
+    }
+}
+
+/// A single accepted outcome to be produced to the outcomes-billing topic.
+#[derive(Debug, Clone, Serialize)]
+pub struct TrackOutcome {
+    pub timestamp: String,
+    pub org_id: u64,
+    pub project_id: u64,
+    pub key_id: u64,
+    /// (0 = accepted)
+    pub outcome: u8,
+    /// DataCategory uint32 value as defined in Relay
+    pub category: u32,
+    pub quantity: u64,
+}
+
+/// Key used to deduplicate items within an outcomes batch.
+/// Uses the relevant fields from the eap_items table sorting key:
+/// (organization_id, project_id, item_type, timestamp, trace_id, item_id)
+/// Note: item_type is handled separately via the HashMap in seen_items.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ItemDedupKey {
+    pub org_id: u64,
+    pub project_id: u64,
+    pub timestamp: u32,
+    pub trace_id: [u8; 16],
+    pub item_id: [u8; 16],
+}
+
+/// Key used to bucket accepted outcomes by time slot, organization, project, key, and data category.
+/// Outcome type is omitted because this consumer only processes accepted outcomes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct BucketKey {
+    /// Time slot index: floor(event_timestamp_secs / bucket_interval)
+    pub time_offset: u64,
+    pub org_id: u64,
+    pub project_id: u64,
+    pub key_id: u64,
+    /// DataCategory uint32 value as defined in Relay
+    pub category: u32,
+}
+
+/// Statistics for a single bucket
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct BucketStats {
+    pub quantity: u64,
+}
+
+impl BucketStats {
+    pub fn new(quantity: u64) -> Self {
+        Self { quantity }
+    }
+}
+
+/// Per-category metrics accumulated within a batch
+#[derive(Clone, Debug, Default)]
+pub struct CategoryMetrics {
+    pub messages_seen: u64,
+    pub total_quantity: u64,
+    pub bucket_count: u64,
+}
+
+/// Batch type for aggregated outcomes data
+/// Stores bucketed counts instead of raw row data
+#[derive(Clone, Debug)]
+pub struct AggregatedOutcomesBatch {
+    /// Map from bucket key to aggregated statistics
+    pub buckets: HashMap<BucketKey, BucketStats>,
+    pub bucket_interval: u64,
+    /// Per-category metrics for the current batch
+    pub category_metrics: BTreeMap<u32, CategoryMetrics>,
+    /// Set of items already processed in this batch, used for deduplication, keyed by item type
+    pub seen_items: HashMap<TraceItemType, HashSet<ItemDedupKey>>,
+    /// Count of items skipped due to deduplication within this batch, keyed by item type
+    pub duplicate_item_count: HashMap<TraceItemType, u64>,
+    /// Uses the timestamp the message was added to snuba-items topic
+    broker_timestamp: LatencyRecorder,
+}
+
+impl Default for AggregatedOutcomesBatch {
+    fn default() -> Self {
+        Self {
+            buckets: HashMap::new(),
+            bucket_interval: 60,
+            category_metrics: BTreeMap::new(),
+            seen_items: HashMap::new(),
+            duplicate_item_count: HashMap::new(),
+            broker_timestamp: LatencyRecorder::default(),
+        }
+    }
+}
+
+impl AggregatedOutcomesBatch {
+    /// Create a new empty batch
+    pub fn new(bucket_interval: u64) -> Self {
+        Self {
+            bucket_interval,
+            ..Default::default()
+        }
+    }
+
+    pub fn record_if_duplicate(&mut self, item_type: TraceItemType, key: ItemDedupKey) -> bool {
+        let is_dup = !self.seen_items.entry(item_type).or_default().insert(key);
+        if is_dup {
+            *self.duplicate_item_count.entry(item_type).or_insert(0) += 1;
+        }
+        is_dup
+    }
+
+    /// Add or update a bucket with a count and quantity, updating per-category metrics
+    pub fn add_to_bucket(&mut self, key: BucketKey, quantity: u64) {
+        let is_new = !self.buckets.contains_key(&key);
+        let stats = self
+            .buckets
+            .entry(key)
+            .or_insert_with(|| BucketStats::new(0));
+        stats.quantity += quantity;
+
+        let m = self.category_metrics.entry(key.category).or_default();
+        m.messages_seen += 1;
+        m.total_quantity += quantity;
+        if is_new {
+            m.bucket_count += 1;
+        }
+    }
+
+    /// Get the total number of buckets
+    pub fn num_buckets(&self) -> usize {
+        self.buckets.len()
+    }
+
+    /// Merge a single broker timestamp into the batch's running latency recorder.
+    pub fn add_broker_timestamp(&mut self, timestamp: DateTime<Utc>) {
+        self.broker_timestamp
+            .merge(LatencyRecorder::from(timestamp));
+    }
+
+    /// Emit broker-latency timers (avg + max) under `accepted_outcomes.{metric_name}_ms` and
+    /// `accepted_outcomes.max_{metric_name}_ms`. Mirrors `BytesInsertBatch::record_message_latency`.
+    pub fn record_message_latency(&self, metric_name: &str) {
+        self.broker_timestamp
+            .send_metric(Utc::now(), metric_name, "accepted_outcomes");
     }
 }

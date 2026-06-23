@@ -56,6 +56,7 @@ class ClickhouseClientSettings(Enum):
             "mutations_sync": 2,
             "alter_sync": 2,  # Wait for ON CLUSTER DDL on all replicas
             "database_atomic_wait_for_drop_and_detach_synchronously": 1,
+            "distributed_ddl_task_timeout": 300,  # 5 minute ON CLUSTER DDL timeout
         },
         # 5 minute timeout to allow ON CLUSTER DDL operations to complete
         # across all replicas. This is needed because alter_sync=2 blocks

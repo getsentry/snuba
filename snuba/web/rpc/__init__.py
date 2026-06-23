@@ -84,6 +84,22 @@ def _flush_logs() -> None:
         pass
 
 
+def _set_rpc_error_tags(in_msg: ProtobufMessage) -> None:
+    sentry_sdk.set_tag("source", "rpc_api")
+
+    # Extract and tag fields from meta if available
+    if hasattr(in_msg, "meta"):
+        meta = in_msg.meta
+
+        if hasattr(meta, "referrer") and meta.referrer:
+            sentry_sdk.set_tag("referrer", meta.referrer)
+
+        if hasattr(meta, "organization_id") and meta.organization_id:
+            sentry_sdk.set_tag("organization_id", str(meta.organization_id))
+        if hasattr(meta, "request_id") and meta.request_id:
+            sentry_sdk.set_tag("request_id", str(meta.request_id))
+
+
 class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
     def __init__(
         self, timer: Timer | None = None, metrics_backend: MetricsBackend | None = None
@@ -196,6 +212,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             in_msg=in_msg,
             query_id=uuid.uuid4().hex,
         )
+        _set_rpc_error_tags(in_msg)
 
         self.__before_execute(in_msg)
         error: Exception | None = None
@@ -342,7 +359,13 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                     tags=self._timer.tags,
                 )
             else:
-                sentry_sdk.capture_exception(error)
+                # `should_report=False` marks an exception (e.g. an invalid
+                # query from a client, like an empty-string filter on a hexint
+                # column) that we deliberately do not want surfaced in Sentry.
+                # Honor that flag here, matching the legacy HTTP path in
+                # `snuba/web/views.py`.
+                if getattr(error, "should_report", True):
+                    sentry_sdk.capture_exception(error)
                 self.metrics.increment(
                     "request_error",
                     tags=self._timer.tags,
@@ -414,7 +437,12 @@ def run_rpc_handler(name: str, version: str, data: bytes) -> ProtobufMessage | E
     except (RPCRequestException, QueryException) as e:
         return convert_rpc_exception_to_proto(e)
     except Exception as e:
-        sentry_sdk.capture_exception(e)
+        # Don't report exceptions that opted out via `should_report=False`
+        # (e.g. invalid client queries). `execute` re-raises after
+        # `__after_execute`, so this is the second capture site for the same
+        # error and must honor the flag too.
+        if getattr(e, "should_report", True):
+            sentry_sdk.capture_exception(e)
         return convert_rpc_exception_to_proto(
             RPCRequestException(
                 status_code=500,

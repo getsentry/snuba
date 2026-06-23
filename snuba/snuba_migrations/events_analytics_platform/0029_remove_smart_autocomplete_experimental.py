@@ -19,9 +19,7 @@ _TYPES: dict[str, ColumnType[Any]] = {
 }
 
 
-_attr_columns = [
-    Column(f"attrs_{type_name}", type_spec) for type_name, type_spec in _TYPES.items()
-]
+_attr_columns = [Column(f"attrs_{type_name}", type_spec) for type_name, type_spec in _TYPES.items()]
 
 
 columns: List[Column[Modifiers]] = [
@@ -40,7 +38,7 @@ _attr_num_names = ", ".join([f"mapKeys(attr_num_{i})" for i in range(20)])
 MV_QUERY = f"""
 SELECT
     project_id,
-    'span',
+    'span' AS item_type,
     toDate(_sort_timestamp) AS date,
     retention_days as retention_days,
     mapConcat(attr_str_0, attr_str_1, attr_str_2, attr_str_3, attr_str_4, attr_str_5, attr_str_6, attr_str_7, attr_str_8, attr_str_9, attr_str_10, attr_str_11, attr_str_12, attr_str_13, attr_str_14, attr_str_15, attr_str_16, attr_str_17, attr_str_18, attr_str_19) AS attrs_string, -- `attrs_string` Map(String, String),
@@ -100,7 +98,6 @@ FROM eap_spans_2_local
 
 
 class Migration(migration.ClickhouseNodeMigration):
-
     blocking = False
     storage_set_key = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
     granularity = "8192"

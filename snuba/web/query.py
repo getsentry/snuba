@@ -7,7 +7,7 @@ import sentry_sdk
 
 from snuba import environment, settings
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_dataset_name
+from snuba.datasets.factory import get_dataset, get_dataset_name
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.pipeline.query_pipeline import QueryPipelineResult
 from snuba.pipeline.stages.query_execution import ExecutionStage
@@ -111,10 +111,7 @@ def run_query(
 
 def _get_dataset(dataset_name: Optional[str]) -> Dataset:
     if dataset_name:
-        try:
-            return get_dataset(dataset_name)
-        except InvalidDatasetError:
-            return PluggableDataset(name=dataset_name, all_entities=[])
+        return get_dataset(dataset_name)
     return PluggableDataset(name=settings.DEFAULT_DATASET_NAME, all_entities=[])
 
 

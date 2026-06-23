@@ -218,7 +218,7 @@ def get_node_for_table(admin_api: FlaskClient, storage_name: str) -> tuple[str, 
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_system_query(admin_api: FlaskClient) -> None:
     _, host, port = get_node_for_table(admin_api, "errors")
     response = admin_api.post(
@@ -240,6 +240,36 @@ def test_system_query(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
+def test_run_copy_table_query_invalid_node_returns_400(admin_api: FlaskClient) -> None:
+    """
+    Regression for EAP-488 follow-up: the clusterless connection helper now
+    raises InvalidNodeError for an attacker-supplied host, and the endpoint
+    must surface that as a 400 (like /run_clickhouse_system_query) rather
+    than letting it bubble into a 500.
+    """
+    from snuba.admin.clickhouse.common import InvalidNodeError
+
+    with mock.patch(
+        "snuba.admin.views.copy_tables",
+        side_effect=InvalidNodeError("host attacker.example.com not in cluster"),
+    ):
+        response = admin_api.post(
+            "/run_copy_table_query",
+            headers={"Content-Type": "application/json"},
+            data=json.dumps(
+                {
+                    "storage": "errors",
+                    "source_host": "attacker.example.com",
+                }
+            ),
+        )
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert data["error"]["type"] == "request"
+    assert "attacker.example.com" in data["error"]["message"]
+
+
+@pytest.mark.redis_db
 def test_predefined_system_queries(admin_api: FlaskClient) -> None:
     response = admin_api.get(
         "/clickhouse_queries",
@@ -253,7 +283,7 @@ def test_predefined_system_queries(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_sudo_system_query(admin_api: FlaskClient) -> None:
     _, host, port = get_node_for_table(admin_api, "errors")
     response = admin_api.post(
@@ -276,7 +306,7 @@ def test_sudo_system_query(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_query_trace(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
@@ -292,7 +322,7 @@ def test_query_trace(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_query_trace_bad_query(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
@@ -311,7 +341,7 @@ def test_query_trace_bad_query(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_query_trace_invalid_query(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
@@ -510,7 +540,19 @@ def test_get_routing_strategy_configs(admin_api: FlaskClient) -> None:
         "value": 50,
         "params": {},
     } in strategy_data["configurations"]
-    assert strategy_data["optional_config_definitions"] == []
+    assert {
+        "name": "organization_max_threads_override",
+        "type": "int",
+        "default": -1,
+        "description": (
+            "Per-organization_id override for the ClickHouse max_threads setting. "
+            "Replaces any value set by allocation policies or the routing strategy, "
+            "including raising it above the policy-derived value. Default -1 means "
+            "no override; note that 0 is a legitimate value (ClickHouse interprets "
+            "max_threads=0 as 'use all available physical cores')."
+        ),
+        "params": [{"name": "organization_id", "type": "int"}],
+    } in strategy_data["optional_config_definitions"]
 
     # Check policies data
     assert len(strategy_data["policies_data"]) == 2
@@ -981,7 +1023,7 @@ def test_prod_snql_query_invalid_dataset(admin_api: FlaskClient) -> None:
     response = admin_api.post(
         "/production_snql_query", data=json.dumps({"dataset": "", "query": ""})
     )
-    assert response.status_code == 400
+    assert response.status_code == 404
     data = json.loads(response.data)
     assert data["error"]["message"] == "dataset '' does not exist"
 
@@ -997,9 +1039,9 @@ def test_prod_snql_query_invalid_query(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_force_overwrite(admin_api: FlaskClient) -> None:
-    migration_id = "0011_add_timestamp_ms"
+    migration_id = "0012_add_group_id_bloom_filter_index"
     migrations = json.loads(admin_api.get("/migrations/search_issues/list").data)
     downgraded_migration = [m for m in migrations if m.get("migration_id") == migration_id][0]
     assert downgraded_migration["status"] == "completed"
@@ -1015,7 +1057,7 @@ def test_force_overwrite(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_prod_snql_query_valid_query(admin_api: FlaskClient) -> None:
     snql_query = """
     MATCH (events)
@@ -1035,7 +1077,7 @@ def test_prod_snql_query_valid_query(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_prod_snql_query_multiple_allowed_projects(admin_api: FlaskClient) -> None:
     snql_query = """
     MATCH (transactions)
@@ -1055,7 +1097,7 @@ def test_prod_snql_query_multiple_allowed_projects(admin_api: FlaskClient) -> No
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 def test_prod_snql_query_invalid_project_query(admin_api: FlaskClient) -> None:
     snql_query = """
     MATCH (events)
@@ -1079,7 +1121,7 @@ def test_prod_mql_query_invalid_dataset(admin_api: FlaskClient) -> None:
         "/production_mql_query",
         data=json.dumps({"dataset": "", "query": "", "mql_context": {}}),
     )
-    assert response.status_code == 400
+    assert response.status_code == 404
     data = json.loads(response.data)
     assert data["error"]["message"] == "dataset '' does not exist"
 

@@ -17,9 +17,9 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
     TraceItemType,
 )
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    Array,
     AttributeKey,
     AttributeValue,
-    IntArray,
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
@@ -195,8 +195,6 @@ class TestEndpointDeleteTrace(BaseApiTest):
         ts = Timestamp()
         ts.GetCurrentTime()
 
-        int_array = IntArray(values=[12345, 67890])
-
         message = DeleteTraceItemsRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -214,7 +212,14 @@ class TestEndpointDeleteTrace(BaseApiTest):
                         comparison_filter=ComparisonFilter(
                             key=AttributeKey(name="group_id", type=AttributeKey.TYPE_INT),
                             op=ComparisonFilter.OP_IN,
-                            value=AttributeValue(val_int_array=int_array),
+                            value=AttributeValue(
+                                val_array=Array(
+                                    values=[
+                                        AttributeValue(val_int=12345),
+                                        AttributeValue(val_int=67890),
+                                    ]
+                                )
+                            ),
                         )
                     )
                 )

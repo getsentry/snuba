@@ -7,33 +7,6 @@ local gocdtasks = import 'github.com/getsentry/gocd-jsonnet/libs/gocd-tasks.libs
 // - https://www.notion.so/sentry/GoCD-New-Service-Quickstart-6d8db7a6964049b3b0e78b8a4b52e25d
 
 
-// Snuba deploy to SaaS is blocked till S4S deploy is healthy
-local s4s_health_check(region) =
-  if region == 's4s' then
-    [
-      {
-        health_check: {
-          jobs: {
-            health_check: {
-              environment_variables: {
-                SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
-                DATADOG_API_KEY: '{{SECRET:[devinfra][st_datadog_api_key]}}',
-                DATADOG_APP_KEY: '{{SECRET:[devinfra][st_datadog_app_key]}}',
-                LABEL_SELECTOR: 'service=snuba',
-              },
-              elastic_profile_id: 'snuba',
-              tasks: [
-                gocdtasks.script(importstr '../bash/s4s-sentry-health-check.sh'),
-                gocdtasks.script(importstr '../bash/s4s-ddog-health-check.sh'),
-              ],
-            },
-          },
-        },
-      },
-    ]
-  else
-    [];
-
 // Snuba deploy to ST is blocked till SaaS deploy is healthy
 local saas_health_check(region) =
   if region == 'us' || region == 'de' then
@@ -63,6 +36,25 @@ local saas_health_check(region) =
   else
     [];
 
+
+local peak_hours_check(region) =
+  if region == 'us' then
+    [
+      {
+        'check-peak-hours': {
+          jobs: {
+            'check-peak-hours': {
+              elastic_profile_id: 'snuba',
+              tasks: [
+                gocdtasks.script(importstr '../bash/check-peak-hours.sh'),
+              ],
+            },
+          },
+        },
+      },
+    ]
+  else
+    [];
 
 local deploy_canary_stage(region) =
   if region == 'us' then
@@ -158,7 +150,7 @@ function(region) {
           checks: {
             elastic_profile_id: 'snuba',
             environment_variables: {
-              PIPELINE_FIRST_STEP: 'deploy-snuba-rs-s4s',
+              PIPELINE_FIRST_STEP: 'deploy-snuba-rs-s4s2',
             },
             tasks: [
               gocdtasks.script(importstr '../bash/check-github.sh'),
@@ -169,7 +161,7 @@ function(region) {
       },
     },
 
-  ] + deploy_canary_stage(region) + [
+  ] + peak_hours_check(region) + deploy_canary_stage(region) + [
 
     {
       'deploy-primary': {
@@ -207,5 +199,5 @@ function(region) {
       },
     },
 
-  ] + s4s_health_check(region) + saas_health_check(region),
+  ] + saas_health_check(region),
 }

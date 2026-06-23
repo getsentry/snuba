@@ -351,13 +351,17 @@ def test_reverse_idempotency_all() -> None:
                     ClickhouseClientSettings.MIGRATE
                 )
 
-                before_state = cluster_connection.execute(
-                    "SELECT create_table_query FROM system.tables"
-                ).results
+                # `system.tables` has no guaranteed row order, and the
+                # reverse_twice() cycle in between can perturb the order rows
+                # are returned in (e.g. ON CLUSTER DDL re-registering tables).
+                # Order the snapshots so the comparison reflects the set of
+                # tables and their definitions, not the iteration order.
+                snapshot_query = (
+                    "SELECT create_table_query FROM system.tables ORDER BY create_table_query"
+                )
+                before_state = cluster_connection.execute(snapshot_query).results
                 reverse_twice()
-                after_state = cluster_connection.execute(
-                    "SELECT create_table_query FROM system.tables"
-                ).results
+                after_state = cluster_connection.execute(snapshot_query).results
                 assert before_state == after_state
             except UndefinedClickhouseCluster:
                 # Some groups do not have a cluster defined (e.g. test_migration)
@@ -489,7 +493,7 @@ def test_check_inactive_replica() -> None:
     with pytest.raises(InactiveClickhouseReplica) as exc:
         check_for_inactive_replicas([mock_cluster])
 
-    assert exc.value.args[0] == (
+    assert str(exc.value) == (
         "Cluster test_cluster has inactive replicas for table bad_table_1 "
         "with 2 out of 3 replicas active.\n"
         "Cluster test_cluster has inactive replicas for table bad_table_2 "

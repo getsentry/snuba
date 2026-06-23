@@ -38,10 +38,16 @@ from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, if_cond, in_cond, literal, literals_array, or_cond
 from snuba.query.dsl import column as snuba_column
 from snuba.query.expressions import (
+    Column as ColumnExpr,
+)
+from snuba.query.expressions import (
     DangerousRawSQL,
     Expression,
     FunctionCall,
     SubscriptableReference,
+)
+from snuba.query.expressions import (
+    Literal as LiteralExpr,
 )
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -52,6 +58,7 @@ from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
     attribute_key_to_expression,
     base_conditions_and,
+    get_field_existence_expression,
     timestamp_in_range_condition,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
@@ -137,31 +144,62 @@ def _apply_virtual_columns(
     mapped_column_to_context = {c.to_column_name: c for c in virtual_column_contexts}
 
     def transform_expressions(expression: Expression) -> Expression:
-        # virtual columns will show up as `attr_str[virtual_column_name]` or `attr_num[virtual_column_name]`
-        if not isinstance(expression, SubscriptableReference):
+        # An attribute read appears as attributes_string[key] (SELECT / group by),
+        # as arrayElement over attributes_string (value), or as the existence guard
+        # has(mapKeys(attributes_string), key) (see snuba.query.dsl.map_key_exists).
+        # For a virtual column the value forms map to the value transform and the
+        # existence guard maps to the backing column, so filters resolve against
+        # from_column_name.
+        is_existence = False
+        if isinstance(expression, SubscriptableReference):
+            if expression.column.column_name != "attributes_string":
+                return expression
+            key = str(expression.key.value)
+        elif (
+            isinstance(expression, FunctionCall)
+            and expression.function_name == "has"
+            and len(expression.parameters) == 2
+            and isinstance(expression.parameters[0], FunctionCall)
+            and expression.parameters[0].function_name == "mapKeys"
+            and len(expression.parameters[0].parameters) == 1
+            and isinstance(expression.parameters[0].parameters[0], ColumnExpr)
+            and expression.parameters[0].parameters[0].column_name == "attributes_string"
+            and isinstance(expression.parameters[1], LiteralExpr)
+        ):
+            key = str(expression.parameters[1].value)
+            is_existence = True
+        elif (
+            isinstance(expression, FunctionCall)
+            and expression.function_name == "arrayElement"
+            and isinstance(expression.parameters[0], ColumnExpr)
+            and expression.parameters[0].column_name == "attributes_string"
+            and isinstance(expression.parameters[1], LiteralExpr)
+        ):
+            key = str(expression.parameters[1].value)
+        else:
             return expression
 
-        if expression.column.column_name != "attributes_string":
+        context = mapped_column_to_context.get(key)
+        if context is None:
             return expression
-        context = mapped_column_to_context.get(str(expression.key.value))
-        if context:
-            attribute_expression = attribute_key_to_expression(
-                AttributeKey(
-                    name=context.from_column_name,
-                    type=NORMALIZED_COLUMNS_EAP_ITEMS.get(
-                        context.from_column_name, [AttributeKey.TYPE_STRING]
-                    )[0],
-                )
-            )
-            return f.transform(
-                f.CAST(f.ifNull(attribute_expression, literal("")), "String"),
-                literals_array(None, [literal(k) for k in context.value_map.keys()]),
-                literals_array(None, [literal(v) for v in context.value_map.values()]),
-                literal(context.default_value if context.default_value != "" else "unknown"),
-                alias=context.to_column_name,
-            )
 
-        return expression
+        from_column = attribute_key_to_expression(
+            AttributeKey(
+                name=context.from_column_name,
+                type=NORMALIZED_COLUMNS_EAP_ITEMS.get(
+                    context.from_column_name, [AttributeKey.TYPE_STRING]
+                )[0],
+            )
+        )
+        if is_existence:
+            return get_field_existence_expression(from_column)
+        return f.transform(
+            f.CAST(f.ifNull(from_column, literal("")), "String"),
+            literals_array(None, [literal(k) for k in context.value_map.keys()]),
+            literals_array(None, [literal(v) for v in context.value_map.values()]),
+            literal(context.default_value if context.default_value != "" else "unknown"),
+            alias=context.to_column_name,
+        )
 
     query.transform_expressions(transform_expressions)
 
@@ -230,6 +268,24 @@ def aggregation_filter_to_expression(
             raise BadSnubaRPCRequestException(f"Unsupported aggregation filter type: {default}")
 
 
+def _groupby_order_by_expression(attr_key: AttributeKey) -> Expression:
+    """
+    Maps an attribute key used in GROUP BY / ORDER BY to its expression.
+
+    `sentry.timestamp` is grouped and ordered on the raw primary-key `timestamp`
+    column rather than the `CAST(timestamp, 'Float64')` that
+    `attribute_key_to_expression` produces, so ClickHouse can read in primary-key
+    order. The GROUP BY and ORDER BY must use the *same* expression: grouping by
+    the bare `timestamp` identifier keeps the SELECT's `CAST(timestamp, 'Float64')`
+    valid (it is a function of the grouped column) while letting ORDER BY sort on
+    the raw column. If the two diverged, ClickHouse would reject the query with
+    "Column `timestamp` is not under aggregate function and not in GROUP BY".
+    """
+    if attr_key.name == "sentry.timestamp":
+        return snuba_column("timestamp")
+    return attribute_key_to_expression(attr_key)
+
+
 def _convert_order_by(
     groupby: List[Expression],
     order_by: Sequence[TraceItemTableRequest.OrderBy],
@@ -271,10 +327,19 @@ def _convert_order_by(
                 ]
             )
         elif x.column.HasField("key"):
+            # `sentry.timestamp` maps to `CAST(timestamp, 'Float64')`; the cast stops
+            # ClickHouse from sorting against the primary-key `timestamp` column. The
+            # cast is monotonic, so ordering by the raw DateTime column yields the same
+            # order while staying read-in-order friendly. (The i == 0 / single-project /
+            # no-groupby branch above already expands to the full table sort key; this
+            # covers `sentry.timestamp` ordering anywhere else.) The GROUP BY uses the
+            # same expression (see `_groupby_order_by_expression`) so an aggregation
+            # query that orders by `sentry.timestamp` stays valid.
+            expression = _groupby_order_by_expression(x.column.key)
             res.append(
                 OrderBy(
                     direction=direction,
-                    expression=attribute_key_to_expression(x.column.key),
+                    expression=expression,
                 )
             )
         elif x.column.HasField("conditional_aggregation"):
@@ -463,6 +528,23 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
             attribute_key_to_expression,
             use_sampling_factor(request_meta),
         )
+        match column.conditional_aggregation.WhichOneof("default_value"):
+            case None:
+                pass
+            case "default_value_double":
+                function_expr = f.coalesce(
+                    replace(function_expr, alias=None),
+                    column.conditional_aggregation.default_value_double,
+                )
+            case "default_value_int64":
+                function_expr = f.coalesce(
+                    replace(function_expr, alias=None),
+                    column.conditional_aggregation.default_value_int64,
+                )
+            case default:
+                raise BadSnubaRPCRequestException(
+                    f"Unknown default_value in formula. Expected default_value_double or default_value_int64 but got {default}"
+                )
         # aggregation label may not be set and the column label takes priority anyways.
         function_expr = replace(function_expr, alias=column.label)
         return function_expr
@@ -541,7 +623,7 @@ def build_query(
     if page_token_filter:
         additional_conditions.append(page_token_filter)
 
-    groupby = [attribute_key_to_expression(attr_key) for attr_key in request.group_by]
+    groupby = [_groupby_order_by_expression(attr_key) for attr_key in request.group_by]
 
     res = Query(
         from_clause=entity,
@@ -670,7 +752,7 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
             # When trace_filters are present and the feature is enabled, don't use sampling on the outer query
             # The inner query (getting trace IDs) will use sampling
             cross_item_queries_no_sample_outer = state.get_int_config(
-                "cross_item_queries_no_sample_outer", 0
+                "cross_item_queries_no_sample_outer", 1
             )
             if not (in_msg.trace_filters and cross_item_queries_no_sample_outer):
                 query_settings.set_sampling_tier(routing_decision.tier)

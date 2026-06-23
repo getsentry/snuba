@@ -31,7 +31,7 @@ from snuba.subscriptions.data import (
 from snuba.utils.metrics.timer import Timer
 from tests.subscriptions import BaseSubscriptionTest
 
-TESTS = [
+TESTS_EVENTS = [
     pytest.param(
         SnQLSubscriptionData(
             project_id=1,
@@ -60,7 +60,7 @@ TESTS = [
         ),
         10,
         None,
-        id="SnQL subscription",
+        id="SnQL subscription with join",
     ),
     pytest.param(
         SnQLSubscriptionData(
@@ -103,6 +103,9 @@ TESTS = [
         InvalidQueryException,
         id="SnQL subscription with disallowed clause",
     ),
+]
+
+TESTS_EAP = [
     pytest.param(
         RPCSubscriptionData.from_proto(
             CreateSubscriptionRequestProto(
@@ -207,10 +210,21 @@ class TestBuildRequestBase:
 
 
 class TestBuildRequest(BaseSubscriptionTest, TestBuildRequestBase):
-    @pytest.mark.parametrize("subscription, expected_value, exception", TESTS)
-    @pytest.mark.clickhouse_db
+    @pytest.mark.parametrize("subscription, expected_value, exception", TESTS_EVENTS)
+    @pytest.mark.events_db
     @pytest.mark.redis_db
     def test_conditions(
+        self,
+        subscription: SubscriptionData,
+        expected_value: Optional[int | float],
+        exception: Optional[Type[Exception]],
+    ) -> None:
+        self.compare_conditions(subscription, exception, "count", expected_value)
+
+    @pytest.mark.parametrize("subscription, expected_value, exception", TESTS_EAP)
+    @pytest.mark.eap
+    @pytest.mark.redis_db
+    def test_conditions_eap(
         self,
         subscription: SubscriptionData,
         expected_value: Optional[int | float],

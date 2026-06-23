@@ -18,7 +18,7 @@ type CopyTableHost = {
 };
 
 type CopyTableHostsState = {
-  sourceHost: Partial<CopyTableHost>
+  sourceHost: Partial<CopyTableHost>;
 }
 
 type CopyTableRequest = {
@@ -26,6 +26,9 @@ type CopyTableRequest = {
   source_host: string;
   source_port: number;
   dry_run: boolean;
+  target_host?: string;
+  skip_on_cluster?: boolean;
+  cluster_name?: string;
 };
 
 type CopyTableResult = {

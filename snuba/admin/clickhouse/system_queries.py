@@ -8,6 +8,7 @@ from snuba.admin.auth_roles import ExecuteSudoSystemQuery
 from snuba.admin.clickhouse.common import (
     InvalidCustomQuery,
     get_clusterless_node_connection,
+    get_ro_clusterless_node_connection,
     get_ro_node_connection,
     get_sudo_node_connection,
 )
@@ -45,10 +46,20 @@ def _run_sql_query_on_host(
         settings = ClickhouseClientSettings.QUERY
 
     if clusterless_mode:
-        connection = get_clusterless_node_connection(
-            clickhouse_host, clickhouse_port, storage_name, settings
+        # Sudo clusterless queries (SYSTEM, ALTER, DROP, etc.) require the full
+        # cluster credentials; read-only clusterless queries use the global
+        # readonly user so anonymous/low-privilege admin users cannot connect
+        # to ClickHouse with admin credentials via this path.
+        clusterless_connection = (
+            get_clusterless_node_connection(
+                clickhouse_host, clickhouse_port, storage_name, settings
+            )
+            if sudo
+            else get_ro_clusterless_node_connection(
+                clickhouse_host, clickhouse_port, storage_name, settings
+            )
         )
-        return connection.execute(query=sql, with_column_types=True)
+        return clusterless_connection.execute(query=sql, with_column_types=True)
 
     connection = (
         get_ro_node_connection(clickhouse_host, clickhouse_port, storage_name, settings)
@@ -159,46 +170,41 @@ DROP_TABLE_QUERY_RE = re.compile(
 
 def _sanitize_query_for_explain(sql_query: str) -> str:
     """
-    Sanitizes a SQL query before using it in EXPLAIN statements to prevent SQL injection.
+    Lightweight defense-in-depth check before embedding an admin-supplied query
+    in an EXPLAIN statement for validation.
 
-    This function adds defense-in-depth protection by:
-    1. Checking for multiple statement attempts (semicolons followed by more SQL)
-    2. Checking for comment-based injection attempts
-    3. Stripping trailing semicolons (which are optional in ClickHouse)
+    The query is SQL typed by an authenticated admin user and, if it passes the
+    EXPLAIN AST / EXPLAIN QUERY TREE validation below, is executed as the
+    read-only user, so this is not the primary security control. It only:
 
-    Note: The query itself will be executed as-is after validation. This sanitization
-    is specifically for the EXPLAIN QUERY TREE and EXPLAIN AST validation steps.
+    1. Strips the trailing semicolon (optional in ClickHouse) so the query can
+       be embedded in "EXPLAIN ... <query>".
+    2. Rejects obvious statement-chaining (e.g. "SELECT ...; DROP TABLE ...").
+    3. Rejects SQL comments.
+
+    String literals are removed before the chaining/comment scan so that
+    semicolons, quotes or comment-like sequences inside string values don't
+    cause false-positive rejections of legitimate queries.
     """
-    # Strip whitespace
     query = sql_query.strip()
 
-    # Check for unbalanced quotes which could indicate injection attempts
-    single_quotes = query.count("'") - query.count("\\'")
-    double_quotes = query.count('"') - query.count('\\"')
-    if single_quotes % 2 != 0 or double_quotes % 2 != 0:
-        raise InvalidCustomQuery("Unbalanced quotes detected in query")
-
-    # Check for multiple statement attempts (semicolon not at the end)
-    # We need to be careful about semicolons in strings
-    # Remove strings first to check for actual statement separators
-    temp_query = re.sub(r"'[^']*'", "", query)
-    temp_query = re.sub(r'"[^"]*"', "", temp_query)
-
-    # Now check if there's a semicolon followed by more SQL
-    if ";" in temp_query:
-        parts = temp_query.split(";")
-        # Filter out empty/whitespace parts
-        non_empty_parts = [p.strip() for p in parts if p.strip()]
-        if len(non_empty_parts) > 1:
-            raise InvalidCustomQuery("Multiple statements not allowed")
-
-    # Check for comment-based injection attempts
-    if "--" in temp_query or "/*" in temp_query:
-        raise InvalidCustomQuery("SQL comments not allowed in queries")
-
-    # Strip trailing semicolon for use in EXPLAIN statements
+    # Trailing semicolons are optional in ClickHouse; drop one so the query can
+    # be embedded in an EXPLAIN statement.
     if query.endswith(";"):
-        query = query.rstrip(";").strip()
+        query = query[:-1].strip()
+
+    # Strip string literals (handling '' / \\' / "" / \\" escapes) so that
+    # quotes, semicolons or comment sequences inside string values are ignored.
+    without_strings = re.sub(r"'(?:[^'\\]|\\.|'')*'", "", query)
+    without_strings = re.sub(r'"(?:[^"\\]|\\.|"")*"', "", without_strings)
+
+    # Reject statement chaining outside of string literals.
+    if ";" in without_strings:
+        raise InvalidCustomQuery("Multiple statements are not allowed")
+
+    # Reject comment-based injection attempts.
+    if "--" in without_strings or "/*" in without_strings:
+        raise InvalidCustomQuery("SQL comments are not allowed in queries")
 
     return query
 

@@ -1,12 +1,19 @@
 from collections import defaultdict
-from typing import Final, Mapping, Sequence, cast
+from typing import Final, Mapping, Sequence
 
 from sentry_conventions.attributes import ATTRIBUTE_METADATA
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import arrayElement, column, literal
-from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
+from snuba.query.expressions import (
+    Argument,
+    Expression,
+    FunctionCall,
+    JsonPath,
+    Lambda,
+    SubscriptableReference,
+)
 
 
 class MalformedAttributeException(Exception):
@@ -55,19 +62,40 @@ PROTO_TYPE_TO_ATTRIBUTE_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]]
 }
 
 
-def _build_deprecated_attributes() -> dict[str, set[str]]:
-    current_to_deprecated: dict[str, set[str]] = defaultdict(set)
+def _resolve_canonical(name: str) -> str:
+    visited: set[str] = set()
+    current = name
+    while current in ATTRIBUTE_METADATA:
+        meta = ATTRIBUTE_METADATA[current]
+        if not meta.deprecation or not meta.deprecation.replacement:
+            return current
+        if current in visited:
+            return current
+        visited.add(current)
+        current = meta.deprecation.replacement
+    return current
+
+
+def _build_deprecated_attributes() -> dict[str, list[str]]:
+    groups: dict[str, set[str]] = defaultdict(set)
     for name, metadata in ATTRIBUTE_METADATA.items():
-        if metadata.deprecation:
-            replacement = cast(str, metadata.deprecation.replacement)
-            deprecated = {name}
-            if metadata.aliases:
-                deprecated.update(metadata.aliases)
-            current_to_deprecated[replacement].update(deprecated)
-    return current_to_deprecated
+        if metadata.deprecation and metadata.deprecation.replacement:
+            canonical = _resolve_canonical(name)
+            groups[canonical].add(name)
+
+    result: dict[str, list[str]] = {}
+    for canonical, deprecated_names in groups.items():
+        full_group = {canonical} | deprecated_names
+        for member in full_group:
+            others = full_group - {member}
+            if member == canonical:
+                result[member] = sorted(others)
+            else:
+                result[member] = [canonical] + sorted(others - {canonical})
+    return result
 
 
-ATTRIBUTES_TO_COALESCE: dict[str, set[str]] = _build_deprecated_attributes()
+ATTRIBUTES_TO_COALESCE: dict[str, list[str]] = _build_deprecated_attributes()
 
 
 def _build_label_mapping_key(attribute_key: AttributeKey) -> str:
@@ -110,6 +138,61 @@ def _generate_subscriptable_reference(
         column=column(PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attribute_type]),
         key=literal(attribute_name),
         alias=alias,
+    )
+
+
+def type_array_to_membership_array_expression(attr_key: AttributeKey) -> FunctionCall:
+    """To be used only in WHERE clause, not SELECT"""
+    if attr_key.type != AttributeKey.Type.TYPE_ARRAY:
+        raise MalformedAttributeException(
+            f"type_array_to_membership_array_expression expected TYPE_ARRAY, got "
+            f"{AttributeKey.Type.Name(attr_key.type)}"
+        )
+    # We need different label than attribute_key_to_expression(TYPE_ARRAY) [toJSONString]
+    alias = f"{_build_label_mapping_key(attr_key)}__array_members"
+    x = Argument(None, "x")
+    return FunctionCall(
+        alias=alias,
+        function_name="arrayMap",
+        parameters=(
+            Lambda(
+                alias=None,
+                parameters=("x",),
+                transformation=FunctionCall(
+                    alias=None,
+                    function_name="coalesce",
+                    parameters=(
+                        JsonPath(None, x, "String", "Nullable(String)"),
+                        FunctionCall(
+                            None,
+                            "toString",
+                            (JsonPath(None, x, "Int", "Nullable(Int64)"),),
+                        ),
+                        FunctionCall(
+                            None,
+                            "toString",
+                            (JsonPath(None, x, "Double", "Nullable(Float64)"),),
+                        ),
+                        JsonPath(None, x, "Bool", "Nullable(String)"),
+                    ),
+                ),
+            ),
+            JsonPath(
+                alias=None,
+                base=column("attributes_array"),
+                path=attr_key.name,
+                return_type="Array(JSON)",
+            ),
+        ),
+    )
+
+
+def type_array_to_stored_array_json_path(attr_key: AttributeKey) -> JsonPath:
+    return JsonPath(
+        alias=None,
+        base=column("attributes_array"),
+        path=attr_key.name,
+        return_type="Array(JSON)",
     )
 
 
@@ -169,6 +252,16 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
                 attr_key.type,
                 alias,
             )
+
+    if attr_key.type == AttributeKey.Type.TYPE_ARRAY:
+        # Tagged array under attributes_array.* as Array(JSON). Select toJSONString(...)
+        # so the result column is String; callers decode in application code. Raw
+        # Array(JSON) is not returned in the SELECT to avoid native client limits.
+        return FunctionCall(
+            alias=alias,
+            function_name="toJSONString",
+            parameters=(type_array_to_stored_array_json_path(attr_key),),
+        )
 
     raise MalformedAttributeException(
         f"Attribute {attr_key.name} has an unknown type: {AttributeKey.Type.Name(attr_key.type)}"

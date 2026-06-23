@@ -18,7 +18,7 @@ SNQL_ROUTE = "/transactions/snql"
 LIMIT_BY_COUNT = 5
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 class TestTransactionsApi(BaseApiTest):
     @pytest.fixture
@@ -32,7 +32,7 @@ class TestTransactionsApi(BaseApiTest):
     @pytest.fixture(autouse=True)
     def setup_teardown(
         self,
-        clickhouse_db: None,
+        events_db: None,
         redis_db: None,
         _build_snql_post_methods: Callable[[str], Any],
     ) -> Generator[None, None, None]:

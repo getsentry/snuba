@@ -27,7 +27,7 @@ from snuba.web import QueryException
 from snuba.web.delete_query import _execute_query
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.eap
 @pytest.mark.redis_db
 def test_delete_query_clickhouse_error() -> None:
     from_clause = Table(

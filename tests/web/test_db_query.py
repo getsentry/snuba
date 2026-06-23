@@ -240,7 +240,7 @@ def _build_test_query(
     )
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 def test_db_record_bytes_scanned() -> None:
     dataset_name = "events"
@@ -277,7 +277,7 @@ def test_db_record_bytes_scanned() -> None:
     }
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 def test_db_query_success() -> None:
     query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
@@ -389,7 +389,7 @@ def test_db_query_success() -> None:
     }
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 def test_bypass_cache_referrer() -> None:
     query, storage, _ = _build_test_query("count(distinct(project_id))")
@@ -440,7 +440,7 @@ def test_bypass_cache_referrer() -> None:
             }
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 def test_db_query_fail() -> None:
     query, storage, attribution_info = _build_test_query("count(non_existent_column)")
@@ -715,7 +715,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
         )
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 def test_allocation_policy_threads_applied_to_query() -> None:
     POLICY_THREADS = 4
@@ -796,7 +796,7 @@ def test_allocation_policy_threads_applied_to_query() -> None:
     assert query_metadata_list[0].stats["max_threads"] == POLICY_THREADS
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 def test_allocation_policy_updates_quota() -> None:
     MAX_QUERIES_TO_RUN = 2
@@ -992,7 +992,7 @@ def test_clickhouse_settings_applied_to_query() -> None:
     )
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 def test_db_query_ignore_consistent() -> None:
     query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
@@ -1018,7 +1018,7 @@ def test_db_query_ignore_consistent() -> None:
     assert result.extra["stats"]["max_threads"] == 10
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 def test_cache_metrics_with_simple_readthrough() -> None:
     query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
@@ -1073,7 +1073,7 @@ def test_cache_metrics_with_simple_readthrough() -> None:
         )
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 def test_policy_sets_max_bytes_to_read() -> None:
     class MaxBytesPolicy(AllocationPolicy):

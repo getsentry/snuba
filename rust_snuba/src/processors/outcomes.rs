@@ -33,6 +33,8 @@ const CLIENT_DISCARD_REASONS: &[&str] = &[
     "invalid",
     // events were dropped because of network errors and were not retried.
     "network_error",
+    // a span was dropped or not started by an SDK due to a missing parent span
+    "no_parent_span",
     // a SDK internal queue (eg: transport queue) overflowed
     "queue_overflow",
     // the SDK dropped events because an earlier rate limit instructed the SDK to back off.
@@ -80,6 +82,12 @@ pub fn process_message(
         }
     }
 
+    msg.quantity32 = Some(
+        msg.quantity
+            .and_then(|quantity| u32::try_from(quantity).ok())
+            .unwrap_or(0),
+    );
+
     InsertBatch::from_rows([msg], None)
 }
 
@@ -94,12 +102,17 @@ struct Outcome {
     timestamp: StringToIntDatetime,
     outcome: u8,
     category: Option<u8>,
-    quantity: Option<u32>,
+    #[serde(rename(serialize = "quantity64"))]
+    quantity: Option<u64>,
+    // Only derived from `quantity` in `process_message`
+    #[serde(skip_deserializing, rename(serialize = "quantity"))]
+    quantity32: Option<u32>,
     reason: Option<String>,
     event_id: Option<Uuid>,
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
     use chrono::DateTime;
@@ -124,7 +137,32 @@ mod tests {
         let result = process_message(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
 
-        let expected = b"{\"org_id\":1,\"project_id\":1,\"key_id\":null,\"timestamp\":1680029444,\"outcome\":4,\"category\":1,\"quantity\":3,\"reason\":null,\"event_id\":null}\n";
+        let expected = b"{\"org_id\":1,\"project_id\":1,\"key_id\":null,\"timestamp\":1680029444,\"outcome\":4,\"category\":1,\"quantity64\":3,\"quantity\":3,\"reason\":null,\"event_id\":null}\n";
+
+        assert_eq!(result.rows.into_encoded_rows(), expected);
+    }
+
+    #[test]
+    fn test_outcome_quantity_overflow() {
+        // A quantity larger than u32::MAX cannot fit in the u32 `quantity`
+        // column; default to 0 while `quantity64` keeps the full value.
+        let data = r#"{
+            "org_id": 1,
+            "outcome": 4,
+            "project_id": 1,
+            "quantity": 5000000000,
+            "timestamp": "2023-03-28T18:50:44.000011Z"
+          }"#;
+        let payload = KafkaPayload::new(None, None, Some(data.as_bytes().to_vec()));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        let result = process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+
+        let expected = b"{\"org_id\":1,\"project_id\":1,\"key_id\":null,\"timestamp\":1680029444,\"outcome\":4,\"category\":1,\"quantity64\":5000000000,\"quantity\":0,\"reason\":null,\"event_id\":null}\n";
 
         assert_eq!(result.rows.into_encoded_rows(), expected);
     }

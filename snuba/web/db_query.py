@@ -467,7 +467,7 @@ def _raw_query(
         error_code = None
         trigger_rate_limiter = None
         status = None
-        request_status = get_request_status(cause)
+        request_status = get_request_status(cause, context=stats)
 
         calculated_cause = cause
         if isinstance(cause, RateLimitExceeded):
@@ -477,10 +477,13 @@ def _raw_query(
             error_code = cause.code
             status = get_query_status_from_error_codes(error_code)
             if error_code == ErrorCodes.TOO_MANY_BYTES:
-                calculated_cause = RateLimitExceeded(
-                    "Query scanned more than the allocated amount of bytes",
-                    quota_allowance=stats["quota_allowance"],
-                )
+                # Only treat as rate limiting if the limit was set by allocation policy
+                if stats.get("max_bytes_to_read_set_by_policy", False):
+                    calculated_cause = RateLimitExceeded(
+                        "Query scanned more than the allocated amount of bytes",
+                        quota_allowance=stats["quota_allowance"],
+                    )
+                    status = QueryStatus.RATE_LIMITED
 
             with configure_scope() as scope:
                 fingerprint = ["{{default}}", str(cause.code), dataset_name]
@@ -857,6 +860,8 @@ def _apply_allocation_policies_quota(
         if max_bytes_to_read != 0:
             query_settings.push_clickhouse_setting("max_bytes_to_read", max_bytes_to_read)
             summary["max_bytes_to_read"] = max_bytes_to_read
+            # Track that max_bytes_to_read was set by allocation policy
+            stats["max_bytes_to_read_set_by_policy"] = True
 
         _populate_query_status(summary, rejection_quota_and_policy, throttle_quota_and_policy)
         _add_quota_info(summary, _REJECTED_BY, rejection_quota_and_policy)

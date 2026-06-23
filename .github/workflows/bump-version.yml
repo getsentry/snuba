@@ -29,12 +29,11 @@ jobs:
   bump-version:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       with:
         token: ${{ secrets.GETSENTRY_BOT_REVERT_TOKEN }}
-    - uses: astral-sh/setup-uv@884ad927a57e558e7a70b92f2bccf9198a4be546 # v6
-      with:
-        version: '0.8.2'
+    - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+    - run: uv python install
     - run: |
         set -euxo pipefail
 

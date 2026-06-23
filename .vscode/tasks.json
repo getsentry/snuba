@@ -1,0 +1,6 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {"label": "uvx maturin develop", "type": "shell", "command": "uvx maturin develop", "options": {"cwd": "${workspaceFolder}/rust_snuba"}}
+    ]
+}

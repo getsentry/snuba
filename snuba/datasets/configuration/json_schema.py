@@ -285,7 +285,9 @@ MAP_SCHEMA = make_column_schema(
         "type": "object",
         "properties": {
             "key": {"anyOf": _SIMPLE_ARRAY_INNER_TYPES},
-            "value": {"anyOf": _SIMPLE_ARRAY_INNER_TYPES},
+            # Map values may be a simple type or an Array, e.g.
+            # Map(String, Array(String)).
+            "value": {"anyOf": [*_SIMPLE_ARRAY_INNER_TYPES, del_name_field(ARRAY_SCHEMA)]},
         },
         "additionalProperties": False,
     },
@@ -621,6 +623,10 @@ DELETION_SETTINGS_SCHEMA = {
                 "type": "array",
                 "items": {"type": "string"},
             },
+        },
+        "partition_column": {
+            "type": "string",
+            "description": "Column used for partition splitting in lightweight deletes. When set, deletes can be split by toMonday(partition_column) to reduce per-mutation CPU.",
         },
     },
     "required": ["is_enabled", "tables"],

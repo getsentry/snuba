@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import time
-from typing import Callable, Generic, MutableSequence, Optional, TypeVar, Union
+from typing import Callable, Generic, MutableSequence, Optional, TypeVar, Union, cast
 
 from arroyo.processing.strategies.abstract import ProcessingStrategy
 from arroyo.processing.strategies.buffer import Buffer
-from arroyo.types import BaseValue, FilteredPayload, Message, TStrategyPayload
+from arroyo.types import BaseValue, FilteredPayload, Message, TStrategyPayload, Value
 
 ValuesBatch = MutableSequence[BaseValue[TStrategyPayload]]
 
@@ -15,6 +15,9 @@ TResult = TypeVar("TResult")
 
 
 Accumulator = Callable[[TResult, BaseValue[TPayload]], TResult]
+# https://clickhouse.com/docs/operations/settings/settings#max_ast_elements
+# max_ast_elements defaults to 50000
+MAX_BUFFERED_MESSAGES = 2000
 
 
 class ReduceRowsBuffer(Generic[TPayload, TResult]):
@@ -35,6 +38,8 @@ class ReduceRowsBuffer(Generic[TPayload, TResult]):
         self._buffer = initial_value()
         self._buffer_size = 0
         self._buffer_until = time.time() + max_batch_time
+        # used to set a max value on the delete AST
+        self._buffered_messages = 0
 
     @property
     def buffer(self) -> TResult:
@@ -46,7 +51,11 @@ class ReduceRowsBuffer(Generic[TPayload, TResult]):
 
     @property
     def is_ready(self) -> bool:
-        return self._buffer_size >= self.max_batch_size or time.time() >= self._buffer_until
+        return (
+            self._buffer_size >= self.max_batch_size
+            or time.time() >= self._buffer_until
+            or self._buffered_messages >= MAX_BUFFERED_MESSAGES
+        )
 
     def append(self, message: BaseValue[TPayload]) -> None:
         """
@@ -61,6 +70,7 @@ class ReduceRowsBuffer(Generic[TPayload, TResult]):
         else:
             buffer_increment = 1
         self._buffer_size += buffer_increment
+        self._buffered_messages += 1
 
     def new(self) -> "ReduceRowsBuffer[TPayload, TResult]":
         return ReduceRowsBuffer(
@@ -109,6 +119,32 @@ class ReduceCustom(
 
     def join(self, timeout: Optional[float] = None) -> None:
         self.__buffer_step.join(timeout)
+
+
+class NoBatchStep(ProcessingStrategy[Union[FilteredPayload, TStrategyPayload]]):
+    def __init__(
+        self,
+        next_step: ProcessingStrategy[ValuesBatch[TStrategyPayload]],
+    ) -> None:
+        self.__next_step = next_step
+
+    def submit(self, message: Message[Union[FilteredPayload, TStrategyPayload]]) -> None:
+        if isinstance(message.payload, FilteredPayload):
+            return
+        value = cast(BaseValue[TStrategyPayload], message.value)
+        self.__next_step.submit(Message(Value([value], value.committable)))
+
+    def poll(self) -> None:
+        self.__next_step.poll()
+
+    def close(self) -> None:
+        self.__next_step.close()
+
+    def terminate(self) -> None:
+        self.__next_step.terminate()
+
+    def join(self, timeout: Optional[float] = None) -> None:
+        self.__next_step.join(timeout)
 
 
 class BatchStepCustom(ProcessingStrategy[Union[FilteredPayload, TStrategyPayload]]):

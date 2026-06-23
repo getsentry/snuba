@@ -9,6 +9,7 @@ from unittest import mock
 import pytest
 import simplejson as json
 from arroyo.backends.kafka import KafkaPayload
+from arroyo.processing.strategies.healthcheck import Healthcheck
 from arroyo.types import BrokerValue, Message, Partition, Topic
 
 from snuba import replacer, settings
@@ -30,11 +31,11 @@ CONSUMER_GROUP = "consumer_group"
 redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.events_db
 @pytest.mark.redis_db
 class TestReplacer:
     @pytest.fixture(autouse=True)
-    def setup_teardown(self, clickhouse_db: None) -> None:
+    def setup_teardown(self, events_db: None) -> None:
         from snuba.web.views import application
 
         assert application.testing is True
@@ -423,3 +424,14 @@ class TestReplacer:
             # exclude_groups from project setter, start_merge from group setter
             {ReplacementType.EXCLUDE_GROUPS, ReplacementType.START_MERGE},
         )
+
+    def test_replacer_strategy_factory_wraps_healthcheck(self) -> None:
+        worker = mock.Mock()
+        factory = replacer.ReplacerStrategyFactory(
+            worker=worker,
+            health_check_file="/tmp/health.txt",
+        )
+
+        strategy = factory.create_with_partitions(mock.Mock(), {})
+
+        assert isinstance(strategy, Healthcheck)

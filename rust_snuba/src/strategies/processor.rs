@@ -9,11 +9,14 @@ use sentry_arroyo::counter;
 use sentry_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
-use sentry_arroyo::processing::strategies::{InvalidMessage, ProcessingStrategy};
+use sentry_arroyo::processing::strategies::{
+    InvalidMessage, InvalidMessageReason, ProcessingStrategy,
+};
 use sentry_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition};
 use sentry_kafka_schemas::{Schema, SchemaError, SchemaType};
 
 use crate::config::ProcessorConfig;
+use crate::processors::utils::SilencedDLQMessage;
 use crate::processors::{ProcessingFunction, ProcessingFunctionWithReplacements};
 use crate::types::{
     BytesInsertBatch, CommitLogEntry, CommitLogOffsets, InsertBatch, InsertOrReplacement,
@@ -49,12 +52,14 @@ pub fn make_rust_processor(
             }
         }
 
+        let num_bytes = transformed.rows.encoded_rows.len();
         let mut payload = BytesInsertBatch::from_rows(transformed.rows)
+            .with_num_bytes(num_bytes)
             .with_message_timestamp(timestamp)
             .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
                 partition.index,
                 CommitLogEntry {
-                    offset,
+                    offset: offset + 1,
                     orig_message_ts: timestamp,
                     received_p99: transformed.origin_timestamp.into_iter().collect(),
                 },
@@ -126,12 +131,14 @@ pub fn make_rust_processor_with_replacements(
 
         let payload = match transformed {
             InsertOrReplacement::Insert(transformed) => {
+                let num_bytes = transformed.rows.encoded_rows.len();
                 let mut batch = BytesInsertBatch::from_rows(transformed.rows)
+                    .with_num_bytes(num_bytes)
                     .with_message_timestamp(timestamp)
                     .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
                         partition.index,
                         CommitLogEntry {
-                            offset,
+                            offset: offset + 1,
                             orig_message_ts: timestamp,
                             received_p99: transformed.origin_timestamp.into_iter().collect(),
                         },
@@ -224,19 +231,27 @@ impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
             }
         };
 
-        let maybe_err = RunTaskError::InvalidMessage(InvalidMessage {
+        let invalid_msg = InvalidMessage {
             partition: msg.partition,
             offset: msg.offset,
-        });
+            reason: InvalidMessageReason::Invalid,
+        };
 
         let kafka_payload = &msg.payload.clone();
         let Some(payload) = kafka_payload.payload() else {
-            return Err(maybe_err);
+            return Err(RunTaskError::InvalidMessage(invalid_msg));
         };
 
         record_message_stats(payload);
 
         let processed_message = self.process_payload(msg).map_err(|error| {
+            if error.is::<SilencedDLQMessage>() {
+                return RunTaskError::InvalidMessage(InvalidMessage {
+                    reason: InvalidMessageReason::Ignored,
+                    ..invalid_msg
+                });
+            }
+
             counter!("invalid_message");
 
             sentry::with_scope(
@@ -252,7 +267,7 @@ impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
                 },
             );
 
-            maybe_err
+            RunTaskError::InvalidMessage(invalid_msg)
         });
 
         let elapsed = start_time.elapsed();
@@ -310,6 +325,7 @@ pub fn validate_schema(
     let maybe_err = RunTaskError::InvalidMessage(InvalidMessage {
         partition: msg.partition,
         offset: msg.offset,
+        reason: InvalidMessageReason::Invalid,
     });
 
     let kafka_payload = &msg.payload.clone();
@@ -392,11 +408,17 @@ fn record_message_stats(payload: &[u8]) {
 mod tests {
     use super::*;
 
+    use std::sync::Arc;
+    use std::time::Duration;
+
     use chrono::Utc;
     use sentry_arroyo::backends::kafka::types::KafkaPayload;
+    use sentry_arroyo::processing::strategies::{
+        CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
+    };
     use sentry_arroyo::types::{Message, Partition, Topic};
 
-    use crate::types::InsertBatch;
+    use crate::types::{InsertBatch, RowData};
     use crate::Noop;
 
     #[test]
@@ -440,6 +462,76 @@ mod tests {
         let _ = strategy.join(None);
     }
 
+    /// The commit log offset produced by the processor must use next-to-consume
+    /// semantics (raw offset + 1).
+    #[test]
+    fn commit_log_entry_uses_next_offset() {
+        let captured: Arc<std::sync::Mutex<Vec<BytesInsertBatch<RowData>>>> =
+            Arc::new(std::sync::Mutex::new(Vec::new()));
+        let captured_clone = captured.clone();
+
+        struct Capture(Arc<std::sync::Mutex<Vec<BytesInsertBatch<RowData>>>>);
+        impl ProcessingStrategy<BytesInsertBatch<RowData>> for Capture {
+            fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
+                Ok(None)
+            }
+            fn submit(
+                &mut self,
+                message: Message<BytesInsertBatch<RowData>>,
+            ) -> Result<(), SubmitError<BytesInsertBatch<RowData>>> {
+                self.0.lock().unwrap().push(message.into_payload());
+                Ok(())
+            }
+            fn terminate(&mut self) {}
+            fn join(
+                &mut self,
+                _timeout: Option<Duration>,
+            ) -> Result<Option<CommitRequest>, StrategyError> {
+                Ok(None)
+            }
+        }
+
+        fn noop_processor(
+            _payload: KafkaPayload,
+            _metadata: KafkaMessageMetadata,
+            _config: &ProcessorConfig,
+        ) -> anyhow::Result<InsertBatch> {
+            Ok(InsertBatch::default())
+        }
+
+        let partition = Partition::new(Topic::new("events-small"), 7);
+        let raw_offset: u64 = 42;
+        let concurrency = ConcurrencyConfig::new(1);
+
+        let mut strategy = make_rust_processor(
+            Capture(captured_clone),
+            noop_processor,
+            "outcomes",
+            false,
+            &concurrency,
+            ProcessorConfig::default(),
+            None,
+        );
+
+        let payload = KafkaPayload::new(None, None, Some(b"{}".to_vec()));
+        let message = Message::new_broker_message(payload, partition, raw_offset, Utc::now());
+
+        strategy.submit(message).unwrap();
+        strategy.poll().unwrap();
+        let _ = strategy.join(None);
+
+        let batches = captured.lock().unwrap();
+        assert_eq!(batches.len(), 1);
+
+        let offsets = batches[0].commit_log_offsets();
+        let entry = offsets
+            .0
+            .get(&partition.index)
+            .expect("commit log entry missing for partition");
+
+        assert_eq!(entry.offset, raw_offset + 1);
+    }
+
     #[test]
     fn test_ip_addresses() {
         let test_cases = [
@@ -457,8 +549,7 @@ mod tests {
             assert_eq!(
                 IP_REGEX.is_match(address),
                 is_ipv4,
-                "{} failed IPv4 validation",
-                address
+                "{address} failed IPv4 validation"
             );
         }
     }

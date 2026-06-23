@@ -94,6 +94,11 @@ class memoize:
                 )
             return self.saved[config_key]
 
+        def clear() -> None:
+            self.saved.clear()
+            self.at.clear()
+
+        wrapper.clear = clear  # type: ignore[attr-defined]
         return wrapper
 
 

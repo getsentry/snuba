@@ -60,7 +60,6 @@
     "editor.formatOnSave": true
   },
 
-  "python.defaultInterpreterPath": ".venv/bin/python",
   // test discovery is sluggish and the UI around running
   // tests is often in your way and misclicked
   "python.testing.pytestEnabled": true,
@@ -70,6 +69,9 @@
     "--strict"
   ],
   "makefile.configureOnOpen": false,
-  "cursorpyright.analysis.autoImportCompletions": true
+  "cursorpyright.analysis.autoImportCompletions": true,
+  "ruff.lint.extendSelect": [
+    "B"
+  ]
 
 }

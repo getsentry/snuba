@@ -6,6 +6,15 @@ use serde_json::Value;
 #[derive(Clone, Default)]
 pub struct ProcessorConfig {
     pub env_config: EnvConfig,
+    pub storage_name: String,
+}
+
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum BatchSizeCalculation {
+    #[default]
+    Rows,
+    Bytes,
 }
 
 #[derive(Deserialize, Debug)]
@@ -15,10 +24,13 @@ pub struct ConsumerConfig {
     pub raw_topic: TopicConfig,
     pub commit_log_topic: Option<TopicConfig>,
     pub replacements_topic: Option<TopicConfig>,
+    pub accepted_outcomes_topic: Option<TopicConfig>,
     pub dlq_topic: Option<TopicConfig>,
     pub accountant_topic: TopicConfig,
     pub max_batch_size: usize,
     pub max_batch_time_ms: u64,
+    #[serde(default)]
+    pub max_batch_size_calculation: BatchSizeCalculation,
     pub env: EnvConfig,
 }
 

@@ -60,10 +60,15 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
     def _additional_config_definitions(self) -> list[Configuration]:
         return [
             Configuration(
-                name="some_additional_config",
-                description="Placeholder for now",
+                name="max_items_before_downsampling",
+                description=(
+                    "Per-org override for the max ingested items threshold above which a query is "
+                    "downsampled. When set to a positive value, takes precedence over the global "
+                    "OutcomesBasedRoutingStrategy.max_items_before_downsampling runtime config. "
+                    "Default 0 means no override (use global)."
+                ),
                 value_type=int,
-                default=50,
+                default=0,
                 param_types={"organization_id": int},
             ),
         ]
@@ -175,6 +180,17 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
                 tenant_ids={
                     "organization_id": in_msg_meta.organization_id,
                     "referrer": "eap.route_outcomes",
+                    # This is an internal, system-initiated query that Snuba runs against
+                    # the (tiny) outcomes table purely to decide which tier to route the
+                    # real query to. It must never be rejected by the outcomes storage's
+                    # allocation policies: a rejection here doesn't protect EAP, it just
+                    # breaks tier routing and forces the fallback path (see SNUBA-A3V,
+                    # "Error getting routing decision: Query cannot be run due to
+                    # allocation policies"). Under load a busy org can exceed the outcomes
+                    # ConcurrentRateLimitAllocationPolicy limit (keyed by organization_id,
+                    # since this query carries no project_id) and get rejected. Marking it
+                    # as a cross-org/system query exempts it from those per-tenant limits.
+                    "cross_org_query": 1,
                 },
                 app_id=AppID("eap"),
                 parent_api="eap.route_outcomes",
@@ -189,7 +205,14 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         routing_context.extra_info["estimation_sql"] = res.extra.get("sql", "")
         return cast(int, res.result.get("data", [{}])[0].get("num_items", 0))
 
-    def _get_max_items_before_downsampling(self) -> int:
+    def _get_max_items_before_downsampling(self, organization_id: int) -> int:
+        per_org_override = self.get_config_value(
+            "max_items_before_downsampling",
+            params={"organization_id": organization_id},
+        )
+        if per_org_override > 0:
+            return cast(int, per_org_override)
+
         default = 1_000_000_000
         return (
             state.get_int_config(
@@ -260,7 +283,9 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         # downsample if it's too many
         ingested_items = self.get_ingested_items_for_timerange(routing_decision.routing_context)
         routing_decision.routing_context.extra_info["ingested_items"] = ingested_items
-        max_items_before_downsampling = self._get_max_items_before_downsampling()
+        max_items_before_downsampling = self._get_max_items_before_downsampling(
+            in_msg_meta.organization_id
+        )
         routing_decision.routing_context.extra_info["max_items_before_downsampling"] = (
             max_items_before_downsampling
         )
