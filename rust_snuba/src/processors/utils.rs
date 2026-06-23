@@ -1,6 +1,6 @@
 use crate::config::EnvConfig;
-use crate::runtime_config::get_str_config;
 use crate::types::item_type_name;
+use sentry_options::options;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use schemars::JsonSchema;
 use sentry_arroyo::counter;
@@ -16,7 +16,7 @@ pub const INVALID_TIMESTAMP_FUTURE_INTERVAL_SECONDS: i64 = 7 * 24 * 60 * 60;
 /// timestamp dropping is enabled.
 pub const INVALID_TIMESTAMP_PAST_INTERVAL_SECONDS: i64 = 30 * 24 * 60 * 60;
 
-/// Runtime config key. When set to `"1"`, the eap-items consumer skips messages
+/// sentry-options key. When `true`, the eap-items consumer skips messages
 /// whose event `timestamp` is more than one week in the future or more than
 /// thirty days in the past (see `out_of_valid_interval_secs`).
 pub const DROP_INVALID_TIMESTAMPS_KEY: &str = "eap_items_drop_invalid_timestamps";
@@ -34,10 +34,10 @@ pub fn out_of_valid_interval_secs(ts: DateTime<Utc>, now: DateTime<Utc>) -> bool
 }
 
 pub fn get_drop_invalid_timestamps_enabled() -> bool {
-    get_str_config(DROP_INVALID_TIMESTAMPS_KEY)
+    options("snuba")
         .ok()
-        .flatten()
-        .map(|s| s == "1")
+        .and_then(|o| o.get(DROP_INVALID_TIMESTAMPS_KEY).ok())
+        .and_then(|v| v.as_bool())
         .unwrap_or(false)
 }
 

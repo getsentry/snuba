@@ -91,6 +91,16 @@
       "type": "string",
       "default": "",
       "description": "Comma-separated list of ClickHouse cluster names for which the max-query-size check is disabled. Empty means the check applies to all clusters."
+    },
+    "eap_items_drop_invalid_timestamps": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the eap-items consumer skips messages whose event timestamp is more than one week in the future or more than thirty days in the past."
+    },
+    "experimental_healthcheck": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the consumer healthcheck strategy treats commit requests (progress) as healthy and touches the healthcheck file accordingly."
     }
   }
 }
