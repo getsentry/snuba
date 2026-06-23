@@ -16,6 +16,8 @@ schema:
       { name: item_type, type: UInt, args: { size: 8 } },
       { name: timestamp, type: DateTime },
       { name: trace_id, type: UUID },
+      { name: conversation_id, type: UUID },
+      { name: session_id, type: UUID },
       { name: item_id, type: UInt, args: { size: 128 } },
       { name: sampling_weight, type: UInt, args: { size: 64 } },
       { name: sampling_factor, type: Float, args: { size: 64 } },
@@ -106,6 +108,11 @@ schema:
       { name: attributes_float_37, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
       { name: attributes_float_38, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
       { name: attributes_float_39, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
+
+      { name: attributes_array_string, type: Map, args: { key: { type: String }, value: { type: Array, args: { inner_type: { type: String } } } } },
+      { name: attributes_array_int, type: Map, args: { key: { type: String }, value: { type: Array, args: { inner_type: { type: Int, args: { size: 64 } } } } } },
+      { name: attributes_array_float, type: Map, args: { key: { type: String }, value: { type: Array, args: { inner_type: { type: Float, args: { size: 64 } } } } } },
+      { name: attributes_array_bool, type: Map, args: { key: { type: String }, value: { type: Array, args: { inner_type: { type: Bool } } } } },
     ]
   local_table_name: eap_items_1_downsample_8_local
   dist_table_name: eap_items_1_downsample_8_dist
@@ -115,7 +122,7 @@ query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: UUIDColumnProcessor
     args:
-      columns: [trace_id]
+      columns: [trace_id, conversation_id, session_id]
   - processor: HexIntColumnProcessor
     args:
       columns: [item_id]
