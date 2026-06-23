@@ -2,9 +2,6 @@
 
 eval $(regions-project-env-vars --region="${SENTRY_REGION}")
 
-# Temporarily run the distroless image variant in s4s2 to validate it before
-# switching production. The "-distroless" tag is published to the same registry
-# by .github/workflows/image.yml (build-distroless-production).
 IMAGE_TAG="${GO_REVISION_SNUBA_REPO}"
 if [ "${SENTRY_REGION}" = "s4s2" ]; then
   IMAGE_TAG="${GO_REVISION_SNUBA_REPO}-distroless"
