@@ -112,3 +112,31 @@ class TestReplaysApi(BaseApiTest):
                 "sdk_version": "",
             }
         ]
+
+    def test_segment_names_query(self) -> None:
+        replays_storage = get_entity(EntityKey.REPLAYS).get_writable_storage()
+        assert replays_storage is not None
+        write_raw_unprocessed_events(replays_storage, [self.event])
+
+        response = self.post(
+            "/replays/snql",
+            data=json.dumps(
+                {
+                    "query": f"""
+                    MATCH (replays)
+                    SELECT replay_id, segment_names
+                    BY replay_id
+                    WHERE project_id = {self.project_id}
+                    AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    LIMIT 10 OFFSET 0
+                    """,
+                    "debug": True,
+                    "tenant_ids": {"referrer": "replays", "organization_id": 1},
+                }
+            ),
+        )
+
+        data = json.loads(response.data)
+        assert response.status_code == 200, data
+        assert data["data"][0]["segment_names"] == ["segment-a", "segment-b"]
