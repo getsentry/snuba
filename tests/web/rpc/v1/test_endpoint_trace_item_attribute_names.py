@@ -263,7 +263,7 @@ class TestTraceItemAttributeNames(BaseApiTest):
                     ]
                 )
             ),
-            filter_mode=TraceItemAttributeNamesRequest.FilterMode.FILTER_MODE_MATCH_ANY,
+            match_mode=TraceItemAttributeNamesRequest.MatchMode.MATCH_MODE_ANY,
             type=AttributeKey.Type.TYPE_STRING,
         )
         res = EndpointTraceItemAttributeNames().execute(req)
