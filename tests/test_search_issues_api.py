@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 import simplejson as json
+from sentry_options.testing import override_options
 
 from snuba.core.initialize import initialize_snuba
 from snuba.datasets.entities.entity_key import EntityKey
@@ -105,8 +106,8 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         )
 
     @patch("snuba.web.bulk_delete_query.produce_delete_query")
+    @override_options("snuba", {"read_through_cache.short_circuit": True})
     def test_simple_delete(self, mock_produce_delete: Mock) -> None:
-        set_config("read_through_cache.short_circuit", 1)
         now = datetime.now().replace(minute=0, second=0, microsecond=0)
         occurrence_id = str(uuid.uuid4())
         group_id = 4

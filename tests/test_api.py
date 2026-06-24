@@ -1470,9 +1470,9 @@ class TestApi(SimpleAPITest):
             assert len(events) == 1
             assert events[0]["exception"]["values"][0]["type"] == "ZeroDivisionError"
 
+    @override_options("snuba", {"read_through_cache.short_circuit": True})
     def test_consistent(self) -> None:
         state.set_config("consistent_override", "test_override=0;another=0.5")
-        state.set_config("read_through_cache.short_circuit", 1)
         query_data = {
             "project": 2,
             "tenant_ids": {"referrer": "test_query", "organization_id": 1234},

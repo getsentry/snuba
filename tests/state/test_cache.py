@@ -13,10 +13,10 @@ import sentry_sdk
 from redis import RedisError, ResponseError
 from redis.exceptions import ReadOnlyError
 from redis.exceptions import TimeoutError as RedisTimeoutError
+from sentry_options.testing import override_options
 from sentry_redis_tools.failover_redis import FailoverRedis
 
 from snuba.redis import RedisClientKey, get_redis_client
-from snuba.state import set_config
 from snuba.state.cache.abstract import Cache
 from snuba.state.cache.redis.backend import RedisCache
 from snuba.utils.codecs import ExceptionAwareCodec
@@ -109,8 +109,8 @@ def noop(value: int) -> None:
 
 
 @pytest.mark.redis_db
+@override_options("snuba", {"read_through_cache.short_circuit": True})
 def test_short_circuit(backend: Cache[bytes]) -> None:
-    set_config("read_through_cache.short_circuit", 1)
     key = "key"
     value = b"value"
     function = mock.MagicMock(return_value=value)
@@ -208,7 +208,9 @@ def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
     with pytest.raises(ReadThroughCustomException) as excinfo:
         waiter.result()
 
-    assert excinfo.value.message == "error"
+    # mypy infers excinfo.value as the ExceptionInfo TypeVar default rather than
+    # the locally-defined exception class, so .message is not visible to it.
+    assert excinfo.value.message == "error"  # type: ignore[attr-defined]
 
 
 @pytest.mark.parametrize(

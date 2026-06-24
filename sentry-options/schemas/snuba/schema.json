@@ -216,6 +216,16 @@
       "type": "number",
       "default": 0.0,
       "description": "Sampling probability [0,1] for recording per-query COGS (cost-of-goods) accounting from the querylog."
+    },
+    "cache_expiry_sec": {
+      "type": "integer",
+      "default": 1,
+      "description": "TTL in seconds applied to query-result cache entries written to Redis."
+    },
+    "read_through_cache.short_circuit": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, bypass the read-through query cache entirely and call the underlying function directly (escape hatch for Redis issues)."
     }
   }
 }

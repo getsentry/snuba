@@ -8,8 +8,8 @@ from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from snuba import environment, settings
 from snuba.redis import RedisClientType
-from snuba.state import get_config
 from snuba.state.cache.abstract import Cache, TValue
+from snuba.state.sentry_options import get_bool_option, get_int_option
 from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -76,7 +76,7 @@ class RedisCache(Cache[TValue]):
         self.__client.set(
             self.__build_key(key),
             self.__codec.encode(value),
-            ex=get_config("cache_expiry_sec", 1),
+            ex=get_int_option("cache_expiry_sec", 1),
         )
 
     def __get_value_with_simple_readthrough(
@@ -113,7 +113,7 @@ class RedisCache(Cache[TValue]):
                     self.__client.set(
                         result_key,
                         self.__codec.encode(value),
-                        ex=get_config("cache_expiry_sec", 1),
+                        ex=get_int_option("cache_expiry_sec", 1),
                     )
 
                 except Exception as e:
@@ -140,7 +140,7 @@ class RedisCache(Cache[TValue]):
     ) -> TValue:
         # in case something is wrong with redis, we want to be able to
         # disable the read_through_cache but still serve traffic.
-        if get_config("read_through_cache.short_circuit", 0):
+        if get_bool_option("read_through_cache.short_circuit", False):
             return function()
 
         try:

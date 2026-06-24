@@ -1,8 +1,9 @@
 from datetime import datetime
-from typing import Any, Callable
+from typing import Any, Callable, Generator
 from unittest import mock
 
 import pytest
+from sentry_options.testing import override_options
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
@@ -43,8 +44,12 @@ class TestMaxRowsEnforcer(BaseApiTest):
             is_delete=True,
         )
 
+    @pytest.fixture(autouse=True)
+    def _short_circuit_cache(self) -> Generator[None, None, None]:
+        with override_options("snuba", {"read_through_cache.short_circuit": True}):
+            yield
+
     def _insert_event(self) -> None:
-        set_config("read_through_cache.short_circuit", 1)
         now = datetime.now().replace(minute=0, second=0, microsecond=0)
 
         write_eap_item(
