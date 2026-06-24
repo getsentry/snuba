@@ -1,3 +1,5 @@
+from unittest import mock
+
 from sentry_options.testing import override_options
 
 from snuba.state.sentry_options import (
@@ -59,3 +61,18 @@ def test_typed_accessors_fall_back_on_unknown_option() -> None:
     assert get_int_option("missing_int", 7) == 7
     assert get_float_option("missing_float", 1.5) == 1.5
     assert get_str_option("missing_str", "fallback") == "fallback"
+
+
+def test_unexpected_error_falls_back_to_default() -> None:
+    # The client should only ever raise OptionsError, but a non-OptionsError
+    # escaping from the client must not crash hot query paths: get_option (and
+    # the typed accessors built on it) honor the "any reason" fallback contract.
+    with mock.patch(
+        "snuba.state.sentry_options.sentry_options.options",
+        side_effect=RuntimeError("boom"),
+    ):
+        assert get_option("enable_any_attribute_filter", "fallback") == "fallback"
+        assert get_bool_option("enable_any_attribute_filter", True) is True
+        assert get_int_option("default_tier", 7) == 7
+        assert get_float_option("rpc_logging_sample_rate", 1.5) == 1.5
+        assert get_str_option("some_str", "fallback") == "fallback"

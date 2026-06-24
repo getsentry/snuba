@@ -61,6 +61,18 @@ def get_option(key: str, default: OptionValue) -> OptionValue:
     try:
         return sentry_options.options(SNUBA_OPTIONS_NAMESPACE).get(key)
     except sentry_options.OptionsError:
+        # Expected fallbacks: the client never initialized
+        # (NotInitializedError), the option/namespace is unknown, or the
+        # schema is invalid. These all subclass OptionsError; return the
+        # call-site default silently so behavior matches the pre-option world.
+        return default
+    except Exception:
+        # The client should only ever raise OptionsError, but a hot query path
+        # must never crash on a config read: honor the "any reason" contract
+        # above and log the unexpected error so it is still noticed.
+        logger.warning(
+            "Unexpected error reading sentry-option %r; using default", key, exc_info=True
+        )
         return default
 
 
