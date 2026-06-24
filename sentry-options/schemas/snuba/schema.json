@@ -121,6 +121,41 @@
       "type": "boolean",
       "default": false,
       "description": "When true, referrers in settings.BYPASS_CACHE_REFERRERS skip the read-through query cache."
+    },
+    "debug_buffer_size_bytes": {
+      "type": "integer",
+      "default": 0,
+      "description": "Size in bytes of the prefix of an INSERT stream kept in memory so a failing row can be attached to the Sentry error. 0 disables the debug buffer."
+    },
+    "http_batch_join_timeout": {
+      "type": "integer",
+      "default": 10,
+      "description": "Seconds to wait when joining a ClickHouse HTTP write batch before raising and shutting the consumer down."
+    },
+    "project_quota_time_percentage": {
+      "type": "number",
+      "default": 1.0,
+      "description": "Fraction of the counter window a project may spend on replacements before it is reported as exceeding the time limit."
+    },
+    "counter_window_size_minutes": {
+      "type": "integer",
+      "default": 10,
+      "description": "Size in minutes of the rolling window the replacement bucket timer uses to track per-project processing time."
+    },
+    "allows_skipping_single_project_replacements": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, a single project that exceeds the replacement time limit can be skipped (otherwise only multi-project groups are skipped)."
+    },
+    "use_sentry_metrics": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the dual-write metrics backend also emits to the Sentry metrics backend (sampled by settings.DDM_METRICS_SAMPLE_RATE)."
+    },
+    "ondemand_profiler_hostnames": {
+      "type": "string",
+      "default": "",
+      "description": "Comma-separated list of hostnames for which the on-demand profiler should capture a profile."
     }
   }
 }
