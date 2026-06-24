@@ -259,6 +259,11 @@ struct EAPItem {
     item_type: u8,
     timestamp: u32,
     trace_id: Uuid,
+    /// Optional conversation/session identifiers carried on the TraceItem.
+    /// Absent (or unparseable) values are stored as the nil UUID — the
+    /// `conversation_id`/`session_id` columns are non-nullable UUIDs.
+    conversation_id: Uuid,
+    session_id: Uuid,
     item_id: u128,
 
     /// Per-item-type primary name attribute, promoted to a dedicated column.
@@ -307,6 +312,8 @@ impl TryFrom<TraceItem> for EAPItem {
             project_id: from.project_id,
             item_type: from.item_type as u8,
             trace_id: Uuid::parse_str(&from.trace_id)?,
+            conversation_id: parse_optional_uuid(&from.conversation_id),
+            session_id: parse_optional_uuid(&from.session_id),
             item_id: read_item_id(from.item_id)?,
             timestamp: timestamp.seconds as u32,
             indexed_name,
@@ -376,6 +383,18 @@ fn fnv_1a(input: &[u8]) -> u32 {
     }
 
     res
+}
+
+/// Parse an optional UUID-valued TraceItem field (e.g. `conversation_id`,
+/// `session_id`). These arrive as strings that are empty when the producer
+/// did not set them. An empty or unparseable value maps to the nil UUID so a
+/// missing/malformed identifier never drops the whole item — unlike
+/// `trace_id`, which is required and propagates a parse error.
+fn parse_optional_uuid(value: &str) -> Uuid {
+    if value.is_empty() {
+        return Uuid::nil();
+    }
+    Uuid::parse_str(value).unwrap_or_else(|_| Uuid::nil())
 }
 
 fn read_item_id(from: Vec<u8>) -> anyhow::Result<u128> {
@@ -533,6 +552,10 @@ pub struct EAPItemRow {
     timestamp: u32,
     #[serde(with = "crate::strategies::clickhouse::rowbinary::uuid")]
     trace_id: Uuid,
+    #[serde(with = "crate::strategies::clickhouse::rowbinary::uuid")]
+    conversation_id: Uuid,
+    #[serde(with = "crate::strategies::clickhouse::rowbinary::uuid")]
+    session_id: Uuid,
     item_id: u128,
 
     indexed_name: String,
@@ -585,6 +608,8 @@ impl EAPItemRow {
         "item_type",
         "timestamp",
         "trace_id",
+        "conversation_id",
+        "session_id",
         "item_id",
         "indexed_name",
         "sampling_weight",
@@ -624,6 +649,8 @@ impl TryFrom<EAPItem> for EAPItemRow {
                 item_type: item.item_type,
                 timestamp: item.timestamp,
                 trace_id: item.trace_id,
+                conversation_id: item.conversation_id,
+                session_id: item.session_id,
                 item_id: item.item_id,
                 indexed_name: item.indexed_name,
                 sampling_weight: item.sampling_weight,
@@ -686,6 +713,8 @@ mod tests {
                 nanos: 0,
             }),
             trace_id: Uuid::new_v4().to_string(),
+            conversation_id: Default::default(),
+            session_id: Default::default(),
             client_sample_rate: 1.0,
             server_sample_rate: 1.0,
             outcomes: Default::default(),
@@ -1069,29 +1098,35 @@ mod tests {
     #[test]
     fn test_column_names_match_struct_layout() {
         let names = EAPItemRow::COLUMN_NAMES;
-        // 12 scalars + indexed_name + attributes_bool + attributes_int + 80
-        // buckets + attributes_array + 4 typed array maps
-        assert_eq!(names.len(), 100);
+        // 14 scalars (incl. conversation_id + session_id) + indexed_name +
+        // attributes_bool + attributes_int + 80 buckets + attributes_array +
+        // 4 typed array maps
+        assert_eq!(names.len(), 102);
         assert_eq!(names[0], "organization_id");
-        assert_eq!(names[5], "item_id");
-        assert_eq!(names[6], "indexed_name");
-        assert_eq!(names[7], "sampling_weight");
-        assert_eq!(names[8], "sampling_factor");
-        assert_eq!(names[9], "client_sample_rate");
-        assert_eq!(names[10], "server_sample_rate");
+        assert_eq!(names[4], "trace_id");
+        // conversation_id/session_id are inserted right after trace_id, matching
+        // the on-disk order set up by migration 0060.
+        assert_eq!(names[5], "conversation_id");
+        assert_eq!(names[6], "session_id");
+        assert_eq!(names[7], "item_id");
+        assert_eq!(names[8], "indexed_name");
+        assert_eq!(names[9], "sampling_weight");
+        assert_eq!(names[10], "sampling_factor");
+        assert_eq!(names[11], "client_sample_rate");
+        assert_eq!(names[12], "server_sample_rate");
         // Bucket pairs are interleaved (string_N then float_N) per the
         // `seq_attrs!` expansion on EAPItemRow.
-        assert_eq!(names[15], "attributes_string_0");
-        assert_eq!(names[16], "attributes_float_0");
-        assert_eq!(names[17], "attributes_string_1");
-        assert_eq!(names[93], "attributes_string_39");
-        assert_eq!(names[94], "attributes_float_39");
-        assert_eq!(names[95], "attributes_array");
+        assert_eq!(names[17], "attributes_string_0");
+        assert_eq!(names[18], "attributes_float_0");
+        assert_eq!(names[19], "attributes_string_1");
+        assert_eq!(names[95], "attributes_string_39");
+        assert_eq!(names[96], "attributes_float_39");
+        assert_eq!(names[97], "attributes_array");
         // Typed array map columns follow the JSON column.
-        assert_eq!(names[96], "attributes_array_string");
-        assert_eq!(names[97], "attributes_array_int");
-        assert_eq!(names[98], "attributes_array_float");
-        assert_eq!(names[99], "attributes_array_bool");
+        assert_eq!(names[98], "attributes_array_string");
+        assert_eq!(names[99], "attributes_array_int");
+        assert_eq!(names[100], "attributes_array_float");
+        assert_eq!(names[101], "attributes_array_bool");
     }
 
     #[test]
@@ -1154,6 +1189,73 @@ mod tests {
         assert_eq!(row.item_id, item_id.as_u128());
         assert_eq!(row.sampling_weight, 1);
         assert!((row.sampling_factor - 1.0).abs() < f64::EPSILON);
+        // Not set on the trace item → stored as the nil UUID.
+        assert_eq!(row.conversation_id, Uuid::nil());
+        assert_eq!(row.session_id, Uuid::nil());
+    }
+
+    #[test]
+    fn test_conversation_and_session_id_parsed_when_present() {
+        let item_id = Uuid::new_v4();
+        let conversation_id = Uuid::new_v4();
+        let session_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.conversation_id = conversation_id.to_string();
+        trace_item.session_id = session_id.to_string();
+
+        let eap_item = EAPItem::try_from(trace_item).unwrap();
+        assert_eq!(eap_item.conversation_id, conversation_id);
+        assert_eq!(eap_item.session_id, session_id);
+    }
+
+    #[test]
+    fn test_conversation_and_session_id_default_to_nil_when_absent() {
+        let item_id = Uuid::new_v4();
+        // generate_trace_item leaves conversation_id/session_id as empty strings.
+        let trace_item = generate_trace_item(item_id);
+
+        let eap_item = EAPItem::try_from(trace_item).unwrap();
+        assert_eq!(eap_item.conversation_id, Uuid::nil());
+        assert_eq!(eap_item.session_id, Uuid::nil());
+    }
+
+    #[test]
+    fn test_conversation_and_session_id_malformed_fall_back_to_nil() {
+        // A malformed identifier must not drop the whole item; it maps to nil.
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.conversation_id = "not-a-uuid".to_string();
+        trace_item.session_id = "also-not-a-uuid".to_string();
+
+        let eap_item = EAPItem::try_from(trace_item).unwrap();
+        assert_eq!(eap_item.conversation_id, Uuid::nil());
+        assert_eq!(eap_item.session_id, Uuid::nil());
+    }
+
+    #[test]
+    fn test_row_binary_conversation_and_session_id() {
+        let item_id = Uuid::new_v4();
+        let conversation_id = Uuid::new_v4();
+        let session_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.conversation_id = conversation_id.to_string();
+        trace_item.session_id = session_id.to_string();
+
+        let mut payload = Vec::new();
+        trace_item.encode(&mut payload).unwrap();
+
+        let payload = KafkaPayload::new(None, None, Some(payload));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        let batch = process_message_row_binary_typed(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+
+        let row = &batch.rows[0];
+        assert_eq!(row.conversation_id, conversation_id);
+        assert_eq!(row.session_id, session_id);
     }
 
     #[test]
