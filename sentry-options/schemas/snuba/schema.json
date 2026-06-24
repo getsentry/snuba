@@ -301,6 +301,41 @@
       "type": "string",
       "default": "",
       "description": "Semicolon-delimited referrer=probability pairs; for a matching referrer, consistency is dropped with the given probability. Empty means no override."
+    },
+    "skip_final_subscriptions_projects": {
+      "type": "string",
+      "default": "[]",
+      "description": "Bracketed comma-separated list of project ids for which subscription queries skip the FINAL keyword."
+    },
+    "post_replacement_consistency_projects_denylist": {
+      "type": "string",
+      "default": "[]",
+      "description": "Bracketed comma-separated list of project ids that are forced to FINAL after a replacement."
+    },
+    "max_group_ids_exclude": {
+      "type": "integer",
+      "default": 256,
+      "description": "Maximum number of group ids excluded from a query before it falls back to FINAL instead of an exclusion set."
+    },
+    "skip_seen_offsets": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the replacer skips replacement messages whose offset has already been seen."
+    },
+    "consumer_groups_to_reset_offset_check": {
+      "type": "string",
+      "default": "[]",
+      "description": "Bracketed comma-separated list of consumer groups whose replacer offset-seen check should be reset."
+    },
+    "write_node_replacements_global": {
+      "type": "number",
+      "default": 1.0,
+      "description": "Probability [0,1] that a replacement is written to every storage node rather than only the distributed table."
+    },
+    "replacements_bypass_projects": {
+      "type": "string",
+      "default": "[]",
+      "description": "JSON array of project ids for which error replacements are skipped."
     }
   }
 }

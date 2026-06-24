@@ -15,6 +15,7 @@ from typing import (
 )
 
 import pytest
+from sentry_options.testing import override_options
 
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters import cluster
@@ -189,20 +190,22 @@ def test_write_each_node(
     Test the execution of replacement queries on both storage nodes and
     query nodes.
     """
-    set_config("write_node_replacements_global", write_node_replacements_global)
-    override_func = request.getfixturevalue(override_fixture)
-    test_cluster = override_func(True)
+    with override_options(
+        "snuba", {"write_node_replacements_global": write_node_replacements_global}
+    ):
+        override_func = request.getfixturevalue(override_fixture)
+        test_cluster = override_func(True)
 
-    replacer = ReplacerWorker(
-        get_writable_storage(StorageKey.ERRORS),
-        "consumer_group",
-        DummyMetricsBackend(),
-    )
+        replacer = ReplacerWorker(
+            get_writable_storage(StorageKey.ERRORS),
+            "consumer_group",
+            DummyMetricsBackend(),
+        )
 
-    replacer.flush_batch([(ReplacementMessageMetadata(0, 0, ""), DummyReplacement())])
+        replacer.flush_batch([(ReplacementMessageMetadata(0, 0, ""), DummyReplacement())])
 
-    queries = test_cluster.get_queries()
-    assert queries == expected_queries
+        queries = test_cluster.get_queries()
+        assert queries == expected_queries
 
 
 @pytest.mark.redis_db

@@ -48,7 +48,7 @@ from snuba.replacers.replacer_processor import (
     ReplacementMessage,
     ReplacementMessageMetadata,
 )
-from snuba.state import get_int_config, get_str_config
+from snuba.state.sentry_options import get_bool_option, get_str_option
 from snuba.utils.bucket_timer import Counter
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.rate_limiter import RateLimiter
@@ -422,7 +422,7 @@ class ReplacerWorker:
                     "offset": metadata.offset,
                 },
             )
-            if get_int_config("skip_seen_offsets"):
+            if get_bool_option("skip_seen_offsets", False):
                 return None
         seq_message = json.loads(message.payload.value)
         [version, action_type, data] = seq_message
@@ -530,7 +530,7 @@ class ReplacerWorker:
         temporarily, then cleared once relevant consumers restart.
         """
         # expected format is "[consumer_group1,consumer_group2,..]"
-        consumer_groups = (get_str_config(RESET_CHECK_CONFIG) or "[]")[1:-1].split(",")
+        consumer_groups = get_str_option(RESET_CHECK_CONFIG, "[]")[1:-1].split(",")
         if self.__consumer_group in consumer_groups:
             self.__last_offset_processed_per_partition[key] = -1
             redis_client.delete(key)

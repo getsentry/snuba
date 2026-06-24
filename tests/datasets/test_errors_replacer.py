@@ -8,6 +8,7 @@ import pytest
 import simplejson as json
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.types import BrokerValue, Message, Partition, Topic
+from sentry_options.testing import override_options
 
 from snuba import replacer, settings
 from snuba.clickhouse import DATETIME_FORMAT
@@ -19,7 +20,6 @@ from snuba.processor import ReplacementType
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.replacers import errors_replacer
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
-from snuba.state import delete_config, set_config
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from tests.fixtures import get_raw_event
 from tests.helpers import write_unprocessed_events
@@ -54,9 +54,9 @@ class BaseTest:
 
         # Total query time range is 24h before to 24h after now to account
         # for local machine time zones
-        self.from_time = datetime.now().replace(
-            minute=0, second=0, microsecond=0
-        ) - timedelta(days=1)
+        self.from_time = datetime.now().replace(minute=0, second=0, microsecond=0) - timedelta(
+            days=1
+        )
 
         self.to_time = self.from_time + timedelta(days=2)
 
@@ -111,9 +111,7 @@ class TestReplacer(BaseTest):
         args = {
             "project": [project_id],
             "selected_columns": ["group_id"],
-            "conditions": [
-                ["event_id", "=", str(uuid.UUID(event_id)).replace("-", "")]
-            ],
+            "conditions": [["event_id", "=", str(uuid.UUID(event_id)).replace("-", "")]],
             "from_date": self.from_time.isoformat(),
             "to_date": self.to_time.isoformat(),
             "tenant_ids": {"referrer": "r", "organization_id": 1234},
@@ -329,8 +327,8 @@ class TestReplacer(BaseTest):
 
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 2}]
 
+    @override_options("snuba", {"skip_seen_offsets": True})
     def test_process_offset_twice(self) -> None:
-        set_config("skip_seen_offsets", True)
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
         self.event["primary_hash"] = "a" * 32
@@ -349,9 +347,7 @@ class TestReplacer(BaseTest):
                                 "previous_group_id": 1,
                                 "new_group_id": 2,
                                 "hashes": ["a" * 32],
-                                "datetime": datetime.utcnow().strftime(
-                                    PAYLOAD_DATETIME_FORMAT
-                                ),
+                                "datetime": datetime.utcnow().strftime(PAYLOAD_DATETIME_FORMAT),
                             },
                         )
                     ).encode("utf-8"),
@@ -369,11 +365,11 @@ class TestReplacer(BaseTest):
         # should be None since the offset should be in Redis, indicating it should be skipped
         assert self.replacer.process_message(message) is None
 
+    @override_options("snuba", {"skip_seen_offsets": True})
     def test_multiple_partitions(self) -> None:
         """
         Different partitions should have independent offset checks.
         """
-        set_config("skip_seen_offsets", True)
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
         self.event["primary_hash"] = "a" * 32
@@ -421,8 +417,8 @@ class TestReplacer(BaseTest):
         # different partition should be unaffected even if it's the same offset
         assert self.replacer.process_message(partition_two) is not None
 
+    @override_options("snuba", {"skip_seen_offsets": True})
     def test_reset_consumer_group_offset_check(self) -> None:
-        set_config("skip_seen_offsets", True)
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
         self.event["primary_hash"] = "a" * 32
@@ -441,9 +437,7 @@ class TestReplacer(BaseTest):
                                 "previous_group_id": 1,
                                 "new_group_id": 2,
                                 "hashes": ["a" * 32],
-                                "datetime": datetime.utcnow().strftime(
-                                    PAYLOAD_DATETIME_FORMAT
-                                ),
+                                "datetime": datetime.utcnow().strftime(PAYLOAD_DATETIME_FORMAT),
                             },
                         )
                     ).encode("utf-8"),
@@ -457,16 +451,15 @@ class TestReplacer(BaseTest):
 
         self.replacer.flush_batch([self.replacer.process_message(message)])
 
-        set_config(replacer.RESET_CHECK_CONFIG, f"[{CONSUMER_GROUP}]")
+        with override_options("snuba", {replacer.RESET_CHECK_CONFIG: f"[{CONSUMER_GROUP}]"}):
+            # Offset to check against should be reset so this message shouldn't be skipped
+            assert self.replacer.process_message(message) is not None
 
-        # Offset to check against should be reset so this message shouldn't be skipped
-        assert self.replacer.process_message(message) is not None
-
+    @override_options("snuba", {"skip_seen_offsets": True})
     def test_offset_already_processed(self) -> None:
         """
         Don't process an offset that already exists in Redis.
         """
-        set_config("skip_seen_offsets", True)
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
         self.event["primary_hash"] = "a" * 32
@@ -596,9 +589,7 @@ class TestReplacerProcess(BaseTest):
 
         assert replacement.get_query_time_flags() == errors_replacer.NeedsFinal()
 
-    @pytest.mark.parametrize(
-        "old_primary_hash", ["e3d704f3542b44a621ebed70dc0efe13", False, None]
-    )
+    @pytest.mark.parametrize("old_primary_hash", ["e3d704f3542b44a621ebed70dc0efe13", False, None])
     def test_tombstone_events_process(self, old_primary_hash) -> None:
         timestamp = datetime.now()
         message_kwargs = {
@@ -617,9 +608,7 @@ class TestReplacerProcess(BaseTest):
         _, replacement = meta_and_replacement
 
         old_primary_condition = (
-            " AND primary_hash = 'e3d704f3-542b-44a6-21eb-ed70dc0efe13'"
-            if old_primary_hash
-            else ""
+            " AND primary_hash = 'e3d704f3-542b-44a6-21eb-ed70dc0efe13'" if old_primary_hash else ""
         )
 
         query_args = {
@@ -759,9 +748,7 @@ class TestReplacerProcess(BaseTest):
             % query_args
         )
 
-        assert replacement.get_query_time_flags() == errors_replacer.ExcludeGroups(
-            [1, 2]
-        )
+        assert replacement.get_query_time_flags() == errors_replacer.ExcludeGroups([1, 2])
 
     def test_unmerge_process(self) -> None:
         timestamp = datetime.now()
@@ -898,15 +885,17 @@ class TestReplacerProcess(BaseTest):
         _, replacement = meta_and_replacement
         assert replacement is not None
 
-        set_config("replacements_bypass_projects", f"[{self.project_id + 1}]")
-        meta_and_replacement = self.replacer.process_message(self._wrap(message))
-        assert meta_and_replacement is not None
-        _, replacement = meta_and_replacement
-        assert replacement is not None
+        with override_options(
+            "snuba", {"replacements_bypass_projects": f"[{self.project_id + 1}]"}
+        ):
+            meta_and_replacement = self.replacer.process_message(self._wrap(message))
+            assert meta_and_replacement is not None
+            _, replacement = meta_and_replacement
+            assert replacement is not None
 
-        set_config(
-            "replacements_bypass_projects", f"[{self.project_id + 1},{self.project_id}]"
-        )
-        meta_and_replacement = self.replacer.process_message(self._wrap(message))
-        assert meta_and_replacement is None
-        delete_config("replacements_bypass_projects")
+        with override_options(
+            "snuba",
+            {"replacements_bypass_projects": f"[{self.project_id + 1},{self.project_id}]"},
+        ):
+            meta_and_replacement = self.replacer.process_message(self._wrap(message))
+            assert meta_and_replacement is None

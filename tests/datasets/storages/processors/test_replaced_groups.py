@@ -2,8 +2,8 @@ from datetime import datetime, timedelta
 from typing import Sequence
 
 import pytest
+from sentry_options.testing import override_options
 
-from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.storages.storage_key import StorageKey
@@ -139,25 +139,20 @@ def test_without_turbo_with_projects_needing_final(query: ClickhouseQuery) -> No
     )
 
     query_settings = HTTPQuerySettings()
-    PostReplacementConsistencyEnforcer(
-        "project_id", ReplacerState.ERRORS
-    ).process_query(query, query_settings)
+    PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS).process_query(
+        query, query_settings
+    )
 
     assert query.get_condition() == build_in("project_id", [2])
     assert query.get_from_clause().final
     assert (
-        query_settings.get_clickhouse_settings()[
-            "do_not_merge_across_partitions_select_final"
-        ]
-        == 1
+        query_settings.get_clickhouse_settings()["do_not_merge_across_partitions_select_final"] == 1
     )
 
 
 @pytest.mark.redis_db
 def test_without_turbo_without_projects_needing_final(query: ClickhouseQuery) -> None:
-    PostReplacementConsistencyEnforcer("project_id", None).process_query(
-        query, HTTPQuerySettings()
-    )
+    PostReplacementConsistencyEnforcer("project_id", None).process_query(query, HTTPQuerySettings())
 
     assert query.get_condition() == build_in("project_id", [2])
     assert not query.get_from_clause().final
@@ -171,22 +166,22 @@ def test_remove_final_subscriptions(query: ClickhouseQuery) -> None:
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
 
-    PostReplacementConsistencyEnforcer(
-        "project_id", ReplacerState.ERRORS
-    ).process_query(query, SubscriptionQuerySettings())
+    PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS).process_query(
+        query, SubscriptionQuerySettings()
+    )
     assert query.get_condition() == build_in("project_id", [2])
     assert query.get_from_clause().final
 
-    state.set_config("skip_final_subscriptions_projects", "[2,3,4]")
-    PostReplacementConsistencyEnforcer(
-        "project_id", ReplacerState.ERRORS
-    ).process_query(query, SubscriptionQuerySettings())
-    assert not query.get_from_clause().final
+    with override_options("snuba", {"skip_final_subscriptions_projects": "[2,3,4]"}):
+        PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS).process_query(
+            query, SubscriptionQuerySettings()
+        )
+        assert not query.get_from_clause().final
 
 
 @pytest.mark.redis_db
+@override_options("snuba", {"max_group_ids_exclude": 5})
 def test_not_many_groups_to_exclude(query: ClickhouseQuery) -> None:
-    state.set_config("max_group_ids_exclude", 5)
     ProjectsQueryFlags.set_project_exclude_groups(
         2,
         [100, 101, 102],
@@ -194,9 +189,9 @@ def test_not_many_groups_to_exclude(query: ClickhouseQuery) -> None:
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
 
-    PostReplacementConsistencyEnforcer(
-        "project_id", ReplacerState.ERRORS
-    ).process_query(query, HTTPQuerySettings())
+    PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS).process_query(
+        query, HTTPQuerySettings()
+    )
 
     assert query.get_condition() == build_and(
         FunctionCall(
@@ -221,8 +216,8 @@ def test_not_many_groups_to_exclude(query: ClickhouseQuery) -> None:
 
 
 @pytest.mark.redis_db
+@override_options("snuba", {"max_group_ids_exclude": 2})
 def test_too_many_groups_to_exclude(query: ClickhouseQuery) -> None:
-    state.set_config("max_group_ids_exclude", 2)
     ProjectsQueryFlags.set_project_exclude_groups(
         2,
         [100, 101, 102],
@@ -230,15 +225,16 @@ def test_too_many_groups_to_exclude(query: ClickhouseQuery) -> None:
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
 
-    PostReplacementConsistencyEnforcer(
-        "project_id", ReplacerState.ERRORS
-    ).process_query(query, HTTPQuerySettings())
+    PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS).process_query(
+        query, HTTPQuerySettings()
+    )
 
     assert query.get_condition() == build_in("project_id", [2])
     assert query.get_from_clause().final
 
 
 @pytest.mark.redis_db
+@override_options("snuba", {"max_group_ids_exclude": 2})
 def test_query_overlaps_replacements_processor(
     query: ClickhouseQuery,
     query_with_timestamp: ClickhouseQuery,
@@ -252,7 +248,6 @@ def test_query_overlaps_replacements_processor(
     assert not query_with_timestamp.get_from_clause().final
 
     # overlaps replacement and should be final due to too many groups to exclude
-    state.set_config("max_group_ids_exclude", 2)
     ProjectsQueryFlags.set_project_exclude_groups(
         2,
         [100, 101, 102],
@@ -275,6 +270,7 @@ def test_query_overlaps_replacements_processor(
 
 
 @pytest.mark.redis_db
+@override_options("snuba", {"max_group_ids_exclude": 2})
 def test_single_no_replacements(query_with_single_group_id: ClickhouseQuery) -> None:
     """
     Query is looking for a group that has not been replaced, but the project itself
@@ -290,7 +286,6 @@ def test_single_no_replacements(query_with_single_group_id: ClickhouseQuery) -> 
     )
 
     enforcer._set_query_final(query_with_single_group_id, True)
-    state.set_config("max_group_ids_exclude", 2)
 
     enforcer.process_query(query_with_single_group_id, HTTPQuerySettings())
     assert query_with_single_group_id.get_condition() == build_and(
@@ -300,6 +295,7 @@ def test_single_no_replacements(query_with_single_group_id: ClickhouseQuery) -> 
 
 
 @pytest.mark.redis_db
+@override_options("snuba", {"max_group_ids_exclude": 2})
 def test_single_too_many_exclude(query_with_single_group_id: ClickhouseQuery) -> None:
     """
     Query is looking for a group that has been replaced, and there are too many
@@ -315,7 +311,6 @@ def test_single_too_many_exclude(query_with_single_group_id: ClickhouseQuery) ->
     )
 
     enforcer._set_query_final(query_with_single_group_id, True)
-    state.set_config("max_group_ids_exclude", 2)
 
     enforcer.process_query(query_with_single_group_id, HTTPQuerySettings())
     assert query_with_single_group_id.get_condition() == build_and(
@@ -326,6 +321,7 @@ def test_single_too_many_exclude(query_with_single_group_id: ClickhouseQuery) ->
 
 
 @pytest.mark.redis_db
+@override_options("snuba", {"max_group_ids_exclude": 5})
 def test_single_not_too_many_exclude(
     query_with_single_group_id: ClickhouseQuery,
 ) -> None:
@@ -343,7 +339,6 @@ def test_single_not_too_many_exclude(
     )
 
     enforcer._set_query_final(query_with_single_group_id, True)
-    state.set_config("max_group_ids_exclude", 5)
 
     enforcer.process_query(query_with_single_group_id, HTTPQuerySettings())
     assert query_with_single_group_id.get_condition() == build_and(
@@ -354,6 +349,7 @@ def test_single_not_too_many_exclude(
 
 
 @pytest.mark.redis_db
+@override_options("snuba", {"max_group_ids_exclude": 5})
 def test_multiple_disjoint_replaced(
     query_with_multiple_group_ids: ClickhouseQuery,
 ) -> None:
@@ -371,7 +367,6 @@ def test_multiple_disjoint_replaced(
     )
 
     enforcer._set_query_final(query_with_multiple_group_ids, True)
-    state.set_config("max_group_ids_exclude", 5)
 
     enforcer.process_query(query_with_multiple_group_ids, HTTPQuerySettings())
     assert query_with_multiple_group_ids.get_condition() == build_and(
@@ -381,6 +376,7 @@ def test_multiple_disjoint_replaced(
 
 
 @pytest.mark.redis_db
+@override_options("snuba", {"max_group_ids_exclude": 5})
 def test_multiple_fewer_exclude_than_queried(
     query_with_multiple_group_ids: ClickhouseQuery,
 ) -> None:
@@ -398,7 +394,6 @@ def test_multiple_fewer_exclude_than_queried(
     )
 
     enforcer._set_query_final(query_with_multiple_group_ids, True)
-    state.set_config("max_group_ids_exclude", 5)
 
     enforcer.process_query(query_with_multiple_group_ids, HTTPQuerySettings())
     assert query_with_multiple_group_ids.get_condition() == build_and(
@@ -409,6 +404,7 @@ def test_multiple_fewer_exclude_than_queried(
 
 
 @pytest.mark.redis_db
+@override_options("snuba", {"max_group_ids_exclude": 2})
 def test_multiple_too_many_excludes(
     query_with_multiple_group_ids: ClickhouseQuery,
 ) -> None:
@@ -426,7 +422,6 @@ def test_multiple_too_many_excludes(
     )
 
     enforcer._set_query_final(query_with_multiple_group_ids, True)
-    state.set_config("max_group_ids_exclude", 2)
 
     enforcer.process_query(query_with_multiple_group_ids, HTTPQuerySettings())
     assert query_with_multiple_group_ids.get_condition() == build_and(
@@ -438,6 +433,7 @@ def test_multiple_too_many_excludes(
 
 
 @pytest.mark.redis_db
+@override_options("snuba", {"max_group_ids_exclude": 5})
 def test_multiple_not_too_many_excludes(
     query_with_multiple_group_ids: ClickhouseQuery,
 ) -> None:
@@ -455,7 +451,6 @@ def test_multiple_not_too_many_excludes(
     )
 
     enforcer._set_query_final(query_with_multiple_group_ids, True)
-    state.set_config("max_group_ids_exclude", 5)
 
     enforcer.process_query(query_with_multiple_group_ids, HTTPQuerySettings())
     assert query_with_multiple_group_ids.get_condition() == build_and(
@@ -466,6 +461,7 @@ def test_multiple_not_too_many_excludes(
 
 
 @pytest.mark.redis_db
+@override_options("snuba", {"max_group_ids_exclude": 3})
 def test_no_groups_not_too_many_excludes(query: ClickhouseQuery) -> None:
     """
     Query has no groups, and not too many to exclude.
@@ -480,7 +476,6 @@ def test_no_groups_not_too_many_excludes(query: ClickhouseQuery) -> None:
     )
 
     enforcer._set_query_final(query, True)
-    state.set_config("max_group_ids_exclude", 3)
 
     enforcer.process_query(query, HTTPQuerySettings())
     assert query.get_condition() == build_and(
@@ -491,6 +486,7 @@ def test_no_groups_not_too_many_excludes(query: ClickhouseQuery) -> None:
 
 
 @pytest.mark.redis_db
+@override_options("snuba", {"max_group_ids_exclude": 1})
 def test_no_groups_too_many_excludes(query: ClickhouseQuery) -> None:
     """
     Query has no groups, and too many to exclude.
@@ -505,7 +501,6 @@ def test_no_groups_too_many_excludes(query: ClickhouseQuery) -> None:
     )
 
     enforcer._set_query_final(query, True)
-    state.set_config("max_group_ids_exclude", 1)
 
     enforcer.process_query(query, HTTPQuerySettings())
     assert query.get_condition() == build_in("project_id", [2])
