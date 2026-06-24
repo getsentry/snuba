@@ -260,8 +260,9 @@ struct EAPItem {
     timestamp: u32,
     trace_id: Uuid,
     /// Optional conversation/session identifiers carried on the TraceItem.
-    /// Absent (or unparseable) values are stored as the nil UUID — the
-    /// `conversation_id`/`session_id` columns are non-nullable UUIDs.
+    /// The columns are non-nullable UUIDs, so an absent or unparseable value is
+    /// replaced with a fresh random UUID rather than the all-zero "magic" UUID
+    /// (see `parse_uuid_or_random`).
     conversation_id: Uuid,
     session_id: Uuid,
     item_id: u128,
@@ -312,8 +313,8 @@ impl TryFrom<TraceItem> for EAPItem {
             project_id: from.project_id,
             item_type: from.item_type as u8,
             trace_id: Uuid::parse_str(&from.trace_id)?,
-            conversation_id: parse_optional_uuid(&from.conversation_id),
-            session_id: parse_optional_uuid(&from.session_id),
+            conversation_id: parse_uuid_or_random(&from.conversation_id),
+            session_id: parse_uuid_or_random(&from.session_id),
             item_id: read_item_id(from.item_id)?,
             timestamp: timestamp.seconds as u32,
             indexed_name,
@@ -385,16 +386,20 @@ fn fnv_1a(input: &[u8]) -> u32 {
     res
 }
 
-/// Parse an optional UUID-valued TraceItem field (e.g. `conversation_id`,
-/// `session_id`). These arrive as strings that are empty when the producer
-/// did not set them. An empty or unparseable value maps to the nil UUID so a
-/// missing/malformed identifier never drops the whole item — unlike
-/// `trace_id`, which is required and propagates a parse error.
-fn parse_optional_uuid(value: &str) -> Uuid {
-    if value.is_empty() {
-        return Uuid::nil();
+/// Resolve a UUID-valued TraceItem field (e.g. `conversation_id`,
+/// `session_id`) for storage in its non-nullable UUID column. The field
+/// arrives as a string that is empty when the producer did not set it.
+///
+/// To avoid persisting the all-zero "magic" UUID — which would be
+/// indistinguishable from a real (if absurd) all-zero id and would balloon the
+/// bloom-filter index with a single high-frequency value — any absent,
+/// unparseable, or explicitly-nil value is replaced with a fresh random UUID.
+/// A present, valid, non-nil id is stored as-is.
+fn parse_uuid_or_random(value: &str) -> Uuid {
+    match Uuid::parse_str(value) {
+        Ok(uuid) if !uuid.is_nil() => uuid,
+        _ => Uuid::new_v4(),
     }
-    Uuid::parse_str(value).unwrap_or_else(|_| Uuid::nil())
 }
 
 fn read_item_id(from: Vec<u8>) -> anyhow::Result<u128> {
@@ -1189,9 +1194,9 @@ mod tests {
         assert_eq!(row.item_id, item_id.as_u128());
         assert_eq!(row.sampling_weight, 1);
         assert!((row.sampling_factor - 1.0).abs() < f64::EPSILON);
-        // Not set on the trace item → stored as the nil UUID.
-        assert_eq!(row.conversation_id, Uuid::nil());
-        assert_eq!(row.session_id, Uuid::nil());
+        // Not set on the trace item → randomized rather than stored as nil.
+        assert!(!row.conversation_id.is_nil());
+        assert!(!row.session_id.is_nil());
     }
 
     #[test]
@@ -1209,27 +1214,44 @@ mod tests {
     }
 
     #[test]
-    fn test_conversation_and_session_id_default_to_nil_when_absent() {
+    fn test_conversation_and_session_id_randomized_when_absent() {
         let item_id = Uuid::new_v4();
         // generate_trace_item leaves conversation_id/session_id as empty strings.
         let trace_item = generate_trace_item(item_id);
 
         let eap_item = EAPItem::try_from(trace_item).unwrap();
-        assert_eq!(eap_item.conversation_id, Uuid::nil());
-        assert_eq!(eap_item.session_id, Uuid::nil());
+        // Absent ids are randomized, not stored as the all-zero magic UUID.
+        assert!(!eap_item.conversation_id.is_nil());
+        assert!(!eap_item.session_id.is_nil());
+        assert_ne!(eap_item.conversation_id, eap_item.session_id);
     }
 
     #[test]
-    fn test_conversation_and_session_id_malformed_fall_back_to_nil() {
-        // A malformed identifier must not drop the whole item; it maps to nil.
+    fn test_conversation_and_session_id_malformed_are_randomized() {
+        // A malformed identifier must not drop the whole item, and must not be
+        // persisted as the nil UUID either — it is randomized.
         let item_id = Uuid::new_v4();
         let mut trace_item = generate_trace_item(item_id);
         trace_item.conversation_id = "not-a-uuid".to_string();
         trace_item.session_id = "also-not-a-uuid".to_string();
 
         let eap_item = EAPItem::try_from(trace_item).unwrap();
-        assert_eq!(eap_item.conversation_id, Uuid::nil());
-        assert_eq!(eap_item.session_id, Uuid::nil());
+        assert!(!eap_item.conversation_id.is_nil());
+        assert!(!eap_item.session_id.is_nil());
+    }
+
+    #[test]
+    fn test_explicit_nil_uuid_is_randomized() {
+        // A producer that explicitly sends the all-zero UUID still gets a
+        // random value rather than persisting the magic nil.
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.conversation_id = Uuid::nil().to_string();
+        trace_item.session_id = Uuid::nil().to_string();
+
+        let eap_item = EAPItem::try_from(trace_item).unwrap();
+        assert!(!eap_item.conversation_id.is_nil());
+        assert!(!eap_item.session_id.is_nil());
     }
 
     #[test]

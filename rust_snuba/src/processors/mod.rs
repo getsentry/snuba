@@ -165,6 +165,10 @@ mod tests {
                         ".*.*[\"sentry._internal.received_at\"]",
                         "<received timestamp>",
                     );
+                    // conversation_id/session_id are randomized when absent on the
+                    // TraceItem, so redact them to keep the snapshot deterministic.
+                    settings.add_redaction(".*.conversation_id", "<random uuid>");
+                    settings.add_redaction(".*.session_id", "<random uuid>");
                 }
 
                 // This payload is protobuf (so binary), not JSON (so text).
