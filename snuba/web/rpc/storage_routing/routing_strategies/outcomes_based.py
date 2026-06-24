@@ -25,6 +25,7 @@ from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array
 from snuba.query.logical import Query
 from snuba.query.query_settings import OutcomesQuerySettings
 from snuba.request import Request as SnubaRequest
+from snuba.settings import LOWER_RETENTION_DAYS, VALID_RETENTION_DAYS
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     timestamp_in_range_condition,
@@ -241,12 +242,24 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
 
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
 
-        thirty_one_days_ago_ts = int((datetime.now(tz=UTC) - timedelta(days=31)).timestamp())
-        older_than_thirty_days = thirty_one_days_ago_ts > in_msg_meta.start_timestamp.seconds
+        if (
+            in_msg_meta.HasField("retention_days")
+            and in_msg_meta.retention_days in VALID_RETENTION_DAYS
+        ):
+            full_fidelity_retention_days = in_msg_meta.retention_days
+        else:
+            full_fidelity_retention_days = LOWER_RETENTION_DAYS
+
+        full_fidelity_days_ago_ts = int(
+            (datetime.now(tz=UTC) - timedelta(days=full_fidelity_retention_days + 1)).timestamp()
+        )
+        older_than_full_fidelity_days = (
+            full_fidelity_days_ago_ts > in_msg_meta.start_timestamp.seconds
+        )
 
         if (
             state.get_int_config("enable_long_term_retention_downsampling", 0)
-            and older_than_thirty_days
+            and older_than_full_fidelity_days
             and in_msg_meta.trace_item_type not in ITEM_TYPE_FULL_RETENTION
         ):
             routing_decision.tier = Tier.TIER_8
