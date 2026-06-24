@@ -48,6 +48,9 @@ from snuba.query.allocation_policies.bytes_scanned_rejecting_policy import (
 from snuba.query.allocation_policies.concurrent_rate_limit import (
     ConcurrentRateLimitAllocationPolicy,
 )
+from snuba.query.allocation_policies.dynamic_concurrent_queries import (
+    DynamicConcurrentQueries,
+)
 from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
 from snuba.query.allocation_policies.utils import get_max_bytes_to_read
 from snuba.query.query_settings import HTTPQuerySettings
@@ -375,6 +378,11 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             BytesScannedRejectingPolicy(
                 storage_key=EAP_RESOURCE_IDENTIFIER,
                 required_tenant_types=["organization_id", "project_id", "referrer"],
+                default_config_overrides={"is_active": 0, "is_enforced": 0},
+            ),
+            DynamicConcurrentQueries(
+                storage_key=EAP_RESOURCE_IDENTIFIER,
+                required_tenant_types=["organization_id"],
                 default_config_overrides={"is_active": 0, "is_enforced": 0},
             ),
         ]
