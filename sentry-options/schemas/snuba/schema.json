@@ -127,11 +127,6 @@
       "default": 0,
       "description": "Size in bytes of the prefix of an INSERT stream kept in memory so a failing row can be attached to the Sentry error. 0 disables the debug buffer."
     },
-    "http_batch_join_timeout": {
-      "type": "integer",
-      "default": 10,
-      "description": "Seconds to wait when joining a ClickHouse HTTP write batch before raising and shutting the consumer down."
-    },
     "project_quota_time_percentage": {
       "type": "number",
       "default": 1.0,
