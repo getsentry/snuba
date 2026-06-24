@@ -1,9 +1,9 @@
 use crate::config::EnvConfig;
 use crate::types::item_type_name;
-use sentry_options::options;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use schemars::JsonSchema;
 use sentry_arroyo::counter;
+use sentry_options::options;
 use sentry_protos::snuba::v1::TraceItemType;
 use serde::{Deserialize, Deserializer, Serialize};
 

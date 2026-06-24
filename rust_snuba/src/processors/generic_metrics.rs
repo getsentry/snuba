@@ -1,11 +1,11 @@
 use adler::Adler32;
 use anyhow::{anyhow, Context};
 use chrono::DateTime;
+use sentry_options::options;
 use serde::{
     de::value::{MapAccessDeserializer, SeqAccessDeserializer},
     Deserialize, Deserializer, Serialize,
 };
-use sentry_options::options;
 use std::{collections::BTreeMap, marker::PhantomData, vec};
 
 use crate::{
