@@ -336,6 +336,11 @@
       "type": "string",
       "default": "[]",
       "description": "JSON array of project ids for which error replacements are skipped."
+    },
+    "generic_metrics_use_case_killswitch": {
+      "type": "string",
+      "default": "",
+      "description": "Substring-matched list of generic-metrics use case ids to drop in the consumer; a message is skipped when its use_case_id appears in this string."
     }
   }
 }
