@@ -8,6 +8,7 @@ import pytest
 import rapidjson
 from confluent_kafka import Consumer
 from confluent_kafka.admin import AdminClient
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba import settings
@@ -97,12 +98,12 @@ def test_deletes_not_enabled_on_storage() -> None:
 
 
 @pytest.mark.redis_db
+@override_options("snuba", {"storage_deletes_enabled": False})
 def test_deletes_not_enabled_runtime_config() -> None:
     storage = get_writable_storage(StorageKey("search_issues"))
     conditions = {"project_id": [1], "group_id": [1, 2, 3, 4]}
     attr_info = get_attribution_info()
 
-    set_config("storage_deletes_enabled", 0)
     with pytest.raises(DeletesNotEnabledError):
         delete_from_storage(storage, conditions, attr_info)
 
@@ -264,10 +265,7 @@ def test_attribute_conditions_feature_flag_enabled() -> None:
     )
     attr_info = get_attribution_info()
 
-    # Enable the feature flag
-    set_config("permit_delete_by_attribute", 1)
-
-    try:
+    with override_options("snuba", {"permit_delete_by_attribute": True}):
         # Mock out _enforce_max_rows to avoid needing actual data
         with patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10):
             with patch("snuba.web.bulk_delete_query.produce_delete_query") as mock_produce:
@@ -290,9 +288,6 @@ def test_attribute_conditions_feature_flag_enabled() -> None:
                     }
                 }
                 assert call_args["attribute_conditions_item_type"] == TRACE_ITEM_TYPE_OCCURRENCE
-    finally:
-        # Clean up: disable the feature flag
-        set_config("permit_delete_by_attribute", 0)
 
 
 @pytest.mark.redis_db
@@ -314,8 +309,7 @@ def test_eap_items_counts_each_table_against_its_readonly_replica() -> None:
     )
     attr_info = get_attribution_info()
 
-    set_config("permit_delete_by_attribute", 1)
-    try:
+    with override_options("snuba", {"permit_delete_by_attribute": True}):
         with patch(
             "snuba.web.bulk_delete_query._enforce_max_rows", return_value=10
         ) as mock_enforce:
@@ -337,8 +331,6 @@ def test_eap_items_counts_each_table_against_its_readonly_replica() -> None:
             "eap_items_downsample_64_ro",
             "eap_items_downsample_512_ro",
         }
-    finally:
-        set_config("permit_delete_by_attribute", 0)
 
 
 def test_count_storage_key_mapping_without_readonly_storage_set() -> None:

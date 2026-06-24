@@ -8,6 +8,7 @@ import pytest
 import rapidjson
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.types import BrokerValue, Message, Partition, Topic
+from sentry_options.testing import override_options
 
 from snuba import state
 from snuba.clusters.cluster import ClickhouseNode
@@ -518,6 +519,7 @@ def _make_eap_message(
 @patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
+@override_options("snuba", {"org_ids_delete_allowlist": "1"})
 def test_allowlist_partial_batch(mock_execute: Mock, mock_num_mutations: Mock) -> None:
     """
     Batch with 2 conditions (org 1 and org 2), allowlist = "1".
@@ -527,8 +529,6 @@ def test_allowlist_partial_batch(mock_execute: Mock, mock_num_mutations: Mock) -
     commit_step = Mock()
     metrics = Mock()
     storage = get_writable_storage(StorageKey("eap_items"))
-
-    state.set_config("org_ids_delete_allowlist", "1")
 
     format_query = FormatQuery(commit_step, storage, EAPItemsFormatter(), metrics)
 
@@ -558,6 +558,7 @@ def test_allowlist_partial_batch(mock_execute: Mock, mock_num_mutations: Mock) -
 @patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
+@override_options("snuba", {"org_ids_delete_allowlist": "999"})
 def test_allowlist_all_blocked(mock_execute: Mock, mock_num_mutations: Mock) -> None:
     """
     All conditions have unallowed org IDs. _execute_query should not be called,
@@ -566,8 +567,6 @@ def test_allowlist_all_blocked(mock_execute: Mock, mock_num_mutations: Mock) -> 
     commit_step = Mock()
     metrics = Mock()
     storage = get_writable_storage(StorageKey("eap_items"))
-
-    state.set_config("org_ids_delete_allowlist", "999")
 
     format_query = FormatQuery(commit_step, storage, EAPItemsFormatter(), metrics)
 
@@ -597,6 +596,7 @@ def test_allowlist_all_blocked(mock_execute: Mock, mock_num_mutations: Mock) -> 
 @patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
+@override_options("snuba", {"org_ids_delete_allowlist": "1,2"})
 def test_allowlist_all_allowed(mock_execute: Mock, mock_num_mutations: Mock) -> None:
     """
     All conditions have allowed org IDs. Normal execution, no delete_skipped.
@@ -604,8 +604,6 @@ def test_allowlist_all_allowed(mock_execute: Mock, mock_num_mutations: Mock) -> 
     commit_step = Mock()
     metrics = Mock()
     storage = get_writable_storage(StorageKey("eap_items"))
-
-    state.set_config("org_ids_delete_allowlist", "1,2")
 
     format_query = FormatQuery(commit_step, storage, EAPItemsFormatter(), metrics)
 

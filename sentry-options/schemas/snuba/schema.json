@@ -226,6 +226,51 @@
       "type": "boolean",
       "default": false,
       "description": "When true, bypass the read-through query cache entirely and call the underlying function directly (escape hatch for Redis issues)."
+    },
+    "lw_deletions_offpeak_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, lightweight deletes are only processed during the configured off-peak window."
+    },
+    "lw_deletions_offpeak_start": {
+      "type": "integer",
+      "default": 0,
+      "description": "UTC hour (0-24) at which the lightweight-deletes off-peak window starts."
+    },
+    "lw_deletions_offpeak_end": {
+      "type": "integer",
+      "default": 24,
+      "description": "UTC hour (0-24) at which the lightweight-deletes off-peak window ends."
+    },
+    "org_ids_delete_allowlist": {
+      "type": "string",
+      "default": "",
+      "description": "Comma-separated org ids allowed to issue EAP-items lightweight deletes; empty means all orgs are allowed."
+    },
+    "max_parts_mutating_for_delete": {
+      "type": "integer",
+      "default": 20,
+      "description": "Maximum number of parts that may be mutating before a lightweight delete is deferred."
+    },
+    "permit_delete_by_attribute": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, delete-by-attribute requests are permitted; otherwise they are ignored."
+    },
+    "MAX_ONGOING_MUTATIONS_FOR_DELETE": {
+      "type": "integer",
+      "default": 5,
+      "description": "Maximum number of ongoing mutations allowed before a delete is rejected."
+    },
+    "storage_deletes_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Master switch for storage delete (DELETE FROM) support; when false all delete requests are rejected."
+    },
+    "enforce_max_rows_to_delete": {
+      "type": "boolean",
+      "default": true,
+      "description": "When true, reject deletes whose estimated row count exceeds the storage's max_rows_to_delete."
     }
   }
 }

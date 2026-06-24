@@ -7,7 +7,7 @@ from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies.abstract import MessageRejected
 from arroyo.types import Message
 
-from snuba.state import get_int_config
+from snuba.state.sentry_options import get_bool_option, get_int_option
 from snuba.utils.metrics import MetricsBackend
 
 _CACHE_TTL_SECONDS = 60
@@ -49,14 +49,14 @@ class OffPeakProcessingStrategy(ProcessingStrategy[KafkaPayload]):
         if self.__cached_result is not None and (now - self.__cached_at) < _CACHE_TTL_SECONDS:
             return self.__cached_result
 
-        enabled = get_int_config("lw_deletions_offpeak_enabled", default=0)
+        enabled = get_bool_option("lw_deletions_offpeak_enabled", False)
         if not enabled:
             self.__cached_result = True
             self.__cached_at = now
             return True
 
-        start = get_int_config("lw_deletions_offpeak_start", default=0) or 0
-        end = get_int_config("lw_deletions_offpeak_end", default=24) or 24
+        start = get_int_option("lw_deletions_offpeak_start", 0)
+        end = get_int_option("lw_deletions_offpeak_end", 24) or 24
         current_hour = datetime.now(timezone.utc).hour
 
         if start == end:

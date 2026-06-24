@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
+from typing import Generator
 from unittest.mock import MagicMock
 
 import pytest
@@ -8,8 +10,8 @@ import time_machine
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies.abstract import MessageRejected
 from arroyo.types import BrokerValue, Message, Partition, Topic
+from sentry_options.testing import override_options
 
-from snuba import state
 from snuba.lw_deletions.off_peak import OffPeakProcessingStrategy
 from snuba.state import get_raw_configs
 
@@ -54,10 +56,17 @@ def _make_strategy(
     return strategy, next_step, metrics
 
 
-def _set_offpeak_config(start: int, end: int) -> None:
-    state.set_config("lw_deletions_offpeak_enabled", 1)
-    state.set_config("lw_deletions_offpeak_start", start)
-    state.set_config("lw_deletions_offpeak_end", end)
+@contextmanager
+def _offpeak_config(start: int, end: int) -> Generator[None, None, None]:
+    with override_options(
+        "snuba",
+        {
+            "lw_deletions_offpeak_enabled": True,
+            "lw_deletions_offpeak_start": start,
+            "lw_deletions_offpeak_end": end,
+        },
+    ):
+        yield
 
 
 @pytest.mark.redis_db
@@ -70,8 +79,8 @@ class TestOffPeakDisabled:
         strategy.submit(msg)
         next_step.submit.assert_called_once_with(msg)
 
+    @override_options("snuba", {"lw_deletions_offpeak_enabled": False})
     def test_messages_pass_through_when_explicitly_disabled(self) -> None:
-        state.set_config("lw_deletions_offpeak_enabled", 0)
         strategy, next_step, _ = _make_strategy()
         msg = _make_message()
         strategy.submit(msg)
@@ -83,15 +92,13 @@ class TestOffPeakSameDayWindow:
     """Window like 2-8 (2am to 8am UTC)."""
 
     def test_within_window_passes(self) -> None:
-        with time_machine.travel(_tomorrow_at(5), tick=False):
-            _set_offpeak_config(start=2, end=8)
+        with time_machine.travel(_tomorrow_at(5), tick=False), _offpeak_config(start=2, end=8):
             strategy, next_step, _ = _make_strategy()
             strategy.submit(_make_message())
             next_step.submit.assert_called_once()
 
     def test_outside_window_rejects(self) -> None:
-        with time_machine.travel(_tomorrow_at(12), tick=False):
-            _set_offpeak_config(start=2, end=8)
+        with time_machine.travel(_tomorrow_at(12), tick=False), _offpeak_config(start=2, end=8):
             strategy, next_step, metrics = _make_strategy()
             with pytest.raises(MessageRejected):
                 strategy.submit(_make_message())
@@ -99,15 +106,13 @@ class TestOffPeakSameDayWindow:
             metrics.increment.assert_called_with("off_peak_rejected")
 
     def test_at_start_boundary_passes(self) -> None:
-        with time_machine.travel(_tomorrow_at(2), tick=False):
-            _set_offpeak_config(start=2, end=8)
+        with time_machine.travel(_tomorrow_at(2), tick=False), _offpeak_config(start=2, end=8):
             strategy, next_step, _ = _make_strategy()
             strategy.submit(_make_message())
             next_step.submit.assert_called_once()
 
     def test_at_end_boundary_rejects(self) -> None:
-        with time_machine.travel(_tomorrow_at(8), tick=False):
-            _set_offpeak_config(start=2, end=8)
+        with time_machine.travel(_tomorrow_at(8), tick=False), _offpeak_config(start=2, end=8):
             strategy, next_step, _ = _make_strategy()
             with pytest.raises(MessageRejected):
                 strategy.submit(_make_message())
@@ -118,22 +123,19 @@ class TestOffPeakMidnightSpanningWindow:
     """Window like 22-6 (10pm to 6am UTC, spanning midnight)."""
 
     def test_before_midnight_passes(self) -> None:
-        with time_machine.travel(_tomorrow_at(23), tick=False):
-            _set_offpeak_config(start=22, end=6)
+        with time_machine.travel(_tomorrow_at(23), tick=False), _offpeak_config(start=22, end=6):
             strategy, next_step, _ = _make_strategy()
             strategy.submit(_make_message())
             next_step.submit.assert_called_once()
 
     def test_after_midnight_passes(self) -> None:
-        with time_machine.travel(_tomorrow_at(3), tick=False):
-            _set_offpeak_config(start=22, end=6)
+        with time_machine.travel(_tomorrow_at(3), tick=False), _offpeak_config(start=22, end=6):
             strategy, next_step, _ = _make_strategy()
             strategy.submit(_make_message())
             next_step.submit.assert_called_once()
 
     def test_during_day_rejects(self) -> None:
-        with time_machine.travel(_tomorrow_at(14), tick=False):
-            _set_offpeak_config(start=22, end=6)
+        with time_machine.travel(_tomorrow_at(14), tick=False), _offpeak_config(start=22, end=6):
             strategy, next_step, _ = _make_strategy()
             with pytest.raises(MessageRejected):
                 strategy.submit(_make_message())
@@ -144,8 +146,7 @@ class TestOffPeakSameStartEnd:
     """When start == end, never off-peak (disables processing)."""
 
     def test_always_rejects(self) -> None:
-        with time_machine.travel(_tomorrow_at(5), tick=False):
-            _set_offpeak_config(start=5, end=5)
+        with time_machine.travel(_tomorrow_at(5), tick=False), _offpeak_config(start=5, end=5):
             strategy, next_step, _ = _make_strategy()
             with pytest.raises(MessageRejected):
                 strategy.submit(_make_message())

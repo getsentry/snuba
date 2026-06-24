@@ -15,7 +15,6 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.data_source.simple import Table
 from snuba.query.dsl import and_cond, column, equals, literal
 from snuba.query.exceptions import TooManyDeleteRowsException
-from snuba.state import set_config
 from snuba.web.delete_query import _enforce_max_rows
 from tests.base import BaseApiTest
 from tests.web.rpc.v1.test_utils import write_eap_item
@@ -91,7 +90,7 @@ class TestMaxRowsEnforcer(BaseApiTest):
             allowed_columns=["project_id", "organization_id"],
         ),
     )
+    @override_options("snuba", {"enforce_max_rows_to_delete": False})
     def test_bypass_enforce_max_rows(self, mock: mock.MagicMock) -> None:
-        set_config("enforce_max_rows_to_delete", 0)
         self._insert_event()
         _enforce_max_rows(self.query)

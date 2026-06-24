@@ -25,7 +25,8 @@ from snuba.query.dsl import literal
 from snuba.query.exceptions import InvalidQueryException, NoRowsToDeleteException
 from snuba.query.expressions import Expression
 from snuba.reader import Result
-from snuba.state import get_int_config, get_str_config
+from snuba.state import get_str_config
+from snuba.state.sentry_options import get_bool_option
 from snuba.utils.metrics.util import with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.schemas import ColumnValidator, InvalidColumnType
@@ -228,7 +229,7 @@ def delete_from_storage(
     if attribute_conditions:
         _validate_attribute_conditions(attribute_conditions, delete_settings)
 
-        if not get_int_config("permit_delete_by_attribute", default=0):
+        if not get_bool_option("permit_delete_by_attribute", False):
             metrics.increment("delete_query.delete_ignored")
             return {}
 
