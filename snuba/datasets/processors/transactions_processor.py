@@ -29,7 +29,7 @@ from snuba.processor import (
     _ensure_valid_ip,
     _unicodify,
 )
-from snuba.state import get_config
+from snuba.state.sentry_options import get_int_option
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger(__name__)
@@ -344,12 +344,7 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         data = event_dict["data"]
         trace_context = data["contexts"]["trace"]
 
-        try:
-            max_spans_per_transaction = get_config("max_spans_per_transaction", 2000)
-            assert isinstance(max_spans_per_transaction, (int, float))
-        except Exception:
-            metrics.increment("bad_config.max_spans_per_transaction")
-            max_spans_per_transaction = 2000
+        max_spans_per_transaction = get_int_option("max_spans_per_transaction", 2000)
 
         num_processed = 0
         processed_spans = []

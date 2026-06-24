@@ -52,7 +52,7 @@ from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
 from snuba.query.allocation_policies.utils import get_max_bytes_to_read
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import record_query
-from snuba.state.sentry_options import get_int_option
+from snuba.state.sentry_options import get_bool_option, get_int_option
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import import_submodules_in_directory
@@ -510,7 +510,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
 
                 routing_context.cluster_load_info = (
                     get_cluster_loadinfo()
-                    if state.get_config("storage_routing.enable_get_cluster_loadinfo", False)
+                    if get_bool_option("storage_routing.enable_get_cluster_loadinfo", False)
                     else None
                 )
 

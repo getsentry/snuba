@@ -1,6 +1,7 @@
 from copy import deepcopy
 
 import pytest
+from sentry_options.testing import override_options
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.query.expressions import Column, FunctionCall, Literal
@@ -9,7 +10,6 @@ from snuba.query.processors.physical.uniq_in_select_and_having import (
     UniqInSelectAndHavingProcessor,
 )
 from snuba.query.query_settings import HTTPQuerySettings
-from snuba.state import set_config
 from tests.query.processors.query_builders import build_query
 
 
@@ -81,16 +81,16 @@ VALID_QUERY_CASES = [
 
 @pytest.mark.parametrize("input_query", deepcopy(INVALID_QUERY_CASES))
 @pytest.mark.redis_db
+@override_options("snuba", {"throw_on_uniq_select_and_having": True})
 def test_invalid_uniq_queries(input_query: ClickhouseQuery) -> None:
-    set_config("throw_on_uniq_select_and_having", True)
     with pytest.raises(MismatchedAggregationException):
         UniqInSelectAndHavingProcessor().process_query(input_query, HTTPQuerySettings())
 
 
 @pytest.mark.parametrize("input_query", deepcopy(VALID_QUERY_CASES))
 @pytest.mark.redis_db
+@override_options("snuba", {"throw_on_uniq_select_and_having": True})
 def test_valid_uniq_queries(input_query: ClickhouseQuery) -> None:
-    set_config("throw_on_uniq_select_and_having", True)
     og_query = deepcopy(input_query)
     UniqInSelectAndHavingProcessor().process_query(input_query, HTTPQuerySettings())
     # query should not change

@@ -16,7 +16,7 @@ from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Param, String
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
-from snuba.state import get_config
+from snuba.state.sentry_options import get_bool_option
 
 
 class MismatchedAggregationException(InvalidQueryException):
@@ -53,7 +53,7 @@ class UniqInSelectAndHavingProcessor(ClickhouseQueryProcessor):
             for col in selected_columns:
                 col.expression.accept(matcher)
             if not all(matcher.found_expressions):
-                should_throw = get_config("throw_on_uniq_select_and_having", False)
+                should_throw = get_bool_option("throw_on_uniq_select_and_having", False)
                 error = MismatchedAggregationException(
                     "Aggregation is in HAVING clause but not SELECT", query=str(query)
                 )

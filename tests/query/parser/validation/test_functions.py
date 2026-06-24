@@ -4,9 +4,9 @@ from typing import Mapping, Optional, Sequence, Type
 from unittest.mock import MagicMock
 
 import pytest
+from sentry_options.testing import override_options
 
 import snuba.query.parser.validation.functions as functions
-from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -108,9 +108,9 @@ def test_functions(
 
 @pytest.mark.parametrize("expression, should_raise", test_expressions[:1])
 @pytest.mark.redis_db
+@override_options("snuba", {"function-validator.enabled": True})
 def test_invalid_function_name(expression: FunctionCall, should_raise: bool) -> None:
     data_source = QueryEntity(EntityKey.EVENTS, ColumnSet([]))
-    state.set_config("function-validator.enabled", True)
 
     with pytest.raises(InvalidExpressionException):
         FunctionCallsValidator().validate(expression, data_source)
@@ -118,9 +118,9 @@ def test_invalid_function_name(expression: FunctionCall, should_raise: bool) -> 
 
 @pytest.mark.parametrize("expression, should_raise", test_expressions)
 @pytest.mark.redis_db
+@override_options("snuba", {"function-validator.enabled": True})
 def test_allowed_functions_validator(expression: FunctionCall, should_raise: bool) -> None:
     data_source = QueryEntity(EntityKey.EVENTS, ColumnSet([]))
-    state.set_config("function-validator.enabled", True)
 
     if should_raise:
         with pytest.raises(InvalidFunctionCall):

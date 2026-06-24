@@ -156,6 +156,41 @@
       "type": "string",
       "default": "",
       "description": "Comma-separated list of hostnames for which the on-demand profiler should capture a profile."
+    },
+    "throw_on_uniq_select_and_having": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, raise MismatchedAggregationException if a uniq aggregation appears in HAVING but not SELECT instead of only logging it."
+    },
+    "function-validator.enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, invalid function names raise InvalidFunctionCall; otherwise only an invalid_funcs metric is emitted."
+    },
+    "mandatory_condition_enforce": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, queries missing mandatory condition columns raise an assertion; otherwise the omission is only logged."
+    },
+    "eap.reject_string_timestamp_filters": {
+      "type": "boolean",
+      "default": true,
+      "description": "When true, reject EAP time-series filters comparing sentry.timestamp to a TYPE_STRING value."
+    },
+    "trace_ids_cross_item_query_limit": {
+      "type": "integer",
+      "default": 50000000,
+      "description": "Maximum number of trace ids fetched by the cross-item-query trace-id lookup when no explicit limit is supplied."
+    },
+    "storage_routing.enable_get_cluster_loadinfo": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the storage routing strategy fetches ClickHouse cluster load info to inform routing decisions."
+    },
+    "max_spans_per_transaction": {
+      "type": "integer",
+      "default": 2000,
+      "description": "Maximum number of spans processed per transaction by the transactions consumer."
     }
   }
 }
