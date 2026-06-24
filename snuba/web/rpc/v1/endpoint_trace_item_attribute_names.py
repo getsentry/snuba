@@ -242,9 +242,13 @@ def get_co_occurring_attributes(
     )
 
     if attribute_keys_to_search:
+        if request.filter_mode == TraceItemAttributeNamesRequest.FilterMode.FILTER_MODE_MATCH_ANY:
+            match_function = f.hasAny
+        else:
+            match_function = f.hasAll
         condition = and_cond(
             condition,
-            f.hasAll(
+            match_function(
                 column("attribute_keys_hash"),
                 f.array(*[f.cityHash64(k) for k in attribute_keys_to_search]),
             ),
