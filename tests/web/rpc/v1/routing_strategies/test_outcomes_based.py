@@ -5,6 +5,7 @@ from unittest import mock
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import GetTracesRequest
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
@@ -95,15 +96,12 @@ def test_outcomes_based_routing_queries_daily_table() -> None:
 
 @pytest.mark.eap
 @pytest.mark.redis_db
+@override_options("snuba", {"enable_long_term_retention_downsampling": True})
 def test_item_type_full_retention() -> None:
     """
     Certain item types will not use the long term retention downsampling,
     find them in ITEM_TYPE_FULL_RETENTION routing_strategies/common.py
     """
-    state.set_config(
-        "enable_long_term_retention_downsampling",
-        1,
-    )
     strategy = OutcomesBasedRoutingStrategy()
 
     # request that queries last 50 days of data
@@ -130,15 +128,12 @@ def test_item_type_full_retention() -> None:
 
 @pytest.mark.eap
 @pytest.mark.redis_db
+@override_options("snuba", {"enable_long_term_retention_downsampling": True})
 def test_item_type_full_retention_preprod() -> None:
     """
     PREPROD item type should not use long term retention downsampling,
     it should always fetch tier1 for its 90 day retention period.
     """
-    state.set_config(
-        "enable_long_term_retention_downsampling",
-        1,
-    )
     strategy = OutcomesBasedRoutingStrategy()
 
     # request that queries last 50 days of data
@@ -165,11 +160,8 @@ def test_item_type_full_retention_preprod() -> None:
 
 @pytest.mark.eap
 @pytest.mark.redis_db
+@override_options("snuba", {"enable_long_term_retention_downsampling": True})
 def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
-    state.set_config(
-        "enable_long_term_retention_downsampling",
-        1,
-    )
     strategy = OutcomesBasedRoutingStrategy()
     end_time = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
 

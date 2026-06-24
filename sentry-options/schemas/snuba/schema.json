@@ -271,6 +271,36 @@
       "type": "boolean",
       "default": true,
       "description": "When true, reject deletes whose estimated row count exceeds the storage's max_rows_to_delete."
+    },
+    "ignore_clickhouse_settings_override": {
+      "type": "string",
+      "default": "",
+      "description": "Comma/space-delimited ClickHouse setting names to strip from a query's settings override; empty keeps all."
+    },
+    "enable_long_term_retention_downsampling": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, EAP queries older than 31 days (for non-full-retention item types) are routed to the most-downsampled tier."
+    },
+    "storage_routing_config_override": {
+      "type": "string",
+      "default": "{}",
+      "description": "JSON object mapping organization_id to a per-org StorageRoutingConfig override."
+    },
+    "default_storage_routing_config": {
+      "type": "string",
+      "default": "{}",
+      "description": "JSON-encoded default StorageRoutingConfig used when no per-org override applies."
+    },
+    "subscription_primary_task_builder": {
+      "type": "string",
+      "default": "jittered",
+      "description": "TaskBuilderMode for the subscription scheduler: one of immediate, jittered, transition_jitter, transition_immediate."
+    },
+    "consistent_override": {
+      "type": "string",
+      "default": "",
+      "description": "Semicolon-delimited referrer=probability pairs; for a matching referrer, consistency is dropped with the given probability. Empty means no override."
     }
   }
 }

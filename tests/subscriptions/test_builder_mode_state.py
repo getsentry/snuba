@@ -2,8 +2,9 @@ from datetime import timedelta
 from typing import Sequence, Tuple
 
 import pytest
+from sentry_options.testing import override_options
 
-from snuba import settings, state
+from snuba import settings
 from snuba.subscriptions.data import Subscription
 from snuba.subscriptions.scheduler import TaskBuilderMode, TaskBuilderModeState
 from tests.subscriptions.subscriptions_utils import build_subscription
@@ -99,11 +100,11 @@ def test_state_changes(
 ) -> None:
     prev_threshold = settings.MAX_RESOLUTION_FOR_JITTER
     settings.MAX_RESOLUTION_FOR_JITTER = 300
-    state.set_config("subscription_primary_task_builder", general_mode)
-    mode_state = TaskBuilderModeState()
-    modes = [
-        mode_state.get_current_mode(subscription, timestamp)
-        for subscription, timestamp in subscriptions
-    ]
-    assert modes == expected_modes
+    with override_options("snuba", {"subscription_primary_task_builder": general_mode}):
+        mode_state = TaskBuilderModeState()
+        modes = [
+            mode_state.get_current_mode(subscription, timestamp)
+            for subscription, timestamp in subscriptions
+        ]
+        assert modes == expected_modes
     settings.MAX_RESOLUTION_FOR_JITTER = prev_threshold

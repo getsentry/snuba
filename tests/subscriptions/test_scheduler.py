@@ -3,8 +3,8 @@ from datetime import datetime, timedelta
 from typing import Callable, Collection, Optional, Tuple
 
 import pytest
+from sentry_options.testing import override_options
 
-from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.redis import RedisClientKey, get_redis_client
@@ -93,8 +93,8 @@ class TestSubscriptionScheduler:
         assert result == expected
 
     @pytest.mark.redis_db
+    @override_options("snuba", {"subscription_primary_task_builder": "immediate"})
     def test_simple(self) -> None:
-        state.set_config("subscription_primary_task_builder", "immediate")
         subscription = self.build_subscription(timedelta(minutes=1))
         start = timedelta(minutes=-10)
         end = timedelta(minutes=0)
@@ -169,8 +169,8 @@ class TestSubscriptionScheduler:
         )
 
     @pytest.mark.redis_db
+    @override_options("snuba", {"subscription_primary_task_builder": "immediate"})
     def test_subscription_resolution_larger_than_tiny_interval(self) -> None:
-        state.set_config("subscription_primary_task_builder", "immediate")
         subscription = self.build_subscription(timedelta(minutes=1))
         start = timedelta(seconds=-1)
         end = timedelta(seconds=1)
@@ -228,8 +228,8 @@ class TestSubscriptionScheduler:
         )
 
     @pytest.mark.redis_db
+    @override_options("snuba", {"subscription_primary_task_builder": "immediate"})
     def test_generic_metrics_gauges_does_not_error(self) -> None:
-        state.set_config("subscription_primary_task_builder", "immediate")
         subscription = Subscription(
             SubscriptionIdentifier(self.partition_id, uuid.uuid4()),
             SnQLSubscriptionData(

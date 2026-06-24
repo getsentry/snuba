@@ -30,6 +30,7 @@ from snuba.querylog.query_metadata import get_request_status
 from snuba.request import Request
 from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.request.schema import RequestParts, RequestSchema
+from snuba.state.sentry_options import get_str_option
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
@@ -71,8 +72,8 @@ def parse_mql_query(
 
 
 def _consistent_override(original_setting: bool, referrer: str) -> bool:
-    consistent_config = state.get_config("consistent_override", None)
-    if isinstance(consistent_config, str):
+    consistent_config = get_str_option("consistent_override", "")
+    if consistent_config:
         referrers_override = consistent_config.split(";")
         for config in referrers_override:
             referrer_config, percentage = config.split("=")

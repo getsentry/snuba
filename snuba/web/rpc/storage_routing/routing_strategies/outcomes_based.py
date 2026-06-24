@@ -25,6 +25,7 @@ from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array
 from snuba.query.logical import Query
 from snuba.query.query_settings import OutcomesQuerySettings
 from snuba.request import Request as SnubaRequest
+from snuba.state.sentry_options import get_bool_option
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     timestamp_in_range_condition,
@@ -245,7 +246,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         older_than_thirty_days = thirty_one_days_ago_ts > in_msg_meta.start_timestamp.seconds
 
         if (
-            state.get_int_config("enable_long_term_retention_downsampling", 0)
+            get_bool_option("enable_long_term_retention_downsampling", False)
             and older_than_thirty_days
             and in_msg_meta.trace_item_type not in ITEM_TYPE_FULL_RETENTION
         ):

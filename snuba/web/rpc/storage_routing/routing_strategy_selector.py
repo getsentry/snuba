@@ -8,7 +8,7 @@ from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 
 from snuba import settings
-from snuba.state import get_config
+from snuba.state.sentry_options import get_str_option
 from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
     OutcomesBasedRoutingStrategy,
@@ -89,11 +89,11 @@ class RoutingStrategySelector:
         in_msg_meta = extract_message_meta(in_msg)
         organization_id = str(in_msg_meta.organization_id)
         try:
-            overrides = json.loads(str(get_config(_STORAGE_ROUTING_CONFIG_OVERRIDE_KEY, "{}")))
+            overrides = json.loads(get_str_option(_STORAGE_ROUTING_CONFIG_OVERRIDE_KEY, "{}"))
             if organization_id in overrides.keys():
                 return StorageRoutingConfig.from_json(overrides[organization_id])
 
-            config = str(get_config(_DEFAULT_STORAGE_ROUTING_CONFIG_KEY, "{}"))
+            config = get_str_option(_DEFAULT_STORAGE_ROUTING_CONFIG_KEY, "{}")
             return StorageRoutingConfig.from_json(json.loads(config))
         except Exception as e:
             sentry_sdk.capture_message(f"Error getting storage routing config: {e}")
