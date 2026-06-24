@@ -191,6 +191,36 @@
       "type": "integer",
       "default": 2000,
       "description": "Maximum number of spans processed per transaction by the transactions consumer."
+    },
+    "admin.querylog_threads": {
+      "type": "integer",
+      "default": 4,
+      "description": "max_threads ClickHouse setting used by the admin querylog query; clamped to a hard maximum of 4."
+    },
+    "enable_eap_readonly_table": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, non-consistent EAP-items queries are routed to the read-only table replica."
+    },
+    "enable_events_readonly_table": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, non-consistent errors/events queries are routed to the read-only table replica."
+    },
+    "use_cross_item_path_for_single_item_queries": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, GetTraces uses the cross-item query path for single-item queries as well as cross-item queries."
+    },
+    "executor_queue_size_factor": {
+      "type": "integer",
+      "default": 10,
+      "description": "Multiplier applied to max_concurrent_queries to size the subscription executor's pending-future queue before backpressure."
+    },
+    "snuba_api_cogs_probability": {
+      "type": "number",
+      "default": 0.0,
+      "description": "Sampling probability [0,1] for recording per-query COGS (cost-of-goods) accounting from the querylog."
     }
   }
 }

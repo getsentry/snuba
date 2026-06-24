@@ -16,8 +16,8 @@ from arroyo.processing.strategies.produce import Produce
 from arroyo.types import BrokerValue, Message, Partition, Topic
 from arroyo.utils.clock import MockedClock
 from confluent_kafka.admin import AdminClient
+from sentry_options.testing import override_options
 
-from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
@@ -341,9 +341,8 @@ def test_poll_skips_non_retryable_query_exception() -> None:
 
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
+@override_options("snuba", {"executor_queue_size_factor": 1})
 def test_too_many_concurrent_queries() -> None:
-    state.set_config("executor_queue_size_factor", 1)
-
     strategy = ExecuteQuery(
         dataset=get_dataset("events"),
         entity_names=["events"],

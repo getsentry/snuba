@@ -11,6 +11,7 @@ import pytest
 import simplejson as json
 from confluent_kafka.admin import AdminClient
 from dateutil.parser import parse as parse_datetime
+from sentry_options.testing import override_options
 from sentry_sdk import Client, Hub
 
 from snuba import settings, state
@@ -28,7 +29,6 @@ from snuba.utils.manage_topics import create_topics
 from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.topics import Topic as SnubaTopic
 from tests.base import BaseApiTest
-from tests.conftest import SnubaSetConfig
 from tests.helpers import write_processed_messages
 
 
@@ -1490,7 +1490,7 @@ class TestApi(SimpleAPITest):
         query_data["tenant_ids"]["referrer"] = "test_override"  # type: ignore
         query = json.dumps(query_data)
         response = json.loads(self.post(query, referrer="test_override").data)
-        assert response["stats"]["consistent"] == False
+        assert not response["stats"]["consistent"]
 
     def test_gracefully_handle_multiple_conditions_on_same_column(self) -> None:
         response = self.post(
@@ -1961,5 +1961,6 @@ class TestAPIErrorsRO(TestApi):
     """
 
     @pytest.fixture(autouse=True)
-    def use_readonly_table(self, snuba_set_config: SnubaSetConfig) -> None:
-        snuba_set_config("enable_events_readonly_table", 1)
+    def use_readonly_table(self) -> Generator[None, None, None]:
+        with override_options("snuba", {"enable_events_readonly_table": True}):
+            yield

@@ -1,6 +1,5 @@
 from typing import Sequence
 
-from snuba import state
 from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.storage import EntityStorageConnection
 from snuba.datasets.storages.factory import get_storage
@@ -8,6 +7,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
+from snuba.state.sentry_options import get_bool_option
 
 
 class EAPItemsStorageSelector(QueryStorageSelector):
@@ -22,7 +22,7 @@ class EAPItemsStorageSelector(QueryStorageSelector):
         tier = query_settings.get_sampling_tier()
 
         use_readonly_storage = (
-            state.get_config("enable_eap_readonly_table", False)
+            get_bool_option("enable_eap_readonly_table", False)
             and not query_settings.get_consistent()
         )
 

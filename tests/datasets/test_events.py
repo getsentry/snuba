@@ -1,6 +1,6 @@
 import pytest
+from sentry_options.testing import override_options
 
-from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.clusters.cluster import ClickhouseClientSettings
@@ -52,9 +52,8 @@ class TestEventsDataset:
 
 
 @pytest.mark.redis_db
+@override_options("snuba", {"enable_events_readonly_table": True})
 def test_storage_selector() -> None:
-    state.set_config("enable_events_readonly_table", True)
-
     storage = get_storage(StorageKey.ERRORS)
     storage_ro = get_storage(StorageKey.ERRORS_RO)
     storage_connections = [
