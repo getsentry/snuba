@@ -85,6 +85,31 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
         raise BadSnubaRPCRequestException(str(e)) from e
 
 
+_SEMVER_COMPONENT_COUNT = 4  # major.minor.patch.build
+
+
+def semver_sort_key(expr: Expression, alias: str | None = None) -> Expression:
+    """Return a Tuple(Array(UInt32), UInt8) sort key for semantic-version ORDER BY.
+
+    Strips a leading 'package@' prefix, isolates the release part (before '-'),
+    maps each dot-component to UInt32, pads to 4 elements so "1.2" == "1.2.0",
+    and adds a stability flag (0=prerelease, 1=stable) so prerelease versions sort
+    before their corresponding stable release.  Works on Altinity 25.3/25.8.
+    """
+    x = Argument(None, "x")
+    version_no_prefix = f.arrayElement(f.splitByChar(literal("@"), expr), literal(-1))
+    release_part = f.arrayElement(f.splitByChar(literal("-"), version_no_prefix), literal(1))
+    numeric_key = f.arrayResize(
+        f.arrayMap(
+            Lambda(None, ("x",), f.toUInt32OrZero(x)),
+            f.splitByChar(literal("."), release_part),
+        ),
+        literal(_SEMVER_COMPONENT_COUNT),
+    )
+    is_stable = f.equals(f.position(version_no_prefix, literal("-")), literal(0))
+    return f.tuple(numeric_key, is_stable, alias=alias)
+
+
 def _trace_item_filter_key_expression(
     attr_to_key_expression_callable: Callable[[AttributeKey], Expression], key: AttributeKey
 ) -> Expression:

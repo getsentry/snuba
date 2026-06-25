@@ -59,6 +59,7 @@ from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     base_conditions_and,
     get_field_existence_expression,
+    semver_sort_key,
     timestamp_in_range_condition,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
@@ -87,6 +88,8 @@ from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 
 _DEFAULT_ROW_LIMIT = 10_000
+
+_SEMVER_SORT_ATTRIBUTES: frozenset[str] = frozenset({"sentry.release"})
 
 
 OP_TO_EXPR = {
@@ -283,7 +286,10 @@ def _groupby_order_by_expression(attr_key: AttributeKey) -> Expression:
     """
     if attr_key.name == "sentry.timestamp":
         return snuba_column("timestamp")
-    return attribute_key_to_expression(attr_key)
+    base = attribute_key_to_expression(attr_key)
+    if attr_key.name in _SEMVER_SORT_ATTRIBUTES:
+        return semver_sort_key(base)
+    return base
 
 
 def _convert_order_by(
