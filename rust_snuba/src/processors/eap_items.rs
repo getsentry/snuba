@@ -662,11 +662,20 @@ mod tests {
     use std::time::SystemTime;
 
     use prost_types::Timestamp;
+    use sentry_options::init_with_schemas;
+    use sentry_options::testing::override_options;
     use sentry_protos::snuba::v1::any_value::Value;
     use sentry_protos::snuba::v1::{AnyValue, ArrayValue, TraceItemType};
     use serde::Deserialize;
+    use serde_json::json;
+    use std::sync::Once;
 
     use super::*;
+
+    static INIT: Once = Once::new();
+    fn init_options() {
+        INIT.call_once(|| init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap());
+    }
 
     fn generate_trace_item(item_id: Uuid) -> TraceItem {
         TraceItem {
@@ -1121,8 +1130,36 @@ mod tests {
 
     #[test]
     fn test_get_dlq_grace_period_min_unset_storage_returns_none() {
-        // Empty storage_name short-circuits to None without hitting Python.
+        // Empty storage_name short-circuits to None without reading options.
         assert_eq!(get_dlq_grace_period_min(""), None);
+    }
+
+    #[test]
+    fn test_get_dlq_grace_period_min_reads_dict_option() {
+        init_options();
+        {
+            let _guard = override_options(&[(
+                "snuba",
+                "eap_items_dlq_grace_period_min",
+                json!({ "eap_items_dlq_test": 45 }),
+            )])
+            .unwrap();
+            // Reads the per-storage entry out of the dict option (the nested get
+            // on the serde_json::Value returned by options(...).get(...)).
+            assert_eq!(get_dlq_grace_period_min("eap_items_dlq_test"), Some(45));
+            // A storage with no entry in the dict falls back to None.
+            assert_eq!(get_dlq_grace_period_min("eap_items_dlq_other"), None);
+        }
+        {
+            // Negative values are rejected.
+            let _guard = override_options(&[(
+                "snuba",
+                "eap_items_dlq_grace_period_min",
+                json!({ "eap_items_dlq_test": -1 }),
+            )])
+            .unwrap();
+            assert_eq!(get_dlq_grace_period_min("eap_items_dlq_test"), None);
+        }
     }
 
     #[test]
