@@ -542,6 +542,11 @@
       "additionalProperties": { "type": "integer" },
       "default": {},
       "description": "Dict mapping an outcomes-based routing strategy class name to the minimum query time range in seconds for which outcomes are queried. Strategies with no entry use 14400 (4 hours). Migrated from per-strategy runtime config <ClassName>.min_timerange_to_query_outcomes."
+    },
+    "use_array_map_columns_timestamp_seconds": {
+      "type": "integer",
+      "default": 1782172800,
+      "description": "Unix timestamp (seconds) cutoff: EAP queries whose window starts on/after this read array attributes from the typed attributes_array_* map columns; older windows read the legacy attributes_array JSON column. 0 disables the typed-column read path entirely. Migrated from runtime config use_array_map_columns_timestamp_seconds."
     }
   }
 }

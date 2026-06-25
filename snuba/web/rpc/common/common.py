@@ -263,12 +263,9 @@ def use_array_map_columns(meta: RequestMeta) -> bool:
     only exists in the legacy ``attributes_array`` JSON column. A config value of 0
     disables the typed-column read path entirely.
     """
-    use_array_map_columns_timestamp_seconds = cast(
-        int,
-        state.get_int_config(
-            "use_array_map_columns_timestamp_seconds",
-            settings.USE_ARRAY_MAP_COLUMNS_TIMESTAMP_SECONDS,
-        ),
+    use_array_map_columns_timestamp_seconds = get_int_option(
+        "use_array_map_columns_timestamp_seconds",
+        settings.USE_ARRAY_MAP_COLUMNS_TIMESTAMP_SECONDS,
     )
     if use_array_map_columns_timestamp_seconds == 0:
         return False

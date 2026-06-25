@@ -116,11 +116,11 @@ class TestCommon:
             )
         )
         # A config value of 0 disables the typed-column read path entirely.
-        snuba_set_config("use_array_map_columns_timestamp_seconds", 0)
-        assert not use_array_map_columns(RequestMeta(start_timestamp=Timestamp(seconds=2**31)))
-        snuba_set_config("use_array_map_columns_timestamp_seconds", 10)
-        assert use_array_map_columns(RequestMeta(start_timestamp=Timestamp(seconds=10)))
-        assert not use_array_map_columns(RequestMeta(start_timestamp=Timestamp(seconds=9)))
+        with override_options("snuba", {"use_array_map_columns_timestamp_seconds": 0}):
+            assert not use_array_map_columns(RequestMeta(start_timestamp=Timestamp(seconds=2**31)))
+        with override_options("snuba", {"use_array_map_columns_timestamp_seconds": 10}):
+            assert use_array_map_columns(RequestMeta(start_timestamp=Timestamp(seconds=10)))
+            assert not use_array_map_columns(RequestMeta(start_timestamp=Timestamp(seconds=9)))
 
 
 class TestTraceItemFiltersArrayLike:
