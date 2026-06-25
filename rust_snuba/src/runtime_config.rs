@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use sentry_arroyo::timer;
 use sentry_arroyo::utils::timing::Deadline;
+use sentry_options::options;
 
 static CONFIG: RwLock<BTreeMap<String, (Option<String>, Deadline)>> = RwLock::new(BTreeMap::new());
 
@@ -54,16 +55,29 @@ pub struct LoadBalancingConfig {
 }
 
 pub fn get_load_balancing_config(storage_name: &str) -> LoadBalancingConfig {
-    let load_balancing = get_str_config(&format!("clickhouse_load_balancing:{storage_name}"))
-        .ok()
-        .flatten()
+    // Both keys live in the `snuba` sentry-options namespace as dicts keyed by
+    // storage name (migrated from the per-storage runtime config keys
+    // `clickhouse_load_balancing[_first_offset]:<storage>`).
+    let snuba_options = options("snuba").ok();
+
+    let load_balancing = snuba_options
+        .as_ref()
+        .and_then(|o| o.get("clickhouse_load_balancing").ok())
+        .and_then(|v| {
+            v.get(storage_name)
+                .and_then(|s| s.as_str())
+                .map(String::from)
+        })
         .unwrap_or_else(|| "in_order".to_string());
 
-    let first_offset = get_str_config(&format!(
-        "clickhouse_load_balancing_first_offset:{storage_name}"
-    ))
-    .ok()
-    .flatten();
+    let first_offset = snuba_options
+        .as_ref()
+        .and_then(|o| o.get("clickhouse_load_balancing_first_offset").ok())
+        .and_then(|v| {
+            v.get(storage_name)
+                .and_then(|s| s.as_str())
+                .map(String::from)
+        });
 
     LoadBalancingConfig {
         load_balancing,
@@ -82,16 +96,26 @@ pub const CLICKHOUSE_DEFAULT_MAX_INSERT_BLOCK_SIZE: u64 = 1_048_449;
 /// past what ClickHouse already does by default. Callers should append
 /// `&max_insert_block_size=<n>` to the INSERT URL when Some.
 pub fn get_max_insert_block_size(storage_name: &str) -> Option<u64> {
-    get_str_config(&format!("clickhouse_max_insert_block_size:{storage_name}"))
+    options("snuba")
         .ok()
-        .flatten()
-        .and_then(|s| s.parse::<u64>().ok())
+        .and_then(|o| o.get("clickhouse_max_insert_block_size").ok())
+        .and_then(|v| v.get(storage_name).and_then(|n| n.as_u64()))
         .filter(|&n| n >= CLICKHOUSE_DEFAULT_MAX_INSERT_BLOCK_SIZE)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sentry_options::init_with_schemas;
+    use sentry_options::testing::override_options;
+    use serde_json::json;
+    use std::sync::Once;
+
+    static INIT: Once = Once::new();
+
+    fn init_options() {
+        INIT.call_once(|| init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap());
+    }
 
     #[test]
     fn test_runtime_config() {
@@ -102,7 +126,7 @@ mod tests {
 
     #[test]
     fn test_load_balancing_config_defaults() {
-        crate::testutils::initialize_python();
+        init_options();
         let config = get_load_balancing_config("lb_defaults_test");
         assert_eq!(config.load_balancing, "in_order");
         assert_eq!(config.first_offset, None);
@@ -110,15 +134,20 @@ mod tests {
 
     #[test]
     fn test_load_balancing_config_overrides() {
-        crate::testutils::initialize_python();
-        patch_str_config_for_test(
-            "clickhouse_load_balancing:lb_overrides_test",
-            Some("first_or_random"),
-        );
-        patch_str_config_for_test(
-            "clickhouse_load_balancing_first_offset:lb_overrides_test",
-            Some("1"),
-        );
+        init_options();
+        let _guard = override_options(&[
+            (
+                "snuba",
+                "clickhouse_load_balancing",
+                json!({ "lb_overrides_test": "first_or_random" }),
+            ),
+            (
+                "snuba",
+                "clickhouse_load_balancing_first_offset",
+                json!({ "lb_overrides_test": "1" }),
+            ),
+        ])
+        .unwrap();
 
         let config = get_load_balancing_config("lb_overrides_test");
         assert_eq!(config.load_balancing, "first_or_random");

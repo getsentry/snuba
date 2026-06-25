@@ -397,6 +397,30 @@
       "type": "boolean",
       "default": true,
       "description": "Killswitch for the MappingOptimizer flags-hashmap query optimization on the errors/errors_ro storages. When false the optimizer is a no-op."
+    },
+    "clickhouse_load_balancing": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "default": {},
+      "description": "Dict mapping storage name to the ClickHouse load_balancing mode (e.g. \"in_order\", \"first_or_random\") used by that storage's consumer writer. Storages with no entry default to \"in_order\". Migrated from per-storage runtime config clickhouse_load_balancing:<storage>."
+    },
+    "clickhouse_load_balancing_first_offset": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "default": {},
+      "description": "Dict mapping storage name to the first_offset used with the first_or_random load_balancing mode. Storages with no entry have no first_offset. Migrated from per-storage runtime config clickhouse_load_balancing_first_offset:<storage>."
+    },
+    "clickhouse_max_insert_block_size": {
+      "type": "object",
+      "additionalProperties": { "type": "integer" },
+      "default": {},
+      "description": "Dict mapping storage name to a max_insert_block_size override for that storage's INSERTs. Values below ClickHouse's default (1048449) are ignored. Storages with no entry use the server default. Migrated from per-storage runtime config clickhouse_max_insert_block_size:<storage>."
+    },
+    "eap_items_dlq_grace_period_min": {
+      "type": "object",
+      "additionalProperties": { "type": "integer" },
+      "default": {},
+      "description": "Dict mapping storage name to a grace period in minutes; eap-items messages from before the current partition older than this are routed to the DLQ. Storages with no entry have no grace-period dropping. Migrated from per-storage runtime config eap_items_dlq_grace_period_min:<storage>."
     }
   }
 }

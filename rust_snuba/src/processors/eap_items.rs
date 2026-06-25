@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::counter;
+use sentry_options::options;
 use sentry_protos::snuba::v1::any_value::Value;
 use sentry_protos::snuba::v1::{ArrayValue, TraceItem, TraceItemType};
 
@@ -18,7 +19,6 @@ use crate::processors::utils::{
     enforce_retention, get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs,
     record_invalid_timestamp_metric, SilencedDLQMessage,
 };
-use crate::runtime_config::get_str_config;
 use crate::strategies::clickhouse::rowbinary;
 use crate::types::CogsData;
 use crate::types::{item_type_name, InsertBatch, ItemTypeMetrics, KafkaMessageMetadata};
@@ -153,10 +153,10 @@ fn get_dlq_grace_period_min(storage_name: &str) -> Option<i64> {
     if storage_name.is_empty() {
         return None;
     }
-    get_str_config(&format!("{DLQ_GRACE_PERIOD_MIN_KEY}:{storage_name}"))
+    options("snuba")
         .ok()
-        .flatten()
-        .and_then(|s| s.parse::<i64>().ok())
+        .and_then(|o| o.get(DLQ_GRACE_PERIOD_MIN_KEY).ok())
+        .and_then(|v| v.get(storage_name).and_then(|n| n.as_i64()))
         .filter(|&n| n >= 0)
 }
 
