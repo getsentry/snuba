@@ -4,6 +4,7 @@ expression: snapshot_payload
 ---
 [
   {
+    "ai_conversation_id": "",
     "attributes_bool": {
       "some_bool": true
     },
@@ -28,7 +29,6 @@ expression: snapshot_payload
       "one_attribute": "blah"
     },
     "client_sample_rate": 1.0,
-    "conversation_id": "<random uuid>",
     "downsampled_retention_days": 90,
     "indexed_name": "",
     "item_id": 140754042156678400000000000000000000000.0,

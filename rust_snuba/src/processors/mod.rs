@@ -165,9 +165,8 @@ mod tests {
                         ".*.*[\"sentry._internal.received_at\"]",
                         "<received timestamp>",
                     );
-                    // conversation_id/session_id are randomized when absent on the
-                    // TraceItem, so redact them to keep the snapshot deterministic.
-                    settings.add_redaction(".*.conversation_id", "<random uuid>");
+                    // session_id is randomized when absent on the TraceItem, so
+                    // redact it to keep the snapshot deterministic.
                     settings.add_redaction(".*.session_id", "<random uuid>");
                 }
 
