@@ -2,6 +2,7 @@ import os.path
 import subprocess
 from shutil import ExecError
 
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
 
@@ -36,15 +37,24 @@ def _main() -> None:
         migration_id, _ = os.path.splitext(migration_filename)
         runner = Runner()
         migration_key = MigrationKey(migration_group, migration_id)
-        print(f"-- forward migration {migration_group.value} : {migration_id}")
-        runner.run_migration(migration_key, dry_run=True)
-        print(f"-- end forward migration {migration_group.value} : {migration_id}")
+        try:
+            print(f"-- forward migration {migration_group.value} : {migration_id}")
+            runner.run_migration(migration_key, dry_run=True)
+            print(f"-- end forward migration {migration_group.value} : {migration_id}")
 
-        print("\n\n\n")
-        migration_key = MigrationKey(migration_group, migration_id)
-        print(f"-- backward migration {migration_group.value} : {migration_id}")
-        runner.reverse_migration(migration_key, dry_run=True)
-        print(f"-- end backward migration {migration_group.value} : {migration_id}")
+            print("\n\n\n")
+            print(f"-- backward migration {migration_group.value} : {migration_id}")
+            runner.reverse_migration(migration_key, dry_run=True)
+            print(f"-- end backward migration {migration_group.value} : {migration_id}")
+        except ClickhouseError as exc:
+            # A few migrations (e.g. functions 0001) build their SQL from a live
+            # ClickHouse version lookup, so even a dry run needs a reachable
+            # node. This CI job has no ClickHouse, so note and skip rendering
+            # those rather than failing the whole DDL diff.
+            print(
+                f"-- skipped {migration_group.value} : {migration_id} "
+                f"(requires a live ClickHouse connection to render DDL: {exc})"
+            )
 
 
 if __name__ == "__main__":

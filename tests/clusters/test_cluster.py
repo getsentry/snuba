@@ -135,6 +135,7 @@ def test_clusters() -> None:
 @patch("snuba.settings.CLUSTERS", FULL_CONFIG)
 @pytest.mark.clickhouse_db
 def test_cache_partition() -> None:
+    importlib.reload(cluster)
     assert (
         get_storage(StorageKey("transactions")).get_cluster().get_reader().cache_partition_id
         == "host_2_cache"
@@ -146,6 +147,7 @@ def test_cache_partition() -> None:
 @patch("snuba.settings.CLUSTERS", FULL_CONFIG)
 @pytest.mark.clickhouse_db
 def test_query_settings_prefix() -> None:
+    importlib.reload(cluster)
     assert (
         get_storage(StorageKey("transactions"))
         .get_cluster()
