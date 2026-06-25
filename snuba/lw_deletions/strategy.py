@@ -202,7 +202,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         # starting in 24.4 the default is 2
         lw_sync = get_int_config("lightweight_deletes_sync")
         if lw_sync is not None:
-            query_settings.set_clickhouse_settings({"lightweight_deletes_sync": lw_sync})
+            query_settings.push_clickhouse_setting("lightweight_deletes_sync", lw_sync)
 
         lw_updates_enabled = get_str_config("lightweight_delete_mode")
         if lw_updates_enabled:
@@ -216,7 +216,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             # alter_update - run ALTER UPDATE query that creates a heavyweight mutation.
             # lightweight_update - run lightweight update if possible, run ALTER UPDATE otherwise.
             # lightweight_update_force - run lightweight update if possible, throw otherwise.
-            query_settings.set_clickhouse_settings({"lightweight_delete_mode": mode})
+            query_settings.push_clickhouse_setting("lightweight_delete_mode", mode)
 
         split_enabled = bool(
             self.__partition_column
