@@ -62,7 +62,6 @@ class SimpleAPITest(BaseApiTest):
         state.delete_config("project_concurrent_limit")
         state.delete_config("project_concurrent_limit_1")
         state.delete_config("project_per_second_limit")
-        state.delete_config("date_align_seconds")
 
     def write_events(self, events: Sequence[InsertEvent]) -> None:
         processor = self.storage.get_table_writer().get_stream_loader().get_processor()
@@ -269,25 +268,25 @@ class TestApi(SimpleAPITest):
 
         # But if we set time alignment to an hour, the buckets will fall back to
         # the 1hr boundary.
-        state.set_config("date_align_seconds", 3600)
-        result = json.loads(
-            self.post(
-                json.dumps(
-                    {
-                        "project": 1,
-                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
-                        "granularity": 60,
-                        "selected_columns": ["time"],
-                        "groupby": "time",
-                        "from_date": (self.base_time + skew).isoformat(),
-                        "to_date": (
-                            self.base_time + skew + timedelta(minutes=self.minutes)
-                        ).isoformat(),
-                        "orderby": "time",
-                    }
-                ),
-            ).data
-        )
+        with override_options("snuba", {"date_align_seconds": 3600}):
+            result = json.loads(
+                self.post(
+                    json.dumps(
+                        {
+                            "project": 1,
+                            "tenant_ids": {"referrer": "r", "organization_id": 1234},
+                            "granularity": 60,
+                            "selected_columns": ["time"],
+                            "groupby": "time",
+                            "from_date": (self.base_time + skew).isoformat(),
+                            "to_date": (
+                                self.base_time + skew + timedelta(minutes=self.minutes)
+                            ).isoformat(),
+                            "orderby": "time",
+                        }
+                    ),
+                ).data
+            )
         bucket_time = parse_datetime(result["data"][0]["time"]).replace(tzinfo=None)
         assert bucket_time == self.base_time
 

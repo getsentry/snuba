@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Any, Tuple
+from typing import Any, Iterator, Tuple
 from unittest.mock import patch
 
 import pytest
+from sentry_options.testing import override_options
 
 from snuba import state
 from snuba.redis import RedisClientKey, get_redis_client
@@ -21,12 +22,13 @@ from snuba.state.rate_limit import (
 
 
 @pytest.fixture(params=[1, 20])
-def rate_limit_shards(request: Any) -> None:
+def rate_limit_shards(request: Any) -> Iterator[None]:
     """
     Use this fixture to run the test automatically against both 1
     and 20 shards.
     """
-    state.set_config("rate_limit_shard_factor", request.param)
+    with override_options("snuba", {"rate_limit_shard_factor": request.param}):
+        yield
 
 
 class TestRateLimit:
@@ -167,10 +169,9 @@ class TestRateLimit:
     @pytest.mark.redis_db
     def test_bypass_rate_limit(self) -> None:
         rate_limit_params = RateLimitParameters("foo", "bar", None, None)
-        state.set_config("bypass_rate_limit", 1)
-
-        with rate_limit(rate_limit_params) as stats:
-            assert stats is None
+        with override_options("snuba", {"bypass_rate_limit": 1}):
+            with rate_limit(rate_limit_params) as stats:
+                assert stats is None
 
     @pytest.mark.redis_db
     def test_rate_limit_exceptions(self) -> None:

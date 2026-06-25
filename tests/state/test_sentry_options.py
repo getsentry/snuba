@@ -7,6 +7,7 @@ from snuba.state.sentry_options import (
     get_bool_option,
     get_float_option,
     get_int_option,
+    get_mapped_bool_option,
     get_mapped_float_option,
     get_mapped_int_option,
     get_mapped_option,
@@ -108,6 +109,19 @@ def test_mapped_option_falls_back_when_option_unset() -> None:
     assert get_mapped_int_option("lw_deletes_split_by_partition", "search_issues", 7) == 7
     assert get_mapped_str_option("lw_deletes_killswitch", "search_issues", "d") == "d"
     assert get_mapped_float_option("validate_schema_sample_rate", "events", 1.0) == 1.0
+
+
+def test_mapped_bool_option() -> None:
+    # `snql_disabled_dataset` is a bool-valued dict keyed by dataset name.
+    with override_options(
+        SNUBA_OPTIONS_NAMESPACE,
+        {"snql_disabled_dataset": {"events": True}},
+    ):
+        assert get_mapped_bool_option("snql_disabled_dataset", "events", False) is True
+        # A dataset with no entry falls back to the caller default.
+        assert get_mapped_bool_option("snql_disabled_dataset", "transactions", False) is False
+    # When the option is unset every name falls back to the caller default.
+    assert get_mapped_bool_option("snql_disabled_dataset", "events", True) is True
 
 
 def test_mapped_option_coerces_entry_to_requested_type() -> None:

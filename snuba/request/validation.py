@@ -7,7 +7,7 @@ from typing import Any, Dict, MutableMapping, Optional, Protocol, Type, Union
 
 import sentry_sdk
 
-from snuba import environment, settings, state
+from snuba import environment, settings
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
@@ -30,7 +30,7 @@ from snuba.querylog.query_metadata import get_request_status
 from snuba.request import Request
 from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.request.schema import RequestParts, RequestSchema
-from snuba.state.sentry_options import get_str_option
+from snuba.state.sentry_options import get_mapped_bool_option, get_str_option
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
@@ -112,8 +112,9 @@ def build_request(
     with sentry_sdk.start_span(description="build_request", op="validate") as span:
         try:
             dataset_name = get_dataset_name(dataset)
-            if state.get_config(
-                f"snql_disabled_dataset__{dataset_name}",
+            if get_mapped_bool_option(
+                "snql_disabled_dataset",
+                dataset_name,
                 dataset_name in settings.SNQL_DISABLED_DATASETS,
             ):
                 raise InvalidQueryException(f"snql is disabled for dataset {dataset}")

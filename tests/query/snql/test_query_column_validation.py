@@ -2,8 +2,8 @@ import datetime
 from typing import Any, Generator
 
 import pytest
+from sentry_options.testing import override_options
 
-from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
@@ -43,9 +43,7 @@ time_validation_tests = [
                 ),
                 selected_columns=[
                     SelectedExpression("title", Column("_snuba_title", None, "title")),
-                    SelectedExpression(
-                        "count", FunctionCall("_snuba_count", "count", tuple())
-                    ),
+                    SelectedExpression("count", FunctionCall("_snuba_count", "count", tuple())),
                 ],
                 groupby=[Column("_snuba_title", None, "title")],
                 condition=binary_condition(
@@ -120,19 +118,13 @@ time_validation_tests = [
             selected_columns=[
                 SelectedExpression(
                     "4-5",
-                    FunctionCall(
-                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
-                    ),
+                    FunctionCall("_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))),
                 ),
-                SelectedExpression(
-                    "e.event_id", Column("_snuba_e.event_id", "e", "event_id")
-                ),
+                SelectedExpression("e.event_id", Column("_snuba_e.event_id", "e", "event_id")),
             ],
             condition=and_cond(
                 and_cond(
-                    f.equals(
-                        column("project_id", "e", "_snuba_e.project_id"), literal(1)
-                    ),
+                    f.equals(column("project_id", "e", "_snuba_e.project_id"), literal(1)),
                     f.greaterOrEquals(
                         column("timestamp", "e", "_snuba_e.timestamp"),
                         literal(datetime.datetime(2021, 1, 1, 0, 0)),
@@ -144,9 +136,7 @@ time_validation_tests = [
                             column("timestamp", "e", "_snuba_e.timestamp"),
                             literal(datetime.datetime(2021, 1, 3, 0, 0)),
                         ),
-                        f.equals(
-                            column("project_id", "t", "_snuba_t.project_id"), literal(1)
-                        ),
+                        f.equals(column("project_id", "t", "_snuba_t.project_id"), literal(1)),
                     ),
                     and_cond(
                         f.greaterOrEquals(
@@ -324,9 +314,7 @@ time_validation_tests = [
             ],
             condition=and_cond(
                 and_cond(
-                    f.equals(
-                        column("project_id", None, "_snuba_project_id"), literal(1)
-                    ),
+                    f.equals(column("project_id", None, "_snuba_project_id"), literal(1)),
                     f.greaterOrEquals(
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime.datetime(2021, 1, 1, 0, 0)),
@@ -364,9 +352,7 @@ time_validation_tests = [
             ],
             condition=and_cond(
                 and_cond(
-                    f.equals(
-                        column("project_id", None, "_snuba_project_id"), literal(1)
-                    ),
+                    f.equals(column("project_id", None, "_snuba_project_id"), literal(1)),
                     f.greaterOrEquals(
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime.datetime(2021, 1, 1, 0, 0)),
@@ -398,19 +384,17 @@ time_validation_tests = [
 
 @pytest.fixture(autouse=True)
 def set_configs(redis_db: None) -> Generator[None, None, None]:
-    old_max = state.get_config("max_days")
-    old_align = state.get_config("date_align_seconds")
-    state.set_config("max_days", 5)
-    state.set_config("date_align_seconds", 3600)
-    yield
-    state.set_config("max_days", old_max)
-    state.set_config("date_align_seconds", old_align)
+    with override_options("snuba", {"max_days": 5, "date_align_seconds": 3600}):
+        yield
 
 
 @pytest.mark.parametrize("query_body, expected_query", time_validation_tests)
 @pytest.mark.redis_db
 def test_entity_column_validation(
-    query_body: str, expected_query: LogicalQuery, set_configs: Any, monkeypatch
+    query_body: str,
+    expected_query: LogicalQuery,
+    set_configs: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     events = get_dataset("events")
 

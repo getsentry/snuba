@@ -445,6 +445,58 @@
       "additionalProperties": { "type": "string" },
       "default": {},
       "description": "Dict mapping a referrer to a JSON-object string of ClickHouse query settings ({\"setting\": \"value\"}) applied for that referrer, taking precedence over prefix and base settings. Migrated from per-setting runtime config referrer/<referrer>/query_settings/<setting>."
+    },
+    "optimize_parallel_threads": {
+      "type": "integer",
+      "default": 0,
+      "description": "Number of parallel threads the table-optimize cron uses when running OPTIMIZE. 0 (the default) means unset: the optimize command's --parallel flag is used instead. Migrated from runtime config optimize_parallel_threads."
+    },
+    "http_batch_join_timeout": {
+      "type": "integer",
+      "default": 0,
+      "description": "Timeout in seconds the ClickHouse HTTP batch writer waits when joining the upload thread. 0 (the default) means unset: settings.BATCH_JOIN_TIMEOUT is used instead. Migrated from runtime config http_batch_join_timeout."
+    },
+    "simultaneous_queries_sleep_seconds": {
+      "type": "integer",
+      "default": 0,
+      "description": "Base sleep in seconds used when retrying a ClickHouse query rejected with TOO_MANY_SIMULTANEOUS_QUERIES. 0 disables the native-driver retry (it re-raises immediately); the robust-execute path always uses at least 1 second. Migrated from runtime config simultaneous_queries_sleep_seconds."
+    },
+    "max_days": {
+      "type": "integer",
+      "default": 0,
+      "description": "Maximum number of days a query time range may span before the lower bound is clamped. 0 means no limit (the time range is left unchanged). Migrated from runtime config max_days."
+    },
+    "date_align_seconds": {
+      "type": "integer",
+      "default": 1,
+      "description": "Granularity in seconds to which query time-range bounds are aligned (truncated). Must be non-zero. Migrated from runtime config date_align_seconds."
+    },
+    "snql_disabled_dataset": {
+      "type": "object",
+      "additionalProperties": { "type": "boolean" },
+      "default": {},
+      "description": "Dict mapping dataset name to a flag; when true, SnQL queries against that dataset are rejected. Datasets with no entry default to membership in settings.SNQL_DISABLED_DATASETS. Migrated from per-dataset runtime config snql_disabled_dataset__<dataset>."
+    },
+    "quantized_rebalance_consumer_group_delay_secs": {
+      "type": "object",
+      "additionalProperties": { "type": "integer" },
+      "default": {},
+      "description": "Dict mapping consumer group name to a quantized rebalance delay in seconds. Consumer groups with no entry use no delay. Migrated from per-group runtime config quantized_rebalance_consumer_group_delay_secs__<consumer_group>."
+    },
+    "bypass_rate_limit": {
+      "type": "integer",
+      "default": 0,
+      "description": "When set to 1, all Redis-backed rate limits are bypassed (no limiting applied). Migrated from runtime config bypass_rate_limit."
+    },
+    "rate_history_sec": {
+      "type": "integer",
+      "default": 3600,
+      "description": "Number of seconds the rate limiter keeps per-request timestamps in its Redis sorted set. Migrated from runtime config rate_history_sec."
+    },
+    "rate_limit_shard_factor": {
+      "type": "integer",
+      "default": 1,
+      "description": "Number of shards each rate-limit Redis set is split into. Increasing it multiplies the number of Redis keys and reduces the size of each set. Migrated from runtime config rate_limit_shard_factor."
     }
   }
 }

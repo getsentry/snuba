@@ -24,7 +24,6 @@ from parsimonious.exceptions import IncompleteParseError
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
 
-from snuba import state
 from snuba.clickhouse.columns import Array, ColumnSet
 from snuba.clickhouse.query_dsl.accessors import get_time_range_expressions
 from snuba.datasets.dataset import Dataset
@@ -109,6 +108,7 @@ from snuba.query.snql.expression_visitor import (
 )
 from snuba.query.snql.joins import RelationshipTuple, build_join_clause
 from snuba.state import explain_meta
+from snuba.state.sentry_options import get_int_option
 from snuba.util import parse_datetime
 from snuba.utils.metrics.timer import Timer
 
@@ -1267,10 +1267,11 @@ def _replace_time_condition(
 ) -> None:
     condition = query.get_condition()
     top_level = get_first_level_and_conditions(condition) if condition is not None else []
-    max_days, date_align = state.get_configs([("max_days", None), ("date_align_seconds", 1)])
-    assert isinstance(date_align, int)
-    if max_days is not None:
-        max_days = int(max_days)
+    # max_days defaults to 0 in the schema, which we treat as "no limit" (None)
+    # to preserve the prior runtime-config behavior where an unset value meant
+    # no clamping of the query time range.
+    date_align = get_int_option("date_align_seconds", 1)
+    max_days = get_int_option("max_days", 0) or None
 
     if isinstance(query, LogicalQuery):
         new_top_level = _align_max_days_date_align(

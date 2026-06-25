@@ -160,6 +160,12 @@ def get_mapped_option(key: str, name: str, default: OptionValue) -> OptionValue:
     return default
 
 
+def get_mapped_bool_option(key: str, name: str, default: bool) -> bool:
+    """``get_bool_option`` for one entry of a JSON-object option (see
+    :func:`get_mapped_option`)."""
+    return _coerce_bool(get_mapped_option(key, name, default), default)
+
+
 def get_mapped_int_option(key: str, name: str, default: int) -> int:
     """``get_int_option`` for one entry of a JSON-object option (see
     :func:`get_mapped_option`)."""

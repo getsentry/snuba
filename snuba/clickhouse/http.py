@@ -23,7 +23,7 @@ import sentry_sdk
 from urllib3.connectionpool import HTTPConnectionPool, HTTPSConnectionPool
 from urllib3.exceptions import HTTPError
 
-from snuba import settings, state
+from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.errors import ClickhouseWriterError
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
@@ -348,8 +348,11 @@ class HTTPBatchWriter(BatchWriter[bytes]):
             batch.append(value)
 
         batch.close()
-        batch_join_timeout = state.get_config(
-            "http_batch_join_timeout", settings.BATCH_JOIN_TIMEOUT
+        # A 0 (the schema default) means "unset": fall back to the env-configured
+        # settings.BATCH_JOIN_TIMEOUT, preserving the prior runtime-config
+        # behavior where the option was only an override.
+        batch_join_timeout = (
+            get_int_option("http_batch_join_timeout", 0) or settings.BATCH_JOIN_TIMEOUT
         )
         # IMPORTANT: Please read the docstring of this method if you ever decide to remove the
         # timeout argument from the join method.

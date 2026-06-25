@@ -6,6 +6,7 @@ from unittest import mock
 import pytest
 from clickhouse_driver import errors
 from dateutil.tz import tz
+from sentry_options.testing import override_options
 
 from snuba import state
 from snuba.clickhouse.errors import ClickhouseError
@@ -56,11 +57,10 @@ class TestConcurrentError(errors.Error):  # type: ignore
 
 @pytest.mark.skip(reason="broke all of a sudden, blocking CI but not critical")
 @pytest.mark.redis_db
+@override_options("snuba", {"simultaneous_queries_sleep_seconds": 1})
 def test_concurrency_limit() -> None:
     connection = mock.Mock()
     connection.execute.side_effect = TestError("some error")
-
-    state.set_config("simultaneous_queries_sleep_seconds", 0.5)
 
     pool = ClickhousePool("host", 100, "test", "test", "test")
     pool.pool = queue.LifoQueue(1)

@@ -4,8 +4,8 @@ from datetime import datetime
 from typing import Any, Dict
 
 import pytest
+from sentry_options.testing import override_options
 
-from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
@@ -97,7 +97,7 @@ def test_build_request(body: Dict[str, Any], condition: Expression) -> None:
     assert request.referrer == "my_request"
     assert dict(request.original_body) == body
     status, differences = request.query.equals(expected_query)
-    assert status == True, f"Query mismatch: {differences}"
+    assert status, f"Query mismatch: {differences}"
 
 
 TENANT_ID_TESTS = [
@@ -185,8 +185,8 @@ def test_tenant_ids(
 
 
 @pytest.mark.redis_db
+@override_options("snuba", {"snql_disabled_dataset": {"events": True}})
 def test_disabled_dataset() -> None:
-    state.set_config("snql_disabled_dataset__events", True)
     dataset = get_dataset("events")
     schema = RequestSchema.build(HTTPQuerySettings)
 
