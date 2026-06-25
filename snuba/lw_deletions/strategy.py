@@ -34,7 +34,6 @@ from snuba.query.dsl import column, equals, literal
 from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import RedisClientKey, get_redis_client
-from snuba.state import get_int_config
 from snuba.state.sentry_options import (
     get_int_option,
     get_mapped_int_option,
@@ -203,12 +202,13 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
     def _execute_delete(self, conditions: Sequence[ConditionsBag]) -> None:
         self._check_ongoing_mutations()
         query_settings = HTTPQuerySettings()
-        # starting in 24.4 the default is 2
-        lw_sync = get_int_config("lightweight_deletes_sync")
-        if lw_sync is not None:
+        # starting in 24.4 the default is 2; -1 (the schema default) means
+        # "unset", leaving ClickHouse's own default in place.
+        lw_sync = get_int_option("lightweight_deletes_sync", -1)
+        if lw_sync >= 0:
             query_settings.push_clickhouse_setting("lightweight_deletes_sync", lw_sync)
 
-        lw_updates_enabled = get_str_config("lightweight_delete_mode")
+        lw_updates_enabled = get_str_option("lightweight_delete_mode", "")
         if lw_updates_enabled:
             mode = (
                 lw_updates_enabled

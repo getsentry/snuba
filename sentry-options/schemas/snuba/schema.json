@@ -497,6 +497,16 @@
       "type": "integer",
       "default": 1,
       "description": "Number of shards each rate-limit Redis set is split into. Increasing it multiplies the number of Redis keys and reduces the size of each set. Migrated from runtime config rate_limit_shard_factor."
+    },
+    "lightweight_deletes_sync": {
+      "type": "integer",
+      "default": -1,
+      "description": "Value for the ClickHouse lightweight_deletes_sync setting applied to lightweight-delete queries. -1 (the default) means unset: ClickHouse's own default (2 since 24.4) is left in place. Migrated from runtime config lightweight_deletes_sync."
+    },
+    "lightweight_delete_mode": {
+      "type": "string",
+      "default": "",
+      "description": "ClickHouse lightweight_delete_mode applied to lightweight-delete queries. Empty (the default) leaves the setting unset. One of: alter_update (heavyweight ALTER UPDATE mutation), lightweight_update (lightweight if possible, else ALTER UPDATE), lightweight_update_force (lightweight if possible, else throw); any other non-empty value is treated as lightweight_update. Migrated from runtime config lightweight_delete_mode."
     }
   }
 }

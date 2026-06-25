@@ -10,7 +10,6 @@ from arroyo.backends.kafka import KafkaPayload
 from arroyo.types import BrokerValue, Message, Partition, Topic
 from sentry_options.testing import override_options
 
-from snuba import state
 from snuba.clusters.cluster import ClickhouseNode
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -99,16 +98,16 @@ def test_clickhouse_settings(mock_execute: Mock, mock_num_mutations: Mock) -> No
         next_step=FormatQuery(commit_step, storage, SearchIssuesFormatter(), metrics),
         increment_by=increment_by,
     )
-    state.set_config("lightweight_deletes_sync", 2)
     make_message = generate_message()
-    strategy.submit(next(make_message))
-    strategy.submit(next(make_message))
-    strategy.submit(next(make_message))
+    with override_options("snuba", {"lightweight_deletes_sync": 2}):
+        strategy.submit(next(make_message))
+        strategy.submit(next(make_message))
+        strategy.submit(next(make_message))
     # use different setting for second execute_query
-    state.set_config("lightweight_deletes_sync", 0)
-    strategy.submit(next(make_message))
-    strategy.close()
-    strategy.join()
+    with override_options("snuba", {"lightweight_deletes_sync": 0}):
+        strategy.submit(next(make_message))
+        strategy.close()
+        strategy.join()
 
     assert mock_execute.call_count == 2
     assert commit_step.submit.call_count == 2
