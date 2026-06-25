@@ -385,3 +385,43 @@ def test_conditional_aggregation_uses_has_for_in_sets() -> None:
         and [p.value for p in e.parameters[0].parameters if isinstance(p, Literal)] == project_ids
     ]
     assert has_over_pids, "expected has(array(<project_ids>), x) in the conditional aggregate"
+
+
+def _aggregation_column_names(expr: Any) -> set[str]:
+    return {e.column_name for e in expr if isinstance(e, Column)}
+
+
+def test_conditional_aggregation_array_filter_uses_typed_columns() -> None:
+    """A conditional aggregation whose filter is on an array attribute reads the
+    typed ``attributes_array_*`` columns when ``use_array_map_columns`` is set, and
+    the legacy ``attributes_array`` JSON column otherwise."""
+    agg = AttributeConditionalAggregation(
+        aggregate=Function.FUNCTION_SUM,
+        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="my.field"),
+        label="sum(my.field)",
+        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+        filter=TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="my_tags"),
+                op=ComparisonFilter.OP_LIKE,
+                value=AttributeValue(val_str="%error%"),
+            )
+        ),
+    )
+
+    default_cols = _aggregation_column_names(
+        aggregation_to_expression(agg, attribute_key_to_expression)
+    )
+    assert "attributes_array" in default_cols
+    assert not any(c.startswith("attributes_array_") for c in default_cols)
+
+    typed_cols = _aggregation_column_names(
+        aggregation_to_expression(agg, attribute_key_to_expression, use_array_map_columns=True)
+    )
+    assert {
+        "attributes_array_string",
+        "attributes_array_int",
+        "attributes_array_float",
+        "attributes_array_bool",
+    } <= typed_cols
+    assert "attributes_array" not in typed_cols
