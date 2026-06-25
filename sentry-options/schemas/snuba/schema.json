@@ -377,6 +377,26 @@
       "additionalProperties": { "type": "string" },
       "default": {},
       "description": "Dict mapping sliced storage-set name to a bracketed list of logical partitions that must query the mega cluster (e.g. \"[1, 2]\"). Storage sets with no entry never use the mega cluster. Migrated from per-storage-set runtime config slicing_mega_cluster_partitions_<storage_set>."
+    },
+    "tags_hash_map_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Killswitch for the MappingOptimizer tags-hashmap query optimization (transactions, search_issues, discover, replays storages). When false the optimizer is a no-op for those storages."
+    },
+    "generic_metrics/tags_hash_map_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Killswitch for the MappingOptimizer tags-hashmap query optimization on generic-metrics storages (distributions, gauges). When false the optimizer is a no-op."
+    },
+    "events_tags_hash_map_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Killswitch for the MappingOptimizer tags-hashmap query optimization on the errors/errors_ro storages. When false the optimizer is a no-op."
+    },
+    "events_flags_hash_map_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Killswitch for the MappingOptimizer flags-hashmap query optimization on the errors/errors_ro storages. When false the optimizer is a no-op."
     }
   }
 }
