@@ -3,6 +3,8 @@ from typing import Optional
 from unittest.mock import patch
 
 import pytest
+from sentry_options import OptionValue
+from sentry_options.testing import override_options
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.entities.entity_key import EntityKey
@@ -19,7 +21,6 @@ from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import Column, Literal
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.query_settings import HTTPQuerySettings
-from snuba.state import delete_config, set_config
 
 DISTS_ENTITY_KEY = EntityKey("generic_metrics_distributions")
 DISTS_STORAGE_KEY = StorageKey("generic_metrics_distributions")
@@ -91,12 +92,14 @@ def test_column_based_partition_selector(
     Tests that the column based partition selector selects the right cluster
     for a query.
     """
+    override: dict[str, OptionValue] = {}
     if set_override:
         logical_partition = map_org_id_to_logical_partition(org_id)
-        set_config(
-            f"{MEGA_CLUSTER_RUNTIME_CONFIG_PREFIX}_generic_metrics_distributions",
-            f"[{logical_partition}]",
-        )
+        override = {
+            MEGA_CLUSTER_RUNTIME_CONFIG_PREFIX: {
+                "generic_metrics_distributions": f"[{logical_partition}]"
+            }
+        }
     query = LogicalQuery(
         QueryEntity(
             DISTS_ENTITY_KEY,
@@ -116,11 +119,9 @@ def test_column_based_partition_selector(
         DISTS_STORAGE_SET_KEY,
         "org_id",
     )
-    cluster = selector.select_cluster(query, settings)
-
-    assert cluster.get_database() == expected_slice_db
-    if set_override:
-        delete_config(f"{MEGA_CLUSTER_RUNTIME_CONFIG_PREFIX}_generic_metrics_distributions")
+    with override_options("snuba", override):
+        cluster = selector.select_cluster(query, settings)
+        assert cluster.get_database() == expected_slice_db
 
 
 mega_cluster_test_data = [
@@ -166,8 +167,10 @@ def test_should_use_mega_cluster(
     override_config: Optional[str],
     expected: bool,
 ) -> None:
-    if override_config:
-        set_config(f"{MEGA_CLUSTER_RUNTIME_CONFIG_PREFIX}_{storage_set.value}", override_config)
-    assert _should_use_mega_cluster(storage_set, logical_partition) == expected
-    if override_config:
-        delete_config(f"MEGA_CLUSTER_RUNTIME_CONFIG_PREFIX_{storage_set}")
+    override: dict[str, OptionValue] = (
+        {MEGA_CLUSTER_RUNTIME_CONFIG_PREFIX: {storage_set.value: override_config}}
+        if override_config
+        else {}
+    )
+    with override_options("snuba", override):
+        assert _should_use_mega_cluster(storage_set, logical_partition) == expected

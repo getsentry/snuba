@@ -371,6 +371,12 @@
       "additionalProperties": { "type": "number" },
       "default": {},
       "description": "Dict mapping in-process rate-limit bucket name to a maximum operations-per-second. Buckets with no entry are unlimited (rate limiter off). Migrated from per-bucket runtime config mem_rate_limit_per_sec_<bucket>."
+    },
+    "slicing_mega_cluster_partitions": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "default": {},
+      "description": "Dict mapping sliced storage-set name to a bracketed list of logical partitions that must query the mega cluster (e.g. \"[1, 2]\"). Storage sets with no entry never use the mega cluster. Migrated from per-storage-set runtime config slicing_mega_cluster_partitions_<storage_set>."
     }
   }
 }
