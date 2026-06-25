@@ -225,7 +225,10 @@ class ReplacementBatchWriter:
                     self.__topic.name,
                     key=key,
                     value=rapidjson.dumps(value).encode("utf-8"),
-                    on_delivery=self.__delivery_callback,
+                    on_delivery=cast(
+                        "Callable[[Optional[KafkaError], ConfluentMessage], None]",
+                        self.__delivery_callback,
+                    ),
                 )
 
         self.__producer.flush()
@@ -316,7 +319,7 @@ class ProcessedMessageBatchWriter:
                     self.__commit_log_config.topic.name,
                     key=payload.key,
                     value=payload.value,
-                    headers=payload.headers,
+                    headers=cast("List[Tuple[str, Union[str, bytes, None]]]", payload.headers),
                     on_delivery=self.__commit_message_delivery_callback,
                 )
                 self.__commit_log_config.producer.poll(0.0)
@@ -442,7 +445,7 @@ class MultistorageCollector:
                     self.__commit_log_config.topic.name,
                     key=payload.key,
                     value=payload.value,
-                    headers=payload.headers,
+                    headers=cast("List[Tuple[str, Union[str, bytes, None]]]", payload.headers),
                     on_delivery=self.__commit_message_delivery_callback,
                 )
                 self.__commit_log_config.producer.poll(0.0)

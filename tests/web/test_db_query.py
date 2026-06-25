@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Mapping, MutableMapping, Optional
+from typing import Any, Mapping, MutableMapping, Optional, cast
 from unittest import mock
 
 import pytest
@@ -466,8 +466,10 @@ def test_db_query_fail() -> None:
 
     assert len(query_metadata_list) == 1
     assert query_metadata_list[0].status.value == "error"
-    assert excinfo.value.extra["stats"] == stats
-    assert excinfo.value.extra["sql"] is not None
+    err = cast(QueryException, excinfo.value)
+    assert isinstance(err, QueryException)
+    assert err.extra["stats"] == stats
+    assert err.extra["sql"] is not None
 
 
 class MockThrottleAllocationPolicy(AllocationPolicy):
@@ -702,14 +704,16 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
             },
         }
         # extra data contains policy failure information
+        err = cast(QueryException, excinfo.value)
+        assert isinstance(err, QueryException)
         assert (
-            excinfo.value.extra["stats"]["quota_allowance"]["details"]["RejectAllocationPolicy"][
+            err.extra["stats"]["quota_allowance"]["details"]["RejectAllocationPolicy"][
                 "explanation"
             ]["reason"]
             == "policy rejects all queries"
         )
         assert query_metadata_list[0].request_status.status.value == "rate-limited"
-        cause = excinfo.value.__cause__
+        cause = err.__cause__
         assert isinstance(cause, AllocationPolicyViolations)
         assert "RejectAllocationPolicy" in cause.violations
         assert update_called, (
@@ -908,7 +912,9 @@ def test_allocation_policy_updates_quota() -> None:
     with pytest.raises(QueryException) as e:
         _run_query()
 
-    assert e.value.extra["stats"]["quota_allowance"] == {
+    err = cast(QueryException, e.value)
+    assert isinstance(err, QueryException)
+    assert err.extra["stats"]["quota_allowance"] == {
         "summary": {
             "threads_used": 0,
             "is_successful": False,
@@ -944,7 +950,7 @@ def test_allocation_policy_updates_quota() -> None:
             },
         },
     }
-    cause = e.value.__cause__
+    cause = err.__cause__
     assert isinstance(cause, AllocationPolicyViolations)
     assert "CountQueryPolicy" in cause.violations
     assert "CountQueryPolicyDuplicate" not in cause.violations

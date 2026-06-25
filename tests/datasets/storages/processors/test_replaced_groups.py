@@ -139,7 +139,7 @@ def test_without_turbo_with_projects_needing_final(query: ClickhouseQuery) -> No
     )
 
     query_settings = HTTPQuerySettings()
-    PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS).process_query(
+    PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS.value).process_query(
         query, query_settings
     )
 
@@ -166,14 +166,14 @@ def test_remove_final_subscriptions(query: ClickhouseQuery) -> None:
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
 
-    PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS).process_query(
+    PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS.value).process_query(
         query, SubscriptionQuerySettings()
     )
     assert query.get_condition() == build_in("project_id", [2])
     assert query.get_from_clause().final
 
     with override_options("snuba", {"skip_final_subscriptions_projects": "[2,3,4]"}):
-        PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS).process_query(
+        PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS.value).process_query(
             query, SubscriptionQuerySettings()
         )
         assert not query.get_from_clause().final
@@ -189,7 +189,7 @@ def test_not_many_groups_to_exclude(query: ClickhouseQuery) -> None:
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
 
-    PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS).process_query(
+    PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS.value).process_query(
         query, HTTPQuerySettings()
     )
 
@@ -225,7 +225,7 @@ def test_too_many_groups_to_exclude(query: ClickhouseQuery) -> None:
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
 
-    PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS).process_query(
+    PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS.value).process_query(
         query, HTTPQuerySettings()
     )
 
@@ -240,7 +240,7 @@ def test_query_overlaps_replacements_processor(
     query_with_timestamp: ClickhouseQuery,
     query_with_future_timestamp: ClickhouseQuery,
 ) -> None:
-    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
+    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS.value)
 
     # replacement time unknown, default to "overlaps" but no groups to exclude so shouldn't be final
     enforcer._set_query_final(query_with_timestamp, True)
@@ -276,7 +276,7 @@ def test_single_no_replacements(query_with_single_group_id: ClickhouseQuery) -> 
     Query is looking for a group that has not been replaced, but the project itself
     has replacements.
     """
-    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
+    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS.value)
 
     ProjectsQueryFlags.set_project_exclude_groups(
         2,
@@ -301,7 +301,7 @@ def test_single_too_many_exclude(query_with_single_group_id: ClickhouseQuery) ->
     Query is looking for a group that has been replaced, and there are too many
     groups to exclude.
     """
-    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
+    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS.value)
 
     ProjectsQueryFlags.set_project_exclude_groups(
         2,
@@ -329,7 +329,7 @@ def test_single_not_too_many_exclude(
     Query is looking for a group that has been replaced, and there are not too many
     groups to exclude.
     """
-    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
+    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS.value)
 
     ProjectsQueryFlags.set_project_exclude_groups(
         2,
@@ -357,7 +357,7 @@ def test_multiple_disjoint_replaced(
     Query is looking for multiple groups and there are replaced groups, but these
     sets of group ids are disjoint. (No queried groups have been replaced)
     """
-    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
+    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS.value)
 
     ProjectsQueryFlags.set_project_exclude_groups(
         2,
@@ -384,7 +384,7 @@ def test_multiple_fewer_exclude_than_queried(
     Query is looking for multiple groups and there are replaced groups, but there
     are fewer excluded groups than queried groups.
     """
-    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
+    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS.value)
 
     ProjectsQueryFlags.set_project_exclude_groups(
         2,
@@ -412,7 +412,7 @@ def test_multiple_too_many_excludes(
     Query is looking for multiple groups and there are too many groups to exclude, but
     there are fewer groups queried for than replaced.
     """
-    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
+    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS.value)
 
     ProjectsQueryFlags.set_project_exclude_groups(
         2,
@@ -441,7 +441,7 @@ def test_multiple_not_too_many_excludes(
     Query is looking for multiple groups and there are not too many groups to exclude, but
     there are fewer groups queried for than replaced.
     """
-    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
+    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS.value)
 
     ProjectsQueryFlags.set_project_exclude_groups(
         2,
@@ -466,7 +466,7 @@ def test_no_groups_not_too_many_excludes(query: ClickhouseQuery) -> None:
     """
     Query has no groups, and not too many to exclude.
     """
-    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
+    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS.value)
 
     ProjectsQueryFlags.set_project_exclude_groups(
         2,
@@ -491,7 +491,7 @@ def test_no_groups_too_many_excludes(query: ClickhouseQuery) -> None:
     """
     Query has no groups, and too many to exclude.
     """
-    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS)
+    enforcer = PostReplacementConsistencyEnforcer("project_id", ReplacerState.ERRORS.value)
 
     ProjectsQueryFlags.set_project_exclude_groups(
         2,

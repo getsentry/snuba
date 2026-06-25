@@ -1,4 +1,5 @@
 from copy import deepcopy
+from typing import Optional
 
 import pytest
 from sentry_options.testing import override_options
@@ -13,7 +14,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 from tests.query.processors.query_builders import build_query
 
 
-def uniq_expression(alias: str = None, column_name: str = "user") -> FunctionCall:
+def uniq_expression(alias: Optional[str] = None, column_name: str = "user") -> FunctionCall:
     return FunctionCall(
         None,
         "greater",

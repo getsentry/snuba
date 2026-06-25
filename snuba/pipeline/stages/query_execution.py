@@ -5,7 +5,7 @@ import textwrap
 from collections import defaultdict
 from dataclasses import replace
 from math import floor
-from typing import Any, MutableMapping, Optional
+from typing import Any, Dict, MutableMapping, Optional, cast
 
 import sentry_sdk
 
@@ -248,7 +248,7 @@ def _format_storage_query_and_run(
             cause.__class__.__name__,
             str(cause),
             extra=QueryExtraData(
-                stats=stats,
+                stats=cast(Dict[str, Any], stats),
                 sql=formatted_sql,
                 experiments=clickhouse_query.get_experiments(),
             ),
