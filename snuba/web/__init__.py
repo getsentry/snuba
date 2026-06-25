@@ -72,7 +72,52 @@ class QueryResult:
 def transform_column_names(result: QueryResult, mapping: Mapping[str, list[str]]) -> None:
     """
     Replaces the column names in a ResultSet object in place.
+
+    This runs on every query (including cache hits), so it avoids allocating a
+    brand new dict for every row whenever the shape of the renaming allows it:
+
+    * Identity mapping (every alias maps only to itself): the rows and meta are
+      already correct, so we return immediately without touching the data.
+    * Simple 1:1 rename with no colliding target names: the keys of each row are
+      renamed in place, so no second dict is allocated per row.
+    * Fan-out (one alias -> several names) or colliding targets: fall back to
+      building a new dict per row, which is the only way to handle those safely.
     """
+    # Collect the (alias -> name) pairs where the output name actually differs
+    # from the alias, and detect whether any alias fans out to multiple names.
+    renames: list[tuple[str, str]] = []
+    has_fan_out = False
+    for alias, names in mapping.items():
+        if len(names) != 1:
+            has_fan_out = True
+            break
+        if names[0] != alias:
+            renames.append((alias, names[0]))
+
+    if not has_fan_out:
+        if not renames:
+            # The mapping renames nothing: rows and meta are already correct.
+            return
+
+        targets = {new for _, new in renames}
+        existing = {c["name"] for c in result.result["meta"]}
+        # In-place renaming is safe (order-independent and never clobbers a value
+        # that is still needed) only when every target name is unique and none of
+        # them collides with a column name that already exists in the rows. A
+        # collision would happen for a passthrough/identity column whose name is
+        # reused as a target, or for a chained rename (a -> b, b -> c); in those
+        # cases we fall back to rebuilding the row dicts, which is always correct.
+        if len(targets) == len(renames) and targets.isdisjoint(existing):
+
+            def rename_in_place(row: Row) -> Row:
+                for old, new in renames:
+                    if old in row:
+                        row[new] = row.pop(old)
+                return row
+
+            transform_rows(result.result, rename_in_place)
+            _transform_meta_names(result, mapping)
+            return
 
     def transformer(row: Row) -> Row:
         new_row: Row = {}
@@ -83,7 +128,10 @@ def transform_column_names(result: QueryResult, mapping: Mapping[str, list[str]]
         return new_row
 
     transform_rows(result.result, transformer)
+    _transform_meta_names(result, mapping)
 
+
+def _transform_meta_names(result: QueryResult, mapping: Mapping[str, list[str]]) -> None:
     new_meta = []
     for c in result.result["meta"]:
         names = mapping.get(c["name"], [c["name"]])

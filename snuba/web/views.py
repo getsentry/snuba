@@ -377,45 +377,61 @@ def storage_delete(*, storage: WritableTableStorage, timer: Timer) -> Union[Resp
         assert False, "unexpected fallthrough"
 
 
-def _sanitize_payload(payload: MutableMapping[str, Any], res: MutableMapping[str, Any]) -> None:
-    def hex_encode_if_bytes(value: Any) -> Any:
-        if isinstance(value, bytes):
-            try:
-                return value.decode("utf-8")
-            except UnicodeDecodeError:
-                # encode the byte string in a hex string
-                return "RAW_BYTESTRING__" + value.hex()
+def _hex_encode_if_bytes(value: Any) -> Any:
+    if isinstance(value, bytes):
+        try:
+            return value.decode("utf-8")
+        except UnicodeDecodeError:
+            # encode the byte string in a hex string
+            return "RAW_BYTESTRING__" + value.hex()
 
+    return value
+
+
+def _sanitize_payload_in_place(value: Any) -> Any:
+    """
+    Recursively replace any ``bytes`` found in ``value`` with a string: valid
+    UTF-8 is decoded, invalid bytes become a ``RAW_BYTESTRING__<hex>`` marker.
+
+    Containers are mutated in place and the (possibly new) value is returned, so
+    the entire payload is never deep-copied. For large result sets a deep copy
+    would transiently double the memory held by the response, which is what this
+    avoids.
+    """
+    if isinstance(value, dict):
+        for k in list(value.keys()):
+            v = value[k]
+            new_v = _sanitize_payload_in_place(v)
+            if new_v is not v:
+                value[k] = new_v
+            if isinstance(k, bytes):
+                value[_hex_encode_if_bytes(k)] = value.pop(k)
         return value
-
-    for k, v in payload.items():
-        if isinstance(v, dict):
-            res[hex_encode_if_bytes(k)] = {}
-            _sanitize_payload(v, res[hex_encode_if_bytes(k)])
-        elif isinstance(v, list):
-            res[hex_encode_if_bytes(k)] = []
-            for item in v:
-                if isinstance(item, dict):
-                    res[hex_encode_if_bytes(k)].append({})
-                    _sanitize_payload(item, res[hex_encode_if_bytes(k)][-1])
-                else:
-                    res[hex_encode_if_bytes(k)].append(hex_encode_if_bytes(item))
-        else:
-            res[hex_encode_if_bytes(k)] = hex_encode_if_bytes(v)
+    elif isinstance(value, list):
+        for i, item in enumerate(value):
+            new_item = _sanitize_payload_in_place(item)
+            if new_item is not item:
+                value[i] = new_item
+        return value
+    else:
+        return _hex_encode_if_bytes(value)
 
 
 def dump_payload(payload: MutableMapping[str, Any]) -> str:
     try:
         return json.dumps(payload, default=str)
     except UnicodeDecodeError:
-        # If there were any string that could not be decoded, we
-        # encode the problematic bytes in a hex string.
-        # this is to prevent other clients downstream of us from having
-        # to deal with potentially malicious strings and to prevent one
-        # bad string from breaking the entire payload.
-        sanitized_payload: MutableMapping[str, Any] = {}
-        _sanitize_payload(payload, sanitized_payload)
-        return json.dumps(sanitized_payload, default=str)
+        # If there were any strings that could not be decoded, we encode the
+        # problematic bytes in a hex string. This is to prevent other clients
+        # downstream of us from having to deal with potentially malicious strings
+        # and to prevent one bad string from breaking the entire payload.
+        #
+        # The sanitization happens in place rather than against a full deep copy
+        # of the payload: the payload is owned by the response at this point and
+        # is not read again, so mutating it is safe and avoids transiently
+        # doubling the memory held by a large response.
+        _sanitize_payload_in_place(payload)
+        return json.dumps(payload, default=str)
 
 
 @with_span()
