@@ -427,14 +427,11 @@ class NativeDriverReader(Reader):
         # duplicated names are discarded at this stage.
         columns = {c[0]: i for i, c in enumerate(meta)}
 
-        # Convert each positional row tuple into a column-keyed dict. We overwrite
-        # the entries of the source list in place rather than building a second
-        # list via a comprehension: this way each row tuple is released as soon as
-        # its dict replacement is created, instead of keeping the full list of
-        # tuples and the full list of dicts alive at the same time.
+        # Build the column-keyed row dicts by overwriting the source list in
+        # place rather than via a second list comprehension, so each row tuple is
+        # freed as its dict replacement is created instead of keeping the full
+        # tuple list and the full dict list alive at once.
         if not isinstance(data, list):
-            # clickhouse-driver returns a list, but be defensive since we need to
-            # overwrite entries in place.
             data = list(data)
         column_items = list(columns.items())
         for i, row in enumerate(data):

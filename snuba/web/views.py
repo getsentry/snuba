@@ -382,7 +382,6 @@ def _hex_encode_if_bytes(value: Any) -> Any:
         try:
             return value.decode("utf-8")
         except UnicodeDecodeError:
-            # encode the byte string in a hex string
             return "RAW_BYTESTRING__" + value.hex()
 
     return value
@@ -390,13 +389,9 @@ def _hex_encode_if_bytes(value: Any) -> Any:
 
 def _sanitize_payload_in_place(value: Any) -> Any:
     """
-    Recursively replace any ``bytes`` found in ``value`` with a string: valid
-    UTF-8 is decoded, invalid bytes become a ``RAW_BYTESTRING__<hex>`` marker.
-
-    Containers are mutated in place and the (possibly new) value is returned, so
-    the entire payload is never deep-copied. For large result sets a deep copy
-    would transiently double the memory held by the response, which is what this
-    avoids.
+    Recursively replace any ``bytes`` with a string (valid UTF-8 is decoded,
+    invalid bytes become a ``RAW_BYTESTRING__<hex>`` marker), mutating containers
+    in place so the payload is never deep-copied.
     """
     if isinstance(value, dict):
         for k in list(value.keys()):
@@ -421,15 +416,9 @@ def dump_payload(payload: MutableMapping[str, Any]) -> str:
     try:
         return json.dumps(payload, default=str)
     except UnicodeDecodeError:
-        # If there were any strings that could not be decoded, we encode the
-        # problematic bytes in a hex string. This is to prevent other clients
-        # downstream of us from having to deal with potentially malicious strings
-        # and to prevent one bad string from breaking the entire payload.
-        #
-        # The sanitization happens in place rather than against a full deep copy
-        # of the payload: the payload is owned by the response at this point and
-        # is not read again, so mutating it is safe and avoids transiently
-        # doubling the memory held by a large response.
+        # Hex-encode any undecodable bytes so one bad string can't break the
+        # whole payload. Done in place rather than against a deep copy: the
+        # payload is owned by the response here and isn't read again.
         _sanitize_payload_in_place(payload)
         return json.dumps(payload, default=str)
 
