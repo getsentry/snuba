@@ -1,0 +1,37 @@
+version: v1
+kind: entity
+name: outcomes_org
+schema:
+  [
+    { name: org_id, type: UInt, args: { size: 64 } },
+    { name: project_id, type: UInt, args: { size: 64 } },
+    { name: key_id, type: UInt, args: { size: 64 } },
+    { name: timestamp, type: DateTime },
+    { name: time, type: DateTime },
+    { name: outcome, type: UInt, args: { size: 8 } },
+    { name: reason, type: String },
+    { name: quantity, type: UInt, args: { size: 64 } },
+    { name: category, type: UInt, args: { size: 8 } },
+    { name: times_seen, type: UInt, args: { size: 64 } },
+  ]
+required_time_column: timestamp
+storages:
+  - storage: outcomes_org
+    is_writable: false
+storage_selector:
+  selector: DefaultQueryStorageSelector
+query_processors:
+  - processor: BasicFunctionsProcessor
+  - processor: TimeSeriesProcessor
+    args:
+      time_group_columns:
+        time: timestamp
+      time_parse_columns:
+        - timestamp
+# Dedicated org-level outcomes entity for cross-org active-org discovery. Unlike the
+# shared `outcomes` entity it intentionally has an EMPTY validators list (no
+# EntityRequiredColumnValidator for org_id), so callers can group by org_id without a
+# per-org filter. Access is governed at the storage layer by
+# CrossOrgQueryAllocationPolicy.
+validators: []
+validate_data_model: error
