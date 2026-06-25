@@ -71,12 +71,18 @@ class QueryResult:
 
 def transform_column_names(result: QueryResult, mapping: Mapping[str, list[str]]) -> None:
     """
-    Replaces the column names in a ResultSet object in place.
+    Replaces the column names in a ResultSet object in place. ``mapping`` maps
+    each ClickHouse alias to its user-facing output name(s), e.g.
+    ``{"_snuba_event_id": ["event_id"]}``.
 
     Runs on every query (including cache hits), so it avoids allocating a new
-    dict per row when possible: identity mappings are a no-op, simple 1:1
-    renames mutate keys in place, and only fan-out or colliding targets fall
-    back to rebuilding the row dicts.
+    dict per row when possible:
+
+    * Identity, e.g. ``{"event_id": ["event_id"]}`` -> no-op.
+    * 1:1 rename, e.g. ``{"_snuba_event_id": ["event_id"]}`` -> keys are renamed
+      in place.
+    * Fan-out (``{"_snuba_duration": ["duration", "duration_ms"]}``) or a target
+      that collides with an existing column -> rebuild each row dict.
     """
     renames: list[tuple[str, str]] = []
     has_fan_out = False
