@@ -47,6 +47,7 @@ from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
+    use_array_map_columns,
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
@@ -556,7 +557,9 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         return len({f.item_type for f in filters}) > 1
 
     def _get_trace_item_filter_expressions(
-        self, filters: RepeatedCompositeFieldContainer[GetTracesRequest.TraceFilter]
+        self,
+        filters: RepeatedCompositeFieldContainer[GetTracesRequest.TraceFilter],
+        request_meta: RequestMeta,
     ) -> dict[TraceItemType.ValueType, Expression]:
         """
         Returns a dict mapping item types to a filter expression for that item type.
@@ -584,6 +587,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                     ),
                     attribute_key_to_expression,
                     membership_as_has=True,
+                    use_array_map_columns=use_array_map_columns(request_meta),
                 ),
             )
 
@@ -607,6 +611,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                 ),
             ),
             attribute_key_to_expression,
+            use_array_map_columns=use_array_map_columns(request.meta),
         )
         selected_columns: list[SelectedExpression] = [
             SelectedExpression(
@@ -671,7 +676,9 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     ) -> tuple[list[GetTracesResponse.Trace], Any]:
         # We use the item type specified in the request meta for the trace item filter conditions.
         # If no item type is specified, we use all the filters.
-        filter_expressions_by_item_type = self._get_trace_item_filter_expressions(request.filters)
+        filter_expressions_by_item_type = self._get_trace_item_filter_expressions(
+            request.filters, request.meta
+        )
         trace_item_filters_expression = None
         item_type = None
         if request.meta.trace_item_type in filter_expressions_by_item_type:
@@ -785,7 +792,9 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         """
         # We use the item type specified in the request meta for the trace item filter conditions.
         # If no item type is specified, we use all the filters.
-        filter_expressions_by_item_type = self._get_trace_item_filter_expressions(request.filters)
+        filter_expressions_by_item_type = self._get_trace_item_filter_expressions(
+            request.filters, request.meta
+        )
         trace_item_filters_expression = None
         item_type = None
         if request.meta.trace_item_type in filter_expressions_by_item_type:

@@ -64,6 +64,7 @@ SERVER_SAMPLE_RATE_ATTRIBUTE = "server_sample_rate"
 def _get_condition_in_aggregation(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    use_array_map_columns: bool = False,
 ) -> Expression:
     condition_in_aggregation: Expression = literal(True)
     if isinstance(aggregation, AttributeConditionalAggregation):
@@ -72,7 +73,10 @@ def _get_condition_in_aggregation(
         # result-block column name stable across mixed-version ClickHouse nodes on
         # distributed reads (membership_as_has, see common._in_or_has).
         condition_in_aggregation = trace_item_filters_to_expression(
-            aggregation.filter, attribute_key_to_expression, membership_as_has=True
+            aggregation.filter,
+            attribute_key_to_expression,
+            membership_as_has=True,
+            use_array_map_columns=use_array_map_columns,
         )
     return condition_in_aggregation
 
@@ -376,6 +380,7 @@ def get_average_sample_rate_column(
     aggregation: AttributeConditionalAggregation,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
     use_sampling_factor: bool = False,
+    use_array_map_columns: bool = False,
 ) -> Expression:
     alias = CustomColumnInformation(
         custom_column_id="average_sample_rate",
@@ -388,7 +393,7 @@ def get_average_sample_rate_column(
     )
     field, field_exists = _resolve_field_and_existence(aggregation, attribute_key_to_expression)
     condition_in_aggregation = _get_condition_in_aggregation(
-        aggregation, attribute_key_to_expression
+        aggregation, attribute_key_to_expression, use_array_map_columns
     )
     return f.divide(
         f.countIf(
@@ -416,13 +421,16 @@ def _get_count_column_alias(
 def get_count_column(
     aggregation: AttributeConditionalAggregation,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    use_array_map_columns: bool = False,
 ) -> Expression:
     field, field_exists = _resolve_field_and_existence(aggregation, attribute_key_to_expression)
     return f.countIf(
         field,
         and_cond(
             field_exists,
-            _get_condition_in_aggregation(aggregation, attribute_key_to_expression),
+            _get_condition_in_aggregation(
+                aggregation, attribute_key_to_expression, use_array_map_columns
+            ),
         ),
         alias=_get_count_column_alias(aggregation),
     )
@@ -485,11 +493,12 @@ def get_extrapolated_function(
     field_exists: Expression,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
     use_sampling_factor: bool = False,
+    use_array_map_columns: bool = False,
 ) -> CurriedFunctionCall | FunctionCall | None:
     alias = aggregation.label if aggregation.label else None
     alias_dict = {"alias": alias} if alias else {}
     condition_in_aggregation = _get_condition_in_aggregation(
-        aggregation, attribute_key_to_expression
+        aggregation, attribute_key_to_expression, use_array_map_columns
     )
 
     sampling_weight = _get_sampling_weight_expression(
@@ -607,6 +616,7 @@ def _get_ci_count(
     alias: str | None = None,
     z_value: float = Z_VALUE_P95,
     use_sampling_factor: bool = False,
+    use_array_map_columns: bool = False,
 ) -> Expression:
     r"""
     confidence interval = Z \cdot \sqrt{\sum_{i=1}^n w_i^2 - w_i}
@@ -630,7 +640,7 @@ def _get_ci_count(
 
     field, field_exists = _resolve_field_and_existence(aggregation, attribute_key_to_expression)
     condition_in_aggregation = _get_condition_in_aggregation(
-        aggregation, attribute_key_to_expression
+        aggregation, attribute_key_to_expression, use_array_map_columns
     )
     alias_dict = {"alias": alias} if alias else {}
     sampling_weight = _get_sampling_weight_expression(
@@ -657,6 +667,7 @@ def _get_ci_sum(
     alias: str | None = None,
     z_value: float = Z_VALUE_P95,
     use_sampling_factor: bool = False,
+    use_array_map_columns: bool = False,
 ) -> Expression:
     r"""
     confidence interval = Z \cdot \sqrt{\sum_{i=1}^n x_i^2 \cdot (w_i^2 - w_i)}
@@ -674,7 +685,7 @@ def _get_ci_sum(
 
     field, field_exists = _resolve_field_and_existence(aggregation, attribute_key_to_expression)
     condition_in_aggregation = _get_condition_in_aggregation(
-        aggregation, attribute_key_to_expression
+        aggregation, attribute_key_to_expression, use_array_map_columns
     )
     alias_dict = {"alias": alias} if alias else {}
     sampling_weight = _get_sampling_weight_expression(
@@ -703,6 +714,7 @@ def _get_ci_avg(
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
     alias: str | None = None,
     use_sampling_factor: bool = False,
+    use_array_map_columns: bool = False,
 ) -> Expression:
     """
     confidence interval = (\\frac{t + err_t}{c - err_c} - \\frac{t - err_t}{c + err_c}) \\cdot 0.5
@@ -729,7 +741,7 @@ def _get_ci_avg(
 
     field, field_exists = _resolve_field_and_existence(aggregation, attribute_key_to_expression)
     condition_in_aggregation = _get_condition_in_aggregation(
-        aggregation, attribute_key_to_expression
+        aggregation, attribute_key_to_expression, use_array_map_columns
     )
     alias_dict = {"alias": alias} if alias else {}
     sampling_weight = _get_sampling_weight_expression(
@@ -754,6 +766,7 @@ def _get_ci_avg(
         f"{alias}__sum_err",
         Z_VALUE_P975,
         use_sampling_factor,
+        use_array_map_columns,
     )
     expr_count_err = _get_ci_count(
         aggregation,
@@ -761,6 +774,7 @@ def _get_ci_avg(
         f"{alias}__count_err",
         Z_VALUE_P975,
         use_sampling_factor,
+        use_array_map_columns,
     )
 
     return f.divide(
@@ -785,6 +799,7 @@ def get_confidence_interval_column(
     aggregation: AttributeConditionalAggregation,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
     use_sampling_factor: bool = False,
+    use_array_map_columns: bool = False,
 ) -> Expression | None:
     """
     Returns the expression for calculating the upper confidence limit for a given aggregation. If the aggregation cannot be extrapolated, returns None.
@@ -799,15 +814,21 @@ def get_confidence_interval_column(
             attribute_key_to_expression,
             alias,
             use_sampling_factor=use_sampling_factor,
+            use_array_map_columns=use_array_map_columns,
         ),
         Function.FUNCTION_SUM: _get_ci_sum(
             aggregation,
             attribute_key_to_expression,
             alias,
             use_sampling_factor=use_sampling_factor,
+            use_array_map_columns=use_array_map_columns,
         ),
         Function.FUNCTION_AVG: _get_ci_avg(
-            aggregation, attribute_key_to_expression, alias, use_sampling_factor
+            aggregation,
+            attribute_key_to_expression,
+            alias,
+            use_sampling_factor,
+            use_array_map_columns,
         ),
         Function.FUNCTION_P50: _get_possible_percentiles_expression(
             aggregation, 0.5, attribute_key_to_expression, use_sampling_factor
@@ -880,12 +901,13 @@ def aggregation_to_expression(
     aggregation: AttributeConditionalAggregation,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
     use_sampling_factor: bool = False,
+    use_array_map_columns: bool = False,
 ) -> Expression:
     field, field_exists = _resolve_field_and_existence(aggregation, attribute_key_to_expression)
     alias = aggregation.label if aggregation.label else None
     alias_dict = {"alias": alias} if alias else {}
     condition_in_aggregation = _get_condition_in_aggregation(
-        aggregation, attribute_key_to_expression
+        aggregation, attribute_key_to_expression, use_array_map_columns
     )
 
     if aggregation.key.type == AttributeKey.Type.TYPE_ARRAY:
@@ -954,7 +976,12 @@ def aggregation_to_expression(
         ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY,
     ]:
         agg_func_expr = get_extrapolated_function(
-            aggregation, field, field_exists, attribute_key_to_expression, use_sampling_factor
+            aggregation,
+            field,
+            field_exists,
+            attribute_key_to_expression,
+            use_sampling_factor,
+            use_array_map_columns,
         )
     else:
         agg_func_expr = function_map.get(aggregation.aggregate)

@@ -30,6 +30,7 @@ from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
+    use_array_map_columns,
 )
 
 # 50 million trace ids * 16 bytes per id = a limit of 1gigabyte memory usage per cross item query
@@ -90,6 +91,7 @@ def get_trace_ids_sql_for_cross_item_query(
                     trace_item_filters_to_expression(
                         trace_filter.filter,
                         attribute_key_to_expression,
+                        use_array_map_columns=use_array_map_columns(request_meta),
                     ),
                 )
             )
@@ -100,6 +102,7 @@ def get_trace_ids_sql_for_cross_item_query(
                         trace_filter.filter,
                         attribute_key_to_expression,
                         membership_as_has=True,
+                        use_array_map_columns=use_array_map_columns(request_meta),
                     ),
                 )
             )

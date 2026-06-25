@@ -22,6 +22,7 @@ from snuba.protos.common import (
     PROTO_TYPE_TO_CLICKHOUSE_TYPE,
     MalformedAttributeException,
     type_array_to_membership_array_expression,
+    type_array_to_membership_array_expression_from_typed_columns,
 )
 from snuba.protos.common import (
     attribute_key_to_expression as _attribute_key_to_expression,
@@ -87,14 +88,22 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
 
 
 def _trace_item_filter_key_expression(
-    attr_to_key_expression_callable: Callable[[AttributeKey], Expression], key: AttributeKey
+    attr_to_key_expression_callable: Callable[[AttributeKey], Expression],
+    key: AttributeKey,
+    use_array_map_columns: bool = False,
 ) -> Expression:
     """predicates must use the normalized
     ``arrayMap`` (``type_array_to_membership_array_expression``) so
     ``arrayExists`` compares per element. It is different from SELECT predicate.
+
+    When ``use_array_map_columns`` is set, array predicates read the typed
+    ``attributes_array_*`` map columns instead of the legacy ``attributes_array``
+    JSON column (see ``use_array_map_columns``).
     """
     if key.type == AttributeKey.Type.TYPE_ARRAY:
         try:
+            if use_array_map_columns:
+                return type_array_to_membership_array_expression_from_typed_columns(key)
             return type_array_to_membership_array_expression(key)
         except MalformedAttributeException as e:
             raise BadSnubaRPCRequestException(str(e)) from e
@@ -247,6 +256,27 @@ def use_sampling_factor(meta: RequestMeta) -> bool:
         return False
 
     return meta.start_timestamp.seconds >= use_sampling_factor_timestamp_seconds
+
+
+def use_array_map_columns(meta: RequestMeta) -> bool:
+    """
+    Array attributes were double-written into the typed ``attributes_array_*`` map
+    columns starting 2026-06-22, so we should only read those columns on queries
+    whose window starts on/after the cutoff (2026-06-23 UTC by default). Older data
+    only exists in the legacy ``attributes_array`` JSON column. A config value of 0
+    disables the typed-column read path entirely.
+    """
+    use_array_map_columns_timestamp_seconds = cast(
+        int,
+        state.get_int_config(
+            "use_array_map_columns_timestamp_seconds",
+            settings.USE_ARRAY_MAP_COLUMNS_TIMESTAMP_SECONDS,
+        ),
+    )
+    if use_array_map_columns_timestamp_seconds == 0:
+        return False
+
+    return meta.start_timestamp.seconds >= use_array_map_columns_timestamp_seconds
 
 
 def treeify_or_and_conditions(query: Query) -> None:
@@ -735,6 +765,7 @@ def trace_item_filters_to_expression(
     item_filter: TraceItemFilter,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
     membership_as_has: bool = False,
+    use_array_map_columns: bool = False,
 ) -> Expression:
     """
     Trace Item Filters are things like (span.id=12345 AND start_timestamp >= "june 4th, 2024")
@@ -746,6 +777,10 @@ def trace_item_filters_to_expression(
         ``IN`` set leaks an unstable ``__set_*`` identifier into the result-block column
         name and breaks mixed-version distributed reads (see ``_in_or_has``). Leave the
         default for WHERE clauses, where the prepared ``IN`` set drives pruning.
+    :param use_array_map_columns: resolve ``TYPE_ARRAY`` predicates against the typed
+        ``attributes_array_*`` map columns instead of the legacy ``attributes_array``
+        JSON column. Pass ``use_array_map_columns(meta)`` so this is only enabled for
+        query windows new enough that the typed columns are fully populated.
     :return:
     """
     if item_filter.HasField("and_filter"):
@@ -754,11 +789,19 @@ def trace_item_filters_to_expression(
             return literal(True)
         if len(filters) == 1:
             return trace_item_filters_to_expression(
-                filters[0], attribute_key_to_expression, membership_as_has
+                filters[0],
+                attribute_key_to_expression,
+                membership_as_has,
+                use_array_map_columns,
             )
         return and_cond(
             *(
-                trace_item_filters_to_expression(x, attribute_key_to_expression, membership_as_has)
+                trace_item_filters_to_expression(
+                    x,
+                    attribute_key_to_expression,
+                    membership_as_has,
+                    use_array_map_columns,
+                )
                 for x in filters
             )
         )
@@ -769,11 +812,19 @@ def trace_item_filters_to_expression(
             raise BadSnubaRPCRequestException("Invalid trace item filter, empty 'or' clause")
         if len(filters) == 1:
             return trace_item_filters_to_expression(
-                filters[0], attribute_key_to_expression, membership_as_has
+                filters[0],
+                attribute_key_to_expression,
+                membership_as_has,
+                use_array_map_columns,
             )
         return or_cond(
             *(
-                trace_item_filters_to_expression(x, attribute_key_to_expression, membership_as_has)
+                trace_item_filters_to_expression(
+                    x,
+                    attribute_key_to_expression,
+                    membership_as_has,
+                    use_array_map_columns,
+                )
                 for x in filters
             )
         )
@@ -785,14 +836,20 @@ def trace_item_filters_to_expression(
         if len(filters) == 1:
             return not_cond(
                 trace_item_filters_to_expression(
-                    filters[0], attribute_key_to_expression, membership_as_has
+                    filters[0],
+                    attribute_key_to_expression,
+                    membership_as_has,
+                    use_array_map_columns,
                 )
             )
         return not_cond(
             and_cond(
                 *(
                     trace_item_filters_to_expression(
-                        x, attribute_key_to_expression, membership_as_has
+                        x,
+                        attribute_key_to_expression,
+                        membership_as_has,
+                        use_array_map_columns,
                     )
                     for x in filters
                 )
@@ -808,7 +865,9 @@ def trace_item_filters_to_expression(
             _validate_comparison_filter_type_array(op, v)
 
         k_expression = _trace_item_filter_key_expression(
-            attr_to_key_expression_callable=attribute_key_to_expression, key=k
+            attr_to_key_expression_callable=attribute_key_to_expression,
+            key=k,
+            use_array_map_columns=use_array_map_columns,
         )
 
         value_type = v.WhichOneof("value")
@@ -1068,6 +1127,7 @@ def trace_item_filters_to_expression(
             _trace_item_filter_key_expression(
                 attr_to_key_expression_callable=attribute_key_to_expression,
                 key=item_filter.exists_filter.key,
+                use_array_map_columns=use_array_map_columns,
             )
         )
 
@@ -1173,9 +1233,12 @@ def get_field_existence_expression(field: Expression) -> Expression:
     if isinstance(field, FunctionCall) and field.function_name == "arrayElement":
         return map_key_exists(field.parameters[0], field.parameters[1])
 
-    if isinstance(field, FunctionCall) and field.function_name == "arrayMap":
-        # Array attributes in the JSON column return empty arrays (not NULL)
-        # for missing keys, so notEmpty is the correct existence check.
+    if isinstance(field, FunctionCall) and field.function_name in ("arrayMap", "arrayConcat"):
+        # Array attributes return empty arrays (not NULL) for missing keys, so
+        # notEmpty is the correct existence check. This covers both the JSON-column
+        # membership expression (arrayMap) and the typed-column one (arrayConcat of
+        # the per-type map lookups, see
+        # type_array_to_membership_array_expression_from_typed_columns).
         return f.notEmpty(field)
 
     return f.isNotNull(field)
