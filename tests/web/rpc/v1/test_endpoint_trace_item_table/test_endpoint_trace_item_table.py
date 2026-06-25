@@ -4498,4 +4498,20 @@ class TestSemverSorting:
     def test_desc_is_reverse_of_asc(self) -> None:
         asc = self._query_releases(descending=False)
         desc = self._query_releases(descending=True)
-        assert asc == list(reversed(desc))
+        # "1.2" and "1.2.0" share the same sort key ([1,2,0,0], 1); ClickHouse
+        # may return them in either relative order within the tied pair.
+        # Collapse contiguous tied elements into a frozenset before comparing so
+        # the assertion is order-insensitive within ties.
+        TIED: frozenset[str] = frozenset({"1.2", "1.2.0"})
+
+        def _canonicalize(releases: list[str]) -> list[object]:
+            out: list[object] = []
+            for r in releases:
+                if r in TIED:
+                    if not out or out[-1] != TIED:
+                        out.append(TIED)
+                else:
+                    out.append(r)
+            return out
+
+        assert _canonicalize(asc) == _canonicalize(list(reversed(desc)))
