@@ -55,6 +55,7 @@ from snuba.request import Request as SnubaRequest
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
+    SEMVER_SORT_ATTRIBUTES,
     add_existence_check_to_subscriptable_references,
     attribute_key_to_expression,
     base_conditions_and,
@@ -88,8 +89,6 @@ from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 
 _DEFAULT_ROW_LIMIT = 10_000
-
-_SEMVER_SORT_ATTRIBUTES: frozenset[str] = frozenset({"sentry.release"})
 
 
 OP_TO_EXPR = {
@@ -284,14 +283,14 @@ def _groupby_order_by_expression(attr_key: AttributeKey, for_order_by: bool = Fa
     the raw column. If the two diverged, ClickHouse would reject the query with
     "Column `timestamp` is not under aggregate function and not in GROUP BY".
 
-    For `_SEMVER_SORT_ATTRIBUTES` (e.g. `sentry.release`), the ORDER BY uses
+    For `SEMVER_SORT_ATTRIBUTES` (e.g. `sentry.release`), the ORDER BY uses
     a semver tuple key while GROUP BY keeps the raw expression.  ClickHouse
     accepts ORDER BY on a function of a GROUP BY key, so the two can differ here.
     """
     if attr_key.name == "sentry.timestamp":
         return snuba_column("timestamp")
     base = attribute_key_to_expression(attr_key)
-    if for_order_by and attr_key.name in _SEMVER_SORT_ATTRIBUTES:
+    if for_order_by and attr_key.name in SEMVER_SORT_ATTRIBUTES:
         return semver_sort_key(base)
     return base
 

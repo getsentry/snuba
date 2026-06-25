@@ -87,6 +87,8 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
 
 _SEMVER_COMPONENT_COUNT = 4  # major.minor.patch.build
 
+SEMVER_SORT_ATTRIBUTES: frozenset[str] = frozenset({"sentry.release"})
+
 
 def semver_sort_key(expr: Expression, alias: str | None = None) -> Expression:
     """Return a Tuple(Array(UInt32), UInt8) sort key for semantic-version ORDER BY.

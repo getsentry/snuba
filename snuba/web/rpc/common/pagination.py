@@ -18,7 +18,11 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
 from snuba.query.expressions import Expression
-from snuba.web.rpc.common.common import attribute_key_to_expression
+from snuba.web.rpc.common.common import (
+    SEMVER_SORT_ATTRIBUTES,
+    attribute_key_to_expression,
+    semver_sort_key,
+)
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import TimeWindow
 
 
@@ -99,9 +103,23 @@ class FlexibleTimeWindowPageWithFilters:
                     )
         # Assumes everything in the ORDER BY is ordered by DESC
         if column_names:
-            res = f.less(
-                f.tuple(*(column(c_name) for c_name in column_names)), f.tuple(*column_values)
-            )
+            col_exprs = []
+            val_exprs = []
+            for c_name, c_value in zip(column_names, column_values):
+                # c_name is the attribute expression alias: "{attr}.{Type.Name(type)}"
+                # For semver attributes (e.g. sentry.release_TYPE_STRING), apply the
+                # same semver sort key on both sides so the page boundary comparison
+                # uses the same ordering as ORDER BY.
+                attr_name = (
+                    c_name.removesuffix("_TYPE_STRING") if c_name.endswith("_TYPE_STRING") else None
+                )
+                if attr_name in SEMVER_SORT_ATTRIBUTES:
+                    col_exprs.append(semver_sort_key(column(c_name)))
+                    val_exprs.append(semver_sort_key(c_value))
+                else:
+                    col_exprs.append(column(c_name))
+                    val_exprs.append(c_value)
+            res = f.less(f.tuple(*col_exprs), f.tuple(*val_exprs))
             return res
         return None
 
