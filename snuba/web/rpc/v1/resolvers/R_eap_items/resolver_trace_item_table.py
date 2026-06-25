@@ -271,7 +271,9 @@ def aggregation_filter_to_expression(
             raise BadSnubaRPCRequestException(f"Unsupported aggregation filter type: {default}")
 
 
-def _groupby_order_by_expression(attr_key: AttributeKey) -> Expression:
+def _groupby_order_by_expression(
+    attr_key: AttributeKey, for_order_by: bool = False
+) -> Expression:
     """
     Maps an attribute key used in GROUP BY / ORDER BY to its expression.
 
@@ -283,11 +285,15 @@ def _groupby_order_by_expression(attr_key: AttributeKey) -> Expression:
     valid (it is a function of the grouped column) while letting ORDER BY sort on
     the raw column. If the two diverged, ClickHouse would reject the query with
     "Column `timestamp` is not under aggregate function and not in GROUP BY".
+
+    For `_SEMVER_SORT_ATTRIBUTES` (e.g. `sentry.release`), the ORDER BY uses
+    a semver tuple key while GROUP BY keeps the raw expression.  ClickHouse
+    accepts ORDER BY on a function of a GROUP BY key, so the two can differ here.
     """
     if attr_key.name == "sentry.timestamp":
         return snuba_column("timestamp")
     base = attribute_key_to_expression(attr_key)
-    if attr_key.name in _SEMVER_SORT_ATTRIBUTES:
+    if for_order_by and attr_key.name in _SEMVER_SORT_ATTRIBUTES:
         return semver_sort_key(base)
     return base
 
@@ -341,7 +347,7 @@ def _convert_order_by(
             # covers `sentry.timestamp` ordering anywhere else.) The GROUP BY uses the
             # same expression (see `_groupby_order_by_expression`) so an aggregation
             # query that orders by `sentry.timestamp` stays valid.
-            expression = _groupby_order_by_expression(x.column.key)
+            expression = _groupby_order_by_expression(x.column.key, for_order_by=True)
             res.append(
                 OrderBy(
                     direction=direction,

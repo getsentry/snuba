@@ -107,7 +107,7 @@ def semver_sort_key(expr: Expression, alias: str | None = None) -> Expression:
         literal(_SEMVER_COMPONENT_COUNT),
     )
     is_stable = f.equals(f.position(version_no_prefix, literal("-")), literal(0))
-    return f.tuple(numeric_key, is_stable, alias=alias)
+    return FunctionCall(alias, "tuple", (numeric_key, is_stable))
 
 
 def _trace_item_filter_key_expression(
