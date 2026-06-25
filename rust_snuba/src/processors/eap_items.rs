@@ -259,15 +259,9 @@ struct EAPItem {
     item_type: u8,
     timestamp: u32,
     trace_id: Uuid,
-    /// Optional session identifier carried on the TraceItem. The column is a
-    /// non-nullable UUID, so an absent or unparseable value is replaced with a
-    /// fresh random UUID rather than the all-zero "magic" UUID (see
-    /// `parse_uuid_or_random`).
     session_id: Uuid,
-    /// Optional conversation identifier carried on the TraceItem's
-    /// `conversation_id` field. It is stored in the `ai_conversation_id` String
-    /// column (migration 0061) rather than the deprecated UUID `conversation_id`
-    /// column, which is no longer written.
+    /// The TraceItem `conversation_id` field, stored in the `ai_conversation_id`
+    /// String column. The deprecated UUID `conversation_id` column is not written.
     ai_conversation_id: String,
     item_id: u128,
 
@@ -390,20 +384,10 @@ fn fnv_1a(input: &[u8]) -> u32 {
     res
 }
 
-/// Resolve a UUID-valued TraceItem field (e.g. `session_id`) for storage in
-/// its non-nullable UUID column. The field arrives as a string that is empty
-/// when the producer did not set it.
-///
-/// The destination columns are `UUID`, so the only thing we can store is a
-/// valid UUID. To avoid persisting the all-zero "magic" UUID — which would be
-/// indistinguishable from a real (if absurd) all-zero id and would balloon the
-/// bloom-filter index with a single high-frequency value — an absent or
-/// explicitly-nil value is replaced with a fresh random UUID.
-///
-/// A *present* value that is not UUID-formatted is unexpected: the producer is
-/// supposed to send UUIDs. We can't store the raw string in a `UUID` column,
-/// so we randomize the value so the row still ingests rather than dropping an
-/// otherwise-valid item over an optional field.
+/// Parse a UUID-valued TraceItem field (e.g. `session_id`) for its non-nullable
+/// UUID column. An absent, malformed, or all-zero value is replaced with a fresh
+/// random UUID, avoiding the all-zero "magic" UUID that would balloon the
+/// bloom-filter index with a single high-frequency value.
 fn parse_uuid_or_random(value: &str) -> Uuid {
     if value.is_empty() {
         return Uuid::new_v4();
@@ -1120,10 +1104,6 @@ mod tests {
         assert_eq!(names.len(), 102);
         assert_eq!(names[0], "organization_id");
         assert_eq!(names[4], "trace_id");
-        // session_id (UUID, migration 0060) and ai_conversation_id (String,
-        // migration 0061) are inserted right after trace_id, matching the
-        // on-disk column order. The deprecated UUID conversation_id column is no
-        // longer written.
         assert_eq!(names[5], "session_id");
         assert_eq!(names[6], "ai_conversation_id");
         assert_eq!(names[7], "item_id");
@@ -1207,8 +1187,6 @@ mod tests {
         assert_eq!(row.item_id, item_id.as_u128());
         assert_eq!(row.sampling_weight, 1);
         assert!((row.sampling_factor - 1.0).abs() < f64::EPSILON);
-        // session_id is not set on the trace item → randomized rather than
-        // stored as nil. ai_conversation_id is a String, empty when unset.
         assert!(!row.session_id.is_nil());
         assert!(row.ai_conversation_id.is_empty());
     }
@@ -1223,8 +1201,6 @@ mod tests {
         trace_item.session_id = session_id.to_string();
 
         let eap_item = EAPItem::try_from(trace_item).unwrap();
-        // The conversation id is stored verbatim in the ai_conversation_id
-        // String column; the session id is parsed into its UUID column.
         assert_eq!(eap_item.ai_conversation_id, conversation_id);
         assert_eq!(eap_item.session_id, session_id);
     }
@@ -1232,36 +1208,29 @@ mod tests {
     #[test]
     fn test_conversation_and_session_id_when_absent() {
         let item_id = Uuid::new_v4();
-        // generate_trace_item leaves conversation_id/session_id as empty strings.
         let trace_item = generate_trace_item(item_id);
 
         let eap_item = EAPItem::try_from(trace_item).unwrap();
-        // An absent conversation id is stored as an empty String.
+        // Absent conversation id → empty String; absent session id → random UUID.
         assert!(eap_item.ai_conversation_id.is_empty());
-        // An absent session id is randomized, not stored as the all-zero magic
-        // UUID.
         assert!(!eap_item.session_id.is_nil());
     }
 
     #[test]
     fn test_session_id_malformed_is_randomized() {
-        // A malformed session id must not drop the whole item, and must not be
-        // persisted as the nil UUID either — it is randomized. The conversation
-        // id is a free-form String, so any value is stored verbatim.
         let item_id = Uuid::new_v4();
         let mut trace_item = generate_trace_item(item_id);
         trace_item.conversation_id = "not-a-uuid".to_string();
         trace_item.session_id = "also-not-a-uuid".to_string();
 
         let eap_item = EAPItem::try_from(trace_item).unwrap();
+        // The conversation id is free-form, so it is stored verbatim.
         assert_eq!(eap_item.ai_conversation_id, "not-a-uuid");
         assert!(!eap_item.session_id.is_nil());
     }
 
     #[test]
     fn test_explicit_nil_session_id_is_randomized() {
-        // A producer that explicitly sends the all-zero session UUID still gets
-        // a random value rather than persisting the magic nil.
         let item_id = Uuid::new_v4();
         let mut trace_item = generate_trace_item(item_id);
         trace_item.session_id = Uuid::nil().to_string();
