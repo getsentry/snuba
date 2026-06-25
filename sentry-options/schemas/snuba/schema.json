@@ -421,6 +421,30 @@
       "additionalProperties": { "type": "integer" },
       "default": {},
       "description": "Dict mapping storage name to a grace period in minutes; eap-items messages from before the current partition older than this are routed to the DLQ. Storages with no entry have no grace-period dropping. Migrated from per-storage runtime config eap_items_dlq_grace_period_min:<storage>."
+    },
+    "query_settings": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "default": {},
+      "description": "Dict of base ClickHouse query settings (setting name -> value as a string) applied to all queries. Migrated from per-setting runtime config query_settings/<setting>."
+    },
+    "async_query_settings": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "default": {},
+      "description": "Dict of ClickHouse query settings (setting name -> value as a string) applied additionally when the async override is active. Migrated from per-setting runtime config async_query_settings/<setting>."
+    },
+    "query_settings_by_prefix": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "default": {},
+      "description": "Dict mapping a query prefix to a JSON-object string of ClickHouse query settings ({\"setting\": \"value\"}) applied for that prefix, overriding the base query_settings. Migrated from per-setting runtime config <prefix>/query_settings/<setting>."
+    },
+    "query_settings_by_referrer": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "default": {},
+      "description": "Dict mapping a referrer to a JSON-object string of ClickHouse query settings ({\"setting\": \"value\"}) applied for that referrer, taking precedence over prefix and base settings. Migrated from per-setting runtime config referrer/<referrer>/query_settings/<setting>."
     }
   }
 }

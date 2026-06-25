@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import json
 from typing import Any, Mapping, MutableMapping, Optional, cast
 from unittest import mock
 
 import pytest
 from sentry_options.testing import override_options
 
-from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.query import format_query
@@ -193,8 +193,40 @@ test_data = [
 ]
 
 
+def _query_config_to_overrides(query_config: Mapping[str, Any]) -> dict[str, Any]:
+    """Translate the legacy flat runtime-config keys used by these test cases
+    into the sentry-options dict shape _get_query_settings_from_config now reads.
+    Values are stringified to match the string-typed option dicts; the
+    per-prefix/per-referrer second level is JSON-encoded."""
+    base: dict[str, str] = {}
+    async_settings: dict[str, str] = {}
+    by_prefix: dict[str, dict[str, str]] = {}
+    by_referrer: dict[str, dict[str, str]] = {}
+    for key, value in query_config.items():
+        sval = str(value)
+        if key.startswith("query_settings/"):
+            base[key.split("/", 1)[1]] = sval
+        elif key.startswith("async_query_settings/"):
+            async_settings[key.split("/", 1)[1]] = sval
+        elif key.startswith("referrer/"):
+            _, ref, _, setting = key.split("/", 3)
+            by_referrer.setdefault(ref, {})[setting] = sval
+        else:
+            prefix, _, setting = key.split("/", 2)
+            by_prefix.setdefault(prefix, {})[setting] = sval
+    overrides: dict[str, Any] = {}
+    if base:
+        overrides["query_settings"] = base
+    if async_settings:
+        overrides["async_query_settings"] = async_settings
+    if by_prefix:
+        overrides["query_settings_by_prefix"] = {p: json.dumps(s) for p, s in by_prefix.items()}
+    if by_referrer:
+        overrides["query_settings_by_referrer"] = {r: json.dumps(s) for r, s in by_referrer.items()}
+    return overrides
+
+
 @pytest.mark.parametrize("query_config,expected,query_prefix,async_override,referrer", test_data)
-@pytest.mark.redis_db
 def test_query_settings_from_config(
     query_config: Mapping[str, Any],
     expected: MutableMapping[str, Any],
@@ -202,11 +234,11 @@ def test_query_settings_from_config(
     async_override: bool,
     referrer: str,
 ) -> None:
-    for k, v in query_config.items():
-        state.set_config(k, v)
-    assert (
-        _get_query_settings_from_config(query_prefix, async_override, referrer=referrer) == expected
-    )
+    with override_options("snuba", _query_config_to_overrides(query_config)):
+        result = _get_query_settings_from_config(query_prefix, async_override, referrer=referrer)
+    # Values come back as strings (the option dicts are string-typed); ClickHouse
+    # HTTP settings are strings on the wire regardless.
+    assert result == {k: str(v) for k, v in expected.items()}
 
 
 def _build_test_query(

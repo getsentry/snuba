@@ -15,7 +15,7 @@ from clickhouse_driver.errors import ErrorCodes
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
 from sentry_sdk.api import configure_scope
 
-from snuba import environment, settings, state
+from snuba import environment, settings
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
@@ -58,7 +58,12 @@ from snuba.state.cache.redis.backend import (
 )
 from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import RateLimitExceeded
-from snuba.state.sentry_options import get_bool_option, get_mapped_float_option
+from snuba.state.sentry_options import (
+    get_bool_option,
+    get_mapped_float_option,
+    get_mapped_str_option,
+    get_option,
+)
 from snuba.util import force_bytes
 from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.metrics.timer import Timer
@@ -349,44 +354,61 @@ def execute_query_with_readthrough_caching(
     )
 
 
+def _query_settings_dict(option: str) -> Mapping[str, Any]:
+    """A dict-typed sentry-option of {clickhouse_setting: value}."""
+    value = get_option(option, {})
+    return value if isinstance(value, dict) else {}
+
+
+def _query_settings_override(option: str, name: str) -> Mapping[str, Any]:
+    """One entry of a dict-typed sentry-option whose values are JSON-object
+    strings ({"clickhouse_setting": "value"}), keyed by ``name`` (a query
+    prefix or referrer). sentry-options can't express dict-of-dict natively, so
+    the second level is a JSON string parsed here."""
+    raw = get_mapped_str_option(option, name, "")
+    if not raw:
+        return {}
+    try:
+        parsed = rapidjson.loads(raw)
+    except (TypeError, ValueError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
 def _get_query_settings_from_config(
     override_prefix: Optional[str],
     async_override: bool,
     referrer: Optional[str],
 ) -> MutableMapping[str, Any]:
     """
-    Helper function to get the query settings from the config. Order of precedence
-    for overlapping config within this method is:
-    1. referrer/<referrer>/query_settings/<setting>
-    2. <override_prefix>/query_settings/<setting>
-    3. query_settings/<setting>
+    Helper function to get the query settings from sentry-options. Order of
+    precedence for overlapping settings within this method is:
+    1. referrer/<referrer>  (query_settings_by_referrer)
+    2. <override_prefix>    (query_settings_by_prefix)
+    3. base                 (query_settings)
 
     #TODO: Make this configurable by entity/dataset. Since we want to use
     #      different settings across different clusters belonging to the
     #      same entity/dataset, using cache_partition right now. This is
     #      not ideal but it works for now.
     """
-    all_confs = state.get_all_configs()
-
-    # Populate the query settings with the default values
-    clickhouse_query_settings: MutableMapping[str, Any] = {
-        k.split("/", 1)[1]: v for k, v in all_confs.items() if k.startswith("query_settings/")
-    }
+    # Populate the query settings with the base values.
+    clickhouse_query_settings: MutableMapping[str, Any] = dict(
+        _query_settings_dict("query_settings")
+    )
 
     if async_override:
-        for k, v in all_confs.items():
-            if k.startswith("async_query_settings/"):
-                clickhouse_query_settings[k.split("/", 1)[1]] = v
+        clickhouse_query_settings.update(_query_settings_dict("async_query_settings"))
 
     if override_prefix:
-        for k, v in all_confs.items():
-            if k.startswith(f"{override_prefix}/query_settings/"):
-                clickhouse_query_settings[k.split("/", 2)[2]] = v
+        clickhouse_query_settings.update(
+            _query_settings_override("query_settings_by_prefix", override_prefix)
+        )
 
     if referrer:
-        for k, v in all_confs.items():
-            if k.startswith(f"referrer/{referrer}/query_settings/"):
-                clickhouse_query_settings[k.split("/", 3)[3]] = v
+        clickhouse_query_settings.update(
+            _query_settings_override("query_settings_by_referrer", referrer)
+        )
 
     return clickhouse_query_settings
 
