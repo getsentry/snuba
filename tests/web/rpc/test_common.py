@@ -268,6 +268,7 @@ def _collect_column_names(expr: Expression) -> set[str]:
 
 _TYPED_ARRAY_COLUMNS = {
     "attributes_array_string",
+    "attributes_array_int",
     "attributes_array_float",
     "attributes_array_bool",
 }
@@ -276,8 +277,8 @@ _TYPED_ARRAY_COLUMNS = {
 class TestTraceItemFiltersArrayMapColumns:
     """Array predicates read the typed ``attributes_array_*`` map columns when
     ``use_array_map_columns`` is set, and the legacy ``attributes_array`` JSON
-    column otherwise. The int column is intentionally not read (ints are
-    double-written into ``attributes_array_float``)."""
+    column otherwise. All four typed columns are read: unlike the scalar
+    double-write, array ints live only in ``attributes_array_int``."""
 
     def _array_filter(
         self,
