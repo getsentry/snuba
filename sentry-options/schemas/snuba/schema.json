@@ -512,6 +512,36 @@
       "type": "integer",
       "default": 5,
       "description": "Window in minutes for which a project that recently received replacements is kept in the auto-replacements bypass set. Migrated from runtime config replacements_expiry_window_minutes."
+    },
+    "configurable_component_overrides": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "default": {},
+      "description": "Override values for ConfigurableComponent (allocation policy and storage-routing strategy) configs, keyed by the fully-qualified config key '{resource}.{ClassName}.{config}' (parameterized configs append '.{param}:{value},...', sorted, with '.'/','/':' in param names/values escaped as __dot_literal__/__comma_literal__/__colon_literal__). Values are strings coerced to each config's declared type (bool/int/float/str) on read. Authoritative source for these configs; a key absent here falls back to the legacy Redis runtime config and then the code default. Migrated from per-component runtime config of the same key."
+    },
+    "storage_routing_sampled_too_low_threshold": {
+      "type": "object",
+      "additionalProperties": { "type": "integer" },
+      "default": {},
+      "description": "Dict mapping a storage-routing strategy class name to its sampled-too-low threshold; the special key 'StorageRouting' sets the global default applied when a strategy has no entry. Strategies with neither entry use 1000. Migrated from per-strategy runtime config <ClassName>.sampled_too_low_threshold."
+    },
+    "storage_routing_time_budget_ms": {
+      "type": "object",
+      "additionalProperties": { "type": "integer" },
+      "default": {},
+      "description": "Dict mapping a storage-routing strategy class name to its query time budget in milliseconds; the special key 'StorageRouting' sets the global default applied when a strategy has no entry. Strategies with neither entry use 8000. Migrated from per-strategy runtime config <ClassName>.time_budget_ms."
+    },
+    "storage_routing_max_items_before_downsampling": {
+      "type": "object",
+      "additionalProperties": { "type": "integer" },
+      "default": {},
+      "description": "Dict mapping an outcomes-based routing strategy class name to the global max number of items before downsampling (the per-org override goes through configurable_component_overrides). Strategies with no entry use 1000000000. Migrated from per-strategy runtime config <ClassName>.max_items_before_downsampling."
+    },
+    "storage_routing_min_timerange_to_query_outcomes": {
+      "type": "object",
+      "additionalProperties": { "type": "integer" },
+      "default": {},
+      "description": "Dict mapping an outcomes-based routing strategy class name to the minimum query time range in seconds for which outcomes are queried. Strategies with no entry use 14400 (4 hours). Migrated from per-strategy runtime config <ClassName>.min_timerange_to_query_outcomes."
     }
   }
 }

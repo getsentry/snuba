@@ -27,7 +27,7 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 
-from snuba import environment, settings, state
+from snuba import environment, settings
 from snuba.configs.configuration import (
     ConfigurableComponent,
     ConfigurableComponentData,
@@ -52,7 +52,11 @@ from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
 from snuba.query.allocation_policies.utils import get_max_bytes_to_read
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import record_query
-from snuba.state.sentry_options import get_bool_option, get_int_option
+from snuba.state.sentry_options import (
+    get_bool_option,
+    get_int_option,
+    get_mapped_int_option,
+)
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import import_submodules_in_directory
@@ -619,12 +623,17 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         pass
 
     def _get_sampled_too_low_threshold(self) -> int:
+        # Per-strategy override, falling back to the global "StorageRouting"
+        # default, then the constant. The dict is keyed by routing-strategy class
+        # name (or DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX for the global value).
         default = 1000
         return (
-            state.get_int_config(
-                f"{self.class_name()}.sampled_too_low_threshold",
-                state.get_int_config(
-                    f"{DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX}.sampled_too_low_threshold",
+            get_mapped_int_option(
+                "storage_routing_sampled_too_low_threshold",
+                self.class_name(),
+                get_mapped_int_option(
+                    "storage_routing_sampled_too_low_threshold",
+                    DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX,
                     default,
                 )
                 or default,
@@ -639,10 +648,12 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         """
         default = 8000
         return (
-            state.get_int_config(
-                f"{self.class_name()}.time_budget_ms",
-                state.get_int_config(
-                    f"{DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX}.time_budget_ms",
+            get_mapped_int_option(
+                "storage_routing_time_budget_ms",
+                self.class_name(),
+                get_mapped_int_option(
+                    "storage_routing_time_budget_ms",
+                    DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX,
                     default,
                 )
                 or default,

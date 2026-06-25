@@ -8,11 +8,22 @@ from snuba.state import delete_config as delete_runtime_config
 from snuba.state import get_all_configs as get_all_runtime_configs
 from snuba.state import get_config as get_runtime_config
 from snuba.state import set_config as set_runtime_config
+from snuba.state.sentry_options import get_option
 from snuba.utils.registered_class import RegisteredClass
 
 logger = logging.getLogger("snuba.configurable_component")
 
 T = TypeVar("T", bound="ConfigurableComponent")
+
+# Single sentry-options dict holding all ConfigurableComponent (allocation
+# policy / routing strategy) config overrides, keyed by the same fully-qualified
+# runtime-config key these configs have always used
+# (``{resource}.{ClassName}.{config}[.{param}:{value},...]``). Values are stored
+# as strings and coerced to each config's declared ``value_type`` on read. This
+# is the authoritative, centrally-managed (sentry-options-automator) source; when
+# a key is absent we fall back to the legacy Redis runtime config so existing
+# values keep working during the transition.
+CONFIGURABLE_COMPONENT_OVERRIDES_KEY = "configurable_component_overrides"
 
 
 class InvalidConfig(Exception):
@@ -389,20 +400,47 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
     def _get_hash(self) -> str:
         return self.component_namespace()
 
+    @staticmethod
+    def __coerce_override(value: Any, config_definition: "Configuration") -> Any:
+        """Coerce a sentry-options override (stored as a string) to the config's
+        declared ``value_type``. Falls back to the definition default if the
+        stored value can't be coerced."""
+        value_type = config_definition.value_type
+        try:
+            if value_type is bool:
+                if isinstance(value, bool):
+                    return value
+                if isinstance(value, (int, float)):
+                    return bool(value)
+                return str(value).strip().lower() in ("1", "true", "yes", "on")
+            return value_type(value)
+        except (TypeError, ValueError):
+            return config_definition.default
+
     def get_config_value(
         self,
         config_key: str,
         params: dict[str, Any] = {},
         validate: bool = True,
     ) -> Any:
-        """Returns value of a configuration on this ConfigurableComponent, or the default if none exists in Redis."""
+        """Returns value of a configuration on this ConfigurableComponent, or the default if none is set.
+
+        sentry-options (managed centrally via the sentry-options-automator) is the
+        authoritative source. When a key is absent there we fall back to the
+        legacy Redis runtime config and finally the code default, so values set
+        the old way keep working during the transition.
+        """
         config_definition = (
             self._validate_config_params(config_key, params)
             if validate
             else self.config_definitions()[config_key]
         )
+        full_key = self.__build_runtime_config_key(config_key, params)
+        overrides = get_option(CONFIGURABLE_COMPONENT_OVERRIDES_KEY, {})
+        if isinstance(overrides, dict) and full_key in overrides:
+            return self.__coerce_override(overrides[full_key], config_definition)
         return get_runtime_config(
-            key=self.__build_runtime_config_key(config_key, params),
+            key=full_key,
             default=config_definition.default,
             config_key=self._get_hash(),
         )

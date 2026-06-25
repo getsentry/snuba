@@ -12,7 +12,6 @@ from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageCon
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
-from snuba import state
 from snuba.configs.configuration import Configuration, ResourceIdentifier
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
@@ -401,16 +400,23 @@ def test_get_time_budget() -> None:
     strategy = RoutingStrategySelectsTier8()
 
     # Test case 1: No config specified - should return default 8000
-
     assert strategy._get_time_budget_ms() == 8000
 
     # Test case 2: Global config specified - should return global value
-    state.set_config("StorageRouting.time_budget_ms", 5000)
-    assert strategy._get_time_budget_ms() == 5000
+    with override_options("snuba", {"storage_routing_time_budget_ms": {"StorageRouting": 5000}}):
+        assert strategy._get_time_budget_ms() == 5000
 
-    # Test case 3: Strategy specific config specified - should return strategy value
-    state.set_config("RoutingStrategySelectsTier8.time_budget_ms", 3000)
-    assert strategy._get_time_budget_ms() == 3000
+    # Test case 3: Strategy specific config takes precedence over the global one
+    with override_options(
+        "snuba",
+        {
+            "storage_routing_time_budget_ms": {
+                "StorageRouting": 5000,
+                "RoutingStrategySelectsTier8": 3000,
+            }
+        },
+    ):
+        assert strategy._get_time_budget_ms() == 3000
 
 
 @pytest.mark.redis_db
@@ -419,6 +425,10 @@ def test_strategy_exceeds_time_budget() -> None:
         pass
 
     with (
+        override_options(
+            "snuba",
+            {"storage_routing_time_budget_ms": {"OutcomesBasedRoutingStrategy": 8000}},
+        ),
         mock.patch(
             "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.record_query"
         ) as record_query,
@@ -431,7 +441,6 @@ def test_strategy_exceeds_time_budget() -> None:
             return_value=get_query_result(12000),
         ),
     ):
-        state.set_config("OutcomesBasedRoutingStrategy.time_budget_ms", 8000)
         EndpointTimeSeries().execute(_get_in_msg())
         recorded_payload = record_query.mock_calls[0].args[0]
         assert recorded_payload["query_list"][0]["stats"]["extra_info"][
@@ -449,6 +458,10 @@ def test_outcomes_based_routing_metrics_sampled_too_low() -> None:
         pass
 
     with (
+        override_options(
+            "snuba",
+            {"storage_routing_time_budget_ms": {"OutcomesBasedRoutingStrategy": 8000}},
+        ),
         mock.patch(
             "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.record_query"
         ) as record_query,
@@ -461,7 +474,6 @@ def test_outcomes_based_routing_metrics_sampled_too_low() -> None:
             return_value=get_query_result(900),
         ),
     ):
-        state.set_config("OutcomesBasedRoutingStrategy.time_budget_ms", 8000)
         EndpointTimeSeries().execute(_get_in_msg())
         recorded_payload = record_query.mock_calls[0].args[0]
         assert recorded_payload["query_list"][0]["stats"]["extra_info"][
