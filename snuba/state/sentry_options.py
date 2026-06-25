@@ -76,14 +76,7 @@ def get_option(key: str, default: OptionValue) -> OptionValue:
         return default
 
 
-def get_bool_option(key: str, default: bool) -> bool:
-    """Read ``key`` as a bool. Replaces ``state.get_int_config`` used as a flag.
-
-    The schema type for these keys is ``boolean``, so ``get`` returns a real
-    ``bool``; the int/str coercion below only guards against a misconfigured
-    value and otherwise falls back to ``default``.
-    """
-    value = get_option(key, default)
+def _coerce_bool(value: OptionValue, default: bool) -> bool:
     if isinstance(value, bool):
         return value
     if isinstance(value, (int, float)):
@@ -93,9 +86,7 @@ def get_bool_option(key: str, default: bool) -> bool:
     return default
 
 
-def get_int_option(key: str, default: int) -> int:
-    """Read ``key`` as an int. Counterpart to ``state.get_int_config``."""
-    value = get_option(key, default)
+def _coerce_int(value: OptionValue, default: int) -> int:
     if isinstance(value, bool):
         return int(value)
     if isinstance(value, (int, float, str)):
@@ -106,9 +97,7 @@ def get_int_option(key: str, default: int) -> int:
     return default
 
 
-def get_float_option(key: str, default: float) -> float:
-    """Read ``key`` as a float. Counterpart to ``state.get_float_config``."""
-    value = get_option(key, default)
+def _coerce_float(value: OptionValue, default: float) -> float:
     if isinstance(value, bool):
         return float(value)
     if isinstance(value, (int, float, str)):
@@ -119,9 +108,71 @@ def get_float_option(key: str, default: float) -> float:
     return default
 
 
-def get_str_option(key: str, default: str) -> str:
-    """Read ``key`` as a str. Counterpart to ``state.get_str_config``."""
-    value = get_option(key, default)
+def _coerce_str(value: OptionValue, default: str) -> str:
     if isinstance(value, str):
         return value
     return default
+
+
+def get_bool_option(key: str, default: bool) -> bool:
+    """Read ``key`` as a bool. Replaces ``state.get_int_config`` used as a flag.
+
+    The schema type for these keys is ``boolean``, so ``get`` returns a real
+    ``bool``; the int/str coercion only guards against a misconfigured value
+    and otherwise falls back to ``default``.
+    """
+    return _coerce_bool(get_option(key, default), default)
+
+
+def get_int_option(key: str, default: int) -> int:
+    """Read ``key`` as an int. Counterpart to ``state.get_int_config``."""
+    return _coerce_int(get_option(key, default), default)
+
+
+def get_float_option(key: str, default: float) -> float:
+    """Read ``key`` as a float. Counterpart to ``state.get_float_config``."""
+    return _coerce_float(get_option(key, default), default)
+
+
+def get_str_option(key: str, default: str) -> str:
+    """Read ``key`` as a str. Counterpart to ``state.get_str_config``."""
+    return _coerce_str(get_option(key, default), default)
+
+
+def get_mapped_option(key: str, name: str, default: OptionValue) -> OptionValue:
+    """Read one entry from a dict-typed option keyed by a dynamic ``name``.
+
+    Some runtime-config keys were named dynamically — one Redis key per
+    storage, topic, dataset, or bucket (``f"{prefix}_{name}"``). A static
+    sentry-options schema cannot enumerate those, so the migration collapses
+    each family into a single ``object`` option ``key`` — a dictionary declared
+    with ``additionalProperties`` and defaulting to ``{}`` — whose value maps
+    the dynamic ``name`` to its value.
+
+    Returns the entry for ``name``; falls back to ``default`` when the option
+    is unset/empty, is not a dictionary, or has no entry for ``name``. Because
+    a dict option allows arbitrary keys of the declared value type, the typed
+    wrappers below still coerce the entry defensively.
+    """
+    mapping = get_option(key, {})
+    if isinstance(mapping, dict) and name in mapping:
+        return mapping[name]
+    return default
+
+
+def get_mapped_int_option(key: str, name: str, default: int) -> int:
+    """``get_int_option`` for one entry of a JSON-object option (see
+    :func:`get_mapped_option`)."""
+    return _coerce_int(get_mapped_option(key, name, default), default)
+
+
+def get_mapped_float_option(key: str, name: str, default: float) -> float:
+    """``get_float_option`` for one entry of a JSON-object option (see
+    :func:`get_mapped_option`)."""
+    return _coerce_float(get_mapped_option(key, name, default), default)
+
+
+def get_mapped_str_option(key: str, name: str, default: str) -> str:
+    """``get_str_option`` for one entry of a JSON-object option (see
+    :func:`get_mapped_option`)."""
+    return _coerce_str(get_mapped_option(key, name, default), default)

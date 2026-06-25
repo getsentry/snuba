@@ -35,7 +35,11 @@ from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state import get_int_config
-from snuba.state.sentry_options import get_int_option, get_str_option
+from snuba.state.sentry_options import (
+    get_int_option,
+    get_mapped_int_option,
+    get_str_option,
+)
 from snuba.utils.metrics import MetricsBackend
 from snuba.web import QueryException
 from snuba.web.bulk_delete_query import construct_or_conditions, construct_query
@@ -206,7 +210,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
 
         split_enabled = bool(
             self.__partition_column
-            and get_int_config(f"lw_deletes_split_by_partition_{self.__storage_name}", default=0)
+            and get_mapped_int_option("lw_deletes_split_by_partition", self.__storage_name, 0)
         )
 
         for table in self.__tables:

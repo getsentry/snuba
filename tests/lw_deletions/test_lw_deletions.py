@@ -230,6 +230,7 @@ def _make_single_message(
     create=True,
 )
 @pytest.mark.redis_db
+@override_options("snuba", {"lw_deletes_split_by_partition": {"search_issues": 1}})
 def test_split_by_partition_enabled(mock_execute: Mock, mock_num_mutations: Mock) -> None:
     """
     When partition splitting is enabled and system.parts returns 3 Monday dates,
@@ -238,8 +239,6 @@ def test_split_by_partition_enabled(mock_execute: Mock, mock_num_mutations: Mock
     commit_step = Mock()
     metrics = Mock()
     storage = get_writable_storage(StorageKey("search_issues"))
-
-    state.set_config("lw_deletes_split_by_partition_search_issues", 1)
 
     format_query = FormatQuery(commit_step, storage, SearchIssuesFormatter(), metrics)
 
@@ -287,9 +286,7 @@ def test_split_by_partition_disabled(mock_execute: Mock, mock_num_mutations: Moc
     metrics = Mock()
     storage = get_writable_storage(StorageKey("search_issues"))
 
-    # Ensure config is off (default)
-    state.set_config("lw_deletes_split_by_partition_search_issues", 0)
-
+    # Config is off by default (no entry in the lw_deletes_split_by_partition dict).
     strategy = BatchStepCustom(
         max_batch_size=8,
         max_batch_time=1000,
@@ -307,6 +304,7 @@ def test_split_by_partition_disabled(mock_execute: Mock, mock_num_mutations: Moc
 @patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
+@override_options("snuba", {"lw_deletes_split_by_partition": {"search_issues": 1}})
 def test_split_by_partition_redis_tracking(mock_execute: Mock, mock_num_mutations: Mock) -> None:
     """
     Issue a batch with partition splitting enabled. Verify Redis SET is populated.
@@ -316,8 +314,6 @@ def test_split_by_partition_redis_tracking(mock_execute: Mock, mock_num_mutation
     commit_step = Mock()
     metrics = Mock()
     storage = get_writable_storage(StorageKey("search_issues"))
-
-    state.set_config("lw_deletes_split_by_partition_search_issues", 1)
 
     partition_dates = ["2024-01-15", "2024-01-22"]
 
@@ -397,6 +393,7 @@ def test_split_by_partition_redis_tracking(mock_execute: Mock, mock_num_mutation
 @patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
+@override_options("snuba", {"lw_deletes_split_by_partition": {"search_issues": 1}})
 def test_split_by_partition_fallback(mock_execute: Mock, mock_num_mutations: Mock) -> None:
     """
     When partition splitting is enabled but system.parts returns no partitions,
@@ -405,8 +402,6 @@ def test_split_by_partition_fallback(mock_execute: Mock, mock_num_mutations: Moc
     commit_step = Mock()
     metrics = Mock()
     storage = get_writable_storage(StorageKey("search_issues"))
-
-    state.set_config("lw_deletes_split_by_partition_search_issues", 1)
 
     format_query = FormatQuery(commit_step, storage, SearchIssuesFormatter(), metrics)
 

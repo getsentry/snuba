@@ -7,6 +7,10 @@ from snuba.state.sentry_options import (
     get_bool_option,
     get_float_option,
     get_int_option,
+    get_mapped_float_option,
+    get_mapped_int_option,
+    get_mapped_option,
+    get_mapped_str_option,
     get_option,
     get_str_option,
 )
@@ -76,3 +80,53 @@ def test_unexpected_error_falls_back_to_default() -> None:
         assert get_int_option("default_tier", 7) == 7
         assert get_float_option("rpc_logging_sample_rate", 1.5) == 1.5
         assert get_str_option("some_str", "fallback") == "fallback"
+
+
+def test_mapped_option_returns_entry_for_name() -> None:
+    # A dict-typed option (additionalProperties) keyed by the dynamic name.
+    with override_options(
+        SNUBA_OPTIONS_NAMESPACE,
+        {"lw_deletes_split_by_partition": {"search_issues": 1, "errors": 0}},
+    ):
+        assert get_mapped_int_option("lw_deletes_split_by_partition", "search_issues", 9) == 1
+        assert get_mapped_int_option("lw_deletes_split_by_partition", "errors", 9) == 0
+
+
+def test_mapped_option_falls_back_for_absent_name() -> None:
+    with override_options(
+        SNUBA_OPTIONS_NAMESPACE,
+        {"lw_deletes_killswitch": {"search_issues": "[1]"}},
+    ):
+        assert get_mapped_str_option("lw_deletes_killswitch", "search_issues", "") == "[1]"
+        # A name with no entry falls back to the caller default.
+        assert get_mapped_str_option("lw_deletes_killswitch", "transactions", "x") == "x"
+
+
+def test_mapped_option_falls_back_when_option_unset() -> None:
+    # Each dict option defaults to {} (empty), so every name falls back to the
+    # caller-supplied default — preserving the pre-migration per-key default.
+    assert get_mapped_int_option("lw_deletes_split_by_partition", "search_issues", 7) == 7
+    assert get_mapped_str_option("lw_deletes_killswitch", "search_issues", "d") == "d"
+    assert get_mapped_float_option("validate_schema_sample_rate", "events", 1.0) == 1.0
+
+
+def test_mapped_option_coerces_entry_to_requested_type() -> None:
+    # A number-typed dict may hold an integer JSON value; the typed accessor
+    # coerces it to float.
+    with override_options(
+        SNUBA_OPTIONS_NAMESPACE,
+        {"validate_schema_sample_rate": {"events": 1}},
+    ):
+        result = get_mapped_float_option("validate_schema_sample_rate", "events", 0.0)
+        assert result == 1.0
+        assert isinstance(result, float)
+
+
+def test_mapped_option_base_accessor_and_unknown_option() -> None:
+    with override_options(
+        SNUBA_OPTIONS_NAMESPACE,
+        {"lw_deletes_killswitch": {"search_issues": "[1]"}},
+    ):
+        assert get_mapped_option("lw_deletes_killswitch", "search_issues", "") == "[1]"
+    # An option absent from the schema falls back to the caller default.
+    assert get_mapped_option("option_that_does_not_exist", "x", "fallback") == "fallback"

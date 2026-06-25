@@ -996,9 +996,9 @@ def test_clickhouse_settings_applied_to_query() -> None:
 
 @pytest.mark.events_db
 @pytest.mark.redis_db
+@override_options("snuba", {"ignore_consistent_queries_sample_rate": {"events": 1.0}})
 def test_db_query_ignore_consistent() -> None:
     query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
-    state.set_config("events_ignore_consistent_queries_sample_rate", 1)
 
     query_metadata_list: list[ClickhouseQueryMetadata] = []
     stats: dict[str, Any] = {}

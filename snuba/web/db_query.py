@@ -58,7 +58,7 @@ from snuba.state.cache.redis.backend import (
 )
 from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import RateLimitExceeded
-from snuba.state.sentry_options import get_bool_option
+from snuba.state.sentry_options import get_bool_option, get_mapped_float_option
 from snuba.util import force_bytes
 from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.metrics.timer import Timer
@@ -429,9 +429,10 @@ def _raw_query(
     consistent = query_settings.get_consistent()
     stats["consistent"] = consistent
     if consistent:
-        sample_rate = state.get_config(f"{dataset_name}_ignore_consistent_queries_sample_rate", 0)
-        assert sample_rate is not None
-        ignore_consistent = random.random() < float(sample_rate)
+        sample_rate = get_mapped_float_option(
+            "ignore_consistent_queries_sample_rate", dataset_name, 0.0
+        )
+        ignore_consistent = random.random() < sample_rate
         if not ignore_consistent:
             clickhouse_query_settings["load_balancing"] = "in_order"
             clickhouse_query_settings["max_threads"] = 1

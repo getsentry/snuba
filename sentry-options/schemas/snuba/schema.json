@@ -341,6 +341,36 @@
       "type": "string",
       "default": "",
       "description": "Substring-matched list of generic-metrics use case ids to drop in the consumer; a message is skipped when its use_case_id appears in this string."
+    },
+    "lw_deletes_killswitch": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "default": {},
+      "description": "Dict mapping storage name to a string of project ids; a lightweight delete is dropped when its project id appears in that storage's entry. Storages with no entry are not killswitched. Migrated from per-storage runtime config lw_deletes_killswitch_<storage>."
+    },
+    "lw_deletes_split_by_partition": {
+      "type": "object",
+      "additionalProperties": { "type": "integer" },
+      "default": {},
+      "description": "Dict mapping storage name to a flag; a non-zero value enables splitting that storage's lightweight deletes by partition. Storages with no entry are not split. Migrated from per-storage runtime config lw_deletes_split_by_partition_<storage>."
+    },
+    "validate_schema_sample_rate": {
+      "type": "object",
+      "additionalProperties": { "type": "number" },
+      "default": {},
+      "description": "Dict mapping snuba logical topic name to a [0,1] sample rate for JSON-schema validation of consumed messages. Topics with no entry default to 1.0 (always validate). Migrated from per-topic runtime config validate_schema_<topic>."
+    },
+    "ignore_consistent_queries_sample_rate": {
+      "type": "object",
+      "additionalProperties": { "type": "number" },
+      "default": {},
+      "description": "Dict mapping dataset name to a [0,1] probability of dropping consistency for an otherwise-consistent query. Datasets with no entry default to 0 (never drop consistency). Migrated from per-dataset runtime config <dataset>_ignore_consistent_queries_sample_rate."
+    },
+    "mem_rate_limit_per_sec": {
+      "type": "object",
+      "additionalProperties": { "type": "number" },
+      "default": {},
+      "description": "Dict mapping in-process rate-limit bucket name to a maximum operations-per-second. Buckets with no entry are unlimited (rate limiter off). Migrated from per-bucket runtime config mem_rate_limit_per_sec_<bucket>."
     }
   }
 }

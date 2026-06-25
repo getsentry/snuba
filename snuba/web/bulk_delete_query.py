@@ -25,8 +25,7 @@ from snuba.query.dsl import literal
 from snuba.query.exceptions import InvalidQueryException, NoRowsToDeleteException
 from snuba.query.expressions import Expression
 from snuba.reader import Result
-from snuba.state import get_str_config
-from snuba.state.sentry_options import get_bool_option
+from snuba.state.sentry_options import get_bool_option, get_mapped_str_option
 from snuba.utils.metrics.util import with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.schemas import ColumnValidator, InvalidColumnType
@@ -374,5 +373,5 @@ def construct_or_conditions(
 
 
 def should_use_killswitch(storage_name: str, project_id: str) -> bool:
-    killswitch_config = get_str_config(f"lw_deletes_killswitch_{storage_name}", default="")
+    killswitch_config = get_mapped_str_option("lw_deletes_killswitch", storage_name, "")
     return project_id in killswitch_config if killswitch_config else False

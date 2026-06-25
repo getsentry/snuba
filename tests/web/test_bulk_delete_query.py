@@ -17,7 +17,6 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.lw_deletions.types import AttributeConditions
 from snuba.query.exceptions import InvalidQueryException
-from snuba.state import set_config
 from snuba.utils.manage_topics import create_topics
 from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.topics import Topic
@@ -111,12 +110,12 @@ def test_deletes_not_enabled_runtime_config() -> None:
 @pytest.mark.redis_db
 @patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10)
 @patch("snuba.web.bulk_delete_query.produce_delete_query")
+@override_options("snuba", {"lw_deletes_killswitch": {"search_issues": "[1]"}})
 def test_deletes_killswitch(mock_produce_query: Mock, mock_enforce_rows: Mock) -> None:
     storage = get_writable_storage(StorageKey("search_issues"))
     conditions = {"project_id": [1], "group_id": [1, 2, 3, 4]}
     attr_info = get_attribution_info()
 
-    set_config("lw_deletes_killswitch_search_issues", "[1]")
     delete_from_storage(storage, conditions, attr_info)
     mock_produce_query.assert_not_called()
 
