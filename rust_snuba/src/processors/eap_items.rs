@@ -313,8 +313,8 @@ impl TryFrom<TraceItem> for EAPItem {
             project_id: from.project_id,
             item_type: from.item_type as u8,
             trace_id: Uuid::parse_str(&from.trace_id)?,
-            conversation_id: parse_uuid_or_random(&from.conversation_id),
-            session_id: parse_uuid_or_random(&from.session_id),
+            conversation_id: parse_uuid_or_random(&from.conversation_id, "conversation_id"),
+            session_id: parse_uuid_or_random(&from.session_id, "session_id"),
             item_id: read_item_id(from.item_id)?,
             timestamp: timestamp.seconds as u32,
             indexed_name,
@@ -390,15 +390,28 @@ fn fnv_1a(input: &[u8]) -> u32 {
 /// `session_id`) for storage in its non-nullable UUID column. The field
 /// arrives as a string that is empty when the producer did not set it.
 ///
-/// To avoid persisting the all-zero "magic" UUID — which would be
+/// The destination columns are `UUID`, so the only thing we can store is a
+/// valid UUID. To avoid persisting the all-zero "magic" UUID — which would be
 /// indistinguishable from a real (if absurd) all-zero id and would balloon the
-/// bloom-filter index with a single high-frequency value — any absent,
-/// unparseable, or explicitly-nil value is replaced with a fresh random UUID.
-/// A present, valid, non-nil id is stored as-is.
-fn parse_uuid_or_random(value: &str) -> Uuid {
+/// bloom-filter index with a single high-frequency value — an absent or
+/// explicitly-nil value is replaced with a fresh random UUID.
+///
+/// A *present* value that is not UUID-formatted is unexpected: the producer is
+/// supposed to send UUIDs. We can't store the raw string in a `UUID` column,
+/// so we emit the `eap_items.non_uuid_id` metric (tagged by field) to make
+/// such producers detectable, then randomize so the row still ingests rather
+/// than dropping an otherwise-valid item over an optional field.
+fn parse_uuid_or_random(value: &str, field: &str) -> Uuid {
+    if value.is_empty() {
+        return Uuid::new_v4();
+    }
     match Uuid::parse_str(value) {
         Ok(uuid) if !uuid.is_nil() => uuid,
-        _ => Uuid::new_v4(),
+        Ok(_) => Uuid::new_v4(),
+        Err(_) => {
+            counter!("eap_items.non_uuid_id", 1, "field" => field.to_string());
+            Uuid::new_v4()
+        }
     }
 }
 
