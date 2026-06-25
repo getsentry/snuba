@@ -427,7 +427,15 @@ class NativeDriverReader(Reader):
         # duplicated names are discarded at this stage.
         columns = {c[0]: i for i, c in enumerate(meta)}
 
-        data = [{column: row[index] for column, index in columns.items()} for row in data]
+        # Build the column-keyed row dicts by overwriting the source list in
+        # place rather than via a second list comprehension, so each row tuple is
+        # freed as its dict replacement is created instead of keeping the full
+        # tuple list and the full dict list alive at once.
+        if not isinstance(data, list):
+            data = list(data)
+        column_items = list(columns.items())
+        for i, row in enumerate(data):
+            data[i] = {column: row[index] for column, index in column_items}
 
         meta = [{"name": m[0], "type": m[1]} for m in [meta[i] for i in columns.values()]]
 
