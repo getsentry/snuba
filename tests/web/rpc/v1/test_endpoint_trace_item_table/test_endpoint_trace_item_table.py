@@ -3345,7 +3345,7 @@ class TestTraceItemTable(BaseApiTest):
         ]
 
     def test_virtual_column_like_filter_uses_backing_existence(self) -> None:
-        # LIKE (and null / default-value guards) build a mapContains existence
+        # LIKE (and null / default-value guards) build a has(mapKeys(...)) existence
         # check on the request key; for a virtual column that key is absent in
         # storage, so _apply_virtual_columns must rewrite the existence guard to
         # the backing column too — otherwise it matches nothing.
@@ -3965,15 +3965,17 @@ class TestArrayWildcardSearch(BaseApiTest):
                 {"arr_eq_flt": _double_array(0.0, 1.5, 2.0)},
                 {"arr_eq_flt": _double_array(0.1, 0.2)},
                 AttributeValue(val_float=1.5),
-                lambda row: any(
-                    isclose(e.val_double, 1.5)
-                    for e in row.val_array.values
-                    if e.WhichOneof("value") == "val_double"
-                )
-                or any(
-                    isclose(e.val_float, 1.5)
-                    for e in row.val_array.values
-                    if e.WhichOneof("value") == "val_float"
+                lambda row: (
+                    any(
+                        isclose(e.val_double, 1.5)
+                        for e in row.val_array.values
+                        if e.WhichOneof("value") == "val_double"
+                    )
+                    or any(
+                        isclose(e.val_float, 1.5)
+                        for e in row.val_array.values
+                        if e.WhichOneof("value") == "val_float"
+                    )
                 ),
                 id="val_float",
             ),

@@ -13,8 +13,10 @@ from snuba.clickhouse.columns import (
     Enum,
     FixedString,
     Float,
+    Int,
     IPv4,
     IPv6,
+    Map,
     String,
     UInt,
 )
@@ -61,6 +63,14 @@ test_data = [
         ("Array(Array(Nullable(UUID)))", "", "", ""),
         Array(Array(UUID(Modifiers(nullable=True)))),
     ),
+    # Map
+    (("Map(String, String)", "", "", ""), Map(String(), String())),
+    (("Map(String, UInt64)", "", "", ""), Map(String(), UInt(64))),
+    # Map with array values (typed array attribute columns)
+    (("Map(String, Array(String))", "", "", ""), Map(String(), Array(String()))),
+    (("Map(String, Array(Int64))", "", "", ""), Map(String(), Array(Int(64)))),
+    (("Map(String, Array(Float64))", "", "", ""), Map(String(), Array(Float(64)))),
+    (("Map(String, Array(Bool))", "", "", ""), Map(String(), Array(Bool()))),
     # Nullable
     (("Nullable(String)", "", "", ""), String(Modifiers(nullable=True))),
     (

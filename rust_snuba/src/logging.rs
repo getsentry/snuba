@@ -9,14 +9,25 @@ pub fn setup_logging() {
         .or_else(|_| EnvFilter::try_new("info"))
         .unwrap();
 
-    // Capture errors & warnings as exceptions, and also send everything at or above INFO as logs
-    // instead of breadcrumbs.
-    let sentry_layer =
-        sentry::integrations::tracing::layer().event_filter(|metadata| match *metadata.level() {
-            Level::ERROR | Level::WARN => EventFilter::Event | EventFilter::Log,
-            Level::INFO => EventFilter::Log,
+    // Only errors are forwarded to Sentry as issues. Warnings are operational
+    // noise far more often than they're actionable (e.g. consumer
+    // rebalance/shutdown timeouts), so they're kept as logs alongside
+    // everything at or above INFO, instead of breadcrumbs.
+    let sentry_layer = sentry::integrations::tracing::layer().event_filter(|metadata| {
+        match *metadata.level() {
+            // The usage accountant is a best-effort billing side channel. Its
+            // Kafka producer logs "Purged in queue/flight" at ERROR whenever the
+            // producer is flushed during a consumer shutdown/rebalance. These
+            // are transient and don't affect ingestion, so keep them as logs
+            // rather than issues (SNUBA-474, SNUBA-475).
+            Level::ERROR if metadata.target().starts_with("sentry_usage_accountant") => {
+                EventFilter::Log
+            }
+            Level::ERROR => EventFilter::Event | EventFilter::Log,
+            Level::WARN | Level::INFO => EventFilter::Log,
             Level::DEBUG | Level::TRACE => EventFilter::Ignore,
-        });
+        }
+    });
 
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer().json())

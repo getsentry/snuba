@@ -98,18 +98,15 @@ class EntityProcessingExecutor:
             # translate_query_and_apply_mappers to avoid cache conflicts.
             clickhouse_query = QueryTranslator(mappers).translate(query)
 
-        with sentry_sdk.start_span(
-            op="build_plan.storage_query_plan_builder", description="set_from_clause"
-        ):
-            clickhouse_query.set_from_clause(
-                get_query_data_source(
-                    storage.get_schema().get_data_source(),
-                    allocation_policies=storage.get_allocation_policies(),
-                    final=query.get_final(),
-                    sampling_rate=query.get_sample(),
-                    storage_key=storage.get_storage_key(),
-                )
+        clickhouse_query.set_from_clause(
+            get_query_data_source(
+                storage.get_schema().get_data_source(),
+                allocation_policies=storage.get_allocation_policies(),
+                final=query.get_final(),
+                sampling_rate=query.get_sample(),
+                storage_key=storage.get_storage_key(),
             )
+        )
 
         if settings.get_dry_run():
             explain_meta.add_transform_step(

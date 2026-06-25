@@ -19,7 +19,7 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import combine_or_conditions
 from snuba.query.data_source.simple import Entity, LogicalDataSource
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column
+from snuba.query.dsl import column, map_key_exists
 from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -64,12 +64,11 @@ def _build_conditions(request: TraceItemAttributeValuesRequest) -> Expression:
     except KeyError as e:
         raise BadSnubaRPCRequestException("Only string and boolean attributes can be used") from e
 
-    # Use mapContains (not has) for key existence: it's the correct ClickHouse
-    # function for Map columns and is handled by HashBucketFunctionTransformer
-    # for the bucketed string/float maps as well as the un-bucketed bool map.
+    # Key existence via map_key_exists (has(mapKeys(col), key)); routed to the
+    # right bucket for the bucketed string/float maps and the un-bucketed bool map.
     key_existence = combine_or_conditions(
         [
-            f.mapContains(column(attributes_column), name)
+            map_key_exists(column(attributes_column), name)
             for name in _map_key_names_for_existence_check(request.key)
         ]
     )

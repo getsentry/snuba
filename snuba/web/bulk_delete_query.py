@@ -12,8 +12,12 @@ from snuba import environment, settings
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
+from snuba.clusters.cluster import UndefinedClickhouseCluster, get_cluster
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.deletion_settings import DeletionSettings, get_trace_item_type_name
+from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import WritableTableStorage
+from snuba.datasets.storages.factory import get_config_built_storages
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.lw_deletions.types import AttributeConditions, ConditionsBag, ConditionsType
 from snuba.query.conditions import combine_or_conditions
@@ -270,19 +274,63 @@ def _serialize_attribute_conditions(
     return result
 
 
+def _count_storage_key_by_local_table(
+    storage: WritableTableStorage,
+) -> dict[str, StorageKey]:
+    """
+    Maps each read/write local table to the read-only replica storage that its
+    rows should be counted against. Counting is a read-only query, so we run it
+    against the `*_ro` storages (in the `<storage set>_ro` storage set), keeping
+    it off the read/write cluster that handles ingestion and deletes. Each table
+    (e.g. the downsampled EAP tables) maps to its own replica so its rows are
+    counted individually.
+
+    Returns an empty mapping when there is no read-only replica to count against
+    (a storage without a read-only storage set, e.g. search_issues, or an
+    environment where the read-only cluster is not configured, e.g. self-hosted),
+    in which case the caller counts against the read/write table instead.
+    """
+    readonly_storage_set = StorageSetKey(f"{storage.get_storage_set_key().value}_ro")
+    mapping: dict[str, StorageKey] = {}
+    for storage_key, candidate in get_config_built_storages().items():
+        if candidate.get_storage_set_key() != readonly_storage_set:
+            continue
+        schema = candidate.get_schema()
+        if isinstance(schema, TableSchema):
+            mapping[schema.get_local_table_name()] = storage_key
+
+    # The read-only storages are always built from config, but their cluster may
+    # not be configured in this environment. Only route counts to them when it
+    # is; otherwise fall back to counting against the read/write table.
+    if mapping:
+        try:
+            get_cluster(readonly_storage_set)
+        except UndefinedClickhouseCluster:
+            return {}
+    return mapping
+
+
 def delete_from_tables(
     storage: WritableTableStorage,
     tables: Sequence[str],
     conditions: ConditionsBag,
     attribution_info: AttributionInfo,
 ) -> dict[str, Result]:
+    # Each table (the read/write table plus its downsampled counterparts) holds
+    # a different number of matching rows, so we count each one individually.
+    # Counting is read-only, so it runs against the read-only replica storages
+    # while the deletes themselves still target the read/write tables below.
+    count_storage_by_local = _count_storage_key_by_local_table(storage)
+    where_clause = _construct_condition(storage, conditions)
+
     highest_rows_to_delete = 0
     result: dict[str, Result] = {}
     for table in tables:
-        where_clause = _construct_condition(storage, conditions)
         query = construct_query(storage, table, where_clause)
         try:
-            num_rows_to_delete = _enforce_max_rows(query)
+            num_rows_to_delete = _enforce_max_rows(
+                query, count_storage_key=count_storage_by_local.get(table)
+            )
             highest_rows_to_delete = max(highest_rows_to_delete, num_rows_to_delete)
             result[table] = {"data": [{"rows_to_delete": num_rows_to_delete}]}
         except NoRowsToDeleteException:

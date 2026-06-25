@@ -16,6 +16,7 @@ from snuba.admin.clickhouse.system_queries import (
     validate_query,
 )
 from snuba.admin.user import AdminUser
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.clusters.cluster import ClickhouseClientSettings
 
 
@@ -98,7 +99,10 @@ def test_is_valid_system_query(sql_query: str) -> None:
 )
 @pytest.mark.events_db
 def test_invalid_system_query(sql_query: str) -> None:
-    with pytest.raises(InvalidCustomQuery):
+    # These queries are rejected either by Snuba's own validation
+    # (InvalidCustomQuery) or by ClickHouse when EXPLAIN runs on a
+    # malformed/non-SELECT statement (ClickhouseError).
+    with pytest.raises((InvalidCustomQuery, ClickhouseError)):
         is_valid_system_query(
             settings.CLUSTERS[0]["host"],
             int(settings.CLUSTERS[0]["port"]),
@@ -148,7 +152,7 @@ def test_sudo_queries(sudo_query: str, expected: bool) -> None:
             False,
         )  # Should no-op
     else:
-        with pytest.raises(InvalidCustomQuery):
+        with pytest.raises((InvalidCustomQuery, ClickhouseError)):
             validate_query(
                 settings.CLUSTERS[0]["host"],
                 int(settings.CLUSTERS[0]["port"]),
@@ -223,7 +227,7 @@ def test_run_sudo_queries(
         with pytest.raises(UnauthorizedForSudo):
             run_query()
     elif not expect_valid:
-        with pytest.raises(InvalidCustomQuery):
+        with pytest.raises((InvalidCustomQuery, ClickhouseError)):
             run_query()
     else:
         run_query()

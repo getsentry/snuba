@@ -942,10 +942,10 @@ wheels = [
 
 [[package]]
 name = "sentry-conventions"
-version = "0.11.0"
+version = "0.13.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_conventions-0.11.0-py3-none-any.whl", hash = "sha256:881581e4319620d1d798306a0a631fbc1265fab9581dc268401982999f70cc5c" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_conventions-0.13.0-py3-none-any.whl", hash = "sha256:9a58f74b3ef6f11f2b71408775107d9c0b395dc583ae8949bb9f5717a9c3d005" },
 ]
 
 [[package]]
@@ -963,7 +963,7 @@ wheels = [
 
 [[package]]
 name = "sentry-kafka-schemas"
-version = "2.1.24"
+version = "2.1.36"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
     { name = "fastjsonschema", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -975,12 +975,12 @@ dependencies = [
     { name = "typing-extensions", version = "4.15.0", source = { registry = "https://pypi.devinfra.sentry.io/simple" }, marker = "(python_full_version >= '3.15' and sys_platform == 'darwin') or (python_full_version >= '3.15' and sys_platform == 'linux')" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_kafka_schemas-2.1.24-py2.py3-none-any.whl", hash = "sha256:50ca2ce88598b2a2eacdeb609a783153c6a7bb4e3f5e3bc4121690b8a3c2f293" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_kafka_schemas-2.1.36-py2.py3-none-any.whl", hash = "sha256:f3f5c1aa16e9972840d06038c7085a5e1bd50e1fdbdbf42e99b33ec56ccb4ace" },
 ]
 
 [[package]]
 name = "sentry-protos"
-version = "0.17.0"
+version = "0.34.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
     { name = "grpc-stubs", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
@@ -988,7 +988,7 @@ dependencies = [
     { name = "protobuf", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_protos-0.17.0-py3-none-any.whl", hash = "sha256:e5a7c320678a6204cfa6e8a8981952e8dd1080131de076c5cec8702a24f62d7d" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_protos-0.34.0-py3-none-any.whl", hash = "sha256:917fc77bc17662680fbbb93ed056de5a44201982c367a1179842e355ae5ca244" },
 ]
 
 [[package]]
@@ -1185,9 +1185,9 @@ requires-dist = [
     { name = "redis", specifier = ">=4.5.4" },
     { name = "rust-snuba", editable = "rust_snuba" },
     { name = "sentry-arroyo", specifier = ">=2.39.2" },
-    { name = "sentry-conventions", specifier = ">=0.11.0" },
-    { name = "sentry-kafka-schemas", specifier = ">=2.1.24" },
-    { name = "sentry-protos", specifier = ">=0.17.0" },
+    { name = "sentry-conventions", specifier = ">=0.13.0" },
+    { name = "sentry-kafka-schemas", specifier = ">=2.1.36" },
+    { name = "sentry-protos", specifier = ">=0.34.0" },
     { name = "sentry-redis-tools", specifier = ">=0.5.1" },
     { name = "sentry-relay", specifier = ">=0.9.25" },
     { name = "sentry-sdk", specifier = ">=2.35.0" },

@@ -173,6 +173,17 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
                 tenant_ids={
                     "organization_id": in_msg_meta.organization_id,
                     "referrer": "eap.route_outcomes",
+                    # This is an internal, system-initiated query that Snuba runs against
+                    # the (tiny) outcomes table purely to decide which tier to route the
+                    # real query to. It must never be rejected by the outcomes storage's
+                    # allocation policies: a rejection here doesn't protect EAP, it just
+                    # breaks tier routing and forces the fallback path (see SNUBA-A3V,
+                    # "Error getting routing decision: Query cannot be run due to
+                    # allocation policies"). Under load a busy org can exceed the outcomes
+                    # ConcurrentRateLimitAllocationPolicy limit (keyed by organization_id,
+                    # since this query carries no project_id) and get rejected. Marking it
+                    # as a cross-org/system query exempts it from those per-tenant limits.
+                    "cross_org_query": 1,
                 },
                 app_id=AppID("eap"),
                 parent_api="eap.route_outcomes",

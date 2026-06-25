@@ -560,6 +560,11 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     ) -> dict[TraceItemType.ValueType, Expression]:
         """
         Returns a dict mapping item types to a filter expression for that item type.
+
+        These expressions are only ever embedded in the ``filtered_item_count`` countIf
+        in the SELECT clause, so membership is built as ``has(array, x)``
+        (``membership_as_has``) to keep the result-block column name stable across
+        mixed-version distributed ClickHouse nodes (see common._in_or_has).
         """
         filters_by_item_type: dict[TraceItemType.ValueType, list[TraceItemFilter]] = defaultdict(
             list
@@ -578,6 +583,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                         ),
                     ),
                     attribute_key_to_expression,
+                    membership_as_has=True,
                 ),
             )
 

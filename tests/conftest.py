@@ -1,4 +1,6 @@
+import hashlib
 import json
+import os
 import traceback
 from collections.abc import Callable, Generator, Sequence
 from typing import (
@@ -74,7 +76,20 @@ def create_databases() -> None:
             connection.execute(f"CREATE DATABASE {database_name};")
 
 
-def pytest_collection_modifyitems(items: Sequence[Any]) -> None:
+def pytest_collection_modifyitems(config: pytest.Config, items: list[Any]) -> None:
+    # Optional CI sharding by a stable hash of the test file (keeps a file's tests together); inert unless SNUBA_TEST_SHARD_TOTAL > 1.
+    total = int(os.environ.get("SNUBA_TEST_SHARD_TOTAL", "1"))
+    if total > 1:
+        shard = int(os.environ.get("SNUBA_TEST_SHARD", "0"))
+        selected: list[Any] = []
+        deselected: list[Any] = []
+        for item in items:
+            file_id = item.nodeid.split("::", 1)[0]
+            digest = int(hashlib.md5(file_id.encode()).hexdigest(), 16)
+            (selected if digest % total == shard else deselected).append(item)
+        items[:] = selected
+        config.hook.pytest_deselected(items=deselected)
+
     for item in items:
         if item.get_closest_marker("eap"):
             item.fixturenames.append("eap")

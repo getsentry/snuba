@@ -60,6 +60,10 @@ class ColumnWrapper(ProtoWrapper[Column]):
 class AggregationComparisonFilterWrapper(ProtoWrapper[AggregationComparisonFilter]):
     def accept(self, visitor: ProtoVisitor) -> None:
         visitor.visit_AggregationComparisonFilterWrapper(self)
+        comparison_filter = self.underlying_proto
+        if comparison_filter.HasField("formula"):
+            ColumnWrapper(comparison_filter.formula.left).accept(visitor)
+            ColumnWrapper(comparison_filter.formula.right).accept(visitor)
 
 
 class AggregationFilterWrapper(ProtoWrapper[AggregationFilter]):

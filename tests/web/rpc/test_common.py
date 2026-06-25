@@ -229,10 +229,11 @@ class TestExistsFilterCoalesced:
     """exists_filter on coalesced attributes must check all deprecated keys."""
 
     @staticmethod
-    def _collect_map_contains_keys(expr: FunctionCall) -> set[str]:
-        """Recursively collect all keys from a (possibly nested) OR of mapContains calls."""
+    def _collect_existence_keys(expr: FunctionCall) -> set[str]:
+        """Recursively collect all keys from a (possibly nested) OR of
+        has(mapKeys(col), key) existence checks."""
         keys: set[str] = set()
-        if expr.function_name == "mapContains":
+        if expr.function_name == "has":
             key_literal = expr.parameters[1]
             assert isinstance(key_literal, Literal)
             assert isinstance(key_literal.value, str)
@@ -240,7 +241,7 @@ class TestExistsFilterCoalesced:
         elif expr.function_name == "or":
             for param in expr.parameters:
                 assert isinstance(param, FunctionCall)
-                keys.update(TestExistsFilterCoalesced._collect_map_contains_keys(param))
+                keys.update(TestExistsFilterCoalesced._collect_existence_keys(param))
         return keys
 
     def test_exists_filter_on_coalesced_string_attribute(self) -> None:
@@ -258,12 +259,12 @@ class TestExistsFilterCoalesced:
         expr = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
         assert isinstance(expr, FunctionCall)
         assert expr.function_name == "or"
-        checked_keys = self._collect_map_contains_keys(expr)
+        checked_keys = self._collect_existence_keys(expr)
         expected_keys = {canonical, *deprecated_keys}
         assert checked_keys == expected_keys
 
     def test_exists_filter_on_non_coalesced_attribute_unchanged(self) -> None:
-        """Non-coalesced attributes should still produce a single mapContains."""
+        """Non-coalesced attributes should still produce a single has(mapKeys(...))."""
         item_filter = TraceItemFilter(
             exists_filter=ExistsFilter(
                 key=AttributeKey(type=AttributeKey.Type.TYPE_STRING, name="some.custom.tag")
@@ -271,7 +272,7 @@ class TestExistsFilterCoalesced:
         )
         expr = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
         assert isinstance(expr, FunctionCall)
-        assert expr.function_name == "mapContains"
+        assert expr.function_name == "has"
 
 
 class TestSentryTimestampFilter:
@@ -414,10 +415,10 @@ class TestDedupeAndConditions:
 
 class TestAnalyzerSafeFilters:
     """Per-key filters on map-backed attributes are built from a NULL-free
-    (mapContains, arrayElement) pair instead of the legacy
-    if(mapContains, arrayElement, NULL) + isNull(...) idiom, so the new ClickHouse
+    (has(mapKeys(...)), arrayElement) pair instead of the legacy
+    if(<exists>, arrayElement, NULL) + isNull(...) idiom, so the new ClickHouse
     analyzer names the aggregate column consistently (SNUBA-B62/B6C/A13). The
-    mapContains guard preserves the absent-vs-empty distinction.
+    has(mapKeys(...)) existence guard preserves the absent-vs-empty distinction.
     """
 
     @staticmethod
@@ -467,13 +468,13 @@ class TestAnalyzerSafeFilters:
         )
         return trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
 
-    # --- pruned forms: literal != column default, so no mapContains guard ---
+    # --- pruned forms: literal != column default, so no existence guard ---
 
     def test_in_pruned(self) -> None:
         expr = self._build(ComparisonFilter.OP_IN, values=["a", "b"])
         self._assert_clean(expr)
         assert isinstance(expr, FunctionCall) and expr.function_name == "in"
-        assert "mapContains" not in self._fn_names(expr)
+        assert "mapKeys" not in self._fn_names(expr)
 
     def test_not_in_pruned(self) -> None:
         expr = self._build(ComparisonFilter.OP_NOT_IN, values=["a", "b"])
@@ -481,24 +482,24 @@ class TestAnalyzerSafeFilters:
         assert isinstance(expr, FunctionCall) and expr.function_name == "not"
         names = self._fn_names(expr)
         assert {"not", "in", "arrayElement"} <= names
-        assert "mapContains" not in names and "has" not in names
+        assert "has" not in names and "mapKeys" not in names
 
     def test_equals_pruned(self) -> None:
         expr = self._build(ComparisonFilter.OP_EQUALS, value="ok")
         self._assert_clean(expr)
         assert isinstance(expr, FunctionCall) and expr.function_name == "equals"
-        assert "mapContains" not in self._fn_names(expr)
+        assert "mapKeys" not in self._fn_names(expr)
 
     def test_not_equals_pruned(self) -> None:
         expr = self._build(ComparisonFilter.OP_NOT_EQUALS, value="ok")
         self._assert_clean(expr)
         assert isinstance(expr, FunctionCall) and expr.function_name == "notEquals"
-        assert "mapContains" not in self._fn_names(expr)
+        assert "mapKeys" not in self._fn_names(expr)
 
     def test_coalesced_pruned_uses_multi_if_no_outer_guard(self) -> None:
-        # Coalesced keys resolve via a NULL-free multiIf over per-key mapContains
-        # (never coalesce(if(..., NULL), ...)); with a non-default literal the
-        # outer existence OR-guard is dropped too.
+        # Coalesced keys resolve via a NULL-free multiIf over per-key existence
+        # checks (never coalesce(if(..., NULL), ...)); with a non-default literal
+        # the outer existence OR-guard is dropped too.
         assert "transaction" in ATTRIBUTES_TO_COALESCE
         expr = self._build(ComparisonFilter.OP_EQUALS, name="transaction", value="t")
         self._assert_clean(expr)
@@ -518,25 +519,25 @@ class TestAnalyzerSafeFilters:
         inner = operand.parameters[0]
         assert isinstance(inner, FunctionCall) and inner.function_name == "arrayElement"
 
-    # --- guarded forms: literal IS the column default, so mapContains is kept ---
+    # --- guarded forms: literal IS the column default, so the existence guard is kept ---
 
     def test_equals_default_value_keeps_guard(self) -> None:
         expr = self._build(ComparisonFilter.OP_EQUALS, value="")  # '' could match an absent key
         self._assert_clean(expr)
         assert isinstance(expr, FunctionCall) and expr.function_name == "and"
-        assert {"and", "mapContains", "equals", "arrayElement"} <= self._fn_names(expr)
+        assert {"and", "has", "mapKeys", "equals", "arrayElement"} <= self._fn_names(expr)
 
     def test_in_with_default_value_keeps_guard(self) -> None:
         expr = self._build(ComparisonFilter.OP_IN, values=["", "x"])
         self._assert_clean(expr)
         assert isinstance(expr, FunctionCall) and expr.function_name == "and"
-        assert {"and", "in", "mapContains"} <= self._fn_names(expr)
+        assert {"and", "in", "has", "mapKeys"} <= self._fn_names(expr)
 
     def test_coalesced_default_value_keeps_guard(self) -> None:
         expr = self._build(ComparisonFilter.OP_EQUALS, name="transaction", value="")
         self._assert_clean(expr)
         assert isinstance(expr, FunctionCall) and expr.function_name == "and"
-        assert {"and", "or", "equals", "multiIf", "mapContains"} <= self._fn_names(expr)
+        assert {"and", "or", "equals", "multiIf", "has", "mapKeys"} <= self._fn_names(expr)
 
     # --- always-guarded forms: null comparisons and LIKE/NOT_LIKE ---
 
@@ -544,12 +545,12 @@ class TestAnalyzerSafeFilters:
         expr = self._build(ComparisonFilter.OP_EQUALS, is_null=True)  # attr = null <=> absent
         self._assert_clean(expr)
         assert isinstance(expr, FunctionCall) and expr.function_name == "not"
-        assert self._fn_names(expr) == {"not", "mapContains"}
+        assert self._fn_names(expr) == {"not", "has", "mapKeys"}
 
     def test_not_equals_null_is_map_contains(self) -> None:
         expr = self._build(ComparisonFilter.OP_NOT_EQUALS, is_null=True)  # attr != null <=> present
         self._assert_clean(expr)
-        assert isinstance(expr, FunctionCall) and expr.function_name == "mapContains"
+        assert isinstance(expr, FunctionCall) and expr.function_name == "has"
 
     def test_in_null_value_builds_without_raising(self) -> None:
         # null isn't the column default, so the guard helper must treat it as a
@@ -565,14 +566,14 @@ class TestAnalyzerSafeFilters:
         expr = self._build(ComparisonFilter.OP_LIKE, value="%ok%")
         self._assert_clean(expr)
         assert isinstance(expr, FunctionCall) and expr.function_name == "and"
-        assert {"and", "mapContains", "like", "arrayElement"} <= self._fn_names(expr)
+        assert {"and", "has", "mapKeys", "like", "arrayElement"} <= self._fn_names(expr)
 
     def test_not_like_keeps_guard_and_negates_positive_like(self) -> None:
         expr = self._build(ComparisonFilter.OP_NOT_LIKE, value="%ok%")
         self._assert_clean(expr)
         assert isinstance(expr, FunctionCall) and expr.function_name == "not"
         names = self._fn_names(expr)
-        assert {"not", "and", "mapContains", "like", "arrayElement"} <= names
+        assert {"not", "and", "has", "mapKeys", "like", "arrayElement"} <= names
         assert "notLike" not in names  # positive like under the negation
         ilike = self._build(ComparisonFilter.OP_NOT_LIKE, value="%ok%", ignore_case=True)
         assert "ilike" in self._fn_names(ilike) and "notILike" not in self._fn_names(ilike)
@@ -729,6 +730,60 @@ class TestAnyAttributeFilter:
         )
         with pytest.raises(BadSnubaRPCRequestException, match="does not have a value"):
             _any_attribute_filter_to_expression(filt)
+
+    @staticmethod
+    def _in_over_arrays(expr: Expression) -> list[FunctionCall]:
+        return [
+            e
+            for e in expr
+            if isinstance(e, FunctionCall)
+            and e.function_name == "in"
+            and len(e.parameters) == 2
+            and isinstance(e.parameters[1], FunctionCall)
+            and e.parameters[1].function_name == "array"
+        ]
+
+    @staticmethod
+    def _has_over(expr: Expression, values: list[str]) -> list[FunctionCall]:
+        return [
+            e
+            for e in expr
+            if isinstance(e, FunctionCall)
+            and e.function_name == "has"
+            and isinstance(e.parameters[0], FunctionCall)
+            and e.parameters[0].function_name == "array"
+            and [p.value for p in e.parameters[0].parameters if isinstance(p, Literal)] == values
+        ]
+
+    @pytest.mark.parametrize("op", [AnyAttributeFilter.OP_IN, AnyAttributeFilter.OP_NOT_IN])
+    def test_membership_as_has_for_select_clause(self, op: AnyAttributeFilter.Op.ValueType) -> None:
+        """Regression guard for SNUBA-9W6 / SNUBA-A1W (mixed-version distributed reads).
+
+        An any-attribute ``IN``/``NOT_IN`` builds ``in(x, array(...))`` inside an
+        ``arrayExists`` lambda. When that filter lands in a SELECT-clause aggregate, the
+        constant ``IN`` set's ``__set_<hash>`` identifier leaks into the result-block
+        column name and breaks reads across mixed-version ``Remote`` nodes. With
+        ``membership_as_has=True`` the comparison must be ``has(array(...), x)`` instead;
+        the default (WHERE) keeps ``in()`` so the prepared set still drives pruning.
+        """
+        values = ["error", "internal_error"]
+        filt = AnyAttributeFilter(
+            op=op,
+            value=AttributeValue(
+                val_array=Array(values=[AttributeValue(val_str=v) for v in values])
+            ),
+        )
+
+        # Default (WHERE) keeps the in() set inside arrayExists.
+        where_expr = _any_attribute_filter_to_expression(filt)
+        assert self._in_over_arrays(where_expr), "WHERE form must keep in() over the constant array"
+
+        # SELECT-clause form uses has(array, x) and builds no in() set.
+        select_expr = _any_attribute_filter_to_expression(filt, membership_as_has=True)
+        assert not self._in_over_arrays(select_expr), (
+            "membership_as_has must replace in() over a constant array with has()"
+        )
+        assert self._has_over(select_expr, values), "expected has(array(values), x) in the lambda"
 
 
 @pytest.mark.eap
@@ -891,8 +946,8 @@ class TestAnyAttributeFilterIntegration:
 class TestEmptyVsAbsentComparison:
     """End-to-end: the migrated per-key comparisons (EQUALS / NOT_EQUALS / LIKE /
     NOT_LIKE) must keep distinguishing a *stored empty value* from an *absent
-    key*, since arrayElement reads both as '' and only mapContains tells them
-    apart. Three spans, by the attribute under test:
+    key*, since arrayElement reads both as '' and only the has(mapKeys(...))
+    existence guard tells them apart. Three spans, by the attribute under test:
       - present, value "ok"  (color "red")
       - present, empty ""    (color "blue")
       - absent               (color "green")

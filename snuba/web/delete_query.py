@@ -14,6 +14,7 @@ from snuba.clickhouse.translators.snuba.mapping import SnubaClickhouseMappingTra
 from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -238,7 +239,7 @@ def _get_rows_to_delete(storage_key: StorageKey, select_query_to_count_rows: Que
     return typing.cast(int, select_query_results["data"][0]["count"])
 
 
-def _enforce_max_rows(delete_query: Query) -> int:
+def _enforce_max_rows(delete_query: Query, count_storage_key: StorageKey | None = None) -> int:
     """
     The cost of a lightweight delete operation depends on the number of matching rows in the WHERE clause and the current number of data parts.
     This operation will be most efficient when matching a small number of rows, **and on wide parts** (where the `_row_exists` column is stored
@@ -246,8 +247,15 @@ def _enforce_max_rows(delete_query: Query) -> int:
 
     Because of the above, we want to limit the number of rows one deletes at a time. The `MaxRowsEnforcer` will query clickhouse to see how many
       rows we plan on deleting and if it crosses the `max_rows_to_delete` set for that storage we will reject the query.
+
+    Counting matching rows is a read-only query, so `count_storage_key` lets the
+    caller run it against a read-only replica storage (its cluster and table)
+    instead of the read/write storage that the delete itself targets. This both
+    keeps the count off the read/write cluster and lets each table (e.g. the
+    downsampled EAP tables, whose row counts differ) be counted individually.
     """
     storage_key = delete_query.get_from_clause().storage_key
+    reader_storage_key = count_storage_key or storage_key
 
     def get_new_from_clause() -> Table:
         """
@@ -255,12 +263,17 @@ def _enforce_max_rows(delete_query: Query) -> int:
         row count we are querying the dist tables (if applicable). This function
         updates the from_clause to have the correct table.
         """
-        dist_table_name = (
-            get_writable_storage(storage_key).get_table_writer().get_schema().get_table_name()
-        )
+        if reader_storage_key == storage_key:
+            count_table_name = (
+                get_writable_storage(storage_key).get_table_writer().get_schema().get_table_name()
+            )
+        else:
+            count_schema = get_storage(reader_storage_key).get_schema()
+            assert isinstance(count_schema, TableSchema)
+            count_table_name = count_schema.get_table_name()
         from_clause = delete_query.get_from_clause()
         return Table(
-            table_name=dist_table_name,
+            table_name=count_table_name,
             schema=from_clause.schema,
             storage_key=from_clause.storage_key,
             allocation_policies=from_clause.allocation_policies,
@@ -274,7 +287,7 @@ def _enforce_max_rows(delete_query: Query) -> int:
         condition=delete_query.get_condition(),
     )
     rows_to_delete = _get_rows_to_delete(
-        storage_key=storage_key, select_query_to_count_rows=select_query_to_count_rows
+        storage_key=reader_storage_key, select_query_to_count_rows=select_query_to_count_rows
     )
     if rows_to_delete == 0:
         raise NoRowsToDeleteException

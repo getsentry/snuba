@@ -132,18 +132,15 @@ def apply_storage_processors(
 
     check_storage_readiness(storage)
 
-    with sentry_sdk.start_span(
-        op="build_plan.storage_query_plan_builder", description="set_from_clause"
-    ):
-        query_plan.query.set_from_clause(
-            get_query_data_source(
-                storage.get_schema().get_data_source(),
-                allocation_policies=storage.get_allocation_policies(),
-                final=query_plan.query.get_from_clause().final,
-                sampling_rate=query_plan.query.get_from_clause().sampling_rate,
-                storage_key=storage.get_storage_key(),
-            )
+    query_plan.query.set_from_clause(
+        get_query_data_source(
+            storage.get_schema().get_data_source(),
+            allocation_policies=storage.get_allocation_policies(),
+            final=query_plan.query.get_from_clause().final,
+            sampling_rate=query_plan.query.get_from_clause().sampling_rate,
+            storage_key=storage.get_storage_key(),
         )
+    )
     assert isinstance(query_plan.query, Query)
     for processor in query_plan.db_query_processors:
         with sentry_sdk.start_span(description=type(processor).__name__, op="processor"):
