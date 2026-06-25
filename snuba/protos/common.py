@@ -196,6 +196,62 @@ def type_array_to_stored_array_json_path(attr_key: AttributeKey) -> JsonPath:
     )
 
 
+def type_array_to_membership_array_expression_from_typed_columns(
+    attr_key: AttributeKey,
+) -> FunctionCall:
+    """WHERE-clause membership array built from the typed array map columns.
+
+    Counterpart to ``type_array_to_membership_array_expression``, which reads the
+    legacy ``attributes_array`` JSON column. Since 2026-06-22 array attributes are
+    also double-written into typed ``Map(String, Array(T))`` columns; for query
+    windows new enough that those columns are fully populated (see
+    ``use_array_map_columns``) we read them instead.
+
+    Returns a normalized ``Array(String)`` of every element across the string,
+    float, and bool columns so the per-element comparisons built by
+    ``_type_array_membership_rhs_expression`` keep matching the JSON-column
+    behaviour (string elements stay as-is, numbers become ``toString(...)``, and
+    bools become ``'true'``/``'false'``). Integer elements are double-written into
+    ``attributes_array_float`` (the read path resolves all numeric types to the
+    float column), so the int column is intentionally not read — including it
+    would duplicate every integer element.
+    """
+    if attr_key.type != AttributeKey.Type.TYPE_ARRAY:
+        raise MalformedAttributeException(
+            f"type_array_to_membership_array_expression_from_typed_columns expected "
+            f"TYPE_ARRAY, got {AttributeKey.Type.Name(attr_key.type)}"
+        )
+    alias = f"{_build_label_mapping_key(attr_key)}__array_members"
+    name = attr_key.name
+    x = Argument(None, "x")
+    string_elements = arrayElement(None, column("attributes_array_string"), literal(name))
+    float_elements = FunctionCall(
+        None,
+        "arrayMap",
+        (
+            Lambda(None, ("x",), FunctionCall(None, "toString", (x,))),
+            arrayElement(None, column("attributes_array_float"), literal(name)),
+        ),
+    )
+    bool_elements = FunctionCall(
+        None,
+        "arrayMap",
+        (
+            Lambda(
+                None,
+                ("x",),
+                FunctionCall(None, "if", (x, literal("true"), literal("false"))),
+            ),
+            arrayElement(None, column("attributes_array_bool"), literal(name)),
+        ),
+    )
+    return FunctionCall(
+        alias=alias,
+        function_name="arrayConcat",
+        parameters=(string_elements, float_elements, bool_elements),
+    )
+
+
 def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
     """Convert an AttributeKey proto to a Snuba Expression.
 

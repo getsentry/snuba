@@ -249,6 +249,13 @@ USE_EAP_ITEMS_TABLE_START_TIMESTAMP_SECONDS = 1741762800
 # Represents 10AM PST April 8, 2025 which is the date we started writing the sampling factor. We can remove this setting once 90 days have passed since this date.
 USE_SAMPLING_FACTOR_TIMESTAMP_SECONDS = 1744131600
 
+# Represents 2026-06-23 00:00 UTC, the day after we began double-writing array
+# attributes into the typed `attributes_array_*` map columns (2026-06-22). Only
+# queries whose window starts on/after this read those typed columns; older data
+# only exists in the legacy `attributes_array` JSON column. We can remove this
+# setting once enough time has passed that all queryable data is double-written.
+USE_ARRAY_MAP_COLUMNS_TIMESTAMP_SECONDS = 1782172800
+
 # Processor/Writer Options
 
 

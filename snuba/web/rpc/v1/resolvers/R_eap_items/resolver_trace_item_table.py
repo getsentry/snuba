@@ -62,6 +62,7 @@ from snuba.web.rpc.common.common import (
     timestamp_in_range_condition,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
+    use_array_map_columns,
     use_sampling_factor,
     valid_sampling_factor_conditions,
 )
@@ -633,6 +634,7 @@ def build_query(
             trace_item_filters_to_expression(
                 request.filter,
                 attribute_key_to_expression,
+                use_array_map_columns=use_array_map_columns(request.meta),
             ),
             valid_sampling_factor_conditions(),
             *item_type_conds,
