@@ -32,9 +32,16 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 from snuba import settings
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.protos.common import ATTRIBUTES_TO_COALESCE
+from snuba.protos.common import (
+    ATTRIBUTES_TO_COALESCE,
+    MalformedAttributeException,
+    type_array_to_membership_array_expression_from_typed_columns,
+)
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column
+from snuba.query.expressions import (
+    Column as ColumnExpr,
+)
 from snuba.query.expressions import (
     Expression,
     FunctionCall,
@@ -51,6 +58,7 @@ from snuba.web.rpc.common.common import (
     prev_monday,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
+    use_array_map_columns,
     use_sampling_factor,
 )
 from snuba.web.rpc.common.exceptions import (
@@ -92,6 +100,27 @@ class TestCommon:
         with override_options("snuba", {"use_sampling_factor_timestamp_seconds": 10}):
             assert use_sampling_factor(RequestMeta(start_timestamp=Timestamp(seconds=10)))
             assert not use_sampling_factor(RequestMeta(start_timestamp=Timestamp(seconds=9)))
+
+    @pytest.mark.redis_db
+    def test_use_array_map_columns(self, snuba_set_config: SnubaSetConfig) -> None:
+        assert use_array_map_columns(
+            RequestMeta(
+                start_timestamp=Timestamp(seconds=settings.USE_ARRAY_MAP_COLUMNS_TIMESTAMP_SECONDS)
+            )
+        )
+        assert not use_array_map_columns(
+            RequestMeta(
+                start_timestamp=Timestamp(
+                    seconds=settings.USE_ARRAY_MAP_COLUMNS_TIMESTAMP_SECONDS - 1
+                )
+            )
+        )
+        # A config value of 0 disables the typed-column read path entirely.
+        snuba_set_config("use_array_map_columns_timestamp_seconds", 0)
+        assert not use_array_map_columns(RequestMeta(start_timestamp=Timestamp(seconds=2**31)))
+        snuba_set_config("use_array_map_columns_timestamp_seconds", 10)
+        assert use_array_map_columns(RequestMeta(start_timestamp=Timestamp(seconds=10)))
+        assert not use_array_map_columns(RequestMeta(start_timestamp=Timestamp(seconds=9)))
 
 
 class TestTraceItemFiltersArrayLike:
@@ -224,6 +253,121 @@ class TestTraceItemFiltersArrayLike:
             match="NOT LIKE comparison is only supported on string and array keys",
         ):
             trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+
+
+def _collect_column_names(expr: Expression) -> set[str]:
+    names: set[str] = set()
+
+    def visit(node: Expression) -> Expression:
+        if isinstance(node, ColumnExpr):
+            names.add(node.column_name)
+        return node
+
+    expr.transform(visit)
+    return names
+
+
+_TYPED_ARRAY_COLUMNS = {
+    "attributes_array_string",
+    "attributes_array_int",
+    "attributes_array_float",
+    "attributes_array_bool",
+}
+
+
+class TestTraceItemFiltersArrayMapColumns:
+    """Array predicates read the typed ``attributes_array_*`` map columns when
+    ``use_array_map_columns`` is set, and the legacy ``attributes_array`` JSON
+    column otherwise. All four typed columns are read: unlike the scalar
+    double-write, array ints live only in ``attributes_array_int``."""
+
+    def _array_filter(
+        self,
+        op: ComparisonFilter.Op.ValueType,
+        value: AttributeValue,
+    ) -> TraceItemFilter:
+        return TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_ARRAY, name="my_tags"),
+                op=op,
+                value=value,
+            )
+        )
+
+    def test_like_on_array_key_uses_json_column_by_default(self) -> None:
+        result = trace_item_filters_to_expression(
+            self._array_filter(ComparisonFilter.OP_LIKE, AttributeValue(val_str="%error%")),
+            attribute_key_to_expression,
+        )
+        assert isinstance(result, FunctionCall)
+        assert result.function_name == "arrayExists"
+        membership = result.parameters[1]
+        assert isinstance(membership, FunctionCall)
+        assert membership.function_name == "arrayMap"
+        assert _collect_column_names(membership) == {"attributes_array"}
+
+    def test_like_on_array_key_uses_typed_columns_when_enabled(self) -> None:
+        result = trace_item_filters_to_expression(
+            self._array_filter(ComparisonFilter.OP_LIKE, AttributeValue(val_str="%error%")),
+            attribute_key_to_expression,
+            use_array_map_columns=True,
+        )
+        assert isinstance(result, FunctionCall)
+        assert result.function_name == "arrayExists"
+        membership = result.parameters[1]
+        assert isinstance(membership, FunctionCall)
+        assert membership.function_name == "arrayConcat"
+        assert _collect_column_names(membership) == _TYPED_ARRAY_COLUMNS
+
+    def test_equals_on_array_key_uses_typed_columns_when_enabled(self) -> None:
+        result = trace_item_filters_to_expression(
+            self._array_filter(ComparisonFilter.OP_EQUALS, AttributeValue(val_str="error")),
+            attribute_key_to_expression,
+            use_array_map_columns=True,
+        )
+        assert isinstance(result, FunctionCall)
+        assert result.function_name == "arrayExists"
+        membership = result.parameters[1]
+        assert isinstance(membership, FunctionCall)
+        assert membership.function_name == "arrayConcat"
+        assert _collect_column_names(membership) == _TYPED_ARRAY_COLUMNS
+
+    def test_exists_filter_on_array_key_uses_typed_columns_when_enabled(self) -> None:
+        item_filter = TraceItemFilter(
+            exists_filter=ExistsFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_ARRAY, name="my_tags")
+            )
+        )
+        result = trace_item_filters_to_expression(
+            item_filter, attribute_key_to_expression, use_array_map_columns=True
+        )
+        # Existence is notEmpty(arrayConcat(...)) over the typed columns.
+        assert isinstance(result, FunctionCall)
+        assert result.function_name == "notEmpty"
+        inner = result.parameters[0]
+        assert isinstance(inner, FunctionCall)
+        assert inner.function_name == "arrayConcat"
+        assert _collect_column_names(inner) == _TYPED_ARRAY_COLUMNS
+
+    def test_exists_filter_on_array_key_uses_json_column_by_default(self) -> None:
+        item_filter = TraceItemFilter(
+            exists_filter=ExistsFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_ARRAY, name="my_tags")
+            )
+        )
+        result = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        assert isinstance(result, FunctionCall)
+        assert result.function_name == "notEmpty"
+        inner = result.parameters[0]
+        assert isinstance(inner, FunctionCall)
+        assert inner.function_name == "arrayMap"
+        assert _collect_column_names(inner) == {"attributes_array"}
+
+    def test_typed_membership_function_rejects_non_array(self) -> None:
+        with pytest.raises(MalformedAttributeException):
+            type_array_to_membership_array_expression_from_typed_columns(
+                AttributeKey(type=AttributeKey.Type.TYPE_STRING, name="my_tags")
+            )
 
 
 class TestExistsFilterCoalesced:

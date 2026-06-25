@@ -34,6 +34,7 @@ from snuba.web.rpc.common.common import (
     decode_attributes_array_value,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
+    use_array_map_columns,
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
@@ -99,7 +100,11 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
                 column("trace_id"),
                 literal(request.trace_id),
             ),
-            trace_item_filters_to_expression(request.filter, attribute_key_to_expression),
+            trace_item_filters_to_expression(
+                request.filter,
+                attribute_key_to_expression,
+                use_array_map_columns=use_array_map_columns(request.meta),
+            ),
         ),
         limit=1,
     )
