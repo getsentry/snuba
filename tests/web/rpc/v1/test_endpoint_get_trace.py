@@ -34,8 +34,8 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.settings import ENABLE_TRACE_PAGINATION_DEFAULT
 from snuba.web.rpc.common.common import ATTRIBUTES_ARRAY_ALLOWLIST
 from snuba.web.rpc.v1.endpoint_get_trace import (
-    APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
     _DEFAULT_ROW_LIMIT,
+    APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
     EndpointGetTrace,
     _build_query,
     _get_pagination_limit,
