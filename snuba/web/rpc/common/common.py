@@ -99,7 +99,11 @@ def semver_sort_key(expr: Expression, alias: str | None = None) -> Expression:
     before their corresponding stable release.  Works on Altinity 25.3/25.8.
     """
     x = Argument(None, "x")
-    version_no_prefix = f.arrayElement(f.splitByChar(literal("@"), expr), literal(-1))
+    # sentry.release is coalesced from multiple attribute columns and therefore
+    # returns Nullable(String).  ClickHouse forbids Nullable(Array(…)), so strip
+    # the nullable wrapper before applying any string → array functions.
+    non_null = f.ifNull(expr, literal(""))
+    version_no_prefix = f.arrayElement(f.splitByChar(literal("@"), non_null), literal(-1))
     release_part = f.arrayElement(f.splitByChar(literal("-"), version_no_prefix), literal(1))
     numeric_key = f.arrayResize(
         f.arrayMap(
