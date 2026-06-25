@@ -52,6 +52,10 @@ UNSEARCHABLE_ATTRIBUTE_KEYS = [
 ]
 
 NON_STORED_ATTRIBUTE_KEYS = ["sentry.service"]
+MATCH_MODES = {
+    TraceItemAttributeNamesRequest.MatchMode.MATCH_MODE_ANY: f.hasAny,
+    TraceItemAttributeNamesRequest.MatchMode.MATCH_MODE_ALL: f.hasAll,
+}
 
 
 def _order_by_count(request: TraceItemAttributeNamesRequest) -> bool:
@@ -244,7 +248,7 @@ def get_co_occurring_attributes(
     if attribute_keys_to_search:
         condition = and_cond(
             condition,
-            f.hasAll(
+            MATCH_MODES.get(request.match_mode, f.hasAll)(
                 column("attribute_keys_hash"),
                 f.array(*[f.cityHash64(k) for k in attribute_keys_to_search]),
             ),
