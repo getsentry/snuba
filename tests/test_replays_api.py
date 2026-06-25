@@ -124,7 +124,7 @@ class TestReplaysApi(BaseApiTest):
                 {
                     "query": f"""
                     MATCH (replays)
-                    SELECT replay_id, segment_names
+                    SELECT replay_id, groupArrayArray(segment_names) AS `segment_names`
                     BY replay_id
                     WHERE project_id = {self.project_id}
                     AND timestamp >= toDateTime('{self.base_time.isoformat()}')
