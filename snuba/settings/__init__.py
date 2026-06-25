@@ -478,7 +478,10 @@ MAX_PARTS_MUTATING_FOR_DELETE = 20
 LW_DELETES_PARTITION_TRACKING_TTL = 86400
 SNQL_DISABLED_DATASETS: set[str] = set([])
 
-ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS: int = 0  # 0 means no limit
+# Per-page cap for EndpointGetTrace. When <= 0 there is no configured global cap,
+# and the endpoint falls back to a default row limit so the query is always
+# bounded (see _get_pagination_limit in endpoint_get_trace.py).
+ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS: int = 0
 ENABLE_TRACE_PAGINATION_DEFAULT = 1
 
 

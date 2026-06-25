@@ -68,6 +68,11 @@ NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS = [
 ]
 APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY = "EndpointGetTrace.apply_final_rollout_percentage"
 
+# Fallback limit applied to a GetTrace query when neither the request nor the
+# ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS setting provide a positive limit. This
+# guarantees the underlying ClickHouse query is always bounded.
+_DEFAULT_ROW_LIMIT = 10_000
+
 TIMESTAMP_FIELD_BY_ITEM_TYPE: dict[TraceItemType.ValueType, str] = {
     TraceItemType.TRACE_ITEM_TYPE_SPAN: "sentry.start_timestamp_precise",
 }
@@ -551,23 +556,30 @@ def _process_results(
     )
 
 
-def _get_pagination_limit(user_requested_limit: int) -> int | None:
+def _get_pagination_limit(user_requested_limit: int) -> int:
     """
+    Returns the limit to apply to a GetTrace query. The result is always a
+    positive integer so the underlying ClickHouse query is never unbounded.
+
     If the user requested a limit, we use the minimum of the user requested limit and
     the ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS snuba setting.
 
     If the user requested a limit of 0, we assume the user did not pass a limit, we
     use the default ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS.
+
+    When ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS is non-positive (no global cap
+    configured), we fall back to _DEFAULT_ROW_LIMIT so the query stays bounded.
     """
     if ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS <= 0:
-        # no limit unless the user requests one
+        # No global cap configured; honor the user's limit if present, otherwise
+        # fall back to the default so the query is never unbounded.
         if ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS < 0:
             sentry_sdk.capture_message(
-                f"Pagination max items is negative, no global limit will be applied: {ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS}"
+                f"Pagination max items is negative, falling back to the default limit: {ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS}"
             )
         if user_requested_limit > 0:
             return user_requested_limit
-        return None
+        return _DEFAULT_ROW_LIMIT
 
     if user_requested_limit > 0:
         return min(user_requested_limit, ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS)
@@ -588,18 +600,24 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
         return GetTraceResponse
 
     def _execute(self, in_msg: GetTraceRequest) -> GetTraceResponse:
-        self.metrics.increment(
-            "eap_trace_request_without_limit", 1, tags={"referrer": in_msg.meta.referrer}
-        )
+        if in_msg.limit <= 0:
+            # The request did not specify a limit, so a default cap is applied to
+            # keep the query bounded. Track how often this happens per referrer.
+            self.metrics.increment(
+                "eap_trace_request_without_limit",
+                1,
+                tags={"referrer": in_msg.meta.referrer},
+            )
 
         enable_pagination = state.get_int_config(
             "enable_trace_pagination", ENABLE_TRACE_PAGINATION_DEFAULT
         )
+        # A limit is always applied so the underlying ClickHouse query is never
+        # unbounded, regardless of whether pagination is enabled.
+        limit = _get_pagination_limit(in_msg.limit)
         if enable_pagination:
-            limit = _get_pagination_limit(in_msg.limit)
             page_token = EndpointGetTracePageToken.from_protobuf(in_msg.page_token)
         else:
-            limit = None
             page_token = None
 
         query_results = []
@@ -608,9 +626,10 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
             start = 0
         else:
             start = page_token.last_item_index
+        remaining = limit
         for i, item in enumerate(in_msg.items[start:], start=start):
             item_group, query_result, last_seen_timestamp_precise, last_seen_id = (
-                self._query_item_group(in_msg, item, limit, page_token)
+                self._query_item_group(in_msg, item, remaining, page_token)
             )
             page_token = None
             query_results.append(query_result)
@@ -619,13 +638,14 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
 
             item_groups.append(item_group)
 
-            if limit is not None:
-                limit -= len(item_group.items)
-
-            if limit is not None and limit <= 0:
-                # create a page token, we have reached the limit
-                page_token = EndpointGetTracePageToken(i, last_seen_timestamp_precise, last_seen_id)
-                break
+            if enable_pagination:
+                remaining -= len(item_group.items)
+                if remaining <= 0:
+                    # create a page token, we have reached the limit
+                    page_token = EndpointGetTracePageToken(
+                        i, last_seen_timestamp_precise, last_seen_id
+                    )
+                    break
 
         with sentry_sdk.start_span(op="function", description="assemble_response"):
             response_meta = extract_response_meta(

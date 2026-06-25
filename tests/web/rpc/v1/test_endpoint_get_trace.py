@@ -35,8 +35,10 @@ from snuba.settings import ENABLE_TRACE_PAGINATION_DEFAULT
 from snuba.web.rpc.common.common import ATTRIBUTES_ARRAY_ALLOWLIST
 from snuba.web.rpc.v1.endpoint_get_trace import (
     APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
+    _DEFAULT_ROW_LIMIT,
     EndpointGetTrace,
     _build_query,
+    _get_pagination_limit,
     _process_results,
     _value_to_attribute,
 )
@@ -573,6 +575,35 @@ def test_process_results_keeps_empty_string_attribute() -> None:
     assert attribute.value.val_str == ""
 
 
+@pytest.mark.parametrize(
+    "configured_max, user_limit, expected",
+    [
+        # No configured global cap (default): always bounded.
+        (0, 0, _DEFAULT_ROW_LIMIT),  # no user limit -> default cap
+        (0, 50, 50),  # user limit honored
+        # Negative configured cap: still bounded, never unbounded.
+        (-1, 0, _DEFAULT_ROW_LIMIT),
+        (-1, 50, 50),
+        # Configured global cap.
+        (9, 0, 9),  # no user limit -> configured cap
+        (9, 5, 5),  # user limit below cap -> user limit
+        (9, 100, 9),  # user limit above cap -> configured cap
+    ],
+)
+def test_get_pagination_limit_is_always_bounded(
+    configured_max: int, user_limit: int, expected: int
+) -> None:
+    with patch(
+        "snuba.web.rpc.v1.endpoint_get_trace.ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS",
+        configured_max,
+    ):
+        result = _get_pagination_limit(user_limit)
+    assert result == expected
+    # The result must always be a positive integer so the query is never unbounded.
+    assert result is not None
+    assert result > 0
+
+
 @pytest.mark.eap
 @pytest.mark.redis_db
 class TestGetTracePagination(BaseApiTest):
@@ -702,3 +733,50 @@ class TestGetTracePagination(BaseApiTest):
                     break
                 message.page_token.CopyFrom(response.page_token)
             assert len(items_received) == len(_SPANS) + len(_LOGS)
+
+    def test_query_is_bounded_when_pagination_disabled(self, setup_teardown: Any) -> None:
+        """
+        Even with pagination disabled and no user-provided limit, every query
+        sent to ClickHouse must carry a (default) limit so it is never unbounded.
+        """
+        import snuba.web.rpc.v1.endpoint_get_trace as endpoint_get_trace
+
+        state.set_config("enable_trace_pagination", 0)
+        ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
+        three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
+        message = GetTraceRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=Timestamp(seconds=three_hours_later),
+                request_id=_REQUEST_ID,
+            ),
+            trace_id=_TRACE_ID,
+            items=[
+                GetTraceRequest.TraceItem(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    attributes=[
+                        AttributeKey(
+                            name="sentry.item_id",
+                            type=AttributeKey.Type.TYPE_STRING,
+                        ),
+                    ],
+                ),
+            ],
+        )
+        with patch.object(
+            endpoint_get_trace,
+            "_build_snuba_request",
+            wraps=endpoint_get_trace._build_snuba_request,
+        ) as spy:
+            response = EndpointGetTrace().execute(message)
+
+        assert spy.call_count >= 1
+        for call in spy.call_args_list:
+            limit_arg = call.args[2] if len(call.args) > 2 else call.kwargs["limit"]
+            assert limit_arg == _DEFAULT_ROW_LIMIT
+        # The data is still returned (data set is far smaller than the cap).
+        assert len(response.item_groups) == 1
