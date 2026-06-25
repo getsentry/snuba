@@ -271,9 +271,7 @@ def aggregation_filter_to_expression(
             raise BadSnubaRPCRequestException(f"Unsupported aggregation filter type: {default}")
 
 
-def _groupby_order_by_expression(
-    attr_key: AttributeKey, for_order_by: bool = False
-) -> Expression:
+def _groupby_order_by_expression(attr_key: AttributeKey, for_order_by: bool = False) -> Expression:
     """
     Maps an attribute key used in GROUP BY / ORDER BY to its expression.
 
