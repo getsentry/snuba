@@ -77,6 +77,7 @@ def test_gather_profile_events() -> None:
                     "test_storage",
                     "SELECT ProfileEvents FROM system.query_log WHERE query_id = 'query1' AND type = 'QueryFinish'",
                     False,
+                    False,
                     "test_user",
                 )
 
