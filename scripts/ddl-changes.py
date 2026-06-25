@@ -10,13 +10,19 @@ from snuba.migrations.runner import MigrationKey, Runner
 def _main() -> None:
     """
     This method takes the output of `git diff --name-status master snuba/migrations` and
-    runs `snuba migrations run -dry-run with the proper parameters`, for a CI action
+    runs `snuba migrations run -dry-run with the proper parameters`, for a CI action.
+
+    Only newly *added* migration files are rendered (``--diff-filter=A``).
+    Modifications to existing migrations are intentionally ignored: shipped
+    migrations are immutable, and a pure-formatting touch to an old migration
+    (e.g. a lint sweep) would otherwise re-render hundreds of files and blow
+    past GitHub's comment-size limit.
     """
     diff_result = subprocess.run(
         [
             "git",
             "diff",
-            "--diff-filter=AM",
+            "--diff-filter=A",
             "--name-only",
             "origin/master",
             "--",
