@@ -507,6 +507,11 @@
       "type": "string",
       "default": "",
       "description": "ClickHouse lightweight_delete_mode applied to lightweight-delete queries. Empty (the default) leaves the setting unset. One of: alter_update (heavyweight ALTER UPDATE mutation), lightweight_update (lightweight if possible, else ALTER UPDATE), lightweight_update_force (lightweight if possible, else throw); any other non-empty value is treated as lightweight_update. Migrated from runtime config lightweight_delete_mode."
+    },
+    "replacements_expiry_window_minutes": {
+      "type": "integer",
+      "default": 5,
+      "description": "Window in minutes for which a project that recently received replacements is kept in the auto-replacements bypass set. Migrated from runtime config replacements_expiry_window_minutes."
     }
   }
 }

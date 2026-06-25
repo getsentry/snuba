@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import time
-import typing
 from datetime import datetime, timedelta
 from typing import Mapping, Sequence
 
@@ -11,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 from snuba import environment
 from snuba.redis import RedisClientKey, get_redis_client
-from snuba.state import get_int_config
+from snuba.state.sentry_options import get_int_option
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "replacements_and_expiry")
@@ -30,9 +29,7 @@ def set_config_auto_replacements_bypass_projects(
     try:
         projects_within_expiry = get_config_auto_replacements_bypass_projects(curr_time)
         start = time.time()
-        expiry_window = typing.cast(
-            int, get_int_config(key=REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY, default=5)
-        )
+        expiry_window = get_int_option(REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY, 5)
         with redis_client.pipeline() as pipeline:
             for project_id in new_project_ids:
                 if project_id not in projects_within_expiry:
