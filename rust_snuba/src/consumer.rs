@@ -100,6 +100,13 @@ pub fn consumer_impl(
         .expect("failed to initialize sentry-options");
 
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
+
+    tracing::info!(
+        consumer_group,
+        "Consumer config: {}",
+        consumer_config.redacted_for_logging()
+    );
+
     let max_batch_size = consumer_config.max_batch_size;
     let max_batch_time = Duration::from_millis(consumer_config.max_batch_time_ms);
     let max_batch_size_calculation = consumer_config.max_batch_size_calculation;
