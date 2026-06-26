@@ -277,8 +277,9 @@ _TYPED_ARRAY_COLUMNS = {
 class TestTraceItemFiltersArrayMapColumns:
     """Array predicates read the typed ``attributes_array_*`` map columns when
     ``use_array_map_columns`` is set, and the legacy ``attributes_array`` JSON
-    column otherwise. All four typed columns are read: unlike the scalar
-    double-write, array ints live only in ``attributes_array_int``."""
+    column otherwise. A comparison reads only the typed column(s) that can hold a
+    value of the compared type (string -> string column, number -> int+float, bool
+    -> bool column); an exists filter (no value) reads all four."""
 
     def _array_filter(
         self,
@@ -305,7 +306,8 @@ class TestTraceItemFiltersArrayMapColumns:
         assert membership.function_name == "arrayMap"
         assert _collect_column_names(membership) == {"attributes_array"}
 
-    def test_like_on_array_key_uses_typed_columns_when_enabled(self) -> None:
+    def test_like_on_array_key_uses_only_string_typed_column(self) -> None:
+        # LIKE takes a string pattern, so only the string column can match.
         result = trace_item_filters_to_expression(
             self._array_filter(ComparisonFilter.OP_LIKE, AttributeValue(val_str="%error%")),
             attribute_key_to_expression,
@@ -316,20 +318,41 @@ class TestTraceItemFiltersArrayMapColumns:
         membership = result.parameters[1]
         assert isinstance(membership, FunctionCall)
         assert membership.function_name == "arrayConcat"
-        assert _collect_column_names(membership) == _TYPED_ARRAY_COLUMNS
+        assert _collect_column_names(membership) == {"attributes_array_string"}
 
-    def test_equals_on_array_key_uses_typed_columns_when_enabled(self) -> None:
+    def test_equals_string_on_array_key_uses_only_string_typed_column(self) -> None:
         result = trace_item_filters_to_expression(
             self._array_filter(ComparisonFilter.OP_EQUALS, AttributeValue(val_str="error")),
             attribute_key_to_expression,
             use_array_map_columns=True,
         )
-        assert isinstance(result, FunctionCall)
-        assert result.function_name == "arrayExists"
         membership = result.parameters[1]
         assert isinstance(membership, FunctionCall)
-        assert membership.function_name == "arrayConcat"
-        assert _collect_column_names(membership) == _TYPED_ARRAY_COLUMNS
+        assert _collect_column_names(membership) == {"attributes_array_string"}
+
+    def test_equals_number_on_array_key_uses_only_numeric_typed_columns(self) -> None:
+        # A number can be stored in either the int or the float column.
+        result = trace_item_filters_to_expression(
+            self._array_filter(ComparisonFilter.OP_EQUALS, AttributeValue(val_int=12)),
+            attribute_key_to_expression,
+            use_array_map_columns=True,
+        )
+        membership = result.parameters[1]
+        assert isinstance(membership, FunctionCall)
+        assert _collect_column_names(membership) == {
+            "attributes_array_int",
+            "attributes_array_float",
+        }
+
+    def test_equals_bool_on_array_key_uses_only_bool_typed_column(self) -> None:
+        result = trace_item_filters_to_expression(
+            self._array_filter(ComparisonFilter.OP_EQUALS, AttributeValue(val_bool=True)),
+            attribute_key_to_expression,
+            use_array_map_columns=True,
+        )
+        membership = result.parameters[1]
+        assert isinstance(membership, FunctionCall)
+        assert _collect_column_names(membership) == {"attributes_array_bool"}
 
     def test_exists_filter_on_array_key_uses_typed_columns_when_enabled(self) -> None:
         item_filter = TraceItemFilter(

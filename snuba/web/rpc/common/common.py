@@ -91,6 +91,7 @@ def _trace_item_filter_key_expression(
     attr_to_key_expression_callable: Callable[[AttributeKey], Expression],
     key: AttributeKey,
     use_array_map_columns: bool = False,
+    value_type: str | None = None,
 ) -> Expression:
     """predicates must use the normalized
     ``arrayMap`` (``type_array_to_membership_array_expression``) so
@@ -98,12 +99,15 @@ def _trace_item_filter_key_expression(
 
     When ``use_array_map_columns`` is set, array predicates read the typed
     ``attributes_array_*`` map columns instead of the legacy ``attributes_array``
-    JSON column (see ``use_array_map_columns``).
+    JSON column (see ``use_array_map_columns``). ``value_type`` is the AttributeValue
+    oneof being compared against; on the typed-column path it narrows the read to the
+    column(s) that can hold a value of that type instead of all four (see
+    ``type_array_to_membership_array_expression_from_typed_columns``).
     """
     if key.type == AttributeKey.Type.TYPE_ARRAY:
         try:
             if use_array_map_columns:
-                return type_array_to_membership_array_expression_from_typed_columns(key)
+                return type_array_to_membership_array_expression_from_typed_columns(key, value_type)
             return type_array_to_membership_array_expression(key)
         except MalformedAttributeException as e:
             raise BadSnubaRPCRequestException(str(e)) from e
@@ -923,6 +927,7 @@ def trace_item_filters_to_expression(
             attr_to_key_expression_callable=attribute_key_to_expression,
             key=k,
             use_array_map_columns=use_array_map_columns,
+            value_type=v.WhichOneof("value"),
         )
 
         value_type = v.WhichOneof("value")
