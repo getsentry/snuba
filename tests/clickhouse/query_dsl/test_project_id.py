@@ -1,4 +1,5 @@
-from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set, Tuple, cast
+from collections.abc import Mapping, MutableMapping, Sequence
+from typing import Any, cast
 
 import pytest
 from snuba_sdk.legacy import json_to_snql
@@ -12,7 +13,7 @@ from snuba.query.logical import EntityQuery, Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query
 
-test_cases: Sequence[Tuple[Mapping[str, Any], Optional[Set[int]]]] = [
+test_cases: Sequence[tuple[Mapping[str, Any], set[int] | None]] = [
     (
         {
             "selected_columns": ["event_id"],
@@ -174,7 +175,7 @@ test_cases: Sequence[Tuple[Mapping[str, Any], Optional[Set[int]]]] = [
 @pytest.mark.redis_db
 @pytest.mark.parametrize("query_body, expected_projects", test_cases)
 def test_find_projects(
-    query_body: MutableMapping[str, Any], expected_projects: Optional[Set[int]]
+    query_body: MutableMapping[str, Any], expected_projects: set[int] | None
 ) -> None:
     events = get_dataset("events")
     if expected_projects is None:

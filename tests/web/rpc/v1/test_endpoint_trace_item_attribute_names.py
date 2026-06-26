@@ -9,10 +9,10 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
 )
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
-from sentry_protos.snuba.v1.trace_item_filter_pb2 import ExistsFilter, TraceItemFilter
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import AndFilter, ExistsFilter, TraceItemFilter
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.expressions import FunctionCall, Lambda, Literal
 from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
@@ -62,9 +62,9 @@ def populate_eap_spans_storage(num_rows: int) -> None:
             attributes=attributes,
         )
 
-    items_storage = get_storage(StorageKey("eap_items"))
+    items_storage = get_writable_storage(StorageKey("eap_items"))
     messages = [generate_span_event_message(i) for i in range(num_rows)]
-    write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+    write_raw_unprocessed_events(items_storage, messages)
 
 
 @pytest.fixture(autouse=True)
@@ -239,6 +239,46 @@ class TestTraceItemAttributeNames(BaseApiTest):
             ),
         ]
         assert res.attributes == expected
+
+    def test_basic_co_occurring_attrs_with_match_any(self) -> None:
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
+            ),
+            limit=TOTAL_GENERATED_ATTR_PER_TYPE,
+            intersecting_attributes_filter=TraceItemFilter(
+                and_filter=AndFilter(
+                    filters=[
+                        TraceItemFilter(
+                            exists_filter=ExistsFilter(
+                                key=AttributeKey(type=AttributeKey.TYPE_STRING, name=key)
+                            )
+                        )
+                        for key in ["a_tag_000", "a_tag_001"]
+                    ]
+                )
+            ),
+            match_mode=TraceItemAttributeNamesRequest.MatchMode.MATCH_MODE_ANY,
+            type=AttributeKey.Type.TYPE_STRING,
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+        assert (
+            TraceItemAttributeNamesResponse.Attribute(
+                name="a_tag_000", type=AttributeKey.Type.TYPE_STRING
+            )
+            in res.attributes
+        )
+        assert (
+            TraceItemAttributeNamesResponse.Attribute(
+                name="a_tag_001", type=AttributeKey.Type.TYPE_STRING
+            )
+            in res.attributes
+        )
 
     def test_co_occurring_attrs_excludes_unsearchable_keys_without_in_set(self) -> None:
         """Regression guard for SNUBA-B82 (mixed-version distributed reads).

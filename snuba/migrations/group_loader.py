@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import os
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from glob import glob
 from importlib import import_module
-from typing import Sequence
 
 from snuba.migrations.errors import MigrationDoesNotExist
 from snuba.migrations.migration import Migration
@@ -53,10 +53,8 @@ class DirectoryLoader(GroupLoader, ABC):
             return []
         # grab the migrations, ignore all other files
         migration_filenames = sorted(
-            map(
-                lambda x: os.path.basename(x)[:-3],
-                glob(os.path.join(migration_folder, "[0-9][0-9][0-9][0-9]_*.py")),
-            )
+            os.path.basename(x)[:-3]
+            for x in glob(os.path.join(migration_folder, "[0-9][0-9][0-9][0-9]_*.py"))
         )
         # validate no duplicate migration numbers
         last = None
@@ -79,9 +77,10 @@ class DirectoryLoader(GroupLoader, ABC):
     def load_migration(self, migration_id: str) -> Migration:
         try:
             module = import_module(f"{self.__module}.{migration_id}")
-            return module.Migration()  # type: ignore
-        except ModuleNotFoundError:
-            raise MigrationDoesNotExist("Invalid migration ID")
+            migration: Migration = module.Migration()
+            return migration
+        except ModuleNotFoundError as e:
+            raise MigrationDoesNotExist("Invalid migration ID") from e
 
 
 class SystemLoader(DirectoryLoader):

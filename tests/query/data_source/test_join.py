@@ -13,9 +13,7 @@ from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column
 from snuba.query.logical import Query
 
-ERRORS_SCHEMA = ColumnSet(
-    [("event_id", UUID()), ("message", String()), ("group_id", UInt(32))]
-)
+ERRORS_SCHEMA = ColumnSet([("event_id", UUID()), ("message", String()), ("group_id", UInt(32))])
 
 GROUPS_SCHEMA = ColumnSet([("id", UInt(32)), ("message", String())])
 

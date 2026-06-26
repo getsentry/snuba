@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Optional, Sequence, TypeVar, Union
+from collections.abc import Sequence
+from typing import TypeVar
 
 import sentry_sdk
 
@@ -46,7 +47,7 @@ def get_query_data_source(
     relational_source: RelationalSource,
     allocation_policies: list[AllocationPolicy],
     final: bool,
-    sampling_rate: Optional[float],
+    sampling_rate: float | None,
     storage_key: StorageKey,
 ) -> Table:
     assert isinstance(relational_source, TableSource)
@@ -74,7 +75,7 @@ def check_storage_readiness(storage: ReadableStorage) -> None:
 
 
 def build_best_plan(
-    physical_query: Union[Query, ProcessableQuery[Table]],
+    physical_query: Query | ProcessableQuery[Table],
     settings: QuerySettings,
     post_processors: Sequence[ClickhouseQueryProcessor] = [],
 ) -> ClickhouseQueryPlan:

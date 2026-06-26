@@ -32,7 +32,7 @@ def snuba_api() -> FlaskClient:
 
 
 def test_response_dumping() -> None:
-    data = {
+    data: dict[str, Any] = {
         "data": [
             {"count": 5181337, "release": "elsa"},
             {"count": 2170, "release": "simba"},
@@ -58,8 +58,38 @@ def test_response_dumping() -> None:
     dumped_payload = dump_payload(data)
 
     clean_data = copy.deepcopy(data)
-    clean_data["data"][3]["release"] = "RAW_BYTESTRING__" + b"x;\x83\xc0\x05".hex()  # type: ignore
+    clean_data["data"][3]["release"] = "RAW_BYTESTRING__" + b"x;\x83\xc0\x05".hex()
     assert json.loads(dumped_payload) == clean_data
+
+
+def test_response_dumping_sanitizes_bytes_everywhere() -> None:
+    """
+    When the payload contains invalid-UTF-8 bytes anywhere (nested in lists, in
+    the totals row, etc.) every ``bytes`` value is replaced: valid UTF-8 is
+    decoded to a string, invalid bytes become a ``RAW_BYTESTRING__<hex>`` marker.
+    """
+    bad = b"x;\x83\xc0\x05"
+    bad_hex = "RAW_BYTESTRING__" + bad.hex()
+    data = {
+        "data": [
+            {"count": 1, "release": b"good-utf8", "tags": ["ok", bad, ["nested", bad]]},
+            {"count": 2, "release": bad},
+        ],
+        "totals": {"count": 0, "release": bad},
+        "meta": [],
+        "trace_output": "",
+    }
+    expected = {
+        "data": [
+            {"count": 1, "release": "good-utf8", "tags": ["ok", bad_hex, ["nested", bad_hex]]},
+            {"count": 2, "release": bad_hex},
+        ],
+        "totals": {"count": 0, "release": bad_hex},
+        "meta": [],
+        "trace_output": "",
+    }
+    dumped_payload = dump_payload(data)
+    assert json.loads(dumped_payload) == expected
 
 
 @pytest.mark.parametrize("exception, expected_log_level", invalid_query_exception_test_cases)

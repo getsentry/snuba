@@ -1,9 +1,8 @@
 from datetime import datetime
-from typing import Dict, List, Tuple
 
 from sentry_relay.consts import DataCategory
 
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.storage_routing.routing_strategies.common import Outcome
 from tests.helpers import write_raw_unprocessed_events
@@ -15,7 +14,7 @@ def gen_ingest_outcome(
     project_id: int = 1,
     org_id: int = 1,
     outcome_category: int = DataCategory.SPAN_INDEXED,
-) -> Dict[str, int | str | None]:
+) -> dict[str, int | str | None]:
     """Generate a single ingest outcome record.
 
     Args:
@@ -42,7 +41,7 @@ def gen_ingest_outcome(
 
 
 def store_outcomes_data(
-    outcome_data: List[Tuple[datetime, int]],
+    outcome_data: list[tuple[datetime, int]],
     outcome_category: int = DataCategory.SPAN_INDEXED,
     org_id: int = 1,
     project_id: int = 1,
@@ -55,7 +54,7 @@ def store_outcomes_data(
         outcome_category: The outcome category to use for all records when using 2-tuple format
                          (defaults to SPAN_INDEXED, ignored for 3-tuple format)
     """
-    outcomes_storage = get_storage(StorageKey("outcomes_raw"))
+    outcomes_storage = get_writable_storage(StorageKey("outcomes_raw"))
     messages = []
 
     for item in outcome_data:
@@ -70,7 +69,7 @@ def store_outcomes_data(
                 time, num_outcomes, outcome_category=category, org_id=org_id, project_id=project_id
             )
         )
-    write_raw_unprocessed_events(outcomes_storage, messages)  # type: ignore
+    write_raw_unprocessed_events(outcomes_storage, messages)
 
 
 # Available outcome categories (from DataCategory class):

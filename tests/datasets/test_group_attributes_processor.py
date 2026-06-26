@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Optional
 
 import pytest
 from sentry_kafka_schemas.schema_types.group_attributes_v1 import (
@@ -39,15 +38,13 @@ def group_created() -> GroupAttributesSnapshot:
 
 
 class TestGroupAttributesMessageProcessor:
-    KAFKA_META = KafkaMessageMetadata(
-        offset=0, partition=0, timestamp=datetime(1970, 1, 1)
-    )
+    KAFKA_META = KafkaMessageMetadata(offset=0, partition=0, timestamp=datetime(1970, 1, 1))
 
     processor = GroupAttributesMessageProcessor()
 
     def process_message(
         self, message, kafka_meta: KafkaMessageMetadata = KAFKA_META
-    ) -> Optional[ProcessedMessage]:
+    ) -> ProcessedMessage | None:
         return self.processor.process_message(message, kafka_meta)
 
     def processed_single_row(self, message) -> WriterTableRow:

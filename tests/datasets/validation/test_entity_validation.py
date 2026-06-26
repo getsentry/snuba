@@ -1,5 +1,4 @@
 import datetime
-from typing import Optional
 
 import pytest
 
@@ -71,7 +70,7 @@ required_column_tests = [
 
 
 @pytest.mark.parametrize("key, condition", required_column_tests)
-def test_entity_required_column_validation(key: EntityKey, condition: Optional[Expression]) -> None:
+def test_entity_required_column_validation(key: EntityKey, condition: Expression | None) -> None:
     query = LogicalQuery(
         QueryEntity(key, get_entity(key).get_data_model()),
         selected_columns=[
@@ -104,7 +103,7 @@ invalid_required_column_tests = [
 
 @pytest.mark.parametrize("key, condition", invalid_required_column_tests)
 def test_entity_required_column_validation_failure(
-    key: EntityKey, condition: Optional[Expression]
+    key: EntityKey, condition: Expression | None
 ) -> None:
     query = LogicalQuery(
         QueryEntity(key, get_entity(key).get_data_model()),
@@ -157,7 +156,7 @@ required_str_column_tests = [
 
 @pytest.mark.parametrize("key, condition", required_str_column_tests)
 def test_entity_required_str_column_validation(
-    key: EntityKey, condition: Optional[Expression]
+    key: EntityKey, condition: Expression | None
 ) -> None:
     query = LogicalQuery(
         QueryEntity(key, get_entity(key).get_data_model()),

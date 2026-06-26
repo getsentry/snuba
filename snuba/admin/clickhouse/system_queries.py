@@ -243,7 +243,7 @@ def is_query_show(sql_query: str) -> bool:
     """
     sql_query = " ".join(sql_query.split())
     match = SHOW_QUERY_RE.match(sql_query)
-    return True if match else False
+    return bool(match)
 
 
 def is_query_describe(sql_query: str) -> bool:
@@ -252,7 +252,7 @@ def is_query_describe(sql_query: str) -> bool:
     """
     sql_query = " ".join(sql_query.split())
     match = DESCRIBE_QUERY_RE.match(sql_query)
-    return True if match else False
+    return bool(match)
 
 
 def is_system_command(sql_query: str) -> bool:
@@ -273,7 +273,7 @@ def is_query_optimize(sql_query: str) -> bool:
     """
     sql_query = " ".join(sql_query.split())
     match = OPTIMIZE_QUERY_RE.match(sql_query)
-    return True if match else False
+    return bool(match)
 
 
 def is_query_alter(sql_query: str) -> bool:
@@ -282,7 +282,7 @@ def is_query_alter(sql_query: str) -> bool:
     """
     sql_query = " ".join(sql_query.split())
     match = ALTER_QUERY_RE.match(sql_query)
-    return True if match else False
+    return bool(match)
 
 
 def is_query_drop(sql_query: str) -> bool:
@@ -291,7 +291,7 @@ def is_query_drop(sql_query: str) -> bool:
     """
     sql_query = " ".join(sql_query.split())
     match = DROP_TABLE_QUERY_RE.match(sql_query)
-    return True if match else False
+    return bool(match)
 
 
 def validate_query(
@@ -368,7 +368,7 @@ def run_system_query_on_host_with_sql(
         # Don't send error to Snuba if it is an unknown table or column as it
         # will be too noisy
         if exc.code in (ErrorCodes.UNKNOWN_TABLE, ErrorCodes.UNKNOWN_IDENTIFIER):
-            raise InvalidCustomQuery(f"Invalid query: {exc.message} {exc.code}")
+            raise InvalidCustomQuery(f"Invalid query: {exc.message} {exc.code}") from exc
 
         raise
     finally:

@@ -8,6 +8,7 @@ by creating unit tests in ./unit_tests
 """
 
 from datetime import datetime
+from typing import cast
 
 import pytest
 
@@ -114,9 +115,7 @@ def test_mql() -> None:
                         column("project_id", None, "_snuba_project_id"),
                         f.tuple(literal(1)),
                     ),
-                    in_cond(
-                        column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
-                    ),
+                    in_cond(column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))),
                 ),
             ),
             and_cond(
@@ -125,17 +124,11 @@ def test_mql() -> None:
                         column("use_case_id", None, "_snuba_use_case_id"),
                         literal("transactions"),
                     ),
-                    f.equals(
-                        column("granularity", None, "_snuba_granularity"), literal(60)
-                    ),
+                    f.equals(column("granularity", None, "_snuba_granularity"), literal(60)),
                 ),
                 and_cond(
-                    f.equals(
-                        column("metric_id", None, "_snuba_metric_id"), literal(123456)
-                    ),
-                    in_cond(
-                        tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))
-                    ),
+                    f.equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
+                    in_cond(tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))),
                 ),
             ),
         ),
@@ -222,9 +215,7 @@ def test_mql_extrapolate() -> None:
                         column("project_id", None, "_snuba_project_id"),
                         f.tuple(literal(1)),
                     ),
-                    in_cond(
-                        column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
-                    ),
+                    in_cond(column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))),
                 ),
             ),
             and_cond(
@@ -233,17 +224,11 @@ def test_mql_extrapolate() -> None:
                         column("use_case_id", None, "_snuba_use_case_id"),
                         literal("transactions"),
                     ),
-                    f.equals(
-                        column("granularity", None, "_snuba_granularity"), literal(60)
-                    ),
+                    f.equals(column("granularity", None, "_snuba_granularity"), literal(60)),
                 ),
                 and_cond(
-                    f.equals(
-                        column("metric_id", None, "_snuba_metric_id"), literal(123456)
-                    ),
-                    in_cond(
-                        tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))
-                    ),
+                    f.equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
+                    in_cond(tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))),
                 ),
             ),
         ),
@@ -329,9 +314,7 @@ def test_mql_wildcards() -> None:
                         column("project_id", None, "_snuba_project_id"),
                         f.tuple(literal(1)),
                     ),
-                    in_cond(
-                        column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
-                    ),
+                    in_cond(column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))),
                 ),
             ),
             and_cond(
@@ -340,14 +323,10 @@ def test_mql_wildcards() -> None:
                         column("use_case_id", None, "_snuba_use_case_id"),
                         literal("transactions"),
                     ),
-                    f.equals(
-                        column("granularity", None, "_snuba_granularity"), literal(60)
-                    ),
+                    f.equals(column("granularity", None, "_snuba_granularity"), literal(60)),
                 ),
                 and_cond(
-                    f.equals(
-                        column("metric_id", None, "_snuba_metric_id"), literal(123456)
-                    ),
+                    f.equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
                     f.like(tags_raw["42"], literal("before_wildcard_%")),
                 ),
             ),
@@ -434,9 +413,7 @@ def test_mql_negated_wildcards() -> None:
                         column("project_id", None, "_snuba_project_id"),
                         f.tuple(literal(1)),
                     ),
-                    in_cond(
-                        column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
-                    ),
+                    in_cond(column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))),
                 ),
             ),
             and_cond(
@@ -445,14 +422,10 @@ def test_mql_negated_wildcards() -> None:
                         column("use_case_id", None, "_snuba_use_case_id"),
                         literal("transactions"),
                     ),
-                    f.equals(
-                        column("granularity", None, "_snuba_granularity"), literal(60)
-                    ),
+                    f.equals(column("granularity", None, "_snuba_granularity"), literal(60)),
                 ),
                 and_cond(
-                    f.equals(
-                        column("metric_id", None, "_snuba_metric_id"), literal(123456)
-                    ),
+                    f.equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
                     f.notLike(tags_raw["42"], literal("before_wildcard_%")),
                 ),
             ),
@@ -508,9 +481,7 @@ def test_formula_mql() -> None:
         "offset": None,
     }
 
-    def timeseries(
-        agg: str, metric_id: int, condition: FunctionCall | None = None
-    ) -> FunctionCall:
+    def timeseries(agg: str, metric_id: int, condition: FunctionCall | None = None) -> FunctionCall:
         metric_condition = FunctionCall(
             None,
             "equals",
@@ -543,7 +514,7 @@ def test_formula_mql() -> None:
         )
 
     def tag_column(tag: str) -> SubscriptableReference:
-        tag_val = mql_context.get("indexer_mappings").get(tag)  # type: ignore
+        tag_val = cast("dict[str, int]", mql_context["indexer_mappings"]).get(tag)
         return SubscriptableReference(
             alias=f"_snuba_tags_raw[{tag_val}]",
             column=Column(
@@ -561,9 +532,7 @@ def test_formula_mql() -> None:
             timeseries(
                 "sumIf",
                 123456,
-                binary_condition(
-                    "equals", tag_column("status_code"), Literal(None, "200")
-                ),
+                binary_condition("equals", tag_column("status_code"), Literal(None, "200")),
             ),
             timeseries("sumIf", 123456),
             "_snuba_aggregate_value",
@@ -640,9 +609,7 @@ def test_formula_mql() -> None:
                 ),
                 and_cond(
                     and_cond(
-                        in_cond(
-                            column("org_id", "d0", "_snuba_org_id"), f.tuple(literal(1))
-                        ),
+                        in_cond(column("org_id", "d0", "_snuba_org_id"), f.tuple(literal(1))),
                         f.equals(
                             column("use_case_id", "d0", "_snuba_use_case_id"),
                             literal("transactions"),
@@ -689,9 +656,7 @@ def test_formula_mql() -> None:
                             column("granularity", "d1", "_snuba_granularity"),
                             literal(60),
                         ),
-                        f.equals(
-                            NestedColumn("tags_raw", "d0")["222222"], literal("200")
-                        ),
+                        f.equals(NestedColumn("tags_raw", "d0")["222222"], literal("200")),
                     ),
                     and_cond(
                         f.equals(
@@ -740,9 +705,7 @@ SELECT group_id, goo(partition) AS issue_id,
         foo(zoo(offset)) AS offset
 WHERE {conditions}
 ORDER BY group_id ASC
-""".format(
-        conditions=snql_conditions_with_default("foo(issue_id) AS group_id = 1")
-    )
+""".format(conditions=snql_conditions_with_default("foo(issue_id) AS group_id = 1"))
     expected = Query(
         QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
         selected_columns=[
@@ -877,16 +840,12 @@ def test_recursion_error() -> None:
         ]
         return " AND ".join(list(conditions) + DEFAULT_TEST_QUERY_CONDITIONS)
 
-    conds = " OR ".join(
-        ["(group_id=268128807 AND group_id=268128807)" for i in range(NUM_CONDS)]
-    )
+    conds = " OR ".join(["(group_id=268128807 AND group_id=268128807)" for i in range(NUM_CONDS)])
     snql = """
     MATCH (events)
     SELECT group_id, goo(partition) AS issue_id,
             foo(zoo(offset)) AS offset
     WHERE {conditions}
     ORDER BY group_id ASC
-    """.format(
-        conditions=snql_conditions_with_default(f"({conds})")
-    )
+    """.format(conditions=snql_conditions_with_default(f"({conds})"))
     parse_snql_query(snql, get_dataset("events"))

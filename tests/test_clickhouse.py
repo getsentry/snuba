@@ -5,7 +5,7 @@ from clickhouse_driver import Client, errors
 
 from snuba.clickhouse.columns import Array, UInt
 from snuba.clickhouse.columns import SchemaModifiers as Modifier
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.native import ClickhouseNativePool
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -35,7 +35,7 @@ def test_reconnect(FakeClient: Client) -> None:
         errors.NetworkError,
         '{"data": "to my face"}',
     ]
-    cp = ClickhousePool("0:0:0:0", 9000, "default", "", "default")
+    cp = ClickhouseNativePool("0:0:0:0", 9000, "default", "", "default")
     cp.execute("SHOW TABLES")
     assert FakeClient.return_value.execute.mock_calls == [
         call(

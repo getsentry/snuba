@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 import logging
+import typing
 from typing import Any, cast
 
 from snuba.configs.configuration import Configuration, InvalidConfig, ResourceIdentifier
-from snuba.query.allocation_policies import QueryResultOrError, QuotaAllowance
+from snuba.query.allocation_policies import (
+    MAX_THRESHOLD,
+    NO_SUGGESTION,
+    NO_UNITS,
+    QueryResultOrError,
+    QuotaAllowance,
+)
 from snuba.query.allocation_policies.concurrent_rate_limit import (
     BaseConcurrentRateLimitAllocationPolicy,
 )
@@ -22,11 +29,9 @@ logger = logging.getLogger("snuba.query.allocation_policy_cross_org")
 _RATE_LIMIT_NAME = "concurrent_limit_policy"
 _UNREGISTERED_REFERRER_MAX_THREADS = 1
 _UNREGISTERED_REFERRER_CONCURRENT_QUERIES = 1
-from snuba.query.allocation_policies import MAX_THRESHOLD, NO_SUGGESTION, NO_UNITS
 
 QUOTA_UNIT = "concurrent_queries"
 SUGGESTION = "scan less concurrent queries"
-import typing
 
 
 class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
@@ -61,15 +66,17 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
         self,
         config_key: str,
         value: Any,
-        params: dict[str, Any] = {},
+        params: dict[str, Any] | None = None,
         user: str | None = None,
     ) -> None:
         """makes sure only registered referrers can be overridden"""
+        if params is None:
+            params = {}
         if config_key in (
             "referrer_concurrent_override",
             "referrer_max_threads_override",
         ):
-            referrer = params.get("referrer", None)
+            referrer = params.get("referrer")
             if referrer is not None and not self._referrer_is_registered(referrer):
                 raise InvalidConfig(
                     f"Referrer {referrer} is not registered in the the {self._resource_identifier.value} yaml. Register it first to be able to override its limits"

@@ -18,6 +18,7 @@ schema:
       { name: trace_id, type: UUID },
       { name: conversation_id, type: UUID },
       { name: session_id, type: UUID },
+      { name: ai_conversation_id, type: String },
       { name: item_id, type: UInt, args: { size: 128 } },
       { name: sampling_weight, type: UInt, args: { size: 64 } },
       { name: sampling_factor, type: Float, args: { size: 64 } },

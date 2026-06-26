@@ -1,5 +1,3 @@
-from typing import Optional
-
 from snuba.query.expressions import Expression
 from snuba.utils.serializable_exception import SerializableException
 
@@ -40,8 +38,8 @@ class QueryPlanException(SerializableException):
 
     def __init__(
         self,
-        exception_type: Optional[str] = None,
-        message: Optional[str] = None,
+        exception_type: str | None = None,
+        message: str | None = None,
         should_report: bool = True,
     ) -> None:
         self.exception_type = exception_type

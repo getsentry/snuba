@@ -181,9 +181,7 @@ def test_subquery_generator_metrics() -> None:
     assert selected_columns == expected_outer_query_selected
 
     # Test outer conditions
-    assert (
-        original_query.get_condition() is None
-    ), "all conditions should be pushed down"
+    assert original_query.get_condition() is None, "all conditions should be pushed down"
 
     # Test outer groupby
     expected_outer_query_groupby = []
@@ -235,9 +233,7 @@ def test_subquery_generator_metrics() -> None:
     assert selected_columns == expected_lhs_selected
 
     # The ordering of conditions is not guaranteed so we sort them by alias before asserting
-    flattened_conditions: list[Expression] = get_first_level_and_conditions(
-        lhs.get_condition()
-    )
+    flattened_conditions: list[Expression] = get_first_level_and_conditions(lhs.get_condition())
     flattened_conditions.sort(key=lambda x: x.alias)
     assert flattened_conditions == [
         f.greaterOrEquals(
@@ -315,9 +311,7 @@ def test_subquery_generator_metrics() -> None:
     assert selected_columns == expected_rhs_selected
 
     # Test rhs conditions
-    flattened_conditions: list[Expression] = get_first_level_and_conditions(
-        rhs.get_condition()
-    )
+    flattened_conditions: list[Expression] = get_first_level_and_conditions(rhs.get_condition())
     flattened_conditions.sort(key=lambda x: x.alias)
     assert flattened_conditions == [
         f.greaterOrEquals(

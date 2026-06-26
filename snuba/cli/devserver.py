@@ -568,9 +568,8 @@ def _run_daemons(daemons: list[tuple[str, list[str]]]) -> int:
                 sys.stdout.flush()
             rc = proc.wait()
             with failure_lock:
-                if rc != 0 and not cleanup_started.is_set():
-                    if not first_failure:
-                        first_failure.append(rc)
+                if rc != 0 and not cleanup_started.is_set() and not first_failure:
+                    first_failure.append(rc)
         except BaseException:
             with failure_lock:
                 if not cleanup_started.is_set() and not first_failure:

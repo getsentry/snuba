@@ -1,7 +1,8 @@
 import uuid
 from collections import OrderedDict
+from collections.abc import Iterable
 from datetime import datetime
-from typing import Any, Dict, Iterable, Tuple
+from typing import Any
 
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -45,6 +46,7 @@ from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
+    use_array_map_columns,
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
@@ -73,12 +75,12 @@ EAP_ITEMS_ENTITY = Entity(
 
 
 def _transform_attr_distribution_results(
-    results: Iterable[Dict[str, Any]],
+    results: Iterable[dict[str, Any]],
     request_meta: RequestMeta,
 ) -> Iterable[AttributeDistribution]:
     # Maintain the order of keys, so it is in descending order
     # of most prevelant key-value pair.
-    res: OrderedDict[Tuple[str, str], AttributeDistribution] = OrderedDict()
+    res: OrderedDict[tuple[str, str], AttributeDistribution] = OrderedDict()
 
     for row in results:
         attr_key = row["attr_key"]
@@ -233,6 +235,7 @@ def _build_attr_distribution_query(
     trace_item_filters_expression = trace_item_filters_to_expression(
         in_msg.filter,
         (attribute_key_to_expression),
+        use_array_map_columns=use_array_map_columns(in_msg.meta),
     )
     item_type_filter = f.equals(column("item_type"), in_msg.meta.trace_item_type)
     query = Query(

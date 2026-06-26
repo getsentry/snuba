@@ -1,4 +1,4 @@
-from typing import Any, Union
+from typing import Any
 
 from google.protobuf import any_pb2, struct_pb2
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
@@ -50,7 +50,7 @@ class RPCAllocationPolicyException(RPCRequestException):
         )
 
 
-def convert_rpc_exception_to_proto(exc: Union[RPCRequestException, QueryException]) -> ErrorProto:
+def convert_rpc_exception_to_proto(exc: RPCRequestException | QueryException) -> ErrorProto:
     if isinstance(exc, RPCRequestException):
         s = struct_pb2.Struct()
         s.update(exc.details)

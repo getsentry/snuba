@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
@@ -14,9 +14,9 @@ from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 
 
 def build_query(
-    selected_columns: Optional[Sequence[Expression]] = None,
-    condition: Optional[Expression] = None,
-    having: Optional[Expression] = None,
+    selected_columns: Sequence[Expression] | None = None,
+    condition: Expression | None = None,
+    having: Expression | None = None,
 ) -> ClickhouseQuery:
     return ClickhouseQuery(
         Table(

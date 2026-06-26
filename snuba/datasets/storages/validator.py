@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from typing import Union
-
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.migrations.groups import get_group_readiness_state_from_storage_set
 
 
 class StorageValidator:
-    def __init__(self, storage: Union[ReadableTableStorage, WritableTableStorage]) -> None:
+    def __init__(self, storage: ReadableTableStorage | WritableTableStorage) -> None:
         self.storage = storage
 
     def validate(self) -> None:

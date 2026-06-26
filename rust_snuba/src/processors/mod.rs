@@ -165,6 +165,8 @@ mod tests {
                         ".*.*[\"sentry._internal.received_at\"]",
                         "<received timestamp>",
                     );
+                    // session_id is randomized when absent, so redact it.
+                    settings.add_redaction(".*.session_id", "<random uuid>");
                 }
 
                 // This payload is protobuf (so binary), not JSON (so text).

@@ -1,6 +1,7 @@
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Iterator, Optional
+from typing import Any
 
 import pytest
 import sentry_kafka_schemas
@@ -24,7 +25,7 @@ from snuba.replacers.replacer_processor import (
 class Case:
     example: Example
     processor: MessageProcessor
-    replacer_processor: Optional[ReplacerProcessor[Any]]
+    replacer_processor: ReplacerProcessor[Any] | None
 
     def __repr__(self) -> str:
         return repr(self.example)
@@ -101,6 +102,6 @@ def test_has_kafka_schema() -> None:
             sentry_kafka_schemas.get_codec(topic_name)
         except sentry_kafka_schemas.SchemaNotFound:
             if topic_name in DEPRECATED_TOPICS:
-                print("Skipped validation for topic: %s" % topic_name)
+                print(f"Skipped validation for topic: {topic_name}")
             else:
                 raise
