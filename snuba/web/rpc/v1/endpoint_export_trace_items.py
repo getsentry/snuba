@@ -252,6 +252,11 @@ def _build_query(
     page_token: ExportTraceItemsPageToken | None = None,
     query_meta: RequestMeta | None = None,
 ) -> Query:
+    # The cutoff must be evaluated against the time window actually queried (the
+    # routing-adjusted query_meta used in the WHERE clause below), not the original
+    # request window, or the SELECT could read typed columns from a window where they
+    # are unpopulated.
+    meta = query_meta if query_meta is not None else in_msg.meta
     selected_columns = [
         SelectedExpression("timestamp", f.toUnixTimestamp(column("timestamp"), alias="timestamp")),
         SelectedExpression(
@@ -297,7 +302,7 @@ def _build_query(
         # instead of the legacy attributes_array JSON-column allowlist.
         *(
             typed_array_map_selected_expressions()
-            if use_array_map_columns(in_msg.meta)
+            if use_array_map_columns(meta)
             else attributes_array_selected_expressions()
         ),
     ]
@@ -330,7 +335,6 @@ def _build_query(
         if page_token is not None and page_token.keyset_cursor is not None
         else []
     )
-    meta = query_meta if query_meta is not None else in_msg.meta
     item_type_filter = []
     if meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
         item_type_filter.append(f.equals(column("item_type"), literal(meta.trace_item_type)))
@@ -535,8 +539,12 @@ class EndpointExportTraceItems(RPCEndpoint[ExportTraceItemsRequest, ExportTraceI
         )
 
         rows = results.result.get("data", [])
+        # Match _build_query: gate on the routing-adjusted window actually queried.
         processed_results = _convert_rows(
-            rows, read_typed_arrays=use_array_map_columns(in_msg.meta)
+            rows,
+            read_typed_arrays=use_array_map_columns(
+                _export_query_meta(in_msg, self.routing_decision)
+            ),
         )
         is_flex = _is_flextime_export(in_msg)
         orig_start = in_msg.meta.start_timestamp.seconds
