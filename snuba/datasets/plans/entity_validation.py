@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Union
-
 import sentry_sdk
 
 from snuba.datasets.entities.factory import get_entity
@@ -28,7 +26,7 @@ def _validate_query(query: Query) -> None:
             v.validate(exp, query.get_from_clause())
 
 
-def _validate_entities_with_query(query: Union[CompositeQuery[QueryEntity], EntityQuery]) -> None:
+def _validate_entities_with_query(query: CompositeQuery[QueryEntity] | EntityQuery) -> None:
     """
     Applies all validator defined on the entities in the query
     """
@@ -41,7 +39,7 @@ def _validate_entities_with_query(query: Union[CompositeQuery[QueryEntity], Enti
             raise ValidationException(
                 f"Validation failed for entity {query.get_from_clause().key.value}: {e}",
                 should_report=e.should_report,
-            )
+            ) from e
     else:
         from_clause = query.get_from_clause()
         if isinstance(from_clause, JoinClause):
@@ -56,14 +54,14 @@ def _validate_entities_with_query(query: Union[CompositeQuery[QueryEntity], Enti
                     raise ValidationException(
                         f"Validation failed for entity {node.data_source.key.value}: {e}",
                         should_report=e.should_report,
-                    )
+                    ) from e
 
 
 VALIDATORS = [_validate_query, _validate_entities_with_query]
 
 
 def run_entity_validators(
-    query: Union[CompositeQuery[QueryEntity], EntityQuery],
+    query: CompositeQuery[QueryEntity] | EntityQuery,
     settings: QuerySettings | None = None,
 ) -> None:
     """

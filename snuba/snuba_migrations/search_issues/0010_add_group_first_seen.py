@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
@@ -16,9 +16,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 operations.AddColumn(
                     storage_set=StorageSetKey.SEARCH_ISSUES,
                     table_name=table_name,
-                    column=Column(
-                        "group_first_seen", DateTime(MigrationModifiers(nullable=True))
-                    ),
+                    column=Column("group_first_seen", DateTime(MigrationModifiers(nullable=True))),
                     after="message",
                     target=target,
                 ),

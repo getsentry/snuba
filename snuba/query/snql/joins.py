@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import MutableMapping, NamedTuple, Optional, Sequence, Union
+from collections.abc import MutableMapping, Sequence
+from typing import NamedTuple
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query.data_source.join import (
@@ -36,11 +37,11 @@ class Node:
     def __init__(
         self,
         entity_data: IndividualNode[QueryEntity],
-        relationship: Optional[JoinRelationship] = None,
+        relationship: JoinRelationship | None = None,
     ) -> None:
         self.entity_data = entity_data
         self.relationship = relationship
-        self.child: Optional[Node] = None
+        self.child: Node | None = None
         self.join_conditions: Sequence[JoinCondition] = []
 
     @property
@@ -120,7 +121,7 @@ def build_list(relationships: Sequence[RelationshipTuple]) -> Node:
     roots: MutableMapping[EntityKey, Node] = {}
     children: MutableMapping[EntityKey, Node] = {}
 
-    def update_children(child: Optional[Node]) -> None:
+    def update_children(child: Node | None) -> None:
         while child is not None:
             children[child.entity] = child
             child = child.child
@@ -129,12 +130,11 @@ def build_list(relationships: Sequence[RelationshipTuple]) -> Node:
         lhs = Node(rel.lhs)
         rhs = Node(rel.rhs, rel.data)
         orphan = roots.get(rhs.entity)
-        if orphan:
-            if not orphan.has_child(lhs.entity):
-                # The orphan is a child of this join. Combine them.
-                if orphan.child:
-                    rhs.push_child(orphan.child)
-                del roots[orphan.entity]
+        if orphan and not orphan.has_child(lhs.entity):
+            # The orphan is a child of this join. Combine them.
+            if orphan.child:
+                rhs.push_child(orphan.child)
+            del roots[orphan.entity]
 
         if lhs.entity in roots:
             roots[lhs.entity].push_child(rhs)
@@ -159,8 +159,8 @@ def build_list(relationships: Sequence[RelationshipTuple]) -> Node:
 
 def build_join_clause_loop(
     node_list: Node,
-    lhs: Optional[Union[IndividualNode[QueryEntity], JoinClause[QueryEntity]]],
-) -> Union[IndividualNode[QueryEntity], JoinClause[QueryEntity]]:
+    lhs: IndividualNode[QueryEntity] | JoinClause[QueryEntity] | None,
+) -> IndividualNode[QueryEntity] | JoinClause[QueryEntity]:
     rhs = node_list.entity_data
     if lhs is None:
         lhs = rhs

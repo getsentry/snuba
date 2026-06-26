@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import UUID, Array, Column, String
 from snuba.clusters.storage_sets import StorageSetKey
@@ -16,7 +16,6 @@ class Migration(migration.ClickhouseNodeMigration):
     blocking = False
 
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:
-
         return [
             operations.ModifyTableTTL(
                 StorageSetKey.QUERYLOG,

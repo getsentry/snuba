@@ -1,6 +1,7 @@
 import uuid
+from collections.abc import Iterable
 from datetime import datetime
-from typing import Any, Dict, Iterable, NamedTuple, Type, cast
+from typing import Any, Literal, NamedTuple, cast
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -71,17 +72,17 @@ class FlexWindow(NamedTuple):
 
     @classmethod
     def from_filters(cls, filters: list[TraceItemFilter]) -> "FlexWindow":
-        _SCHEMA = [
+        _SCHEMA: list[tuple[str, Literal["val_int"]]] = [
             (FLEX_WIN_START, "val_int"),
             (FLEX_WIN_END, "val_int"),
         ]
         values = []
-        for expected_filter, timestamp_filter in zip(_SCHEMA, filters):
+        for expected_filter, timestamp_filter in zip(_SCHEMA, filters, strict=False):
             filter_name, filter_value_type = expected_filter
             if (
                 not timestamp_filter.HasField("comparison_filter")
                 or timestamp_filter.comparison_filter.key.name != filter_name
-                or not timestamp_filter.comparison_filter.value.HasField(filter_value_type)  # type: ignore[arg-type]
+                or not timestamp_filter.comparison_filter.value.HasField(filter_value_type)
             ):
                 raise ValueError("Invalid timestamp filter in page token")
             values.append(timestamp_filter.comparison_filter.value.val_int)
@@ -144,7 +145,9 @@ class KeysetCursor(NamedTuple):
                     value=AttributeValue(**{val_field: value}),  # type: ignore[arg-type]
                 )
             )
-            for (name, attr_type, val_field), value in zip(_KEYSET_CURSOR_SCHEMA, self)
+            for (name, attr_type, val_field), value in zip(
+                _KEYSET_CURSOR_SCHEMA, self, strict=False
+            )
         ]
 
 
@@ -387,18 +390,17 @@ def _build_snuba_request(
 def _to_any_value(value: Any) -> AnyValue:
     if isinstance(value, bool):
         return AnyValue(bool_value=value)
-    elif isinstance(value, int):
+    if isinstance(value, int):
         return AnyValue(int_value=value)
-    elif isinstance(value, float):
+    if isinstance(value, float):
         return AnyValue(double_value=value)
-    elif isinstance(value, str):
+    if isinstance(value, str):
         return AnyValue(string_value=value)
-    elif isinstance(value, list):
+    if isinstance(value, list):
         return AnyValue(array_value=ArrayValue(values=[_to_any_value(v) for v in value]))
-    elif isinstance(value, datetime):
+    if isinstance(value, datetime):
         return AnyValue(double_value=value.timestamp())
-    else:
-        raise BadSnubaRPCRequestException(f"data type unknown: {type(value)}")
+    raise BadSnubaRPCRequestException(f"data type unknown: {type(value)}")
 
 
 class ProcessedResults(NamedTuple):
@@ -406,7 +408,7 @@ class ProcessedResults(NamedTuple):
     keyset_cursor: KeysetCursor
 
 
-def _convert_rows(rows: Iterable[Dict[str, Any]]) -> ProcessedResults:
+def _convert_rows(rows: Iterable[dict[str, Any]]) -> ProcessedResults:
     items: list[TraceItem] = []
     last_seen_project_id = 0
     last_seen_item_type = TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
@@ -493,11 +495,11 @@ class EndpointExportTraceItems(RPCEndpoint[ExportTraceItemsRequest, ExportTraceI
         return "v1"
 
     @classmethod
-    def request_class(cls) -> Type[ExportTraceItemsRequest]:
+    def request_class(cls) -> type[ExportTraceItemsRequest]:
         return ExportTraceItemsRequest
 
     @classmethod
-    def response_class(cls) -> Type[ExportTraceItemsResponse]:
+    def response_class(cls) -> type[ExportTraceItemsResponse]:
         return ExportTraceItemsResponse
 
     def _execute(self, in_msg: ExportTraceItemsRequest) -> ExportTraceItemsResponse:

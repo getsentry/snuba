@@ -1,4 +1,4 @@
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 from snuba.clusters.cluster import get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
@@ -8,7 +8,7 @@ from snuba.migrations.operations import OperationTarget, SqlOperation
 storage_set = StorageSetKey.EVENTS_ANALYTICS_PLATFORM_RO
 
 # (new_dist_ro_table, source_dist_table, local_table, sharding_key)
-DIST_RO_TABLES: list[tuple[str, str, str, Optional[str]]] = [
+DIST_RO_TABLES: list[tuple[str, str, str, str | None]] = [
     (
         "eap_items_1_dist_ro",
         "eap_items_1_dist",
@@ -54,7 +54,7 @@ def _create_dist_ro_sql(
     new_table: str,
     source_table: str,
     local_table: str,
-    sharding_key: Optional[str],
+    sharding_key: str | None,
 ) -> str:
     cluster = get_cluster(storage_set)
     cluster_name = cluster.get_clickhouse_cluster_name()

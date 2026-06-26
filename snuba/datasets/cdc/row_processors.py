@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Type, cast
+from typing import cast
 
 from snuba.datasets.cdc.groupassignee_processor import GroupAssigneeRow
 from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageRow
@@ -18,8 +18,8 @@ class CdcRowProcessor(ABC, metaclass=RegisteredClass):
         return cls(**kwargs)
 
     @classmethod
-    def get_from_name(cls, name: str) -> Type["CdcRowProcessor"]:
-        return cast(Type["CdcRowProcessor"], cls.class_from_name(name))
+    def get_from_name(cls, name: str) -> type["CdcRowProcessor"]:
+        return cast(type["CdcRowProcessor"], cls.class_from_name(name))
 
     @classmethod
     def config_key(cls) -> str:

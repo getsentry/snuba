@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Callable, Generic, Optional, TypeVar
+from collections.abc import Callable
+from typing import Generic, TypeVar
 
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.serializable_exception import SerializableException
@@ -17,7 +18,7 @@ class ExecutionTimeoutError(ExecutionError):
 
 class Cache(Generic[TValue], ABC):
     @abstractmethod
-    def get(self, key: str) -> Optional[TValue]:
+    def get(self, key: str) -> TValue | None:
         """
         Gets a value from the cache.
         """
@@ -36,7 +37,7 @@ class Cache(Generic[TValue], ABC):
         key: str,
         function: Callable[[], TValue],
         record_cache_hit_type: Callable[[int], None],
-        timer: Optional[Timer] = None,
+        timer: Timer | None = None,
     ) -> TValue:
         """
         Implements a read-through caching pattern for the value at the given

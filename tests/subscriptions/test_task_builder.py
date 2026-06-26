@@ -1,5 +1,5 @@
+from collections.abc import Sequence
 from datetime import datetime, timedelta
-from typing import Sequence, Tuple
 
 import pytest
 
@@ -219,9 +219,9 @@ TEST_CASES = [
 def test_sequences(
     builder: TaskBuilder,
     primary_builder_config: str,
-    sequence_in: Sequence[Tuple[int, Subscription]],
-    task_sequence: Sequence[Tuple[int, ScheduledSubscriptionTask]],
-    metrics: Sequence[Tuple[str, int, Tags]],
+    sequence_in: Sequence[tuple[int, Subscription]],
+    task_sequence: Sequence[tuple[int, ScheduledSubscriptionTask]],
+    metrics: Sequence[tuple[str, int, Tags]],
 ) -> None:
     """
     Tries to execute the task builder on several sequences of

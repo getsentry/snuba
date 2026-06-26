@@ -64,7 +64,7 @@ class NonBlockingMigrationsPolicy(MigrationPolicy):
             return True
 
         migration = get_group_loader(migration_key.group).load_migration(migration_key.migration_id)
-        return False if migration.blocking else True
+        return not migration.blocking
 
     def can_reverse(self, migration_key: MigrationKey) -> bool:
         if get_group_readiness_state(migration_key.group) == ReadinessState.EXPERIMENTAL:
@@ -73,14 +73,14 @@ class NonBlockingMigrationsPolicy(MigrationPolicy):
         status, timestamp = Runner().get_status(migration_key)
         migration = get_group_loader(migration_key.group).load_migration(migration_key.migration_id)
         if status == Status.IN_PROGRESS:
-            return False if migration.blocking else True
+            return not migration.blocking
 
         if status == Status.COMPLETED and timestamp:
             oldest_allowed_timestamp = datetime.now() + timedelta(
                 hours=-MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS
             )
             if timestamp >= oldest_allowed_timestamp:
-                return False if migration.blocking else True
+                return not migration.blocking
 
         return False
 

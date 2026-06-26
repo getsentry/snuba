@@ -1,5 +1,4 @@
 import os
-from typing import Optional
 
 import click
 
@@ -16,9 +15,9 @@ from snuba.utils import server
 def admin(
     *,
     debug: bool,
-    log_level: Optional[str],
+    log_level: str | None,
     processes: int,
-    threads: Optional[int],
+    threads: int | None,
     backlog: int,
 ) -> None:
     from snuba import settings

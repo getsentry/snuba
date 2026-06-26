@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Mapping, NamedTuple, Sequence, Union
+from collections.abc import Mapping, Sequence
+from typing import NamedTuple
 
 import sentry_sdk
 
@@ -187,7 +188,7 @@ class JoinDataSourcePlan(NamedTuple):
     an execution strategy that is not used.
     """
 
-    translated_source: Union[JoinClause[Table], IndividualNode[Table]]
+    translated_source: JoinClause[Table] | IndividualNode[Table]
     processors: Mapping[str, SubqueryProcessors]
     storage_set_key: StorageSetKey
 

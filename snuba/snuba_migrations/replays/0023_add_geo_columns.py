@@ -1,4 +1,4 @@
-from typing import Iterator, Sequence, Tuple
+from collections.abc import Iterator, Sequence
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.columns import MigrationModifiers as Modifiers
@@ -11,7 +11,7 @@ from snuba.migrations.operations import (
 )
 from snuba.utils.schemas import Column, String
 
-new_columns: Sequence[Tuple[Column[Modifiers], str]] = [
+new_columns: Sequence[tuple[Column[Modifiers], str]] = [
     (Column("user_geo_city", String()), "user_email"),
     (Column("user_geo_country_code", String()), "user_geo_city"),
     (Column("user_geo_region", String()), "user_geo_country_code"),

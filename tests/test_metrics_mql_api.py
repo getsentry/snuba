@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import itertools
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, cast
+from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 
 import pytest
 import simplejson as json
@@ -39,7 +40,7 @@ RETENTION_DAYS = 90
 
 def utc_yesterday_12_15() -> datetime:
     return (datetime.utcnow() - timedelta(days=1)).replace(
-        hour=12, minute=15, second=0, microsecond=0, tzinfo=timezone.utc
+        hour=12, minute=15, second=0, microsecond=0, tzinfo=UTC
     )
 
 

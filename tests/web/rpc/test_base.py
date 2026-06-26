@@ -1,7 +1,6 @@
 import time
 import uuid
 from datetime import timedelta
-from typing import Type
 from unittest.mock import patch
 
 import pytest
@@ -23,7 +22,7 @@ from snuba.web.rpc.common.exceptions import (
     QueryTimeoutException,
 )
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
-from tests.backends.metrics import TestingMetricsBackend
+from tests.backends.metrics import Events, TestingMetricsBackend
 from tests.web.rpc.v1.test_utils import BASE_TIME
 
 RANDOM_REQUEST_ID = str(uuid.uuid4())
@@ -69,7 +68,7 @@ class ErrorRPC(RPCEndpoint[TimeSeriesRequest, TimeSeriesRequest]):
     duration_millis = 100
 
     @classmethod
-    def response_class(cls) -> Type[TimeSeriesRequest]:
+    def response_class(cls) -> type[TimeSeriesRequest]:
         return TimeSeriesRequest
 
     @classmethod
@@ -85,7 +84,7 @@ class SilentErrorRPC(RPCEndpoint[TimeSeriesRequest, TimeSeriesRequest]):
     duration_millis = 100
 
     @classmethod
-    def response_class(cls) -> Type[TimeSeriesRequest]:
+    def response_class(cls) -> type[TimeSeriesRequest]:
         return TimeSeriesRequest
 
     @classmethod
@@ -104,7 +103,7 @@ class TimeoutRPC(RPCEndpoint[TimeSeriesRequest, TimeSeriesRequest]):
         return "v1"
 
     @classmethod
-    def response_class(cls) -> Type[TimeSeriesRequest]:
+    def response_class(cls) -> type[TimeSeriesRequest]:
         return TimeSeriesRequest
 
     def _execute(self, in_msg: TimeSeriesRequest) -> TimeSeriesRequest:
@@ -165,11 +164,11 @@ def test_metrics() -> None:
         for _ in range(len(metrics_backend.calls))
     ]
 
-    metric_names_to_metric = {m.name: m for m in metrics_backend.calls}  # type: ignore
-    assert metric_names_to_metric["rpc.endpoint_timing"].value == pytest.approx(  # type: ignore
+    metric_names_to_metric = {m.name: m for m in metrics_backend.calls if not isinstance(m, Events)}
+    assert metric_names_to_metric["rpc.endpoint_timing"].value == pytest.approx(
         MyRPC.duration_millis, rel=10
     )
-    assert metric_names_to_metric["rpc.request_success"].value == 1  # type: ignore
+    assert metric_names_to_metric["rpc.request_success"].value == 1
 
 
 @pytest.mark.redis_db
@@ -192,8 +191,10 @@ def test_error_metrics() -> None:
             for _ in range(len(metrics_backend.calls))
         ]
 
-        metric_names_to_metric = {m.name: m for m in metrics_backend.calls}  # type: ignore
-        assert metric_names_to_metric["rpc.request_error"].value == 1  # type: ignore
+        metric_names_to_metric = {
+            m.name: m for m in metrics_backend.calls if not isinstance(m, Events)
+        }
+        assert metric_names_to_metric["rpc.request_error"].value == 1
         sentry_sdk_mock.assert_called()
 
 
@@ -208,8 +209,10 @@ def test_should_report_false_not_captured() -> None:
         with pytest.raises(ColumnTypeError):
             rpc_call.execute(_get_in_msg())
 
-        metric_names_to_metric = {m.name: m for m in metrics_backend.calls}  # type: ignore
-        assert metric_names_to_metric["rpc.request_error"].value == 1  # type: ignore
+        metric_names_to_metric = {
+            m.name: m for m in metrics_backend.calls if not isinstance(m, Events)
+        }
+        assert metric_names_to_metric["rpc.request_error"].value == 1
         sentry_sdk_mock.assert_not_called()
 
 

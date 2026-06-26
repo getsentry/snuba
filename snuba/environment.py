@@ -1,8 +1,5 @@
-from __future__ import absolute_import
-
 import logging
 import os
-from typing import Optional
 
 import sentry_sdk
 import structlog
@@ -46,7 +43,7 @@ def drop_level(logger: logging.Logger, method_name: str, event_dict: EventDict) 
     return event_dict
 
 
-def setup_logging(level: Optional[str] = None) -> None:
+def setup_logging(level: str | None = None) -> None:
     if level is None:
         level = settings.LOG_LEVEL
 
@@ -129,7 +126,7 @@ def before_send(event: Event, hint: Hint) -> Event | None:
     # Walk the exception chain (the exception itself plus its __cause__ /
     # __context__) and drop the event if any link is a known noise type.
     seen: set[int] = set()
-    exc: Optional[BaseException] = exc_value
+    exc: BaseException | None = exc_value
     while exc is not None and id(exc) not in seen:
         seen.add(id(exc))
         if isinstance(exc, noise_types):

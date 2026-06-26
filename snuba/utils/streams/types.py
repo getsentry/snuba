@@ -1,3 +1,3 @@
-from typing import Any, Dict
+from typing import Any
 
-KafkaBrokerConfig = Dict[str, Any]
+KafkaBrokerConfig = dict[str, Any]

@@ -1,8 +1,9 @@
 import random
 import uuid
+from collections.abc import Iterable
 from datetime import datetime
 from operator import attrgetter
-from typing import Any, Dict, Iterable, NamedTuple, Optional, Type
+from typing import Any, NamedTuple, Optional
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -230,16 +231,14 @@ def _build_query(
             *attributes_array_selected_expressions(),
         ]
         selected_columns.extend(
-            map(
-                lambda col_name: SelectedExpression(
-                    name=col_name,
-                    expression=column(
-                        col_name,
-                        alias=f"selected_{col_name}",
-                    ),
+            SelectedExpression(
+                name=col_name,
+                expression=column(
+                    col_name,
+                    alias=f"selected_{col_name}",
                 ),
-                (NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS),
             )
+            for col_name in (NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS)
         )
 
     entity = Entity(
@@ -379,28 +378,27 @@ def convert_to_attribute_value(value: Any) -> AttributeValue:
         return AttributeValue(
             val_bool=value,
         )
-    elif isinstance(value, int):
+    if isinstance(value, int):
         return AttributeValue(
             val_int=value,
         )
-    elif isinstance(value, float):
+    if isinstance(value, float):
         return AttributeValue(
             val_double=value,
         )
-    elif isinstance(value, str):
+    if isinstance(value, str):
         return AttributeValue(
             val_str=value,
         )
-    elif isinstance(value, (list, tuple)):
+    if isinstance(value, (list, tuple)):
         return AttributeValue(
             val_array=Array(values=[convert_to_attribute_value(v) for v in value])
         )
-    elif isinstance(value, datetime):
+    if isinstance(value, datetime):
         return AttributeValue(
             val_double=value.timestamp(),
         )
-    else:
-        raise BadSnubaRPCRequestException(f"data type unknown: {type(value)}")
+    raise BadSnubaRPCRequestException(f"data type unknown: {type(value)}")
 
 
 def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeValue]:
@@ -412,7 +410,7 @@ def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeVa
             ),
             convert_to_attribute_value(value),
         )
-    elif isinstance(value, int):
+    if isinstance(value, int):
         return (
             AttributeKey(
                 name=key,
@@ -420,7 +418,7 @@ def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeVa
             ),
             convert_to_attribute_value(value),
         )
-    elif isinstance(value, float):
+    if isinstance(value, float):
         return (
             AttributeKey(
                 name=key,
@@ -428,7 +426,7 @@ def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeVa
             ),
             convert_to_attribute_value(value),
         )
-    elif isinstance(value, str):
+    if isinstance(value, str):
         return (
             AttributeKey(
                 name=key,
@@ -436,12 +434,12 @@ def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeVa
             ),
             convert_to_attribute_value(value),
         )
-    elif isinstance(value, list):
+    if isinstance(value, list):
         return (
             AttributeKey(name=key, type=AttributeKey.Type.TYPE_ARRAY),
             convert_to_attribute_value(value),
         )
-    elif isinstance(value, datetime):
+    if isinstance(value, datetime):
         return (
             AttributeKey(
                 name=key,
@@ -449,23 +447,18 @@ def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeVa
             ),
             convert_to_attribute_value(value),
         )
-    else:
-        raise BadSnubaRPCRequestException(f"data type unknown: {type(value)}")
+    raise BadSnubaRPCRequestException(f"data type unknown: {type(value)}")
 
 
-ProcessedResults = NamedTuple(
-    "ProcessedResults",
-    [
-        ("items", list[GetTraceResponse.Item]),
-        ("last_seen_timestamp_precise", float),
-        ("last_seen_id", str),
-    ],
-)
+class ProcessedResults(NamedTuple):
+    items: list[GetTraceResponse.Item]
+    last_seen_timestamp_precise: float
+    last_seen_id: str
 
 
 @with_span(op="function")
 def _process_results(
-    data: Iterable[Dict[str, Any]],
+    data: Iterable[dict[str, Any]],
 ) -> ProcessedResults:
     """
     Used to process the results returned from clickhouse in two passes.
@@ -496,7 +489,11 @@ def _process_results(
 
             attributes: dict[str, GetTraceResponse.Item.Attribute] = {}
 
-            def add_attribute(key: str, value: Any) -> None:
+            def add_attribute(
+                key: str,
+                value: Any,
+                attributes: dict[str, GetTraceResponse.Item.Attribute] = attributes,
+            ) -> None:
                 attribute_key, attribute_value = _value_to_attribute(key, value)
                 attributes[key] = GetTraceResponse.Item.Attribute(
                     key=attribute_key,
@@ -580,11 +577,11 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
         return "v1"
 
     @classmethod
-    def request_class(cls) -> Type[GetTraceRequest]:
+    def request_class(cls) -> type[GetTraceRequest]:
         return GetTraceRequest
 
     @classmethod
-    def response_class(cls) -> Type[GetTraceResponse]:
+    def response_class(cls) -> type[GetTraceResponse]:
         return GetTraceResponse
 
     def _execute(self, in_msg: GetTraceRequest) -> GetTraceResponse:

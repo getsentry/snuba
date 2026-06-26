@@ -3,15 +3,10 @@ from __future__ import annotations
 import logging
 import time
 from collections import deque
+from collections.abc import Mapping, MutableMapping
 from datetime import datetime
 from typing import (
-    Deque,
-    List,
-    Mapping,
-    MutableMapping,
     NamedTuple,
-    Optional,
-    Tuple,
     cast,
 )
 
@@ -37,7 +32,7 @@ class CommittableTick(NamedTuple):
     tick: Tick
     # Offset that we can safely committed once the tick is processed.
     # Not necessarily the same as the tick's offset.
-    offset_to_commit: Optional[int]
+    offset_to_commit: int | None
 
 
 class ProvideCommitStrategy(ProcessingStrategy[Tick]):
@@ -81,11 +76,11 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
 
         # Store the last message we received for each partition so know when
         # to commit offsets.
-        self.__latest_messages_by_partition: MutableMapping[int, Optional[BrokerValue[Tick]]] = {
-            index: None for index in range(self.__partitions)
-        }
-        self.__offset_low_watermark: Optional[int] = None
-        self.__offset_high_watermark: Optional[int] = None
+        self.__latest_messages_by_partition: MutableMapping[int, BrokerValue[Tick] | None] = (
+            dict.fromkeys(range(self.__partitions))
+        )
+        self.__offset_low_watermark: int | None = None
+        self.__offset_high_watermark: int | None = None
 
         self.__closed = False
 
@@ -164,7 +159,7 @@ class ProvideCommitStrategy(ProcessingStrategy[Tick]):
         self.__closed = True
         self.__next_step.terminate()
 
-    def join(self, timeout: Optional[float] = None) -> None:
+    def join(self, timeout: float | None = None) -> None:
         self.__next_step.close()
         self.__next_step.join(timeout)
 
@@ -197,7 +192,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
         self,
         mode: SchedulingWatermarkMode,
         partitions: int,
-        max_ticks_buffered_per_partition: Optional[int],
+        max_ticks_buffered_per_partition: int | None,
         next_step: ProcessingStrategy[Tick],
         metrics: MetricsBackend,
     ) -> None:
@@ -210,7 +205,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
         self.__next_step = next_step
         self.__metrics = metrics
 
-        self.__buffers: Mapping[int, Deque[Message[Tick]]] = {
+        self.__buffers: Mapping[int, deque[Message[Tick]]] = {
             index: deque() for index in range(self.__partitions)
         }
 
@@ -293,7 +288,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
         self.__closed = True
         self.__next_step.terminate()
 
-    def join(self, timeout: Optional[float] = None) -> None:
+    def join(self, timeout: float | None = None) -> None:
         self.__next_step.close()
         self.__next_step.join(timeout)
 
@@ -301,7 +296,7 @@ class TickBuffer(ProcessingStrategy[Tick]):
 class TickSubscription(NamedTuple):
     tick_message: BrokerValue[CommittableTick]
     subscription_future: ProducerFuture[BrokerValue[KafkaPayload]]
-    offset_to_commit: Optional[int]
+    offset_to_commit: int | None
 
 
 class ScheduledSubscriptionQueue:
@@ -310,22 +305,22 @@ class ScheduledSubscriptionQueue:
     """
 
     def __init__(self) -> None:
-        self.__queues: Deque[
-            Tuple[
+        self.__queues: deque[
+            tuple[
                 BrokerValue[CommittableTick],
-                Deque[ProducerFuture[BrokerValue[KafkaPayload]]],
+                deque[ProducerFuture[BrokerValue[KafkaPayload]]],
             ]
         ] = deque()
 
     def append(
         self,
         tick_message: BrokerValue[CommittableTick],
-        futures: Deque[ProducerFuture[BrokerValue[KafkaPayload]]],
+        futures: deque[ProducerFuture[BrokerValue[KafkaPayload]]],
     ) -> None:
         if len(futures) > 0:
             self.__queues.append((tick_message, futures))
 
-    def peek(self) -> Optional[TickSubscription]:
+    def peek(self) -> TickSubscription | None:
         if self.__queues:
             tick, futures = self.__queues[0]
 
@@ -385,9 +380,9 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
         producer: Producer[KafkaPayload],
         scheduled_topic_spec: KafkaTopicSpec,
         commit: Commit,
-        stale_threshold_seconds: Optional[int],
+        stale_threshold_seconds: int | None,
         metrics: MetricsBackend,
-        slice_id: Optional[int] = None,
+        slice_id: int | None = None,
     ) -> None:
         self.__schedulers = schedulers
         self.__encoder = SubscriptionScheduledTaskEncoder()
@@ -444,9 +439,9 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
             self.__stale_threshold_seconds is not None
             and time.time() - tick.timestamps.lower > self.__stale_threshold_seconds
         ):
-            encoded_tasks: List[KafkaPayload] = []
+            encoded_tasks: list[KafkaPayload] = []
         else:
-            tasks = [task for task in self.__schedulers[tick.partition].find(tick)]
+            tasks = list(self.__schedulers[tick.partition].find(tick))
             encoded_tasks = []
 
             for task in tasks:
@@ -491,7 +486,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
     def terminate(self) -> None:
         self.__closed = True
 
-    def join(self, timeout: Optional[float] = None) -> None:
+    def join(self, timeout: float | None = None) -> None:
         start = time.time()
 
         while self.__queue:

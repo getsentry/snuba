@@ -106,7 +106,7 @@ class InvalidTenantsForAllocationPolicy(SerializableException):
         tenant_ids: dict[str, str | int],
         policy_name: str,
         description: str | None = None,
-    ) -> "InvalidTenantsForAllocationPolicy":
+    ) -> InvalidTenantsForAllocationPolicy:
         return cls(
             description or "Invalid tenants for allocation policy",
             tenant_ids=tenant_ids,
@@ -126,7 +126,7 @@ class AllocationPolicyViolations(SerializableException):
     @property
     def violations(self) -> dict[str, dict[str, Any]]:
         details = cast(dict[str, Any], self.quota_allowance.get("details"))
-        return {k: v for k, v in details.items() if v["can_run"] == False}
+        return {k: v for k, v in details.items() if not v["can_run"]}
 
     @property
     def quota_allowance(self) -> dict[str, dict[str, Any]]:
@@ -140,7 +140,7 @@ class AllocationPolicyViolations(SerializableException):
     def from_args(
         cls,
         quota_allowances: dict[str, Any],
-    ) -> "AllocationPolicyViolations":
+    ) -> AllocationPolicyViolations:
         return cls(
             "Query on could not be run due to allocation policies",
             quota_allowances=quota_allowances,
@@ -375,7 +375,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         )
 
     @classmethod
-    def create_minimal_instance(cls, resource_identifier: str) -> "ConfigurableComponent":
+    def create_minimal_instance(cls, resource_identifier: str) -> ConfigurableComponent:
         return cls(
             storage_key=ResourceIdentifier(resource_identifier),
             required_tenant_types=[],
@@ -425,7 +425,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         return bool(tenant_ids.get("cross_org_query", False))
 
     @classmethod
-    def from_kwargs(cls, **kwargs: str) -> "AllocationPolicy":
+    def from_kwargs(cls, **kwargs: str) -> AllocationPolicy:
         required_tenant_types = kwargs.pop("required_tenant_types", None)
         storage_key = kwargs.pop("storage_key", None)
         default_config_overrides: dict[str, Any] = cast(
@@ -548,7 +548,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
     ) -> None:
         try:
             if not self.is_active:
-                return
+                return None
             return self._update_quota_balance(tenant_ids, query_id, result_or_error)
         except InvalidTenantsForAllocationPolicy:
             # the policy did not do anything because the tenants were invalid, updating is also not necessary
@@ -584,7 +584,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
 
     def to_dict(self) -> PolicyData:
         base_data = super().to_dict()
-        return PolicyData(**base_data, query_type=self.query_type.value)  # type: ignore
+        return PolicyData(**base_data, query_type=self.query_type.value)
 
 
 class PassthroughPolicy(AllocationPolicy):

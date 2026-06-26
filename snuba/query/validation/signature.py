@@ -1,7 +1,7 @@
 import logging
-from abc import ABC
+from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from datetime import date, datetime
-from typing import Sequence, Set, Type, Union
 
 from snuba.clickhouse.columns import (
     UUID,
@@ -14,6 +14,7 @@ from snuba.clickhouse.columns import (
     IPv6,
     Nullable,
     String,
+    TypeModifiers,
     UInt,
 )
 from snuba.query.data_source import DataSource
@@ -29,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 class ParamType(ABC):
+    @abstractmethod
     def validate(self, expression: Expression, schema: ColumnSet) -> None:
         raise NotImplementedError
 
@@ -46,28 +48,22 @@ COLUMN_PATTERN = ColumnMatcher(
     column_name=Param("column_name", AnyMatcher(str)),
 )
 
-AllowedTypes = Union[
-    Type[Array],
-    Type[String],
-    Type[UUID],
-    Type[IPv4],
-    Type[IPv6],
-    Type[FixedString],
-    Type[UInt],
-    Type[Float],
-    Type[Date],
-    Type[DateTime],
-]
+AllowedTypes = (
+    type[Array[TypeModifiers]]
+    | type[String[TypeModifiers]]
+    | type[UUID[TypeModifiers]]
+    | type[IPv4[TypeModifiers]]
+    | type[IPv6[TypeModifiers]]
+    | type[FixedString[TypeModifiers]]
+    | type[UInt[TypeModifiers]]
+    | type[Float[TypeModifiers]]
+    | type[Date[TypeModifiers]]
+    | type[DateTime[TypeModifiers]]
+)
 
-AllowedScalarTypes = Union[
-    Type[None],
-    Type[bool],
-    Type[str],
-    Type[float],
-    Type[int],
-    Type[date],
-    Type[datetime],
-]
+AllowedScalarTypes = (
+    type[None] | type[bool] | type[str] | type[float] | type[int] | type[date] | type[datetime]
+)
 
 
 class Column(ParamType):
@@ -84,7 +80,7 @@ class Column(ParamType):
     is False it will require non nullable columns.
     """
 
-    def __init__(self, types: Set[AllowedTypes], allow_nullable: bool = True) -> None:
+    def __init__(self, types: set[AllowedTypes], allow_nullable: bool = True) -> None:
         self.__valid_types = types
         self.__allow_nullable = allow_nullable
 
@@ -111,10 +107,8 @@ class Column(ParamType):
             nullable and not self.__allow_nullable
         ):
             raise InvalidFunctionCall(
-                (
-                    f"Illegal type {'Nullable ' if nullable else ''}{str(column.type)} "
-                    f"of argument `{column_name}`. Required types {self.__valid_types}"
-                )
+                f"Illegal type {'Nullable ' if nullable else ''}{str(column.type)} "
+                f"of argument `{column_name}`. Required types {self.__valid_types}"
             )
 
 
@@ -128,7 +122,7 @@ class Literal(ParamType):
     expressions can be passed as arguments in certain functions.
     """
 
-    def __init__(self, types: Set[AllowedScalarTypes], allow_nullable: bool = False) -> None:
+    def __init__(self, types: set[AllowedScalarTypes], allow_nullable: bool = False) -> None:
         self.__valid_types = types
         if allow_nullable:
             self.__valid_types.add(type(None))
@@ -138,7 +132,7 @@ class Literal(ParamType):
 
     def validate(self, expression: Expression, schema: ColumnSet) -> None:
         if not isinstance(expression, LiteralType):
-            return None
+            return
 
         value = expression.value
         if not isinstance(value, tuple(self.__valid_types)):
@@ -176,8 +170,7 @@ class SignatureValidator(FunctionCallValidator):
         except InvalidFunctionCall as exception:
             if self.__enforce:
                 raise exception
-            else:
-                logger.warning(f"Query validation exception. Validator: {self}", exc_info=True)
+            logger.warning(f"Query validation exception. Validator: {self}", exc_info=True)
 
     def __validate_impl(
         self, func_name: str, parameters: Sequence[Expression], data_source: DataSource
@@ -192,5 +185,5 @@ class SignatureValidator(FunctionCallValidator):
                 f"Too many arguments. Required {[str(t) for t in self.__param_types]}"
             )
 
-        for validator, param in zip(self.__param_types, parameters):
+        for validator, param in zip(self.__param_types, parameters, strict=False):
             validator.validate(param, data_source.get_columns())

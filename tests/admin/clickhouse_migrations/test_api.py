@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import tempfile
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict
-from typing import Any, Mapping, Optional, Sequence, Type
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -35,13 +36,13 @@ def generate_migration_test_role(
     group: str,
     policy: str,
     override_resource: bool = False,
-    name: Optional[str] = None,
+    name: str | None = None,
 ) -> Role:
     if not name:
         name = f"{group}-{policy}"
 
     if policy == "all":
-        action: Type[MigrationAction] = ExecuteAllAction
+        action: type[MigrationAction] = ExecuteAllAction
     elif policy == "non_blocking":
         action = ExecuteNonBlockingAction
     else:
@@ -264,21 +265,23 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
                 )
 
             if action == "reverse":
-                with patch.object(Runner, method) as mock_run_migration:
-                    # allowed non blocking
-                    with patch(
+                # allowed non blocking
+                with (
+                    patch.object(Runner, method) as mock_run_migration,
+                    patch(
                         "snuba.migrations.runner.Runner.get_status",
                         return_value=(Status.IN_PROGRESS, None),
-                    ):
-                        migration_key = MigrationKey(
-                            group=MigrationGroup.QUERYLOG,
-                            migration_id="0001_querylog",
-                        )
-                        response = admin_api.post(f"/migrations/querylog/{action}/0001_querylog")
-                        assert response.status_code == 200
-                        mock_run_migration.assert_called_once_with(
-                            migration_key, force=False, fake=False, dry_run=False
-                        )
+                    ),
+                ):
+                    migration_key = MigrationKey(
+                        group=MigrationGroup.QUERYLOG,
+                        migration_id="0001_querylog",
+                    )
+                    response = admin_api.post(f"/migrations/querylog/{action}/0001_querylog")
+                    assert response.status_code == 200
+                    mock_run_migration.assert_called_once_with(
+                        migration_key, force=False, fake=False, dry_run=False
+                    )
 
             # allow dry runs
         with patch.object(Runner, method) as mock_run_migration:
@@ -301,7 +304,7 @@ def test_get_iam_roles(caplog: Any) -> None:
         "snuba.admin.auth.DEFAULT_ROLES",
         [system_role, tool_role],
     ):
-        iam_file = tempfile.NamedTemporaryFile()
+        iam_file = tempfile.NamedTemporaryFile()  # noqa: SIM115 handle reused across statements and explicitly closed below
         iam_file.write(
             json.dumps(
                 {
@@ -389,7 +392,7 @@ def test_get_iam_roles_cache() -> None:
         "snuba.admin.auth.DEFAULT_ROLES",
         [system_role, tool_role],
     ):
-        iam_file = tempfile.NamedTemporaryFile()
+        iam_file = tempfile.NamedTemporaryFile()  # noqa: SIM115 handle reused across statements and explicitly closed below
         iam_file.write(
             json.dumps(
                 {
@@ -442,7 +445,7 @@ def test_get_iam_roles_cache() -> None:
                 tool_role,
             ]
 
-        iam_file = tempfile.NamedTemporaryFile()
+        iam_file = tempfile.NamedTemporaryFile()  # noqa: SIM115 handle reused across statements and explicitly closed below
         iam_file.write(json.dumps({"bindings": []}).encode("utf-8"))
         iam_file.flush()
 
@@ -478,7 +481,7 @@ def test_get_iam_roles_cache_fail(mock_redis: Any) -> None:
         "snuba.admin.auth.DEFAULT_ROLES",
         [system_role, tool_role],
     ):
-        iam_file = tempfile.NamedTemporaryFile()
+        iam_file = tempfile.NamedTemporaryFile()  # noqa: SIM115 handle reused across statements and explicitly closed below
         iam_file.write(json.dumps({"bindings": []}).encode("utf-8"))
         iam_file.flush()
 

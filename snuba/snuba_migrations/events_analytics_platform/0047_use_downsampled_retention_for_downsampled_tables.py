@@ -1,4 +1,4 @@
-from typing import List, Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
@@ -13,7 +13,7 @@ sampling_weights = [8, 8**2, 8**3]
 old_version = 2
 new_version = 3
 
-columns: List[Column[Modifiers]] = [
+columns: list[Column[Modifiers]] = [
     Column("organization_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("item_type", UInt(8)),
@@ -78,11 +78,7 @@ columns.extend(
 
 def generate_old_materialized_view_expression(sampling_weight: int) -> str:
     column_names_str = ", ".join(
-        [
-            c.name
-            for c in columns
-            if c.name != "sampling_weight" and c.name != "sampling_factor"
-        ]
+        [c.name for c in columns if c.name != "sampling_weight" and c.name != "sampling_factor"]
     )
     return f"SELECT {column_names_str}, sampling_weight * {sampling_weight} AS sampling_weight, sampling_factor / {sampling_weight} AS sampling_factor FROM eap_items_1_local WHERE (cityHash64(item_id + {sampling_weight})  % {sampling_weight}) = 0"
 
@@ -104,7 +100,7 @@ class Migration(migration.ClickhouseNodeMigration):
     blocking = False
 
     def forwards_ops(self) -> Sequence[SqlOperation]:
-        ops: List[SqlOperation] = []
+        ops: list[SqlOperation] = []
 
         for sampling_weight in sampling_weights:
             local_table_name = f"eap_items_1_downsample_{sampling_weight}_local"
@@ -117,9 +113,7 @@ class Migration(migration.ClickhouseNodeMigration):
                         columns=columns,
                         destination_table_name=local_table_name,
                         target=OperationTarget.LOCAL,
-                        query=generate_new_materialized_view_expression(
-                            sampling_weight
-                        ),
+                        query=generate_new_materialized_view_expression(sampling_weight),
                     ),
                     operations.DropTable(
                         storage_set=storage_set_key,
@@ -132,7 +126,7 @@ class Migration(migration.ClickhouseNodeMigration):
         return ops
 
     def backwards_ops(self) -> Sequence[SqlOperation]:
-        ops: List[SqlOperation] = []
+        ops: list[SqlOperation] = []
 
         for sampling_weight in sampling_weights:
             local_table_name = f"eap_items_1_downsample_{sampling_weight}_local"
@@ -145,9 +139,7 @@ class Migration(migration.ClickhouseNodeMigration):
                         columns=columns,
                         destination_table_name=local_table_name,
                         target=OperationTarget.LOCAL,
-                        query=generate_old_materialized_view_expression(
-                            sampling_weight
-                        ),
+                        query=generate_old_materialized_view_expression(sampling_weight),
                     ),
                     operations.DropTable(
                         storage_set=storage_set_key,
