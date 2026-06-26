@@ -33,7 +33,7 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.downsampled_storage_tiers import Tier
 from snuba.protos.common import (
     NORMALIZED_COLUMNS_EAP_ITEMS,
-    TYPED_ARRAY_SELECT_COLUMNS,
+    TYPED_ARRAY_MAP_COLUMNS,
     type_array_typed_columns_select_expressions,
 )
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
@@ -598,7 +598,7 @@ def _array_subcolumn_selected_expressions(column: Column) -> list[SelectedExpres
             expression=expression,
         )
         for typed_col, expression in zip(
-            TYPED_ARRAY_SELECT_COLUMNS,
+            TYPED_ARRAY_MAP_COLUMNS,
             type_array_typed_columns_select_expressions(column.key),
         )
     ]

@@ -196,7 +196,10 @@ def type_array_to_stored_array_json_path(attr_key: AttributeKey) -> JsonPath:
     )
 
 
-TYPED_ARRAY_SELECT_COLUMNS: tuple[str, ...] = (
+# The typed array map columns (Map(String, Array(T))), in element-type order. Shared by
+# the per-attribute SELECT (type_array_typed_columns_select_expressions) and the
+# whole-map reads / merges in snuba.web.rpc.common.common.
+TYPED_ARRAY_MAP_COLUMNS: tuple[str, ...] = (
     "attributes_array_string",
     "attributes_array_int",
     "attributes_array_float",
@@ -218,7 +221,7 @@ def type_array_typed_columns_select_expressions(attr_key: AttributeKey) -> list[
     label_mapping_key = _build_label_mapping_key(attr_key)
     return [
         arrayElement(f"{label_mapping_key}.{col}", column(col), literal(attr_key.name))
-        for col in TYPED_ARRAY_SELECT_COLUMNS
+        for col in TYPED_ARRAY_MAP_COLUMNS
     ]
 
 

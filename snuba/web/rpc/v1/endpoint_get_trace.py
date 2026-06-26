@@ -30,7 +30,7 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.protos.common import (
-    TYPED_ARRAY_SELECT_COLUMNS,
+    TYPED_ARRAY_MAP_COLUMNS,
     type_array_typed_columns_select_expressions,
 )
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
@@ -216,7 +216,7 @@ def _build_query(
             if read_typed_arrays and attribute_key.type == AttributeKey.Type.TYPE_ARRAY:
                 # Read as four typed sub-columns, merged back in _process_results.
                 for typed_col, expression in zip(
-                    TYPED_ARRAY_SELECT_COLUMNS,
+                    TYPED_ARRAY_MAP_COLUMNS,
                     type_array_typed_columns_select_expressions(attribute_key),
                 ):
                     selected_columns.append(

@@ -19,6 +19,7 @@ from snuba.protos.common import (
     COLUMN_PREFIX,
     PROTO_TYPE_TO_ATTRIBUTE_COLUMN,
     PROTO_TYPE_TO_CLICKHOUSE_TYPE,
+    TYPED_ARRAY_MAP_COLUMNS,
     MalformedAttributeException,
     type_array_to_membership_array_expression,
     type_array_to_membership_array_expression_from_typed_columns,
@@ -176,18 +177,6 @@ def attributes_array_selected_expressions() -> list[SelectedExpression]:
         )
         for path in ATTRIBUTES_ARRAY_ALLOWLIST
     ]
-
-
-# The typed array map columns, read whole (key -> Array(T)) by endpoints that return
-# all of an item's attributes. Past the cutoff these replace the legacy
-# attributes_array JSON-column allowlist: every array attribute is returned, not just
-# the allowlisted paths.
-TYPED_ARRAY_MAP_COLUMNS: tuple[str, ...] = (
-    "attributes_array_string",
-    "attributes_array_int",
-    "attributes_array_float",
-    "attributes_array_bool",
-)
 
 
 def typed_array_map_selected_expressions() -> list[SelectedExpression]:
