@@ -230,13 +230,17 @@ def deletes_are_enabled() -> bool:
 
 def _get_rows_to_delete(storage_key: StorageKey, select_query_to_count_rows: Query) -> int:
     formatted_select_query_to_count_rows = format_query(select_query_to_count_rows)
-    select_query_results = (
+    # This count scans every row matching the delete predicate and can run long
+    # on large tables. It is delete-validation infra, not a user-facing read, so
+    # run it on the unbounded INTERNAL profile rather than the 30s QUERY profile
+    # that get_reader() would use (consistent with the other delete checks).
+    count_result = (
         get_storage(storage_key)
         .get_cluster()
-        .get_reader()
-        .execute(formatted_select_query_to_count_rows)
+        .get_query_connection(ClickhouseClientSettings.INTERNAL)
+        .execute(formatted_select_query_to_count_rows.get_sql())
     )
-    return typing.cast(int, select_query_results["data"][0]["count"])
+    return typing.cast(int, count_result.results[0][0])
 
 
 def _enforce_max_rows(delete_query: Query, count_storage_key: StorageKey | None = None) -> int:
