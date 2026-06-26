@@ -556,6 +556,31 @@ def test_process_results_falls_back_to_string_on_untagged_array_elements() -> No
     assert attribute.value.val_str == '["gamma", "delta"]'
 
 
+@pytest.mark.parametrize(
+    "typed_tuple",
+    [
+        (["a", "b"], [1, 3], [], [True]),  # ClickHouse Tuple delivered as a tuple
+        [["a", "b"], [1, 3], [], [True]],  # ...or as a list
+    ],
+    ids=["as_tuple", "as_list"],
+)
+def test_process_results_flattens_typed_array_tuple(typed_tuple: Any) -> None:
+    """Past the cutoff, a per-attribute array column read as the native typed-column
+    tuple(string[], int[], float[], bool[]) is flattened into one typed val_array,
+    whether the driver delivers it as a tuple or a list (not a nested array-of-arrays)."""
+    processed_results = _process_results(
+        [{"id": "abc123", "timestamp": 1778785776.0, "my_tags": typed_tuple}],
+        read_typed_arrays=True,
+    )
+    item = processed_results.items[0]
+    attribute = next(attr for attr in item.attributes if attr.key.name == "my_tags")
+    assert attribute.key.type == AttributeKey.Type.TYPE_ARRAY
+    vals = attribute.value.val_array.values
+    assert [v.val_str for v in vals if v.WhichOneof("value") == "val_str"] == ["a", "b"]
+    assert [v.val_int for v in vals if v.WhichOneof("value") == "val_int"] == [1, 3]
+    assert [v.val_bool for v in vals if v.WhichOneof("value") == "val_bool"] == [True]
+
+
 def test_process_results_keeps_empty_string_attribute() -> None:
     processed_results = _process_results(
         [

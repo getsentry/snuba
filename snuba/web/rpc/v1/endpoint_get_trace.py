@@ -530,9 +530,15 @@ def _process_results(
                 if isinstance(row_value, dict):
                     for column_key, column_value in row_value.items():
                         add_attribute(column_key, column_value)
-                elif isinstance(row_value, tuple):
-                    # Per-attribute mode past the cutoff: a single array attribute read
-                    # as a native typed-column tuple (see flatten_typed_array_tuple).
+                elif (
+                    read_typed_arrays
+                    and isinstance(row_value, (tuple, list))
+                    and len(row_value) == 4
+                ):
+                    # Per-attribute mode past the cutoff: a single array attribute read as
+                    # a native typed-column tuple(string[], int[], float[], bool[]). The
+                    # driver may deliver the ClickHouse Tuple as a tuple or a list, so
+                    # accept both (matches flatten_typed_array_tuple / the table converter).
                     flattened = flatten_typed_array_tuple(row_value)
                     if flattened:
                         add_attribute(row_key, flattened)
