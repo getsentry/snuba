@@ -14,7 +14,7 @@ from snuba import settings
 from snuba.processor import ReplacementType
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.replacers.replacer_processor import ReplacerState
-from snuba.state import get_config
+from snuba.state.sentry_options import get_int_option
 
 redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 
@@ -83,11 +83,9 @@ class ProjectsQueryFlags:
             # the redis key size limit is defined as 2 times the clickhouse query size
             # limit. there is an explicit check in the query processor for the same
             # limit
-            max_group_ids_exclude = get_config(
-                "max_group_ids_exclude",
-                settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE,
+            max_group_ids_exclude = get_int_option(
+                "max_group_ids_exclude", settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE
             )
-            assert isinstance(max_group_ids_exclude, int)
 
             group_id_data: MutableMapping[str | bytes, bytes | float | int | str] = {}
             for group_id in group_ids:

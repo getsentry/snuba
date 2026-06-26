@@ -12,6 +12,7 @@ import simplejson as json
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies.healthcheck import Healthcheck
 from arroyo.types import BrokerValue, Message, Partition, Topic
+from sentry_options.testing import override_options
 
 from snuba import replacer, settings
 from snuba.clickhouse.optimize.optimize import run_optimize
@@ -366,7 +367,7 @@ class TestReplacer:
             {ReplacementType.EXCLUDE_GROUPS},
         )
 
-    @mock.patch.object(settings, "REPLACER_MAX_GROUP_IDS_TO_EXCLUDE", 2)
+    @override_options("snuba", {"max_group_ids_exclude": 2})
     def test_query_time_flags_bounded_size(self) -> None:
         redis_client.flushdb()
         project_id = 256
