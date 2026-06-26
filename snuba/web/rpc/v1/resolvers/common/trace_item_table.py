@@ -233,7 +233,12 @@ def convert_results(
     for row in data:
         if array_labels:
             for label, elements in merge_typed_array_subcolumns(row, array_labels):
-                row[label] = elements
+                # An absent array attribute reads as four empty typed sub-columns; surface
+                # it as NULL (like a missing scalar attribute) rather than an empty array.
+                # Keep the label in the row so every requested column stays aligned across
+                # rows. The typed columns can't tell an absent array from a stored-empty
+                # one, so both map to NULL.
+                row[label] = elements if elements else None
         for column_name, value in row.items():
             if column_name in converters.keys():
                 extrapolation_context = ExtrapolationContext.from_row(column_name, row)
