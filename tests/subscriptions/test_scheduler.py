@@ -1,6 +1,6 @@
 import uuid
+from collections.abc import Callable, Collection
 from datetime import datetime, timedelta
-from typing import Callable, Collection, Optional, Tuple
 
 import pytest
 
@@ -54,7 +54,7 @@ class TestSubscriptionScheduler:
             ),
         )
 
-    def sort_key(self, task: ScheduledSubscriptionTask) -> Tuple[datetime, uuid.UUID]:
+    def sort_key(self, task: ScheduledSubscriptionTask) -> tuple[datetime, uuid.UUID]:
         return task.timestamp, task.task.subscription.identifier.uuid
 
     def run_test(
@@ -63,9 +63,7 @@ class TestSubscriptionScheduler:
         start: timedelta,
         end: timedelta,
         expected: Collection[ScheduledSubscriptionTask],
-        sort_key: Optional[
-            Callable[[ScheduledSubscriptionTask], Tuple[datetime, uuid.UUID]]
-        ] = None,
+        sort_key: Callable[[ScheduledSubscriptionTask], tuple[datetime, uuid.UUID]] | None = None,
         entity_key: EntityKey = EntityKey.EVENTS,
     ) -> None:
         tick = self.build_tick(start, end)

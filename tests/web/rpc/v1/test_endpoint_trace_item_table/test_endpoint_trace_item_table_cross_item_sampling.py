@@ -83,40 +83,37 @@ class TestTraceItemTableCrossItemSampling(BaseApiTest):
 
         storage_keys, storage_tracker = track_storage_selections()
 
-        with storage_tracker:
-            with patch.object(RPCEndpoint, "_RPCEndpoint__before_execute"):
-                message = create_trace_item_table_request(
-                    start_time=start_time,
-                    end_time=end_time,
-                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                    columns=[
-                        Column(
-                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.span_id")
-                        )
-                    ],
-                    trace_filters=trace_filters,
-                )
+        with storage_tracker, patch.object(RPCEndpoint, "_RPCEndpoint__before_execute"):
+            message = create_trace_item_table_request(
+                start_time=start_time,
+                end_time=end_time,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                columns=[
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.span_id"))
+                ],
+                trace_filters=trace_filters,
+            )
 
-                mock_routing_decision = create_mock_routing_decision(Tier.TIER_8, message)
+            mock_routing_decision = create_mock_routing_decision(Tier.TIER_8, message)
 
-                endpoint = EndpointTraceItemTable()
-                endpoint.routing_decision = mock_routing_decision
-                endpoint.execute(message)
+            endpoint = EndpointTraceItemTable()
+            endpoint.routing_decision = mock_routing_decision
+            endpoint.execute(message)
 
-                # Verify storages were selected (should have at least 2 calls: inner + outer)
-                assert len(storage_keys) >= 2, (
-                    f"Expected at least 2 storage selections, got {len(storage_keys)}"
-                )
+            # Verify storages were selected (should have at least 2 calls: inner + outer)
+            assert len(storage_keys) >= 2, (
+                f"Expected at least 2 storage selections, got {len(storage_keys)}"
+            )
 
-                # The inner query should use downsampled storage (TIER_8)
-                assert StorageKey.EAP_ITEMS_DOWNSAMPLE_8 in storage_keys, (
-                    f"Inner query should use EAP_ITEMS_DOWNSAMPLE_8, got: {storage_keys}"
-                )
+            # The inner query should use downsampled storage (TIER_8)
+            assert StorageKey.EAP_ITEMS_DOWNSAMPLE_8 in storage_keys, (
+                f"Inner query should use EAP_ITEMS_DOWNSAMPLE_8, got: {storage_keys}"
+            )
 
-                # The outer query should use full storage (EAP_ITEMS)
-                assert StorageKey.EAP_ITEMS in storage_keys, (
-                    f"Outer query should use EAP_ITEMS, got: {storage_keys}"
-                )
+            # The outer query should use full storage (EAP_ITEMS)
+            assert StorageKey.EAP_ITEMS in storage_keys, (
+                f"Outer query should use EAP_ITEMS, got: {storage_keys}"
+            )
 
     def test_cross_item_query_sampling_disabled(self) -> None:
         """
@@ -138,32 +135,29 @@ class TestTraceItemTableCrossItemSampling(BaseApiTest):
 
         storage_keys, storage_tracker = track_storage_selections()
 
-        with storage_tracker:
-            with patch.object(RPCEndpoint, "_RPCEndpoint__before_execute"):
-                message = create_trace_item_table_request(
-                    start_time=start_time,
-                    end_time=end_time,
-                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                    columns=[
-                        Column(
-                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.span_id")
-                        )
-                    ],
-                    trace_filters=trace_filters,
-                )
+        with storage_tracker, patch.object(RPCEndpoint, "_RPCEndpoint__before_execute"):
+            message = create_trace_item_table_request(
+                start_time=start_time,
+                end_time=end_time,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                columns=[
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.span_id"))
+                ],
+                trace_filters=trace_filters,
+            )
 
-                mock_routing_decision = create_mock_routing_decision(Tier.TIER_8, message)
+            mock_routing_decision = create_mock_routing_decision(Tier.TIER_8, message)
 
-                endpoint = EndpointTraceItemTable()
-                endpoint.routing_decision = mock_routing_decision
-                endpoint.execute(message)
+            endpoint = EndpointTraceItemTable()
+            endpoint.routing_decision = mock_routing_decision
+            endpoint.execute(message)
 
-                # When feature is disabled, both inner and outer queries should use the same tier
-                assert len(storage_keys) >= 2, (
-                    f"Expected at least 2 storage selections, got {len(storage_keys)}"
-                )
+            # When feature is disabled, both inner and outer queries should use the same tier
+            assert len(storage_keys) >= 2, (
+                f"Expected at least 2 storage selections, got {len(storage_keys)}"
+            )
 
-                # All storages should be TIER_8 (downsampled)
-                assert all(key == StorageKey.EAP_ITEMS_DOWNSAMPLE_8 for key in storage_keys), (
-                    f"All queries should use EAP_ITEMS_DOWNSAMPLE_8, got: {storage_keys}"
-                )
+            # All storages should be TIER_8 (downsampled)
+            assert all(key == StorageKey.EAP_ITEMS_DOWNSAMPLE_8 for key in storage_keys), (
+                f"All queries should use EAP_ITEMS_DOWNSAMPLE_8, got: {storage_keys}"
+            )

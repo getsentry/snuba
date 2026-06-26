@@ -60,7 +60,7 @@ def test_uuid_array_column_processor(
         condition=expected,
     )
 
-    FixedStringArrayColumnProcessor(set(["column1", "column2"]), 32).process_query(
+    FixedStringArrayColumnProcessor({"column1", "column2"}, 32).process_query(
         unprocessed_query, HTTPQuerySettings()
     )
     assert unprocessed_query.get_selected_columns() == [

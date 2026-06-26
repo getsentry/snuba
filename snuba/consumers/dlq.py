@@ -5,7 +5,7 @@ import signal
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, TypeVar
+from typing import TypeVar
 
 import rapidjson
 from arroyo.dlq import InvalidMessage
@@ -44,7 +44,7 @@ class DlqInstruction:
     policy: DlqReplayPolicy
     status: DlqInstructionStatus
     storage_key: StorageKey
-    slice_id: Optional[int]
+    slice_id: int | None
     max_messages_to_process: int
 
     def to_bytes(self) -> bytes:
@@ -79,7 +79,7 @@ class DlqInstruction:
         return self.storage_key.value not in ("errors", "transactions", "search_issues")
 
 
-def load_instruction() -> Optional[DlqInstruction]:
+def load_instruction() -> DlqInstruction | None:
     value = redis_client.get(DLQ_REDIS_KEY)
 
     if value is None:
@@ -169,5 +169,5 @@ class ExitAfterNMessages(ProcessingStrategy[TPayload]):
             logger.warning("Closing DLQ consumer after %d messages", self.__processed_messages)
         self.__next_step.terminate()
 
-    def join(self, timeout: Optional[float] = None) -> None:
+    def join(self, timeout: float | None = None) -> None:
         self.__next_step.join(timeout)

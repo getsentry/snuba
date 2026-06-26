@@ -1,7 +1,8 @@
 import _strptime  # NOQA fixes _strptime deferred import issue
 import inspect
 from functools import partial, wraps
-from typing import Any, Callable, Mapping, Optional, TypeVar, cast
+from typing import Any, TypeVar, cast
+from collections.abc import Callable, Mapping
 
 import sentry_sdk
 
@@ -12,30 +13,30 @@ from snuba.utils.metrics.types import Tags
 
 def create_metrics(
     prefix: str,
-    tags: Optional[Tags] = None,
-    sample_rates: Optional[Mapping[str, float]] = None,
+    tags: Tags | None = None,
+    sample_rates: Mapping[str, float] | None = None,
 ) -> MetricsBackend:
     """Create a DogStatsd object if DOGSTATSD_HOST and DOGSTATSD_PORT are defined,
     with the specified prefix and tags. Return a DummyMetricsBackend otherwise.
     Prefixes must start with `snuba.<category>`, for example: `snuba.processor`.
     """
-    host: Optional[str] = settings.DOGSTATSD_HOST
-    port: Optional[int] = settings.DOGSTATSD_PORT
+    host: str | None = settings.DOGSTATSD_HOST
+    port: int | None = settings.DOGSTATSD_PORT
 
     if settings.TESTING:
         from snuba.utils.metrics.backends.testing import TestingMetricsBackend
 
         return TestingMetricsBackend()
-    elif host is None and port is None:
+    if host is None and port is None:
         from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 
         return DummyMetricsBackend()
-    elif host is None or port is None:
+    if host is None or port is None:
         raise ValueError(
             f"DOGSTATSD_HOST and DOGSTATSD_PORT should both be None or not None. Found DOGSTATSD_HOST: {host}, DOGSTATSD_PORT: {port} instead."
         )
 
-    from datadog import DogStatsd  # type: ignore[attr-defined]
+    from datadog import DogStatsd  # type: ignore[attr-defined]  # datadog lacks explicit re-export
 
     from snuba import state
     from snuba.utils.metrics.backends.datadog import DatadogMetricsBackend

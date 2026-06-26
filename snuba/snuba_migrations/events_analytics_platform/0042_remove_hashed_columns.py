@@ -1,4 +1,5 @@
-from typing import Any, List, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
@@ -24,7 +25,7 @@ def hash_map_column_name(attribute_type: str, i: int) -> str:
     return f"_hash_map_{attribute_type}_{i}"
 
 
-base_columns: List[Column[Modifiers]] = [
+base_columns: list[Column[Modifiers]] = [
     Column("organization_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("item_type", UInt(8)),
@@ -89,9 +90,7 @@ for column_type_name, column_type in column_types:
 
 def get_mv_expr(sampling_weight: int, with_hash_map_columns: bool = True) -> str:
     column_names = [
-        c.name
-        for c in base_columns
-        if c.name not in {"sampling_weight", "sampling_factor"}
+        c.name for c in base_columns if c.name not in {"sampling_weight", "sampling_factor"}
     ]
     if with_hash_map_columns:
         column_names.extend([c.name for c in hash_map_columns])
@@ -109,7 +108,7 @@ class Migration(migration.ClickhouseNodeMigration):
     dist_table_name = "eap_items_1_dist"
 
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:
-        ops: List[operations.SqlOperation] = []
+        ops: list[operations.SqlOperation] = []
         ops.append(
             operations.DropIndex(
                 storage_set=self.storage_set_key,
@@ -139,7 +138,7 @@ class Migration(migration.ClickhouseNodeMigration):
         return ops
 
     def backwards_ops(self) -> Sequence[operations.SqlOperation]:
-        ops: List[operations.SqlOperation] = []
+        ops: list[operations.SqlOperation] = []
         for downsampled_factor in self.downsampled_factors:
             ops.append(
                 operations.CreateMaterializedView(

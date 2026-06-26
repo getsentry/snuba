@@ -1,8 +1,9 @@
 import copy
 import uuid
 from collections import OrderedDict
-from datetime import datetime, timedelta, timezone
-from typing import Any, MutableMapping, Union
+from collections.abc import MutableMapping
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 from snuba_sdk.legacy import json_to_snql
@@ -51,9 +52,7 @@ def message_base() -> SearchIssueEvent:
 
 
 class TestSearchIssuesMessageProcessor:
-    KAFKA_META = KafkaMessageMetadata(
-        offset=0, partition=0, timestamp=datetime(1970, 1, 1)
-    )
+    KAFKA_META = KafkaMessageMetadata(offset=0, partition=0, timestamp=datetime(1970, 1, 1))
 
     processor = SearchIssuesMessageProcessor()
     REQUIRED_COLUMNS = {
@@ -74,14 +73,10 @@ class TestSearchIssuesMessageProcessor:
         "message",
     }
 
-    def process_message(
-        self, message, version=2, operation="insert", kafka_meta=KAFKA_META
-    ):
+    def process_message(self, message, version=2, operation="insert", kafka_meta=KAFKA_META):
         return self.processor.process_message((version, operation, message), kafka_meta)
 
-    def assert_required_columns(
-        self, processed: Union[InsertBatch, ReplacementBatch, None]
-    ):
+    def assert_required_columns(self, processed: InsertBatch | ReplacementBatch | None):
         assert processed
         assert len(processed.rows) == 1
         assert processed.rows[0].keys() > self.REQUIRED_COLUMNS
@@ -111,9 +106,7 @@ class TestSearchIssuesMessageProcessor:
         del missing_client_timestamp["datetime"]
 
         with_data_client_timestamp = copy.deepcopy(missing_client_timestamp)
-        with_data_client_timestamp["data"][
-            "client_timestamp"
-        ] = datetime.now().timestamp()
+        with_data_client_timestamp["data"]["client_timestamp"] = datetime.now().timestamp()
 
         with_event_datetime = copy.deepcopy(missing_client_timestamp)
         with_event_datetime["datetime"] = datetime.now().isoformat() + "Z"
@@ -128,12 +121,8 @@ class TestSearchIssuesMessageProcessor:
         processed = self.process_message(message_base)
         self.assert_required_columns(processed)
         insert_row = processed.rows[0]
-        client_timestamp_utc = insert_row["client_timestamp"].replace(
-            tzinfo=timezone.utc
-        )
-        assert insert_row["timestamp_ms"] == int(
-            client_timestamp_utc.timestamp() * 1000
-        )
+        client_timestamp_utc = insert_row["client_timestamp"].replace(tzinfo=UTC)
+        assert insert_row["timestamp_ms"] == int(client_timestamp_utc.timestamp() * 1000)
 
     def test_extract_user(self, message_base):
         message_with_user = message_base
@@ -148,12 +137,12 @@ class TestSearchIssuesMessageProcessor:
         insert_row = processed.rows[0]
         assert (
             insert_row.items()
-            > dict(
-                user_name="user",
-                user_id="1",
-                user_email="test@example.com",
-                ip_address_v4="127.0.0.1",
-            ).items()
+            > {
+                "user_name": "user",
+                "user_id": "1",
+                "user_email": "test@example.com",
+                "ip_address_v4": "127.0.0.1",
+            }.items()
         )
 
     def test_extract_user_empty(self, message_base):
@@ -163,11 +152,11 @@ class TestSearchIssuesMessageProcessor:
         insert_row = processed.rows[0]
         assert (
             insert_row.items()
-            > dict(
-                user_name=None,
-                user_id=None,
-                user_email=None,
-            ).items()
+            > {
+                "user_name": None,
+                "user_id": None,
+                "user_email": None,
+            }.items()
         )
 
     def test_extract_promoted_user_from_tag(self, message_base):
@@ -247,10 +236,7 @@ class TestSearchIssuesMessageProcessor:
         self.assert_required_columns(processed)
         insert_row = processed.rows[0]
         assert "http_method" in insert_row and insert_row["http_method"] == "GET"
-        assert (
-            "http_referer" in insert_row
-            and insert_row["http_referer"] == "http://example.com"
-        )
+        assert "http_referer" in insert_row and insert_row["http_referer"] == "http://example.com"
 
     def test_extract_sdk(self, message_base):
         message_base["data"]["sdk"] = {
@@ -274,12 +260,8 @@ class TestSearchIssuesMessageProcessor:
         processed = self.process_message(message_base)
         self.assert_required_columns(processed)
         insert_row = processed.rows[0]
-        assert "contexts.key" in insert_row and insert_row["contexts.key"] == [
-            "scalar.string"
-        ]
-        assert "contexts.value" in insert_row and insert_row["contexts.value"] == [
-            "scalar_value"
-        ]
+        assert "contexts.key" in insert_row and insert_row["contexts.key"] == ["scalar.string"]
+        assert "contexts.value" in insert_row and insert_row["contexts.value"] == ["scalar_value"]
 
     def test_extract_context_filters_non_dict(self, message_base):
         message_base["data"]["contexts"] = {
@@ -425,9 +407,7 @@ class TestSearchIssuesMessageProcessor:
         assert insert_row["transaction_duration"] == 0
 
         now = datetime.utcnow()
-        message_base["data"]["start_timestamp"] = int(
-            (now - timedelta(seconds=10)).timestamp()
-        )
+        message_base["data"]["start_timestamp"] = int((now - timedelta(seconds=10)).timestamp())
         message_base["data"]["timestamp"] = int(now.timestamp())
         processed = self.process_message(message_base)
         self.assert_required_columns(processed)
@@ -450,9 +430,7 @@ class TestSearchIssuesMessageProcessor:
         assert insert_row["profile_id"] == ensure_uuid(profile_id)
 
         for invalid_profile_id in ["", "im a little tea pot", 1, 1.1]:
-            message_base["data"]["contexts"]["profile"][
-                "profile_id"
-            ] = invalid_profile_id
+            message_base["data"]["contexts"]["profile"]["profile_id"] = invalid_profile_id
             with pytest.raises(ValueError):
                 self.process_message(message_base)
 

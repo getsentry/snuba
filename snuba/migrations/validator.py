@@ -1,5 +1,5 @@
 import re
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 from snuba.clusters.cluster import UndefinedClickhouseCluster, get_cluster
 from snuba.datasets.schemas.tables import TableSchema
@@ -54,9 +54,9 @@ class InvalidDistributedOperation(Exception):
 def _conflicts_ops(local_op: SqlOperation, dist_op: SqlOperation) -> bool:
     if isinstance(local_op, CreateTable) and isinstance(dist_op, CreateTable):
         return conflicts_create_table_op(local_op, dist_op)
-    elif isinstance(local_op, AddColumn) and isinstance(dist_op, AddColumn):
+    if isinstance(local_op, AddColumn) and isinstance(dist_op, AddColumn):
         return conflicts_add_column_op(local_op, dist_op)
-    elif isinstance(local_op, DropColumn) and isinstance(dist_op, DropColumn):
+    if isinstance(local_op, DropColumn) and isinstance(dist_op, DropColumn):
         return conflicts_drop_column_op(local_op, dist_op)
     return False
 
@@ -64,26 +64,28 @@ def _conflicts_ops(local_op: SqlOperation, dist_op: SqlOperation) -> bool:
 def _validate_add_col_or_create_table(
     local_op: SqlOperation, dist_ops: Sequence[SqlOperation]
 ) -> None:
-    if isinstance(local_op, (CreateTable, AddColumn)):
-        if any(_conflicts_ops(local_op, dist_op) for dist_op in dist_ops):
-            op_name = (
-                f"{local_op.table_name}.{local_op.column.name}"
-                if isinstance(local_op, AddColumn)
-                else local_op.table_name
-            )
-            raise InvalidMigrationOrderError(
-                f"{type(local_op).__name__} {op_name} operation "
-                "must be applied on local table before dist"
-            )
+    if isinstance(local_op, (CreateTable, AddColumn)) and any(
+        _conflicts_ops(local_op, dist_op) for dist_op in dist_ops
+    ):
+        op_name = (
+            f"{local_op.table_name}.{local_op.column.name}"
+            if isinstance(local_op, AddColumn)
+            else local_op.table_name
+        )
+        raise InvalidMigrationOrderError(
+            f"{type(local_op).__name__} {op_name} operation "
+            "must be applied on local table before dist"
+        )
 
 
 def _validate_drop_col(dist_op: SqlOperation, local_ops: Sequence[SqlOperation]) -> None:
-    if isinstance(dist_op, (DropColumn)):
-        if any(_conflicts_ops(local_op, dist_op) for local_op in local_ops):
-            raise InvalidMigrationOrderError(
-                f"{type(dist_op).__name__} {dist_op.table_name}.{dist_op.column_name} "
-                "operation must be applied on dist table before local"
-            )
+    if isinstance(dist_op, DropColumn) and any(
+        _conflicts_ops(local_op, dist_op) for local_op in local_ops
+    ):
+        raise InvalidMigrationOrderError(
+            f"{type(dist_op).__name__} {dist_op.table_name}.{dist_op.column_name} "
+            "operation must be applied on dist table before local"
+        )
 
 
 def _validate_order_old(
@@ -112,12 +114,10 @@ def _validate_order_new(
         for i, op in enumerate(ops):
             local_ops_before = [op for op in ops[:i] if op.target != OperationTarget.DISTRIBUTED]
             dist_ops_before = [op for op in ops[:i] if op.target != OperationTarget.LOCAL]
-            if isinstance(op, (CreateTable, AddColumn)):
-                if op.target == OperationTarget.LOCAL:
-                    _validate_add_col_or_create_table(op, dist_ops_before)
-            elif isinstance(op, DropColumn):
-                if op.target == OperationTarget.DISTRIBUTED:
-                    _validate_drop_col(op, local_ops_before)
+            if isinstance(op, (CreateTable, AddColumn)) and op.target == OperationTarget.LOCAL:
+                _validate_add_col_or_create_table(op, dist_ops_before)
+            elif isinstance(op, DropColumn) and op.target == OperationTarget.DISTRIBUTED:
+                _validate_drop_col(op, local_ops_before)
 
 
 def validate_migration_order(migration: ClickhouseNodeMigration) -> None:
@@ -205,7 +205,7 @@ def conflicts_drop_column_op(local_drop: DropColumn, dist_drop: DropColumn) -> b
     return False
 
 
-def _get_local_table_name(dist_op: Union[CreateTable, AddColumn, DropColumn]) -> str:
+def _get_local_table_name(dist_op: CreateTable | AddColumn | DropColumn) -> str:
     """
     Returns the local table name for a distributed table.
     """
@@ -215,12 +215,14 @@ def _get_local_table_name(dist_op: Union[CreateTable, AddColumn, DropColumn]) ->
             if storage.get_storage_set_key() != dist_op._storage_set:
                 continue
             schema = storage.get_schema()
-            if isinstance(schema, TableSchema):
-                # In local mode we want to verify that the pairing of
-                # dist/local tables is correct, so using get_dist_table_name
-                # instead of get_table_name here
-                if schema.get_dist_table_name() == dist_op.table_name:
-                    return schema.get_local_table_name()
+            # In local mode we want to verify that the pairing of
+            # dist/local tables is correct, so using get_dist_table_name
+            # instead of get_table_name here
+            if (
+                isinstance(schema, TableSchema)
+                and schema.get_dist_table_name() == dist_op.table_name
+            ):
+                return schema.get_local_table_name()
         except UndefinedClickhouseCluster:
             continue
     raise InvalidDistributedOperation(

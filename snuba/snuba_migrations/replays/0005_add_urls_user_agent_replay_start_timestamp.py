@@ -1,11 +1,11 @@
-from typing import List, Sequence, Tuple
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import Array, Column, DateTime, String
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
-new_columns: Sequence[Tuple[Column[Modifiers], str]] = [
+new_columns: Sequence[tuple[Column[Modifiers], str]] = [
     (Column("urls", Array(String())), "url"),
     (Column("replay_start_timestamp", DateTime(Modifiers(nullable=True))), "timestamp"),
     # OS
@@ -26,7 +26,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
     blocking = False
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
-        new_column_ops: List[operations.SqlOperation] = [
+        new_column_ops: list[operations.SqlOperation] = [
             operations.AddColumn(
                 storage_set=StorageSetKey.REPLAYS,
                 table_name="replays_local",
@@ -38,7 +38,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
         return new_column_ops
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
-        drop_column_ops: List[operations.SqlOperation] = [
+        drop_column_ops: list[operations.SqlOperation] = [
             operations.DropColumn(StorageSetKey.REPLAYS, "replays_local", column.name)
             for column, _ in reversed(new_columns)
         ]
@@ -46,7 +46,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
         return drop_column_ops
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
-        new_column_ops: List[operations.SqlOperation] = [
+        new_column_ops: list[operations.SqlOperation] = [
             operations.AddColumn(
                 storage_set=StorageSetKey.REPLAYS,
                 table_name="replays_dist",
@@ -58,7 +58,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
         return new_column_ops
 
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
-        drop_column_ops: List[operations.SqlOperation] = [
+        drop_column_ops: list[operations.SqlOperation] = [
             operations.DropColumn(StorageSetKey.REPLAYS, "replays_dist", column.name)
             for column, _ in reversed(new_columns)
         ]

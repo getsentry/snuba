@@ -1,5 +1,6 @@
 import logging
-from typing import Any, MutableMapping, Optional
+from collections.abc import MutableMapping
+from typing import Any
 
 import sentry_kafka_schemas
 import sentry_sdk
@@ -11,7 +12,7 @@ from snuba.utils.streams.topics import Topic
 logger = logging.getLogger(__name__)
 
 
-def _get_codec_impl(topic: Topic) -> Optional[Codec[Any]]:
+def _get_codec_impl(topic: Topic) -> Codec[Any] | None:
     """
     This function returns either the schema if it is defined, or None if not.
     """

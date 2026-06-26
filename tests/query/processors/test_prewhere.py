@@ -1,4 +1,5 @@
-from typing import Any, MutableMapping, Optional, Sequence
+from collections.abc import MutableMapping, Sequence
+from typing import Any
 
 import pytest
 from snuba_sdk.legacy import json_to_snql
@@ -220,8 +221,8 @@ def test_prewhere(
     query_body: MutableMapping[str, Any],
     keys: Sequence[str],
     omit_if_final_keys: Sequence[str],
-    new_ast_condition: Optional[Expression],
-    new_prewhere_ast_condition: Optional[Expression],
+    new_ast_condition: Expression | None,
+    new_prewhere_ast_condition: Expression | None,
     final: bool,
 ) -> None:
     settings.MAX_PREWHERE_CONDITIONS = 2
@@ -252,11 +253,7 @@ def test_prewhere(
     def verify_expressions(top_level: Expression, expected: Expression) -> bool:
         actual_conds = get_first_level_and_conditions(top_level)
         expected_conds = get_first_level_and_conditions(expected)
-        for cond in expected_conds:
-            if cond not in actual_conds:
-                return False
-
-        return True
+        return all(cond in actual_conds for cond in expected_conds)
 
     if new_ast_condition:
         condition = query.get_condition()

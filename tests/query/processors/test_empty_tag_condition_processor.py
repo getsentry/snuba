@@ -154,7 +154,7 @@ test_data = [
 ]
 
 
-@pytest.mark.parametrize("query, expected", test_data)  # type: ignore
+@pytest.mark.parametrize("query, expected", test_data)
 def test_empty_tag_condition(query: Query, expected: Expression) -> None:
     query_settings = HTTPQuerySettings()
     processor = EmptyTagConditionProcessor(column_name="tags.key")

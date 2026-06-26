@@ -1,11 +1,11 @@
-from typing import Iterator, Sequence, Tuple
+from collections.abc import Iterator, Sequence
 
 from snuba.clickhouse.columns import Array, Column, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
-columns: Sequence[Tuple[Column[Modifiers], str]] = [
+columns: Sequence[tuple[Column[Modifiers], str]] = [
     (Column("click_node_id", UInt(32, Modifiers(default="0"))), "tags.value"),
     (
         Column("click_tag", String(Modifiers(default="''", low_cardinality=True))),

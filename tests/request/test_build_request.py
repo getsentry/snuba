@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 
@@ -64,7 +64,7 @@ TESTS = [
 
 
 @pytest.mark.parametrize("body, condition", TESTS)
-def test_build_request(body: Dict[str, Any], condition: Expression) -> None:
+def test_build_request(body: dict[str, Any], condition: Expression) -> None:
     dataset = get_dataset("events")
     entity = get_entity(EntityKey.EVENTS)
     schema = RequestSchema.build(HTTPQuerySettings)
@@ -86,7 +86,7 @@ def test_build_request(body: Dict[str, Any], condition: Expression) -> None:
                 name="time",
                 expression=Column(alias="_snuba_time", table_name=None, column_name="time"),
             ),
-            SelectedExpression("count", FunctionCall("_snuba_count", "count", tuple())),
+            SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
         ],
         condition=condition,
         groupby=[Column("_snuba_time", None, "time")],
@@ -97,7 +97,7 @@ def test_build_request(body: Dict[str, Any], condition: Expression) -> None:
     assert request.referrer == "my_request"
     assert dict(request.original_body) == body
     status, differences = request.query.equals(expected_query)
-    assert status == True, f"Query mismatch: {differences}"
+    assert status, f"Query mismatch: {differences}"
 
 
 TENANT_ID_TESTS = [

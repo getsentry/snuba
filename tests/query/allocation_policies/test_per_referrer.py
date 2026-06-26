@@ -24,13 +24,9 @@ class TestPerReferrerPolicy:
         )
 
         policy.set_config_value("default_concurrent_request_per_referrer", 2)
-        policy.get_quota_allowance(
-            tenant_ids={"referrer": "statistical_detectors"}, query_id="1"
-        )
+        policy.get_quota_allowance(tenant_ids={"referrer": "statistical_detectors"}, query_id="1")
 
-        policy.get_quota_allowance(
-            tenant_ids={"referrer": "statistical_detectors"}, query_id="2"
-        )
+        policy.get_quota_allowance(tenant_ids={"referrer": "statistical_detectors"}, query_id="2")
 
         quota_allowance = policy.get_quota_allowance(
             tenant_ids={"referrer": "statistical_detectors"}, query_id="3"

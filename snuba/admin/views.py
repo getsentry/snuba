@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import io
 import sys
+from collections.abc import Mapping, Sequence
 from contextlib import redirect_stdout
 from dataclasses import asdict
 from datetime import datetime
-from typing import Any, List, Mapping, Optional, Sequence, Tuple, Type, cast
+from typing import Any, cast
 
 import sentry_sdk
 import simplejson as json
@@ -198,7 +199,7 @@ def migrations_groups() -> Response:
     group_policies = get_migration_group_policies(g.user)
     allowed_groups = group_policies.keys()
 
-    res: List[Mapping[str, str | Sequence[Mapping[str, str | bool]]]] = []
+    res: list[Mapping[str, str | Sequence[Mapping[str, str | bool]]]] = []
     if not allowed_groups:
         return make_response(jsonify(res), 200)
 
@@ -437,7 +438,7 @@ def clickhouse_system_query() -> Response:
             host, port, storage, raw_sql, sudo_mode, clusterless_mode, g.user
         )
         rows = []
-        rows, columns = cast(List[List[str]], result.results), result.meta
+        rows, columns = cast(list[list[str]], result.results), result.meta
 
         if columns is not None:
             res = {}
@@ -834,28 +835,27 @@ def configs() -> Response:
 
         return Response(json.dumps(config), 200, {"Content-Type": "application/json"})
 
-    else:
-        descriptions = state.get_all_config_descriptions()
+    descriptions = state.get_all_config_descriptions()
 
-        raw_configs: Sequence[Tuple[str, Any]] = state.get_raw_configs().items()
+    raw_configs: Sequence[tuple[str, Any]] = state.get_raw_configs().items()
 
-        sorted_configs = sorted(raw_configs, key=lambda c: c[0])
+    sorted_configs = sorted(raw_configs, key=lambda c: c[0])
 
-        config_data = [
-            {
-                "key": k,
-                "value": str(v) if v is not None else None,
-                "description": str(descriptions.get(k)) if k in descriptions else None,
-                "type": get_config_type_from_value(v),
-            }
-            for (k, v) in sorted_configs
-        ]
+    config_data = [
+        {
+            "key": k,
+            "value": str(v) if v is not None else None,
+            "description": str(descriptions.get(k)) if k in descriptions else None,
+            "type": get_config_type_from_value(v),
+        }
+        for (k, v) in sorted_configs
+    ]
 
-        return Response(
-            json.dumps(config_data),
-            200,
-            {"Content-Type": "application/json"},
-        )
+    return Response(
+        json.dumps(config_data),
+        200,
+        {"Content-Type": "application/json"},
+    )
 
 
 @application.route("/all_config_descriptions", methods=["GET"])
@@ -885,76 +885,75 @@ def config(config_key: str) -> Response:
         audit_log.record(
             user or "",
             AuditLogAction.REMOVED_OPTION,
-            {"option": config_key, "old": str(old) if not old else old},
+            {"option": config_key, "old": old if old else str(old)},
             notify=True,
         )
 
         return Response("", 200)
 
-    else:
-        # PUT currently only supports editing existing config when old and
-        # new types match. Does not currently support passing force to
-        # set_config to override the type check.
+    # PUT currently only supports editing existing config when old and
+    # new types match. Does not currently support passing force to
+    # set_config to override the type check.
 
-        user = request.headers.get(USER_HEADER_KEY)
-        data = json.loads(request.data)
+    user = request.headers.get(USER_HEADER_KEY)
+    data = json.loads(request.data)
 
-        # Get the previous value for notifications
-        old = state.get_uncached_config(config_key)
+    # Get the previous value for notifications
+    old = state.get_uncached_config(config_key)
 
-        try:
-            new_value = data["value"]
-            new_desc = data["description"]
+    try:
+        new_value = data["value"]
+        new_desc = data["description"]
 
-            assert isinstance(config_key, str), "Invalid key"
-            assert isinstance(new_value, str), "Invalid value"
-            assert config_key != "", "Key cannot be empty string"
+        assert isinstance(config_key, str), "Invalid key"
+        assert isinstance(new_value, str), "Invalid value"
+        assert config_key != "", "Key cannot be empty string"
 
-            state.set_config(
-                config_key,
-                new_value,
-                user=user,
-            )
-            state.set_config_description(config_key, new_desc, user=user)
+        state.set_config(
+            config_key,
+            new_value,
+            user=user,
+        )
+        state.set_config_description(config_key, new_desc, user=user)
 
-        except (KeyError, AssertionError) as exc:
-            return Response(
-                json.dumps({"error": f"Invalid config: {str(exc)}"}),
-                400,
-                {"Content-Type": "application/json"},
-            )
-        except state.MismatchedTypeException:
-            return Response(
-                json.dumps({"error": "Mismatched type"}),
-                400,
-                {"Content-Type": "application/json"},
-            )
-
-        # Value was updated successfully, refetch and return it
-        evaluated_value = state.get_uncached_config(config_key)
-        assert evaluated_value is not None
-        evaluated_type = get_config_type_from_value(evaluated_value)
-
-        # Send notification
-        audit_log.record(
-            user or "",
-            AuditLogAction.UPDATED_OPTION,
-            {
-                "option": config_key,
-                "old": str(old) if not old else old,
-                "new": evaluated_value,
-            },
-            notify=True,
+    except (KeyError, AssertionError) as exc:
+        return Response(
+            json.dumps({"error": f"Invalid config: {str(exc)}"}),
+            400,
+            {"Content-Type": "application/json"},
+        )
+    except state.MismatchedTypeException:
+        return Response(
+            json.dumps({"error": "Mismatched type"}),
+            400,
+            {"Content-Type": "application/json"},
         )
 
-        config = {
-            "key": config_key,
-            "value": str(evaluated_value),
-            "description": state.get_config_description(config_key),
-            "type": evaluated_type,
-        }
+    # Value was updated successfully, refetch and return it
+    evaluated_value = state.get_uncached_config(config_key)
+    assert evaluated_value is not None
+    evaluated_type = get_config_type_from_value(evaluated_value)
 
-        return Response(json.dumps(config), 200, {"Content-Type": "application/json"})
+    # Send notification
+    audit_log.record(
+        user or "",
+        AuditLogAction.UPDATED_OPTION,
+        {
+            "option": config_key,
+            "old": old if old else str(old),
+            "new": evaluated_value,
+        },
+        notify=True,
+    )
+
+    config = {
+        "key": config_key,
+        "value": str(evaluated_value),
+        "description": state.get_config_description(config_key),
+        "type": evaluated_type,
+    }
+
+    return Response(json.dumps(config), 200, {"Content-Type": "application/json"})
 
 
 @application.route("/config_auditlog")
@@ -963,9 +962,9 @@ def config_changes() -> Response:
     def serialize(
         key: str,
         ts: float,
-        user: Optional[str],
-        before: Optional[ConfigType],
-        after: Optional[ConfigType],
+        user: str | None,
+        before: ConfigType | None,
+        after: ConfigType | None,
     ) -> ConfigChange:
         return {
             "key": key,
@@ -1120,7 +1119,7 @@ def set_configuration() -> Response:
             notify=True,
         )
         return Response("", 200)
-    elif request.method == "POST":
+    if request.method == "POST":
         try:
             value = data["value"]
             assert isinstance(value, str), "Invalid value"
@@ -1281,7 +1280,7 @@ def list_rpc_endpoints() -> Response:
 @check_tool_perms(tools=[AdminTools.RPC_ENDPOINTS])
 def execute_rpc_endpoint(endpoint_name: str, version: str) -> Response:
     try:
-        endpoint_class: Type[RPCEndpoint[Any, Any]] = RPCEndpoint.get_from_name(
+        endpoint_class: type[RPCEndpoint[Any, Any]] = RPCEndpoint.get_from_name(
             endpoint_name, version
         )
     except InvalidConfigKeyError:
@@ -1407,9 +1406,8 @@ def delete() -> Response:
             from traceback import format_exception
 
             return make_response(jsonify({"error": format_exception(e)}), 500)
-        else:
-            sentry_sdk.capture_exception(e)
-            return make_response(jsonify({"error": "unexpected internal error"}), 500)
+        sentry_sdk.capture_exception(e)
+        return make_response(jsonify({"error": "unexpected internal error"}), 500)
 
     return Response(json.dumps(delete_results), 200, {"Content-Type": "application/json"})
 

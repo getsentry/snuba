@@ -11,7 +11,7 @@ def test_interval_validation() -> None:
         Interval(10, 1)
 
     with pytest.raises(InvalidRangeError):
-        Interval(1, None)  # type: ignore
+        Interval(1, None)  # type: ignore[type-var]
 
     assert e.value.lower == 10
     assert e.value.upper == 1
