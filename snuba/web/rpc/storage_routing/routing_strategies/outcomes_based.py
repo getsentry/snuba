@@ -9,7 +9,6 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
-from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query import Expression
@@ -25,6 +24,7 @@ from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array
 from snuba.query.logical import Query
 from snuba.query.query_settings import OutcomesQuerySettings
 from snuba.request import Request as SnubaRequest
+from snuba.state.sentry_options import get_bool_option, get_mapped_int_option
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     timestamp_in_range_condition,
@@ -208,8 +208,9 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
 
         default = 1_000_000_000
         return (
-            state.get_int_config(
-                f"{self.class_name()}.max_items_before_downsampling",
+            get_mapped_int_option(
+                "storage_routing_max_items_before_downsampling",
+                self.class_name(),
                 default,
             )
             or default
@@ -218,8 +219,9 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
     def _get_min_timerange_to_query_outcomes(self) -> int:
         default = 3600 * 4
         return (
-            state.get_int_config(
-                f"{self.class_name()}.min_timerange_to_query_outcomes",
+            get_mapped_int_option(
+                "storage_routing_min_timerange_to_query_outcomes",
+                self.class_name(),
                 default,
             )
             or default
@@ -238,7 +240,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         older_than_thirty_days = thirty_one_days_ago_ts > in_msg_meta.start_timestamp.seconds
 
         if (
-            state.get_int_config("enable_long_term_retention_downsampling", 0)
+            get_bool_option("enable_long_term_retention_downsampling", False)
             and older_than_thirty_days
             and in_msg_meta.trace_item_type not in ITEM_TYPE_FULL_RETENTION
         ):
