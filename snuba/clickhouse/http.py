@@ -17,11 +17,12 @@ import sentry_sdk
 from urllib3.connectionpool import HTTPConnectionPool, HTTPSConnectionPool
 from urllib3.exceptions import HTTPError
 
-from snuba import settings, state
+from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.errors import ClickhouseWriterError
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.clickhouse.query import Expression
+from snuba.state.sentry_options import get_int_option
 from snuba.utils.codecs import Encoder
 from snuba.utils.iterators import chunked
 from snuba.utils.metrics import MetricsBackend
@@ -306,11 +307,7 @@ class HTTPBatchWriter(BatchWriter[bytes]):
         self.__statement = statement
         self.__buffer_size = buffer_size
         self.__chunk_size = chunk_size
-        self.__debug_buffer_size_bytes = state.get_config("debug_buffer_size_bytes", None)
-        assert (
-            isinstance(self.__debug_buffer_size_bytes, int)
-            or self.__debug_buffer_size_bytes is None
-        )
+        self.__debug_buffer_size_bytes = get_int_option("debug_buffer_size_bytes", 0)
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__}: {self.__statement.get_qualified_table()} on {self.__pool.host}:{self.__pool.port}>"
@@ -342,8 +339,11 @@ class HTTPBatchWriter(BatchWriter[bytes]):
             batch.append(value)
 
         batch.close()
-        batch_join_timeout = state.get_config(
-            "http_batch_join_timeout", settings.BATCH_JOIN_TIMEOUT
+        # A 0 (the schema default) means "unset": fall back to the env-configured
+        # settings.BATCH_JOIN_TIMEOUT, preserving the prior runtime-config
+        # behavior where the option was only an override.
+        batch_join_timeout = (
+            get_int_option("http_batch_join_timeout", 0) or settings.BATCH_JOIN_TIMEOUT
         )
         # IMPORTANT: Please read the docstring of this method if you ever decide to remove the
         # timeout argument from the join method.
