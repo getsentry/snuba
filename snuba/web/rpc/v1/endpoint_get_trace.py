@@ -48,9 +48,13 @@ from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     attributes_array_selected_expressions,
     decode_attributes_array_value,
+    flatten_typed_array_tuple,
+    merge_typed_array_maps,
     project_id_and_org_conditions,
     timestamp_in_range_condition,
     treeify_or_and_conditions,
+    typed_array_map_selected_expressions,
+    use_array_map_columns,
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
@@ -201,12 +205,15 @@ def _build_query(
         ),
     ]
 
+    read_typed_arrays = use_array_map_columns(request.meta)
     if len(item.attributes) > 0:
         for attribute_key in item.attributes:
             selected_columns.append(
                 SelectedExpression(
                     name=attribute_key.name,
-                    expression=(attribute_key_to_expression(attribute_key)),
+                    expression=attribute_key_to_expression(
+                        attribute_key, read_arrays_from_typed_columns=read_typed_arrays
+                    ),
                 )
             )
     else:
@@ -227,7 +234,13 @@ def _build_query(
                     tuple(column(f"attributes_float_{i}") for i in range(40)),
                 ),
             ),
-            *attributes_array_selected_expressions(),
+            # Past the cutoff, read every array attribute from the typed array map
+            # columns instead of the legacy attributes_array JSON-column allowlist.
+            *(
+                typed_array_map_selected_expressions()
+                if read_typed_arrays
+                else attributes_array_selected_expressions()
+            ),
         ]
         selected_columns.extend(
             map(
@@ -466,6 +479,7 @@ ProcessedResults = NamedTuple(
 @with_span(op="function")
 def _process_results(
     data: Iterable[Dict[str, Any]],
+    read_typed_arrays: bool = False,
 ) -> ProcessedResults:
     """
     Used to process the results returned from clickhouse in two passes.
@@ -503,12 +517,25 @@ def _process_results(
                     value=attribute_value,
                 )
 
+            if read_typed_arrays:
+                # Bulk mode: every array attribute, merged from the typed array map
+                # columns (no-op for the per-attribute mode, where they aren't selected).
+                for name, values in merge_typed_array_maps(row):
+                    if values:
+                        add_attribute(name, values)
+
             for row_key, row_value in row.items():
                 if row_value is None:
                     continue
                 if isinstance(row_value, dict):
                     for column_key, column_value in row_value.items():
                         add_attribute(column_key, column_value)
+                elif isinstance(row_value, tuple):
+                    # Per-attribute mode past the cutoff: a single array attribute read
+                    # as a native typed-column tuple (see flatten_typed_array_tuple).
+                    flattened = flatten_typed_array_tuple(row_value)
+                    if flattened:
+                        add_attribute(row_key, flattened)
                 elif isinstance(row_value, str):
                     decoded = decode_attributes_array_value(row_key, row_value)
                     if decoded is None or (isinstance(decoded, list) and not decoded):
@@ -662,6 +689,7 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
         )
         processed_results = _process_results(
             results.result.get("data", []),
+            read_typed_arrays=use_array_map_columns(in_msg.meta),
         )
         items = processed_results.items
         last_seen_timestamp_precise = processed_results.last_seen_timestamp_precise
