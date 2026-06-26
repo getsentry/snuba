@@ -270,7 +270,9 @@ def aggregation_filter_to_expression(
             raise BadSnubaRPCRequestException(f"Unsupported aggregation filter type: {default}")
 
 
-def _groupby_order_by_expression(attr_key: AttributeKey) -> Expression:
+def _groupby_order_by_expression(
+    attr_key: AttributeKey, read_arrays_from_typed_columns: bool = False
+) -> Expression:
     """
     Maps an attribute key used in GROUP BY / ORDER BY to its expression.
 
@@ -282,10 +284,16 @@ def _groupby_order_by_expression(attr_key: AttributeKey) -> Expression:
     valid (it is a function of the grouped column) while letting ORDER BY sort on
     the raw column. If the two diverged, ClickHouse would reject the query with
     "Column `timestamp` is not under aggregate function and not in GROUP BY".
+
+    ``read_arrays_from_typed_columns`` must match the SELECT (see
+    ``_column_to_expression``) so a TYPE_ARRAY group-by/order-by key uses the same
+    typed-column expression the SELECT does — otherwise the same divergence error.
     """
     if attr_key.name == "sentry.timestamp":
         return snuba_column("timestamp")
-    return attribute_key_to_expression(attr_key)
+    return attribute_key_to_expression(
+        attr_key, read_arrays_from_typed_columns=read_arrays_from_typed_columns
+    )
 
 
 def _convert_order_by(
@@ -337,7 +345,10 @@ def _convert_order_by(
             # covers `sentry.timestamp` ordering anywhere else.) The GROUP BY uses the
             # same expression (see `_groupby_order_by_expression`) so an aggregation
             # query that orders by `sentry.timestamp` stays valid.
-            expression = _groupby_order_by_expression(x.column.key)
+            expression = _groupby_order_by_expression(
+                x.column.key,
+                read_arrays_from_typed_columns=use_array_map_columns(request_meta),
+            )
             res.append(
                 OrderBy(
                     direction=direction,
@@ -633,7 +644,13 @@ def build_query(
     if page_token_filter:
         additional_conditions.append(page_token_filter)
 
-    groupby = [_groupby_order_by_expression(attr_key) for attr_key in request.group_by]
+    groupby = [
+        _groupby_order_by_expression(
+            attr_key,
+            read_arrays_from_typed_columns=use_array_map_columns(request.meta),
+        )
+        for attr_key in request.group_by
+    ]
 
     res = Query(
         from_clause=entity,
