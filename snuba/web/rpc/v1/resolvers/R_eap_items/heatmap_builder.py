@@ -35,7 +35,6 @@ from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
-    use_array_map_columns,
 )
 from snuba.web.rpc.common.debug_info import setup_trace_query_settings
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -125,7 +124,6 @@ class HeatmapBuilder:
         filter_expression = trace_item_filters_to_expression(
             filter,
             (attribute_key_to_expression),
-            use_array_map_columns=use_array_map_columns(in_msg.meta),
         )
         condition = base_conditions_and(in_msg.meta, filter_expression)
         min_max_query = Query(
@@ -216,7 +214,6 @@ class HeatmapBuilder:
         filter_expression = trace_item_filters_to_expression(
             filter,
             (attribute_key_to_expression),
-            use_array_map_columns=use_array_map_columns(self.in_msg.meta),
         )
         condition = base_conditions_and(self.in_msg.meta, filter_expression)
         bucket_index_y = f.least(

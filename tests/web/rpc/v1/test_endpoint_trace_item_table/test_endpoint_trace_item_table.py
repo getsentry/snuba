@@ -65,6 +65,7 @@ from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column as snuba_column
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint
+from snuba.web.rpc.common.common import attribute_key_to_expression
 from snuba.web.rpc.common.exceptions import (
     BadSnubaRPCRequestException,
     QueryTimeoutException,
@@ -77,7 +78,9 @@ from snuba.web.rpc.v1.endpoint_trace_item_table import (
     EndpointTraceItemTable,
     _apply_labels_to_columns,
     _validate_order_by,
+    _validate_select_and_groupby,
 )
+from snuba.web.rpc.v1.resolvers.common.aggregation import aggregation_to_expression
 from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_table import build_query
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -3759,300 +3762,6 @@ def _int_array(*values: int) -> AnyValue:
     return AnyValue(array_value=ArrayValue(values=[AnyValue(int_value=v) for v in values]))
 
 
-def _double_array(*values: float) -> AnyValue:
-    return AnyValue(array_value=ArrayValue(values=[AnyValue(double_value=v) for v in values]))
-
-
-def _bool_array(*values: bool) -> AnyValue:
-    return AnyValue(array_value=ArrayValue(values=[AnyValue(bool_value=v) for v in values]))
-
-
-class TestArrayWildcardSearch(BaseApiTest):
-    @pytest.mark.clickhouse_db
-    @pytest.mark.redis_db
-    def test_like_filter_on_array_attribute(self) -> None:
-        """Wildcard search on array attributes using LIKE returns matching items."""
-        span_ts = BASE_TIME - timedelta(minutes=1)
-        items_storage = get_storage(StorageKey("eap_items"))
-        write_raw_unprocessed_events(
-            items_storage,  # type: ignore
-            [
-                gen_item_message(
-                    span_ts, attributes={"tags": _str_array("auth-error", "timeout", "retry")}
-                ),
-                gen_item_message(span_ts, attributes={"tags": _str_array("success", "cached")}),
-                gen_item_message(
-                    span_ts, attributes={"tags": _str_array("auth-failure", "network-error")}
-                ),
-            ],
-        )
-
-        message = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=START_TIMESTAMP,
-                end_timestamp=END_TIMESTAMP,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            filter=TraceItemFilter(
-                comparison_filter=ComparisonFilter(
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_ARRAY,
-                        name="tags",
-                    ),
-                    op=ComparisonFilter.OP_LIKE,
-                    value=AttributeValue(val_str="%error%"),
-                )
-            ),
-            columns=[
-                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
-            ],
-        )
-        response = EndpointTraceItemTable().execute(message)
-        # Only the two items with "error" in one of their tags should match
-        assert len(response.column_values[0].results) == 2
-
-    @pytest.mark.clickhouse_db
-    @pytest.mark.redis_db
-    def test_not_like_filter_on_array_attribute(self) -> None:
-        """NOT_LIKE on array attributes excludes items where any element matches."""
-        span_ts = BASE_TIME - timedelta(minutes=1)
-        items_storage = get_storage(StorageKey("eap_items"))
-        write_raw_unprocessed_events(
-            items_storage,  # type: ignore
-            [
-                gen_item_message(span_ts, attributes={"tags": _str_array("auth-error", "timeout")}),
-                gen_item_message(span_ts, attributes={"tags": _str_array("success", "cached")}),
-                gen_item_message(span_ts, attributes={"tags": _str_array("network-error")}),
-            ],
-        )
-
-        message = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=START_TIMESTAMP,
-                end_timestamp=END_TIMESTAMP,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            filter=TraceItemFilter(
-                comparison_filter=ComparisonFilter(
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_ARRAY,
-                        name="tags",
-                    ),
-                    op=ComparisonFilter.OP_NOT_LIKE,
-                    value=AttributeValue(val_str="%error%"),
-                )
-            ),
-            columns=[
-                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
-            ],
-        )
-        response = EndpointTraceItemTable().execute(message)
-        # Only the item with ["success", "cached"] should match (no "error" elements)
-        assert len(response.column_values[0].results) == 1
-
-    @pytest.mark.clickhouse_db
-    @pytest.mark.redis_db
-    def test_trace_item_table_array_op_equals_includes_string_ignore_case(self) -> None:
-        """OP_EQUALS with ignore_case matches a string in a TYPE_ARRAY (element-wise)."""
-        span_ts = BASE_TIME - timedelta(minutes=1)
-        items_storage = get_storage(StorageKey("eap_items"))
-        write_raw_unprocessed_events(
-            items_storage,  # type: ignore
-            [
-                gen_item_message(span_ts, attributes={"tags": _str_array("ERROR", "other")}),
-                gen_item_message(
-                    span_ts, attributes={"tags": _str_array("success", "cached", "http-error")}
-                ),
-                gen_item_message(span_ts, attributes={"tags": _str_array("Error", "timeout")}),
-            ],
-        )
-        message = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=START_TIMESTAMP,
-                end_timestamp=END_TIMESTAMP,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            filter=TraceItemFilter(
-                comparison_filter=ComparisonFilter(
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_ARRAY,
-                        name="tags",
-                    ),
-                    op=ComparisonFilter.OP_EQUALS,
-                    value=AttributeValue(val_str="error"),
-                    ignore_case=True,
-                )
-            ),
-            columns=[
-                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
-                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags")),
-            ],
-        )
-        response = EndpointTraceItemTable().execute(message)
-        assert len(response.column_values[0].results) == 2
-        by_name = {cv.attribute_name: cv for cv in response.column_values}
-        for row in by_name["tags"].results:
-            vals = [e.val_str for e in row.val_array.values if e.WhichOneof("value") == "val_str"]
-            assert "error" in [val.lower() for val in vals]
-
-    @pytest.mark.clickhouse_db
-    @pytest.mark.redis_db
-    def test_trace_item_table_array_op_equals_includes_int(self) -> None:
-        """OP_EQUALS on TYPE_ARRAY with val_int=45 returns rows where some element is 45."""
-        span_ts = BASE_TIME - timedelta(minutes=1)
-        items_storage = get_storage(StorageKey("eap_items"))
-        write_raw_unprocessed_events(
-            items_storage,  # type: ignore
-            [
-                gen_item_message(span_ts, attributes={"frame_linenos": _int_array(1, 45, 200)}),
-                gen_item_message(span_ts, attributes={"frame_linenos": _int_array(10, 20)}),
-                gen_item_message(span_ts, attributes={"frame_linenos": _int_array(45, 99)}),
-            ],
-        )
-        message = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=START_TIMESTAMP,
-                end_timestamp=END_TIMESTAMP,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            filter=TraceItemFilter(
-                comparison_filter=ComparisonFilter(
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_ARRAY,
-                        name="frame_linenos",
-                    ),
-                    op=ComparisonFilter.OP_EQUALS,
-                    value=AttributeValue(val_int=45),
-                )
-            ),
-            columns=[
-                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
-                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="frame_linenos")),
-            ],
-        )
-        response = EndpointTraceItemTable().execute(message)
-        assert len(response.column_values[0].results) == 2
-        by_name = {cv.attribute_name: cv for cv in response.column_values}
-        assert by_name["frame_linenos"].results[0].WhichOneof("value") == "val_array"
-        for row in by_name["frame_linenos"].results:
-            int_vals = [
-                e.val_int for e in row.val_array.values if e.WhichOneof("value") == "val_int"
-            ]
-            assert 45 in int_vals
-
-    @pytest.mark.clickhouse_db
-    @pytest.mark.redis_db
-    @pytest.mark.parametrize(
-        "attr_name,match_attrs,no_match_attrs,filter_value,check_row",
-        [
-            pytest.param(
-                "arr_eq_flt",
-                {"arr_eq_flt": _double_array(0.0, 1.5, 2.0)},
-                {"arr_eq_flt": _double_array(0.1, 0.2)},
-                AttributeValue(val_float=1.5),
-                lambda row: (
-                    any(
-                        isclose(e.val_double, 1.5)
-                        for e in row.val_array.values
-                        if e.WhichOneof("value") == "val_double"
-                    )
-                    or any(
-                        isclose(e.val_float, 1.5)
-                        for e in row.val_array.values
-                        if e.WhichOneof("value") == "val_float"
-                    )
-                ),
-                id="val_float",
-            ),
-            pytest.param(
-                "arr_eq_dbl",
-                {"arr_eq_dbl": _double_array(9.9, 1.0)},
-                {"arr_eq_dbl": _double_array(0.0, 0.0)},
-                AttributeValue(val_double=9.9),
-                lambda row: any(
-                    e.WhichOneof("value") == "val_double" and e.val_double == 9.9
-                    for e in row.val_array.values
-                ),
-                id="val_double",
-            ),
-            pytest.param(
-                "arr_eq_bool",
-                {"arr_eq_bool": _bool_array(False, True)},
-                {"arr_eq_bool": _bool_array(False, False)},
-                AttributeValue(val_bool=True),
-                lambda row: any(
-                    e.WhichOneof("value") == "val_bool" and e.val_bool is True
-                    for e in row.val_array.values
-                ),
-                id="val_bool",
-            ),
-        ],
-    )
-    def test_trace_item_table_array_op_equals_all_scalar_rhs_types(
-        self,
-        attr_name: str,
-        match_attrs: dict[str, AnyValue],
-        no_match_attrs: dict[str, AnyValue],
-        filter_value: AttributeValue,
-        check_row: Any,
-    ) -> None:
-        """OP_EQUALS on TYPE_ARRAY: each scalar AttributeValue type matches a stored element"""
-        span_ts = BASE_TIME - timedelta(minutes=1)
-        items_storage = get_storage(StorageKey("eap_items"))
-        write_raw_unprocessed_events(
-            items_storage,  # type: ignore
-            [
-                gen_item_message(span_ts, attributes=match_attrs),
-                gen_item_message(span_ts, attributes=no_match_attrs),
-            ],
-        )
-        message = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=START_TIMESTAMP,
-                end_timestamp=END_TIMESTAMP,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            filter=TraceItemFilter(
-                comparison_filter=ComparisonFilter(
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_ARRAY,
-                        name=attr_name,
-                    ),
-                    op=ComparisonFilter.OP_EQUALS,
-                    value=filter_value,
-                )
-            ),
-            columns=[
-                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
-                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name=attr_name)),
-            ],
-        )
-        response = EndpointTraceItemTable().execute(message)
-        by_name = {cv.attribute_name: cv for cv in response.column_values}
-        assert len(by_name[attr_name].results) == 1
-        assert check_row(by_name[attr_name].results[0])
-
-
 class TestTraceItemTableArrayColumn(BaseApiTest):
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
@@ -4172,6 +3881,50 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
         assert [e.val_str for e in by_name["tags"].results[0].val_array.values] == ["alpha", "beta"]
         assert by_name["cols"].results[0].WhichOneof("value") == "val_array"
         assert [e.val_int for e in by_name["cols"].results[0].val_array.values] == [1, 3]
+
+
+class TestArrayOperationsRejected:
+    """Array attributes are select-only: group_by / order_by / aggregations are rejected."""
+
+    def test_group_by_array_raises(self) -> None:
+        request = TraceItemTableRequest(
+            columns=[Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.name"))],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags")],
+        )
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="group_by is not supported on array attributes",
+        ):
+            _validate_select_and_groupby(request)
+
+    def test_order_by_array_raises(self) -> None:
+        request = TraceItemTableRequest(
+            columns=[Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags"))],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags"))
+                )
+            ],
+        )
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="order_by is not supported on array attributes",
+        ):
+            _validate_order_by(request)
+
+    def test_aggregation_on_array_raises(self) -> None:
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="aggregations are not supported on array attributes",
+        ):
+            aggregation_to_expression(
+                AttributeConditionalAggregation(
+                    aggregate=Function.FUNCTION_COUNT,
+                    key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags"),
+                    label="count(tags)",
+                ),
+                attribute_key_to_expression,
+            )
 
 
 class TestUtils:

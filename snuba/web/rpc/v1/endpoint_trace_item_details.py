@@ -113,7 +113,6 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
             trace_item_filters_to_expression(
                 request.filter,
                 attribute_key_to_expression,
-                use_array_map_columns=use_array_map_columns(request.meta),
             ),
         ),
         limit=1,

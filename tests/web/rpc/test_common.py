@@ -31,20 +31,12 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 from snuba import settings
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.protos.common import (
-    ATTRIBUTES_TO_COALESCE,
-    MalformedAttributeException,
-    type_array_to_membership_array_expression_from_typed_columns,
-)
+from snuba.protos.common import ATTRIBUTES_TO_COALESCE
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column
 from snuba.query.expressions import (
-    Column as ColumnExpr,
-)
-from snuba.query.expressions import (
     Expression,
     FunctionCall,
-    Lambda,
     Literal,
     SubscriptableReference,
 )
@@ -122,121 +114,78 @@ class TestCommon:
         assert not use_array_map_columns(RequestMeta(start_timestamp=Timestamp(seconds=9)))
 
 
-class TestTraceItemFiltersArrayLike:
+class TestArrayFiltersRejected:
+    """Filtering on array attributes is not supported (arrays are select-only)."""
+
+    def _array_comparison_filter(
+        self, op: ComparisonFilter.Op.ValueType, value: AttributeValue
+    ) -> TraceItemFilter:
+        return TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_ARRAY, name="my_tags"),
+                op=op,
+                value=value,
+            )
+        )
+
+    def test_equals_filter_on_array_key_raises(self) -> None:
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="filtering is not supported on array attributes",
+        ):
+            trace_item_filters_to_expression(
+                self._array_comparison_filter(
+                    ComparisonFilter.OP_EQUALS, AttributeValue(val_str="error")
+                ),
+                attribute_key_to_expression,
+            )
+
+    def test_like_filter_on_array_key_raises(self) -> None:
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="filtering is not supported on array attributes",
+        ):
+            trace_item_filters_to_expression(
+                self._array_comparison_filter(
+                    ComparisonFilter.OP_LIKE, AttributeValue(val_str="%error%")
+                ),
+                attribute_key_to_expression,
+            )
+
+    def test_exists_filter_on_array_key_raises(self) -> None:
+        item_filter = TraceItemFilter(
+            exists_filter=ExistsFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_ARRAY, name="my_tags")
+            )
+        )
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="filtering is not supported on array attributes",
+        ):
+            trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+
+
+class TestLikeComparisonValidation:
     def _make_like_filter(
         self,
         attr_name: str,
         attr_type: AttributeKey.Type.ValueType,
         pattern: str,
         op: ComparisonFilter.Op.ValueType = ComparisonFilter.OP_LIKE,
-        ignore_case: bool = False,
     ) -> TraceItemFilter:
         return TraceItemFilter(
             comparison_filter=ComparisonFilter(
                 key=AttributeKey(type=attr_type, name=attr_name),
                 op=op,
                 value=AttributeValue(val_str=pattern),
-                ignore_case=ignore_case,
             )
         )
-
-    def test_like_on_array_key(self) -> None:
-        item_filter = self._make_like_filter("my_tags", AttributeKey.Type.TYPE_ARRAY, "%error%")
-        result = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
-        assert isinstance(result, FunctionCall)
-        assert result.function_name == "arrayExists"
-        # First param is a Lambda with like
-        lam = result.parameters[0]
-        assert isinstance(lam, Lambda)
-        assert lam.parameters == ("x",)
-        assert isinstance(lam.transformation, FunctionCall)
-        assert lam.transformation.function_name == "like"
-        # Second param is the array expression (from attribute_key_to_expression)
-        assert isinstance(result.parameters[1], FunctionCall)
-
-    def test_like_on_array_key_ignore_case(self) -> None:
-        item_filter = self._make_like_filter(
-            "my_tags", AttributeKey.Type.TYPE_ARRAY, "%error%", ignore_case=True
-        )
-        result = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
-        assert isinstance(result, FunctionCall)
-        assert result.function_name == "arrayExists"
-        lam = result.parameters[0]
-        assert isinstance(lam, Lambda)
-        assert isinstance(lam.transformation, FunctionCall)
-        assert lam.transformation.function_name == "ilike"
-
-    def test_not_like_on_array_key(self) -> None:
-        item_filter = self._make_like_filter(
-            "my_tags",
-            AttributeKey.Type.TYPE_ARRAY,
-            "%error%",
-            op=ComparisonFilter.OP_NOT_LIKE,
-        )
-        result = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
-        # Result should be NOT(arrayExists(...))
-        assert isinstance(result, FunctionCall)
-        assert result.function_name == "not"
-        inner = result.parameters[0]
-        assert isinstance(inner, FunctionCall)
-        assert inner.function_name == "arrayExists"
-        lam = inner.parameters[0]
-        assert isinstance(lam, Lambda)
-        assert isinstance(lam.transformation, FunctionCall)
-        assert lam.transformation.function_name == "like"
-
-    def test_not_like_on_array_key_ignore_case(self) -> None:
-        item_filter = self._make_like_filter(
-            "my_tags",
-            AttributeKey.Type.TYPE_ARRAY,
-            "%error%",
-            op=ComparisonFilter.OP_NOT_LIKE,
-            ignore_case=True,
-        )
-        result = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
-        assert isinstance(result, FunctionCall)
-        assert result.function_name == "not"
-        inner = result.parameters[0]
-        assert isinstance(inner, FunctionCall)
-        assert inner.function_name == "arrayExists"
-        lam = inner.parameters[0]
-        assert isinstance(lam, Lambda)
-        assert isinstance(lam.transformation, FunctionCall)
-        assert lam.transformation.function_name == "ilike"
-
-    def test_like_on_array_key_non_string_value_raises(self) -> None:
-        item_filter = TraceItemFilter(
-            comparison_filter=ComparisonFilter(
-                key=AttributeKey(type=AttributeKey.Type.TYPE_ARRAY, name="my_tags"),
-                op=ComparisonFilter.OP_LIKE,
-                value=AttributeValue(val_int=42),
-            )
-        )
-        with pytest.raises(
-            BadSnubaRPCRequestException,
-            match="LIKE/NOT_LIKE on array keys requires a string pattern",
-        ):
-            trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
-
-    def test_equals_on_array_key_with_str_array_value_raises(self) -> None:
-        item_filter = TraceItemFilter(
-            comparison_filter=ComparisonFilter(
-                key=AttributeKey(type=AttributeKey.Type.TYPE_ARRAY, name="my_tags"),
-                op=ComparisonFilter.OP_EQUALS,
-                value=AttributeValue(val_str_array=StrArray(values=["a", "b"])),
-            )
-        )
-        with pytest.raises(
-            BadSnubaRPCRequestException,
-            match="OP_EQUALS/OP_NOT_EQUALS on array keys require a scalar value",
-        ):
-            trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
 
     def test_like_on_int_key_raises(self) -> None:
         item_filter = self._make_like_filter("my_int", AttributeKey.Type.TYPE_INT, "%something%")
         with pytest.raises(
             BadSnubaRPCRequestException,
-            match="LIKE comparison is only supported on string and array keys",
+            match="LIKE comparison is only supported on string keys",
         ):
             trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
 
@@ -249,124 +198,9 @@ class TestTraceItemFiltersArrayLike:
         )
         with pytest.raises(
             BadSnubaRPCRequestException,
-            match="NOT LIKE comparison is only supported on string and array keys",
+            match="NOT LIKE comparison is only supported on string keys",
         ):
             trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
-
-
-def _collect_column_names(expr: Expression) -> set[str]:
-    names: set[str] = set()
-
-    def visit(node: Expression) -> Expression:
-        if isinstance(node, ColumnExpr):
-            names.add(node.column_name)
-        return node
-
-    expr.transform(visit)
-    return names
-
-
-_TYPED_ARRAY_COLUMNS = {
-    "attributes_array_string",
-    "attributes_array_int",
-    "attributes_array_float",
-    "attributes_array_bool",
-}
-
-
-class TestTraceItemFiltersArrayMapColumns:
-    """Array predicates read the typed ``attributes_array_*`` map columns when
-    ``use_array_map_columns`` is set, and the legacy ``attributes_array`` JSON
-    column otherwise. All four typed columns are read: unlike the scalar
-    double-write, array ints live only in ``attributes_array_int``."""
-
-    def _array_filter(
-        self,
-        op: ComparisonFilter.Op.ValueType,
-        value: AttributeValue,
-    ) -> TraceItemFilter:
-        return TraceItemFilter(
-            comparison_filter=ComparisonFilter(
-                key=AttributeKey(type=AttributeKey.Type.TYPE_ARRAY, name="my_tags"),
-                op=op,
-                value=value,
-            )
-        )
-
-    def test_like_on_array_key_uses_json_column_by_default(self) -> None:
-        result = trace_item_filters_to_expression(
-            self._array_filter(ComparisonFilter.OP_LIKE, AttributeValue(val_str="%error%")),
-            attribute_key_to_expression,
-        )
-        assert isinstance(result, FunctionCall)
-        assert result.function_name == "arrayExists"
-        membership = result.parameters[1]
-        assert isinstance(membership, FunctionCall)
-        assert membership.function_name == "arrayMap"
-        assert _collect_column_names(membership) == {"attributes_array"}
-
-    def test_like_on_array_key_uses_typed_columns_when_enabled(self) -> None:
-        result = trace_item_filters_to_expression(
-            self._array_filter(ComparisonFilter.OP_LIKE, AttributeValue(val_str="%error%")),
-            attribute_key_to_expression,
-            use_array_map_columns=True,
-        )
-        assert isinstance(result, FunctionCall)
-        assert result.function_name == "arrayExists"
-        membership = result.parameters[1]
-        assert isinstance(membership, FunctionCall)
-        assert membership.function_name == "arrayConcat"
-        assert _collect_column_names(membership) == _TYPED_ARRAY_COLUMNS
-
-    def test_equals_on_array_key_uses_typed_columns_when_enabled(self) -> None:
-        result = trace_item_filters_to_expression(
-            self._array_filter(ComparisonFilter.OP_EQUALS, AttributeValue(val_str="error")),
-            attribute_key_to_expression,
-            use_array_map_columns=True,
-        )
-        assert isinstance(result, FunctionCall)
-        assert result.function_name == "arrayExists"
-        membership = result.parameters[1]
-        assert isinstance(membership, FunctionCall)
-        assert membership.function_name == "arrayConcat"
-        assert _collect_column_names(membership) == _TYPED_ARRAY_COLUMNS
-
-    def test_exists_filter_on_array_key_uses_typed_columns_when_enabled(self) -> None:
-        item_filter = TraceItemFilter(
-            exists_filter=ExistsFilter(
-                key=AttributeKey(type=AttributeKey.Type.TYPE_ARRAY, name="my_tags")
-            )
-        )
-        result = trace_item_filters_to_expression(
-            item_filter, attribute_key_to_expression, use_array_map_columns=True
-        )
-        # Existence is notEmpty(arrayConcat(...)) over the typed columns.
-        assert isinstance(result, FunctionCall)
-        assert result.function_name == "notEmpty"
-        inner = result.parameters[0]
-        assert isinstance(inner, FunctionCall)
-        assert inner.function_name == "arrayConcat"
-        assert _collect_column_names(inner) == _TYPED_ARRAY_COLUMNS
-
-    def test_exists_filter_on_array_key_uses_json_column_by_default(self) -> None:
-        item_filter = TraceItemFilter(
-            exists_filter=ExistsFilter(
-                key=AttributeKey(type=AttributeKey.Type.TYPE_ARRAY, name="my_tags")
-            )
-        )
-        result = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
-        assert isinstance(result, FunctionCall)
-        assert result.function_name == "notEmpty"
-        inner = result.parameters[0]
-        assert isinstance(inner, FunctionCall)
-        assert inner.function_name == "arrayMap"
-        assert _collect_column_names(inner) == {"attributes_array"}
-
-    def test_typed_membership_function_rejects_non_array(self) -> None:
-        with pytest.raises(MalformedAttributeException):
-            type_array_to_membership_array_expression_from_typed_columns(
-                AttributeKey(type=AttributeKey.Type.TYPE_STRING, name="my_tags")
-            )
 
 
 class TestExistsFilterCoalesced:

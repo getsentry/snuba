@@ -245,7 +245,6 @@ def aggregation_filter_to_expression(
                     agg_filter.comparison_filter.conditional_aggregation,
                     attribute_key_to_expression,
                     use_sampling_factor(request_meta),
-                    use_array_map_columns(request_meta),
                 ),
                 agg_filter.comparison_filter.val,
             )
@@ -275,23 +274,19 @@ def aggregation_filter_to_expression(
             raise BadSnubaRPCRequestException(f"Unsupported aggregation filter type: {default}")
 
 
-def _groupby_order_by_expressions(
-    attr_key: AttributeKey, request_meta: RequestMeta
-) -> list[Expression]:
+def _groupby_order_by_expression(attr_key: AttributeKey) -> Expression:
     """
-    Maps an attribute key used in GROUP BY / ORDER BY to its expression(s). Returns a
-    list: a TYPE_ARRAY key past the cutoff expands to its four typed sub-columns (same
-    expressions the SELECT emits, so the query stays valid); every other key is single.
+    Maps an attribute key used in GROUP BY / ORDER BY to its expression.
 
     `sentry.timestamp` groups/orders on the raw primary-key `timestamp` column (not the
     SELECT's `CAST(timestamp, 'Float64')`) so ClickHouse can read in primary-key order
-    while keeping the cast valid as a function of the grouped column.
+    while keeping the cast valid as a function of the grouped column. TYPE_ARRAY keys are
+    rejected upstream (see _validate_select_and_groupby / _validate_order_by), so they
+    never reach here.
     """
     if attr_key.name == "sentry.timestamp":
-        return [snuba_column("timestamp")]
-    if attr_key.type == AttributeKey.Type.TYPE_ARRAY and use_array_map_columns(request_meta):
-        return list(type_array_typed_columns_select_expressions(attr_key))
-    return [attribute_key_to_expression(attr_key)]
+        return snuba_column("timestamp")
+    return attribute_key_to_expression(attr_key)
 
 
 def _convert_order_by(
@@ -341,14 +336,14 @@ def _convert_order_by(
             # order while staying read-in-order friendly. (The i == 0 / single-project /
             # no-groupby branch above already expands to the full table sort key; this
             # covers `sentry.timestamp` ordering anywhere else.) GROUP BY uses the same
-            # expression(s) so the query stays valid.
-            for expression in _groupby_order_by_expressions(x.column.key, request_meta):
-                res.append(
-                    OrderBy(
-                        direction=direction,
-                        expression=expression,
-                    )
+            # expression so an aggregation query that orders by `sentry.timestamp` stays
+            # valid.
+            res.append(
+                OrderBy(
+                    direction=direction,
+                    expression=_groupby_order_by_expression(x.column.key),
                 )
+            )
         elif x.column.HasField("conditional_aggregation"):
             res.append(
                 OrderBy(
@@ -357,7 +352,6 @@ def _convert_order_by(
                         x.column.conditional_aggregation,
                         attribute_key_to_expression,
                         use_sampling_factor(request_meta),
-                        use_array_map_columns(request_meta),
                     ),
                 )
             )
@@ -432,7 +426,6 @@ def _get_reliability_context_columns(
         confidence_interval_column = get_confidence_interval_column(
             column.conditional_aggregation,
             attribute_key_to_expression,
-            use_array_map_columns=use_array_map_columns(request_meta),
         )
         if confidence_interval_column is not None:
             context_columns.append(
@@ -445,7 +438,6 @@ def _get_reliability_context_columns(
         average_sample_rate_column = get_average_sample_rate_column(
             column.conditional_aggregation,
             attribute_key_to_expression,
-            use_array_map_columns=use_array_map_columns(request_meta),
         )
         context_columns.append(
             SelectedExpression(
@@ -457,7 +449,6 @@ def _get_reliability_context_columns(
         count_column = get_count_column(
             column.conditional_aggregation,
             attribute_key_to_expression,
-            use_array_map_columns=use_array_map_columns(request_meta),
         )
         context_columns.append(SelectedExpression(name=count_column.alias, expression=count_column))
         return context_columns
@@ -538,7 +529,6 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
             column.conditional_aggregation,
             attribute_key_to_expression,
             use_sampling_factor(request_meta),
-            use_array_map_columns(request_meta),
         )
         match column.conditional_aggregation.WhichOneof("default_value"):
             case None:
@@ -664,11 +654,7 @@ def build_query(
     if page_token_filter:
         additional_conditions.append(page_token_filter)
 
-    groupby = [
-        expression
-        for attr_key in request.group_by
-        for expression in _groupby_order_by_expressions(attr_key, request.meta)
-    ]
+    groupby = [_groupby_order_by_expression(attr_key) for attr_key in request.group_by]
 
     res = Query(
         from_clause=entity,
@@ -678,7 +664,6 @@ def build_query(
             trace_item_filters_to_expression(
                 request.filter,
                 attribute_key_to_expression,
-                use_array_map_columns=use_array_map_columns(request.meta),
             ),
             valid_sampling_factor_conditions(),
             *item_type_conds,
