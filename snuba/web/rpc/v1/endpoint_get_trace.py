@@ -219,6 +219,7 @@ def _build_query(
                 for typed_col, expression in zip(
                     TYPED_ARRAY_MAP_COLUMNS,
                     type_array_typed_columns_select_expressions(attribute_key),
+                    strict=True,
                 ):
                     selected_columns.append(
                         SelectedExpression(

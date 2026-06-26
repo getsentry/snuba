@@ -599,6 +599,7 @@ def _array_subcolumn_selected_expressions(column: Column) -> list[SelectedExpres
         for typed_col, expression in zip(
             TYPED_ARRAY_MAP_COLUMNS,
             type_array_typed_columns_select_expressions(column.key),
+            strict=True,
         )
     ]
 
