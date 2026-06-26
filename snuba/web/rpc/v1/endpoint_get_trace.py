@@ -214,9 +214,7 @@ def _build_query(
     if len(item.attributes) > 0:
         for attribute_key in item.attributes:
             if read_typed_arrays and attribute_key.type == AttributeKey.Type.TYPE_ARRAY:
-                # Past the cutoff, read the array from the typed array map columns as four
-                # native sub-columns merged back into the attribute name (see
-                # merge_typed_array_subcolumns) instead of the legacy JSON column.
+                # Read as four typed sub-columns, merged back in _process_results.
                 for typed_col, expression in zip(
                     TYPED_ARRAY_SELECT_COLUMNS,
                     type_array_typed_columns_select_expressions(attribute_key),
@@ -544,9 +542,7 @@ def _process_results(
                         add_attribute(name, values)
 
             if array_attribute_names:
-                # Per-attribute mode past the cutoff: each requested array attribute was
-                # read as four native typed sub-columns; merge them back into the attribute
-                # name (see merge_typed_array_subcolumns).
+                # Per-attribute mode: merge each array's four typed sub-columns by name.
                 for name, values in merge_typed_array_subcolumns(row, array_attribute_names):
                     if values:
                         add_attribute(name, values)

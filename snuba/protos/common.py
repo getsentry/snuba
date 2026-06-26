@@ -196,9 +196,6 @@ def type_array_to_stored_array_json_path(attr_key: AttributeKey) -> JsonPath:
     )
 
 
-# The typed array map columns, in the order their per-element sub-columns are surfaced
-# for a SELECT (see type_array_typed_columns_select_expressions). Keep this in sync with
-# the converter that merges the sub-columns (resolvers/common/trace_item_table.py).
 TYPED_ARRAY_SELECT_COLUMNS: tuple[str, ...] = (
     "attributes_array_string",
     "attributes_array_int",
@@ -208,24 +205,11 @@ TYPED_ARRAY_SELECT_COLUMNS: tuple[str, ...] = (
 
 
 def type_array_typed_columns_select_expressions(attr_key: AttributeKey) -> list[FunctionCall]:
-    """Native per-type sub-column reads for a TYPE_ARRAY SELECT past the cutoff.
-
-    Replaces the ``toJSONString(attributes_array.<name>:Array(JSON))`` form used for the
-    legacy JSON column. Returns one ``arrayElement(attributes_array_<type>, key)`` per
-    typed array map column (see ``TYPED_ARRAY_SELECT_COLUMNS``), in column order, each
-    keeping its element's native ClickHouse ``Array(T)`` type — no JSON, no ``tuple``
-    wrapper. We only store homogeneous arrays, so exactly one of the four sub-columns is
-    non-empty for a given attribute; the caller concatenates them back into a single
-    typed array (see ``merge_typed_array_subcolumns``).
-
-    Uses ``arrayElement(col, key)`` — the access used for the other non-bucketed map
-    columns (``attributes_int`` / ``attributes_bool``) — not the
-    ``SubscriptableReference`` form used for the bucketed ``attributes_string`` /
-    ``attributes_float`` columns. Each sub-column is aliased
-    ``"<label_mapping_key>.<column>"`` so a TYPE_ARRAY key used in the SELECT and in
-    GROUP BY / ORDER BY produces the same expression (the caller renames the result
-    column to the user-facing label via the ``SelectedExpression`` name).
-    """
+    """Native ``arrayElement`` read per typed array map column for a TYPE_ARRAY SELECT
+    past the cutoff (replaces the legacy ``toJSONString`` JSON-column form). Arrays are
+    homogeneous, so one sub-column is non-empty; the caller merges them back into one
+    array (``merge_typed_array_subcolumns``). Aliased ``"<label_mapping_key>.<column>"``
+    so SELECT and GROUP BY / ORDER BY agree."""
     if attr_key.type != AttributeKey.Type.TYPE_ARRAY:
         raise MalformedAttributeException(
             f"type_array_typed_columns_select_expressions expected TYPE_ARRAY, got "
@@ -359,12 +343,8 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
             )
 
     if attr_key.type == AttributeKey.Type.TYPE_ARRAY:
-        # Tagged array as a JSON string so the result column is String; callers decode
-        # in application code. Raw Array(JSON)/Array(T) is not returned in the SELECT to
-        # avoid native client limits. The typed-column read path past the cutoff is built
-        # separately as native per-type sub-columns (see
-        # type_array_typed_columns_select_expressions), so this stays on the legacy
-        # attributes_array JSON column — used pre-cutoff and for aggregations on arrays.
+        # Legacy JSON column (used pre-cutoff and for aggregations); the typed-column read
+        # path is built separately (type_array_typed_columns_select_expressions).
         return FunctionCall(
             alias=alias,
             function_name="toJSONString",

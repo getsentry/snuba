@@ -279,25 +279,13 @@ def _groupby_order_by_expressions(
     attr_key: AttributeKey, request_meta: RequestMeta
 ) -> list[Expression]:
     """
-    Maps an attribute key used in GROUP BY / ORDER BY to its expression(s).
+    Maps an attribute key used in GROUP BY / ORDER BY to its expression(s). Returns a
+    list: a TYPE_ARRAY key past the cutoff expands to its four typed sub-columns (same
+    expressions the SELECT emits, so the query stays valid); every other key is single.
 
-    Returns a list because a TYPE_ARRAY key past the cutoff expands to one expression
-    per typed sub-column (see ``type_array_typed_columns_select_expressions``); every
-    other key returns a single expression.
-
-    `sentry.timestamp` is grouped and ordered on the raw primary-key `timestamp`
-    column rather than the `CAST(timestamp, 'Float64')` that
-    `attribute_key_to_expression` produces, so ClickHouse can read in primary-key
-    order. The GROUP BY and ORDER BY must use the *same* expression: grouping by
-    the bare `timestamp` identifier keeps the SELECT's `CAST(timestamp, 'Float64')`
-    valid (it is a function of the grouped column) while letting ORDER BY sort on
-    the raw column. If the two diverged, ClickHouse would reject the query with
-    "Column `timestamp` is not under aggregate function and not in GROUP BY".
-
-    For a TYPE_ARRAY key the SELECT emits the same four native sub-column expressions
-    (see ``build_query``), so GROUP BY / ORDER BY must list all four — they carry the
-    same aliases as the SELECT sub-columns, so ClickHouse matches them and the query
-    stays valid.
+    `sentry.timestamp` groups/orders on the raw primary-key `timestamp` column (not the
+    SELECT's `CAST(timestamp, 'Float64')`) so ClickHouse can read in primary-key order
+    while keeping the cast valid as a function of the grouped column.
     """
     if attr_key.name == "sentry.timestamp":
         return [snuba_column("timestamp")]
@@ -352,10 +340,8 @@ def _convert_order_by(
             # cast is monotonic, so ordering by the raw DateTime column yields the same
             # order while staying read-in-order friendly. (The i == 0 / single-project /
             # no-groupby branch above already expands to the full table sort key; this
-            # covers `sentry.timestamp` ordering anywhere else.) The GROUP BY uses the
-            # same expression(s) (see `_groupby_order_by_expressions`) so an aggregation
-            # query that orders by `sentry.timestamp` (or a TYPE_ARRAY key, which expands
-            # to its four typed sub-columns) stays valid.
+            # covers `sentry.timestamp` ordering anywhere else.) GROUP BY uses the same
+            # expression(s) so the query stays valid.
             for expression in _groupby_order_by_expressions(x.column.key, request_meta):
                 res.append(
                     OrderBy(
@@ -604,11 +590,8 @@ def _reads_typed_array_columns(column: Column, request_meta: RequestMeta) -> boo
 
 
 def _array_subcolumn_selected_expressions(column: Column) -> list[SelectedExpression]:
-    """Four native typed sub-columns for a TYPE_ARRAY column read past the cutoff.
-
-    Each is named ``"<label>.<typed_col>"`` so ``convert_results`` merges them back into
-    ``column.label`` (see ``merge_typed_array_subcolumns``). The expressions carry
-    label-mapping-key aliases so they match the GROUP BY / ORDER BY expansion."""
+    """Four native typed sub-columns for a TYPE_ARRAY column, named ``"<label>.<col>"`` so
+    ``convert_results`` merges them back into ``column.label``."""
     return [
         SelectedExpression(
             name=typed_array_select_subcolumn_name(column.label, typed_col),
@@ -647,8 +630,7 @@ def build_query(
         # the attribute key name is used in the groupby, the column label is just the name of
         # the returned attribute value
         if _reads_typed_array_columns(column, request.meta):
-            # A TYPE_ARRAY column past the cutoff is read as four native typed sub-columns
-            # (merged back into column.label by convert_results) instead of one JSON column.
+            # Read as four typed sub-columns, merged back by convert_results.
             selected_columns.extend(_array_subcolumn_selected_expressions(column))
         else:
             selected_columns.append(

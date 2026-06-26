@@ -85,9 +85,7 @@ def _get_converter_for_type(
     elif key_type == AttributeKey.TYPE_DOUBLE:
         return lambda x: AttributeValue(val_double=float(x))
     elif key_type == AttributeKey.TYPE_ARRAY:
-        # Past the cutoff the typed array sub-columns are merged into a native list before
-        # conversion (see convert_results); pre-cutoff the value is the legacy JSON string.
-        # _array_raw_to_attribute_value handles both.
+        # Native list (typed sub-columns merged in convert_results) or legacy JSON string.
         return _array_raw_to_attribute_value
     else:
         raise BadSnubaRPCRequestException(
@@ -219,10 +217,8 @@ def convert_results(
 ) -> list[TraceItemColumnValues]:
     converters = get_converters_for_columns(request.columns)
 
-    # Past the cutoff a TYPE_ARRAY column is selected as four native typed sub-columns
-    # (see resolver build_query); collapse them back into the column label so the
-    # TYPE_ARRAY converter sees a single native list. Pre-cutoff the label holds the
-    # legacy JSON string and there are no sub-columns to merge.
+    # Past the cutoff a TYPE_ARRAY column is selected as four typed sub-columns; collapse
+    # them back into the column label so its converter sees one native list.
     array_labels = (
         [
             column.label
