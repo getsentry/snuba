@@ -14,7 +14,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import ComparisonFilter, TraceItemFilter
 
-from snuba.query.expressions import Column, FunctionCall, Literal, SubscriptableReference
+from snuba.query.expressions import Column, FunctionCall, JsonPath, Literal, SubscriptableReference
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     get_field_existence_expression,
@@ -301,18 +301,25 @@ def test_get_field_existence_expression_coalesce() -> None:
     assert rhs.parameters[1] == Literal(alias=None, value="http.response_content_length")
 
 
-def test_aggregation_to_expression_uniq_type_array_raises() -> None:
+def test_aggregation_to_expression_uniq_type_array() -> None:
     agg = AttributeConditionalAggregation(
         aggregate=Function.FUNCTION_UNIQ,
         key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="user_ids"),
         label="uniq_users",
         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
     )
-    with pytest.raises(
-        BadSnubaRPCRequestException,
-        match="aggregations are not supported on array attributes",
-    ):
-        aggregation_to_expression(agg, attribute_key_to_expression)
+    expr = aggregation_to_expression(agg, attribute_key_to_expression)
+    assert isinstance(expr, FunctionCall)
+    assert expr.function_name == "round"
+    assert expr.alias == "uniq_users"
+    inner = expr.parameters[0]
+    assert isinstance(inner, FunctionCall)
+    assert inner.function_name == "uniqArrayIfOrNull"
+    # Must be the stored Array(JSON) path, not toJSONString (String) from attribute_key_to_expression
+    first = inner.parameters[0]
+    assert isinstance(first, JsonPath)
+    assert first.path == "user_ids"
+    assert first.return_type == "Array(JSON)"
 
 
 def test_aggregation_to_expression_sum_type_array_raises() -> None:
@@ -322,10 +329,7 @@ def test_aggregation_to_expression_sum_type_array_raises() -> None:
         label="sum_users",
         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
     )
-    with pytest.raises(
-        BadSnubaRPCRequestException,
-        match="aggregations are not supported on array attributes",
-    ):
+    with pytest.raises(BadSnubaRPCRequestException, match="not supported for array attribute"):
         aggregation_to_expression(agg, attribute_key_to_expression)
 
 

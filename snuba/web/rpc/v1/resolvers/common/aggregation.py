@@ -19,6 +19,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Reliability,
 )
 
+from snuba.protos.common import type_array_to_stored_array_json_path
 from snuba.query.dsl import CurriedFunctions as cf
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column, literal
@@ -125,11 +126,6 @@ def _resolve_field_and_existence(
         field, keys = _attribute_key_expression_to_expression(
             aggregation.expression, attribute_key_to_expression
         )
-        array_keys = [k.name for k in keys if k.type == AttributeKey.Type.TYPE_ARRAY]
-        if array_keys:
-            raise BadSnubaRPCRequestException(
-                f"aggregations are not supported on array attributes: {', '.join(array_keys)}"
-            )
         existence_checks = [
             get_field_existence_expression(attribute_key_to_expression(k)) for k in keys
         ]
@@ -143,9 +139,8 @@ def _resolve_field_and_existence(
             raise RuntimeError("expected existence_checks to never be empty, but it is")
         return field, existence
     elif aggregation.key.type == AttributeKey.Type.TYPE_ARRAY:
-        raise BadSnubaRPCRequestException(
-            f"aggregations are not supported on array attributes: {aggregation.key.name}"
-        )
+        field = type_array_to_stored_array_json_path(aggregation.key)
+        return field, f.notEmpty(field)
     else:
         field = attribute_key_to_expression(aggregation.key)
         return field, get_field_existence_expression(field)
@@ -880,6 +875,29 @@ def _calculate_approximate_ci_percentile_levels(
     return (lower_index / n, upper_index / n)
 
 
+def _array_aggregation_to_expression(
+    aggregation: AttributeAggregation | AttributeConditionalAggregation,
+    field: Expression,
+    condition_in_aggregation: Expression,
+    alias_dict: dict[str, str],
+) -> Expression:
+    # Arrays only support uniq (counting distinct elements across the array), used e.g.
+    # for crash-free user rate. The field is the legacy attributes_array JSON path.
+    if aggregation.aggregate == Function.FUNCTION_UNIQ:
+        return f.round(
+            f.uniqArrayIfOrNull(
+                field,
+                and_cond(get_field_existence_expression(field), condition_in_aggregation),
+            ),
+            _FLOATING_POINT_PRECISION,
+            **alias_dict,
+        )
+    raise BadSnubaRPCRequestException(
+        f"Aggregation {Function.Name(aggregation.aggregate)} "
+        f"not supported for array attribute {aggregation.key.name}"
+    )
+
+
 def aggregation_to_expression(
     aggregation: AttributeConditionalAggregation,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
@@ -892,6 +910,11 @@ def aggregation_to_expression(
     condition_in_aggregation = _get_condition_in_aggregation(
         aggregation, attribute_key_to_expression, use_array_map_columns
     )
+
+    if aggregation.key.type == AttributeKey.Type.TYPE_ARRAY:
+        return _array_aggregation_to_expression(
+            aggregation, field, condition_in_aggregation, alias_dict
+        )
 
     function_map: dict[Function.ValueType, CurriedFunctionCall | FunctionCall] = {
         Function.FUNCTION_SUM: f.sumIfOrNull(

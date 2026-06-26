@@ -4178,7 +4178,8 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
 
 
 class TestArrayOperationsRejected:
-    """Array attributes support select + filter, but not group_by / order_by / aggregations."""
+    """Array attributes support select + filter (and uniq, for crash-free rate), but not
+    group_by / order_by / other aggregations."""
 
     def test_group_by_array_raises(self) -> None:
         request = TraceItemTableRequest(
@@ -4206,10 +4207,11 @@ class TestArrayOperationsRejected:
         ):
             _validate_order_by(request)
 
-    def test_aggregation_on_array_raises(self) -> None:
+    def test_non_uniq_aggregation_on_array_raises(self) -> None:
+        # Only uniq is supported on arrays; other aggregations are rejected.
         with pytest.raises(
             BadSnubaRPCRequestException,
-            match="aggregations are not supported on array attributes",
+            match="not supported for array attribute",
         ):
             aggregation_to_expression(
                 AttributeConditionalAggregation(
