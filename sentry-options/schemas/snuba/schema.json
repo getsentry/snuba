@@ -258,6 +258,44 @@
       },
       "default": {},
       "description": "Dict mapping an outcomes-based routing strategy class name to the minimum query time range in seconds for which outcomes are queried. Strategies with no entry use 14400 (4 hours). Migrated from per-strategy runtime config <ClassName>.min_timerange_to_query_outcomes."
+    },
+    "project_quota_time_percentage": {
+      "type": "number",
+      "default": 1.0,
+      "description": "Fraction of the counter window a project may spend on replacements before it is reported as exceeding the time limit."
+    },
+    "counter_window_size_minutes": {
+      "type": "integer",
+      "default": 10,
+      "description": "Size in minutes of the rolling window the replacement bucket timer uses to track per-project processing time."
+    },
+    "allows_skipping_single_project_replacements": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, a single project that exceeds the replacement time limit can be skipped (otherwise only multi-project groups are skipped)."
+    },
+    "mem_rate_limit_per_sec": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number"
+      },
+      "default": {},
+      "description": "Dict mapping in-process rate-limit bucket name to a maximum operations-per-second. Buckets with no entry are unlimited (rate limiter off). Migrated from per-bucket runtime config mem_rate_limit_per_sec_<bucket>."
+    },
+    "bypass_rate_limit": {
+      "type": "integer",
+      "default": 0,
+      "description": "When set to 1, all Redis-backed rate limits are bypassed (no limiting applied). Migrated from runtime config bypass_rate_limit."
+    },
+    "rate_history_sec": {
+      "type": "integer",
+      "default": 3600,
+      "description": "Number of seconds the rate limiter keeps per-request timestamps in its Redis sorted set. Migrated from runtime config rate_history_sec."
+    },
+    "rate_limit_shard_factor": {
+      "type": "integer",
+      "default": 1,
+      "description": "Number of shards each rate-limit Redis set is split into. Increasing it multiplies the number of Redis keys and reduces the size of each set. Migrated from runtime config rate_limit_shard_factor."
     }
   }
 }
