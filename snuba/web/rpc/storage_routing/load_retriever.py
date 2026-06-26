@@ -1,7 +1,8 @@
 import inspect
 import json
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable
+from typing import Any
 
 import sentry_sdk
 

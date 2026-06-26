@@ -1,18 +1,12 @@
 from abc import ABC, abstractmethod
+from collections.abc import Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
 from threading import Lock
 from typing import (
     Any,
-    Dict,
     Generic,
-    Mapping,
-    MutableMapping,
     NamedTuple,
-    Optional,
-    Sequence,
-    Set,
-    Tuple,
     TypeVar,
 )
 
@@ -45,7 +39,7 @@ DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
 
 class ClickhouseClientSettingsType(NamedTuple):
     settings: Mapping[str, Any]
-    timeout: Optional[int]
+    timeout: int | None
 
 
 class ConnectionId(NamedTuple):
@@ -122,13 +116,13 @@ class ClickhouseClientSettings(Enum):
 class ClickhouseNode:
     host_name: str
     native_port: int
-    shard: Optional[int] = None
-    replica: Optional[int] = None
+    shard: int | None = None
+    replica: int | None = None
     # The node's HTTP port, used by the clickhouse-connect (HTTP) driver. It is
     # optional because nodes built outside a cluster context (e.g. in tests, or
     # the replacer's load balancer, which never open HTTP connections) do not
     # need one. Cluster-produced nodes always carry the cluster's HTTP port.
-    http_port: Optional[int] = None
+    http_port: int | None = None
 
     def __str__(self) -> str:
         return f"{self.host_name}:{self.native_port}"
@@ -160,13 +154,13 @@ class Cluster(ABC, Generic[TWriterOptions]):
         - optimize
     """
 
-    def __init__(self, storage_sets: Set[str]):
+    def __init__(self, storage_sets: set[str]):
         self.__storage_sets = storage_sets
         # register the cluster's storage sets
         for storage_set in storage_sets:
             register_storage_set_key(storage_set)
 
-    def get_storage_set_keys(self) -> Set[StorageSetKey]:
+    def get_storage_set_keys(self) -> set[StorageSetKey]:
         return {StorageSetKey(storage_set) for storage_set in self.__storage_sets}
 
     @abstractmethod
@@ -178,15 +172,15 @@ class Cluster(ABC, Generic[TWriterOptions]):
         self,
         metrics: MetricsBackend,
         insert_statement: InsertStatement,
-        encoding: Optional[str],
+        encoding: str | None,
         options: TWriterOptions,
-        chunk_size: Optional[int],
+        chunk_size: int | None,
         buffer_size: int,
     ) -> BatchWriter[JSONRow]:
         raise NotImplementedError
 
 
-ClickhouseWriterOptions = Optional[Mapping[str, Any]]
+ClickhouseWriterOptions = Mapping[str, Any] | None
 
 
 def use_clickhouse_connect_driver() -> bool:
@@ -206,15 +200,15 @@ def use_clickhouse_connect_driver() -> bool:
 # HTTP pool for the same node can be cached side by side. The node's HTTP port
 # is part of ``ClickhouseNode`` itself, so it does not need a separate key
 # element.
-CacheKey = Tuple[
+CacheKey = tuple[
     ClickhouseNode,
     ClickhouseClientSettings,
     str,
     str,
     str,
     bool,
-    Optional[str],
-    Optional[bool],
+    str | None,
+    bool | None,
     str,
 ]
 
@@ -232,8 +226,8 @@ class ConnectionCache:
         password: str,
         database: str,
         secure: bool,
-        ca_certs: Optional[str],
-        verify: Optional[bool],
+        ca_certs: str | None,
+        verify: bool | None,
     ) -> ClickhousePool:
         """
         Return a cached connection pool for the node, typed as the abstract
@@ -342,16 +336,16 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         database: str,
         http_port: int,
         secure: bool,
-        ca_certs: Optional[str],
-        verify: Optional[bool],
-        storage_sets: Set[str],
+        ca_certs: str | None,
+        verify: bool | None,
+        storage_sets: set[str],
         single_node: bool,
         # The cluster name and distributed cluster name only apply if single_node is set to False
-        cluster_name: Optional[str] = None,
-        distributed_cluster_name: Optional[str] = None,
-        cache_partition_id: Optional[str] = None,
-        query_settings_prefix: Optional[str] = None,
-        max_connections: Optional[int] = None,
+        cluster_name: str | None = None,
+        distributed_cluster_name: str | None = None,
+        cache_partition_id: str | None = None,
+        query_settings_prefix: str | None = None,
+        max_connections: int | None = None,
         block_connections: bool = False,
     ):
         super().__init__(storage_sets)
@@ -375,12 +369,12 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         self.__query_settings_prefix = query_settings_prefix
         # The local node used by the deleter is static cluster topology; cache
         # it so get_deleter() does not re-run a system.clusters lookup per call.
-        self.__delete_local_node: Optional[ClickhouseNode] = None
+        self.__delete_local_node: ClickhouseNode | None = None
 
     def __str__(self) -> str:
         return str(self.__query_node)
 
-    def get_credentials(self) -> Tuple[str, str]:
+    def get_credentials(self) -> tuple[str, str]:
         """
         Returns the user credentials for the Clickhouse connection
         """
@@ -453,9 +447,9 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         self,
         metrics: MetricsBackend,
         insert_statement: InsertStatement,
-        encoding: Optional[str],
+        encoding: str | None,
         options: ClickhouseWriterOptions,
-        chunk_size: Optional[int],
+        chunk_size: int | None,
         buffer_size: int,
     ) -> BatchWriter[JSONRow]:
         return HTTPBatchWriter(
@@ -484,10 +478,10 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         """
         return self.__single_node
 
-    def get_clickhouse_cluster_name(self) -> Optional[str]:
+    def get_clickhouse_cluster_name(self) -> str | None:
         return self.__cluster_name
 
-    def get_clickhouse_distributed_cluster_name(self) -> Optional[str]:
+    def get_clickhouse_distributed_cluster_name(self) -> str | None:
         return self.__distributed_cluster_name
 
     def get_database(self) -> str:
@@ -570,10 +564,8 @@ CLUSTERS = [
         verify=cluster.get("verify", False),
         storage_sets=cluster["storage_sets"],
         single_node=cluster["single_node"],
-        cluster_name=cluster["cluster_name"] if "cluster_name" in cluster else None,
-        distributed_cluster_name=(
-            cluster["distributed_cluster_name"] if "distributed_cluster_name" in cluster else None
-        ),
+        cluster_name=cluster.get("cluster_name", None),
+        distributed_cluster_name=(cluster.get("distributed_cluster_name", None)),
         cache_partition_id=cluster.get("cache_partition_id"),
         query_settings_prefix=cluster.get("query_settings_prefix"),
         max_connections=cluster.get("max_connections", _DEFAULT_MAX_CONNECTIONS),
@@ -591,12 +583,12 @@ assert len(_registered_storage_sets) == len(_unique_registered_storage_sets), (
     "Storage set registered to more than one cluster"
 )
 
-_STORAGE_SET_CLUSTER_MAP: Dict[StorageSetKey, ClickhouseCluster] = {
+_STORAGE_SET_CLUSTER_MAP: dict[StorageSetKey, ClickhouseCluster] = {
     storage_set: cluster for cluster in CLUSTERS for storage_set in cluster.get_storage_set_keys()
 }
 
 
-def _get_storage_set_cluster_map() -> Dict[StorageSetKey, ClickhouseCluster]:
+def _get_storage_set_cluster_map() -> dict[StorageSetKey, ClickhouseCluster]:
     return _STORAGE_SET_CLUSTER_MAP
 
 
@@ -613,19 +605,17 @@ def _build_sliced_cluster(cluster: Mapping[str, Any]) -> ClickhouseCluster:
         verify=cluster.get("verify", False),
         storage_sets={storage_tuple[0] for storage_tuple in cluster["storage_set_slices"]},
         single_node=cluster["single_node"],
-        cluster_name=cluster["cluster_name"] if "cluster_name" in cluster else None,
-        distributed_cluster_name=(
-            cluster["distributed_cluster_name"] if "distributed_cluster_name" in cluster else None
-        ),
+        cluster_name=cluster.get("cluster_name", None),
+        distributed_cluster_name=(cluster.get("distributed_cluster_name", None)),
         cache_partition_id=cluster.get("cache_partition_id"),
         query_settings_prefix=cluster.get("query_settings_prefix"),
     )
 
 
-_SLICED_STORAGE_SET_CLUSTER_MAP: Dict[Tuple[StorageSetKey, int], ClickhouseCluster] = {}
+_SLICED_STORAGE_SET_CLUSTER_MAP: dict[tuple[StorageSetKey, int], ClickhouseCluster] = {}
 
 
-def _get_sliced_storage_set_cluster_map() -> Dict[Tuple[StorageSetKey, int], ClickhouseCluster]:
+def _get_sliced_storage_set_cluster_map() -> dict[tuple[StorageSetKey, int], ClickhouseCluster]:
     if len(_SLICED_STORAGE_SET_CLUSTER_MAP) == 0:
         for cluster in settings.SLICED_CLUSTERS:
             for storage_set_tuple in cluster["storage_set_slices"]:
@@ -640,9 +630,7 @@ class UndefinedClickhouseCluster(SerializableException):
     pass
 
 
-def get_cluster(
-    storage_set_key: StorageSetKey, slice_id: Optional[int] = None
-) -> ClickhouseCluster:
+def get_cluster(storage_set_key: StorageSetKey, slice_id: int | None = None) -> ClickhouseCluster:
     """Return a clickhouse cluster for a storage set key.
 
     If passing in a sliced storage set, a slice_id must be specified.

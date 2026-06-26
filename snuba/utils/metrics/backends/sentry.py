@@ -40,7 +40,7 @@ class SentryMetricsBackend(MetricsBackend):
         unit: str | None = None,
     ) -> None:
         # The Sentry SDK has strict typing on the unit, so it doesn't allow passing arbitrary units
-        metrics.timing(name, value, unit or "millisecond", tags)  # type: ignore
+        metrics.timing(name, value, unit or "millisecond", tags)  # type: ignore[arg-type]
 
     def distribution(
         self,

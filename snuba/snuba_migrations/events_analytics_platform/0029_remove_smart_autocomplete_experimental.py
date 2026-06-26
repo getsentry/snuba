@@ -1,4 +1,5 @@
-from typing import Any, List, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
@@ -22,7 +23,7 @@ _TYPES: dict[str, ColumnType[Any]] = {
 _attr_columns = [Column(f"attrs_{type_name}", type_spec) for type_name, type_spec in _TYPES.items()]
 
 
-columns: List[Column[Modifiers]] = [
+columns: list[Column[Modifiers]] = [
     Column("project_id", UInt(64)),
     Column("item_type", String()),
     Column("date", Date(Modifiers(codecs=["DoubleDelta", "ZSTD(1)"]))),

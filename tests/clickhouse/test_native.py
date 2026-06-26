@@ -1,6 +1,7 @@
 import queue
+from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import Any, Callable
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -46,11 +47,11 @@ def test_robust_concurrency_limit() -> None:
     assert connection.execute.call_count == 3, "Expected three attempts"
 
 
-class TestError(errors.Error):  # type: ignore
+class TestError(errors.Error):  # type: ignore[misc]
     code = 1
 
 
-class TestConcurrentError(errors.Error):  # type: ignore
+class TestConcurrentError(errors.Error):  # type: ignore[misc]
     code = errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES
 
 

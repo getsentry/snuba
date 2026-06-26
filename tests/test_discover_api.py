@@ -1,5 +1,6 @@
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Tuple, Union
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 import simplejson as json
@@ -18,7 +19,7 @@ from tests.helpers import write_unprocessed_events
 @pytest.mark.redis_db
 class TestDiscoverApi(BaseApiTest):
     @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
+    def test_entity(self) -> str | tuple[str, str]:
         # This can be overridden in the post function
         return (
             "discover_events",
@@ -40,9 +41,9 @@ class TestDiscoverApi(BaseApiTest):
         self.event = get_raw_event()
         self.project_id = self.event["project_id"]
         self.skew = timedelta(minutes=180)
-        self.base_time = datetime.utcnow().replace(
-            second=0, microsecond=0, tzinfo=timezone.utc
-        ) - timedelta(minutes=90)
+        self.base_time = datetime.utcnow().replace(second=0, microsecond=0, tzinfo=UTC) - timedelta(
+            minutes=90
+        )
 
         events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
         assert events_storage is not None
@@ -1771,7 +1772,7 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200
         assert len(data["data"]) == 1
-        assert data["data"][0]["symbolicated_in_app"] == True
+        assert data["data"][0]["symbolicated_in_app"]
 
     def test_timestamp_ms_query(self) -> None:
         response = self.post(
@@ -1829,7 +1830,7 @@ class TestDiscoverAPIEntitySelection(TestDiscoverApi):
     """
 
     @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
+    def test_entity(self) -> str | tuple[str, str]:
         # This can be overridden in the post function
         return "discover"
 

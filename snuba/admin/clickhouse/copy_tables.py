@@ -1,5 +1,6 @@
+from collections.abc import MutableMapping, Sequence
 from dataclasses import dataclass
-from typing import MutableMapping, Optional, Sequence, Tuple, TypedDict
+from typing import TypedDict
 
 from snuba.admin.clickhouse.common import _get_storage, get_clusterless_node_connection
 from snuba.clickhouse.native import ClickhousePool
@@ -26,7 +27,7 @@ def get_create_table_statements(
     tables: Sequence[str],
     source_connection: ClickhousePool,
     source_database: str,
-    cluster_name: Optional[str],
+    cluster_name: str | None,
 ) -> Sequence[TableStatement]:
     table_statements = []
 
@@ -55,7 +56,7 @@ def get_create_table_statements(
             table_engine = source_connection.execute(
                 f"SELECT engine FROM system.tables WHERE name = '{table}'"
             ).results[0][0]
-            is_mergetree = True if "MergeTree" in table_engine else False
+            is_mergetree = "MergeTree" in table_engine
 
         if cluster_name:
             table_statement = table_statement.replace(
@@ -77,10 +78,10 @@ def get_tables(connection: ClickhousePool) -> Sequence[str]:
 
 def verify_tables_on_replicas(
     connection: ClickhousePool,
-    cluster_name: Optional[str],
+    cluster_name: str | None,
     database_name: str,
     table_names: Sequence[str],
-) -> Tuple[MutableMapping[str, list[str]], int]:
+) -> tuple[MutableMapping[str, list[str]], int]:
     """
     Checks that the tables we have copied are present on all hosts.
     Returns a count of the verified hosts (host that have all the
@@ -124,9 +125,9 @@ def copy_tables(
     source_host: str,
     storage_name: str,
     dry_run: bool,
-    target_host: Optional[str] = None,
+    target_host: str | None = None,
     skip_on_cluster: bool = False,
-    cluster_name_override: Optional[str] = None,
+    cluster_name_override: str | None = None,
 ) -> CopyTablesResponse:
     # Table copies can run long, so use the unbounded INTERNAL profile rather
     # than the 30s user-read QUERY profile.

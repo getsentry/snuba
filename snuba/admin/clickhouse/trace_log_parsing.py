@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 # [ spans-clickhouse-1 ] [ 65011 ] {0.21246445055947638} <Debug> default.spans_optimized_v2_traces (aacb1a4f-32d0-49ea-8985-9c0d92a079ae) (SelectExecutor): Index `bf_attr_str_5` has dropped 0/2199 granules.
 INDEX_MATCHER_RE = re.compile(
@@ -200,7 +200,12 @@ class TracingSummary:
     query_summaries: dict[str, QuerySummary]
 
 
-line_types = [
+class LogLineType(Protocol):
+    @staticmethod
+    def from_log(log_line: str) -> Any: ...
+
+
+line_types: list[type[LogLineType]] = [
     IndexSummary,
     SelectSummary,
     StreamSummary,
@@ -224,7 +229,7 @@ def summarize_trace_output(raw_trace_logs: str) -> TracingSummary:
 
         query_summary = summary.query_summaries[line["node_name"]]
         for line_type in line_types:
-            parsed_line = line_type.from_log(line["log_content"])  # type: ignore
+            parsed_line = line_type.from_log(line["log_content"])
             if parsed_line is not None:
                 attr_name = line_type.__name__.lower().replace("summary", "") + "_summaries"
                 if getattr(query_summary, attr_name) is None:

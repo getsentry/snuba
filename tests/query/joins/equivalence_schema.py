@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import UUID, ColumnSet, String, UInt
 from snuba.datasets.entities.entity_key import EntityKey

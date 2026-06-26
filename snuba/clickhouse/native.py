@@ -5,19 +5,14 @@ import queue
 import re
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Generator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from io import StringIO
 from typing import (
     Any,
-    Dict,
-    Generator,
-    Mapping,
-    Optional,
-    Sequence,
     TypedDict,
-    Union,
     cast,
 )
 from uuid import UUID
@@ -40,7 +35,7 @@ logger = logging.getLogger("snuba.clickhouse")
 trace_logger = logging.getLogger("clickhouse_driver.log")
 trace_logger.setLevel("INFO")
 
-Params = Optional[Union[Sequence[Any], Mapping[str, Any]]]
+Params = Sequence[Any] | Mapping[str, Any] | None
 
 metrics = MetricsWrapper(environment.metrics, "clickhouse.native")
 
@@ -62,7 +57,7 @@ class ClickhouseResult:
 
 
 @contextmanager
-def capture_logging() -> Generator[StringIO, None, None]:
+def capture_logging() -> Generator[StringIO]:
     buffer = StringIO()
     new_handler = logging.StreamHandler(buffer)
     trace_logger.addHandler(new_handler)
@@ -98,8 +93,8 @@ class ClickhousePool(ABC):
         query: str,
         params: Params = None,
         with_column_types: bool = False,
-        query_id: Optional[str] = None,
-        settings: Optional[Mapping[str, Any]] = None,
+        query_id: str | None = None,
+        settings: Mapping[str, Any] | None = None,
         types_check: bool = False,
         columnar: bool = False,
         capture_trace: bool = False,
@@ -113,8 +108,8 @@ class ClickhousePool(ABC):
         query: str,
         params: Params = None,
         with_column_types: bool = False,
-        query_id: Optional[str] = None,
-        settings: Optional[Mapping[str, Any]] = None,
+        query_id: str | None = None,
+        settings: Mapping[str, Any] | None = None,
         types_check: bool = False,
         columnar: bool = False,
         capture_trace: bool = False,
@@ -136,10 +131,10 @@ class ClickhouseNativePool(ClickhousePool):
         password: str,
         database: str,
         secure: bool = False,
-        ca_certs: Optional[str] = None,
-        verify: Optional[bool] = False,
+        ca_certs: str | None = None,
+        verify: bool | None = False,
         connect_timeout: int = 1,
-        send_receive_timeout: Optional[int] = 35,
+        send_receive_timeout: int | None = 35,
         max_pool_size: int = settings.CLICKHOUSE_MAX_POOL_SIZE,
         pool_get_timeout_seconds: float = settings.CLICKHOUSE_POOL_GET_TIMEOUT_SECONDS,
         client_settings: Mapping[str, Any] = {},
@@ -157,7 +152,7 @@ class ClickhouseNativePool(ClickhousePool):
         self.pool_get_timeout_seconds = pool_get_timeout_seconds
         self.client_settings = client_settings
 
-        self.pool: queue.LifoQueue[Optional[Client]] = queue.LifoQueue(max_pool_size)
+        self.pool: queue.LifoQueue[Client | None] = queue.LifoQueue(max_pool_size)
         self.__gauge = ThreadSafeGauge(metrics, "connections")
 
         # Fill the queue up so that doing get() on it will block properly
@@ -171,8 +166,8 @@ class ClickhouseNativePool(ClickhousePool):
         query: str,
         params: Params = None,
         with_column_types: bool = False,
-        query_id: Optional[str] = None,
-        settings: Optional[Mapping[str, Any]] = None,
+        query_id: str | None = None,
+        settings: Mapping[str, Any] | None = None,
         types_check: bool = False,
         columnar: bool = False,
         capture_trace: bool = False,
@@ -216,12 +211,12 @@ class ClickhouseNativePool(ClickhousePool):
                             else {"send_logs_level": "trace"}
                         )
 
-                    def query_execute() -> Any:
+                    def query_execute(conn: Client = conn, settings: Any = settings) -> Any:
                         with sentry_sdk.start_span(description=query, op="db.clickhouse") as span:
                             span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
                             span.set_data("query_id", query_id)
                             span.set_data("settings", settings)
-                            return conn.execute(  # type: ignore
+                            return conn.execute(
                                 query,
                                 params=params,
                                 with_column_types=with_column_types,
@@ -282,12 +277,10 @@ class ClickhouseNativePool(ClickhousePool):
                     if attempts_remaining == 0:
                         if isinstance(e, errors.Error):
                             raise ClickhouseError(e.message, code=e.code) from e
-                        else:
-                            raise e
-                    else:
-                        # Short sleep to make sure we give the load
-                        # balancer a chance to mark a bad host as down.
-                        time.sleep(0.1)
+                        raise e
+                    # Short sleep to make sure we give the load
+                    # balancer a chance to mark a bad host as down.
+                    time.sleep(0.1)
                 except errors.Error as e:
                     if e.code == errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
                         attempts_remaining -= 1
@@ -319,8 +312,8 @@ class ClickhouseNativePool(ClickhousePool):
         query: str,
         params: Params = None,
         with_column_types: bool = False,
-        query_id: Optional[str] = None,
-        settings: Optional[Mapping[str, Any]] = None,
+        query_id: str | None = None,
+        settings: Mapping[str, Any] | None = None,
         types_check: bool = False,
         columnar: bool = False,
         capture_trace: bool = False,
@@ -361,8 +354,7 @@ class ClickhouseNativePool(ClickhousePool):
                 if attempts_remaining <= 0:
                     if isinstance(e, errors.Error):
                         raise ClickhouseError(e.message, code=e.code) from e
-                    else:
-                        raise e
+                    raise e
                 time.sleep(1)
                 continue
             except ClickhouseError as e:
@@ -384,9 +376,8 @@ class ClickhouseNativePool(ClickhousePool):
                         float((total_attempts - attempts_remaining) * sleep_interval_seconds)
                     )
                     continue
-                else:
-                    # Quit immediately for other types of server errors.
-                    raise e
+                # Quit immediately for other types of server errors.
+                raise e
             except errors.Error as e:
                 raise ClickhouseError(e.message, code=e.code) from e
 
@@ -465,9 +456,9 @@ class ClickhouseReader(Reader):
 
     def __init__(
         self,
-        cache_partition_id: Optional[str],
+        cache_partition_id: str | None,
         client: ClickhousePool,
-        query_settings_prefix: Optional[str],
+        query_settings_prefix: str | None,
     ) -> None:
         super().__init__(
             cache_partition_id=cache_partition_id,
@@ -482,14 +473,22 @@ class ClickhouseReader(Reader):
         """
         meta = result.meta if result.meta is not None else []
         data = result.results
-        profile = cast(Optional[Dict[str, Any]], result.profile)
+        profile = cast(dict[str, Any] | None, result.profile)
         # XXX: Rows are represented as mappings that are keyed by column or
         # alias, which is problematic when the result set contains duplicate
         # names. To ensure that the column headers and row data are consistent
         # duplicated names are discarded at this stage.
         columns = {c[0]: i for i, c in enumerate(meta)}
 
-        data = [{column: row[index] for column, index in columns.items()} for row in data]
+        # Build the column-keyed row dicts by overwriting the source list in
+        # place rather than via a second list comprehension, so each row tuple is
+        # freed as its dict replacement is created instead of keeping the full
+        # tuple list and the full dict list alive at once.
+        if not isinstance(data, list):
+            data = list(data)
+        column_items = list(columns.items())
+        for i, row in enumerate(data):
+            data[i] = {column: row[index] for column, index in column_items}
 
         meta = [{"name": m[0], "type": m[1]} for m in [meta[i] for i in columns.values()]]
 
@@ -520,7 +519,7 @@ class ClickhouseReader(Reader):
         self,
         query: FormattedQuery,
         # TODO: move Clickhouse specific arguments into clickhouse.query.Query
-        settings: Optional[Mapping[str, str]] = None,
+        settings: Mapping[str, str] | None = None,
         with_totals: bool = False,
         robust: bool = False,
         capture_trace: bool = False,

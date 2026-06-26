@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from abc import abstractmethod
-from typing import Any, Optional, Type, cast
+from typing import Any, cast
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import MessageProcessor, ProcessedMessage
@@ -27,7 +27,7 @@ class DatasetMessageProcessor(MessageProcessor, metaclass=RegisteredClass):
 
     @classmethod
     def from_name(cls, name: str) -> DatasetMessageProcessor:
-        return cast(Type["DatasetMessageProcessor"], cls.class_from_name(name))()
+        return cast(type["DatasetMessageProcessor"], cls.class_from_name(name))()
 
     @classmethod
     def config_key(cls) -> str:
@@ -36,7 +36,7 @@ class DatasetMessageProcessor(MessageProcessor, metaclass=RegisteredClass):
     @abstractmethod
     def process_message(
         self, message: Any, metadata: KafkaMessageMetadata
-    ) -> Optional[ProcessedMessage]:
+    ) -> ProcessedMessage | None:
         raise NotImplementedError
 
 

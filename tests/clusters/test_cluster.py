@@ -1,5 +1,5 @@
 import importlib
-from typing import Generator
+from collections.abc import Generator
 from unittest.mock import patch
 
 import pytest
@@ -111,7 +111,7 @@ SLICED_CLUSTERS_CONFIG = [
 
 
 @pytest.fixture(autouse=True)
-def setup_teardown(clickhouse_db: None) -> Generator[None, None, None]:
+def setup_teardown(clickhouse_db: None) -> Generator[None]:
     yield
     importlib.reload(settings)
     importlib.reload(cluster)
@@ -135,21 +135,31 @@ def test_clusters() -> None:
 @patch("snuba.settings.CLUSTERS", FULL_CONFIG)
 @pytest.mark.clickhouse_db
 def test_cache_partition() -> None:
-    get_storage(
-        StorageKey("transactions")
-    ).get_cluster().get_reader().cache_partition_id == "host_2_cache"
+    importlib.reload(cluster)
+    assert (
+        get_storage(StorageKey("transactions")).get_cluster().get_reader().cache_partition_id
+        == "host_2_cache"
+    )
 
-    get_storage(StorageKey("errors")).get_cluster().get_reader().cache_partition_id is None
+    assert get_storage(StorageKey("errors")).get_cluster().get_reader().cache_partition_id is None
 
 
 @patch("snuba.settings.CLUSTERS", FULL_CONFIG)
 @pytest.mark.clickhouse_db
 def test_query_settings_prefix() -> None:
-    get_storage(
-        StorageKey("transactions")
-    ).get_cluster().get_reader().get_query_settings_prefix() == "transactions"
+    importlib.reload(cluster)
+    assert (
+        get_storage(StorageKey("transactions"))
+        .get_cluster()
+        .get_reader()
+        .get_query_settings_prefix()
+        == "transactions"
+    )
 
-    get_storage(StorageKey("errors")).get_cluster().get_reader().get_query_settings_prefix() is None
+    assert (
+        get_storage(StorageKey("errors")).get_cluster().get_reader().get_query_settings_prefix()
+        is None
+    )
 
 
 @patch("snuba.settings.CLUSTERS", FULL_CONFIG)
@@ -168,9 +178,8 @@ def test_disabled_cluster() -> None:
 
     cluster.get_cluster(StorageSetKey.OUTCOMES)
 
-    with patch("snuba.settings.ENABLE_DEV_FEATURES", False):
-        with pytest.raises(AssertionError):
-            cluster.get_cluster(StorageSetKey.OUTCOMES)
+    with patch("snuba.settings.ENABLE_DEV_FEATURES", False), pytest.raises(AssertionError):
+        cluster.get_cluster(StorageSetKey.OUTCOMES)
 
 
 @patch("snuba.settings.CLUSTERS", FULL_CONFIG)
@@ -309,14 +318,14 @@ def test_sliced_cluster() -> None:
 
     res_cluster = cluster.get_cluster(StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS, 1)
 
-    assert res_cluster.is_single_node() is True
+    assert res_cluster.is_single_node()
     assert res_cluster.get_database() == "slice_1_default"
     assert res_cluster.get_host() == "host_slice"
     assert res_cluster.get_port() == 9001
 
     res_cluster_default = cluster.get_cluster(StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS, 0)
 
-    assert res_cluster_default.is_single_node() is True
+    assert res_cluster_default.is_single_node()
     assert res_cluster_default.get_database() == "default"
     assert res_cluster_default.get_host() == "host_slice"
     assert res_cluster_default.get_port() == 9000

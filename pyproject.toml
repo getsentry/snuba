@@ -30,9 +30,9 @@ dependencies = [
     "pyyaml>=6.0",
     "redis>=4.5.4",
     "sentry-arroyo>=2.39.2",
-    "sentry-conventions>=0.12.0",
-    "sentry-kafka-schemas>=2.1.35",
-    "sentry-protos>=0.17.0",
+    "sentry-conventions>=0.13.0",
+    "sentry-kafka-schemas>=2.1.36",
+    "sentry-protos>=0.34.0",
     "sentry-redis-tools>=0.5.1",
     "sentry-relay>=0.9.25",
     "sentry-sdk>=2.35.0",
@@ -79,7 +79,7 @@ snuba = "snuba.cli:main"
 dev = [
     "devservices>=1.2.1",
     "freezegun>=1.5.5",
-    "mypy>=1.1.1",
+    "mypy>=1.18.2",
     "pre-commit>=4.2.0",
     "pytest>=9.0.3",
     "pytest-cov>=4.1.0",
@@ -97,6 +97,19 @@ dev = [
     "typing-extensions>=4.12.2",
 ]
 
+[tool.pytest.ini_options]
+python_files = "test*.py"
+addopts = "--tb=native -p no:doctest -p no:warnings"
+norecursedirs = "bin dist docs htmlcov script hooks node_modules .*"
+looponfailroots = ["snuba", "tests"]
+markers = [
+    "clickhouse_db: Use clickhouse",
+    "redis_db: Use redis",
+    "ci_only: Only run in CI",
+    "eap: Use clickhouse with EAP migrations only",
+    "genmetrics_db: Use clickhouse with generic metrics migrations only",
+]
+
 [tool.ruff]
 # File filtering is taken care of in pre-commit.
 line-length = 100
@@ -104,24 +117,43 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = [
-    # todo: eventually we should get this enabled
-    # "B",     flake8-bugbear
-    "E", # pycodestyle errors
-    "F", # pyflakes
-    "W", # pycodestyle warnings
-    "I", # isort
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "W",   # pycodestyle warnings
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+    "RET", # flake8-return
 ]
 ignore = [
-    "E501", # line too long (handled by formatter)
-    "E402", # module level import not at top of file
+    "E501",   # line too long (handled by formatter)
+    "SIM108", # use ternary instead of if-else (often hurts readability)
+    "RET504", # unnecessary assignment before return (named results aid debugging)
+    # PEP 695 native generics/type-aliases are a deliberate migration, not a
+    # mechanical sweep — risky alongside custom metaclasses. Adopt case by case.
+    "UP046",  # non-pep695-generic-class
+    "UP047",  # non-pep695-generic-function
+    "UP040",  # non-pep695-type-alias
 ]
+
+[tool.ruff.lint.isort]
+known-first-party = ["snuba", "tests"]
 
 [tool.mypy]
 python_version = "3.13"
 strict = true
 ignore_missing_imports = false
 files = ["."]
-exclude = ["^rust_snuba/", "^tests/datasets/", "^tests/query/"]
+exclude = [
+    "^rust_snuba/",
+    "^tests/datasets/",
+    "^tests/query/",
+    # docker-only distributed-migration scaffolding; its top-level conftest.py
+    # collides with the repo-root conftest.py module name under `mypy .`
+    "^test_distributed_migrations/",
+]
 
 [[tool.mypy.overrides]]
 module = [

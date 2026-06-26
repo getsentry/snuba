@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Mapping, Optional, Union
+from collections.abc import Mapping
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.types import Tags
@@ -28,9 +28,9 @@ class DummyMetricsBackend(MetricsBackend):
     def increment(
         self,
         name: str,
-        value: Union[int, float] = 1,
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        value: int | float = 1,
+        tags: Tags | None = None,
+        unit: str | None = None,
     ) -> None:
         if self.__strict:
             assert isinstance(name, str)
@@ -41,9 +41,9 @@ class DummyMetricsBackend(MetricsBackend):
     def gauge(
         self,
         name: str,
-        value: Union[int, float],
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        value: int | float,
+        tags: Tags | None = None,
+        unit: str | None = None,
     ) -> None:
         if self.__strict:
             assert isinstance(name, str)
@@ -54,9 +54,9 @@ class DummyMetricsBackend(MetricsBackend):
     def timing(
         self,
         name: str,
-        value: Union[int, float],
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        value: int | float,
+        tags: Tags | None = None,
+        unit: str | None = None,
     ) -> None:
         if self.__strict:
             assert isinstance(name, str)
@@ -67,9 +67,9 @@ class DummyMetricsBackend(MetricsBackend):
     def distribution(
         self,
         name: str,
-        value: Union[int, float],
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        value: int | float,
+        tags: Tags | None = None,
+        unit: str | None = None,
     ) -> None:
         if self.__strict:
             assert isinstance(name, str)
@@ -83,7 +83,7 @@ class DummyMetricsBackend(MetricsBackend):
         text: str,
         alert_type: str,
         priority: str,
-        tags: Optional[Tags] = None,
+        tags: Tags | None = None,
     ) -> None:
         if self.__strict:
             assert isinstance(title, str)

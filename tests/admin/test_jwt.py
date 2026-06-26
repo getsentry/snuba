@@ -5,6 +5,7 @@ import json
 import time
 from unittest.mock import patch
 
+import jwt
 import pytest
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -97,9 +98,9 @@ def test_validate_assertion_rejects_wrong_audience(
     with (
         patch("snuba.admin.jwt._certs", return_value={KID: public_pem}),
         patch("snuba.admin.jwt._audience", return_value=AUDIENCE),
+        pytest.raises(jwt.InvalidAudienceError),
     ):
-        with pytest.raises(Exception):
-            validate_assertion(token)
+        validate_assertion(token)
 
 
 def test_validate_assertion_rejects_bad_signature(
@@ -131,6 +132,6 @@ def test_validate_assertion_rejects_bad_signature(
     with (
         patch("snuba.admin.jwt._certs", return_value={KID: other_pem}),
         patch("snuba.admin.jwt._audience", return_value=AUDIENCE),
+        pytest.raises(jwt.InvalidSignatureError),
     ):
-        with pytest.raises(Exception):
-            validate_assertion(token)
+        validate_assertion(token)

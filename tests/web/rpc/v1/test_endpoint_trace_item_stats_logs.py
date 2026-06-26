@@ -12,7 +12,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_trace_item_stats import EndpointTraceItemStats
 from tests.base import BaseApiTest
@@ -22,7 +22,7 @@ from tests.web.rpc.v1.test_utils import BASE_TIME, START_TIMESTAMP, gen_item_mes
 
 @pytest.fixture(autouse=False)
 def setup_logs_in_db(clickhouse_db: None, redis_db: None) -> None:
-    logs_storage = get_storage(StorageKey("eap_items"))
+    logs_storage = get_writable_storage(StorageKey("eap_items"))
     messages = []
     for i in range(120):
         timestamp = BASE_TIME + timedelta(minutes=i)
@@ -41,7 +41,7 @@ def setup_logs_in_db(clickhouse_db: None, redis_db: None) -> None:
                 },
             )
         )
-    write_raw_unprocessed_events(logs_storage, messages)  # type: ignore
+    write_raw_unprocessed_events(logs_storage, messages)
 
 
 @pytest.mark.clickhouse_db

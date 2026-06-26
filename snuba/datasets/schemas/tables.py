@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Sequence
 
 from snuba import util
 from snuba.clickhouse.columns import ColumnSet
@@ -26,7 +26,7 @@ class TableSource(RelationalSource):
 
     table_name: str
     columns: ColumnSet
-    mandatory_conditions: Optional[Sequence[FunctionCall]] = None
+    mandatory_conditions: Sequence[FunctionCall] | None = None
 
     def get_table_name(self) -> str:
         return self.table_name
@@ -51,8 +51,8 @@ class TableSchema(Schema):
         local_table_name: str,
         dist_table_name: str,
         storage_set_key: StorageSetKey,
-        mandatory_conditions: Optional[Sequence[FunctionCall]] = None,
-        partition_format: Optional[Sequence[util.PartSegment]] = None,
+        mandatory_conditions: Sequence[FunctionCall] | None = None,
+        partition_format: Sequence[util.PartSegment] | None = None,
     ):
         self.__local_table_name = local_table_name
         self.__dist_table_name = dist_table_name
@@ -98,7 +98,7 @@ class TableSchema(Schema):
             else self.__dist_table_name
         )
 
-    def get_partition_format(self) -> Optional[Sequence[util.PartSegment]]:
+    def get_partition_format(self) -> Sequence[util.PartSegment] | None:
         """
         Partition format required for cleanup and optimize.
         """

@@ -1,17 +1,10 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Callable, Generator, Mapping, MutableMapping, Sequence
 from concurrent.futures.thread import ThreadPoolExecutor
 from typing import (
     Any,
-    Callable,
-    Generator,
-    List,
-    Mapping,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Tuple,
 )
 
 import pytest
@@ -81,7 +74,7 @@ def override_cluster(
     monkeypatch: pytest.MonkeyPatch,
     events_db: None,
     redis_db: None,
-) -> Generator[Callable[[bool], FakeClickhouseCluster], None, None]:
+) -> Generator[Callable[[bool], FakeClickhouseCluster]]:
     with monkeypatch.context() as m:
 
         def override(healthy: bool) -> FakeClickhouseCluster:
@@ -145,13 +138,13 @@ class DummyReplacement(Replacement):
         cls,
         message: ReplacementMessage[Any],
         context: ReplacementContext,
-    ) -> Optional[DummyReplacement]:
+    ) -> DummyReplacement | None:
         return cls()
 
-    def get_count_query(self, table_name: str) -> Optional[str]:
+    def get_count_query(self, table_name: str) -> str | None:
         return f"SELECT count() FROM {table_name} FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'"
 
-    def get_insert_query(self, table_name: str) -> Optional[str]:
+    def get_insert_query(self, table_name: str) -> str | None:
         required_columns = "project_id, timestamp, event_id"
         select_columns = "project_id, timestamp, event_id, group_id, primary_hash"
 
@@ -346,11 +339,11 @@ TEST_LOCAL_EXECUTOR = [
 @pytest.mark.redis_db
 @pytest.mark.events_db
 def test_local_executor(
-    nodes: Mapping[int, Sequence[Tuple[ClickhouseNode, bool]]],
+    nodes: Mapping[int, Sequence[tuple[ClickhouseNode, bool]]],
     backup_connection: ClickhousePool,
     expected_queries: Mapping[str, Sequence[str]],
 ) -> None:
-    queries: MutableMapping[str, List[str]] = defaultdict(list)
+    queries: MutableMapping[str, list[str]] = defaultdict(list)
 
     def run_query(
         connection: ClickhousePool,
@@ -361,7 +354,7 @@ def test_local_executor(
         connection.execute_robust(query)
         queries[connection.host].append(query)
 
-    all_nodes: List[Tuple[ClickhouseNode, bool]] = []
+    all_nodes: list[tuple[ClickhouseNode, bool]] = []
     for shard_nodes in nodes.values():
         all_nodes.extend(shard_nodes)
 

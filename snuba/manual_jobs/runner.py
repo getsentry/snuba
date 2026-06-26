@@ -1,7 +1,8 @@
 import logging
 import os
 import traceback
-from typing import Any, Mapping, Sequence, Union
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 import simplejson
 
@@ -92,7 +93,7 @@ def list_job_specs(
 
 def list_job_specs_with_status(
     manifest_filename: str = MANIFEST_FILENAME,
-) -> Mapping[str, Mapping[str, Union[JobSpec, JobStatus]]]:
+) -> Mapping[str, Mapping[str, JobSpec | JobStatus]]:
     specs = list_job_specs(manifest_filename)
     job_ids = list(specs.keys())
     statuses = _get_job_status_multi([_build_job_status_key(job_id) for job_id in job_ids])

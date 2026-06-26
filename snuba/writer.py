@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Generic, Iterable, List, Mapping, TypeVar
+from collections.abc import Iterable, Mapping
+from typing import Any, Generic, TypeVar
 
 from snuba.utils.codecs import Encoder, TDecoded, TEncoded
 
@@ -47,7 +48,7 @@ class BufferedWriterWrapper(Generic[TEncoded, TDecoded]):
     ):
         self.__writer = writer
         self.__buffer_size = buffer_size
-        self.__buffer: List[TEncoded] = []
+        self.__buffer: list[TEncoded] = []
         self.__encoder = encoder
 
     def __flush(self) -> None:

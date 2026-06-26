@@ -1,5 +1,4 @@
 import math
-from typing import Type
 
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     Expression,
@@ -19,25 +18,23 @@ from snuba.web.rpc.v1.visitors.time_series_request_visitor import (
     preprocess_expression_labels,
 )
 
-_VALID_GRANULARITY_SECS = set(
-    [
-        15,
-        30,
-        60,  # seconds
-        2 * 60,
-        5 * 60,
-        10 * 60,
-        15 * 60,
-        30 * 60,  # minutes
-        1 * 3600,
-        2 * 3600,
-        3 * 3600,
-        4 * 3600,
-        6 * 3600,
-        12 * 3600,
-        24 * 3600,  # hours
-    ]
-)
+_VALID_GRANULARITY_SECS = {
+    15,
+    30,
+    60,  # seconds
+    2 * 60,
+    5 * 60,
+    10 * 60,
+    15 * 60,
+    30 * 60,  # minutes
+    1 * 3600,
+    2 * 3600,
+    3 * 3600,
+    4 * 3600,
+    6 * 3600,
+    12 * 3600,
+    24 * 3600,  # hours
+}
 
 # MAX 1 minute granularity over 7 days (10080 buckets) + additional buckets to allow for partial time buckets on
 _MAX_BUCKETS_IN_REQUEST = 10100
@@ -100,11 +97,11 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
         return "v1"
 
     @classmethod
-    def request_class(cls) -> Type[TimeSeriesRequest]:
+    def request_class(cls) -> type[TimeSeriesRequest]:
         return TimeSeriesRequest
 
     @classmethod
-    def response_class(cls) -> Type[TimeSeriesResponse]:
+    def response_class(cls) -> type[TimeSeriesResponse]:
         return TimeSeriesResponse
 
     def get_resolver(

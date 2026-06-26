@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping, Sequence
 from threading import Lock
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any
 
 import clickhouse_connect
 import sentry_sdk
@@ -65,10 +66,10 @@ class ClickhouseConnectPool(ClickhousePool):
         database: str,
         http_port: int = DEFAULT_CLICKHOUSE_HTTP_PORT,
         secure: bool = False,
-        ca_certs: Optional[str] = None,
-        verify: Optional[bool] = False,
+        ca_certs: str | None = None,
+        verify: bool | None = False,
         connect_timeout: int = 1,
-        send_receive_timeout: Optional[int] = 35,
+        send_receive_timeout: int | None = 35,
         client_settings: Mapping[str, Any] = {},
     ) -> None:
         # No native connection queue here; clickhouse-connect manages its own
@@ -89,7 +90,7 @@ class ClickhouseConnectPool(ClickhousePool):
         self.send_receive_timeout = send_receive_timeout
         self.client_settings = client_settings
 
-        self.__client: Optional[Client] = None
+        self.__client: Client | None = None
         self.__lock = Lock()
 
     def _get_client(self) -> Client:
@@ -150,10 +151,10 @@ class ClickhouseConnectPool(ClickhousePool):
 
     def _build_query_settings(
         self,
-        settings: Optional[Mapping[str, Any]],
-        query_id: Optional[str],
+        settings: Mapping[str, Any] | None,
+        query_id: str | None,
         capture_trace: bool,
-    ) -> Optional[Mapping[str, Any]]:
+    ) -> Mapping[str, Any] | None:
         query_settings = dict(settings) if settings else {}
         if query_id is not None:
             query_settings["query_id"] = query_id
@@ -174,8 +175,8 @@ class ClickhouseConnectPool(ClickhousePool):
         query: str,
         params: Params,
         with_column_types: bool,
-        query_id: Optional[str],
-        settings: Optional[Mapping[str, Any]],
+        query_id: str | None,
+        settings: Mapping[str, Any] | None,
         columnar: bool,
         capture_trace: bool,
     ) -> ClickhouseResult:
@@ -225,7 +226,9 @@ class ClickhouseConnectPool(ClickhousePool):
         if with_column_types:
             meta = [
                 (name, column_type.name)
-                for name, column_type in zip(query_result.column_names, query_result.column_types)
+                for name, column_type in zip(
+                    query_result.column_names, query_result.column_types, strict=True
+                )
             ]
             return ClickhouseResult(
                 results=results,
@@ -245,8 +248,8 @@ class ClickhouseConnectPool(ClickhousePool):
         query: str,
         params: Params = None,
         with_column_types: bool = False,
-        query_id: Optional[str] = None,
-        settings: Optional[Mapping[str, Any]] = None,
+        query_id: str | None = None,
+        settings: Mapping[str, Any] | None = None,
         types_check: bool = False,
         columnar: bool = False,
         capture_trace: bool = False,
@@ -303,8 +306,8 @@ class ClickhouseConnectPool(ClickhousePool):
         query: str,
         params: Params = None,
         with_column_types: bool = False,
-        query_id: Optional[str] = None,
-        settings: Optional[Mapping[str, Any]] = None,
+        query_id: str | None = None,
+        settings: Mapping[str, Any] | None = None,
         types_check: bool = False,
         columnar: bool = False,
         capture_trace: bool = False,

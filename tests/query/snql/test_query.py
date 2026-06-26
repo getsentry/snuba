@@ -312,7 +312,7 @@ test_cases = [
                 ),
                 SelectedExpression(
                     "count",
-                    FunctionCall("_snuba_count", "count", tuple()),
+                    FunctionCall("_snuba_count", "count", ()),
                 ),
             ],
             groupby=[
@@ -1177,8 +1177,7 @@ test_cases = [
         id="Multi multi join match",
     ),
     pytest.param(
-        "MATCH { MATCH (events) SELECT count() AS count BY title WHERE %s } SELECT max(count) AS max_count"
-        % added_condition,
+        f"MATCH {{ MATCH (events) SELECT count() AS count BY title WHERE {added_condition} }} SELECT max(count) AS max_count",
         CompositeQuery(
             from_clause=LogicalQuery(
                 QueryEntity(
@@ -1187,7 +1186,7 @@ test_cases = [
                 ),
                 selected_columns=[
                     SelectedExpression("title", Column("_snuba_title", None, "title")),
-                    SelectedExpression("count", FunctionCall("_snuba_count", "count", tuple())),
+                    SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
                 ],
                 groupby=[Column("_snuba_title", None, "title")],
                 condition=required_condition,
@@ -1208,14 +1207,13 @@ test_cases = [
         id="sub query match",
     ),
     pytest.param(
-        """MATCH {
-            MATCH {
-                MATCH (events) SELECT count() AS count BY title WHERE %s
-            }
+        f"""MATCH {{
+            MATCH {{
+                MATCH (events) SELECT count() AS count BY title WHERE {added_condition}
+            }}
             SELECT max(count) AS max_count
-        }
-        SELECT min(max_count) AS min_count"""
-        % added_condition,
+        }}
+        SELECT min(max_count) AS min_count""",
         CompositeQuery(
             from_clause=CompositeQuery(
                 from_clause=LogicalQuery(
@@ -1225,7 +1223,7 @@ test_cases = [
                     ),
                     selected_columns=[
                         SelectedExpression("title", Column("_snuba_title", None, "title")),
-                        SelectedExpression("count", FunctionCall("_snuba_count", "count", tuple())),
+                        SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
                     ],
                     groupby=[Column("_snuba_title", None, "title")],
                     condition=required_condition,
@@ -1325,14 +1323,14 @@ test_cases = [
                 ),
                 SelectedExpression(
                     "count",
-                    FunctionCall("_snuba_count", "count", tuple()),
+                    FunctionCall("_snuba_count", "count", ()),
                 ),
             ],
             groupby=[Column("_snuba_tags_key", None, "tags_key")],
             order_by=[
                 OrderBy(
                     OrderByDirection.DESC,
-                    FunctionCall("_snuba_count", "count", tuple()),
+                    FunctionCall("_snuba_count", "count", ()),
                 ),
                 OrderBy(
                     OrderByDirection.ASC,
@@ -1405,7 +1403,7 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "times_seen",
-                    FunctionCall("_snuba_times_seen", "count", tuple()),
+                    FunctionCall("_snuba_times_seen", "count", ()),
                 ),
             ],
             limit=1000,
@@ -1440,7 +1438,7 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "times_seen",
-                    FunctionCall("_snuba_times_seen", "count", tuple()),
+                    FunctionCall("_snuba_times_seen", "count", ()),
                 ),
             ],
             limit=1000,
@@ -1475,7 +1473,7 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "times_seen",
-                    FunctionCall("_snuba_times_seen", "count", tuple()),
+                    FunctionCall("_snuba_times_seen", "count", ()),
                 ),
             ],
             limit=1000,
@@ -1549,7 +1547,7 @@ test_cases = [
                 ),
                 SelectedExpression(
                     "count",
-                    FunctionCall("_snuba_count", "count", tuple()),
+                    FunctionCall("_snuba_count", "count", ()),
                 ),
             ],
             groupby=[Column("_snuba_transaction_name", None, "transaction_name")],

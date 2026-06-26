@@ -18,7 +18,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_trace_item_stats import EndpointTraceItemStats
 from tests.base import BaseApiTest
@@ -66,7 +66,7 @@ def pick_n_deterministic(choices: list[Any], weights: list[int], num_choices: in
 
 @pytest.fixture(autouse=False)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
-    items_storage = get_storage(StorageKey("eap_items"))
+    items_storage = get_writable_storage(StorageKey("eap_items"))
     messages = []
     durations = pick_n_deterministic(
         choices=["10", "30", "50", None],
@@ -91,7 +91,7 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
                 )
             )
 
-    write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+    write_raw_unprocessed_events(items_storage, messages)
 
 
 @pytest.mark.clickhouse_db

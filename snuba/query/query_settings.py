@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Any, MutableMapping, Optional
+from collections.abc import MutableMapping
+from typing import Any
 
 from snuba.downsampled_storage_tiers import Tier
 from snuba.state.quota import ResourceQuota
@@ -37,7 +38,7 @@ class QuerySettings(ABC):
         pass
 
     @abstractmethod
-    def get_resource_quota(self) -> Optional[ResourceQuota]:
+    def get_resource_quota(self) -> ResourceQuota | None:
         pass
 
     @abstractmethod
@@ -99,7 +100,7 @@ class HTTPQuerySettings(QuerySettings):
         self.__debug = debug
         self.__dry_run = dry_run
         self.__legacy = legacy
-        self.__resource_quota: Optional[ResourceQuota] = None
+        self.__resource_quota: ResourceQuota | None = None
         self.__clickhouse_settings: MutableMapping[str, Any] = {}
         self.referrer = referrer
         self.__asynchronous = asynchronous
@@ -121,7 +122,7 @@ class HTTPQuerySettings(QuerySettings):
     def get_legacy(self) -> bool:
         return self.__legacy
 
-    def get_resource_quota(self) -> Optional[ResourceQuota]:
+    def get_resource_quota(self) -> ResourceQuota | None:
         return self.__resource_quota
 
     def set_resource_quota(self, quota: ResourceQuota) -> None:
@@ -214,7 +215,7 @@ class SubscriptionQuerySettings(QuerySettings):
     def get_feature(self) -> str:
         return self.__feature
 
-    def get_resource_quota(self) -> Optional[ResourceQuota]:
+    def get_resource_quota(self) -> ResourceQuota | None:
         return None
 
     def set_resource_quota(self, quota: ResourceQuota) -> None:

@@ -1,5 +1,5 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 from snuba.clickhouse.columns import Column, DateTime64, String
 from snuba.clusters.storage_sets import StorageSetKey
