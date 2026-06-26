@@ -21,6 +21,8 @@ from snuba.protos.common import (
     PROTO_TYPE_TO_CLICKHOUSE_TYPE,
     TYPED_ARRAY_MAP_COLUMNS,
     MalformedAttributeException,
+    type_array_to_membership_array_expression,
+    type_array_to_membership_array_expression_from_typed_columns,
 )
 from snuba.protos.common import (
     attribute_key_to_expression as _attribute_key_to_expression,
@@ -85,12 +87,27 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
         raise BadSnubaRPCRequestException(str(e)) from e
 
 
-def _reject_array_filter(key: AttributeKey) -> None:
-    """Filtering on array attributes is not supported (arrays are select-only)."""
+def _trace_item_filter_key_expression(
+    attr_to_key_expression_callable: Callable[[AttributeKey], Expression],
+    key: AttributeKey,
+    use_array_map_columns: bool = False,
+) -> Expression:
+    """predicates must use the normalized
+    ``arrayMap`` (``type_array_to_membership_array_expression``) so
+    ``arrayExists`` compares per element. It is different from SELECT predicate.
+
+    When ``use_array_map_columns`` is set, array predicates read the typed
+    ``attributes_array_*`` map columns instead of the legacy ``attributes_array``
+    JSON column (see ``use_array_map_columns``).
+    """
     if key.type == AttributeKey.Type.TYPE_ARRAY:
-        raise BadSnubaRPCRequestException(
-            f"filtering is not supported on array attributes: {key.name}"
-        )
+        try:
+            if use_array_map_columns:
+                return type_array_to_membership_array_expression_from_typed_columns(key)
+            return type_array_to_membership_array_expression(key)
+        except MalformedAttributeException as e:
+            raise BadSnubaRPCRequestException(str(e)) from e
+    return attr_to_key_expression_callable(key)
 
 
 Tin = TypeVar("Tin", bound=ProtobufMessage)
@@ -612,6 +629,76 @@ _ARRAY_VALUE_TYPES = {
 }
 
 
+def _validate_comparison_filter_type_array(
+    op: ComparisonFilter.Op.ValueType, v: AttributeValue
+) -> None:
+    if op in (ComparisonFilter.OP_LIKE, ComparisonFilter.OP_NOT_LIKE):
+        if v.WhichOneof("value") != "val_str":
+            raise BadSnubaRPCRequestException(
+                "LIKE/NOT_LIKE on array keys requires a string pattern"
+            )
+        return
+    if op in (ComparisonFilter.OP_EQUALS, ComparisonFilter.OP_NOT_EQUALS):
+        # Array can be empty or non-empty. It can never be null, or can never have null elements.
+        vt = v.WhichOneof("value")
+        if vt in (
+            None,
+            "val_null",
+            "val_array",
+            "val_str_array",
+            "val_int_array",
+            "val_float_array",
+            "val_double_array",
+        ):
+            raise BadSnubaRPCRequestException(
+                "OP_EQUALS/OP_NOT_EQUALS on array keys require a scalar value "
+                "(e.g. val_str, val_int) or null (is_null / val_null) to match null elements"
+            )
+        return
+    raise BadSnubaRPCRequestException(
+        f"{ComparisonFilter.Op.Name(op)} is not supported on array keys "
+        "(supported: LIKE, NOT_LIKE, OP_EQUALS, OP_NOT_EQUALS)"
+    )
+
+
+def _type_array_membership_rhs_expression(v: AttributeValue) -> Expression:
+    """RHS as String, comparable to TYPE_ARRAY arrayMap output (Array(String) in CH)."""
+    value_type = v.WhichOneof("value")
+    match value_type:
+        case "val_str":
+            return literal(v.val_str)
+        case "val_int":
+            return f.toString(literal(v.val_int))
+        case "val_double":
+            return f.toString(literal(v.val_double))
+        case "val_float":
+            return f.toString(literal(v.val_float))
+        case "val_bool":
+            return literal(str(v.val_bool).lower())
+        case _:
+            raise BadSnubaRPCRequestException(
+                f"unsupported AttributeValue for array membership: {value_type}"
+            )
+
+
+def _type_array_includes_scalar_expression(
+    array_expr: Expression,
+    v: AttributeValue,
+    ignore_case: bool,
+) -> Expression:
+    """Any element equals scalar (includes / [*])"""
+    if v.WhichOneof("value") == "val_null" or v.is_null:
+        raise BadSnubaRPCRequestException("Arrays can't be NULL or cannot have NULL elements")
+    x = Argument(None, "x")
+    rhs = _type_array_membership_rhs_expression(v)
+    if ignore_case and v.WhichOneof("value") == "val_str":
+        return f.arrayExists(
+            Lambda(None, ("x",), f.equals(f.lower(x), f.lower(rhs))),
+            array_expr,
+        )
+    return f.arrayExists(Lambda(None, ("x",), f.equals(x, rhs)), array_expr)
+
+
 def _any_attribute_filter_to_expression(
     filt: AnyAttributeFilter,
     *,
@@ -733,6 +820,7 @@ def trace_item_filters_to_expression(
     item_filter: TraceItemFilter,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
     membership_as_has: bool = False,
+    use_array_map_columns: bool = False,
 ) -> Expression:
     """
     Trace Item Filters are things like (span.id=12345 AND start_timestamp >= "june 4th, 2024")
@@ -744,10 +832,11 @@ def trace_item_filters_to_expression(
         ``IN`` set leaks an unstable ``__set_*`` identifier into the result-block column
         name and breaks mixed-version distributed reads (see ``_in_or_has``). Leave the
         default for WHERE clauses, where the prepared ``IN`` set drives pruning.
+    :param use_array_map_columns: resolve ``TYPE_ARRAY`` predicates against the typed
+        ``attributes_array_*`` map columns instead of the legacy ``attributes_array``
+        JSON column. Pass ``use_array_map_columns(meta)`` so this is only enabled for
+        query windows new enough that the typed columns are fully populated.
     :return:
-
-    Filtering on array attributes is not supported (arrays are select-only); such filters
-    are rejected (see ``_reject_array_filter``).
     """
     if item_filter.HasField("and_filter"):
         filters = item_filter.and_filter.filters
@@ -755,11 +844,19 @@ def trace_item_filters_to_expression(
             return literal(True)
         elif len(filters) == 1:
             return trace_item_filters_to_expression(
-                filters[0], attribute_key_to_expression, membership_as_has
+                filters[0],
+                attribute_key_to_expression,
+                membership_as_has,
+                use_array_map_columns,
             )
         return and_cond(
             *(
-                trace_item_filters_to_expression(x, attribute_key_to_expression, membership_as_has)
+                trace_item_filters_to_expression(
+                    x,
+                    attribute_key_to_expression,
+                    membership_as_has,
+                    use_array_map_columns,
+                )
                 for x in filters
             )
         )
@@ -770,11 +867,19 @@ def trace_item_filters_to_expression(
             raise BadSnubaRPCRequestException("Invalid trace item filter, empty 'or' clause")
         elif len(filters) == 1:
             return trace_item_filters_to_expression(
-                filters[0], attribute_key_to_expression, membership_as_has
+                filters[0],
+                attribute_key_to_expression,
+                membership_as_has,
+                use_array_map_columns,
             )
         return or_cond(
             *(
-                trace_item_filters_to_expression(x, attribute_key_to_expression, membership_as_has)
+                trace_item_filters_to_expression(
+                    x,
+                    attribute_key_to_expression,
+                    membership_as_has,
+                    use_array_map_columns,
+                )
                 for x in filters
             )
         )
@@ -786,14 +891,20 @@ def trace_item_filters_to_expression(
         elif len(filters) == 1:
             return not_cond(
                 trace_item_filters_to_expression(
-                    filters[0], attribute_key_to_expression, membership_as_has
+                    filters[0],
+                    attribute_key_to_expression,
+                    membership_as_has,
+                    use_array_map_columns,
                 )
             )
         return not_cond(
             and_cond(
                 *(
                     trace_item_filters_to_expression(
-                        x, attribute_key_to_expression, membership_as_has
+                        x,
+                        attribute_key_to_expression,
+                        membership_as_has,
+                        use_array_map_columns,
                     )
                     for x in filters
                 )
@@ -805,9 +916,14 @@ def trace_item_filters_to_expression(
         op = item_filter.comparison_filter.op
         v = item_filter.comparison_filter.value
 
-        _reject_array_filter(k)
+        if k.type == AttributeKey.Type.TYPE_ARRAY:
+            _validate_comparison_filter_type_array(op, v)
 
-        k_expression = attribute_key_to_expression(k)
+        k_expression = _trace_item_filter_key_expression(
+            attr_to_key_expression_callable=attribute_key_to_expression,
+            key=k,
+            use_array_map_columns=use_array_map_columns,
+        )
 
         value_type = v.WhichOneof("value")
         if value_type is None:
@@ -867,6 +983,10 @@ def trace_item_filters_to_expression(
         if op == ComparisonFilter.OP_EQUALS:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
 
+            if k.type == AttributeKey.Type.TYPE_ARRAY:
+                return _type_array_includes_scalar_expression(
+                    k_expression, v, item_filter.comparison_filter.ignore_case
+                )
             if _contains_subscriptable_reference(k_expression):
                 # Map-backed: NULL-free (exists, value) form (see _map_backed_operands).
                 value, exists = _map_backed_operands(k)
@@ -896,6 +1016,12 @@ def trace_item_filters_to_expression(
                 return expr_with_null
         if op == ComparisonFilter.OP_NOT_EQUALS:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
+            if k.type == AttributeKey.Type.TYPE_ARRAY:
+                return not_cond(
+                    _type_array_includes_scalar_expression(
+                        k_expression, v, item_filter.comparison_filter.ignore_case
+                    )
+                )
             if _contains_subscriptable_reference(k_expression):
                 # Negation of OP_EQUALS; an absent key is "not equal".
                 value, exists = _map_backed_operands(k)
@@ -922,9 +1048,19 @@ def trace_item_filters_to_expression(
                 )
                 return expr_with_null
         if op == ComparisonFilter.OP_LIKE:
+            if k.type == AttributeKey.Type.TYPE_ARRAY:
+                like_fn = f.ilike if item_filter.comparison_filter.ignore_case else f.like
+                return f.arrayExists(
+                    Lambda(
+                        None,
+                        ("x",),
+                        like_fn(Argument(None, "x"), v_expression),
+                    ),
+                    k_expression,
+                )
             if k.type != AttributeKey.Type.TYPE_STRING:
                 raise BadSnubaRPCRequestException(
-                    "the LIKE comparison is only supported on string keys"
+                    "the LIKE comparison is only supported on string and array keys"
                 )
             comparison_function = f.ilike if item_filter.comparison_filter.ignore_case else f.like
             if _contains_subscriptable_reference(k_expression):
@@ -932,9 +1068,21 @@ def trace_item_filters_to_expression(
                 return and_cond(exists, comparison_function(value, v_expression))
             return comparison_function(k_expression, v_expression)
         if op == ComparisonFilter.OP_NOT_LIKE:
+            if k.type == AttributeKey.Type.TYPE_ARRAY:
+                like_fn = f.ilike if item_filter.comparison_filter.ignore_case else f.like
+                return not_cond(
+                    f.arrayExists(
+                        Lambda(
+                            None,
+                            ("x",),
+                            like_fn(Argument(None, "x"), v_expression),
+                        ),
+                        k_expression,
+                    )
+                )
             if k.type != AttributeKey.Type.TYPE_STRING:
                 raise BadSnubaRPCRequestException(
-                    "the NOT LIKE comparison is only supported on string keys"
+                    "the NOT LIKE comparison is only supported on string and array keys"
                 )
             if _contains_subscriptable_reference(k_expression):
                 # Negation of OP_LIKE; an absent key is "not like".
@@ -1036,9 +1184,12 @@ def trace_item_filters_to_expression(
         )
 
     if item_filter.HasField("exists_filter"):
-        _reject_array_filter(item_filter.exists_filter.key)
         return get_field_existence_expression(
-            attribute_key_to_expression(item_filter.exists_filter.key)
+            _trace_item_filter_key_expression(
+                attr_to_key_expression_callable=attribute_key_to_expression,
+                key=item_filter.exists_filter.key,
+                use_array_map_columns=use_array_map_columns,
+            )
         )
 
     if item_filter.HasField("any_attribute_filter"):
@@ -1143,5 +1294,13 @@ def get_field_existence_expression(field: Expression) -> Expression:
 
     if isinstance(field, FunctionCall) and field.function_name == "arrayElement":
         return map_key_exists(field.parameters[0], field.parameters[1])
+
+    if isinstance(field, FunctionCall) and field.function_name in ("arrayMap", "arrayConcat"):
+        # Array attributes return empty arrays (not NULL) for missing keys, so
+        # notEmpty is the correct existence check. This covers both the JSON-column
+        # membership expression (arrayMap) and the typed-column one (arrayConcat of
+        # the per-type map lookups, see
+        # type_array_to_membership_array_expression_from_typed_columns).
+        return f.notEmpty(field)
 
     return f.isNotNull(field)

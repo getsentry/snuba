@@ -7,9 +7,11 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import arrayElement, column, literal
 from snuba.query.expressions import (
+    Argument,
     Expression,
     FunctionCall,
     JsonPath,
+    Lambda,
     SubscriptableReference,
 )
 
@@ -139,6 +141,52 @@ def _generate_subscriptable_reference(
     )
 
 
+def type_array_to_membership_array_expression(attr_key: AttributeKey) -> FunctionCall:
+    """To be used only in WHERE clause, not SELECT"""
+    if attr_key.type != AttributeKey.Type.TYPE_ARRAY:
+        raise MalformedAttributeException(
+            f"type_array_to_membership_array_expression expected TYPE_ARRAY, got "
+            f"{AttributeKey.Type.Name(attr_key.type)}"
+        )
+    # We need different label than attribute_key_to_expression(TYPE_ARRAY) [toJSONString]
+    alias = f"{_build_label_mapping_key(attr_key)}__array_members"
+    x = Argument(None, "x")
+    return FunctionCall(
+        alias=alias,
+        function_name="arrayMap",
+        parameters=(
+            Lambda(
+                alias=None,
+                parameters=("x",),
+                transformation=FunctionCall(
+                    alias=None,
+                    function_name="coalesce",
+                    parameters=(
+                        JsonPath(None, x, "String", "Nullable(String)"),
+                        FunctionCall(
+                            None,
+                            "toString",
+                            (JsonPath(None, x, "Int", "Nullable(Int64)"),),
+                        ),
+                        FunctionCall(
+                            None,
+                            "toString",
+                            (JsonPath(None, x, "Double", "Nullable(Float64)"),),
+                        ),
+                        JsonPath(None, x, "Bool", "Nullable(String)"),
+                    ),
+                ),
+            ),
+            JsonPath(
+                alias=None,
+                base=column("attributes_array"),
+                path=attr_key.name,
+                return_type="Array(JSON)",
+            ),
+        ),
+    )
+
+
 def type_array_to_stored_array_json_path(attr_key: AttributeKey) -> JsonPath:
     return JsonPath(
         alias=None,
@@ -175,6 +223,69 @@ def type_array_typed_columns_select_expressions(attr_key: AttributeKey) -> list[
         arrayElement(f"{label_mapping_key}.{col}", column(col), literal(attr_key.name))
         for col in TYPED_ARRAY_MAP_COLUMNS
     ]
+
+
+def type_array_to_membership_array_expression_from_typed_columns(
+    attr_key: AttributeKey,
+) -> FunctionCall:
+    """WHERE-clause membership array built from the typed array map columns.
+
+    Counterpart to ``type_array_to_membership_array_expression``, which reads the
+    legacy ``attributes_array`` JSON column. Since 2026-06-22 array attributes are
+    also double-written into typed ``Map(String, Array(T))`` columns; for query
+    windows new enough that those columns are fully populated (see
+    ``use_array_map_columns``) we read them instead.
+
+    Returns a normalized ``Array(String)`` of every element across all four typed
+    columns so the per-element comparisons built by
+    ``_type_array_membership_rhs_expression`` keep matching the JSON-column
+    behaviour (string elements stay as-is, numbers become ``toString(...)``, and
+    bools become ``'true'``/``'false'``). Unlike the scalar double-write, array
+    integers are written only to ``attributes_array_int`` (not also to the float
+    column — see ``AttributeMap::insert_array`` in the ``eap_items`` Rust
+    processor), so the int column must be read for int arrays to match; element
+    types never overlap across columns, so no element is duplicated.
+    """
+    if attr_key.type != AttributeKey.Type.TYPE_ARRAY:
+        raise MalformedAttributeException(
+            f"type_array_to_membership_array_expression_from_typed_columns expected "
+            f"TYPE_ARRAY, got {AttributeKey.Type.Name(attr_key.type)}"
+        )
+    alias = f"{_build_label_mapping_key(attr_key)}__array_members"
+    name = attr_key.name
+
+    def _to_string_elements(col_name: str) -> FunctionCall:
+        x = Argument(None, "x")
+        return FunctionCall(
+            None,
+            "arrayMap",
+            (
+                Lambda(None, ("x",), FunctionCall(None, "toString", (x,))),
+                arrayElement(None, column(col_name), literal(name)),
+            ),
+        )
+
+    string_elements = arrayElement(None, column("attributes_array_string"), literal(name))
+    int_elements = _to_string_elements("attributes_array_int")
+    float_elements = _to_string_elements("attributes_array_float")
+    bool_x = Argument(None, "x")
+    bool_elements = FunctionCall(
+        None,
+        "arrayMap",
+        (
+            Lambda(
+                None,
+                ("x",),
+                FunctionCall(None, "if", (bool_x, literal("true"), literal("false"))),
+            ),
+            arrayElement(None, column("attributes_array_bool"), literal(name)),
+        ),
+    )
+    return FunctionCall(
+        alias=alias,
+        function_name="arrayConcat",
+        parameters=(string_elements, int_elements, float_elements, bool_elements),
+    )
 
 
 def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
