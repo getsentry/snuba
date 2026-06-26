@@ -432,12 +432,6 @@ def add_existence_check_to_subscriptable_references(query: Query) -> None:
         if not isinstance(exp, SubscriptableReference):
             return exp
 
-        if exp.column.column_name in TYPED_ARRAY_MAP_COLUMNS:
-            # Array map columns (attributes_array_*) read as an empty array for a missing
-            # key, so they need no NULL existence guard — and ClickHouse has no
-            # Nullable(Array), so an `if(..., Array, NULL)` wrap would be illegal anyway.
-            return exp
-
         return FunctionCall(
             alias=exp.alias,
             function_name="if",
