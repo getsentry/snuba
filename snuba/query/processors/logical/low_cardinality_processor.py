@@ -29,7 +29,7 @@ class LowCardinalityProcessor(LogicalQueryProcessor):
 
     def __init__(self, columns: list[str]) -> None:
         self.low_card_columns = set()
-        self.subscriptable_columns: dict[str, set[str]] = dict()
+        self.subscriptable_columns: dict[str, set[str]] = {}
         for c in columns:
             if c.startswith("tags") or c.startswith("contexts"):
                 column, key = c.split("[")

@@ -1,5 +1,6 @@
 from collections import defaultdict
-from typing import Final, Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Final
 
 from sentry_conventions.attributes import ATTRIBUTE_METADATA
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
@@ -196,6 +197,35 @@ def type_array_to_stored_array_json_path(attr_key: AttributeKey) -> JsonPath:
     )
 
 
+# The typed array map columns (Map(String, Array(T))), in element-type order. Shared by
+# the per-attribute SELECT (type_array_typed_columns_select_expressions) and the
+# whole-map reads / merges in snuba.web.rpc.common.common.
+TYPED_ARRAY_MAP_COLUMNS: tuple[str, ...] = (
+    "attributes_array_string",
+    "attributes_array_int",
+    "attributes_array_float",
+    "attributes_array_bool",
+)
+
+
+def type_array_typed_columns_select_expressions(attr_key: AttributeKey) -> list[FunctionCall]:
+    """Native ``arrayElement`` read per typed array map column for a TYPE_ARRAY SELECT
+    past the cutoff (replaces the legacy ``toJSONString`` JSON-column form). Arrays are
+    homogeneous, so one sub-column is non-empty; the caller merges them back into one
+    array (``merge_typed_array_subcolumns``). Aliased ``"<label_mapping_key>.<column>"``
+    so SELECT and GROUP BY / ORDER BY agree."""
+    if attr_key.type != AttributeKey.Type.TYPE_ARRAY:
+        raise MalformedAttributeException(
+            f"type_array_typed_columns_select_expressions expected TYPE_ARRAY, got "
+            f"{AttributeKey.Type.Name(attr_key.type)}"
+        )
+    label_mapping_key = _build_label_mapping_key(attr_key)
+    return [
+        arrayElement(f"{label_mapping_key}.{col}", column(col), literal(attr_key.name))
+        for col in TYPED_ARRAY_MAP_COLUMNS
+    ]
+
+
 def type_array_to_membership_array_expression_from_typed_columns(
     attr_key: AttributeKey,
 ) -> FunctionCall:
@@ -259,6 +289,21 @@ def type_array_to_membership_array_expression_from_typed_columns(
     )
 
 
+def type_array_typed_column_native_array(attr_key: AttributeKey, col: str) -> FunctionCall:
+    """Native ``Array(T)`` of one typed array map column's elements, for a TYPE_ARRAY
+    membership comparison past the cutoff. The caller compares against the filter value
+    coerced to this column's native type, with no string conversion — unlike
+    ``type_array_to_membership_array_expression_from_typed_columns``, which normalizes
+    every column to ``Array(String)`` for the value-less exists/notEmpty check."""
+    if attr_key.type != AttributeKey.Type.TYPE_ARRAY:
+        raise MalformedAttributeException(
+            f"type_array_typed_column_native_array expected TYPE_ARRAY, got "
+            f"{AttributeKey.Type.Name(attr_key.type)}"
+        )
+    alias = f"{_build_label_mapping_key(attr_key)}__array_members_{col}"
+    return arrayElement(alias, column(col), literal(attr_key.name))
+
+
 def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
     """Convert an AttributeKey proto to a Snuba Expression.
 
@@ -309,17 +354,15 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
                 *expressions,
                 alias=alias,
             )
-        else:
-            return _generate_subscriptable_reference(
-                attr_key.name,
-                attr_key.type,
-                alias,
-            )
+        return _generate_subscriptable_reference(
+            attr_key.name,
+            attr_key.type,
+            alias,
+        )
 
     if attr_key.type == AttributeKey.Type.TYPE_ARRAY:
-        # Tagged array under attributes_array.* as Array(JSON). Select toJSONString(...)
-        # so the result column is String; callers decode in application code. Raw
-        # Array(JSON) is not returned in the SELECT to avoid native client limits.
+        # Legacy JSON column (used pre-cutoff and for aggregations); the typed-column read
+        # path is built separately (type_array_typed_columns_select_expressions).
         return FunctionCall(
             alias=alias,
             function_name="toJSONString",

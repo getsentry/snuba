@@ -1,6 +1,7 @@
 import signal
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
-from typing import Any, Iterator, Optional, Sequence
+from typing import Any
 
 import click
 import structlog
@@ -90,13 +91,13 @@ def subscriptions_executor(
     consumer_group: str,
     bootstrap_server: Sequence[str],
     result_bootstrap_server: Sequence[str],
-    slice_id: Optional[int],
+    slice_id: int | None,
     total_concurrent_queries: int,
     auto_offset_reset: str,
     no_strict_offset_reset: bool,
-    log_level: Optional[str],
-    stale_threshold_seconds: Optional[int],
-    health_check_file: Optional[str],
+    log_level: str | None,
+    stale_threshold_seconds: int | None,
+    health_check_file: str | None,
 ) -> None:
     """
     The subscription's executor consumes scheduled subscriptions from the scheduled
@@ -168,7 +169,7 @@ def subscriptions_executor(
 
 
 @contextmanager
-def closing(producer: KafkaProducer) -> Iterator[Optional[KafkaProducer]]:
+def closing(producer: KafkaProducer) -> Iterator[KafkaProducer | None]:
     try:
         yield producer
     finally:

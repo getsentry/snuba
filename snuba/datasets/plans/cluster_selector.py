@@ -100,7 +100,6 @@ class ColumnBasedStorageSliceSelector(StorageClusterSelector):
         logical_partition = map_org_id_to_logical_partition(org_id)
         if _should_use_mega_cluster(self.storage_set, logical_partition):
             return get_cluster(self.storage_set)
-        else:
-            slice_id = map_logical_partition_to_slice(self.storage_set, logical_partition)
-            cluster = get_cluster(self.storage_set, slice_id)
-            return cluster
+        slice_id = map_logical_partition_to_slice(self.storage_set, logical_partition)
+        cluster = get_cluster(self.storage_set, slice_id)
+        return cluster

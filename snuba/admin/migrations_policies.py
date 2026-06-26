@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Callable, MutableMapping
 from functools import wraps
-from typing import Any, Callable, Dict, MutableMapping, Set
+from typing import Any
 
 from flask import Response, g, jsonify, make_response, request
 
@@ -26,12 +27,12 @@ ACTIONS_TO_POLICIES = {
 
 def get_migration_group_policies(
     user: AdminUser,
-) -> Dict[str, Set[MigrationPolicy]]:
+) -> dict[str, set[MigrationPolicy]]:
     """
     Creates a mapping of migration groups to policies based on a user's
     roles.
     """
-    group_policies: MutableMapping[str, Set[str]] = defaultdict(set)
+    group_policies: MutableMapping[str, set[str]] = defaultdict(set)
     allowed_groups = [group.value for group in get_active_migration_groups()]
 
     for role in user.roles:
@@ -76,16 +77,16 @@ def check_migration_perms(f: Callable[..., Response]) -> Callable[..., Response]
             dry_run = request.args.get("dry_run", False, type=str_to_bool)
 
             if not dry_run:
-                if action == "run":
-                    if not any(policy.can_run(migration_key) for policy in policies):
-                        return make_response(
-                            jsonify({"error": "Group not allowed run policy"}), 403
-                        )
-                elif action == "reverse":
-                    if not any(policy.can_reverse(migration_key) for policy in policies):
-                        return make_response(
-                            jsonify({"error": "Group not allowed reverse policy"}), 403
-                        )
+                if action == "run" and not any(
+                    policy.can_run(migration_key) for policy in policies
+                ):
+                    return make_response(jsonify({"error": "Group not allowed run policy"}), 403)
+                if action == "reverse" and not any(
+                    policy.can_reverse(migration_key) for policy in policies
+                ):
+                    return make_response(
+                        jsonify({"error": "Group not allowed reverse policy"}), 403
+                    )
         return f(*args, **kwargs)
 
     return check_group_perms

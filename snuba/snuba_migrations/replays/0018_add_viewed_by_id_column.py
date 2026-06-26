@@ -1,4 +1,4 @@
-from typing import Iterator, List, Sequence, Tuple
+from collections.abc import Iterator, Sequence
 
 from snuba.clickhouse.columns import Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
@@ -52,6 +52,4 @@ def backward_columns_iter() -> Iterator[operations.SqlOperation]:
         )
 
 
-columns: List[Tuple[str, Column[Modifiers]]] = [
-    ("user_email", Column("viewed_by_id", UInt(64)))
-]
+columns: list[tuple[str, Column[Modifiers]]] = [("user_email", Column("viewed_by_id", UInt(64)))]

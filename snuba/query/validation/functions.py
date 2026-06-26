@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 from snuba import environment
 from snuba.query.data_source import DataSource
@@ -25,5 +25,4 @@ class AllowedFunctionValidator(FunctionCallValidator):
 
         if get_bool_option("function-validator.enabled", False):
             raise InvalidFunctionCall(f"Invalid function name: {func_name}")
-        else:
-            metrics.increment("invalid_funcs", tags={"func_name": func_name})
+        metrics.increment("invalid_funcs", tags={"func_name": func_name})

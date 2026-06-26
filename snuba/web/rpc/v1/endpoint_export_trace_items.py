@@ -1,6 +1,7 @@
 import uuid
+from collections.abc import Iterable
 from datetime import datetime
-from typing import Any, Dict, Iterable, NamedTuple, Type, cast
+from typing import Any, Literal, NamedTuple, cast
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -41,7 +42,10 @@ from snuba.web.rpc.common.common import (
     attributes_array_selected_expressions,
     base_conditions_and,
     decode_attributes_array_value,
+    merge_typed_array_maps,
     treeify_or_and_conditions,
+    typed_array_map_selected_expressions,
+    use_array_map_columns,
 )
 from snuba.web.rpc.common.debug_info import setup_trace_query_settings
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -71,17 +75,17 @@ class FlexWindow(NamedTuple):
 
     @classmethod
     def from_filters(cls, filters: list[TraceItemFilter]) -> "FlexWindow":
-        _SCHEMA = [
+        _SCHEMA: list[tuple[str, Literal["val_int"]]] = [
             (FLEX_WIN_START, "val_int"),
             (FLEX_WIN_END, "val_int"),
         ]
         values = []
-        for expected_filter, timestamp_filter in zip(_SCHEMA, filters):
+        for expected_filter, timestamp_filter in zip(_SCHEMA, filters, strict=False):
             filter_name, filter_value_type = expected_filter
             if (
                 not timestamp_filter.HasField("comparison_filter")
                 or timestamp_filter.comparison_filter.key.name != filter_name
-                or not timestamp_filter.comparison_filter.value.HasField(filter_value_type)  # type: ignore[arg-type]
+                or not timestamp_filter.comparison_filter.value.HasField(filter_value_type)
             ):
                 raise ValueError("Invalid timestamp filter in page token")
             values.append(timestamp_filter.comparison_filter.value.val_int)
@@ -144,7 +148,9 @@ class KeysetCursor(NamedTuple):
                     value=AttributeValue(**{val_field: value}),  # type: ignore[arg-type]
                 )
             )
-            for (name, attr_type, val_field), value in zip(_KEYSET_CURSOR_SCHEMA, self)
+            for (name, attr_type, val_field), value in zip(
+                _KEYSET_CURSOR_SCHEMA, self, strict=False
+            )
         ]
 
 
@@ -249,6 +255,11 @@ def _build_query(
     page_token: ExportTraceItemsPageToken | None = None,
     query_meta: RequestMeta | None = None,
 ) -> Query:
+    # The cutoff must be evaluated against the time window actually queried (the
+    # routing-adjusted query_meta used in the WHERE clause below), not the original
+    # request window, or the SELECT could read typed columns from a window where they
+    # are unpopulated.
+    meta = query_meta if query_meta is not None else in_msg.meta
     selected_columns = [
         SelectedExpression("timestamp", f.toUnixTimestamp(column("timestamp"), alias="timestamp")),
         SelectedExpression(
@@ -290,7 +301,13 @@ def _build_query(
         ),
         SelectedExpression("attributes_int", column("attributes_int", alias="attributes_int")),
         SelectedExpression("attributes_bool", column("attributes_bool", alias="attributes_bool")),
-        *attributes_array_selected_expressions(),
+        # Past the cutoff, read every array attribute from the typed array map columns
+        # instead of the legacy attributes_array JSON-column allowlist.
+        *(
+            typed_array_map_selected_expressions()
+            if use_array_map_columns(meta)
+            else attributes_array_selected_expressions()
+        ),
     ]
 
     entity = Entity(
@@ -321,7 +338,6 @@ def _build_query(
         if page_token is not None and page_token.keyset_cursor is not None
         else []
     )
-    meta = query_meta if query_meta is not None else in_msg.meta
     item_type_filter = []
     if meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
         item_type_filter.append(f.equals(column("item_type"), literal(meta.trace_item_type)))
@@ -387,18 +403,17 @@ def _build_snuba_request(
 def _to_any_value(value: Any) -> AnyValue:
     if isinstance(value, bool):
         return AnyValue(bool_value=value)
-    elif isinstance(value, int):
+    if isinstance(value, int):
         return AnyValue(int_value=value)
-    elif isinstance(value, float):
+    if isinstance(value, float):
         return AnyValue(double_value=value)
-    elif isinstance(value, str):
+    if isinstance(value, str):
         return AnyValue(string_value=value)
-    elif isinstance(value, list):
+    if isinstance(value, list):
         return AnyValue(array_value=ArrayValue(values=[_to_any_value(v) for v in value]))
-    elif isinstance(value, datetime):
+    if isinstance(value, datetime):
         return AnyValue(double_value=value.timestamp())
-    else:
-        raise BadSnubaRPCRequestException(f"data type unknown: {type(value)}")
+    raise BadSnubaRPCRequestException(f"data type unknown: {type(value)}")
 
 
 class ProcessedResults(NamedTuple):
@@ -406,7 +421,9 @@ class ProcessedResults(NamedTuple):
     keyset_cursor: KeysetCursor
 
 
-def _convert_rows(rows: Iterable[Dict[str, Any]]) -> ProcessedResults:
+def _convert_rows(
+    rows: Iterable[dict[str, Any]], read_typed_arrays: bool = False
+) -> ProcessedResults:
     items: list[TraceItem] = []
     last_seen_project_id = 0
     last_seen_item_type = TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
@@ -431,13 +448,20 @@ def _convert_rows(rows: Iterable[Dict[str, Any]]) -> ProcessedResults:
 
         attributes_map: dict[str, AnyValue] = {}
 
-        # Each allowlisted attributes_array path is its own JSON-string column.
-        # Decode only those rather than probing every value in the row.
-        for path in ATTRIBUTES_ARRAY_ALLOWLIST:
-            decoded = decode_attributes_array_value(path, row.pop(path, None))
-            if decoded is None or (isinstance(decoded, list) and not decoded):
-                continue
-            attributes_map[path] = _to_any_value(decoded)
+        if read_typed_arrays:
+            # Past the cutoff: every array attribute, merged from the typed array map
+            # columns (the allowlist is no longer needed).
+            for name, values in merge_typed_array_maps(row):
+                if values:
+                    attributes_map[name] = _to_any_value(values)
+        else:
+            # Each allowlisted attributes_array path is its own JSON-string column.
+            # Decode only those rather than probing every value in the row.
+            for path in ATTRIBUTES_ARRAY_ALLOWLIST:
+                decoded = decode_attributes_array_value(path, row.pop(path, None))
+                if decoded is None or (isinstance(decoded, list) and not decoded):
+                    continue
+                attributes_map[path] = _to_any_value(decoded)
 
         # Remaining columns are scalar map columns (e.g. attributes_string).
         for row_key, row_value in row.items():
@@ -493,11 +517,11 @@ class EndpointExportTraceItems(RPCEndpoint[ExportTraceItemsRequest, ExportTraceI
         return "v1"
 
     @classmethod
-    def request_class(cls) -> Type[ExportTraceItemsRequest]:
+    def request_class(cls) -> type[ExportTraceItemsRequest]:
         return ExportTraceItemsRequest
 
     @classmethod
-    def response_class(cls) -> Type[ExportTraceItemsResponse]:
+    def response_class(cls) -> type[ExportTraceItemsResponse]:
         return ExportTraceItemsResponse
 
     def _execute(self, in_msg: ExportTraceItemsRequest) -> ExportTraceItemsResponse:
@@ -517,7 +541,13 @@ class EndpointExportTraceItems(RPCEndpoint[ExportTraceItemsRequest, ExportTraceI
         )
 
         rows = results.result.get("data", [])
-        processed_results = _convert_rows(rows)
+        # Match _build_query: gate on the routing-adjusted window actually queried.
+        processed_results = _convert_rows(
+            rows,
+            read_typed_arrays=use_array_map_columns(
+                _export_query_meta(in_msg, self.routing_decision)
+            ),
+        )
         is_flex = _is_flextime_export(in_msg)
         orig_start = in_msg.meta.start_timestamp.seconds
         routed = self.routing_decision.time_window

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Mapping, MutableMapping, Optional, cast
+from collections.abc import Mapping, MutableMapping
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -12,6 +13,7 @@ from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.configs.configuration import Configuration, ResourceIdentifier
+from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.storage import Storage
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -230,7 +232,7 @@ def _query_config_to_overrides(query_config: Mapping[str, Any]) -> dict[str, Any
 def test_query_settings_from_config(
     query_config: Mapping[str, Any],
     expected: MutableMapping[str, Any],
-    query_prefix: Optional[str],
+    query_prefix: str | None,
     async_override: bool,
     referrer: str,
 ) -> None:
@@ -245,10 +247,12 @@ def _build_test_query(
     select_expression: str, allocation_policies: list[AllocationPolicy] | None = None
 ) -> tuple[ClickhouseQuery, Storage, AttributionInfo]:
     storage = get_storage(StorageKey("errors_ro"))
+    data_source = storage.get_schema().get_data_source()
+    assert isinstance(data_source, TableSource)
     return (
         ClickhouseQuery(
             from_clause=Table(
-                storage.get_schema().get_data_source().get_table_name(),  # type: ignore
+                data_source.get_table_name(),
                 schema=storage.get_schema().get_columns(),
                 final=False,
                 allocation_policies=allocation_policies or storage.get_allocation_policies(),
@@ -413,7 +417,8 @@ def test_db_query_success() -> None:
     assert len(query_metadata_list) == 1
     assert result.extra["stats"] == stats
     assert result.extra["sql"] is not None
-    assert set(result.result["profile"].keys()) == {  # type: ignore
+    assert result.result["profile"] is not None
+    assert set(result.result["profile"].keys()) == {
         "elapsed",
         "bytes",
         "progress_bytes",
@@ -447,31 +452,32 @@ def test_bypass_cache_referrer() -> None:
     with (
         override_options("snuba", {"enable_bypass_cache_referrers": True}),
         mock.patch("snuba.settings.BYPASS_CACHE_REFERRERS", ["some_bypass_cache_referrer"]),
+        mock.patch("snuba.web.db_query._get_cache_partition"),
     ):
-        with mock.patch("snuba.web.db_query._get_cache_partition"):
-            result = db_query(
-                clickhouse_query=query,
-                query_settings=HTTPQuerySettings(),
-                attribution_info=attribution_info,
-                dataset_name="events",
-                query_metadata_list=query_metadata_list,
-                formatted_query=format_query(query),
-                reader=storage.get_cluster().get_reader(),
-                timer=Timer("foo"),
-                stats=stats,
-                trace_id="trace_id",
-                robust=False,
-            )
-            assert len(query_metadata_list) == 1
-            assert result.extra["stats"] == stats
-            assert result.extra["sql"] is not None
-            assert set(result.result["profile"].keys()) == {  # type: ignore
-                "elapsed",
-                "bytes",
-                "progress_bytes",
-                "blocks",
-                "rows",
-            }
+        result = db_query(
+            clickhouse_query=query,
+            query_settings=HTTPQuerySettings(),
+            attribution_info=attribution_info,
+            dataset_name="events",
+            query_metadata_list=query_metadata_list,
+            formatted_query=format_query(query),
+            reader=storage.get_cluster().get_reader(),
+            timer=Timer("foo"),
+            stats=stats,
+            trace_id="trace_id",
+            robust=False,
+        )
+        assert len(query_metadata_list) == 1
+        assert result.extra["stats"] == stats
+        assert result.extra["sql"] is not None
+        assert result.result["profile"] is not None
+        assert set(result.result["profile"].keys()) == {
+            "elapsed",
+            "bytes",
+            "progress_bytes",
+            "blocks",
+            "rows",
+        }
 
 
 @pytest.mark.events_db
@@ -498,7 +504,7 @@ def test_db_query_fail() -> None:
 
     assert len(query_metadata_list) == 1
     assert query_metadata_list[0].status.value == "error"
-    err = cast(QueryException, excinfo.value)
+    err = excinfo.value
     assert isinstance(err, QueryException)
     assert err.extra["stats"] == stats
     assert err.extra["sql"] is not None
@@ -509,10 +515,16 @@ class MockThrottleAllocationPolicy(AllocationPolicy):
         self,
         max_threads: int,
         policy_name: str,
-        storage_key: StorageKey = StorageKey("doesntmatter"),
-        required_tenant_types: list[str] = ["a", "b", "c"],
-        default_config_overrides: dict[str, Any] = {},
+        storage_key: StorageKey | None = None,
+        required_tenant_types: list[str] | None = None,
+        default_config_overrides: dict[str, Any] | None = None,
     ) -> None:
+        if storage_key is None:
+            storage_key = StorageKey("doesntmatter")
+        if default_config_overrides is None:
+            default_config_overrides = {}
+        if required_tenant_types is None:
+            required_tenant_types = ["a", "b", "c"]
         super().__init__(
             storage_key=ResourceIdentifier(storage_key),
             required_tenant_types=required_tenant_types,
@@ -736,7 +748,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
             },
         }
         # extra data contains policy failure information
-        err = cast(QueryException, excinfo.value)
+        err = excinfo.value
         assert isinstance(err, QueryException)
         assert (
             err.extra["stats"]["quota_allowance"]["details"]["RejectAllocationPolicy"][
@@ -829,7 +841,9 @@ def test_allocation_policy_threads_applied_to_query() -> None:
         trace_id="trace_id",
         robust=False,
     )
-    assert settings.get_resource_quota().max_threads == POLICY_THREADS  # type: ignore
+    resource_quota = settings.get_resource_quota()
+    assert resource_quota is not None
+    assert resource_quota.max_threads == POLICY_THREADS
     assert stats["max_threads"] == POLICY_THREADS
     assert query_metadata_list[0].stats["max_threads"] == POLICY_THREADS
 
@@ -944,7 +958,7 @@ def test_allocation_policy_updates_quota() -> None:
     with pytest.raises(QueryException) as e:
         _run_query()
 
-    err = cast(QueryException, e.value)
+    err = e.value
     assert isinstance(err, QueryException)
     assert err.extra["stats"]["quota_allowance"] == {
         "summary": {

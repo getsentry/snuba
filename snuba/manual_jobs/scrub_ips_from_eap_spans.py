@@ -1,5 +1,6 @@
+from collections.abc import Mapping
 from datetime import datetime
-from typing import Any, Mapping, Optional
+from typing import Any
 
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
@@ -11,10 +12,10 @@ class ScrubIpFromEAPSpans(Job):
         self.__validate_job_params(job_spec.params)
         super().__init__(job_spec)
 
-    def __validate_job_params(self, params: Optional[Mapping[Any, Any]]) -> None:
+    def __validate_job_params(self, params: Mapping[Any, Any] | None) -> None:
         assert params
         assert isinstance(params["organization_ids"], list)
-        assert all([isinstance(p, int) for p in params["organization_ids"]])
+        assert all(isinstance(p, int) for p in params["organization_ids"])
         self._organization_ids = params["organization_ids"]
         self._start_datetime = datetime.fromisoformat(params["start_datetime"])
         self._end_datetime = datetime.fromisoformat(params["end_datetime"])

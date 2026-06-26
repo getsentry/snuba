@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any
 
 from snuba.query.parser.exceptions import ParsingException
 
@@ -63,7 +64,7 @@ class MQLContext:
                 extrapolate=mql_context_dict.get("extrapolate", False),
             )
         except KeyError as e:
-            raise ParsingException(f"MQL context: missing required field {e}")
+            raise ParsingException(f"MQL context: missing required field {e}") from e
 
 
 @dataclass(frozen=True)

@@ -1,5 +1,5 @@
+from collections.abc import Sequence
 from datetime import timedelta
-from typing import Sequence, Tuple
 
 import pytest
 from sentry_options.testing import override_options
@@ -95,7 +95,7 @@ TEST_CASES = [
 @pytest.mark.redis_db
 def test_state_changes(
     general_mode: str,
-    subscriptions: Sequence[Tuple[Subscription, int]],
+    subscriptions: Sequence[tuple[Subscription, int]],
     expected_modes: Sequence[TaskBuilderMode],
 ) -> None:
     prev_threshold = settings.MAX_RESOLUTION_FOR_JITTER

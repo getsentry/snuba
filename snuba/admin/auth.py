@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Sequence
+from collections.abc import Sequence
 
 import rapidjson
 import structlog
@@ -48,7 +48,7 @@ def _is_member_of_group(user: AdminUser, group: str) -> bool:
 def get_iam_roles_from_user(user: AdminUser) -> Sequence[str]:
     iam_roles = []
     try:
-        with open(settings.ADMIN_IAM_POLICY_FILE, "r") as policy_file:
+        with open(settings.ADMIN_IAM_POLICY_FILE) as policy_file:
             policy = json.load(policy_file)
             for binding in policy["bindings"]:
                 role: str = binding["role"].split("roles/")[-1]

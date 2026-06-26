@@ -1,4 +1,4 @@
-from typing import List, Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import Array, Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
@@ -38,7 +38,7 @@ class Migration(migration.ClickhouseNodeMigration):
     blocking = False
 
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:
-        ops: List[operations.SqlOperation] = [
+        ops: list[operations.SqlOperation] = [
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
@@ -64,7 +64,7 @@ class Migration(migration.ClickhouseNodeMigration):
         # apply the indexes after the minmax_timestamp index and have them follow each other
         # one after the other
         index_names = [index[0] for index in indexes]
-        for index, after_col in zip(indexes, ["minmax_timestamp"] + index_names[:-1]):
+        for index, after_col in zip(indexes, ["minmax_timestamp"] + index_names[:-1], strict=False):
             index_name, index_expression, index_type, granularity = index
             ops.append(
                 operations.AddIndex(
@@ -82,7 +82,7 @@ class Migration(migration.ClickhouseNodeMigration):
         return ops
 
     def backwards_ops(self) -> Sequence[operations.SqlOperation]:
-        ops: List[operations.SqlOperation] = []
+        ops: list[operations.SqlOperation] = []
 
         for index in indexes:
             index_name, _, _, _ = index

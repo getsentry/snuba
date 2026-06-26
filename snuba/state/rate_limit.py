@@ -5,11 +5,12 @@ import sys
 import time
 import uuid
 from collections import ChainMap, namedtuple
+from collections import ChainMap as TypingChainMap
+from collections.abc import Iterator, MutableMapping, Sequence
 from contextlib import AbstractContextManager, ExitStack, contextmanager
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Any, Iterator, MutableMapping, Optional, Sequence, Type, cast
-from typing import ChainMap as TypingChainMap
+from typing import Any, cast
 
 from redis.exceptions import TimeoutError as RedisTimeoutError
 
@@ -67,8 +68,8 @@ class RateLimitParameters:
 
     rate_limit_name: str
     bucket: str
-    per_second_limit: Optional[float]
-    concurrent_limit: Optional[int]
+    per_second_limit: float | None
+    concurrent_limit: int | None
 
 
 class RateLimitExceeded(SerializableException):
@@ -104,7 +105,7 @@ class RateLimitStatsContainer:
     def add_stats(self, rate_limit_name: str, rate_limit_stats: RateLimitStats) -> None:
         self.__stats[rate_limit_name] = rate_limit_stats
 
-    def get_stats(self, rate_limit_name: str) -> Optional[RateLimitStats]:
+    def get_stats(self, rate_limit_name: str) -> RateLimitStats | None:
         return self.__stats.get(rate_limit_name)
 
     def __format_single_dict(self, name: str, stats: RateLimitStats) -> MutableMapping[str, float]:
@@ -132,7 +133,7 @@ def _get_bucket_key(prefix: str, bucket: str, shard_id: int) -> str:
         # sharding.
         shard_suffix = f":shard-{shard_id}"
 
-    return "{}{}{}".format(prefix, bucket, shard_suffix)
+    return f"{prefix}{bucket}{shard_suffix}"
 
 
 def rate_limit_start_request(
@@ -200,7 +201,7 @@ def rate_limit_start_request(
         # it is fine to only perform this cleanup for the shard of the current
         # query, because on average there will be many other queries that hit other
         # shards and perform cleanup there
-        pipe.zremrangebyscore(query_bucket, "-inf", "({:f}".format(now - rate_history_sec))
+        pipe.zremrangebyscore(query_bucket, "-inf", f"({now - rate_history_sec:f}")
 
         # Now for the tricky bit:
         # ======================
@@ -262,7 +263,7 @@ def rate_limit_start_request(
             # of concurrent queries
             for shard_i in range(rate_limit_shard_factor):
                 bucket = _get_bucket_key(rate_limit_prefix, rate_limit_params.bucket, shard_i)
-                pipe.zcount(bucket, "({:f}".format(now), "+inf")
+                pipe.zcount(bucket, f"({now:f}", "+inf")
 
         try:
             results = pipe.execute()
@@ -335,7 +336,7 @@ def rate_limit_finish_request(
 @contextmanager
 def rate_limit(
     rate_limit_params: RateLimitParameters,
-) -> Iterator[Optional[RateLimitStats]]:
+) -> Iterator[RateLimitStats | None]:
     """
     A context manager for rate limiting that allows for limiting based on:
         * a rolling-window per-second rate
@@ -400,7 +401,7 @@ def rate_limit(
         )
 
         raise RateLimitExceeded(
-            "{r.scope} {r.name} of {r.val:.0f} exceeds limit of {r.limit:.0f}".format(r=reason),
+            f"{reason.scope} {reason.name} of {reason.val:.0f} exceeds limit of {reason.limit:.0f}",
             scope=reason.scope,
             name=reason.name,
         )
@@ -448,7 +449,7 @@ def _record_metrics(exc: RateLimitExceeded, rate_limit_param: RateLimitParameter
         metrics.increment("rate-limited", tags=tags)
 
 
-class RateLimitAggregator(AbstractContextManager):  # type: ignore
+class RateLimitAggregator(AbstractContextManager[RateLimitStatsContainer]):
     """
     Runs the rate limits provided by the `rate_limit_params` configuration object.
 
@@ -481,8 +482,8 @@ class RateLimitAggregator(AbstractContextManager):  # type: ignore
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         self.stack.pop_all().close()

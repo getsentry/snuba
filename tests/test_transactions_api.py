@@ -1,8 +1,9 @@
 import calendar
 import uuid
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Generator, Tuple, Union
+from collections.abc import Callable, Generator
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 import simplejson as json
@@ -22,7 +23,7 @@ LIMIT_BY_COUNT = 5
 @pytest.mark.redis_db
 class TestTransactionsApi(BaseApiTest):
     @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
+    def test_entity(self) -> str | tuple[str, str]:
         return "transactions"
 
     @pytest.fixture
@@ -35,7 +36,7 @@ class TestTransactionsApi(BaseApiTest):
         events_db: None,
         redis_db: None,
         _build_snql_post_methods: Callable[[str], Any],
-    ) -> Generator[None, None, None]:
+    ) -> Generator[None]:
         self.post = _build_snql_post_methods
 
         # values for test data
@@ -48,7 +49,7 @@ class TestTransactionsApi(BaseApiTest):
         self.skew = timedelta(minutes=self.minutes)
 
         self.base_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0, tzinfo=timezone.utc
+            minute=0, second=0, microsecond=0, tzinfo=UTC
         ) - timedelta(minutes=self.minutes)
         self.storage = get_writable_storage(StorageKey.TRANSACTIONS)
         self.generate_fizzbuzz_events()
@@ -99,10 +100,10 @@ class TestTransactionsApi(BaseApiTest):
                                         "type": "transaction",
                                         "transaction": "/api/do_things",
                                         "start_timestamp": datetime.timestamp(
-                                            (self.base_time + timedelta(minutes=tick))
+                                            self.base_time + timedelta(minutes=tick)
                                         ),
                                         "timestamp": datetime.timestamp(
-                                            (self.base_time + timedelta(minutes=tick, seconds=1))
+                                            self.base_time + timedelta(minutes=tick, seconds=1)
                                         ),
                                         "tags": {
                                             # Sentry
@@ -647,20 +648,16 @@ class TestTransactionsApi(BaseApiTest):
         assert data["data"][0]["span_id"] == "841662216cc598b1"
 
     def test_limitby_multicolumn(self) -> None:
-        query_str = """MATCH (transactions)
+        query_str = f"""MATCH (transactions)
                     SELECT project_id,
                            environment,
                            platform,
                            event_id
                     WHERE project_id = 1
-                    AND finish_ts >= toDateTime('{start_time}')
-                    AND finish_ts < toDateTime('{end_time}')
-                    LIMIT {limit_by_count} BY environment, platform
-                    """.format(
-            start_time=(self.base_time - self.skew).isoformat(),
-            end_time=(self.base_time + self.skew).isoformat(),
-            limit_by_count=LIMIT_BY_COUNT,
-        )
+                    AND finish_ts >= toDateTime('{(self.base_time - self.skew).isoformat()}')
+                    AND finish_ts < toDateTime('{(self.base_time + self.skew).isoformat()}')
+                    LIMIT {LIMIT_BY_COUNT} BY environment, platform
+                    """
         response = self.app.post(
             SNQL_ROUTE,
             data=json.dumps(
@@ -689,24 +686,21 @@ class TestTransactionsApi(BaseApiTest):
         for datum in parsed_data["data"]:
             records_by_limit_columns[(datum["platform"], datum["environment"])].append(datum)
 
-        for key in records_by_limit_columns.keys():
+        for key in records_by_limit_columns:
             assert len(records_by_limit_columns[key]) == LIMIT_BY_COUNT, key
 
     def test_arrayjoin_multicolumn(self) -> None:
-        query_str = """MATCH (transactions)
+        query_str = f"""MATCH (transactions)
                     SELECT event_id,
                            measurements.key,
                            measurements.value
                     ARRAY JOIN measurements.key, measurements.value
                     WHERE project_id = 1
-                    AND finish_ts >= toDateTime('{start_time}')
-                    AND finish_ts < toDateTime('{end_time}')
+                    AND finish_ts >= toDateTime('{(self.base_time - self.skew).isoformat()}')
+                    AND finish_ts < toDateTime('{(self.base_time + self.skew).isoformat()}')
                     ORDER BY event_id ASC, measurements.key ASC
                     LIMIT 4
-                    """.format(
-            start_time=(self.base_time - self.skew).isoformat(),
-            end_time=(self.base_time + self.skew).isoformat(),
-        )
+                    """
         response = self.app.post(
             SNQL_ROUTE,
             data=json.dumps(

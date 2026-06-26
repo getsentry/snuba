@@ -1,15 +1,8 @@
 from abc import ABC, abstractmethod
 from collections import defaultdict
+from collections.abc import Mapping, MutableMapping, Sequence
 from typing import (
     Any,
-    Dict,
-    List,
-    Mapping,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Tuple,
-    Type,
 )
 
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
@@ -57,7 +50,7 @@ class SearchIssuesFormatter(Formatter):
             assert isinstance(project_id, int)
             mapping[project_id] = mapping[project_id].union(
                 # using int() to make mypy happy
-                set([int(g_id) for g_id in condition["group_id"]])
+                {int(g_id) for g_id in condition["group_id"]}
             )
 
         return [
@@ -72,14 +65,14 @@ class SearchIssuesFormatter(Formatter):
 
 
 def _deserialize_attribute_conditions(
-    data: Optional[Dict[str, WireAttributeCondition]],
-    item_type: Optional[int] = None,
-) -> Optional[AttributeConditions]:
+    data: dict[str, WireAttributeCondition] | None,
+    item_type: int | None = None,
+) -> AttributeConditions | None:
     if data is None:
         return None
     assert item_type is not None, "attribute_conditions cannot be deserialized without item_type"
 
-    attributes: Dict[str, Tuple[AttributeKey, List[Any]]] = {}
+    attributes: dict[str, tuple[AttributeKey, list[Any]]] = {}
 
     for key, wire_condition in data.items():
         attr_key_type = wire_condition["attr_key_type"]
@@ -110,7 +103,7 @@ class EAPItemsFormatter(Formatter):
         ]
 
 
-STORAGE_FORMATTER: Mapping[str, Type[Formatter]] = {
+STORAGE_FORMATTER: Mapping[str, type[Formatter]] = {
     StorageKey.SEARCH_ISSUES.value: SearchIssuesFormatter,
     StorageKey.EAP_ITEMS.value: EAPItemsFormatter,
 }

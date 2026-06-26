@@ -1,5 +1,3 @@
-from typing import List
-
 import pytest
 from sentry_options.testing import override_options
 
@@ -104,7 +102,7 @@ TEST_CASES = [
 def test_query_storage_selector(
     snql_query: str,
     dataset: Dataset,
-    storage_connections: List[EntityStorageConnection],
+    storage_connections: list[EntityStorageConnection],
     selector: QueryStorageSelector,
     use_readable: bool,
     expected_storage: Storage,

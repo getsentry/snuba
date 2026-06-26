@@ -1,5 +1,6 @@
+from collections.abc import Callable, Generator
 from datetime import datetime
-from typing import Any, Callable, Generator
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -44,7 +45,7 @@ class TestMaxRowsEnforcer(BaseApiTest):
         )
 
     @pytest.fixture(autouse=True)
-    def _short_circuit_cache(self) -> Generator[None, None, None]:
+    def _short_circuit_cache(self) -> Generator[None]:
         with override_options("snuba", {"read_through_cache.short_circuit": True}):
             yield
 

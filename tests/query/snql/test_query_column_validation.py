@@ -1,5 +1,6 @@
 import datetime
-from typing import Any, Generator
+from collections.abc import Generator
+from typing import Any
 
 import pytest
 from sentry_options.testing import override_options
@@ -43,7 +44,7 @@ time_validation_tests = [
                 ),
                 selected_columns=[
                     SelectedExpression("title", Column("_snuba_title", None, "title")),
-                    SelectedExpression("count", FunctionCall("_snuba_count", "count", tuple())),
+                    SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
                 ],
                 groupby=[Column("_snuba_title", None, "title")],
                 condition=binary_condition(
@@ -383,7 +384,7 @@ time_validation_tests = [
 
 
 @pytest.fixture(autouse=True)
-def set_configs(redis_db: None) -> Generator[None, None, None]:
+def set_configs(redis_db: None) -> Generator[None]:
     with override_options("snuba", {"max_days": 5, "date_align_seconds": 3600}):
         yield
 

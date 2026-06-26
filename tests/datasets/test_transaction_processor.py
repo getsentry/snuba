@@ -1,8 +1,9 @@
 import uuid
+from collections.abc import Mapping, MutableMapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Mapping, MutableMapping, Optional, Sequence, Tuple
+from datetime import UTC, datetime, timedelta
+from typing import Any
 from unittest.mock import ANY
 
 import pytest
@@ -27,31 +28,31 @@ class TransactionEvent:
     start_timestamp: float
     timestamp: float
     platform: str
-    dist: Optional[str]
-    user_name: Optional[str]
-    user_id: Optional[str]
-    user_email: Optional[str]
-    ipv6: Optional[str]
-    ipv4: Optional[str]
-    environment: Optional[str]
+    dist: str | None
+    user_name: str | None
+    user_id: str | None
+    user_email: str | None
+    ipv6: str | None
+    ipv4: str | None
+    environment: str | None
     release: str
-    sdk_name: Optional[str]
-    sdk_version: Optional[str]
-    http_method: Optional[str]
-    http_referer: Optional[str]
+    sdk_name: str | None
+    sdk_version: str | None
+    http_method: str | None
+    http_referer: str | None
     geo: Mapping[str, str]
     status: str
-    transaction_source: Optional[str]
+    transaction_source: str | None
     app_start_type: str = "warm"
     has_app_ctx: bool = True
-    profile_id: Optional[str] = None
-    profiler_id: Optional[str] = None
-    thread_id: Optional[int | str] = None
-    replay_id: Optional[str] = None
-    received: Optional[float] = None
+    profile_id: str | None = None
+    profiler_id: str | None = None
+    thread_id: int | str | None = None
+    replay_id: str | None = None
+    received: float | None = None
 
-    def get_trace_context(self) -> Optional[Mapping[str, Any]]:
-        context: Dict[str, Any] = {
+    def get_trace_context(self) -> Mapping[str, Any] | None:
+        context: dict[str, Any] = {
             "sampled": True,
             "trace_id": self.trace_id,
             "op": self.op,
@@ -68,13 +69,12 @@ class TransactionEvent:
 
         return context
 
-    def get_app_context(self) -> Optional[Mapping[str, str]]:
+    def get_app_context(self) -> Mapping[str, str] | None:
         if self.has_app_ctx:
             return {"start_type": self.app_start_type}
-        else:
-            return None
+        return None
 
-    def get_profile_context(self) -> Optional[Mapping[str, str]]:
+    def get_profile_context(self) -> Mapping[str, str] | None:
         context = {}
 
         if self.profile_id is not None:
@@ -88,12 +88,12 @@ class TransactionEvent:
 
         return None
 
-    def get_replay_context(self) -> Optional[Mapping[str, str]]:
+    def get_replay_context(self) -> Mapping[str, str] | None:
         if self.replay_id is None:
             return None
         return {"replay_id": self.replay_id}
 
-    def serialize(self) -> Tuple[int, str, Dict[str, Any]]:
+    def serialize(self) -> tuple[int, str, dict[str, Any]]:
         return (
             2,
             "insert",
@@ -223,7 +223,7 @@ class TransactionEvent:
 
         spans = sorted([(self.op, int("a" * 16, 16), 1.2345), ("http", int("b" * 16, 16), 0.1234)])
 
-        ret: Dict[str, Any] = {
+        ret: dict[str, Any] = {
             "deleted": 0,
             "project_id": 1,
             "event_id": str(uuid.UUID(self.event_id)),
@@ -313,8 +313,8 @@ class TransactionEvent:
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 class TestTransactionsProcessor:
-    def __get_timestamps(self) -> Tuple[float, float]:
-        timestamp = datetime.now(tz=timezone.utc) - timedelta(seconds=5)
+    def __get_timestamps(self) -> tuple[float, float]:
+        timestamp = datetime.now(tz=UTC) - timedelta(seconds=5)
         start_timestamp = timestamp - timedelta(seconds=5)
         return (start_timestamp.timestamp(), timestamp.timestamp())
 
@@ -330,7 +330,7 @@ class TestTransactionsProcessor:
             op="navigation",
             timestamp=finish,
             start_timestamp=start,
-            received=(datetime.now(tz=timezone.utc) - timedelta(seconds=15)).timestamp(),
+            received=(datetime.now(tz=UTC) - timedelta(seconds=15)).timestamp(),
             platform="python",
             dist="",
             user_name="me",

@@ -1,6 +1,5 @@
 import time
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies import ProcessingStrategy
@@ -32,7 +31,7 @@ class OffPeakProcessingStrategy(ProcessingStrategy[KafkaPayload]):
     ) -> None:
         self.__next_step = next_step
         self.__metrics = metrics
-        self.__cached_result: Optional[bool] = None
+        self.__cached_result: bool | None = None
         self.__cached_at: float = 0.0
 
     def poll(self) -> None:
@@ -57,7 +56,7 @@ class OffPeakProcessingStrategy(ProcessingStrategy[KafkaPayload]):
 
         start = get_int_option("lw_deletions_offpeak_start", 0)
         end = get_int_option("lw_deletions_offpeak_end", 24) or 24
-        current_hour = datetime.now(timezone.utc).hour
+        current_hour = datetime.now(UTC).hour
 
         if start == end:
             result = False
@@ -77,5 +76,5 @@ class OffPeakProcessingStrategy(ProcessingStrategy[KafkaPayload]):
     def terminate(self) -> None:
         self.__next_step.terminate()
 
-    def join(self, timeout: Optional[float] = None) -> None:
+    def join(self, timeout: float | None = None) -> None:
         self.__next_step.join(timeout)

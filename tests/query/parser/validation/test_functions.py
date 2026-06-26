@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Mapping, Optional, Sequence, Type
+from collections.abc import Mapping, Sequence
 from unittest.mock import MagicMock
 
 import pytest
@@ -80,7 +80,7 @@ test_expressions = [
 def test_functions(
     default_validators: Mapping[str, FunctionCallValidator],
     entity_validators: Mapping[str, FunctionCallValidator],
-    exception: Optional[Type[InvalidExpressionException]],
+    exception: type[InvalidExpressionException] | None,
 ) -> None:
     fn_cached = functions.default_validators
     functions.default_validators = default_validators
@@ -89,7 +89,7 @@ def test_functions(
     entity_return.return_value = entity_validators
     events_entity = get_entity(EntityKey.EVENTS)
     cached = events_entity.get_function_call_validators
-    setattr(events_entity, "get_function_call_validators", entity_return)
+    events_entity.get_function_call_validators = entity_return  # type: ignore[method-assign]
     data_source = QueryEntity(EntityKey.EVENTS, ColumnSet([]))
 
     expression = FunctionCall(
@@ -102,7 +102,7 @@ def test_functions(
             FunctionCallsValidator().validate(expression, data_source)
 
     # TODO: This should use fixture to do this
-    setattr(events_entity, "get_function_call_validators", cached)
+    events_entity.get_function_call_validators = cached  # type: ignore[method-assign]
     functions.default_validators = fn_cached
 
 

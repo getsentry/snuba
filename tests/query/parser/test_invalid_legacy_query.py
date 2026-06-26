@@ -1,4 +1,5 @@
-from typing import Any, MutableMapping, Type
+from collections.abc import MutableMapping
+from typing import Any
 
 import pytest
 from snuba_sdk.legacy import json_to_snql
@@ -28,7 +29,7 @@ test_cases = [
 @pytest.mark.parametrize("query_body, expected_exception", test_cases)
 def test_failures(
     query_body: MutableMapping[str, Any],
-    expected_exception: Type[InvalidQueryException],
+    expected_exception: type[InvalidQueryException],
 ) -> None:
     with pytest.raises(expected_exception):
         json_to_snql(query_body, "events")

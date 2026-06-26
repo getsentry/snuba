@@ -1,5 +1,5 @@
+from collections.abc import Sequence
 from datetime import datetime, timedelta
-from typing import Sequence
 
 import pytest
 from sentry_options.testing import override_options

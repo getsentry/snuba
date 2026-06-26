@@ -1,5 +1,5 @@
 import logging
-from typing import Iterable, Optional
+from collections.abc import Iterable
 
 from snuba.clickhouse.http import JSONRow
 from snuba.clickhouse.native import ClickhousePool
@@ -33,11 +33,11 @@ class SingleTableBulkLoader(BulkLoader):
     def __validate_table(self, ignore_existing_data: bool) -> None:
         clickhouse_tables = self.__clickhouse.execute("show tables").results
         if (self.__dest_table,) not in clickhouse_tables:
-            raise ValueError("Destination table %s does not exists" % self.__dest_table)
+            raise ValueError(f"Destination table {self.__dest_table} does not exists")
 
         if not ignore_existing_data:
             table_content = self.__clickhouse.execute(
-                "select count(*) from %s" % self.__dest_table
+                f"select count(*) from {self.__dest_table}"
             ).results
             if table_content != [(0,)]:
                 raise ValueError("Destination Table is not empty")
@@ -46,7 +46,7 @@ class SingleTableBulkLoader(BulkLoader):
         self,
         writer: BufferedWriterWrapper[JSONRow, WriterTableRow],
         ignore_existing_data: bool,
-        progress_callback: Optional[ProgressCallback],
+        progress_callback: ProgressCallback | None,
     ) -> None:
         self.__validate_table(ignore_existing_data)
         descriptor = self.__source.get_descriptor()
@@ -66,7 +66,7 @@ class SingleTableBulkLoader(BulkLoader):
         self,
         writer: BatchWriter[bytes],
         ignore_existing_data: bool,
-        progress_callback: Optional[ProgressCallback],
+        progress_callback: ProgressCallback | None,
     ) -> None:
         self.__validate_table(ignore_existing_data)
         descriptor = self.__source.get_descriptor()

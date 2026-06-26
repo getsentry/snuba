@@ -7,7 +7,8 @@ return an exception to the user but don't crash the clickhouse query node
 """
 
 import logging
-from typing import Any, Dict, Sequence, cast
+from collections.abc import Sequence
+from typing import Any, cast
 
 from snuba.clickhouse.query import Query
 from snuba.query.exceptions import InvalidQueryException
@@ -40,7 +41,7 @@ class UniqInSelectAndHavingProcessor(ClickhouseQueryProcessor):
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         having_clause = query.get_having()
         if not having_clause:
-            return None
+            return
         selected_columns = query.get_selected_columns()
         uniq_matcher = Param("function", FunctionCallMatch(String("uniq")))
         found_functions = []
@@ -59,9 +60,8 @@ class UniqInSelectAndHavingProcessor(ClickhouseQueryProcessor):
                 )
                 if should_throw:
                     raise error
-                else:
-                    logging.warning(
-                        "Aggregation is in HAVING clause but not SELECT",
-                        exc_info=True,
-                        extra=cast(Dict[str, Any], error.to_dict()),
-                    )
+                logging.warning(
+                    "Aggregation is in HAVING clause but not SELECT",
+                    exc_info=True,
+                    extra=cast(dict[str, Any], error.to_dict()),
+                )

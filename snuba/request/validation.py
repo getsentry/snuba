@@ -3,7 +3,8 @@ from __future__ import annotations
 import random
 import textwrap
 import uuid
-from typing import Any, Dict, MutableMapping, Optional, Protocol, Type, Union
+from collections.abc import MutableMapping
+from typing import Any, Protocol
 
 import sentry_sdk
 
@@ -43,16 +44,16 @@ class Parser(Protocol):
         request_parts: RequestParts,
         settings: QuerySettings,
         dataset: Dataset,
-        custom_processing: Optional[CustomProcessors] = ...,
-    ) -> Union[Query, CompositeQuery[LogicalDataSource]]: ...
+        custom_processing: CustomProcessors | None = ...,
+    ) -> Query | CompositeQuery[LogicalDataSource]: ...
 
 
 def parse_snql_query(
     request_parts: RequestParts,
     settings: QuerySettings,
     dataset: Dataset,
-    custom_processing: Optional[CustomProcessors] = None,
-) -> Union[Query, CompositeQuery[LogicalDataSource]]:
+    custom_processing: CustomProcessors | None = None,
+) -> Query | CompositeQuery[LogicalDataSource]:
     return _parse_snql_query(request_parts.query["query"], dataset, custom_processing, settings)
 
 
@@ -60,8 +61,8 @@ def parse_mql_query(
     request_parts: RequestParts,
     settings: QuerySettings,
     dataset: Dataset,
-    custom_processing: Optional[CustomProcessors] = None,
-) -> Union[Query, CompositeQuery[LogicalDataSource]]:
+    custom_processing: CustomProcessors | None = None,
+) -> Query | CompositeQuery[LogicalDataSource]:
     return _parse_mql_query(
         request_parts.query["query"],
         request_parts.query["mql_context"],
@@ -77,15 +78,14 @@ def _consistent_override(original_setting: bool, referrer: str) -> bool:
         referrers_override = consistent_config.split(";")
         for config in referrers_override:
             referrer_config, percentage = config.split("=")
-            if referrer_config == referrer:
-                if random.random() > float(percentage):
-                    return False
+            if referrer_config == referrer and random.random() > float(percentage):
+                return False
 
     return original_setting
 
 
 def update_attribution_info(
-    request_parts: RequestParts, referrer: str, query_project_id: Optional[int]
+    request_parts: RequestParts, referrer: str, query_project_id: int | None
 ) -> dict[str, Any]:
     attribution_info = dict(request_parts.attribution_info)
 
@@ -100,14 +100,14 @@ def update_attribution_info(
 
 
 def build_request(
-    body: Dict[str, Any],
+    body: dict[str, Any],
     parser: Parser,
-    settings_class: Union[Type[HTTPQuerySettings], Type[SubscriptionQuerySettings]],
+    settings_class: type[HTTPQuerySettings] | type[SubscriptionQuerySettings],
     schema: RequestSchema,
     dataset: Dataset,
     timer: Timer,
     referrer: str,
-    custom_processing: Optional[CustomProcessors] = None,
+    custom_processing: CustomProcessors | None = None,
 ) -> Request:
     with sentry_sdk.start_span(description="build_request", op="validate") as span:
         try:
@@ -191,7 +191,7 @@ def _get_referrer(request_parts: RequestParts, referrer: str) -> str:
 
 
 def _get_settings_object(
-    settings_class: Type[HTTPQuerySettings] | Type[SubscriptionQuerySettings],
+    settings_class: type[HTTPQuerySettings] | type[SubscriptionQuerySettings],
     request_parts: RequestParts,
     referrer: str,
 ) -> HTTPQuerySettings | SubscriptionQuerySettings:
@@ -205,12 +205,12 @@ def _get_settings_object(
         # TODO: referrer probably doesn't need to be passed in, it should be from the body
         query_settings["referrer"] = referrer
         # the parameters accept either `str` or `bool` but we pass in `str | bool`
-        return settings_class(**query_settings)  # type: ignore
-    elif settings_class == SubscriptionQuerySettings:
+        return settings_class(**query_settings)  # type: ignore[arg-type]
+    if settings_class == SubscriptionQuerySettings:
         return settings_class(
             consistent=_consistent_override(True, referrer),
         )
-    return None  # type: ignore
+    return None  # type: ignore[return-value]
 
 
 def _get_project_id(query: Query | CompositeQuery[LogicalDataSource]) -> int | None:

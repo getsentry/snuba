@@ -3,11 +3,12 @@ from __future__ import annotations
 import logging
 import random
 import uuid
+from collections.abc import Mapping, MutableMapping, MutableSequence
 from dataclasses import dataclass
 from functools import partial
 from hashlib import md5
 from threading import Lock
-from typing import Any, Mapping, MutableMapping, MutableSequence, Optional, Union, cast
+from typing import Any, cast
 
 import rapidjson
 import sentry_sdk
@@ -120,7 +121,7 @@ logger = logging.getLogger("snuba.query")
 
 
 def update_query_metadata_and_stats(
-    query: Union[Query, CompositeQuery[Table]],
+    query: Query | CompositeQuery[Table],
     sql: str,
     stats: MutableMapping[str, Any],
     query_metadata_list: MutableSequence[ClickhouseQueryMetadata],
@@ -128,9 +129,9 @@ def update_query_metadata_and_stats(
     trace_id: str,
     status: QueryStatus,
     request_status: Status,
-    profile_data: Optional[snuba_queries_v1._QueryMetadataResultProfileObject] = None,
-    error_code: Optional[int] = None,
-    triggered_rate_limiter: Optional[str] = None,
+    profile_data: snuba_queries_v1._QueryMetadataResultProfileObject | None = None,
+    error_code: int | None = None,
+    triggered_rate_limiter: str | None = None,
 ) -> MutableMapping[str, Any]:
     """
     If query logging is enabled then logs details about the query and its status, as
@@ -168,7 +169,7 @@ def execute_query(
     # as the execute method depends on it. Otherwise we can make this
     # file rely either entirely on clickhouse query or entirely on
     # the formatter.
-    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    clickhouse_query: Query | CompositeQuery[Table],
     query_settings: QuerySettings,
     formatted_query: FormattedQuery,
     reader: Reader,
@@ -231,7 +232,7 @@ def _get_cache_partition(reader: Reader) -> Cache[Result]:
 
 @with_span(op="function")
 def execute_query_with_query_id(
-    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    clickhouse_query: Query | CompositeQuery[Table],
     query_settings: QuerySettings,
     formatted_query: FormattedQuery,
     reader: Reader,
@@ -286,7 +287,7 @@ def execute_query_with_query_id(
 
 @with_span(op="function")
 def execute_query_with_readthrough_caching(
-    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    clickhouse_query: Query | CompositeQuery[Table],
     query_settings: QuerySettings,
     formatted_query: FormattedQuery,
     reader: Reader,
@@ -376,9 +377,9 @@ def _query_settings_override(option: str, name: str) -> Mapping[str, Any]:
 
 
 def _get_query_settings_from_config(
-    override_prefix: Optional[str],
+    override_prefix: str | None,
     async_override: bool,
-    referrer: Optional[str],
+    referrer: str | None,
 ) -> MutableMapping[str, Any]:
     """
     Helper function to get the query settings from sentry-options. Order of
@@ -414,7 +415,7 @@ def _get_query_settings_from_config(
 
 
 def _raw_query(
-    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    clickhouse_query: Query | CompositeQuery[Table],
     query_settings: QuerySettings,
     attribution_info: AttributionInfo,
     dataset_name: str,
@@ -425,7 +426,7 @@ def _raw_query(
     timer: Timer,
     # NOTE: This variable is a piece of state which is updated and used outside this function
     stats: MutableMapping[str, Any],
-    trace_id: Optional[str] = None,
+    trace_id: str | None = None,
     robust: bool = False,
 ) -> QueryResult:
     """
@@ -472,7 +473,7 @@ def _raw_query(
         sql=sql,
         stats=stats,
         query_settings=clickhouse_query_settings,
-        trace_id=trace_id,
+        trace_id=cast(str, trace_id),
     )
 
     try:
@@ -500,23 +501,22 @@ def _raw_query(
         elif isinstance(cause, ClickhouseError):
             error_code = cause.code
             status = get_query_status_from_error_codes(error_code)
-            if error_code == ErrorCodes.TOO_MANY_BYTES:
-                # Only treat as rate limiting if the limit was set by allocation policy
-                if stats.get("max_bytes_to_read_set_by_policy", False):
-                    calculated_cause = RateLimitExceeded(
-                        "Query scanned more than the allocated amount of bytes",
-                        quota_allowance=stats["quota_allowance"],
-                    )
-                    status = QueryStatus.RATE_LIMITED
+            # Only treat as rate limiting if the limit was set by allocation policy
+            if error_code == ErrorCodes.TOO_MANY_BYTES and stats.get(
+                "max_bytes_to_read_set_by_policy", False
+            ):
+                calculated_cause = RateLimitExceeded(
+                    "Query scanned more than the allocated amount of bytes",
+                    quota_allowance=stats["quota_allowance"],
+                )
+                status = QueryStatus.RATE_LIMITED
 
             with configure_scope() as scope:
                 fingerprint = ["{{default}}", str(cause.code), dataset_name]
                 if error_code not in constants.CLICKHOUSE_SYSTEMATIC_FAILURES:
                     fingerprint.append(attribution_info.referrer)
                 scope.fingerprint = fingerprint
-        elif isinstance(cause, TimeoutError):
-            status = QueryStatus.TIMEOUT
-        elif isinstance(cause, ExecutionTimeoutError):
+        elif isinstance(cause, (TimeoutError, ExecutionTimeoutError)):
             status = QueryStatus.TIMEOUT
 
         with configure_scope() as scope:
@@ -544,7 +544,10 @@ def _raw_query(
         stats = update_with_status(
             status=QueryStatus.SUCCESS,
             request_status=get_request_status(),
-            profile_data=result["profile"],
+            profile_data=cast(
+                "snuba_queries_v1._QueryMetadataResultProfileObject | None",
+                result["profile"],
+            ),
         )
         return QueryResult(
             result,
@@ -617,7 +620,7 @@ def _record_bytes_scanned(
 
 
 def db_query(
-    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    clickhouse_query: Query | CompositeQuery[Table],
     query_settings: QuerySettings,
     attribution_info: AttributionInfo,
     dataset_name: str,
@@ -765,7 +768,7 @@ def db_query(
                 stats = dict(result.extra["stats"])
                 stats["sampling_tier"] = query_settings.get_sampling_tier()
                 result.extra["stats"] = stats
-            return result
+            return result  # noqa: B012 - intentional: all error paths above are caught into `error`, so this finally is the single terminal point after quota/bytes-scanned bookkeeping
         raise error or Exception("No error or result when running query, this should never happen")
 
 
@@ -799,8 +802,8 @@ def _add_quota_info(
 
 def _populate_query_status(
     summary: dict[str, Any],
-    rejection_quota_and_policy: Optional[_QuotaAndPolicy],
-    throttle_quota_and_policy: Optional[_QuotaAndPolicy],
+    rejection_quota_and_policy: _QuotaAndPolicy | None,
+    throttle_quota_and_policy: _QuotaAndPolicy | None,
 ) -> None:
     is_successful = "is_successful"
     is_rejected = "is_rejected"

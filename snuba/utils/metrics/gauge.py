@@ -1,5 +1,5 @@
 from threading import Lock
-from typing import Any, Optional
+from typing import Any
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.types import Tags
@@ -10,7 +10,7 @@ class Gauge:
         self,
         metrics: MetricsBackend,
         name: str,
-        tags: Optional[Tags] = None,
+        tags: Tags | None = None,
     ) -> None:
         self.__metrics = metrics
         self.__name = name
@@ -25,9 +25,9 @@ class Gauge:
 
     def __exit__(
         self,
-        type: Optional[Any] = None,
-        value: Optional[Any] = None,
-        traceback: Optional[Any] = None,
+        type: Any | None = None,
+        value: Any | None = None,
+        traceback: Any | None = None,
     ) -> None:
         self.decrement()
 
@@ -55,8 +55,8 @@ class ThreadSafeGauge(Gauge):
         self,
         metrics: MetricsBackend,
         name: str,
-        tags: Optional[Tags] = None,
-        lock: Optional[Lock] = None,
+        tags: Tags | None = None,
+        lock: Lock | None = None,
     ) -> None:
         if lock is None:
             lock = Lock()

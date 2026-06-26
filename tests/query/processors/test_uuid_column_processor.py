@@ -275,7 +275,7 @@ def test_uuid_column_processor(
         condition=expected,
     )
 
-    UUIDColumnProcessor(set(["column1", "column2"])).process_query(
+    UUIDColumnProcessor({"column1", "column2"}).process_query(
         unprocessed_query, HTTPQuerySettings()
     )
     assert unprocessed_query.get_selected_columns() == [
@@ -333,6 +333,6 @@ def test_invalid_uuid(unprocessed: Expression) -> None:
     )
 
     with pytest.raises(ColumnTypeError):
-        UUIDColumnProcessor(set(["column1", "column2"])).process_query(
+        UUIDColumnProcessor({"column1", "column2"}).process_query(
             unprocessed_query, HTTPQuerySettings()
         )

@@ -99,22 +99,15 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         item_types = set()
 
         # Handle TraceItemTableRequest
-        if isinstance(in_msg, TraceItemTableRequest):
-            if hasattr(in_msg, "trace_filters") and in_msg.trace_filters:
-                for trace_filter in in_msg.trace_filters:
-                    item_types.add(trace_filter.item_type)
-
-        # Handle TimeSeriesRequest
-        elif isinstance(in_msg, TimeSeriesRequest):
+        if isinstance(in_msg, (TraceItemTableRequest, TimeSeriesRequest)):
             if hasattr(in_msg, "trace_filters") and in_msg.trace_filters:
                 for trace_filter in in_msg.trace_filters:
                     item_types.add(trace_filter.item_type)
 
         # Handle GetTracesRequest
-        elif isinstance(in_msg, GetTracesRequest):
-            if hasattr(in_msg, "filters") and in_msg.filters:
-                for filter_item in in_msg.filters:
-                    item_types.add(filter_item.item_type)
+        elif isinstance(in_msg, GetTracesRequest) and hasattr(in_msg, "filters") and in_msg.filters:
+            for filter_item in in_msg.filters:
+                item_types.add(filter_item.item_type)
 
         # Fallback to meta.trace_item_type
         if (

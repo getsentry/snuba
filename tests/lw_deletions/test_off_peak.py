@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Generator
 from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
-from typing import Generator
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 import pytest
@@ -32,8 +32,8 @@ def _tomorrow_at(hour: int) -> datetime:
     """Return tomorrow at the given UTC hour. Always in the future so
     time_machine.travel moves the clock forward and the snuba.state
     memoize cache naturally expires."""
-    tomorrow = datetime.now(timezone.utc).date() + timedelta(days=1)
-    return datetime(tomorrow.year, tomorrow.month, tomorrow.day, hour, tzinfo=timezone.utc)
+    tomorrow = datetime.now(UTC).date() + timedelta(days=1)
+    return datetime(tomorrow.year, tomorrow.month, tomorrow.day, hour, tzinfo=UTC)
 
 
 def _make_message() -> Message[KafkaPayload]:
@@ -57,7 +57,7 @@ def _make_strategy(
 
 
 @contextmanager
-def _offpeak_config(start: int, end: int) -> Generator[None, None, None]:
+def _offpeak_config(start: int, end: int) -> Generator[None]:
     with override_options(
         "snuba",
         {

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import random
 import time
+from collections.abc import Callable
 from concurrent.futures import Future
 from threading import Thread
-from typing import Any, Callable
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -118,12 +119,12 @@ def test_short_circuit(backend: Cache[bytes]) -> None:
     assert backend.get(key) is None
 
     with assert_changes(lambda: function.call_count, 0, 1):
-        backend.get_readthrough(key, function, noop) == value
+        assert backend.get_readthrough(key, function, noop) == value
 
     assert backend.get(key) is None
 
     with assert_changes(lambda: function.call_count, 1, 2):
-        backend.get_readthrough(key, function, noop) == value
+        assert backend.get_readthrough(key, function, noop) == value
 
 
 @pytest.mark.redis_db
@@ -144,12 +145,12 @@ def test_get_readthrough(backend: Cache[bytes]) -> None:
     assert backend.get(key) is None
 
     with assert_changes(lambda: function.call_count, 0, 1):
-        backend.get_readthrough(key, function, noop) == value
+        assert backend.get_readthrough(key, function, noop) == value
 
     assert backend.get(key) == value
 
     with assert_does_not_change(lambda: function.call_count, 1):
-        backend.get_readthrough(key, function, noop) == value
+        assert backend.get_readthrough(key, function, noop) == value
 
 
 @pytest.mark.redis_db
@@ -172,7 +173,7 @@ def test_get_readthrough_set_wait(backend: Cache[bytes]) -> None:
 
     def function() -> bytes:
         time.sleep(1)
-        return f"{random.random()}".encode("utf-8")
+        return f"{random.random()}".encode()
 
     def worker() -> bytes:
         return backend.get_readthrough(key, function, noop)
@@ -208,9 +209,7 @@ def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
     with pytest.raises(ReadThroughCustomException) as excinfo:
         waiter.result()
 
-    # mypy infers excinfo.value as the ExceptionInfo TypeVar default rather than
-    # the locally-defined exception class, so .message is not visible to it.
-    assert excinfo.value.message == "error"  # type: ignore[attr-defined]
+    assert excinfo.value.message == "error"
 
 
 @pytest.mark.parametrize(
@@ -266,7 +265,9 @@ def test_set_fails_open(backend: Cache[bytes]) -> None:
     "error", [ResponseError("OOM command not allowed under OOM prevention."), RedisTimeoutError()]
 )
 def test_dont_record_expected_errors(backend: Cache[bytes], error: Exception) -> None:
-    with mock.patch.object(redis_client, "set", side_effect=error):
-        with mock.patch.object(sentry_sdk, "capture_exception") as capture_exception:
-            backend.get_readthrough("key", lambda: b"value", noop)
-            capture_exception.assert_not_called()
+    with (
+        mock.patch.object(redis_client, "set", side_effect=error),
+        mock.patch.object(sentry_sdk, "capture_exception") as capture_exception,
+    ):
+        backend.get_readthrough("key", lambda: b"value", noop)
+        capture_exception.assert_not_called()

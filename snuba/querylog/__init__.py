@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Mapping
 from random import random
-from typing import Any, Mapping, Optional, Union
+from typing import Any
 from uuid import UUID
 
 import sentry_sdk
@@ -13,7 +14,12 @@ from snuba import environment, settings, state
 from snuba.cogs.accountant import record_cogs
 from snuba.datasets.storage import StorageNotAvailable
 from snuba.query.exceptions import QueryPlanException
-from snuba.querylog.query_metadata import QueryStatus, SnubaQueryMetadata, Status
+from snuba.querylog.query_metadata import (
+    QueryStatus,
+    SnubaQueryMetadata,
+    Status,
+    get_request_status,
+)
 from snuba.request import Request
 from snuba.state.sentry_options import get_float_option
 from snuba.utils.metrics.timer import Timer
@@ -21,7 +27,6 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import QueryException, QueryResult
 
 metrics = MetricsWrapper(environment.metrics, "api")
-from snuba.querylog.query_metadata import get_request_status
 
 _ITEM_TYPE_TO_APP_FEATURE: dict[str, str] = {
     "TRACE_ITEM_TYPE_SPAN": "spans",
@@ -50,7 +55,7 @@ def _record_timer_metrics(
     request: Request,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
-    result: Union[QueryResult, QueryException, QueryPlanException],
+    result: QueryResult | QueryException | QueryPlanException,
 ) -> None:
     final = str(request.query.get_final())
     referrer = request.referrer or "none"
@@ -96,7 +101,7 @@ def _record_timer_metrics(
 
 def _record_bytes_scanned_metrics(
     query_metadata: SnubaQueryMetadata,
-    result: Union[QueryResult, QueryException, QueryPlanException],
+    result: QueryResult | QueryException | QueryPlanException,
 ) -> None:
     """
     Experimental metrics - trying to understand whether or not
@@ -123,7 +128,7 @@ def _record_bytes_scanned_metrics(
 def _record_cogs(
     request: Request,
     query_metadata: SnubaQueryMetadata,
-    result: Union[QueryResult, QueryException, QueryPlanException],
+    result: QueryResult | QueryException | QueryPlanException,
 ) -> None:
     """
     Record bytes scanned for the clickhouse compute of resource of a query.
@@ -190,7 +195,7 @@ def record_query(
     request: Request,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
-    result: Union[QueryResult, QueryException, QueryPlanException],
+    result: QueryResult | QueryException | QueryPlanException,
 ) -> None:
     """
     Records a request after it has been parsed and validated, whether
@@ -214,8 +219,8 @@ def record_query(
 
 def _add_tags(
     timer: Timer,
-    experiments: Optional[Mapping[str, Any]] = None,
-    metadata: Optional[SnubaQueryMetadata] = None,
+    experiments: Mapping[str, Any] | None = None,
+    metadata: SnubaQueryMetadata | None = None,
 ) -> None:
     if sentry_sdk.get_current_span():
         duration_group = timer.get_duration_group()
@@ -239,7 +244,7 @@ def _build_failed_request_dict(
     dataset: str,
     organization: int,
     request_status: Status,
-    referrer: Optional[str],
+    referrer: str | None,
     exception_name: str | None = None,
 ) -> snuba_queries_v1.Querylog:
     return {
@@ -273,7 +278,7 @@ def record_invalid_request(
     organization: int,
     timer: Timer,
     request_status: Status,
-    referrer: Optional[str],
+    referrer: str | None,
     exception_name: str | None = None,
 ) -> None:
     """
@@ -304,7 +309,7 @@ def record_error_building_request(
     organization: int,
     timer: Timer,
     request_status: Status,
-    referrer: Optional[str],
+    referrer: str | None,
     exception_name: str | None = None,
 ) -> None:
     """
@@ -332,7 +337,7 @@ def _record_failure_metric_with_status(
     status: QueryStatus,
     request_status: Status,
     timer: Timer,
-    referrer: Optional[str],
+    referrer: str | None,
     exception_name: str | None = None,
 ) -> None:
     # TODO: Revisit if recording some data for these queries in the querylog

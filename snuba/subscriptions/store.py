@@ -1,6 +1,6 @@
 import abc
 import time
-from typing import Iterable, Tuple
+from collections.abc import Iterable
 from uuid import UUID
 
 from snuba import environment
@@ -30,7 +30,7 @@ class SubscriptionDataStore(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def all(self) -> Iterable[Tuple[UUID, SubscriptionData]]:
+    def all(self) -> Iterable[tuple[UUID, SubscriptionData]]:
         """
         Fetches all `Subscriptions` from the store
         :return: An iterable of `Subscriptions`.
@@ -63,7 +63,7 @@ class RedisSubscriptionDataStore(SubscriptionDataStore):
         """
         self.client.hdel(self.__key, key.hex.encode("utf-8"))
 
-    def all(self) -> Iterable[Tuple[UUID, SubscriptionData]]:
+    def all(self) -> Iterable[tuple[UUID, SubscriptionData]]:
         """
         Fetches all subscriptions from the store.
         :return: An iterable of `Subscriptions`.

@@ -42,10 +42,8 @@ class TestEventsDataset:
         tag1, tag2 = hashed[0]
 
         event = clickhouse.execute(
-            (
-                f"SELECT replaceAll(toString(event_id), '-', '') FROM {table_name} WHERE has(_tags_hash_map, {tag1}) "
-                f"AND has(_tags_hash_map, {tag2})"
-            )
+            f"SELECT replaceAll(toString(event_id), '-', '') FROM {table_name} WHERE has(_tags_hash_map, {tag1}) "
+            f"AND has(_tags_hash_map, {tag2})"
         ).results
         assert len(event) == 1
         assert event[0][0] == self.event["data"]["id"]

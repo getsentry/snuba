@@ -1,5 +1,4 @@
 import os
-from typing import Optional
 from unittest.mock import patch
 
 import pytest
@@ -164,7 +163,7 @@ mega_cluster_test_data = [
 def test_should_use_mega_cluster(
     storage_set: StorageSetKey,
     logical_partition: int,
-    override_config: Optional[str],
+    override_config: str | None,
     expected: bool,
 ) -> None:
     override: dict[str, OptionValue] = (

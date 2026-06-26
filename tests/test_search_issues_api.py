@@ -1,6 +1,7 @@
 import uuid
+from collections.abc import Callable, MutableMapping
 from datetime import datetime, timedelta
-from typing import Any, Callable, MutableMapping, Tuple, Union
+from typing import Any
 from unittest.mock import Mock, patch
 
 import pytest
@@ -17,8 +18,10 @@ from tests.test_api import SimpleAPITest
 
 
 def base_insert_event(
-    now: datetime = datetime.now(),
-) -> Tuple[int, str, MutableMapping[str, Any]]:
+    now: datetime | None = None,
+) -> tuple[int, str, MutableMapping[str, Any]]:
+    if now is None:
+        now = datetime.now()
     return (
         2,
         "insert",
@@ -49,7 +52,7 @@ def base_insert_event(
 
 class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
     @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
+    def test_entity(self) -> str | tuple[str, str]:
         return "search_issues"
 
     @pytest.fixture
@@ -111,25 +114,25 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         occurrence_id = str(uuid.uuid4())
         group_id = 4
 
-        evt: MutableMapping[str, Any] = dict(
-            organization_id=1,
-            project_id=3,
-            event_id=str(uuid.uuid4().hex),
-            group_id=group_id,
-            primary_hash=str(uuid.uuid4().hex),
-            datetime=datetime.utcnow().isoformat() + "Z",
-            platform="other",
-            message="message",
-            data={"received": now.timestamp()},
-            occurrence_data=dict(
-                id=occurrence_id,
-                type=1,
-                issue_title="search me",
-                fingerprint=["one", "two"],
-                detection_time=now.timestamp(),
-            ),
-            retention_days=90,
-        )
+        evt: MutableMapping[str, Any] = {
+            "organization_id": 1,
+            "project_id": 3,
+            "event_id": str(uuid.uuid4().hex),
+            "group_id": group_id,
+            "primary_hash": str(uuid.uuid4().hex),
+            "datetime": datetime.utcnow().isoformat() + "Z",
+            "platform": "other",
+            "message": "message",
+            "data": {"received": now.timestamp()},
+            "occurrence_data": {
+                "id": occurrence_id,
+                "type": 1,
+                "issue_title": "search me",
+                "fingerprint": ["one", "two"],
+                "detection_time": now.timestamp(),
+            },
+            "retention_days": 90,
+        }
 
         assert self.events_storage
         write_unprocessed_events(self.events_storage, [evt])
@@ -196,25 +199,25 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
     def test_simple_search_query(self) -> None:
         now = datetime.now().replace(minute=0, second=0, microsecond=0)
 
-        evt: MutableMapping[str, Any] = dict(
-            organization_id=1,
-            project_id=2,
-            event_id=str(uuid.uuid4().hex),
-            group_id=3,
-            primary_hash=str(uuid.uuid4().hex),
-            datetime=datetime.utcnow().isoformat() + "Z",
-            platform="other",
-            message="message",
-            data={"received": now.timestamp()},
-            occurrence_data=dict(
-                id=str(uuid.uuid4().hex),
-                type=1,
-                issue_title="search me",
-                fingerprint=["one", "two"],
-                detection_time=now.timestamp(),
-            ),
-            retention_days=90,
-        )
+        evt: MutableMapping[str, Any] = {
+            "organization_id": 1,
+            "project_id": 2,
+            "event_id": str(uuid.uuid4().hex),
+            "group_id": 3,
+            "primary_hash": str(uuid.uuid4().hex),
+            "datetime": datetime.utcnow().isoformat() + "Z",
+            "platform": "other",
+            "message": "message",
+            "data": {"received": now.timestamp()},
+            "occurrence_data": {
+                "id": str(uuid.uuid4().hex),
+                "type": 1,
+                "issue_title": "search me",
+                "fingerprint": ["one", "two"],
+                "detection_time": now.timestamp(),
+            },
+            "retention_days": 90,
+        }
 
         assert self.events_storage
         write_unprocessed_events(self.events_storage, [evt])

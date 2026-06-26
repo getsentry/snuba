@@ -1,6 +1,7 @@
 import json
+from collections.abc import Callable, Generator, Mapping
 from datetime import UTC, datetime, timedelta
-from typing import Any, Callable, Generator, Mapping, Tuple, Union
+from typing import Any
 
 import pytest
 
@@ -16,7 +17,7 @@ RETENTION_DAYS = 90
 SNQL_ROUTE = "/generic_metrics/snql"
 
 
-def get_tags() -> Generator[Mapping[str, str], None, None]:
+def get_tags() -> Generator[Mapping[str, str]]:
     idx = 0
     mappings = {"environment": "112358", "release": "132134"}
     while True:
@@ -37,7 +38,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
         return self.app
 
     @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
+    def test_entity(self) -> str | tuple[str, str]:
         return "generic_metrics_sets"
 
     @pytest.fixture
@@ -167,7 +168,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
 @pytest.mark.redis_db
 class TestGenericMetricsApiCounters(TestGenericMetricsApiSets):
     @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
+    def test_entity(self) -> str | tuple[str, str]:
         return "generic_metrics_counters"
 
     @pytest.fixture
@@ -186,7 +187,7 @@ class TestGenericMetricsApiCounters(TestGenericMetricsApiSets):
 @pytest.mark.redis_db
 class TestGenericMetricsApiGauges(TestGenericMetricsApiSets):
     @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
+    def test_entity(self) -> str | tuple[str, str]:
         return "generic_metrics_gauges"
 
     @pytest.fixture
@@ -211,7 +212,7 @@ class TestGenericMetricsApiGauges(TestGenericMetricsApiSets):
 @pytest.mark.redis_db
 class TestGenericMetricsApiDistributions(TestGenericMetricsApiSets):
     @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
+    def test_entity(self) -> str | tuple[str, str]:
         return "generic_metrics_distributions"
 
     @pytest.fixture

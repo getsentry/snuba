@@ -1,6 +1,3 @@
-from typing import List
-
-
 class ParsingContext:
     """
     This class is passed around during the query parsing process
@@ -9,7 +6,7 @@ class ParsingContext:
     """
 
     def __init__(self) -> None:
-        self.__alias_cache: List[str] = []
+        self.__alias_cache: list[str] = []
 
     def add_alias(self, alias: str) -> None:
         self.__alias_cache.append(alias)

@@ -2,17 +2,13 @@ from __future__ import annotations
 
 import os
 from abc import ABC
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import UTC
 from typing import (
     Any,
-    Callable,
-    Dict,
-    List,
     NamedTuple,
-    Optional,
-    TypeAlias,
     TypedDict,
-    Union,
     cast,
     final,
 )
@@ -69,12 +65,10 @@ _SAMPLING_IN_STORAGE_PREFIX = "sampling_in_storage_"
 _START_ESTIMATION_MARK = "start_sampling_in_storage_estimation"
 _END_ESTIMATION_MARK = "end_sampling_in_storage_estimation"
 DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX = "StorageRouting"
-MetricsBackendType: TypeAlias = Callable[
-    [str, Union[int, float], Optional[Dict[str, str]], Optional[str]], None
-]
+MetricsBackendType = Callable[[str, int | float, dict[str, str] | None, str | None], None]
 CBRS_HASH = "cbrs"
-RoutedRequestType = Union[TimeSeriesRequest, TraceItemTableRequest]
-ClickhouseQuerySettings = Dict[str, Any]
+RoutedRequestType = TimeSeriesRequest | TraceItemTableRequest
+ClickhouseQuerySettings = dict[str, Any]
 
 
 class _OrgOverridableSetting(NamedTuple):
@@ -116,7 +110,7 @@ class RoutingContext:
     timer: Timer
     in_msg: ProtobufMessage
     query_id: str
-    query_result: Optional[QueryResult] = field(default=None)
+    query_result: QueryResult | None = field(default=None)
     extra_info: dict[str, Any] = field(default_factory=dict)
     allocation_policies_recommendations: dict[str, QuotaAllowance] = field(default_factory=dict)
     cluster_load_info: LoadInfo | None = field(default=None)
@@ -144,12 +138,12 @@ class TimeWindow:
         return (self.end_timestamp.seconds - self.start_timestamp.seconds) / 3600
 
     def __repr__(self) -> str:
-        from datetime import datetime, timezone
+        from datetime import datetime
 
-        start = datetime.fromtimestamp(self.start_timestamp.seconds, tz=timezone.utc).strftime(
+        start = datetime.fromtimestamp(self.start_timestamp.seconds, tz=UTC).strftime(
             "%Y-%m-%d %H:%M:%S"
         )
-        end = datetime.fromtimestamp(self.end_timestamp.seconds, tz=timezone.utc).strftime(
+        end = datetime.fromtimestamp(self.end_timestamp.seconds, tz=UTC).strftime(
             "%Y-%m-%d %H:%M:%S"
         )
 
@@ -218,7 +212,7 @@ def get_stats_dict(
 
 
 def _construct_hacky_querylog_payload(
-    strategy: "BaseRoutingStrategy", routing_decision: RoutingDecision
+    strategy: BaseRoutingStrategy, routing_decision: RoutingDecision
 ) -> snuba_queries_v1.Querylog:
     cur_span = sentry_sdk.get_current_span()
     assert routing_decision.routing_context is not None
@@ -290,7 +284,9 @@ class StrategyData(ConfigurableComponentData):
 
 
 class BaseRoutingStrategy(ConfigurableComponent, ABC):
-    def __init__(self, default_config_overrides: dict[str, Any] = {}) -> None:
+    def __init__(self, default_config_overrides: dict[str, Any] | None = None) -> None:
+        if default_config_overrides is None:
+            default_config_overrides = {}
         self._default_config_definitions = [
             RoutingStrategyConfig(
                 name="some_default_config",
@@ -324,12 +320,11 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
 
         if tier_int == 512:
             return Tier.TIER_512
-        elif tier_int == 64:
+        if tier_int == 64:
             return Tier.TIER_64
-        elif tier_int == 8:
+        if tier_int == 8:
             return Tier.TIER_8
-        else:
-            return Tier.TIER_1
+        return Tier.TIER_1
 
     def additional_config_definitions(self) -> list[Configuration]:
         return self._overridden_additional_config_definitions
@@ -349,7 +344,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         )
 
     @classmethod
-    def create_minimal_instance(cls, resource_identifier: str) -> "ConfigurableComponent":
+    def create_minimal_instance(cls, resource_identifier: str) -> ConfigurableComponent:
         return cls(
             default_config_overrides={},
         )
@@ -408,7 +403,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         metrics_backend_func: MetricsBackendType,
         name: str,
         value: float | int,
-        tags: Dict[str, str] | None = None,
+        tags: dict[str, str] | None = None,
     ) -> None:
         name = _SAMPLING_IN_STORAGE_PREFIX + name
         metrics_backend_func(name, value, tags, None)
@@ -442,7 +437,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         return overrides
 
     def _get_combined_allocation_policies_recommendations(
-        self, policy_recommendations: List[QuotaAllowance]
+        self, policy_recommendations: list[QuotaAllowance]
     ) -> CombinedAllocationPoliciesRecommendations:
         # decides how to combine the recommendations from the allocation policies
         settings = {}
@@ -712,7 +707,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
     def to_dict(self) -> StrategyData:
         base_data = super().to_dict()
         policies = self.get_allocation_policies() + self.get_delete_allocation_policies()
-        return StrategyData(**base_data, policies_data=[policy.to_dict() for policy in policies])  # type: ignore
+        return StrategyData(**base_data, policies_data=[policy.to_dict() for policy in policies])
 
 
 import_submodules_in_directory(

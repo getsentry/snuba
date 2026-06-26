@@ -1,5 +1,5 @@
 import logging
-from typing import Iterable, List, Mapping, Set, Union
+from collections.abc import Iterable, Mapping
 
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_inspector import TablesCollector
@@ -21,7 +21,7 @@ from snuba.querylog.query_metadata import (
 logger = logging.getLogger(__name__)
 
 
-def _get_all_columns(all_columns: Mapping[str, Set[ColumnExpr]]) -> Columnset:
+def _get_all_columns(all_columns: Mapping[str, set[ColumnExpr]]) -> Columnset:
     return {
         f"{table_name}.{c.column_name}"
         for table_name, columns in all_columns.items()
@@ -33,7 +33,7 @@ def _get_columns_from_expression(expression: Expression, table_name: str) -> Col
     return {f"{table_name}.{c.column_name}" for c in expression if isinstance(c, ColumnExpr)}
 
 
-def _list_columns(expressions: Mapping[str, Set[Expression]]) -> Columnset:
+def _list_columns(expressions: Mapping[str, set[Expression]]) -> Columnset:
     ret = set()
     for table_name, expression_set in expressions.items():
         for e in expression_set:
@@ -42,7 +42,7 @@ def _list_columns(expressions: Mapping[str, Set[Expression]]) -> Columnset:
     return ret
 
 
-def _flatten_col_set(nested_sets: Iterable[Set[str]]) -> Columnset:
+def _flatten_col_set(nested_sets: Iterable[set[str]]) -> Columnset:
     ret = set()
     for s in nested_sets:
         ret |= s
@@ -52,14 +52,14 @@ def _flatten_col_set(nested_sets: Iterable[Set[str]]) -> Columnset:
 def _list_columns_in_condition(condition_expression: Mapping[str, Expression]) -> Columnset:
     return _flatten_col_set(
         [
-            {c for c in _get_columns_from_expression(expression, table_name)}
+            set(_get_columns_from_expression(expression, table_name))
             for table_name, expression in condition_expression.items()
         ]
     )
 
 
 def _list_mappings(condition_expression: Mapping[str, Expression]) -> Columnset:
-    nested_sets: List[Set[str]] = []
+    nested_sets: list[set[str]] = []
     for table_name, expression in condition_expression.items():
         ret = set()
         for e in expression:
@@ -74,7 +74,7 @@ def _list_mappings(condition_expression: Mapping[str, Expression]) -> Columnset:
 
 
 def generate_profile(
-    query: Union[Query, CompositeQuery[Table]],
+    query: Query | CompositeQuery[Table],
 ) -> ClickhouseQueryProfile:
     """
     Takes a Physical query in, analyzes it and produces the
@@ -88,7 +88,7 @@ def generate_profile(
     try:
         return ClickhouseQueryProfile(
             time_range=collector.get_max_time_range(),
-            table=",".join(sorted([t for t in collector.get_tables()])),
+            table=",".join(sorted(collector.get_tables())),
             all_columns=_get_all_columns(collector.get_all_raw_columns()),
             multi_level_condition=collector.has_complex_condition(),
             where_profile=FilterProfile(

@@ -1,6 +1,6 @@
+from collections.abc import MutableMapping
 from dataclasses import replace
 from datetime import datetime
-from typing import MutableMapping, Optional, Set
 
 from snuba import environment, settings
 from snuba.clickhouse.query import Query
@@ -32,7 +32,7 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
     have to remove those rows manually or to run the query in FINAL mode.
     """
 
-    def __init__(self, project_column: str, replacer_state_name: Optional[str]) -> None:
+    def __init__(self, project_column: str, replacer_state_name: str | None) -> None:
         self.__project_column = project_column
         self.__groups_column = "group_id"
         # This is used to allow us to keep the replacement state in redis for multiple
@@ -137,7 +137,7 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
         """
         Initialize tags dictionary for DataDog metrics.
         """
-        tags = {replacement_type: "True" for replacement_type in flags.replacement_types}
+        tags = dict.fromkeys(flags.replacement_types, "True")
         tags["referrer"] = query_settings.referrer
         return tags
 
@@ -153,7 +153,7 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
     def _query_overlaps_replacements(
         self,
         query: Query,
-        latest_replacement_time: Optional[datetime],
+        latest_replacement_time: datetime | None,
     ) -> bool:
         """
         Given a Query and the latest replacement time for any project
@@ -165,7 +165,7 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
             latest_replacement_time > query_from if latest_replacement_time and query_from else True
         )
 
-    def _groups_to_exclude(self, query: Query, group_ids_to_exclude: Set[int]) -> Set[int]:
+    def _groups_to_exclude(self, query: Query, group_ids_to_exclude: set[int]) -> set[int]:
         """
         Given a Query and the group ids to exclude for any project
         this query touches, returns the intersection of the group ids

@@ -26,7 +26,7 @@ class TestState:
         set_config_auto_replacements_bypass_projects([1], self.proj1_add_time)
         assert set(
             get_config_auto_replacements_bypass_projects(self.proj1_expiry - timedelta(minutes=1))
-        ) == set([1])
+        ) == {1}
 
     @pytest.mark.redis_db
     def test_project_expires_after_expiry(self) -> None:
@@ -46,10 +46,10 @@ class TestState:
         set_config_auto_replacements_bypass_projects([2], self.proj2_add_time)
         assert set(
             get_config_auto_replacements_bypass_projects(self.proj1_expiry - timedelta(minutes=1))
-        ) == set([1, 2])
+        ) == {1, 2}
         assert set(
             get_config_auto_replacements_bypass_projects(self.proj1_expiry + timedelta(minutes=1))
-        ) == set([2])
+        ) == {2}
 
     @pytest.mark.redis_db
     def test_expiry_does_not_update(self) -> None:
@@ -79,13 +79,16 @@ class TestState:
         # project 1 expires after 5 minutes
         assert set(
             get_config_auto_replacements_bypass_projects(self.proj1_add_time + timedelta(minutes=6))
-        ) == set([2])
+        ) == {2}
         # project 2 expires at 10 minutes
         assert set(
             get_config_auto_replacements_bypass_projects(self.proj2_add_time + timedelta(minutes=9))
-        ) == set([2])
-        assert set(
-            get_config_auto_replacements_bypass_projects(
-                self.proj2_add_time + timedelta(minutes=11)
+        ) == {2}
+        assert (
+            set(
+                get_config_auto_replacements_bypass_projects(
+                    self.proj2_add_time + timedelta(minutes=11)
+                )
             )
-        ) == set([])
+            == set()
+        )

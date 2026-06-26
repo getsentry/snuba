@@ -15,16 +15,10 @@ import importlib
 import logging
 import os
 from collections import deque
-from datetime import datetime, timezone
+from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime
 from typing import (
-    Deque,
-    Mapping,
-    Optional,
-    Sequence,
-    Tuple,
-    Type,
     TypedDict,
-    Union,
     cast,
 )
 
@@ -44,10 +38,10 @@ from snuba.processor import InsertBatch
 
 logger = logging.getLogger(__name__)
 
-processor: Optional[DatasetMessageProcessor] = None
+processor: DatasetMessageProcessor | None = None
 
 
-def initialize_processor(module: Optional[str] = None, classname: Optional[str] = None) -> None:
+def initialize_processor(module: str | None = None, classname: str | None = None) -> None:
     if not module or not classname:
         module = os.environ.get("RUST_SNUBA_PROCESSOR_MODULE")
         classname = os.environ.get("RUST_SNUBA_PROCESSOR_CLASSNAME")
@@ -56,7 +50,7 @@ def initialize_processor(module: Optional[str] = None, classname: Optional[str] 
         return
 
     module_object = importlib.import_module(module)
-    Processor: Type[DatasetMessageProcessor] = getattr(module_object, classname)
+    Processor: type[DatasetMessageProcessor] = getattr(module_object, classname)
 
     global processor
     processor = Processor()
@@ -65,15 +59,15 @@ def initialize_processor(module: Optional[str] = None, classname: Optional[str] 
 initialize_processor()
 
 
-def ensure_utc(value: Optional[datetime]) -> Optional[datetime]:
+def ensure_utc(value: datetime | None) -> datetime | None:
     if value and value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
+        return value.replace(tzinfo=UTC)
     return value
 
 
 def process_rust_message(
     message: bytes, offset: int, partition: int, timestamp: datetime
-) -> Tuple[Sequence[bytes], Optional[datetime], Optional[datetime]]:
+) -> tuple[Sequence[bytes], datetime | None, datetime | None]:
     if processor is None:
         raise RuntimeError("processor not yet initialized")
     rv = processor.process_message(
@@ -93,26 +87,26 @@ def process_rust_message(
     )
 
 
-Committable = Mapping[Tuple[str, int], int]
+Committable = Mapping[tuple[str, int], int]
 
 MessageTimestamp = datetime
 
-ReturnValue = Tuple[Sequence[bytes], Optional[datetime], Optional[datetime]]
+ReturnValue = tuple[Sequence[bytes], datetime | None, datetime | None]
 
-ReturnValueWithCommittable = Tuple[ReturnValue, MessageTimestamp, Committable]
+ReturnValueWithCommittable = tuple[ReturnValue, MessageTimestamp, Committable]
 
 
 def wrap_process_message(
     message: Message[bytes],
-) -> Union[FilteredPayload, ReturnValue]:
+) -> FilteredPayload | ReturnValue:
     value = message.value
     assert isinstance(value, BrokerValue)
     try:
         return process_rust_message(
             value.payload, value.offset, value.partition.index, value.timestamp
         )
-    except Exception:
-        raise InvalidMessage(value.partition, value.offset)
+    except Exception as e:
+        raise InvalidMessage(value.partition, value.offset) from e
 
 
 class TransformedMessages:
@@ -121,7 +115,7 @@ class TransformedMessages:
     """
 
     def __init__(self) -> None:
-        self.messages: Deque[Message[ReturnValue]] = deque()
+        self.messages: deque[Message[ReturnValue]] = deque()
 
     def append(self, value: Message[ReturnValue]) -> None:
         self.messages.append(value)
@@ -135,7 +129,7 @@ class TransformedMessages:
         return messages
 
 
-class Next(ProcessingStrategy[Union[FilteredPayload, ReturnValue]]):
+class Next(ProcessingStrategy[FilteredPayload | ReturnValue]):
     """
     Messages are passed to this step from RunTaskWithMultiprocessing,
     and they are added to transformed messages. They are removed and
@@ -145,7 +139,7 @@ class Next(ProcessingStrategy[Union[FilteredPayload, ReturnValue]]):
     def __init__(self, transformed_messages: TransformedMessages) -> None:
         self.__transformed_messages = transformed_messages
 
-    def submit(self, message: Message[Union[FilteredPayload, ReturnValue]]) -> None:
+    def submit(self, message: Message[FilteredPayload | ReturnValue]) -> None:
         # XXX: Filtered payload are created by the multiprocessing strategy in place
         # of invalid messages so their offsets get committed. They are not currently
         # supported in the hybrid consumer. This means the offsets of invalid messages
@@ -157,7 +151,7 @@ class Next(ProcessingStrategy[Union[FilteredPayload, ReturnValue]]):
     def poll(self) -> None:
         pass
 
-    def join(self, timeout: Optional[float] = None) -> None:
+    def join(self, timeout: float | None = None) -> None:
         pass
 
     def close(self) -> None:
@@ -170,9 +164,10 @@ class Next(ProcessingStrategy[Union[FilteredPayload, ReturnValue]]):
 DEFAULT_BLOCK_SIZE = int(32 * 1e6)
 
 
-InvalidMessageMetadata = TypedDict(
-    "InvalidMessageMetadata", {"topic": str, "partition": int, "offset": int}
-)
+class InvalidMessageMetadata(TypedDict):
+    topic: str
+    partition: int
+    offset: int
 
 
 class RunPythonMultiprocessing:
@@ -189,7 +184,7 @@ class RunPythonMultiprocessing:
         transform_fn = wrap_process_message
         self.__pool = MultiprocessingPool(concurrency)
         # Message is carried over if we got MessageRejected from the next step
-        self.__carried_over_message: Optional[Message[bytes]] = None
+        self.__carried_over_message: Message[bytes] | None = None
 
         self.__inner = RunTaskWithMultiprocessing(
             transform_fn,
@@ -208,7 +203,7 @@ class RunPythonMultiprocessing:
         offset: int,
         partition: int,
         timestamp: datetime,
-    ) -> Tuple[int, Optional[InvalidMessageMetadata]]:
+    ) -> tuple[int, InvalidMessageMetadata | None]:
         # HACK: There is probably a better way to handle exceptions in Rust
         # 0 means message successfully submitted
         # 1 means backpressure
@@ -266,7 +261,7 @@ class RunPythonMultiprocessing:
 
         return self.__get_transformed_messages()
 
-    def join(self, timeout: Optional[float] = None) -> Sequence[ReturnValueWithCommittable]:
+    def join(self, timeout: float | None = None) -> Sequence[ReturnValueWithCommittable]:
         """
         Close and join inner strategy. Returns all available transformed rows
         """

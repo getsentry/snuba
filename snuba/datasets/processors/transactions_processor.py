@@ -1,9 +1,11 @@
+import contextlib
 import copy
 import logging
 import numbers
 import uuid
+from collections.abc import Mapping, MutableMapping
 from datetime import datetime
-from typing import Any, Dict, Mapping, MutableMapping, Optional, Tuple
+from typing import Any
 
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
@@ -40,8 +42,8 @@ metrics = MetricsWrapper(environment.metrics, "transactions.processor")
 UNKNOWN_SPAN_STATUS = 2
 GROUP_IDS_LIMIT = 10
 
-EventDict = Dict[str, Any]
-SpanDict = Dict[str, Any]
+EventDict = dict[str, Any]
+SpanDict = dict[str, Any]
 RetentionDays = int
 
 
@@ -54,7 +56,7 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         "replayId",
     }
 
-    def __extract_timestamp(self, field: int) -> Tuple[datetime, int]:
+    def __extract_timestamp(self, field: int) -> tuple[datetime, int]:
         # We are purposely using a naive datetime here to work with the rest of the codebase.
         # We can be confident that clients are only sending UTC dates.
         timestamp = _ensure_valid_date(datetime.utcfromtimestamp(field))
@@ -64,8 +66,8 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         return (timestamp, milliseconds)
 
     def _structure_and_validate_message(
-        self, message: Tuple[int, str, Dict[str, Any]]
-    ) -> Optional[Tuple[EventDict, RetentionDays]]:
+        self, message: tuple[int, str, dict[str, Any]]
+    ) -> tuple[EventDict, RetentionDays] | None:
         if not (isinstance(message, (list, tuple)) and len(message) >= 2):
             return None
 
@@ -159,12 +161,10 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
 
         replay_id = promoted_tags.get("replayId")
         if replay_id:
-            try:
+            # replay_id as a tag is not guarenteed to be UUID (user could set value in theory)
+            # so simply continue if not UUID.
+            with contextlib.suppress(ValueError):
                 processed["replay_id"] = str(uuid.UUID(replay_id))
-            except ValueError:
-                # replay_id as a tag is not guarenteed to be UUID (user could set value in theory)
-                # so simply continue if not UUID.
-                pass
 
         processed["dist"] = _unicodify(
             promoted_tags.get("sentry:dist", event_dict["data"].get("dist")),
@@ -326,7 +326,7 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         if processed["sdk_version"] == "":
             metrics.increment("missing_sdk_version")
 
-    def _process_span(self, span_dict: SpanDict) -> Optional[Tuple[str, int, float]]:
+    def _process_span(self, span_dict: SpanDict) -> tuple[str, int, float] | None:
         op = span_dict.get("op")
         group = span_dict.get("hash")
         exclusive_time = span_dict.get("exclusive_time")
@@ -440,8 +440,8 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         return sanitized_context
 
     def process_message(
-        self, message: Tuple[int, str, Dict[Any, Any]], metadata: KafkaMessageMetadata
-    ) -> Optional[ProcessedMessage]:
+        self, message: tuple[int, str, dict[Any, Any]], metadata: KafkaMessageMetadata
+    ) -> ProcessedMessage | None:
         event_dict, retention_days = self._structure_and_validate_message(message) or (
             None,
             None,

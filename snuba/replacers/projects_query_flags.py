@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import sys
 import time
+from collections.abc import Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, List, Mapping, MutableMapping, Optional, Sequence, Set, Tuple
+from typing import Any
 
 import sentry_sdk
 from redis.cluster import ClusterPipeline as StrictClusterPipeline
@@ -35,14 +36,14 @@ class ProjectsQueryFlags:
     """
 
     needs_final: bool
-    group_ids_to_exclude: Set[int]
-    replacement_types: Set[str]
-    latest_replacement_time: Optional[datetime]
+    group_ids_to_exclude: set[int]
+    replacement_types: set[str]
+    latest_replacement_time: datetime | None
 
     @staticmethod
     def set_project_needs_final(
         project_id: int,
-        state_name: Optional[ReplacerState],
+        state_name: ReplacerState | None,
         replacement_type: ReplacementType,
     ) -> None:
         key, type_key = ProjectsQueryFlags._build_project_needs_final_key_and_type_key(
@@ -57,7 +58,7 @@ class ProjectsQueryFlags:
     def set_project_exclude_groups(
         project_id: int,
         group_ids: Sequence[int],
-        state_name: Optional[ReplacerState],
+        state_name: ReplacerState | None,
         #  replacement type is just for metrics, not necessary for functionality
         replacement_type: ReplacementType,
     ) -> None:
@@ -112,7 +113,7 @@ class ProjectsQueryFlags:
 
     @classmethod
     def load_from_redis(
-        cls, project_ids: Sequence[int], state_name: Optional[ReplacerState]
+        cls, project_ids: Sequence[int], state_name: ReplacerState | None
     ) -> ProjectsQueryFlags:
         """
         Loads flags for given project ids.
@@ -149,13 +150,13 @@ class ProjectsQueryFlags:
             sentry_sdk.capture_exception(e)
             return cls(
                 needs_final=False,
-                group_ids_to_exclude=set([]),
-                replacement_types=set([]),
+                group_ids_to_exclude=set(),
+                replacement_types=set(),
                 latest_replacement_time=None,
             )
 
     @classmethod
-    def _process_redis_results(cls, results: List[Any], len_projects: int) -> ProjectsQueryFlags:
+    def _process_redis_results(cls, results: list[Any], len_projects: int) -> ProjectsQueryFlags:
         """
         Produces readable data from flattened list of Redis pipeline results.
 
@@ -210,8 +211,8 @@ class ProjectsQueryFlags:
 
     @staticmethod
     def _query_redis(
-        project_ids: Set[int],
-        state_name: Optional[ReplacerState],
+        project_ids: set[int],
+        state_name: ReplacerState | None,
         p: StrictClusterPipeline,
     ) -> None:
         """
@@ -259,7 +260,7 @@ class ProjectsQueryFlags:
 
     @staticmethod
     def _remove_stale_and_load_new_sorted_set_data(
-        p: StrictClusterPipeline, keys: List[str]
+        p: StrictClusterPipeline, keys: list[str]
     ) -> None:
         """
         Remove stale data per key according to TTL.
@@ -278,9 +279,9 @@ class ProjectsQueryFlags:
     @staticmethod
     def _process_latest_replacement(
         needs_final: bool,
-        needs_final_result: List[Any],
-        latest_exclude_groups_result: List[Any],
-    ) -> Optional[datetime]:
+        needs_final_result: list[Any],
+        latest_exclude_groups_result: list[Any],
+    ) -> datetime | None:
         """
         Process the relevant replacements data to look for the latest timestamp
         any replacement occured.
@@ -306,15 +307,15 @@ class ProjectsQueryFlags:
 
     @staticmethod
     def _build_project_needs_final_key_and_type_key(
-        project_id: int, state_name: Optional[ReplacerState]
-    ) -> Tuple[str, str]:
+        project_id: int, state_name: ReplacerState | None
+    ) -> tuple[str, str]:
         key = f"project_needs_final:{f'{state_name.value}:' if state_name else ''}{project_id}"
         return key, f"{key}-type"
 
     @staticmethod
     def _build_project_exclude_groups_key_and_type_key(
-        project_id: int, state_name: Optional[ReplacerState]
-    ) -> Tuple[str, str]:
+        project_id: int, state_name: ReplacerState | None
+    ) -> tuple[str, str]:
         key = f"project_exclude_groups:{f'{state_name.value}:' if state_name else ''}{project_id}"
         return key, f"{key}-type"
 

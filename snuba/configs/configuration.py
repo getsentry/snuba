@@ -1,7 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
-from typing import Any, Type, TypedDict, TypeVar, cast, final
+from typing import Any, TypedDict, TypeVar, cast, final
 
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.state import delete_config as delete_runtime_config
@@ -97,8 +97,12 @@ class Configuration:
             ],
         }
 
-    def to_config_dict(self, value: Any = None, params: dict[str, Any] = {}) -> dict[str, Any]:
+    def to_config_dict(
+        self, value: Any = None, params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """Returns a dict representation of a live Config."""
+        if params is None:
+            params = {}
         return {
             **self.__to_base_dict(),
             "value": value if value is not None else self.default,
@@ -233,7 +237,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
                 for key in config.param_types
                 if key not in params
             }
-        ) != dict():
+        ) != {}:
             raise InvalidConfig(
                 f"'{config_key}' missing required parameters: {diff} for {class_name}!"
             )
@@ -250,25 +254,24 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
                         # try casting to the right type, eg try int("10")
                         expected_type = config.param_types[param_name]
                         params[param_name] = expected_type(params[param_name])
-                    except Exception:
+                    except Exception as e:
                         raise InvalidConfig(
                             f"'{config_key}' parameter '{param_name}' needs to be of type"
                             f" {config.param_types[param_name].__name__} (not {type(params[param_name]).__name__})"
                             f" for {class_name}!"
-                        )
+                        ) from e
 
         # value isn't correct type
-        if value is not None:
-            if not isinstance(value, config.value_type):
-                try:
-                    # try casting to the right type
-                    config.value_type(value)
-                except Exception:
-                    raise InvalidConfig(
-                        f"'{config_key}' value needs to be of type"
-                        f" {config.value_type.__name__} (not {type(value).__name__})"
-                        f" for {class_name}!"
-                    )
+        if value is not None and not isinstance(value, config.value_type):
+            try:
+                # try casting to the right type
+                config.value_type(value)
+            except Exception as e:
+                raise InvalidConfig(
+                    f"'{config_key}' value needs to be of type"
+                    f" {config.value_type.__name__} (not {type(value).__name__})"
+                    f" for {class_name}!"
+                ) from e
 
         return config
 
@@ -287,7 +290,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         # key is "storage.policy.config" or "storage.policy.config.param1:val1,param2:val2"
         _, _, config_key, *params = key.split(".")
         # (config_key, params) is ("config", []) or ("config", ["param1:val1,param2:val2"])
-        params_dict = dict()
+        params_dict = {}
         if params:
             # convert ["param1:val1,param2:val2"] to {"param1": "val1", "param2": "val2"}
             [params_string] = params
@@ -308,11 +311,11 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         runtime_configs = get_all_runtime_configs(self._get_hash())
         definitions = self.config_definitions()
 
-        required_configs = set(
+        required_configs = {
             config_name
             for config_name, config_def in definitions.items()
             if not config_def.param_types
-        )
+        }
 
         detailed_configs: list[dict[str, Any]] = []
 
@@ -390,7 +393,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         - `"mystorage.MyAllocationPolicy.my_config.a:1,b:2"`    # sorted params
         """
         parameters = "."
-        for param in sorted(list(params.keys())):
+        for param in sorted(params.keys()):
             param_sanitized = self.__escape_delimiter_chars(param)
             value_sanitized = self.__escape_delimiter_chars(params[param])
             parameters += f"{param_sanitized}:{value_sanitized},"
@@ -420,7 +423,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
     def get_config_value(
         self,
         config_key: str,
-        params: dict[str, Any] = {},
+        params: dict[str, Any] | None = None,
         validate: bool = True,
     ) -> Any:
         """Returns value of a configuration on this ConfigurableComponent, or the default if none is set.
@@ -430,6 +433,8 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         legacy Redis runtime config and finally the code default, so values set
         the old way keep working during the transition.
         """
+        if params is None:
+            params = {}
         config_definition = (
             self._validate_config_params(config_key, params)
             if validate
@@ -449,10 +454,12 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         self,
         config_key: str,
         value: Any,
-        params: dict[str, Any] = {},
+        params: dict[str, Any] | None = None,
         user: str | None = None,
     ) -> None:
         """Sets a value of a configuration on this ConfigurableComponent."""
+        if params is None:
+            params = {}
         config_definition = self._validate_config_params(config_key, params, value)
         # ensure correct type is stored
         value = config_definition.value_type(value)
@@ -467,13 +474,15 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
     def delete_config_value(
         self,
         config_key: str,
-        params: dict[str, Any] = {},
+        params: dict[str, Any] | None = None,
         user: str | None = None,
     ) -> None:
         """
         Deletes an instance of an optional configuration on this ConfigurableComponent.
         If this function is run on a required configuration, it resets the value to default instead.
         """
+        if params is None:
+            params = {}
         self._validate_config_params(config_key, params)
         delete_runtime_config(
             key=self.__build_runtime_config_key(config_key, params),
@@ -499,15 +508,15 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         )
 
     @classmethod
-    def get_component_class(cls, namespace: str) -> Type["ConfigurableComponent"]:
+    def get_component_class(cls, namespace: str) -> type["ConfigurableComponent"]:
         return cast(
-            Type["ConfigurableComponent"],
+            type["ConfigurableComponent"],
             cls.class_from_name(f"{namespace}.{namespace}"),
         )
 
     @classmethod
-    def get_from_name(cls: Type[T], name: str) -> Type[T]:
-        return cast(Type[T], cls.class_from_name(f"{cls.component_namespace()}.{name}"))
+    def get_from_name(cls: type[T], name: str) -> type[T]:
+        return cast(type[T], cls.class_from_name(f"{cls.component_namespace()}.{name}"))
 
     @classmethod
     def create_minimal_instance(cls, resource_identifier: str) -> "ConfigurableComponent":
@@ -518,15 +527,17 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         """Returns all registered class names that belong to this component's namespace."""
         # If called on ConfigurableComponent itself, return all registered classes
         if cls is ConfigurableComponent:
-            return list(getattr(cls, "_registry").all_names())
+            return list(cls._registry.all_names())
 
         # For subclasses, return only classes in the same namespace
         namespaced_classes = []
-        for registered_cls in getattr(cls, "_registry").all_classes():
+        for registered_cls in cls._registry.all_classes():
             if (
                 hasattr(registered_cls, "component_namespace")
                 and registered_cls.component_namespace() == cls.component_namespace()
                 and registered_cls.config_key() != cls.config_key()
             ):
-                namespaced_classes.append(registered_cls.class_name())
+                namespaced_classes.append(
+                    cast("ConfigurableComponent", registered_cls).class_name()
+                )
         return namespaced_classes

@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from enum import Enum
 from threading import Lock
-from typing import Any, Optional, Tuple
+from typing import Any
 
 from snuba.state.sentry_options import get_mapped_float_option
 
@@ -33,14 +33,14 @@ class RateLimiter:
     window.
     """
 
-    def __init__(self, bucket: str, max_rate_per_sec: Optional[float] = None) -> None:
+    def __init__(self, bucket: str, max_rate_per_sec: float | None = None) -> None:
         self.__lock = Lock()
-        self.__bucket_epoch: Optional[int] = None
-        self.__bucket_attempts: Optional[int] = None
+        self.__bucket_epoch: int | None = None
+        self.__bucket_attempts: int | None = None
         self.__max_rate_per_sec = max_rate_per_sec
         self.__bucket = bucket
 
-    def __enter__(self) -> Tuple[RateLimitResult, int]:
+    def __enter__(self) -> tuple[RateLimitResult, int]:
         limit = (
             get_mapped_float_option(RATE_LIMIT_PER_SEC_OPTION, self.__bucket, 0.0)
             if not self.__max_rate_per_sec

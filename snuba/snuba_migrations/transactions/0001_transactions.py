@@ -1,4 +1,4 @@
-from typing import List, Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import (
     UUID,
@@ -16,7 +16,7 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 UNKNOWN_SPAN_STATUS = 2
 
-columns: List[Column[Modifiers]] = [
+columns: list[Column[Modifiers]] = [
     Column("project_id", UInt(64)),
     Column("event_id", UUID()),
     Column("trace_id", UUID()),

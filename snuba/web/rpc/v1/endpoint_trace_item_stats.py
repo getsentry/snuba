@@ -1,5 +1,3 @@
-from typing import Type
-
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
     TraceItemStatsRequest,
@@ -16,9 +14,9 @@ from snuba.web.rpc.v1.resolvers import ResolverTraceItemStats
 def downgrade_tier(tier: Tier) -> Tier:
     if tier == Tier.TIER_1:
         return Tier.TIER_8
-    elif tier == Tier.TIER_8:
+    if tier == Tier.TIER_8:
         return Tier.TIER_64
-    elif tier == Tier.TIER_64:
+    if tier == Tier.TIER_64:
         return Tier.TIER_512
     return tier
 
@@ -29,11 +27,11 @@ class EndpointTraceItemStats(RPCEndpoint[TraceItemStatsRequest, TraceItemStatsRe
         return "v1"
 
     @classmethod
-    def request_class(cls) -> Type[TraceItemStatsRequest]:
+    def request_class(cls) -> type[TraceItemStatsRequest]:
         return TraceItemStatsRequest
 
     @classmethod
-    def response_class(cls) -> Type[TraceItemStatsResponse]:
+    def response_class(cls) -> type[TraceItemStatsResponse]:
         return TraceItemStatsResponse
 
     def get_resolver(

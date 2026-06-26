@@ -1,6 +1,7 @@
 import typing
 import uuid
-from typing import Any, Dict, Mapping, Optional, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 from snuba import settings
 from snuba.attribution import get_app_id
@@ -153,7 +154,7 @@ def _delete_from_table(
         for col, values in conditions.items():
             column_validator.validate(col, values)
     except InvalidColumnType as e:
-        raise InvalidQueryException(e.message)
+        raise InvalidQueryException(e.message) from e
 
     try:
         _enforce_max_rows(query)
@@ -237,7 +238,7 @@ def _get_rows_to_delete(storage_key: StorageKey, select_query_to_count_rows: Que
     return typing.cast(int, select_query_results["data"][0]["count"])
 
 
-def _enforce_max_rows(delete_query: Query, count_storage_key: Optional[StorageKey] = None) -> int:
+def _enforce_max_rows(delete_query: Query, count_storage_key: StorageKey | None = None) -> int:
     """
     The cost of a lightweight delete operation depends on the number of matching rows in the WHERE clause and the current number of data parts.
     This operation will be most efficient when matching a small number of rows, **and on wide parts** (where the `_row_exists` column is stored
@@ -317,7 +318,7 @@ def _execute_query(
     query: Query,
     storage: WritableTableStorage,
     table: str,
-    cluster_name: Optional[str],
+    cluster_name: str | None,
     attribution_info: AttributionInfo,
     query_settings: HTTPQuerySettings,
 ) -> Result:
@@ -333,7 +334,7 @@ def _execute_query(
     result = None
     error = None
 
-    stats: Dict[str, Any] = {
+    stats: dict[str, Any] = {
         "clickhouse_table": table,
         "referrer": attribution_info.referrer,
         "cluster_name": cluster_name or "<unknown>",
@@ -396,7 +397,7 @@ def _execute_query(
                 result_or_error=result_or_error,
             )
         if result:
-            return result
+            return result  # noqa: B012 quota balance must run before returning/raising
         raise error or Exception("No error or result when running query, this should never happen")
 
 

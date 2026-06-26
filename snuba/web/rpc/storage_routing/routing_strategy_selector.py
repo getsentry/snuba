@@ -1,7 +1,8 @@
 import hashlib
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Iterable, Tuple
+from typing import Any
 
 import sentry_sdk
 from google.protobuf.message import Message as ProtobufMessage
@@ -32,7 +33,7 @@ class StorageRoutingConfig:
     version: int
     _routing_strategy_and_percentage_routed: dict[str, float]
 
-    def get_routing_strategy_and_percentage_routed(self) -> Iterable[Tuple[str, float]]:
+    def get_routing_strategy_and_percentage_routed(self) -> Iterable[tuple[str, float]]:
         return sorted(self._routing_strategy_and_percentage_routed.items())
 
     @classmethod
@@ -58,8 +59,10 @@ class StorageRoutingConfig:
 
                 try:
                     BaseRoutingStrategy.get_from_name(strategy_name)()
-                except Exception:
-                    raise ValueError(f"{strategy_name} does not inherit from BaseRoutingStrategy")
+                except Exception as e:
+                    raise ValueError(
+                        f"{strategy_name} does not inherit from BaseRoutingStrategy"
+                    ) from e
                 routing_strategy_and_percentage_routed[strategy_name] = percentage
 
                 total_percentage += percentage
@@ -90,7 +93,7 @@ class RoutingStrategySelector:
         organization_id = str(in_msg_meta.organization_id)
         try:
             overrides = json.loads(get_str_option(_STORAGE_ROUTING_CONFIG_OVERRIDE_KEY, "{}"))
-            if organization_id in overrides.keys():
+            if organization_id in overrides:
                 return StorageRoutingConfig.from_json(overrides[organization_id])
 
             config = get_str_option(_DEFAULT_STORAGE_ROUTING_CONFIG_KEY, "{}")
