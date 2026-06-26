@@ -266,6 +266,30 @@ def _collect_column_names(expr: Expression) -> set[str]:
     return names
 
 
+def _collect_function_names(expr: Expression) -> set[str]:
+    names: set[str] = set()
+
+    def visit(node: Expression) -> Expression:
+        if isinstance(node, FunctionCall):
+            names.add(node.function_name)
+        return node
+
+    expr.transform(visit)
+    return names
+
+
+def _collect_literal_values(expr: Expression) -> list[object]:
+    values: list[object] = []
+
+    def visit(node: Expression) -> Expression:
+        if isinstance(node, Literal):
+            values.append(node.value)
+        return node
+
+    expr.transform(visit)
+    return values
+
+
 _TYPED_ARRAY_COLUMNS = {
     "attributes_array_string",
     "attributes_array_int",
@@ -276,10 +300,12 @@ _TYPED_ARRAY_COLUMNS = {
 
 class TestTraceItemFiltersArrayMapColumns:
     """Array predicates read the typed ``attributes_array_*`` map columns when
-    ``use_array_map_columns`` is set, and the legacy ``attributes_array`` JSON
-    column otherwise. A comparison reads only the typed column(s) that can hold a
-    value of the compared type (string -> string column, number -> int+float, bool
-    -> bool column); an exists filter (no value) reads all four."""
+    ``use_array_map_columns`` is set, and the legacy ``attributes_array`` JSON column
+    otherwise. Sentry always sends the membership value as ``val_str``, so on the typed
+    path the string is coerced to each native type it parses as and matched natively
+    against that column (no string conversion of stored elements): a plain string only
+    searches the string column, a numeric string the int and float columns too, and
+    ``true``/``false`` the bool column. A value-less exists filter reads all four."""
 
     def _array_filter(
         self,
@@ -307,7 +333,7 @@ class TestTraceItemFiltersArrayMapColumns:
         assert _collect_column_names(membership) == {"attributes_array"}
 
     def test_like_on_array_key_uses_only_string_typed_column(self) -> None:
-        # LIKE takes a string pattern, so only the string column can match.
+        # A LIKE pattern can only match string elements.
         result = trace_item_filters_to_expression(
             self._array_filter(ComparisonFilter.OP_LIKE, AttributeValue(val_str="%error%")),
             attribute_key_to_expression,
@@ -315,10 +341,10 @@ class TestTraceItemFiltersArrayMapColumns:
         )
         assert isinstance(result, FunctionCall)
         assert result.function_name == "arrayExists"
-        membership = result.parameters[1]
-        assert isinstance(membership, FunctionCall)
-        assert membership.function_name == "arrayConcat"
-        assert _collect_column_names(membership) == {"attributes_array_string"}
+        assert _collect_column_names(result) == {"attributes_array_string"}
+        assert "like" in _collect_function_names(result)
+        # No stringify-everything normalization of the stored elements.
+        assert {"arrayConcat", "arrayMap", "toString"}.isdisjoint(_collect_function_names(result))
 
     def test_equals_string_on_array_key_uses_only_string_typed_column(self) -> None:
         result = trace_item_filters_to_expression(
@@ -326,33 +352,66 @@ class TestTraceItemFiltersArrayMapColumns:
             attribute_key_to_expression,
             use_array_map_columns=True,
         )
-        membership = result.parameters[1]
-        assert isinstance(membership, FunctionCall)
-        assert _collect_column_names(membership) == {"attributes_array_string"}
+        assert isinstance(result, FunctionCall)
+        assert result.function_name == "arrayExists"
+        assert _collect_column_names(result) == {"attributes_array_string"}
+        assert "error" in _collect_literal_values(result)
+        assert {"arrayConcat", "arrayMap", "toString"}.isdisjoint(_collect_function_names(result))
 
-    def test_equals_number_on_array_key_uses_only_numeric_typed_columns(self) -> None:
-        # A number can be stored in either the int or the float column.
+    def test_equals_numeric_string_matches_int_and_float_columns_natively(self) -> None:
+        # "12" parses as an int and a float, so it searches both numeric columns (the
+        # value could be stored in either) plus the string column, comparing natively.
         result = trace_item_filters_to_expression(
-            self._array_filter(ComparisonFilter.OP_EQUALS, AttributeValue(val_int=12)),
+            self._array_filter(ComparisonFilter.OP_EQUALS, AttributeValue(val_str="12")),
             attribute_key_to_expression,
             use_array_map_columns=True,
         )
-        membership = result.parameters[1]
-        assert isinstance(membership, FunctionCall)
-        assert _collect_column_names(membership) == {
+        assert isinstance(result, FunctionCall)
+        assert result.function_name == "or"
+        assert _collect_column_names(result) == {
+            "attributes_array_string",
             "attributes_array_int",
             "attributes_array_float",
         }
+        values = _collect_literal_values(result)
+        assert "12" in values  # string column, raw string
+        assert any(type(x) is int and x == 12 for x in values)  # int column, native int
+        assert any(type(x) is float and x == 12.0 for x in values)  # float column, native float
+        assert {"arrayConcat", "arrayMap", "toString"}.isdisjoint(_collect_function_names(result))
 
-    def test_equals_bool_on_array_key_uses_only_bool_typed_column(self) -> None:
+    def test_equals_bool_string_matches_bool_column_natively(self) -> None:
         result = trace_item_filters_to_expression(
-            self._array_filter(ComparisonFilter.OP_EQUALS, AttributeValue(val_bool=True)),
+            self._array_filter(ComparisonFilter.OP_EQUALS, AttributeValue(val_str="true")),
             attribute_key_to_expression,
             use_array_map_columns=True,
         )
-        membership = result.parameters[1]
-        assert isinstance(membership, FunctionCall)
-        assert _collect_column_names(membership) == {"attributes_array_bool"}
+        assert isinstance(result, FunctionCall)
+        assert result.function_name == "or"
+        assert _collect_column_names(result) == {
+            "attributes_array_string",
+            "attributes_array_bool",
+        }
+        values = _collect_literal_values(result)
+        assert "true" in values  # string column, raw string
+        assert any(type(x) is bool and x is True for x in values)  # bool column, native bool
+        assert {"arrayConcat", "arrayMap", "toString"}.isdisjoint(_collect_function_names(result))
+
+    def test_not_equals_numeric_string_negates_native_membership(self) -> None:
+        result = trace_item_filters_to_expression(
+            self._array_filter(ComparisonFilter.OP_NOT_EQUALS, AttributeValue(val_str="12")),
+            attribute_key_to_expression,
+            use_array_map_columns=True,
+        )
+        assert isinstance(result, FunctionCall)
+        assert result.function_name == "not"
+        inner = result.parameters[0]
+        assert isinstance(inner, FunctionCall)
+        assert inner.function_name == "or"
+        assert _collect_column_names(inner) == {
+            "attributes_array_string",
+            "attributes_array_int",
+            "attributes_array_float",
+        }
 
     def test_exists_filter_on_array_key_uses_typed_columns_when_enabled(self) -> None:
         item_filter = TraceItemFilter(

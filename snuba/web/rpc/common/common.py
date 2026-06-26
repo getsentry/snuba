@@ -23,6 +23,7 @@ from snuba.protos.common import (
     MalformedAttributeException,
     type_array_to_membership_array_expression,
     type_array_to_membership_array_expression_from_typed_columns,
+    type_array_typed_column_native_array,
 )
 from snuba.protos.common import (
     attribute_key_to_expression as _attribute_key_to_expression,
@@ -91,7 +92,6 @@ def _trace_item_filter_key_expression(
     attr_to_key_expression_callable: Callable[[AttributeKey], Expression],
     key: AttributeKey,
     use_array_map_columns: bool = False,
-    value_type: str | None = None,
 ) -> Expression:
     """predicates must use the normalized
     ``arrayMap`` (``type_array_to_membership_array_expression``) so
@@ -99,15 +99,12 @@ def _trace_item_filter_key_expression(
 
     When ``use_array_map_columns`` is set, array predicates read the typed
     ``attributes_array_*`` map columns instead of the legacy ``attributes_array``
-    JSON column (see ``use_array_map_columns``). ``value_type`` is the AttributeValue
-    oneof being compared against; on the typed-column path it narrows the read to the
-    column(s) that can hold a value of that type instead of all four (see
-    ``type_array_to_membership_array_expression_from_typed_columns``).
+    JSON column (see ``use_array_map_columns``).
     """
     if key.type == AttributeKey.Type.TYPE_ARRAY:
         try:
             if use_array_map_columns:
-                return type_array_to_membership_array_expression_from_typed_columns(key, value_type)
+                return type_array_to_membership_array_expression_from_typed_columns(key)
             return type_array_to_membership_array_expression(key)
         except MalformedAttributeException as e:
             raise BadSnubaRPCRequestException(str(e)) from e
@@ -703,6 +700,96 @@ def _type_array_includes_scalar_expression(
     return f.arrayExists(Lambda(None, ("x",), f.equals(x, rhs)), array_expr)
 
 
+def _coerce_int(s: str) -> int | None:
+    try:
+        return int(s)
+    except ValueError:
+        return None
+
+
+def _coerce_float(s: str) -> float | None:
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _typed_array_native_membership_candidates(
+    v: AttributeValue,
+) -> list[tuple[str, Expression]]:
+    """``(typed column, native rhs)`` pairs to OR for an array-membership comparison on
+    the typed ``attributes_array_*`` columns.
+
+    Sentry sends every array-membership value as ``val_str`` (the filter key only says
+    TYPE_ARRAY, never the element type), so coerce the string to each native type it
+    parses as and match that column natively: a numeric string searches the int/float
+    columns, ``true``/``false`` the bool column, and every string searches the string
+    column. A natively-typed value, if one is ever sent, maps to its own column.
+    """
+    value_type = v.WhichOneof("value")
+    candidates: list[tuple[str, Expression]] = []
+    if value_type == "val_str":
+        s = v.val_str
+        candidates.append(("attributes_array_string", literal(s)))
+        int_val = _coerce_int(s)
+        if int_val is not None:
+            candidates.append(("attributes_array_int", literal(int_val)))
+        float_val = _coerce_float(s)
+        if float_val is not None:
+            candidates.append(("attributes_array_float", literal(float_val)))
+        if s.lower() in ("true", "false"):
+            candidates.append(("attributes_array_bool", literal(s.lower() == "true")))
+    elif value_type == "val_int":
+        candidates.append(("attributes_array_int", literal(v.val_int)))
+        candidates.append(("attributes_array_float", literal(float(v.val_int))))
+    elif value_type in ("val_float", "val_double"):
+        candidates.append(("attributes_array_float", literal(getattr(v, value_type))))
+    elif value_type == "val_bool":
+        candidates.append(("attributes_array_bool", literal(v.val_bool)))
+    else:
+        raise BadSnubaRPCRequestException(
+            f"unsupported AttributeValue for array membership: {value_type}"
+        )
+    return candidates
+
+
+def _typed_array_includes_scalar_expression(
+    attr_key: AttributeKey,
+    v: AttributeValue,
+    ignore_case: bool,
+) -> Expression:
+    """Any element equals scalar (includes / [*]) against the typed ``attributes_array_*``
+    columns: a native ``arrayExists`` per candidate column, OR-ed together (see
+    ``_typed_array_native_membership_candidates``)."""
+    if v.WhichOneof("value") == "val_null" or v.is_null:
+        raise BadSnubaRPCRequestException("Arrays can't be NULL or cannot have NULL elements")
+    exprs: list[Expression] = []
+    for col, rhs in _typed_array_native_membership_candidates(v):
+        array_expr = type_array_typed_column_native_array(attr_key, col)
+        x = Argument(None, "x")
+        if ignore_case and col == "attributes_array_string":
+            lam = Lambda(None, ("x",), f.equals(f.lower(x), f.lower(rhs)))
+        else:
+            lam = Lambda(None, ("x",), f.equals(x, rhs))
+        exprs.append(f.arrayExists(lam, array_expr))
+    if len(exprs) == 1:
+        return exprs[0]
+    return or_cond(exprs[0], exprs[1], *exprs[2:])
+
+
+def _typed_array_like_expression(
+    attr_key: AttributeKey, pattern: Expression, ignore_case: bool
+) -> Expression:
+    """LIKE membership against the typed columns. A pattern can only match string
+    elements, so read just ``attributes_array_string``."""
+    array_expr = type_array_typed_column_native_array(attr_key, "attributes_array_string")
+    like_fn = f.ilike if ignore_case else f.like
+    return f.arrayExists(
+        Lambda(None, ("x",), like_fn(Argument(None, "x"), pattern)),
+        array_expr,
+    )
+
+
 def _any_attribute_filter_to_expression(
     filt: AnyAttributeFilter,
     *,
@@ -927,7 +1014,6 @@ def trace_item_filters_to_expression(
             attr_to_key_expression_callable=attribute_key_to_expression,
             key=k,
             use_array_map_columns=use_array_map_columns,
-            value_type=v.WhichOneof("value"),
         )
 
         value_type = v.WhichOneof("value")
@@ -989,6 +1075,10 @@ def trace_item_filters_to_expression(
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
 
             if k.type == AttributeKey.Type.TYPE_ARRAY:
+                if use_array_map_columns:
+                    return _typed_array_includes_scalar_expression(
+                        k, v, item_filter.comparison_filter.ignore_case
+                    )
                 return _type_array_includes_scalar_expression(
                     k_expression, v, item_filter.comparison_filter.ignore_case
                 )
@@ -1022,11 +1112,16 @@ def trace_item_filters_to_expression(
         if op == ComparisonFilter.OP_NOT_EQUALS:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
             if k.type == AttributeKey.Type.TYPE_ARRAY:
-                return not_cond(
-                    _type_array_includes_scalar_expression(
+                includes = (
+                    _typed_array_includes_scalar_expression(
+                        k, v, item_filter.comparison_filter.ignore_case
+                    )
+                    if use_array_map_columns
+                    else _type_array_includes_scalar_expression(
                         k_expression, v, item_filter.comparison_filter.ignore_case
                     )
                 )
+                return not_cond(includes)
             if _contains_subscriptable_reference(k_expression):
                 # Negation of OP_EQUALS; an absent key is "not equal".
                 value, exists = _map_backed_operands(k)
@@ -1054,6 +1149,10 @@ def trace_item_filters_to_expression(
                 return expr_with_null
         if op == ComparisonFilter.OP_LIKE:
             if k.type == AttributeKey.Type.TYPE_ARRAY:
+                if use_array_map_columns:
+                    return _typed_array_like_expression(
+                        k, v_expression, item_filter.comparison_filter.ignore_case
+                    )
                 like_fn = f.ilike if item_filter.comparison_filter.ignore_case else f.like
                 return f.arrayExists(
                     Lambda(
@@ -1074,6 +1173,12 @@ def trace_item_filters_to_expression(
             return comparison_function(k_expression, v_expression)
         if op == ComparisonFilter.OP_NOT_LIKE:
             if k.type == AttributeKey.Type.TYPE_ARRAY:
+                if use_array_map_columns:
+                    return not_cond(
+                        _typed_array_like_expression(
+                            k, v_expression, item_filter.comparison_filter.ignore_case
+                        )
+                    )
                 like_fn = f.ilike if item_filter.comparison_filter.ignore_case else f.like
                 return not_cond(
                     f.arrayExists(

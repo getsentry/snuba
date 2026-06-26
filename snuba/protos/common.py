@@ -225,24 +225,8 @@ def type_array_typed_columns_select_expressions(attr_key: AttributeKey) -> list[
     ]
 
 
-# The typed array map column(s) that can hold a filter value of each AttributeValue
-# type. A scalar value can only live in the column for its type, so a membership filter
-# only needs to read that column instead of all four. Numbers map to both the int and
-# float columns: array ints are written only to ``attributes_array_int`` and floats only
-# to ``attributes_array_float`` (see ``AttributeMap::insert_array``), and the query value
-# type (``val_int`` vs ``val_double``) does not always match the stored element type.
-_VALUE_TYPE_TO_ARRAY_MEMBERSHIP_COLUMNS: dict[str, tuple[str, ...]] = {
-    "val_str": ("attributes_array_string",),
-    "val_int": ("attributes_array_int", "attributes_array_float"),
-    "val_float": ("attributes_array_int", "attributes_array_float"),
-    "val_double": ("attributes_array_int", "attributes_array_float"),
-    "val_bool": ("attributes_array_bool",),
-}
-
-
 def type_array_to_membership_array_expression_from_typed_columns(
     attr_key: AttributeKey,
-    value_type: str | None = None,
 ) -> FunctionCall:
     """WHERE-clause membership array built from the typed array map columns.
 
@@ -252,15 +236,15 @@ def type_array_to_membership_array_expression_from_typed_columns(
     windows new enough that those columns are fully populated (see
     ``use_array_map_columns``) we read them instead.
 
-    Returns a normalized ``Array(String)`` of the array's elements so the per-element
-    comparisons built by ``_type_array_membership_rhs_expression`` keep matching the
-    JSON-column behaviour (string elements stay as-is, numbers become ``toString(...)``,
-    and bools become ``'true'``/``'false'``).
-
-    ``value_type`` is the ``AttributeValue`` oneof of the value being compared against
-    (e.g. ``"val_str"``). A scalar can only live in the typed column(s) for its type, so
-    we read just those (see ``_VALUE_TYPE_TO_ARRAY_MEMBERSHIP_COLUMNS``) instead of all
-    four. ``None`` (e.g. an exists filter, which has no value) reads every column.
+    Returns a normalized ``Array(String)`` of every element across all four typed
+    columns so the per-element comparisons built by
+    ``_type_array_membership_rhs_expression`` keep matching the JSON-column
+    behaviour (string elements stay as-is, numbers become ``toString(...)``, and
+    bools become ``'true'``/``'false'``). Unlike the scalar double-write, array
+    integers are written only to ``attributes_array_int`` (not also to the float
+    column — see ``AttributeMap::insert_array`` in the ``eap_items`` Rust
+    processor), so the int column must be read for int arrays to match; element
+    types never overlap across columns, so no element is duplicated.
     """
     if attr_key.type != AttributeKey.Type.TYPE_ARRAY:
         raise MalformedAttributeException(
@@ -270,25 +254,53 @@ def type_array_to_membership_array_expression_from_typed_columns(
     alias = f"{_build_label_mapping_key(attr_key)}__array_members"
     name = attr_key.name
 
-    def _normalized_elements(col_name: str) -> FunctionCall:
-        elements = arrayElement(None, column(col_name), literal(name))
-        if col_name == "attributes_array_string":
-            return elements  # already Array(String)
+    def _to_string_elements(col_name: str) -> FunctionCall:
         x = Argument(None, "x")
-        if col_name == "attributes_array_bool":
-            transform: FunctionCall = FunctionCall(
-                None, "if", (x, literal("true"), literal("false"))
-            )
-        else:
-            transform = FunctionCall(None, "toString", (x,))
-        return FunctionCall(None, "arrayMap", (Lambda(None, ("x",), transform), elements))
+        return FunctionCall(
+            None,
+            "arrayMap",
+            (
+                Lambda(None, ("x",), FunctionCall(None, "toString", (x,))),
+                arrayElement(None, column(col_name), literal(name)),
+            ),
+        )
 
-    columns = _VALUE_TYPE_TO_ARRAY_MEMBERSHIP_COLUMNS.get(value_type or "", TYPED_ARRAY_MAP_COLUMNS)
+    string_elements = arrayElement(None, column("attributes_array_string"), literal(name))
+    int_elements = _to_string_elements("attributes_array_int")
+    float_elements = _to_string_elements("attributes_array_float")
+    bool_x = Argument(None, "x")
+    bool_elements = FunctionCall(
+        None,
+        "arrayMap",
+        (
+            Lambda(
+                None,
+                ("x",),
+                FunctionCall(None, "if", (bool_x, literal("true"), literal("false"))),
+            ),
+            arrayElement(None, column("attributes_array_bool"), literal(name)),
+        ),
+    )
     return FunctionCall(
         alias=alias,
         function_name="arrayConcat",
-        parameters=tuple(_normalized_elements(col) for col in columns),
+        parameters=(string_elements, int_elements, float_elements, bool_elements),
     )
+
+
+def type_array_typed_column_native_array(attr_key: AttributeKey, col: str) -> FunctionCall:
+    """Native ``Array(T)`` of one typed array map column's elements, for a TYPE_ARRAY
+    membership comparison past the cutoff. The caller compares against the filter value
+    coerced to this column's native type, with no string conversion — unlike
+    ``type_array_to_membership_array_expression_from_typed_columns``, which normalizes
+    every column to ``Array(String)`` for the value-less exists/notEmpty check."""
+    if attr_key.type != AttributeKey.Type.TYPE_ARRAY:
+        raise MalformedAttributeException(
+            f"type_array_typed_column_native_array expected TYPE_ARRAY, got "
+            f"{AttributeKey.Type.Name(attr_key.type)}"
+        )
+    alias = f"{_build_label_mapping_key(attr_key)}__array_members_{col}"
+    return arrayElement(alias, column(col), literal(attr_key.name))
 
 
 def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
