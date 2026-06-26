@@ -105,7 +105,7 @@ class FlexibleTimeWindowPageWithFilters:
         if column_names:
             col_exprs = []
             val_exprs = []
-            for c_name, c_value in zip(column_names, column_values):
+            for c_name, c_value in zip(column_names, column_values, strict=True):
                 # c_name is the attribute expression alias: "{attr}.{Type.Name(type)}"
                 # For semver attributes (e.g. sentry.release_TYPE_STRING), apply the
                 # same semver sort key on both sides so the page boundary comparison
