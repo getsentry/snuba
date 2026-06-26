@@ -17,6 +17,10 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Reliability,
 )
 
+from snuba.web.rpc.common.common import (
+    merge_typed_array_subcolumns,
+    use_array_map_columns,
+)
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_get_trace import convert_to_attribute_value
 from snuba.web.rpc.v1.resolvers.common.aggregation import ExtrapolationContext
@@ -82,6 +86,7 @@ def _get_converter_for_type(
     if key_type == AttributeKey.TYPE_DOUBLE:
         return lambda x: AttributeValue(val_double=float(x))
     if key_type == AttributeKey.TYPE_ARRAY:
+        # Native list (typed sub-columns merged in convert_results) or legacy JSON string.
         return _array_raw_to_attribute_value
     raise BadSnubaRPCRequestException(f"unknown attribute type: {AttributeKey.Type.Name(key_type)}")
 
@@ -207,8 +212,28 @@ def convert_results(
 ) -> list[TraceItemColumnValues]:
     converters = get_converters_for_columns(request.columns)
 
+    # Past the cutoff a TYPE_ARRAY column is selected as four typed sub-columns; collapse
+    # them back into the column label so its converter sees one native list.
+    array_labels = (
+        [
+            column.label
+            for column in request.columns
+            if column.HasField("key") and column.key.type == AttributeKey.TYPE_ARRAY
+        ]
+        if use_array_map_columns(request.meta)
+        else []
+    )
+
     res: defaultdict[str, TraceItemColumnValues] = defaultdict(TraceItemColumnValues)
     for row in data:
+        if array_labels:
+            for label, elements in merge_typed_array_subcolumns(row, array_labels):
+                # An absent array attribute reads as four empty typed sub-columns; surface
+                # it as NULL (like a missing scalar attribute) rather than an empty array.
+                # Keep the label in the row so every requested column stays aligned across
+                # rows. The typed columns can't tell an absent array from a stored-empty
+                # one, so both map to NULL.
+                row[label] = elements if elements else None
         for column_name, value in row.items():
             if column_name in converters:
                 extrapolation_context = ExtrapolationContext.from_row(column_name, row)

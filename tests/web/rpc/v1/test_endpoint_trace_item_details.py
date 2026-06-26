@@ -16,7 +16,8 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
 
-from snuba.datasets.storages.factory import get_writable_storage
+from snuba import state
+from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_trace_item_details import (
     EndpointTraceItemDetails,
@@ -332,6 +333,105 @@ class TestTraceItemDetails(BaseApiTest):
         assert cols_attr.value.WhichOneof("value") == "val_array"
         assert [e.val_int for e in cols_attr.value.val_array.values] == [1, 3]
 
+    @pytest.mark.parametrize(
+        "read_from_typed_columns",
+        [True, False],
+        ids=["after_cutoff_typed_columns", "before_cutoff_json_allowlist"],
+    )
+    def test_array_attributes_before_and_after_cutoff(
+        self, eap: None, redis_db: None, read_from_typed_columns: bool
+    ) -> None:
+        """An allowlisted array attribute decodes to the same val_array whether read from
+        the typed columns (window on/after the cutoff) or the legacy JSON-column allowlist
+        (before it) — the data is double-written. Past the cutoff a NON-allowlisted array
+        attribute is also returned, since the typed-column read drops the allowlist."""
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        storage = get_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            storage,  # type: ignore
+            [
+                gen_item_message(
+                    span_ts,
+                    attributes={
+                        # allowlisted -> returned by both read paths
+                        "gen_ai.response.text": _str_tags_array("gamma", "delta"),
+                        # not allowlisted -> only the typed-column read path returns it
+                        "my_tags": _str_tags_array("alpha", "beta"),
+                    },
+                ),
+            ],
+        )
+        start = Timestamp()
+        end = Timestamp()
+        start.FromDatetime(BASE_TIME - timedelta(hours=4))
+        end.GetCurrentTime()
+
+        spans = (
+            EndpointTraceItemTable()
+            .execute(
+                TraceItemTableRequest(
+                    meta=RequestMeta(
+                        project_ids=[1],
+                        organization_id=1,
+                        cogs_category="something",
+                        referrer="something",
+                        start_timestamp=start,
+                        end_timestamp=end,
+                        request_id=_REQUEST_ID,
+                        trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    ),
+                    columns=[
+                        Column(
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
+                        ),
+                        Column(
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.trace_id")
+                        ),
+                    ],
+                )
+            )
+            .column_values
+        )
+        item_id = spans[0].results[0].val_str
+        trace_id = spans[1].results[0].val_str
+
+        # 0 disables the typed-column read path (legacy JSON allowlist); a low value
+        # enables it for the (recent) request window.
+        state.set_config(
+            "use_array_map_columns_timestamp_seconds",
+            10 if read_from_typed_columns else 0,
+        )
+        res = EndpointTraceItemDetails().execute(
+            TraceItemDetailsRequest(
+                meta=RequestMeta(
+                    project_ids=[1],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    start_timestamp=start,
+                    end_timestamp=end,
+                    request_id=_REQUEST_ID,
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                ),
+                item_id=item_id,
+                trace_id=trace_id,
+            )
+        )
+        by_name = {a.name: a.value for a in res.attributes}
+        # Allowlisted array attribute: identical val_array from both read paths.
+        assert by_name["gen_ai.response.text"].WhichOneof("value") == "val_array"
+        assert [e.val_str for e in by_name["gen_ai.response.text"].val_array.values] == [
+            "gamma",
+            "delta",
+        ]
+        if read_from_typed_columns:
+            # Allowlist dropped: a non-allowlisted array attribute is now returned too.
+            assert "my_tags" in by_name
+            assert [e.val_str for e in by_name["my_tags"].val_array.values] == ["alpha", "beta"]
+        else:
+            # Legacy JSON allowlist: a non-allowlisted array attribute is omitted.
+            assert "my_tags" not in by_name
+
     def test_dotted_key_array_attribute_parsed_properly(self, eap: None, redis_db: None) -> None:
         trace_id = uuid.uuid4().hex
         span_ts = BASE_TIME - timedelta(minutes=1)
@@ -510,7 +610,7 @@ def test_convert_results_dedupes() -> None:
             },
         }
     ]
-    _, _, attrs = _convert_results(data)
+    _, _, attrs = _convert_results(data, read_typed_arrays=False)
     is_segment_attrs = list(filter(lambda x: x.name == "sentry.is_segment", attrs))
     assert len(is_segment_attrs) == 1
 
@@ -535,11 +635,46 @@ def test_convert_results_includes_attributes_array() -> None:
             "gen_ai.input.messages": '[{"String":"gamma"},{"String":"delta"}]',
         }
     ]
-    _, _, attrs = _convert_results(data)
+    _, _, attrs = _convert_results(data, read_typed_arrays=False)
     msgs = [a for a in attrs if a.name == "gen_ai.input.messages"]
     assert len(msgs) == 1
     assert msgs[0].value.WhichOneof("value") == "val_array"
     assert [e.val_str for e in msgs[0].value.val_array.values] == ["gamma", "delta"]
+
+
+def test_convert_results_reads_typed_array_maps() -> None:
+    """Past the cutoff, every array attribute is read from the typed array map columns
+    (not just an allowlist). Homogeneous arrays keep order; a mixed-type array is merged
+    across the typed columns in column order (string, int, float, bool)."""
+    data = [
+        {
+            "timestamp": 1750964400,
+            "hex_item_id": "e70ef5b1b5bc4611840eff9964b7a767",
+            "trace_id": "cb190d6e7d5743d5bc1494c650592cd2",
+            "organization_id": 1,
+            "project_id": 1,
+            "item_type": 1,
+            "attributes_string": {},
+            "attributes_int": {},
+            "attributes_float": {},
+            "attributes_bool": {},
+            "attributes_array_string": {"tags": ["a", "b"], "mixed": ["s"]},
+            "attributes_array_int": {"cols": [1, 3], "mixed": [9]},
+            "attributes_array_float": {"ratios": [1.5]},
+            "attributes_array_bool": {"flags": [True, False]},
+        }
+    ]
+    _, _, attrs = _convert_results(data, read_typed_arrays=True)
+    by_name = {a.name: a.value for a in attrs}
+    # Not restricted to an allowlist: arbitrary array attributes are returned.
+    assert [e.val_str for e in by_name["tags"].val_array.values] == ["a", "b"]
+    assert [e.val_int for e in by_name["cols"].val_array.values] == [1, 3]
+    assert by_name["ratios"].val_array.values[0].WhichOneof("value") == "val_double"
+    assert [e.val_bool for e in by_name["flags"].val_array.values] == [True, False]
+    # A name present in multiple typed maps is merged (string elements then int).
+    assert [
+        (e.WhichOneof("value"), e.val_str or e.val_int) for e in by_name["mixed"].val_array.values
+    ] == [("val_str", "s"), ("val_int", 9)]
 
 
 def test_convert_results_skips_non_allowlisted_array_paths() -> None:
@@ -559,5 +694,5 @@ def test_convert_results_skips_non_allowlisted_array_paths() -> None:
             "gen_ai.input.messages": "[]",
         }
     ]
-    _, _, attrs = _convert_results(data)
+    _, _, attrs = _convert_results(data, read_typed_arrays=False)
     assert not any(a.name == "gen_ai.input.messages" for a in attrs)

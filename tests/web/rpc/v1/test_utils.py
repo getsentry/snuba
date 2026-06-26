@@ -69,13 +69,15 @@ _DEFAULT_ATTRIBUTES = {
     "transaction.method": AnyValue(string_value="POST"),
     "transaction.op": AnyValue(string_value="http.server"),
     "user": AnyValue(string_value="ip:127.0.0.1"),
+    # Arrays are homogeneous in production (every element shares one type, so the value
+    # lives in a single typed attributes_array_* column). Mixed-type array merging is
+    # covered separately by unit tests (see test_endpoint_trace_item_details).
     "i_am_an_array": AnyValue(
         array_value=ArrayValue(
             values=[
-                AnyValue(int_value=1),
-                AnyValue(bool_value=True),
-                AnyValue(double_value=3.0),
-                AnyValue(string_value="blah"),
+                AnyValue(string_value="one"),
+                AnyValue(string_value="two"),
+                AnyValue(string_value="three"),
             ]
         )
     ),

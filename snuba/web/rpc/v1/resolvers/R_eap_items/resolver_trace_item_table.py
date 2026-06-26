@@ -32,7 +32,11 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.downsampled_storage_tiers import Tier
-from snuba.protos.common import NORMALIZED_COLUMNS_EAP_ITEMS
+from snuba.protos.common import (
+    NORMALIZED_COLUMNS_EAP_ITEMS,
+    TYPED_ARRAY_MAP_COLUMNS,
+    type_array_typed_columns_select_expressions,
+)
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
@@ -63,6 +67,7 @@ from snuba.web.rpc.common.common import (
     timestamp_in_range_condition,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
+    typed_array_select_subcolumn_name,
     use_array_map_columns,
     use_sampling_factor,
     valid_sampling_factor_conditions,
@@ -275,14 +280,11 @@ def _groupby_order_by_expression(attr_key: AttributeKey) -> Expression:
     """
     Maps an attribute key used in GROUP BY / ORDER BY to its expression.
 
-    `sentry.timestamp` is grouped and ordered on the raw primary-key `timestamp`
-    column rather than the `CAST(timestamp, 'Float64')` that
-    `attribute_key_to_expression` produces, so ClickHouse can read in primary-key
-    order. The GROUP BY and ORDER BY must use the *same* expression: grouping by
-    the bare `timestamp` identifier keeps the SELECT's `CAST(timestamp, 'Float64')`
-    valid (it is a function of the grouped column) while letting ORDER BY sort on
-    the raw column. If the two diverged, ClickHouse would reject the query with
-    "Column `timestamp` is not under aggregate function and not in GROUP BY".
+    `sentry.timestamp` groups/orders on the raw primary-key `timestamp` column (not the
+    SELECT's `CAST(timestamp, 'Float64')`) so ClickHouse can read in primary-key order
+    while keeping the cast valid as a function of the grouped column. TYPE_ARRAY keys are
+    rejected upstream (see _validate_select_and_groupby / _validate_order_by), so they
+    never reach here.
     """
     if attr_key.name == "sentry.timestamp":
         return snuba_column("timestamp")
@@ -335,14 +337,13 @@ def _convert_order_by(
             # cast is monotonic, so ordering by the raw DateTime column yields the same
             # order while staying read-in-order friendly. (The i == 0 / single-project /
             # no-groupby branch above already expands to the full table sort key; this
-            # covers `sentry.timestamp` ordering anywhere else.) The GROUP BY uses the
-            # same expression (see `_groupby_order_by_expression`) so an aggregation
-            # query that orders by `sentry.timestamp` stays valid.
-            expression = _groupby_order_by_expression(x.column.key)
+            # covers `sentry.timestamp` ordering anywhere else.) GROUP BY uses the same
+            # expression so an aggregation query that orders by `sentry.timestamp` stays
+            # valid.
             res.append(
                 OrderBy(
                     direction=direction,
-                    expression=expression,
+                    expression=_groupby_order_by_expression(x.column.key),
                 )
             )
         elif x.column.HasField("conditional_aggregation"):
@@ -577,6 +578,32 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
     )
 
 
+def _reads_typed_array_columns(column: Column, request_meta: RequestMeta) -> bool:
+    """True if ``column`` is a TYPE_ARRAY attribute read from the typed array map columns
+    (past the cutoff) rather than the legacy ``attributes_array`` JSON column."""
+    return (
+        column.HasField("key")
+        and column.key.type == AttributeKey.Type.TYPE_ARRAY
+        and use_array_map_columns(request_meta)
+    )
+
+
+def _array_subcolumn_selected_expressions(column: Column) -> list[SelectedExpression]:
+    """Four native typed sub-columns for a TYPE_ARRAY column, named ``"<label>.<col>"`` so
+    ``convert_results`` merges them back into ``column.label``."""
+    return [
+        SelectedExpression(
+            name=typed_array_select_subcolumn_name(column.label, typed_col),
+            expression=expression,
+        )
+        for typed_col, expression in zip(
+            TYPED_ARRAY_MAP_COLUMNS,
+            type_array_typed_columns_select_expressions(column.key),
+            strict=True,
+        )
+    ]
+
+
 def _get_offset_from_page_token(page_token: PageToken | None) -> int:
     if page_token is None:
         return 0
@@ -602,12 +629,16 @@ def build_query(
         # The key_col expression alias may differ from the column label. That is okay
         # the attribute key name is used in the groupby, the column label is just the name of
         # the returned attribute value
-        selected_columns.append(
-            SelectedExpression(
-                name=column.label,
-                expression=_column_to_expression(column, request.meta),
+        if _reads_typed_array_columns(column, request.meta):
+            # Read as four typed sub-columns, merged back by convert_results.
+            selected_columns.extend(_array_subcolumn_selected_expressions(column))
+        else:
+            selected_columns.append(
+                SelectedExpression(
+                    name=column.label,
+                    expression=_column_to_expression(column, request.meta),
+                )
             )
-        )
         selected_columns.extend(_get_reliability_context_columns(column, request.meta))
 
     item_type_conds = [f.equals(snuba_column("item_type"), request.meta.trace_item_type)]

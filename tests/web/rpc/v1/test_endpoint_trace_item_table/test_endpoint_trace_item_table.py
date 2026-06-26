@@ -57,13 +57,15 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
 
-from snuba.datasets.storages.factory import get_writable_storage
+from snuba import state
+from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import OrderBy, OrderByDirection
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column as snuba_column
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint
+from snuba.web.rpc.common.common import attribute_key_to_expression
 from snuba.web.rpc.common.exceptions import (
     BadSnubaRPCRequestException,
     QueryTimeoutException,
@@ -76,7 +78,9 @@ from snuba.web.rpc.v1.endpoint_trace_item_table import (
     EndpointTraceItemTable,
     _apply_labels_to_columns,
     _validate_order_by,
+    _validate_select_and_groupby,
 )
+from snuba.web.rpc.v1.resolvers.common.aggregation import aggregation_to_expression
 from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_table import build_query
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -4117,6 +4121,106 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
         assert [
             e.val_str for e in by_name["resource.process.command_args"].results[0].val_array.values
         ] == ["node", "--enable-source-maps"]
+
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    @pytest.mark.parametrize(
+        "read_from_typed_columns",
+        [True, False],
+        ids=["after_cutoff_typed_columns", "before_cutoff_json_column"],
+    )
+    def test_select_array_column_before_and_after_cutoff(
+        self, read_from_typed_columns: bool
+    ) -> None:
+        """A homogeneous array attribute decodes to the same val_array whether the query
+        window is on/after the typed-column cutoff (read from the typed attributes_array_*
+        columns) or before it (read from the legacy attributes_array JSON column). The
+        data is double-written to both column families, so the two read paths agree."""
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        items_storage = get_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,  # type: ignore
+            [
+                gen_item_message(
+                    span_ts,
+                    attributes={"tags": _str_array("alpha", "beta"), "cols": _int_array(1, 3)},
+                ),
+            ],
+        )
+        # 0 disables the typed-column read path (forces the legacy JSON column); a low
+        # value enables it for the (recent) request window.
+        state.set_config(
+            "use_array_map_columns_timestamp_seconds",
+            10 if read_from_typed_columns else 0,
+        )
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="cols")),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        by_name = {cv.attribute_name: cv for cv in response.column_values}
+        assert by_name["tags"].results[0].WhichOneof("value") == "val_array"
+        assert [e.val_str for e in by_name["tags"].results[0].val_array.values] == ["alpha", "beta"]
+        assert by_name["cols"].results[0].WhichOneof("value") == "val_array"
+        assert [e.val_int for e in by_name["cols"].results[0].val_array.values] == [1, 3]
+
+
+class TestArrayOperationsRejected:
+    """Array attributes support select + filter (and uniq, for crash-free rate), but not
+    group_by / order_by / other aggregations."""
+
+    def test_group_by_array_raises(self) -> None:
+        request = TraceItemTableRequest(
+            columns=[Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.name"))],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags")],
+        )
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="group_by is not supported on array attributes",
+        ):
+            _validate_select_and_groupby(request)
+
+    def test_order_by_array_raises(self) -> None:
+        request = TraceItemTableRequest(
+            columns=[Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags"))],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags"))
+                )
+            ],
+        )
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="order_by is not supported on array attributes",
+        ):
+            _validate_order_by(request)
+
+    def test_non_uniq_aggregation_on_array_raises(self) -> None:
+        # Only uniq is supported on arrays; other aggregations are rejected.
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="not supported for array attribute",
+        ):
+            aggregation_to_expression(
+                AttributeConditionalAggregation(
+                    aggregate=Function.FUNCTION_COUNT,
+                    key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags"),
+                    label="count(tags)",
+                ),
+                attribute_key_to_expression,
+            )
 
 
 class TestUtils:

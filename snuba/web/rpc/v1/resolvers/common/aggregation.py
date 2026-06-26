@@ -882,6 +882,8 @@ def _array_aggregation_to_expression(
     condition_in_aggregation: Expression,
     alias_dict: dict[str, str],
 ) -> Expression:
+    # Arrays only support uniq (counting distinct elements across the array), used e.g.
+    # for crash-free user rate. The field is the legacy attributes_array JSON path.
     if aggregation.aggregate == Function.FUNCTION_UNIQ:
         return f.round(
             f.uniqArrayIfOrNull(

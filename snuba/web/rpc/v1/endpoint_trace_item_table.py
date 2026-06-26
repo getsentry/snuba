@@ -5,6 +5,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -53,6 +54,14 @@ def _validate_select_and_groupby(in_msg: TraceItemTableRequest) -> None:
     if not in_msg.columns:
         raise BadSnubaRPCRequestException("At least one column must be specified in the request")
 
+    array_group_by_columns = [
+        c.name for c in in_msg.group_by if c.type == AttributeKey.Type.TYPE_ARRAY
+    ]
+    if array_group_by_columns:
+        raise BadSnubaRPCRequestException(
+            f"group_by is not supported on array attributes: {', '.join(array_group_by_columns)}"
+        )
+
     non_aggregted_columns = {c.key.name for c in in_msg.columns if c.HasField("key")}
     grouped_by_columns = {c.name for c in in_msg.group_by}
 
@@ -78,6 +87,16 @@ def _validate_select_and_groupby(in_msg: TraceItemTableRequest) -> None:
 
 
 def _validate_order_by(in_msg: TraceItemTableRequest) -> None:
+    array_order_by_columns = [
+        ob.column.key.name
+        for ob in in_msg.order_by
+        if ob.column.HasField("key") and ob.column.key.type == AttributeKey.Type.TYPE_ARRAY
+    ]
+    if array_order_by_columns:
+        raise BadSnubaRPCRequestException(
+            f"order_by is not supported on array attributes: {', '.join(array_order_by_columns)}"
+        )
+
     order_by_cols = {
         ob.column.label if ob.column.label else str(ob.column) for ob in in_msg.order_by
     }

@@ -32,7 +32,6 @@ from snuba import state
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.settings import ENABLE_TRACE_PAGINATION_DEFAULT
-from snuba.web.rpc.common.common import ATTRIBUTES_ARRAY_ALLOWLIST
 from snuba.web.rpc.v1.endpoint_get_trace import (
     APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
     EndpointGetTrace,
@@ -130,9 +129,6 @@ def get_attributes(
     for key, value in span.attributes.items():
         value_type = value.WhichOneof("value")
         if not value_type:
-            continue
-        if value_type == "array_value" and key not in ATTRIBUTES_ARRAY_ALLOWLIST:
-            # bulk get_trace only surfaces allowlisted attributes_array paths
             continue
         attribute_key = AttributeKey(
             name=key,
@@ -554,6 +550,82 @@ def test_process_results_falls_back_to_string_on_untagged_array_elements() -> No
     attribute = next(attr for attr in item.attributes if attr.key.name == "gen_ai.input.messages")
     assert attribute.key.type == AttributeKey.Type.TYPE_STRING
     assert attribute.value.val_str == '["gamma", "delta"]'
+
+
+@pytest.mark.parametrize(
+    "subcolumns,expected_kind,expected_values",
+    [
+        (
+            {
+                "my_tags.attributes_array_string": ["a", "b"],
+                "my_tags.attributes_array_int": [],
+                "my_tags.attributes_array_float": [],
+                "my_tags.attributes_array_bool": [],
+            },
+            "val_str",
+            ["a", "b"],
+        ),
+        (
+            {
+                "my_tags.attributes_array_string": [],
+                "my_tags.attributes_array_int": [1, 3],
+                "my_tags.attributes_array_float": [],
+                "my_tags.attributes_array_bool": [],
+            },
+            "val_int",
+            [1, 3],
+        ),
+        (
+            {
+                "my_tags.attributes_array_string": [],
+                "my_tags.attributes_array_int": [],
+                "my_tags.attributes_array_float": [],
+                "my_tags.attributes_array_bool": [True, False],
+            },
+            "val_bool",
+            [True, False],
+        ),
+    ],
+    ids=["strings", "ints", "bools"],
+)
+def test_process_results_merges_typed_array_subcolumns(
+    subcolumns: dict[str, Any], expected_kind: str, expected_values: list[Any]
+) -> None:
+    """Past the cutoff, a per-attribute array column read as four native typed
+    sub-columns is merged back into a single native val_array. We only store
+    homogeneous arrays, so exactly one sub-column is non-empty and its native element
+    type is preserved (no JSON, no tuple)."""
+    processed_results = _process_results(
+        [{"id": "abc123", "timestamp": 1778785776.0, **subcolumns}],
+        read_typed_arrays=True,
+        array_attribute_names=["my_tags"],
+    )
+    item = processed_results.items[0]
+    attribute = next(attr for attr in item.attributes if attr.key.name == "my_tags")
+    assert attribute.key.type == AttributeKey.Type.TYPE_ARRAY
+    vals = attribute.value.val_array.values
+    assert [getattr(v, expected_kind) for v in vals] == expected_values
+
+
+def test_process_results_skips_empty_typed_array_subcolumns() -> None:
+    """A requested array attribute whose typed sub-columns are all empty (absent on the
+    item) is not surfaced as an empty array attribute."""
+    processed_results = _process_results(
+        [
+            {
+                "id": "abc123",
+                "timestamp": 1778785776.0,
+                "my_tags.attributes_array_string": [],
+                "my_tags.attributes_array_int": [],
+                "my_tags.attributes_array_float": [],
+                "my_tags.attributes_array_bool": [],
+            }
+        ],
+        read_typed_arrays=True,
+        array_attribute_names=["my_tags"],
+    )
+    item = processed_results.items[0]
+    assert all(attr.key.name != "my_tags" for attr in item.attributes)
 
 
 def test_process_results_keeps_empty_string_attribute() -> None:
