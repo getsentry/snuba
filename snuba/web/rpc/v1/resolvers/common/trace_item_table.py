@@ -16,6 +16,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Reliability,
 )
 
+from snuba.web.rpc.common.common import use_array_map_columns
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_get_trace import convert_to_attribute_value
 from snuba.web.rpc.v1.resolvers.common.aggregation import ExtrapolationContext
@@ -66,8 +67,26 @@ def _array_raw_to_attribute_value(raw: Any) -> AttributeValue:
     return convert_to_attribute_value(raw)
 
 
+def _typed_array_columns_to_attribute_value(raw: Any) -> AttributeValue:
+    """Flatten a ``tuple(string[], int[], float[], bool[])`` from the typed array map
+    columns into a typed ``val_array`` (see
+    ``type_array_to_typed_columns_select_expression``). Each element keeps its native
+    type; a mixed-type array's elements are grouped by type (string, int, float, bool),
+    since the typed columns store each element type separately."""
+    if not isinstance(raw, (tuple, list)) or len(raw) != 4:
+        # Unexpected shape (e.g. legacy JSON string); fall back to the JSON decoder.
+        return _array_raw_to_attribute_value(raw)
+    strs, ints, floats, bools = raw
+    values = [AttributeValue(val_str=str(x)) for x in (strs or [])]
+    values += [AttributeValue(val_int=int(x)) for x in (ints or [])]
+    values += [AttributeValue(val_double=float(x)) for x in (floats or [])]
+    values += [AttributeValue(val_bool=bool(x)) for x in (bools or [])]
+    return AttributeValue(val_array=Array(values=values))
+
+
 def _get_converter_for_type(
     key_type: "AttributeKey.Type.ValueType",
+    read_arrays_from_typed_columns: bool = False,
 ) -> Callable[[Any], AttributeValue]:
     """Returns a converter function for the given attribute type."""
     if key_type == AttributeKey.TYPE_BOOLEAN:
@@ -81,6 +100,10 @@ def _get_converter_for_type(
     elif key_type == AttributeKey.TYPE_DOUBLE:
         return lambda x: AttributeValue(val_double=float(x))
     elif key_type == AttributeKey.TYPE_ARRAY:
+        # Past the cutoff the SELECT returns a native typed-column tuple; otherwise the
+        # legacy JSON string.
+        if read_arrays_from_typed_columns:
+            return _typed_array_columns_to_attribute_value
         return _array_raw_to_attribute_value
     else:
         raise BadSnubaRPCRequestException(
@@ -93,9 +116,15 @@ def _get_double_converter() -> Callable[[Any], AttributeValue]:
     return lambda x: AttributeValue(val_double=float(x))
 
 
-def _add_converter(column: Column, converters: Dict[str, Callable[[Any], AttributeValue]]) -> None:
+def _add_converter(
+    column: Column,
+    converters: Dict[str, Callable[[Any], AttributeValue]],
+    read_arrays_from_typed_columns: bool = False,
+) -> None:
     if column.HasField("key"):
-        converters[column.label] = _get_converter_for_type(column.key.type)
+        converters[column.label] = _get_converter_for_type(
+            column.key.type, read_arrays_from_typed_columns
+        )
     elif column.HasField("aggregation"):
         # For FUNCTION_ANY, the result type matches the key type since it returns actual values
         if column.aggregation.aggregate == Function.FUNCTION_ANY:
@@ -115,18 +144,20 @@ def _add_converter(column: Column, converters: Dict[str, Callable[[Any], Attribu
             converters[column.label] = _get_double_converter()
     elif column.HasField("formula"):
         converters[column.label] = _get_double_converter()
-        _add_converter(column.formula.left, converters)
-        _add_converter(column.formula.right, converters)
+        _add_converter(column.formula.left, converters, read_arrays_from_typed_columns)
+        _add_converter(column.formula.right, converters, read_arrays_from_typed_columns)
     elif column.HasField("conditional_formula"):
         converters[column.label] = _get_double_converter()
         conditional = column.conditional_formula
         if conditional.HasField("condition"):
-            _add_converter(conditional.condition.left, converters)
-            _add_converter(conditional.condition.right, converters)
+            _add_converter(conditional.condition.left, converters, read_arrays_from_typed_columns)
+            _add_converter(conditional.condition.right, converters, read_arrays_from_typed_columns)
         if conditional.HasField("match"):
-            _add_converter(getattr(conditional, "match"), converters)
+            _add_converter(
+                getattr(conditional, "match"), converters, read_arrays_from_typed_columns
+            )
         if conditional.HasField("default"):
-            _add_converter(conditional.default, converters)
+            _add_converter(conditional.default, converters, read_arrays_from_typed_columns)
     elif column.HasField("literal"):
         converters[column.label] = _get_double_converter()
     else:
@@ -137,6 +168,7 @@ def _add_converter(column: Column, converters: Dict[str, Callable[[Any], Attribu
 
 def get_converters_for_columns(
     columns: Iterable[Column],
+    read_arrays_from_typed_columns: bool = False,
 ) -> Dict[str, Callable[[Any], AttributeValue]]:
     """
     Returns a dictionary of column labels to their corresponding converters.
@@ -144,7 +176,7 @@ def get_converters_for_columns(
     """
     converters: Dict[str, Callable[[Any], AttributeValue]] = {}
     for column in columns:
-        _add_converter(column, converters)
+        _add_converter(column, converters, read_arrays_from_typed_columns)
     return converters
 
 
@@ -207,7 +239,10 @@ def _get_reliabilities_for_formula(
 def convert_results(
     request: TraceItemTableRequest, data: Iterable[Dict[str, Any]]
 ) -> list[TraceItemColumnValues]:
-    converters = get_converters_for_columns(request.columns)
+    converters = get_converters_for_columns(
+        request.columns,
+        read_arrays_from_typed_columns=use_array_map_columns(request.meta),
+    )
 
     res: defaultdict[str, TraceItemColumnValues] = defaultdict(TraceItemColumnValues)
     for row in data:

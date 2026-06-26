@@ -196,6 +196,44 @@ def type_array_to_stored_array_json_path(attr_key: AttributeKey) -> JsonPath:
     )
 
 
+# The typed array map columns, in the order their elements are surfaced for a SELECT
+# (see type_array_to_typed_columns_select_expression). Keep this in sync with the
+# converter that decodes the tuple (resolvers/common/trace_item_table.py).
+TYPED_ARRAY_SELECT_COLUMNS: tuple[str, ...] = (
+    "attributes_array_string",
+    "attributes_array_int",
+    "attributes_array_float",
+    "attributes_array_bool",
+)
+
+
+def type_array_to_typed_columns_select_expression(attr_key: AttributeKey) -> FunctionCall:
+    """SELECT-clause representation of an array attribute built from the typed columns.
+
+    Replaces the ``toJSONString(attributes_array.<name>:Array(JSON))`` form used for the
+    legacy JSON column: reads only the typed ``attributes_array_*`` map columns and
+    returns each element type as its own native ``Array(T)`` inside a
+    ``tuple(string[], int[], float[], bool[])`` — no JSON serialization. The caller's
+    converter flattens the tuple into a typed ``val_array`` (see
+    ``_typed_array_columns_to_attribute_value``). Homogeneous arrays (the common case)
+    keep element order; a mixed-type array's elements are grouped by type, since the
+    typed columns store each element type separately.
+    """
+    if attr_key.type != AttributeKey.Type.TYPE_ARRAY:
+        raise MalformedAttributeException(
+            f"type_array_to_typed_columns_select_expression expected TYPE_ARRAY, got "
+            f"{AttributeKey.Type.Name(attr_key.type)}"
+        )
+    return FunctionCall(
+        alias=_build_label_mapping_key(attr_key),
+        function_name="tuple",
+        parameters=tuple(
+            arrayElement(None, column(col), literal(attr_key.name))
+            for col in TYPED_ARRAY_SELECT_COLUMNS
+        ),
+    )
+
+
 def type_array_to_membership_array_expression_from_typed_columns(
     attr_key: AttributeKey,
 ) -> FunctionCall:
@@ -259,8 +297,16 @@ def type_array_to_membership_array_expression_from_typed_columns(
     )
 
 
-def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
+def attribute_key_to_expression(
+    attr_key: AttributeKey, read_arrays_from_typed_columns: bool = False
+) -> Expression:
     """Convert an AttributeKey proto to a Snuba Expression.
+
+    When ``read_arrays_from_typed_columns`` is set, a ``TYPE_ARRAY`` SELECT reads the
+    typed ``attributes_array_*`` map columns instead of the legacy ``attributes_array``
+    JSON column (see ``type_array_to_typed_columns_select_expression``). Callers pass
+    ``use_array_map_columns(meta)`` so this is only enabled for windows where the typed
+    columns are fully populated.
 
     Raises:
         MalformedAttributeException: If the attribute key is invalid or malformed.
@@ -317,9 +363,12 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
             )
 
     if attr_key.type == AttributeKey.Type.TYPE_ARRAY:
-        # Tagged array under attributes_array.* as Array(JSON). Select toJSONString(...)
-        # so the result column is String; callers decode in application code. Raw
-        # Array(JSON) is not returned in the SELECT to avoid native client limits.
+        # Tagged array as a JSON string so the result column is String; callers decode
+        # in application code. Raw Array(JSON)/Array(T) is not returned in the SELECT to
+        # avoid native client limits. Past the cutoff, read the typed columns instead of
+        # the legacy attributes_array JSON column.
+        if read_arrays_from_typed_columns:
+            return type_array_to_typed_columns_select_expression(attr_key)
         return FunctionCall(
             alias=alias,
             function_name="toJSONString",

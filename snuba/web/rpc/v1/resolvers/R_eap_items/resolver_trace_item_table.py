@@ -527,7 +527,10 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
     Given a column protobuf object, translates it into a Expression object and returns it.
     """
     if column.HasField("key"):
-        return attribute_key_to_expression(column.key)
+        return attribute_key_to_expression(
+            column.key,
+            read_arrays_from_typed_columns=use_array_map_columns(request_meta),
+        )
     elif column.HasField("conditional_aggregation"):
         function_expr = aggregation_to_expression(
             column.conditional_aggregation,

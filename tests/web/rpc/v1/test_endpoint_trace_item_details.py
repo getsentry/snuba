@@ -510,7 +510,7 @@ def test_convert_results_dedupes() -> None:
             },
         }
     ]
-    _, _, attrs = _convert_results(data)
+    _, _, attrs = _convert_results(data, read_typed_arrays=False)
     is_segment_attrs = list(filter(lambda x: x.name == "sentry.is_segment", attrs))
     assert len(is_segment_attrs) == 1
 
@@ -535,11 +535,46 @@ def test_convert_results_includes_attributes_array() -> None:
             "gen_ai.input.messages": '[{"String":"gamma"},{"String":"delta"}]',
         }
     ]
-    _, _, attrs = _convert_results(data)
+    _, _, attrs = _convert_results(data, read_typed_arrays=False)
     msgs = [a for a in attrs if a.name == "gen_ai.input.messages"]
     assert len(msgs) == 1
     assert msgs[0].value.WhichOneof("value") == "val_array"
     assert [e.val_str for e in msgs[0].value.val_array.values] == ["gamma", "delta"]
+
+
+def test_convert_results_reads_typed_array_maps() -> None:
+    """Past the cutoff, every array attribute is read from the typed array map columns
+    (not just an allowlist). Homogeneous arrays keep order; a mixed-type array is merged
+    across the typed columns in column order (string, int, float, bool)."""
+    data = [
+        {
+            "timestamp": 1750964400,
+            "hex_item_id": "e70ef5b1b5bc4611840eff9964b7a767",
+            "trace_id": "cb190d6e7d5743d5bc1494c650592cd2",
+            "organization_id": 1,
+            "project_id": 1,
+            "item_type": 1,
+            "attributes_string": {},
+            "attributes_int": {},
+            "attributes_float": {},
+            "attributes_bool": {},
+            "attributes_array_string": {"tags": ["a", "b"], "mixed": ["s"]},
+            "attributes_array_int": {"cols": [1, 3], "mixed": [9]},
+            "attributes_array_float": {"ratios": [1.5]},
+            "attributes_array_bool": {"flags": [True, False]},
+        }
+    ]
+    _, _, attrs = _convert_results(data, read_typed_arrays=True)
+    by_name = {a.name: a.value for a in attrs}
+    # Not restricted to an allowlist: arbitrary array attributes are returned.
+    assert [e.val_str for e in by_name["tags"].val_array.values] == ["a", "b"]
+    assert [e.val_int for e in by_name["cols"].val_array.values] == [1, 3]
+    assert by_name["ratios"].val_array.values[0].WhichOneof("value") == "val_double"
+    assert [e.val_bool for e in by_name["flags"].val_array.values] == [True, False]
+    # A name present in multiple typed maps is merged (string elements then int).
+    assert [
+        (e.WhichOneof("value"), e.val_str or e.val_int) for e in by_name["mixed"].val_array.values
+    ] == [("val_str", "s"), ("val_int", 9)]
 
 
 def test_convert_results_skips_non_allowlisted_array_paths() -> None:
@@ -559,5 +594,5 @@ def test_convert_results_skips_non_allowlisted_array_paths() -> None:
             "gen_ai.input.messages": "[]",
         }
     ]
-    _, _, attrs = _convert_results(data)
+    _, _, attrs = _convert_results(data, read_typed_arrays=False)
     assert not any(a.name == "gen_ai.input.messages" for a in attrs)

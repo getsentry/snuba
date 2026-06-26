@@ -70,18 +70,22 @@ def _in_or_has(value: Expression, array: Expression, *, as_has: bool) -> Functio
     return in_cond(value, array)
 
 
-def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
+def attribute_key_to_expression(
+    attr_key: AttributeKey, read_arrays_from_typed_columns: bool = False
+) -> Expression:
     """Convert an AttributeKey proto to a Snuba Expression.
 
     This is a wrapper around the proto-layer function that converts
     MalformedAttributeException to BadSnubaRPCRequestException for
-    HTTP-aware code paths.
+    HTTP-aware code paths. ``read_arrays_from_typed_columns`` makes a TYPE_ARRAY SELECT
+    read the typed ``attributes_array_*`` columns instead of the legacy JSON column
+    (pass ``use_array_map_columns(meta)``).
 
     Raises:
         BadSnubaRPCRequestException: If the attribute key is invalid or malformed.
     """
     try:
-        return _attribute_key_to_expression(attr_key)
+        return _attribute_key_to_expression(attr_key, read_arrays_from_typed_columns)
     except MalformedAttributeException as e:
         raise BadSnubaRPCRequestException(str(e)) from e
 
@@ -176,6 +180,48 @@ def attributes_array_selected_expressions() -> list[SelectedExpression]:
         )
         for path in ATTRIBUTES_ARRAY_ALLOWLIST
     ]
+
+
+# The typed array map columns, read whole (key -> Array(T)) by endpoints that return
+# all of an item's attributes. Past the cutoff these replace the legacy
+# attributes_array JSON-column allowlist: every array attribute is returned, not just
+# the allowlisted paths.
+TYPED_ARRAY_MAP_COLUMNS: tuple[str, ...] = (
+    "attributes_array_string",
+    "attributes_array_int",
+    "attributes_array_float",
+    "attributes_array_bool",
+)
+
+
+def typed_array_map_selected_expressions() -> list[SelectedExpression]:
+    """Select the four typed array map columns whole, for endpoints that return every
+    attribute of an item (TraceItemDetails, GetTrace, ExportTraceItems). Replaces the
+    JSON-column allowlist (see ``attributes_array_selected_expressions``) past the
+    cutoff so all array attributes are returned, not just the allowlisted paths."""
+    return [SelectedExpression(col, column(col, alias=col)) for col in TYPED_ARRAY_MAP_COLUMNS]
+
+
+def merge_typed_array_maps(row: dict[str, Any]) -> list[tuple[str, list[Any]]]:
+    """Pop the four typed array map columns from ``row`` and merge them into a list of
+    ``(attribute_name, elements)`` pairs.
+
+    Each map is ``{name: [native elements of one type]}``. An array attribute whose
+    elements span several types appears in multiple maps; its elements are concatenated
+    in column order (string, int, float, bool) — the typed columns store each element
+    type separately, so cross-type element order is not preserved (homogeneous arrays,
+    the common case, keep their order). Names are returned in first-seen order. Callers
+    convert each ``elements`` list to a ``val_array`` and skip empty ones."""
+    merged: dict[str, list[Any]] = {}
+    order: list[str] = []
+    for col in TYPED_ARRAY_MAP_COLUMNS:
+        column_map = row.pop(col, None) or {}
+        for name, values in column_map.items():
+            if name not in merged:
+                merged[name] = []
+                order.append(name)
+            merged[name].extend(values)
+    return [(name, merged[name]) for name in order]
 
 
 def decode_attributes_array_value(key: str, raw: Any) -> list[Any] | str | None:
