@@ -1,4 +1,4 @@
-from typing import List, Sequence
+from collections.abc import Sequence
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages.tags_hash_map import get_array_vals_hash
@@ -17,17 +17,18 @@ from snuba.utils.schemas import (
 
 num_attr_buckets = 40
 
-# Every attribute-key array in the table, across all attribute types (string,
-# float, int, bool, and array-valued). The dedup `key_hash` and the bloom-filter
-# `attribute_keys_hash` are both derived from this so they cover every attribute
-# key regardless of its type.
+# Every attribute-key array in the table, across all attribute types (the scalar
+# string/float/int/bool maps and the four array-valued maps). The dedup `key_hash`
+# and the bloom-filter `attribute_keys_hash` are both derived from this so they
+# cover every attribute key regardless of its type.
 _all_attribute_keys = (
     "arrayConcat("
-    "attributes_string, attributes_float, attributes_int, "
-    "attributes_bool, attributes_array)"
+    "attributes_string, attributes_float, attributes_int, attributes_bool, "
+    "attributes_array_string, attributes_array_int, "
+    "attributes_array_float, attributes_array_bool)"
 )
 
-columns: List[Column[Modifiers]] = [
+columns: list[Column[Modifiers]] = [
     Column("organization_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("item_type", UInt(8)),
@@ -49,9 +50,13 @@ columns: List[Column[Modifiers]] = [
     Column("attributes_float", Array(String())),
     Column("attributes_int", Array(String())),
     Column("attributes_bool", Array(String())),
-    # keys of all array-valued attributes (string/int/float/bool element types),
-    # which all map to a single AttributeKey TYPE_ARRAY.
-    Column("attributes_array", Array(String())),
+    # keys of the array-valued attributes, split by element type to match the
+    # AttributeKey TYPE_ARRAY_STRING / TYPE_ARRAY_INT / TYPE_ARRAY_DOUBLE /
+    # TYPE_ARRAY_BOOL types (float arrays map to TYPE_ARRAY_DOUBLE).
+    Column("attributes_array_string", Array(String())),
+    Column("attributes_array_int", Array(String())),
+    Column("attributes_array_float", Array(String())),
+    Column("attributes_array_bool", Array(String())),
     # a hash of all the attribute keys of the item in sorted order
     # this lets us deduplicate rows with merges
     Column(
@@ -82,7 +87,10 @@ SELECT
     arrayConcat({_attr_num_names}) AS attributes_float,
     mapKeys(attributes_int) AS attributes_int,
     mapKeys(attributes_bool) AS attributes_bool,
-    arrayConcat(mapKeys(attributes_array_string), mapKeys(attributes_array_int), mapKeys(attributes_array_float), mapKeys(attributes_array_bool)) AS attributes_array,
+    mapKeys(attributes_array_string) AS attributes_array_string,
+    mapKeys(attributes_array_int) AS attributes_array_int,
+    mapKeys(attributes_array_float) AS attributes_array_float,
+    mapKeys(attributes_array_bool) AS attributes_array_bool,
     1 AS count,
     timestamp AS last_seen
 FROM eap_items_1_local
