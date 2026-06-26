@@ -175,6 +175,10 @@ def setup_sentry() -> None:
         },
     )
 
+    from snuba.state.sentry_options import init_options
+
+    init_options()
+
     from snuba.utils.profiler import run_ondemand_profiler
 
     if settings.SENTRY_DSN is not None:

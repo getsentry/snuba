@@ -26,6 +26,68 @@
       "type": "integer",
       "default": 120,
       "description": "BLQ hysteresis in seconds. Once routing stale, keep routing messages at least (stale_threshold - static_friction) old. Set to 0 to disable friction."
+    },
+    "enable_any_attribute_filter": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable translating any_attribute_filter trace-item filters into ClickHouse predicates. When false, an any_attribute_filter is treated as always-true (no filtering applied)."
+    },
+    "aggregation_deprecation_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable the deprecation check that rejects deprecated aggregation expressions in EAP time-series requests. When false, the check is skipped."
+    },
+    "default_tier": {
+      "type": "integer",
+      "default": 1,
+      "description": "Default storage routing tier for EAP queries when no other tier is selected. Maps to a Tier enum value (e.g. 1, 8, 64, 512)."
+    },
+    "export_trace_items_default_page_size": {
+      "type": "integer",
+      "default": 10000,
+      "description": "Default page size used by the ExportTraceItems RPC when the request does not specify one."
+    },
+    "rpc_logging_sample_rate": {
+      "type": "number",
+      "default": 0.0,
+      "description": "Sample rate (0.0-1.0) for logging RPC requests. 0 disables RPC request logging."
+    },
+    "ExecutionStage.disable_max_query_size_check_for_clusters": {
+      "type": "string",
+      "default": "",
+      "description": "Comma-separated list of ClickHouse cluster names for which the max-query-size check is disabled. Empty means the check applies to all clusters."
+    },
+    "lw_deletes_split_by_partition": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "default": {},
+      "description": "Dict mapping storage name to a flag; a non-zero value enables splitting that storage's lightweight deletes by partition. Storages with no entry are not split. Migrated from per-storage runtime config lw_deletes_split_by_partition_<storage>."
+    },
+    "lw_deletes_killswitch": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Dict mapping storage name to a string of project ids; a lightweight delete is dropped when its project id appears in that storage's entry. Storages with no entry are not killswitched. Migrated from per-storage runtime config lw_deletes_killswitch_<storage>."
+    },
+    "validate_schema_sample_rate": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number"
+      },
+      "default": {},
+      "description": "Dict mapping snuba logical topic name to a [0,1] sample rate for JSON-schema validation of consumed messages. Topics with no entry default to 1.0 (always validate). Migrated from per-topic runtime config validate_schema_<topic>."
+    },
+    "snql_disabled_dataset": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "boolean"
+      },
+      "default": {},
+      "description": "Dict mapping dataset name to a flag; when true, SnQL queries against that dataset are rejected. Datasets with no entry default to membership in settings.SNQL_DISABLED_DATASETS. Migrated from per-dataset runtime config snql_disabled_dataset__<dataset>."
     }
   }
 }
