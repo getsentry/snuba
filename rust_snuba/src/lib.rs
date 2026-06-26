@@ -2,6 +2,7 @@ pub(crate) const SNUBA_SCHEMA: &str =
     include_str!("../../sentry-options/schemas/snuba/schema.json");
 
 mod accepted_outcomes_consumer;
+mod auto_restart;
 mod config;
 mod consumer;
 mod factory_v2;
