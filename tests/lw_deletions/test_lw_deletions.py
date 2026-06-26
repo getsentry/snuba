@@ -8,8 +8,8 @@ import pytest
 import rapidjson
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.types import BrokerValue, Message, Partition, Topic
+from sentry_options.testing import override_options
 
-from snuba import state
 from snuba.clusters.cluster import ClickhouseNode
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -98,16 +98,16 @@ def test_clickhouse_settings(mock_execute: Mock, mock_num_mutations: Mock) -> No
         next_step=FormatQuery(commit_step, storage, SearchIssuesFormatter(), metrics),
         increment_by=increment_by,
     )
-    state.set_config("lightweight_deletes_sync", 2)
     make_message = generate_message()
-    strategy.submit(next(make_message))
-    strategy.submit(next(make_message))
-    strategy.submit(next(make_message))
+    with override_options("snuba", {"lightweight_deletes_sync": 2}):
+        strategy.submit(next(make_message))
+        strategy.submit(next(make_message))
+        strategy.submit(next(make_message))
     # use different setting for second execute_query
-    state.set_config("lightweight_deletes_sync", 0)
-    strategy.submit(next(make_message))
-    strategy.close()
-    strategy.join()
+    with override_options("snuba", {"lightweight_deletes_sync": 0}):
+        strategy.submit(next(make_message))
+        strategy.close()
+        strategy.join()
 
     assert mock_execute.call_count == 2
     assert commit_step.submit.call_count == 2
@@ -229,6 +229,7 @@ def _make_single_message(
     create=True,
 )
 @pytest.mark.redis_db
+@override_options("snuba", {"lw_deletes_split_by_partition": {"search_issues": 1}})
 def test_split_by_partition_enabled(mock_execute: Mock, mock_num_mutations: Mock) -> None:
     """
     When partition splitting is enabled and system.parts returns 3 Monday dates,
@@ -237,8 +238,6 @@ def test_split_by_partition_enabled(mock_execute: Mock, mock_num_mutations: Mock
     commit_step = Mock()
     metrics = Mock()
     storage = get_writable_storage(StorageKey("search_issues"))
-
-    state.set_config("lw_deletes_split_by_partition_search_issues", 1)
 
     format_query = FormatQuery(commit_step, storage, SearchIssuesFormatter(), metrics)
 
@@ -286,9 +285,7 @@ def test_split_by_partition_disabled(mock_execute: Mock, mock_num_mutations: Moc
     metrics = Mock()
     storage = get_writable_storage(StorageKey("search_issues"))
 
-    # Ensure config is off (default)
-    state.set_config("lw_deletes_split_by_partition_search_issues", 0)
-
+    # Config is off by default (no entry in the lw_deletes_split_by_partition dict).
     strategy = BatchStepCustom(
         max_batch_size=8,
         max_batch_time=1000,
@@ -306,6 +303,7 @@ def test_split_by_partition_disabled(mock_execute: Mock, mock_num_mutations: Moc
 @patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
+@override_options("snuba", {"lw_deletes_split_by_partition": {"search_issues": 1}})
 def test_split_by_partition_redis_tracking(mock_execute: Mock, mock_num_mutations: Mock) -> None:
     """
     Issue a batch with partition splitting enabled. Verify Redis SET is populated.
@@ -315,8 +313,6 @@ def test_split_by_partition_redis_tracking(mock_execute: Mock, mock_num_mutation
     commit_step = Mock()
     metrics = Mock()
     storage = get_writable_storage(StorageKey("search_issues"))
-
-    state.set_config("lw_deletes_split_by_partition_search_issues", 1)
 
     partition_dates = ["2024-01-15", "2024-01-22"]
 
@@ -396,6 +392,7 @@ def test_split_by_partition_redis_tracking(mock_execute: Mock, mock_num_mutation
 @patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
+@override_options("snuba", {"lw_deletes_split_by_partition": {"search_issues": 1}})
 def test_split_by_partition_fallback(mock_execute: Mock, mock_num_mutations: Mock) -> None:
     """
     When partition splitting is enabled but system.parts returns no partitions,
@@ -404,8 +401,6 @@ def test_split_by_partition_fallback(mock_execute: Mock, mock_num_mutations: Moc
     commit_step = Mock()
     metrics = Mock()
     storage = get_writable_storage(StorageKey("search_issues"))
-
-    state.set_config("lw_deletes_split_by_partition_search_issues", 1)
 
     format_query = FormatQuery(commit_step, storage, SearchIssuesFormatter(), metrics)
 
@@ -518,6 +513,7 @@ def _make_eap_message(
 @patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
+@override_options("snuba", {"org_ids_delete_allowlist": "1"})
 def test_allowlist_partial_batch(mock_execute: Mock, mock_num_mutations: Mock) -> None:
     """
     Batch with 2 conditions (org 1 and org 2), allowlist = "1".
@@ -527,8 +523,6 @@ def test_allowlist_partial_batch(mock_execute: Mock, mock_num_mutations: Mock) -
     commit_step = Mock()
     metrics = Mock()
     storage = get_writable_storage(StorageKey("eap_items"))
-
-    state.set_config("org_ids_delete_allowlist", "1")
 
     format_query = FormatQuery(commit_step, storage, EAPItemsFormatter(), metrics)
 
@@ -558,6 +552,7 @@ def test_allowlist_partial_batch(mock_execute: Mock, mock_num_mutations: Mock) -
 @patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
+@override_options("snuba", {"org_ids_delete_allowlist": "999"})
 def test_allowlist_all_blocked(mock_execute: Mock, mock_num_mutations: Mock) -> None:
     """
     All conditions have unallowed org IDs. _execute_query should not be called,
@@ -566,8 +561,6 @@ def test_allowlist_all_blocked(mock_execute: Mock, mock_num_mutations: Mock) -> 
     commit_step = Mock()
     metrics = Mock()
     storage = get_writable_storage(StorageKey("eap_items"))
-
-    state.set_config("org_ids_delete_allowlist", "999")
 
     format_query = FormatQuery(commit_step, storage, EAPItemsFormatter(), metrics)
 
@@ -597,6 +590,7 @@ def test_allowlist_all_blocked(mock_execute: Mock, mock_num_mutations: Mock) -> 
 @patch("snuba.lw_deletions.strategy._num_parts_currently_mutating", return_value=1)
 @patch("snuba.lw_deletions.strategy._execute_query")
 @pytest.mark.redis_db
+@override_options("snuba", {"org_ids_delete_allowlist": "1,2"})
 def test_allowlist_all_allowed(mock_execute: Mock, mock_num_mutations: Mock) -> None:
     """
     All conditions have allowed org IDs. Normal execution, no delete_skipped.
@@ -604,8 +598,6 @@ def test_allowlist_all_allowed(mock_execute: Mock, mock_num_mutations: Mock) -> 
     commit_step = Mock()
     metrics = Mock()
     storage = get_writable_storage(StorageKey("eap_items"))
-
-    state.set_config("org_ids_delete_allowlist", "1,2")
 
     format_query = FormatQuery(commit_step, storage, EAPItemsFormatter(), metrics)
 

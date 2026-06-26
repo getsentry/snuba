@@ -37,7 +37,7 @@ from snuba.query.exceptions import (
 from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.reader import Result
-from snuba.state import get_config, get_int_config
+from snuba.state.sentry_options import get_bool_option, get_int_option
 from snuba.utils.metrics.util import with_span
 from snuba.utils.schemas import ColumnValidator, InvalidColumnType
 from snuba.web import QueryException, QueryExtraData, QueryResult
@@ -98,9 +98,8 @@ def delete_from_storage(
 
     # fail if too many mutations ongoing
     ongoing_mutations = _num_ongoing_mutations(storage.get_cluster(), delete_settings.tables)
-    max_ongoing_mutations = get_int_config(
-        "MAX_ONGOING_MUTATIONS_FOR_DELETE",
-        default=settings.MAX_ONGOING_MUTATIONS_FOR_DELETE,
+    max_ongoing_mutations = get_int_option(
+        "MAX_ONGOING_MUTATIONS_FOR_DELETE", settings.MAX_ONGOING_MUTATIONS_FOR_DELETE
     )
     assert max_ongoing_mutations
     if ongoing_mutations > max_ongoing_mutations:
@@ -225,7 +224,7 @@ WHERE metric = 'PartMutation'
 
 
 def deletes_are_enabled() -> bool:
-    return bool(get_config("storage_deletes_enabled", 1))
+    return get_bool_option("storage_deletes_enabled", True)
 
 
 def _get_rows_to_delete(storage_key: StorageKey, select_query_to_count_rows: Query) -> int:
@@ -292,10 +291,7 @@ def _enforce_max_rows(delete_query: Query, count_storage_key: StorageKey | None 
     if rows_to_delete == 0:
         raise NoRowsToDeleteException
     max_rows_allowed = get_storage(storage_key).get_deletion_settings().max_rows_to_delete
-    if (
-        get_int_config("enforce_max_rows_to_delete", default=1)
-        and rows_to_delete > max_rows_allowed
-    ):
+    if get_bool_option("enforce_max_rows_to_delete", True) and rows_to_delete > max_rows_allowed:
         raise TooManyDeleteRowsException(
             f"Too many rows to delete ({rows_to_delete}), maximum allowed is {max_rows_allowed}"
         )

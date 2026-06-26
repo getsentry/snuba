@@ -286,6 +286,74 @@
       "type": "integer",
       "default": 5,
       "description": "Window in minutes for which a project that recently received replacements is kept in the auto-replacements bypass set. Migrated from runtime config replacements_expiry_window_minutes."
+    },
+    "lw_deletions_offpeak_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, lightweight deletes are only processed during the configured off-peak window."
+    },
+    "lw_deletions_offpeak_start": {
+      "type": "integer",
+      "default": 0,
+      "description": "UTC hour (0-24) at which the lightweight-deletes off-peak window starts."
+    },
+    "lw_deletions_offpeak_end": {
+      "type": "integer",
+      "default": 24,
+      "description": "UTC hour (0-24) at which the lightweight-deletes off-peak window ends."
+    },
+    "org_ids_delete_allowlist": {
+      "type": "string",
+      "default": "",
+      "description": "Comma-separated org ids allowed to issue EAP-items lightweight deletes; empty means all orgs are allowed."
+    },
+    "max_parts_mutating_for_delete": {
+      "type": "integer",
+      "default": 20,
+      "description": "Maximum number of parts that may be mutating before a lightweight delete is deferred."
+    },
+    "permit_delete_by_attribute": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, delete-by-attribute requests are permitted; otherwise they are ignored."
+    },
+    "MAX_ONGOING_MUTATIONS_FOR_DELETE": {
+      "type": "integer",
+      "default": 5,
+      "description": "Maximum number of ongoing mutations allowed before a delete is rejected."
+    },
+    "storage_deletes_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Master switch for storage delete (DELETE FROM) support; when false all delete requests are rejected."
+    },
+    "enforce_max_rows_to_delete": {
+      "type": "boolean",
+      "default": true,
+      "description": "When true, reject deletes whose estimated row count exceeds the storage's max_rows_to_delete."
+    },
+    "lightweight_deletes_sync": {
+      "type": "integer",
+      "default": -1,
+      "description": "Value for the ClickHouse lightweight_deletes_sync setting applied to lightweight-delete queries. -1 (the default) means unset: ClickHouse's own default (2 since 24.4) is left in place. Migrated from runtime config lightweight_deletes_sync."
+    },
+    "lightweight_delete_mode": {
+      "type": "string",
+      "default": "",
+      "description": "ClickHouse lightweight_delete_mode applied to lightweight-delete queries. Empty (the default) leaves the setting unset. One of: alter_update (heavyweight ALTER UPDATE mutation), lightweight_update (lightweight if possible, else ALTER UPDATE), lightweight_update_force (lightweight if possible, else throw); any other non-empty value is treated as lightweight_update. Migrated from runtime config lightweight_delete_mode."
+    },
+    "read_through_cache.short_circuit": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, bypass the read-through query cache entirely and call the underlying function directly (escape hatch for Redis issues)."
+    },
+    "query_settings": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Dict of base ClickHouse query settings (setting name -> value as a string) applied to all queries. Migrated from per-setting runtime config query_settings/<setting>."
     }
   }
 }
