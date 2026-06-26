@@ -6,7 +6,7 @@ import time
 import sentry_sdk
 from sentry_sdk.tracing import NoOpSpan, Transaction
 
-from snuba.state import get_config
+from snuba.state.sentry_options import get_str_option
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +21,7 @@ def _profiler_main() -> None:
     own_hostname = socket.gethostname()
 
     while True:
-        queried_hostnames = get_config("ondemand_profiler_hostnames") or ""
-        queried_hostnames = queried_hostnames.split(",")
+        queried_hostnames = get_str_option("ondemand_profiler_hostnames", "").split(",")
 
         if own_hostname in queried_hostnames and current_transaction is None:
             # Log an error to Sentry on purpose, if the pod slows down it

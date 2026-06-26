@@ -62,7 +62,6 @@ class TestTransactionsApi(BaseApiTest):
         state.delete_config("project_concurrent_limit")
         state.delete_config("project_concurrent_limit_1")
         state.delete_config("project_per_second_limit")
-        state.delete_config("date_align_seconds")
 
     def generate_fizzbuzz_events(self) -> None:
         """

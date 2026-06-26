@@ -1,4 +1,3 @@
-from snuba import state
 from snuba.admin.audit_log.query import audit_log
 from snuba.admin.clickhouse.common import (
     get_ro_query_node_connection,
@@ -9,12 +8,9 @@ from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.state.sentry_options import get_int_option
 
 _MAX_CH_THREADS = 4
-
-
-class BadThreadsValue(Exception):
-    pass
 
 
 @audit_log
@@ -39,17 +35,8 @@ def describe_querylog_schema() -> ClickhouseResult:
 
 
 def _get_clickhouse_threads() -> int:
-    config_threads = state.get_config("admin.querylog_threads", _MAX_CH_THREADS)
-    try:
-        return min(
-            int(config_threads) if config_threads is not None else _MAX_CH_THREADS,
-            _MAX_CH_THREADS,
-        )
-    except ValueError as e:
-        # in case the config is set incorrectly
-        raise BadThreadsValue(
-            f"{config_threads} is not a valid configuration option for Clickhouse `max_threads`"
-        ) from e
+    config_threads = get_int_option("admin.querylog_threads", _MAX_CH_THREADS)
+    return min(config_threads, _MAX_CH_THREADS)
 
 
 def __run_querylog_query(query: str) -> ClickhouseResult:

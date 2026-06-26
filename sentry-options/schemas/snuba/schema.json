@@ -504,6 +504,36 @@
       "type": "boolean",
       "default": true,
       "description": "Killswitch for the MappingOptimizer tags-hashmap query optimization on generic-metrics storages (distributions, gauges). When false the optimizer is a no-op."
+    },
+    "use_sentry_metrics": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the dual-write metrics backend also emits to the Sentry metrics backend (sampled by settings.DDM_METRICS_SAMPLE_RATE)."
+    },
+    "ondemand_profiler_hostnames": {
+      "type": "string",
+      "default": "",
+      "description": "Comma-separated list of hostnames for which the on-demand profiler should capture a profile."
+    },
+    "max_spans_per_transaction": {
+      "type": "integer",
+      "default": 2000,
+      "description": "Maximum number of spans processed per transaction by the transactions consumer."
+    },
+    "admin.querylog_threads": {
+      "type": "integer",
+      "default": 4,
+      "description": "max_threads ClickHouse setting used by the admin querylog query; clamped to a hard maximum of 4."
+    },
+    "executor_queue_size_factor": {
+      "type": "integer",
+      "default": 10,
+      "description": "Multiplier applied to max_concurrent_queries to size the subscription executor's pending-future queue before backpressure."
+    },
+    "subscription_primary_task_builder": {
+      "type": "string",
+      "default": "jittered",
+      "description": "TaskBuilderMode for the subscription scheduler: one of immediate, jittered, transition_jitter, transition_immediate."
     }
   }
 }
