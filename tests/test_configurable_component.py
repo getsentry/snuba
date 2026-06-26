@@ -116,9 +116,9 @@ class TestConfigurableComponentBasic:
 
     def test_config_definitions(self, test_component: SomeConfigurableComponent) -> None:
         """Test that config_definitions returns all configurations."""
-        assert set(
-            ["default_config_1", "additional_config_1", "override_config_for_org_id"]
-        ) == set(test_component.config_definitions().keys())
+        assert {"default_config_1", "additional_config_1", "override_config_for_org_id"} == set(
+            test_component.config_definitions().keys()
+        )
 
     def test_get_current_configs(self, test_component: SomeConfigurableComponent) -> None:
         """Test that get_current_configs returns the correct configs."""

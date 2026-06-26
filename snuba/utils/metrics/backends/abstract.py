@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Union
 
 from snuba.utils.metrics.types import Tags
 
@@ -13,9 +12,9 @@ class MetricsBackend(ABC):
     def increment(
         self,
         name: str,
-        value: Union[int, float] = 1,
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        value: int | float = 1,
+        tags: Tags | None = None,
+        unit: str | None = None,
     ) -> None:
         """
         Increment a counter metric. These increments can also be
@@ -33,9 +32,9 @@ class MetricsBackend(ABC):
     def gauge(
         self,
         name: str,
-        value: Union[int, float],
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        value: int | float,
+        tags: Tags | None = None,
+        unit: str | None = None,
     ) -> None:
         """
         Emit a metric that is the authoritative value for a quantity at a point in time
@@ -50,9 +49,9 @@ class MetricsBackend(ABC):
     def timing(
         self,
         name: str,
-        value: Union[int, float],
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        value: int | float,
+        tags: Tags | None = None,
+        unit: str | None = None,
     ) -> None:
         """
         Emit a metric for the timing performance of an operation.
@@ -67,9 +66,9 @@ class MetricsBackend(ABC):
     def distribution(
         self,
         name: str,
-        value: Union[int, float],
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        value: int | float,
+        tags: Tags | None = None,
+        unit: str | None = None,
     ) -> None:
         """
         Emit a metric for the performance of an operation.
@@ -87,6 +86,6 @@ class MetricsBackend(ABC):
         text: str,
         alert_type: str,
         priority: str,
-        tags: Optional[Tags] = None,
+        tags: Tags | None = None,
     ) -> None:
         raise NotImplementedError

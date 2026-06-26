@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from operator import attrgetter
 from typing import Any
 from unittest.mock import patch
@@ -29,7 +29,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, TraceItem
 
 from snuba import state
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.settings import ENABLE_TRACE_PAGINATION_DEFAULT
 from snuba.web.rpc.common.common import ATTRIBUTES_ARRAY_ALLOWLIST
@@ -45,7 +45,7 @@ from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import SERVER_NAME, gen_item_message
 
 _TRACE_ID = uuid.uuid4().hex
-_BASE_TIME = datetime.now(tz=timezone.utc).replace(
+_BASE_TIME = datetime.now(tz=UTC).replace(
     minute=0,
     second=0,
     microsecond=0,
@@ -148,10 +148,10 @@ def get_attributes(
 
 @pytest.fixture(autouse=False)
 def setup_teardown(eap: None, redis_db: None) -> None:
-    items_storage = get_storage(StorageKey("eap_items"))
+    items_storage = get_writable_storage(StorageKey("eap_items"))
 
-    write_raw_unprocessed_events(items_storage, _SPANS)  # type: ignore
-    write_raw_unprocessed_events(items_storage, _LOGS)  # type: ignore
+    write_raw_unprocessed_events(items_storage, _SPANS)
+    write_raw_unprocessed_events(items_storage, _LOGS)
 
 
 @pytest.mark.eap
@@ -226,7 +226,7 @@ class TestGetTrace(BaseApiTest):
                                 key=attrgetter("key.name"),
                             ),
                         )
-                        for timestamp, span in zip(timestamps, spans)
+                        for timestamp, span in zip(timestamps, spans, strict=False)
                     ],
                 ),
             ],
@@ -321,7 +321,7 @@ class TestGetTrace(BaseApiTest):
                                 ),
                             ],
                         )
-                        for timestamp, span in zip(timestamps, spans)
+                        for timestamp, span in zip(timestamps, spans, strict=False)
                     ],
                 ),
             ],
@@ -443,7 +443,7 @@ class TestGetTrace(BaseApiTest):
                                 ),
                             ],
                         )
-                        for timestamp, log in zip(timestamps, logs)
+                        for timestamp, log in zip(timestamps, logs, strict=False)
                     ],
                 ),
             ],

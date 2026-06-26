@@ -1,4 +1,3 @@
-from typing import Optional
 from urllib.parse import urlencode
 
 import structlog
@@ -26,7 +25,7 @@ class CloudIdentityAPI:
         except Exception as e:
             logger.exception(e)
 
-    def _get_group_id(self, group_email: str) -> Optional[str]:
+    def _get_group_id(self, group_email: str) -> str | None:
         if not self.initialized:
             return None
 
@@ -53,7 +52,7 @@ class CloudIdentityAPI:
             return False
 
         try:
-            query_params = urlencode({"query": "member_key_id == '{}'".format(member)})
+            query_params = urlencode({"query": f"member_key_id == '{member}'"})
             request = (
                 self.service.groups()
                 .memberships()

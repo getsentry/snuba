@@ -1,5 +1,6 @@
-from datetime import datetime, timezone
-from typing import Any, Iterable, Mapping, Optional, Sequence, Tuple
+from collections.abc import Iterable, Mapping, Sequence
+from datetime import UTC, datetime
+from typing import Any
 from unittest.mock import ANY
 
 import pytest
@@ -16,12 +17,12 @@ from snuba.processor import InsertBatch
 
 MATERIALIZATION_VERSION = 4
 
-timestamp = int(datetime.now(timezone.utc).timestamp())
+timestamp = int(datetime.now(UTC).timestamp())
 # expects that test is run in utc local time
 intermediate_timestamp = datetime.utcfromtimestamp(timestamp)
-expected_timestamp = int(intermediate_timestamp.replace(tzinfo=timezone.utc).timestamp())
+expected_timestamp = int(intermediate_timestamp.replace(tzinfo=UTC).timestamp())
 
-sentry_received_timestamp = datetime.now(timezone.utc).timestamp()
+sentry_received_timestamp = datetime.now(UTC).timestamp()
 expected_sentry_received_timestamp = datetime.utcfromtimestamp(sentry_received_timestamp)
 
 MAPPING_META_COMMON = {
@@ -187,7 +188,7 @@ TEST_CASES_POLYMORPHIC = [
 )
 def test_metrics_polymorphic_processor(
     message: Mapping[str, Any],
-    expected_output: Optional[Sequence[Mapping[str, Any]]],
+    expected_output: Sequence[Mapping[str, Any]] | None,
 ) -> None:
     settings.DISABLED_DATASETS = set()
 
@@ -227,7 +228,7 @@ def test_metrics_polymorphic_processor(
     ],
 )
 def test_generic_metrics_sets_processor(
-    message: Mapping[str, Any], expected_output: Optional[Sequence[Mapping[str, Any]]]
+    message: Mapping[str, Any], expected_output: Sequence[Mapping[str, Any]] | None
 ) -> None:
     meta = KafkaMessageMetadata(offset=100, partition=1, timestamp=datetime(1970, 1, 1))
 
@@ -239,6 +240,6 @@ def test_generic_metrics_sets_processor(
     )
 
 
-def sorted_tag_items(message: Mapping[str, Any]) -> Iterable[Tuple[str, int]]:
+def sorted_tag_items(message: Mapping[str, Any]) -> Iterable[tuple[str, int]]:
     tags = message["tags"]
     return sorted(tags.items())

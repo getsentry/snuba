@@ -1,4 +1,4 @@
-from typing import Mapping, Optional, Sequence
+from collections.abc import Mapping, Sequence
 
 from snuba.query.conditions import ConditionFunctions
 from snuba.query.dsl import multiply
@@ -91,21 +91,18 @@ class TimeSeriesProcessor(LogicalQueryProcessor):
             ),
         )
 
-    def __group_time_column(self, exp: Expression, granularity: Optional[int]) -> Expression:
-        if isinstance(exp, Column):
-            if exp.column_name in self.__time_replace_columns:
-                real_column_name = self.__time_replace_columns[exp.column_name]
-                if granularity is None:
-                    granularity = 3600
-                time_column_fn = self.__group_time_function(
-                    real_column_name, granularity, exp.alias
-                )
-                return time_column_fn
+    def __group_time_column(self, exp: Expression, granularity: int | None) -> Expression:
+        if isinstance(exp, Column) and exp.column_name in self.__time_replace_columns:
+            real_column_name = self.__time_replace_columns[exp.column_name]
+            if granularity is None:
+                granularity = 3600
+            time_column_fn = self.__group_time_function(real_column_name, granularity, exp.alias)
+            return time_column_fn
 
         return exp
 
     def __group_time_function(
-        self, column_name: str, granularity: int, alias: Optional[str]
+        self, column_name: str, granularity: int, alias: str | None
     ) -> FunctionCall:
         function_call = {
             3600: FunctionCall(
@@ -193,7 +190,7 @@ GRANULARITY_MAPPING = {
 }
 
 
-def extract_granularity_from_query(query: Query, column: str) -> Optional[int]:
+def extract_granularity_from_query(query: Query, column: str) -> int | None:
     """
     This extracts the `granularity` from the `groupby` statement of the query.
     The matches are essentially the reverse of `TimeSeriesProcessor.__group_time_function`.

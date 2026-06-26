@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import importlib
 import time
-from datetime import datetime, timedelta, timezone
-from typing import Any, Mapping, MutableMapping, Sequence
+from collections.abc import Mapping, MutableMapping, Sequence
+from datetime import UTC, datetime, timedelta
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -122,7 +123,7 @@ class TestReplacer:
         assert _issue_count() == [{"count": 1, "group_id": 1}]
         assert _issue_count(total=True) == [{"count": 1, "group_id": 1}]
 
-        timestamp = datetime.now(tz=timezone.utc)
+        timestamp = datetime.now(tz=UTC)
 
         message: Message[KafkaPayload] = Message(
             BrokerValue(

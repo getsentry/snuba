@@ -1,8 +1,9 @@
 import logging
 import os
 from abc import ABC, abstractmethod
+from collections.abc import MutableMapping
 from dataclasses import dataclass
-from typing import Any, MutableMapping, Optional, cast
+from typing import Any, cast
 
 from snuba.manual_jobs.redis import _set_job_type
 from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
@@ -36,8 +37,8 @@ class JobLogger(ABC):
 class JobSpec:
     job_id: str
     job_type: str
-    is_async: Optional[bool] = False
-    params: Optional[MutableMapping[Any, Any]] = None
+    is_async: bool | None = False
+    params: MutableMapping[Any, Any] | None = None
 
 
 class Job(ABC, metaclass=RegisteredClass):

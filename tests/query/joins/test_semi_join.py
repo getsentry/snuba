@@ -1,4 +1,5 @@
-from typing import Mapping, Optional, cast
+from collections.abc import Mapping
+from typing import cast
 
 import pytest
 
@@ -207,10 +208,10 @@ TEST_CASES = [
 @pytest.mark.parametrize("query, expected_semi_join", TEST_CASES)
 def test_subquery_generator(
     query: CompositeQuery[Table],
-    expected_semi_join: Mapping[str, Optional[JoinModifier]],
+    expected_semi_join: Mapping[str, JoinModifier | None],
 ) -> None:
     def assert_transformation(
-        clause: JoinClause[Table], expected: Mapping[str, Optional[JoinModifier]]
+        clause: JoinClause[Table], expected: Mapping[str, JoinModifier | None]
     ) -> None:
         right_alias = clause.right_node.alias
         assert right_alias in expected and clause.join_modifier == expected[right_alias], (

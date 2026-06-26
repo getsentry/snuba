@@ -1,7 +1,6 @@
 import time
 import uuid
 from datetime import datetime, timedelta
-from typing import Optional, Set
 from unittest.mock import call, patch
 
 import pytest
@@ -52,9 +51,9 @@ redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 def test_optimized_partition_tracker(tracker: OptimizedPartitionTracker) -> None:
     def assert_partitions(
         *,
-        all: Optional[Set[str]] = None,
-        completed: Optional[Set[str]] = None,
-        pending: Optional[Set[str]] = None,
+        all: set[str] | None = None,
+        completed: set[str] | None = None,
+        pending: set[str] | None = None,
     ) -> None:
         """
         Assert partition status with sleep + retry. This is needed for when the

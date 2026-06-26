@@ -1,4 +1,5 @@
-from typing import Any, MutableMapping
+from collections.abc import MutableMapping
+from typing import Any
 
 from snuba.clickhouse.query import Query
 from snuba.query.processors.physical import ClickhouseQueryProcessor

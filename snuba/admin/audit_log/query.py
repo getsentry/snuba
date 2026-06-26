@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from collections.abc import Callable, MutableMapping
+from datetime import UTC, datetime
 from enum import Enum
 from functools import partial
-from typing import Callable, MutableMapping, TypeVar, Union
-
-DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
+from typing import TypeVar
 
 from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.audit_log.base import AuditLog
+
+DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 Return = TypeVar("Return")
 
@@ -30,7 +31,7 @@ def audit_log(fn: Callable[[str, str], Return]) -> Callable[[str, str], Return]:
     """
 
     def audit_log_wrapper(query: str, user: str) -> Return:
-        data: MutableMapping[str, Union[str, QueryExecutionStatus]] = {
+        data: MutableMapping[str, str | int] = {
             "query": query,
         }
         audit_log_notify = partial(
@@ -42,11 +43,11 @@ def audit_log(fn: Callable[[str, str], Return]) -> Callable[[str, str], Return]:
             result = fn(query, user)
         except Exception:
             data["status"] = QueryExecutionStatus.FAILED.value
-            data["end_timestamp"] = datetime.now(timezone.utc).strftime(DATETIME_FORMAT)
+            data["end_timestamp"] = datetime.now(UTC).strftime(DATETIME_FORMAT)
             audit_log_notify(data=data)
             raise
         data["status"] = QueryExecutionStatus.SUCCEEDED.value
-        data["end_timestamp"] = datetime.now(timezone.utc).strftime(DATETIME_FORMAT)
+        data["end_timestamp"] = datetime.now(UTC).strftime(DATETIME_FORMAT)
         audit_log_notify(data=data)
         return result
 

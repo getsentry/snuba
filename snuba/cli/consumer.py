@@ -1,6 +1,7 @@
 import logging
 import signal
-from typing import Any, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import click
 import sentry_sdk
@@ -169,33 +170,33 @@ logger = logging.getLogger(__name__)
 def consumer(
     *,
     storage_name: str,
-    raw_events_topic: Optional[str],
-    replacements_topic: Optional[str],
-    commit_log_topic: Optional[str],
+    raw_events_topic: str | None,
+    replacements_topic: str | None,
+    commit_log_topic: str | None,
     consumer_group: str,
     bootstrap_server: Sequence[str],
     commit_log_bootstrap_server: Sequence[str],
     replacement_bootstrap_server: Sequence[str],
-    slice_id: Optional[int],
+    slice_id: int | None,
     max_batch_size: int,
     max_batch_time_ms: int,
-    max_insert_batch_size: Optional[int],
-    max_insert_batch_time_ms: Optional[int],
+    max_insert_batch_size: int | None,
+    max_insert_batch_time_ms: int | None,
     auto_offset_reset: str,
     no_strict_offset_reset: bool,
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
-    processes: Optional[int],
-    input_block_size: Optional[int],
-    output_block_size: Optional[int],
+    processes: int | None,
+    input_block_size: int | None,
+    output_block_size: int | None,
     join_timeout: int,
     enforce_schema: bool,
-    log_level: Optional[str],
-    profile_path: Optional[str],
+    log_level: str | None,
+    profile_path: str | None,
     max_poll_interval_ms: int,
-    quantized_rebalance_consumer_group_delay_secs: Optional[int],
-    health_check_file: Optional[str],
-    group_instance_id: Optional[str],
+    quantized_rebalance_consumer_group_delay_secs: int | None,
+    health_check_file: str | None,
+    group_instance_id: str | None,
 ) -> None:
     setup_logging(log_level)
     setup_sentry()

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar, Union
+from typing import Generic, TypeVar
 
 from snuba.query import ProcessableQuery, TSimpleDataSource
 from snuba.query.composite import CompositeQuery
@@ -21,24 +21,21 @@ class DataSourceVisitor(ABC, Generic[TReturn, TSimpleDataSource]):
 
     def visit(
         self,
-        data_source: Union[
-            TSimpleDataSource,
-            JoinClause[TSimpleDataSource],
-            ProcessableQuery[TSimpleDataSource],
-            CompositeQuery[TSimpleDataSource],
-        ],
+        data_source: TSimpleDataSource
+        | JoinClause[TSimpleDataSource]
+        | ProcessableQuery[TSimpleDataSource]
+        | CompositeQuery[TSimpleDataSource],
     ) -> TReturn:
         if isinstance(data_source, JoinClause):
             return self._visit_join(data_source)
-        elif isinstance(data_source, ProcessableQuery):
+        if isinstance(data_source, ProcessableQuery):
             return self._visit_simple_query(data_source)
-        elif isinstance(data_source, CompositeQuery):
+        if isinstance(data_source, CompositeQuery):
             return self._visit_composite_query(data_source)
-        else:
-            # It must be a simple data source according to the type
-            # signature, we cannot do that via the isinstance call
-            # since that type does not exist at runtime.
-            return self._visit_simple_source(data_source)
+        # It must be a simple data source according to the type
+        # signature, we cannot do that via the isinstance call
+        # since that type does not exist at runtime.
+        return self._visit_simple_source(data_source)
 
     @abstractmethod
     def _visit_simple_source(self, data_source: TSimpleDataSource) -> TReturn:

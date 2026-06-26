@@ -1,4 +1,4 @@
-from typing import Optional, Sequence, Set
+from collections.abc import Sequence
 
 from snuba import environment, settings
 from snuba.clickhouse.query import Query
@@ -44,12 +44,12 @@ class PrewhereProcessor(ClickhouseQueryProcessor):
     def __init__(
         self,
         prewhere_candidates: Sequence[str],
-        omit_if_final: Optional[Sequence[str]] = None,
-        max_prewhere_conditions: Optional[int] = None,
+        omit_if_final: Sequence[str] | None = None,
+        max_prewhere_conditions: int | None = None,
     ) -> None:
         self.__prewhere_candidates = prewhere_candidates
         self.__omit_if_final = omit_if_final
-        self.__max_prewhere_conditions: Optional[int] = max_prewhere_conditions
+        self.__max_prewhere_conditions: int | None = max_prewhere_conditions
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         max_prewhere_conditions: int = (
@@ -60,7 +60,7 @@ class PrewhereProcessor(ClickhouseQueryProcessor):
         # We remove the candidates that appear in a uniq or -If aggregations
         # because a query like `countIf(col=x) .. PREWHERE col=x` can make
         # the Clickhouse server crash.
-        uniq_cols: Set[str] = set()
+        uniq_cols: set[str] = set()
         expressions = query.get_all_expressions()
         for exp in expressions:
             if isinstance(exp, FunctionCall) and (

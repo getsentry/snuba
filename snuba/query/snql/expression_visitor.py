@@ -1,15 +1,10 @@
 import re
+from collections.abc import Callable, Iterable, Sequence
 from enum import Enum
 from typing import (
     Any,
-    Callable,
-    Iterable,
-    List,
     NamedTuple,
-    Optional,
-    Sequence,
-    Tuple,
-    Union,
+    TypeAlias,
 )
 
 from parsimonious.nodes import Node
@@ -44,8 +39,8 @@ class HighPriTuple(NamedTuple):
     arithm: Expression
 
 
-HighPriArithmetic = Union[Node, HighPriTuple, Sequence[HighPriTuple]]
-LowPriArithmetic = Union[Node, LowPriTuple, Sequence[LowPriTuple]]
+HighPriArithmetic: TypeAlias = Node | HighPriTuple | Sequence[HighPriTuple]
+LowPriArithmetic: TypeAlias = Node | LowPriTuple | Sequence[LowPriTuple]
 
 
 ARITHMETIC_OP_TO_FUNCTION = {
@@ -58,19 +53,19 @@ ARITHMETIC_OP_TO_FUNCTION = {
 
 def get_arithmetic_function(
     operator: Enum,
-) -> Callable[[Expression, Expression, Optional[str]], FunctionCall]:
+) -> Callable[[Expression, Expression, str | None], FunctionCall]:
     return ARITHMETIC_OP_TO_FUNCTION[operator]
 
 
 def get_arithmetic_expression(
     term: Expression,
-    exp: Union[LowPriArithmetic, HighPriArithmetic, Sequence[Any]],
+    exp: LowPriArithmetic | HighPriArithmetic | Sequence[Any],
 ) -> Expression:
     if isinstance(exp, Node):
         return term
     if isinstance(exp, (LowPriTuple, HighPriTuple)):
         return get_arithmetic_function(exp.op)(term, exp.arithm, None)
-    elif isinstance(exp, list):
+    if isinstance(exp, list):
         for elem in exp:
             if isinstance(elem, (LowPriTuple, HighPriTuple)):
                 term = get_arithmetic_function(elem.op)(term, elem.arithm, None)
@@ -89,14 +84,14 @@ def visit_column_name(node: Node, visited_children: Iterable[Any]) -> Column:
 
 
 def visit_low_pri_tuple(
-    node: Node, visited_children: Tuple[LowPriOperator, Any, Expression]
+    node: Node, visited_children: tuple[LowPriOperator, Any, Expression]
 ) -> LowPriTuple:
     left, _, right = visited_children
     return LowPriTuple(op=left, arithm=right)
 
 
 def visit_high_pri_tuple(
-    node: Node, visited_children: Tuple[HighPriOperator, Any, Expression]
+    node: Node, visited_children: tuple[HighPriOperator, Any, Expression]
 ) -> HighPriTuple:
     left, _, right = visited_children
     return HighPriTuple(op=left, arithm=right)
@@ -110,14 +105,14 @@ def visit_high_pri_op(node: Node, visited_children: Iterable[Any]) -> HighPriOpe
     return HighPriOperator(node.text)
 
 
-def visit_arithmetic_term(node: Node, visited_children: Tuple[Any, Expression]) -> Expression:
+def visit_arithmetic_term(node: Node, visited_children: tuple[Any, Expression]) -> Expression:
     _, term = visited_children
     return term
 
 
 def visit_low_pri_arithmetic(
     node: Node,
-    visited_children: Tuple[Any, Expression, LowPriArithmetic],
+    visited_children: tuple[Any, Expression, LowPriArithmetic],
 ) -> Expression:
     _, term, exp = visited_children
     return get_arithmetic_expression(term, exp)
@@ -125,7 +120,7 @@ def visit_low_pri_arithmetic(
 
 def visit_high_pri_arithmetic(
     node: Node,
-    visited_children: Tuple[Any, Expression, HighPriArithmetic],
+    visited_children: tuple[Any, Expression, HighPriArithmetic],
 ) -> Expression:
     _, term, exp = visited_children
 
@@ -142,24 +137,24 @@ def visit_numeric_literal(node: Node, visited_children: Iterable[Any]) -> Litera
 newline_re = re.compile("((?:\\{2})*)(\\n)")
 
 
-def visit_quoted_literal(node: Node, visited_children: Tuple[Any]) -> Literal:
+def visit_quoted_literal(node: Node, visited_children: tuple[Any]) -> Literal:
     text = node.text[1:-1]
     text = newline_re.sub(text, "\n")
     match = text.replace("\\'", "'")
     return Literal(None, match)
 
 
-def visit_parameter(node: Node, visited_children: Tuple[Expression, Any, Any, Any]) -> Expression:
+def visit_parameter(node: Node, visited_children: tuple[Expression, Any, Any, Any]) -> Expression:
     param, _, _, _ = visited_children
     return param
 
 
 def visit_parameters_list(
     node: Node,
-    visited_children: Tuple[Union[Expression, List[Expression]], Expression],
-) -> List[Expression]:
+    visited_children: tuple[Expression | list[Expression], Expression],
+) -> list[Expression]:
     left_section, right_section = visited_children
-    ret: List[Expression] = []
+    ret: list[Expression] = []
     if not isinstance(left_section, Node):
         # We get a Node when the parameter rule is empty. Thus
         # no parameters
@@ -168,14 +163,14 @@ def visit_parameters_list(
             # thus the generic visitor method removes the list.
             ret = [left_section]
         else:
-            ret = [p for p in left_section]
+            ret = list(left_section)
     ret.append(right_section)
     return ret
 
 
 def visit_function_call(
     node: Node,
-    visited_children: Tuple[str, Any, List[Expression], Any, Union[Node, List[Expression]]],
+    visited_children: tuple[str, Any, list[Expression], Any, Node | list[Expression]],
 ) -> Expression:
     name, _, params1, _, params2 = visited_children
     param_list1 = tuple(params1)

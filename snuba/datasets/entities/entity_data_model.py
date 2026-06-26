@@ -7,4 +7,4 @@ class EntityColumnSet(ColumnSet):
     """
 
     def __repr__(self) -> str:
-        return "EntityColumnSet({})".format(repr(self.columns))
+        return f"EntityColumnSet({repr(self.columns)})"

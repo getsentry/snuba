@@ -1,4 +1,4 @@
-from typing import List, Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import UUID, Column, DateTime64, UInt
 from snuba.clusters.storage_sets import StorageSetKey
@@ -11,7 +11,7 @@ table_prefix = "profile_chunks"
 local_table_name = f"{table_prefix}_local"
 dist_table_name = f"{table_prefix}_dist"
 
-columns: List[Column[Modifiers]] = [
+columns: list[Column[Modifiers]] = [
     Column("project_id", UInt(64)),
     Column("profiler_id", UUID()),
     Column("chunk_id", UUID()),

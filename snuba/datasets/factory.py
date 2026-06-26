@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from glob import glob
-from typing import Type
 
 import sentry_sdk
 
@@ -20,7 +19,7 @@ class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
         with sentry_sdk.start_span(op="initialize", description="Dataset Factory"):
             initialize_entity_factory()
             self._dataset_map: dict[str, Dataset] = {}
-            self._name_map: dict[Type[Dataset], str] = {}
+            self._name_map: dict[type[Dataset], str] = {}
             self.__initialize()
 
     def __initialize(self) -> None:
@@ -36,7 +35,7 @@ class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
         self._name_map = {v.__class__: k for k, v in self._dataset_map.items()}
 
     def all_names(self) -> list[str]:
-        return [name for name in self._dataset_map.keys() if name not in settings.DISABLED_DATASETS]
+        return [name for name in self._dataset_map if name not in settings.DISABLED_DATASETS]
 
     def get(self, name: str) -> Dataset:
         if name in settings.DISABLED_DATASETS:

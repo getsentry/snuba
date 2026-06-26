@@ -32,7 +32,7 @@ def snuba_api() -> FlaskClient:
 
 
 def test_response_dumping() -> None:
-    data = {
+    data: dict[str, Any] = {
         "data": [
             {"count": 5181337, "release": "elsa"},
             {"count": 2170, "release": "simba"},
@@ -58,7 +58,7 @@ def test_response_dumping() -> None:
     dumped_payload = dump_payload(data)
 
     clean_data = copy.deepcopy(data)
-    clean_data["data"][3]["release"] = "RAW_BYTESTRING__" + b"x;\x83\xc0\x05".hex()  # type: ignore
+    clean_data["data"][3]["release"] = "RAW_BYTESTRING__" + b"x;\x83\xc0\x05".hex()
     assert json.loads(dumped_payload) == clean_data
 
 

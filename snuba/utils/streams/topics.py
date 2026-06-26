@@ -1,5 +1,5 @@
+from collections.abc import Mapping
 from enum import Enum
-from typing import Mapping
 
 from sentry_kafka_schemas import SchemaNotFound, get_topic
 

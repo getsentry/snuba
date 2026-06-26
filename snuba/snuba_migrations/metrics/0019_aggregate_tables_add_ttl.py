@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
@@ -21,8 +21,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
             operations.RunSql(
                 storage_set=StorageSetKey.METRICS,
                 statement=(
-                    f"ALTER TABLE {table_name} MODIFY TTL "
-                    "timestamp + toIntervalDay(retention_days)"
+                    f"ALTER TABLE {table_name} MODIFY TTL timestamp + toIntervalDay(retention_days)"
                 ),
             )
             for table_name in self.table_names

@@ -39,4 +39,4 @@ def is_storage_set_sliced(storage_set: StorageSetKey) -> bool:
     """
     from snuba.settings import SLICED_STORAGE_SETS
 
-    return True if storage_set.value in SLICED_STORAGE_SETS.keys() else False
+    return storage_set.value in SLICED_STORAGE_SETS

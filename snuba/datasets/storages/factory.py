@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import contextlib
+from collections.abc import MutableSequence, Sequence
 from glob import glob
-from typing import MutableSequence, Sequence
 
 import sentry_sdk
 
@@ -88,10 +89,8 @@ def get_writable_storages() -> Sequence[WritableTableStorage]:
     writable_storages: MutableSequence[WritableTableStorage] = []
     storage_keys = get_all_storage_keys()
     for storage_key in storage_keys:
-        try:
+        with contextlib.suppress(AssertionError):
             writable_storages.append(get_writable_storage(storage_key))
-        except AssertionError:
-            pass
 
     return writable_storages
 

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import typing
 from collections import defaultdict
+from collections.abc import MutableMapping
 from datetime import datetime, timedelta
-from typing import List, MutableMapping
 
 from snuba import environment, state
 from snuba.state import get_int_config
@@ -79,7 +79,7 @@ class Counter:
             right += timedelta(minutes=1)
         self.__add_to_bucket(project_id, start_minute, end - left)
 
-    def get_projects_exceeding_limit(self) -> List[int]:
+    def get_projects_exceeding_limit(self) -> list[int]:
         now = datetime.now()
         self.__trim_expired_buckets(now)
         project_groups: dict[int, timedelta] = defaultdict(lambda: timedelta(seconds=0))

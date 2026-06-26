@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any
 
 from flask import Response
 
@@ -15,7 +15,7 @@ from snuba.utils.metrics.timer import Timer
 from snuba.web.views import dataset_query
 
 
-def run_snql_query(body: Dict[str, Any], user: str) -> Response:
+def run_snql_query(body: dict[str, Any], user: str) -> Response:
     """
     Validates, audit logs, and executes given query.
     """
@@ -36,7 +36,7 @@ def run_snql_query(body: Dict[str, Any], user: str) -> Response:
     return run_query_with_audit(body["query"], user)
 
 
-def _validate_projects_in_query(body: Dict[str, Any], dataset: Dataset, is_mql: bool) -> None:
+def _validate_projects_in_query(body: dict[str, Any], dataset: Dataset, is_mql: bool) -> None:
     """
     Validates that the projects accessed by the query are allowed to be accessed.
     """
@@ -65,7 +65,7 @@ def _validate_projects_in_query(body: Dict[str, Any], dataset: Dataset, is_mql: 
         )
 
 
-def run_mql_query(body: Dict[str, Any], user: str) -> Response:
+def run_mql_query(body: dict[str, Any], user: str) -> Response:
     """
     Validates, audit logs, and executes given query.
     """

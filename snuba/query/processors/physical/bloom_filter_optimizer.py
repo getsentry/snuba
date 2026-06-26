@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Dict, Optional, Sequence, Set, Tuple
+from collections.abc import Sequence
 
 from snuba.clickhouse.query import Query
 from snuba.query.conditions import combine_and_conditions, combine_or_conditions
@@ -27,9 +27,9 @@ class BloomFilterOptimizer(AbstractArrayJoinOptimizer):
 
 def generate_bloom_filter_condition(
     column_name: str,
-    single_filtered: Dict[str, Sequence[str]],
-    multiple_filtered: Dict[Tuple[str, ...], Sequence[Tuple[str, ...]]],
-) -> Optional[Expression]:
+    single_filtered: dict[str, Sequence[str]],
+    multiple_filtered: dict[tuple[str, ...], Sequence[tuple[str, ...]]],
+) -> Expression | None:
     """
     Generate the filters on the array columns to use the bloom filter index on
     the spans.op and spans.group columns in order to filter the transactions
@@ -39,7 +39,7 @@ def generate_bloom_filter_condition(
     the final condition is built up from a series of has conditions.
     """
 
-    per_key_vals: Dict[str, Set[str]] = defaultdict(set)
+    per_key_vals: dict[str, set[str]] = defaultdict(set)
 
     for key, single_filter in single_filtered.items():
         for val in single_filter:
@@ -47,7 +47,7 @@ def generate_bloom_filter_condition(
 
     for keys, multiple_filter in multiple_filtered.items():
         for val_tuple in multiple_filter:
-            for key, val in zip(keys, val_tuple):
+            for key, val in zip(keys, val_tuple, strict=False):
                 per_key_vals[key].add(val)
 
     conditions = [

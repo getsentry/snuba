@@ -35,15 +35,14 @@ class EntityProcessingStage(QueryPipelineStage[Request, ClickhouseQuery | Compos
         run_entity_validators(cast(EntityQuery, query), pipe_input.query_settings)
         if isinstance(query, LogicalQuery) and isinstance(query.get_from_clause(), Entity):
             return run_entity_processing_executor(query, pipe_input.query_settings)
-        elif isinstance(query, CompositeQuery):
+        if isinstance(query, CompositeQuery):
             # if we were not able to translate the storage query earlier and we got to this point, this is
             # definitely a composite entity query
             return translate_composite_query(
                 cast(CompositeQuery[Entity], query),
                 pipe_input.query_settings,
             )
-        else:
-            raise NotImplementedError(f"Unknown query type {type(query)}, {query}")
+        raise NotImplementedError(f"Unknown query type {type(query)}, {query}")
 
 
 class StorageProcessingStage(
@@ -68,10 +67,7 @@ class StorageProcessingStage(
         if isinstance(pipe_input.data, ClickhouseQuery):
             query_plan = build_best_plan(pipe_input.data, pipe_input.query_settings, [])
             return apply_storage_processors(query_plan, pipe_input.query_settings)
-        else:
-            composite_query_plan = build_best_plan_for_composite_query(
-                pipe_input.data, pipe_input.query_settings, []
-            )
-            return apply_composite_storage_processors(
-                composite_query_plan, pipe_input.query_settings
-            )
+        composite_query_plan = build_best_plan_for_composite_query(
+            pipe_input.data, pipe_input.query_settings, []
+        )
+        return apply_composite_storage_processors(composite_query_plan, pipe_input.query_settings)

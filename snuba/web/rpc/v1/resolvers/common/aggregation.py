@@ -3,9 +3,10 @@ from __future__ import annotations
 import math
 from abc import ABC, abstractmethod
 from bisect import bisect_left
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
     AttributeConditionalAggregation,
@@ -138,12 +139,11 @@ def _resolve_field_and_existence(
         else:
             raise RuntimeError("expected existence_checks to never be empty, but it is")
         return field, existence
-    elif aggregation.key.type == AttributeKey.Type.TYPE_ARRAY:
+    if aggregation.key.type == AttributeKey.Type.TYPE_ARRAY:
         field = type_array_to_stored_array_json_path(aggregation.key)
         return field, f.notEmpty(field)
-    else:
-        field = attribute_key_to_expression(aggregation.key)
-        return field, get_field_existence_expression(field)
+    field = attribute_key_to_expression(aggregation.key)
+    return field, get_field_existence_expression(field)
 
 
 @dataclass(frozen=True)
@@ -166,7 +166,7 @@ class ExtrapolationContext(ABC):
     @staticmethod
     def from_row(
         column_label: str,
-        row_data: Dict[str, Any],
+        row_data: dict[str, Any],
     ) -> ExtrapolationContext:
         value = row_data[column_label]
         is_extrapolated = False
@@ -245,7 +245,7 @@ class GenericExtrapolationContext(ExtrapolationContext):
         # than the value, so reliability is low.
         if self.confidence_interval == 0:
             return Reliability.RELIABILITY_HIGH
-        elif self.value == 0:
+        if self.value == 0:
             return Reliability.RELIABILITY_LOW
 
         if abs(self.confidence_interval / self.value) <= CONFIDENCE_INTERVAL_THRESHOLD:
@@ -299,7 +299,7 @@ class CustomColumnInformation:
 
     # A column that this custom column depends on or attached to.
     # For example, if we are computing the confidence interval for an aggregation column, we need to know for which column we are computing a confidence interval.
-    referenced_column: Optional[str]
+    referenced_column: str | None
 
     # Metadata about the custom column that can be used to encode additional information in the column.
     # E.g. the aggregation function type for the confidence interval column.
@@ -314,7 +314,7 @@ class CustomColumnInformation:
         return alias
 
     @staticmethod
-    def from_alias(alias: str) -> "CustomColumnInformation":
+    def from_alias(alias: str) -> CustomColumnInformation:
         if not alias.startswith(CUSTOM_COLUMN_PREFIX):
             raise ValueError(f"Alias {alias} does not start with {CUSTOM_COLUMN_PREFIX}")
 
@@ -338,18 +338,19 @@ def _get_sampling_weight_expression(
     if extrapolation_mode == ExtrapolationMode.EXTRAPOLATION_MODE_CLIENT_ONLY:
         # Use client sample rate attribute, convert to weight (1/rate)
         return f.divide(1, client_sample_rate_column)
-    elif extrapolation_mode == ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY:
+    if extrapolation_mode == ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY:
         # Use server sample rate attribute, convert to weight (1/rate)
         return f.divide(1, server_sample_rate_column)
-    else:
-        # Default behavior for existing modes - always use sampling_factor now
-        return f.divide(1, sampling_factor_column)
+    # Default behavior for existing modes - always use sampling_factor now
+    return f.divide(1, sampling_factor_column)
 
 
 def get_attribute_confidence_interval_alias(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
-    additional_metadata: dict[str, str] = {},
+    additional_metadata: dict[str, str] | None = None,
 ) -> str | None:
+    if additional_metadata is None:
+        additional_metadata = {}
     function_alias_map = {
         Function.FUNCTION_COUNT: "count",
         Function.FUNCTION_AVG: "avg",
@@ -435,7 +436,7 @@ def get_count_column(
     )
 
 
-def _get_possible_percentiles(percentile: float, granularity: float, width: float) -> List[float]:
+def _get_possible_percentiles(percentile: float, granularity: float, width: float) -> list[float]:
     """
     Returns a list of possible percentiles to use for the confidence interval calculation from the range percentile - width to percentile + width,
     with a granularity of granularity.

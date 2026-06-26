@@ -1,5 +1,3 @@
-from typing import Type
-
 from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
     CreateSubscriptionRequest as CreateSubscriptionRequestProto,
 )
@@ -22,11 +20,11 @@ class CreateSubscriptionRequest(
         return "v1"
 
     @classmethod
-    def request_class(cls) -> Type[CreateSubscriptionRequestProto]:
+    def request_class(cls) -> type[CreateSubscriptionRequestProto]:
         return CreateSubscriptionRequestProto
 
     @classmethod
-    def response_class(cls) -> Type[CreateSubscriptionResponse]:
+    def response_class(cls) -> type[CreateSubscriptionResponse]:
         return CreateSubscriptionResponse
 
     def _execute(self, in_msg: CreateSubscriptionRequestProto) -> CreateSubscriptionResponse:
