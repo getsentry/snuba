@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Optional, Sequence, TypedDict
+from collections.abc import Sequence
+from typing import TypedDict
 
 import structlog
 
@@ -14,18 +15,18 @@ from snuba.datasets.storages.storage_key import StorageKey
 
 logger = structlog.get_logger().bind(module=__name__)
 
-Node = TypedDict("Node", {"host": str, "port": int})
 
-Storage = TypedDict(
-    "Storage",
-    {
-        "storage_name": str,
-        "local_table_name": str,
-        "local_nodes": Sequence[Node],
-        "dist_nodes": Sequence[Node],
-        "query_node": Optional[Node],
-    },
-)
+class Node(TypedDict):
+    host: str
+    port: int
+
+
+class Storage(TypedDict):
+    storage_name: str
+    local_table_name: str
+    local_nodes: Sequence[Node]
+    dist_nodes: Sequence[Node]
+    query_node: Node | None
 
 
 def _get_local_table_name(storage_key: StorageKey) -> str:
@@ -46,19 +47,16 @@ def _get_nodes(storage_key: StorageKey, local: bool = True) -> Sequence[Node]:
             # The get_nodes cluster methods would result in an error because
             # discover is not a single node, but also does not belong to any cluster.
             return []
-        else:
-            return [
-                {"host": node.host_name, "port": node.port}
-                for node in (
-                    cluster.get_local_nodes() if local else cluster.get_distributed_nodes()
-                )
-            ]
+        return [
+            {"host": node.host_name, "port": node.port}
+            for node in (cluster.get_local_nodes() if local else cluster.get_distributed_nodes())
+        ]
     except (AssertionError, KeyError, UndefinedClickhouseCluster) as e:
         logger.warning(str(e), storage_key=storage_key.value, local=local)
         return []
 
 
-def _get_query_node(storage_key: StorageKey) -> Optional[Node]:
+def _get_query_node(storage_key: StorageKey) -> Node | None:
     try:
         cluster = get_storage(storage_key).get_cluster()
         query_node = cluster.get_query_node()

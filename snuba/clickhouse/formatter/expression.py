@@ -1,8 +1,9 @@
 import re
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from datetime import date, datetime
 from functools import lru_cache
-from typing import Optional, Sequence, cast
+from typing import cast
 
 from snuba.clickhouse.escaping import escape_alias, escape_identifier, escape_string
 from snuba.query.conditions import (
@@ -46,22 +47,21 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
     the visited expression, the return value is the formatted string.
     """
 
-    def __init__(self, parsing_context: Optional[ParsingContext] = None) -> None:
+    def __init__(self, parsing_context: ParsingContext | None = None) -> None:
         self._parsing_context = parsing_context if parsing_context is not None else ParsingContext()
 
-    def _alias(self, formatted_exp: str, alias: Optional[str]) -> str:
+    def _alias(self, formatted_exp: str, alias: str | None) -> str:
         if not alias:
             return formatted_exp
-        elif self._parsing_context.is_alias_present(alias):
+        if self._parsing_context.is_alias_present(alias):
             ret = escape_alias(alias)
             # This is for the type checker. escape_alias can return None if
             # we pass None. But here we do not pass None so a None return value
             # is not valid.
             assert ret is not None
             return ret
-        else:
-            self._parsing_context.add_alias(alias)
-            return f"({formatted_exp} AS {escape_alias(alias)})"
+        self._parsing_context.add_alias(alias)
+        return f"({formatted_exp} AS {escape_alias(alias)})"
 
     @abstractmethod
     def _format_string_literal(self, exp: Literal) -> str:
@@ -88,16 +88,15 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
             return self._alias("NULL", exp.alias)
         if isinstance(exp.value, bool):
             return self._format_boolean_literal(exp)
-        elif isinstance(exp.value, str):
+        if isinstance(exp.value, str):
             return self._format_string_literal(exp)
-        elif isinstance(exp.value, (int, float)):
+        if isinstance(exp.value, (int, float)):
             return self._format_number_literal(exp)
-        elif isinstance(exp.value, datetime):
+        if isinstance(exp.value, datetime):
             return self._format_datetime_literal(exp)
-        elif isinstance(exp.value, date):
+        if isinstance(exp.value, date):
             return self._format_date_literal(exp)
-        else:
-            raise ValueError(f"Unexpected literal type {type(exp.value)}")
+        raise ValueError(f"Unexpected literal type {type(exp.value)}")
 
     def visit_column(self, exp: Column) -> str:
         ret = []
@@ -127,8 +126,7 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
         # parsing so the names are preserved during query processing.
         if exp.alias != "".join(ret_unescaped):
             return self._alias("".join(ret), exp.alias)
-        else:
-            return "".join(ret)
+        return "".join(ret)
 
     def __visit_params(self, parameters: Sequence[Expression]) -> str:
         ret = [p.accept(self) for p in parameters]
@@ -157,11 +155,11 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
             # will interpret (1) -> 1 which will break things like 1 IN tuple(1)
             return self._alias(f"({self.__visit_params(exp.parameters)})", exp.alias)
 
-        elif exp.function_name == BooleanFunctions.AND:
+        if exp.function_name == BooleanFunctions.AND:
             formatted = (c.accept(self) for c in get_first_level_and_conditions(exp))
             return " AND ".join(formatted)
 
-        elif exp.function_name == BooleanFunctions.OR:
+        if exp.function_name == BooleanFunctions.OR:
             formatted = (c.accept(self) for c in get_first_level_or_conditions(exp))
             return f"({' OR '.join(formatted)})"
 
@@ -231,11 +229,11 @@ class ClickhouseExpressionFormatter(ExpressionFormatterBase):
 
     def _format_datetime_literal(self, exp: Literal) -> str:
         value = cast(datetime, exp.value).replace(tzinfo=None, microsecond=0)
-        return self._alias("toDateTime('{}', 'Universal')".format(value.isoformat()), exp.alias)
+        return self._alias(f"toDateTime('{value.isoformat()}', 'Universal')", exp.alias)
 
     def _format_date_literal(self, exp: Literal) -> str:
         return self._alias(
-            "toDate('{}', 'Universal')".format(cast(date, exp.value).isoformat()),
+            f"toDate('{cast(date, exp.value).isoformat()}', 'Universal')",
             exp.alias,
         )
 
@@ -260,16 +258,15 @@ class ExpressionFormatterAnonymized(ClickhouseExpressionFormatter):
         # if they are input by the user, but that is better than leaking PII
         return _BETWEEN_SQUARE_BRACKETS_REGEX.sub("$A", alias)
 
-    def _alias(self, formatted_exp: str, alias: Optional[str]) -> str:
+    def _alias(self, formatted_exp: str, alias: str | None) -> str:
         if not alias:
             return formatted_exp
-        elif self._parsing_context.is_alias_present(alias):
+        if self._parsing_context.is_alias_present(alias):
             ret = escape_alias(alias)
             # This is for the type checker. escape_alias can return None if
             # we pass None. But here we do not pass None so a None return value
             # is not valid.
             assert ret is not None
             return ret
-        else:
-            self._parsing_context.add_alias(alias)
-            return f"({formatted_exp} AS {escape_alias(self._anonimize_alias(alias))})"
+        self._parsing_context.add_alias(alias)
+        return f"({formatted_exp} AS {escape_alias(self._anonimize_alias(alias))})"

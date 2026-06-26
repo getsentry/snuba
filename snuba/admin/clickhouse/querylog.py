@@ -45,11 +45,11 @@ def _get_clickhouse_threads() -> int:
             int(config_threads) if config_threads is not None else _MAX_CH_THREADS,
             _MAX_CH_THREADS,
         )
-    except ValueError:
+    except ValueError as e:
         # in case the config is set incorrectly
         raise BadThreadsValue(
             f"{config_threads} is not a valid configuration option for Clickhouse `max_threads`"
-        )
+        ) from e
 
 
 def __run_querylog_query(query: str) -> ClickhouseResult:

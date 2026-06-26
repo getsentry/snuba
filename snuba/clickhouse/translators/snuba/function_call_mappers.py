@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Optional, Tuple, Union
 
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
 from snuba.clickhouse.translators.snuba.allowed import (
@@ -11,10 +10,10 @@ from snuba.query.expressions import CurriedFunctionCall, Expression, FunctionCal
 
 
 def _build_parameters(
-    expression: Union[FunctionCall, CurriedFunctionCall],
+    expression: FunctionCall | CurriedFunctionCall,
     children_translator: SnubaClickhouseStrictTranslator,
     aggregated_col_name: str,
-) -> Tuple[Expression, ...]:
+) -> tuple[Expression, ...]:
     assert isinstance(expression.parameters[0], ColumnExpr)
     return (
         ColumnExpr(None, expression.parameters[0].table_name, aggregated_col_name),
@@ -26,7 +25,7 @@ def _should_transform_aggregation(
     function_name: str,
     expected_function_name: str,
     column_to_map: str,
-    function_call: Union[FunctionCall, CurriedFunctionCall],
+    function_call: FunctionCall | CurriedFunctionCall,
 ) -> bool:
     return (
         function_name == expected_function_name
@@ -52,7 +51,7 @@ class AggregateFunctionMapper(FunctionCallMapper):
         self,
         expression: FunctionCall,
         children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[FunctionCall]:
+    ) -> FunctionCall | None:
         if not _should_transform_aggregation(
             expression.function_name, self.from_name, self.column_to_map, expression
         ):
@@ -81,7 +80,7 @@ class AggregateCurriedFunctionMapper(CurriedFunctionCallMapper):
         self,
         expression: CurriedFunctionCall,
         children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[CurriedFunctionCall]:
+    ) -> CurriedFunctionCall | None:
         if not _should_transform_aggregation(
             expression.internal_function.function_name,
             self.from_name,

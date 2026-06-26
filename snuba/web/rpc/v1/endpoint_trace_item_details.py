@@ -1,5 +1,6 @@
 import uuid
-from typing import Any, Dict, Iterable, Tuple, Type
+from collections.abc import Iterable
+from typing import Any
 
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -146,9 +147,9 @@ def _build_snuba_request(request: TraceItemDetailsRequest) -> SnubaRequest:
 
 
 def _convert_results(
-    data: Iterable[Dict[str, Any]],
+    data: Iterable[dict[str, Any]],
     read_typed_arrays: bool,
-) -> Tuple[str, Timestamp, list[TraceItemDetailsAttribute]]:
+) -> tuple[str, Timestamp, list[TraceItemDetailsAttribute]]:
     row = next(iter(data))
     item_id = row.pop("hex_item_id")
     dt = row.pop("timestamp")
@@ -156,14 +157,13 @@ def _convert_results(
     timestamp.FromSeconds(dt)
     attrs = []
 
-    if (val := row.pop("trace_id")) is not None:
-        if val != "0" * 32:
-            attrs.append(
-                TraceItemDetailsAttribute(
-                    name="sentry.trace_id",
-                    value=AttributeValue(val_str=str(uuid.UUID(val))),
-                )
+    if (val := row.pop("trace_id")) is not None and val != "0" * 32:
+        attrs.append(
+            TraceItemDetailsAttribute(
+                name="sentry.trace_id",
+                value=AttributeValue(val_str=str(uuid.UUID(val))),
             )
+        )
     if (val := row.pop("organization_id")) is not None:
         attrs.append(
             TraceItemDetailsAttribute(
@@ -227,11 +227,11 @@ class EndpointTraceItemDetails(RPCEndpoint[TraceItemDetailsRequest, TraceItemDet
         return "v1"
 
     @classmethod
-    def request_class(cls) -> Type[TraceItemDetailsRequest]:
+    def request_class(cls) -> type[TraceItemDetailsRequest]:
         return TraceItemDetailsRequest
 
     @classmethod
-    def response_class(cls) -> Type[TraceItemDetailsResponse]:
+    def response_class(cls) -> type[TraceItemDetailsResponse]:
         return TraceItemDetailsResponse
 
     def _execute(self, in_msg: TraceItemDetailsRequest) -> TraceItemDetailsResponse:
@@ -243,13 +243,12 @@ class EndpointTraceItemDetails(RPCEndpoint[TraceItemDetailsRequest, TraceItemDet
             raise BadSnubaRPCRequestException("This endpoint requires item_id to be set.")
         if in_msg.trace_id == "":
             raise BadSnubaRPCRequestException("This endpoint requires trace_id to be set.")
-        else:
-            try:
-                _ = uuid.UUID(in_msg.trace_id)
-            except ValueError:
-                raise BadSnubaRPCRequestException(
-                    "This endpoint requires trace_id to be a valid UUID."
-                )
+        try:
+            _ = uuid.UUID(in_msg.trace_id)
+        except ValueError as e:
+            raise BadSnubaRPCRequestException(
+                "This endpoint requires trace_id to be a valid UUID."
+            ) from e
 
         snuba_request = _build_snuba_request(in_msg)
         res = run_query(
@@ -262,11 +261,11 @@ class EndpointTraceItemDetails(RPCEndpoint[TraceItemDetailsRequest, TraceItemDet
                 res.result.get("data", []),
                 read_typed_arrays=use_array_map_columns(in_msg.meta),
             )
-        except StopIteration:
+        except StopIteration as e:
             raise RPCRequestException(
                 status_code=404,
                 message=f"no item found with ID={in_msg.item_id}",
-            )
+            ) from e
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,

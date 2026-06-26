@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Generic, Optional, TypeVar, Union, cast
+from typing import Generic, TypeVar, cast
 
 from snuba.query.query_settings import QuerySettings
 from snuba.utils.metrics.timer import Timer
@@ -46,7 +46,7 @@ class QueryPipelineStage(Generic[Tin, Tout]):
         >>> print("PhysicalQuery: ", stage_2.data)
     """
 
-    def _process_error(self, pipe_input: QueryPipelineError[Tin]) -> Union[Tout, Exception]:
+    def _process_error(self, pipe_input: QueryPipelineError[Tin]) -> Tout | Exception:
         """default behaviour is to just pass through to the next stage of the pipeline
         Can be overridden to do something else"""
         logging.exception(pipe_input.error)
@@ -66,13 +66,12 @@ class QueryPipelineStage(Generic[Tin, Tout]):
                     error=res,
                     timer=pipe_input.timer,
                 )
-            else:
-                return QueryPipelineResult(
-                    data=res,
-                    query_settings=pipe_input.query_settings,
-                    error=None,
-                    timer=pipe_input.timer,
-                )
+            return QueryPipelineResult(
+                data=res,
+                query_settings=pipe_input.query_settings,
+                error=None,
+                timer=pipe_input.timer,
+            )
         try:
             return QueryPipelineResult(
                 data=self._process_data(pipe_input.as_data()),
@@ -99,8 +98,8 @@ class QueryPipelineResult(ABC, Generic[T]):
     A container to represent the result of a query pipeline stage.
     """
 
-    data: Optional[T]
-    error: Optional[Exception]
+    data: T | None
+    error: Exception | None
     query_settings: QuerySettings
     timer: Timer
 

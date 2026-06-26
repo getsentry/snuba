@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from types import MethodType
-from typing import Any, Callable, Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
@@ -51,7 +52,7 @@ class ColumnWrapper(ProtoWrapper[Column]):
                     ColumnWrapper(conditional.condition.right).accept(visitor)
             # Note: 'match' is a Python keyword, so use getattr
             if conditional.HasField("match"):
-                ColumnWrapper(getattr(conditional, "match")).accept(visitor)
+                ColumnWrapper(conditional.match).accept(visitor)
             if conditional.HasField("default"):
                 ColumnWrapper(conditional.default).accept(visitor)
 
@@ -122,7 +123,7 @@ class TraceItemFilterWrapper(ProtoWrapper[TraceItemFilter]):
                 TraceItemFilterWrapper(f).accept(visitor)
 
 
-class ProtoVisitor(ABC):
+class ProtoVisitor(ABC):  # noqa: B024 dynamic visit dispatch via __getattr__; ABC marks it non-instantiable by design
     """
     Proto visitor design is split into two parts:
     1. the visitor. Responsible for only executing work on the object it is visiting

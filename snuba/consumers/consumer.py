@@ -3,22 +3,13 @@ import logging
 import random
 import time
 from collections import defaultdict
+from collections.abc import Callable, Mapping, MutableMapping, MutableSequence, Sequence
 from datetime import datetime
 from pickle import PickleBuffer
 from typing import (
     Any,
-    Callable,
-    List,
-    Mapping,
-    MutableMapping,
-    MutableSequence,
     NamedTuple,
-    Optional,
-    Sequence,
-    Set,
     SupportsIndex,
-    Tuple,
-    Union,
     cast,
 )
 
@@ -67,12 +58,12 @@ class BytesInsertBatch(NamedTuple):
 
     # refer to InsertBatch for the meaning of these values, or the Rust
     # implementation of BytesInsertBatch
-    origin_timestamp: Optional[datetime]
-    sentry_received_timestamp: Optional[datetime] = None
+    origin_timestamp: datetime | None
+    sentry_received_timestamp: datetime | None = None
 
     def __reduce_ex__(
         self, protocol: SupportsIndex
-    ) -> Tuple[Any, Tuple[Sequence[Any], Optional[datetime], Optional[datetime]]]:
+    ) -> tuple[Any, tuple[Sequence[Any], datetime | None, datetime | None]]:
         if int(protocol) >= 5:
             return (
                 type(self),
@@ -82,18 +73,17 @@ class BytesInsertBatch(NamedTuple):
                     self.sentry_received_timestamp,
                 ),
             )
-        else:
-            return type(self), (
-                self.rows,
-                self.origin_timestamp,
-                self.sentry_received_timestamp,
-            )
+        return type(self), (
+            self.rows,
+            self.origin_timestamp,
+            self.sentry_received_timestamp,
+        )
 
 
 class LatencyRecorder:
     def __init__(self) -> None:
         self._sum = 0.0
-        self._max: Optional[float] = None
+        self._max: float | None = None
         self._msg_count = 0
 
     def record(self, latency_seconds: float) -> None:
@@ -107,7 +97,7 @@ class LatencyRecorder:
         return (self._sum / self._msg_count) * 1000
 
     @property
-    def max_ms(self) -> Optional[float]:
+    def max_ms(self) -> float | None:
         if not self._max:
             return None
         return self._max * 1000
@@ -204,7 +194,7 @@ class ReplacementBatchWriter:
         self.__messages.append(message)
 
     def __delivery_callback(
-        self, error: Optional[Exception], message: Message[ReplacementBatch]
+        self, error: Exception | None, message: Message[ReplacementBatch]
     ) -> None:
         if error is not None:
             # errors are KafkaError objects and inherit from BaseException
@@ -224,7 +214,10 @@ class ReplacementBatchWriter:
                     self.__topic.name,
                     key=key,
                     value=rapidjson.dumps(value).encode("utf-8"),
-                    on_delivery=self.__delivery_callback,
+                    on_delivery=cast(
+                        Callable[[KafkaError | None, ConfluentMessage], None],
+                        self.__delivery_callback,
+                    ),
                 )
 
         self.__producer.flush()
@@ -234,21 +227,21 @@ class ProcessedMessageBatchWriter:
     def __init__(
         self,
         insert_batch_writer: InsertBatchWriter,
-        replacement_batch_writer: Optional[ReplacementBatchWriter] = None,
+        replacement_batch_writer: ReplacementBatchWriter | None = None,
         # If commit log config is passed, we will produce to the commit log topic
         # upon closing each batch.
-        commit_log_config: Optional[CommitLogConfig] = None,
-        metrics: Optional[MetricsBackend] = None,
+        commit_log_config: CommitLogConfig | None = None,
+        metrics: MetricsBackend | None = None,
     ) -> None:
         self.__insert_batch_writer = insert_batch_writer
         self.__replacement_batch_writer = replacement_batch_writer
         self.__commit_log_config = commit_log_config
-        self.__offsets_to_produce: MutableMapping[Partition, Tuple[int, datetime]] = {}
-        self.__received_timestamps: MutableMapping[Partition, List[float]] = defaultdict(list)
+        self.__offsets_to_produce: MutableMapping[Partition, tuple[int, datetime]] = {}
+        self.__received_timestamps: MutableMapping[Partition, list[float]] = defaultdict(list)
 
         self.__closed = False
 
-    def submit(self, message: Message[Union[None, BytesInsertBatch, ReplacementBatch]]) -> None:
+    def submit(self, message: Message[None | BytesInsertBatch | ReplacementBatch]) -> None:
         assert not self.__closed
 
         if message.payload is None:
@@ -277,7 +270,7 @@ class ProcessedMessageBatchWriter:
         )
 
     def __commit_message_delivery_callback(
-        self, error: Optional[KafkaError], message: ConfluentMessage
+        self, error: KafkaError | None, message: ConfluentMessage
     ) -> None:
         if error is not None:
             raise Exception(error.str())
@@ -315,7 +308,7 @@ class ProcessedMessageBatchWriter:
                     self.__commit_log_config.topic.name,
                     key=payload.key,
                     value=payload.value,
-                    headers=payload.headers,
+                    headers=cast("list[tuple[str, str | bytes | None]]", payload.headers),
                     on_delivery=self.__commit_message_delivery_callback,
                 )
                 self.__commit_log_config.producer.poll(0.0)
@@ -325,7 +318,7 @@ class ProcessedMessageBatchWriter:
 
 json_row_encoder = JSONRowEncoder()
 
-values_row_encoders: MutableMapping[StorageKey, ValuesRowEncoder] = dict()
+values_row_encoders: MutableMapping[StorageKey, ValuesRowEncoder] = {}
 
 
 def get_values_row_encoder(storage_key: StorageKey) -> ValuesRowEncoder:
@@ -341,10 +334,10 @@ def get_values_row_encoder(storage_key: StorageKey) -> ValuesRowEncoder:
 def build_batch_writer(
     table_writer: TableWriter,
     metrics: MetricsBackend,
-    replacements_producer: Optional[ConfluentKafkaProducer] = None,
-    replacements_topic: Optional[Topic] = None,
-    commit_log_config: Optional[CommitLogConfig] = None,
-    slice_id: Optional[int] = None,
+    replacements_producer: ConfluentKafkaProducer | None = None,
+    replacements_topic: Topic | None = None,
+    commit_log_config: CommitLogConfig | None = None,
+    slice_id: int | None = None,
 ) -> Callable[[], ProcessedMessageBatchWriter]:
     assert not (replacements_producer is None) ^ (replacements_topic is None)
     supports_replacements = replacements_producer is not None
@@ -358,7 +351,7 @@ def build_batch_writer(
     def build_writer() -> ProcessedMessageBatchWriter:
         insert_metrics = MetricsWrapper(metrics, "insertions")
 
-        replacement_batch_writer: Optional[ReplacementBatchWriter]
+        replacement_batch_writer: ReplacementBatchWriter | None
         if supports_replacements:
             assert replacements_producer is not None
             assert replacements_topic is not None
@@ -383,23 +376,21 @@ class MultistorageCollector:
         self,
         steps: Mapping[StorageKey, ProcessedMessageBatchWriter],
         # If passed, produces to the commit log after each batch is closed
-        commit_log_config: Optional[CommitLogConfig],
-        ignore_errors: Optional[Set[StorageKey]] = None,
+        commit_log_config: CommitLogConfig | None,
+        ignore_errors: set[StorageKey] | None = None,
     ):
         self.__steps = steps
         self.__closed = False
         self.__commit_log_config = commit_log_config
         self.__messages: MutableMapping[
             StorageKey,
-            List[Message[Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]]],
+            list[Message[tuple[StorageKey, None | BytesInsertBatch | ReplacementBatch]]],
         ] = defaultdict(list)
-        self.__offsets_to_produce: MutableMapping[Partition, Tuple[int, datetime]] = {}
+        self.__offsets_to_produce: MutableMapping[Partition, tuple[int, datetime]] = {}
 
     def submit(
         self,
-        message: Message[
-            Sequence[Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]]
-        ],
+        message: Message[Sequence[tuple[StorageKey, None | BytesInsertBatch | ReplacementBatch]]],
     ) -> None:
         assert not self.__closed
 
@@ -423,7 +414,7 @@ class MultistorageCollector:
     def close(self) -> None:
         self.__closed = True
 
-        for storage_key, step in self.__steps.items():
+        for _storage_key, step in self.__steps.items():
             step.close()
 
         if self.__commit_log_config is not None:
@@ -441,7 +432,7 @@ class MultistorageCollector:
                     self.__commit_log_config.topic.name,
                     key=payload.key,
                     value=payload.value,
-                    headers=payload.headers,
+                    headers=cast("list[tuple[str, str | bytes | None]]", payload.headers),
                     on_delivery=self.__commit_message_delivery_callback,
                 )
                 self.__commit_log_config.producer.poll(0.0)
@@ -452,7 +443,7 @@ class MultistorageCollector:
         self.__offsets_to_produce.clear()
 
     def __commit_message_delivery_callback(
-        self, error: Optional[KafkaError], message: ConfluentMessage
+        self, error: KafkaError | None, message: ConfluentMessage
     ) -> None:
         if error is not None:
             raise Exception(error.str())
@@ -464,7 +455,7 @@ class MultistorageKafkaPayload(NamedTuple):
 
 
 MultistorageProcessedMessage = Sequence[
-    Tuple[StorageKey, Union[None, BytesInsertBatch, ReplacementBatch]]
+    tuple[StorageKey, None | BytesInsertBatch | ReplacementBatch]
 ]
 
 
@@ -474,7 +465,7 @@ def process_message(
     snuba_logical_topic: SnubaTopic,
     enforce_schema: bool,
     message: Message[KafkaPayload],
-) -> Union[None, BytesInsertBatch, ReplacementBatch]:
+) -> None | BytesInsertBatch | ReplacementBatch:
     local_metrics = MetricsWrapper(
         metrics,
         tags={
@@ -557,5 +548,4 @@ def process_message(
             result.origin_timestamp,
             result.sentry_received_timestamp,
         )
-    else:
-        return result
+    return result

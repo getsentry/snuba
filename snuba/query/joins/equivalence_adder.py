@@ -1,5 +1,5 @@
+from collections.abc import Mapping, MutableMapping
 from functools import partial
-from typing import Mapping, MutableMapping, Optional, Set, Tuple
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query import ProcessableQuery
@@ -43,7 +43,7 @@ def add_equivalent_conditions(query: CompositeQuery[Entity]) -> None:
     if isinstance(from_clause, CompositeQuery):
         add_equivalent_conditions(from_clause)
         return
-    elif isinstance(from_clause, ProcessableQuery):
+    if isinstance(from_clause, ProcessableQuery):
         return
 
     # Now this has to be a join, so we can work with it.
@@ -54,7 +54,7 @@ def add_equivalent_conditions(query: CompositeQuery[Entity]) -> None:
     alias_to_entity = {
         alias: entity_from_node(node) for alias, node in from_clause.get_alias_node_map().items()
     }
-    entity_to_alias: MutableMapping[EntityKey, Set[str]] = {}
+    entity_to_alias: MutableMapping[EntityKey, set[str]] = {}
     for alias, entity in alias_to_entity.items():
         entity_to_alias.setdefault(entity, set()).add(alias)
 
@@ -110,12 +110,12 @@ def add_equivalent_conditions(query: CompositeQuery[Entity]) -> None:
 
 def _classify_single_column_condition(
     condition: Expression, alias_entity_map: Mapping[str, EntityKey]
-) -> Optional[Tuple[QualifiedCol, str]]:
+) -> tuple[QualifiedCol, str] | None:
     """
     Inspects a condition to check if it is a condition on a
     single column on a single entity
     """
-    qualified_col: Optional[Tuple[QualifiedCol, str]] = None
+    qualified_col: tuple[QualifiedCol, str] | None = None
     for e in condition:
         if isinstance(e, Column):
             if not e.table_name:

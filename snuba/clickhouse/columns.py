@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 from snuba.utils.schemas import (
     JSON,
@@ -86,7 +86,7 @@ class ColumnSet(BaseColumnSet):
 
     def __init__(
         self,
-        columns: Sequence[Union[Column[SchemaModifiers], tuple[str, ColumnType[SchemaModifiers]]]],
+        columns: Sequence[Column[SchemaModifiers] | tuple[str, ColumnType[SchemaModifiers]]],
     ) -> None:
         for column in columns:
             assert not isinstance(column, WildcardColumn)
@@ -94,11 +94,11 @@ class ColumnSet(BaseColumnSet):
         super().__init__(Column.to_columns(columns))
 
     def __repr__(self) -> str:
-        return "ColumnSet({})".format(repr(self.columns))
+        return f"ColumnSet({repr(self.columns)})"
 
     def __add__(
         self,
-        other: Union[ColumnSet, Sequence[tuple[str, ColumnType[SchemaModifiers]]]],
+        other: ColumnSet | Sequence[tuple[str, ColumnType[SchemaModifiers]]],
     ) -> ColumnSet:
         if isinstance(other, ColumnSet):
             return ColumnSet([*self.columns, *other.columns])

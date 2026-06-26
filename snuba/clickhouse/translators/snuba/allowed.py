@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Type, TypeVar, Union, cast
+from typing import TypeVar, cast
 
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
 from snuba.datasets.plans.translator.mapper import ExpressionMapper
@@ -44,7 +44,7 @@ class LiteralMapper(SnubaClickhouseMapper[Literal, Literal]):
     pass
 
 
-ValidColumnMappings = Union[Column, Literal, FunctionCall, CurriedFunctionCall]
+ValidColumnMappings = Column | Literal | FunctionCall | CurriedFunctionCall
 
 
 class ColumnMapper(SnubaClickhouseMapper[Column, ValidColumnMappings], metaclass=RegisteredClass):
@@ -60,8 +60,8 @@ class ColumnMapper(SnubaClickhouseMapper[Column, ValidColumnMappings], metaclass
         return cls.__name__
 
     @classmethod
-    def get_from_name(cls, name: str) -> Type["ColumnMapper"]:
-        return cast(Type["ColumnMapper"], cls.class_from_name(name))
+    def get_from_name(cls, name: str) -> type[ColumnMapper]:
+        return cast(type["ColumnMapper"], cls.class_from_name(name))
 
 
 class FunctionCallMapper(
@@ -83,12 +83,12 @@ class FunctionCallMapper(
         return cls.__name__
 
     @classmethod
-    def get_from_name(cls, name: str) -> Type["FunctionCallMapper"]:
-        return cast(Type["FunctionCallMapper"], cls.class_from_name(name))
+    def get_from_name(cls, name: str) -> type[FunctionCallMapper]:
+        return cast(type["FunctionCallMapper"], cls.class_from_name(name))
 
 
 class CurriedFunctionCallMapper(
-    SnubaClickhouseMapper[CurriedFunctionCall, Union[CurriedFunctionCall, FunctionCall]],
+    SnubaClickhouseMapper[CurriedFunctionCall, CurriedFunctionCall | FunctionCall],
     metaclass=RegisteredClass,
 ):
     @classmethod
@@ -96,14 +96,14 @@ class CurriedFunctionCallMapper(
         return cls.__name__
 
     @classmethod
-    def get_from_name(cls, name: str) -> Type["CurriedFunctionCallMapper"]:
-        return cast(Type["CurriedFunctionCallMapper"], cls.class_from_name(name))
+    def get_from_name(cls, name: str) -> type[CurriedFunctionCallMapper]:
+        return cast(type["CurriedFunctionCallMapper"], cls.class_from_name(name))
 
 
 class SubscriptableReferenceMapper(
     SnubaClickhouseMapper[
         SubscriptableReference,
-        Union[FunctionCall, Literal, SubscriptableReference],
+        FunctionCall | Literal | SubscriptableReference,
     ],
     metaclass=RegisteredClass,
 ):
@@ -121,8 +121,8 @@ class SubscriptableReferenceMapper(
         return cls.__name__
 
     @classmethod
-    def get_from_name(cls, name: str) -> Type["SubscriptableReferenceMapper"]:
-        return cast(Type["SubscriptableReferenceMapper"], cls.class_from_name(name))
+    def get_from_name(cls, name: str) -> type[SubscriptableReferenceMapper]:
+        return cast(type["SubscriptableReferenceMapper"], cls.class_from_name(name))
 
 
 class LambdaMapper(SnubaClickhouseMapper[Lambda, Lambda]):
@@ -149,15 +149,14 @@ class DefaultNoneColumnMapper(ColumnMapper):
         self,
         expression: Column,
         children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[FunctionCall]:
+    ) -> FunctionCall | None:
         if expression.column_name in self.column_names:
             return identity(
                 Literal(None, None),
                 expression.alias
                 or qualified_column(expression.column_name, expression.table_name or ""),
             )
-        else:
-            return None
+        return None
 
 
 @dataclass
@@ -166,7 +165,7 @@ class DefaultNoneFunctionMapper(FunctionCallMapper):
     Maps the list of function names to NULL.
     """
 
-    function_names: List[str]
+    function_names: list[str]
 
     def __post_init__(self) -> None:
         self.function_match = FunctionCallMatch(
@@ -177,7 +176,7 @@ class DefaultNoneFunctionMapper(FunctionCallMapper):
         self,
         expression: FunctionCall,
         children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[FunctionCall]:
+    ) -> FunctionCall | None:
         if self.function_match.match(expression):
             return identity(Literal(None, None), expression.alias)
 
@@ -199,7 +198,7 @@ class DefaultIfNullFunctionMapper(FunctionCallMapper):
         self,
         expression: FunctionCall,
         children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[FunctionCall]:
+    ) -> FunctionCall | None:
         # HACK: Quick fix to avoid this function dropping important conditions from the query
         logical_functions = {"and", "or", "xor"}
 
@@ -231,7 +230,7 @@ class DefaultIfNullCurriedFunctionMapper(CurriedFunctionCallMapper):
         self,
         expression: CurriedFunctionCall,
         children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[Union[CurriedFunctionCall, FunctionCall]]:
+    ) -> CurriedFunctionCall | FunctionCall | None:
         internal_function = expression.internal_function.accept(children_translator)
         assert isinstance(internal_function, FunctionCall)  # mypy
         parameters = tuple(p.accept(children_translator) for p in expression.parameters)
@@ -255,14 +254,13 @@ class DefaultNoneSubscriptMapper(SubscriptableReferenceMapper):
     the discover dataset file.
     """
 
-    subscript_names: List[str]
+    subscript_names: list[str]
 
     def attempt_map(
         self,
         expression: SubscriptableReference,
         children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[FunctionCall]:
+    ) -> FunctionCall | None:
         if expression.column.column_name in self.subscript_names:
             return identity(Literal(None, None), expression.alias)
-        else:
-            return None
+        return None

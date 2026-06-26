@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any
 
 import jwt
 import requests
@@ -6,7 +6,7 @@ import requests
 from snuba import settings
 from snuba.admin.user import AdminUser
 
-CERTS: Optional[Any] = None
+CERTS: Any | None = None
 
 
 def _certs() -> Any:

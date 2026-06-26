@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Iterator, Mapping
 from concurrent.futures import Future
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -11,15 +12,9 @@ from functools import partial
 from typing import (
     Any,
     Generic,
-    Iterator,
-    List,
-    Mapping,
     NamedTuple,
     NewType,
-    Optional,
-    Tuple,
     TypeVar,
-    Union,
 )
 from uuid import UUID
 
@@ -117,12 +112,12 @@ class _SubscriptionData(ABC, Generic[TRequest]):
     time_window_sec: int
     entity: Entity
     metadata: Mapping[str, Any]
-    tenant_ids: Mapping[str, Any] = field(default_factory=lambda: dict())
+    tenant_ids: Mapping[str, Any] = field(default_factory=lambda: {})
 
     def validate(self) -> None:
         if self.time_window_sec < 60:
             raise InvalidSubscriptionError("Time window must be greater than or equal to 1 minute")
-        elif self.time_window_sec > 60 * 60 * 24:
+        if self.time_window_sec > 60 * 60 * 24:
             raise InvalidSubscriptionError("Time window must be less than or equal to 24 hours")
 
         if self.resolution_sec < 60:
@@ -133,9 +128,9 @@ class _SubscriptionData(ABC, Generic[TRequest]):
         self,
         dataset: Dataset,
         timestamp: datetime,
-        offset: Optional[int],
+        offset: int | None,
         timer: Timer,
-        metrics: Optional[MetricsBackend] = None,
+        metrics: MetricsBackend | None = None,
         referrer: str = SUBSCRIPTION_REFERRER,
     ) -> TRequest:
         raise NotImplementedError
@@ -147,7 +142,7 @@ class _SubscriptionData(ABC, Generic[TRequest]):
         request: TRequest,
         timer: Timer,
         robust: bool = False,
-        concurrent_queries_gauge: Optional[Gauge] = None,
+        concurrent_queries_gauge: Gauge | None = None,
     ) -> QueryResult:
         raise NotImplementedError
 
@@ -220,9 +215,9 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         self,
         dataset: Dataset,
         timestamp: datetime,
-        offset: Optional[int],
+        offset: int | None,
         timer: Timer,
-        metrics: Optional[MetricsBackend] = None,
+        metrics: MetricsBackend | None = None,
         referrer: str = SUBSCRIPTION_REFERRER,
     ) -> TimeSeriesRequest:
         request_class = EndpointTimeSeries().request_class()()
@@ -247,7 +242,7 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         request: TimeSeriesRequest,
         timer: Timer,
         robust: bool = False,
-        concurrent_queries_gauge: Optional[Gauge] = None,
+        concurrent_queries_gauge: Gauge | None = None,
     ) -> QueryResult:
         response = EndpointTimeSeries().execute(request)
         if not response.result_timeseries or not any(
@@ -270,7 +265,7 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
     def from_dict(cls, data: Mapping[str, Any], entity_key: EntityKey) -> RPCSubscriptionData:
         entity: Entity = get_entity(entity_key)
         metadata = {}
-        for key in data.keys():
+        for key in data:
             if key == "metadata":
                 metadata.update(data[key])
             elif key not in SUBSCRIPTION_DATA_PAYLOAD_KEYS:
@@ -285,7 +280,7 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
             request_name=data["request_name"],
             entity=entity,
             metadata=metadata,
-            tenant_ids=data.get("tenant_ids", dict()),
+            tenant_ids=data.get("tenant_ids", {}),
         )
 
     @classmethod
@@ -342,12 +337,12 @@ class SnQLSubscriptionData(_SubscriptionData[Request]):
     def add_conditions(
         self,
         timestamp: datetime,
-        offset: Optional[int],
-        query: Union[CompositeQuery[EntityDS], Query],
+        offset: int | None,
+        query: CompositeQuery[EntityDS] | Query,
     ) -> None:
         added_timestamp_column = False
         from_clause = query.get_from_clause()
-        entities: List[Tuple[Optional[str], Entity]] = []
+        entities: list[tuple[str | None, Entity]] = []
         if isinstance(from_clause, JoinClause):
             for alias, node in from_clause.get_alias_node_map().items():
                 assert isinstance(node.data_source, EntityDS), node.data_source
@@ -357,7 +352,7 @@ class SnQLSubscriptionData(_SubscriptionData[Request]):
         else:
             raise InvalidSubscriptionError("Only simple queries and join queries are supported")
         for entity_alias, entity in entities:
-            conditions_to_add: List[Expression] = [
+            conditions_to_add: list[Expression] = [
                 binary_condition(
                     ConditionFunctions.EQ,
                     Column(None, entity_alias, "project_id"),
@@ -407,9 +402,9 @@ class SnQLSubscriptionData(_SubscriptionData[Request]):
         self,
         dataset: Dataset,
         timestamp: datetime,
-        offset: Optional[int],
+        offset: int | None,
         timer: Timer,
-        metrics: Optional[MetricsBackend] = None,
+        metrics: MetricsBackend | None = None,
         referrer: str = SUBSCRIPTION_REFERRER,
     ) -> Request:
         schema = RequestSchema.build(SubscriptionQuerySettings)
@@ -440,7 +435,7 @@ class SnQLSubscriptionData(_SubscriptionData[Request]):
             referrer,
             # subscriptions are tied to entities, these validators are going to run on the entity
             # anyways so it's okay that the post-processing is done without type safety
-            custom_processing,  # type: ignore
+            custom_processing,  # type: ignore[arg-type]
         )
         return request
 
@@ -450,7 +445,7 @@ class SnQLSubscriptionData(_SubscriptionData[Request]):
         request: Request,
         timer: Timer,
         robust: bool = False,
-        concurrent_queries_gauge: Optional[Gauge] = None,
+        concurrent_queries_gauge: Gauge | None = None,
     ) -> QueryResult:
         return run_query(
             dataset,
@@ -465,7 +460,7 @@ class SnQLSubscriptionData(_SubscriptionData[Request]):
         entity: Entity = get_entity(entity_key)
 
         metadata = {}
-        for key in data.keys():
+        for key in data:
             if key not in SUBSCRIPTION_DATA_PAYLOAD_KEYS:
                 metadata[key] = data[key]
 
@@ -477,7 +472,7 @@ class SnQLSubscriptionData(_SubscriptionData[Request]):
             query=data["query"],
             entity=entity,
             metadata=metadata,
-            tenant_ids=data.get("tenant_ids", dict()),
+            tenant_ids=data.get("tenant_ids", {}),
         )
 
     def to_dict(self) -> Mapping[str, Any]:
@@ -496,8 +491,8 @@ class SnQLSubscriptionData(_SubscriptionData[Request]):
         return subscription_data_dict
 
 
-SubscriptionData = Union[RPCSubscriptionData, SnQLSubscriptionData]
-SubscriptionRequest = Union[Request, TimeSeriesRequest]
+SubscriptionData = RPCSubscriptionData | SnQLSubscriptionData
+SubscriptionRequest = Request | TimeSeriesRequest
 
 
 class Subscription(NamedTuple):
@@ -545,9 +540,9 @@ class SubscriptionScheduler(ABC):
 
 class SubscriptionTaskResultFuture(NamedTuple):
     task: ScheduledSubscriptionTask
-    future: Future[Tuple[SubscriptionRequest, Result]]
+    future: Future[tuple[SubscriptionRequest, Result]]
 
 
 class SubscriptionTaskResult(NamedTuple):
     task: ScheduledSubscriptionTask
-    result: Tuple[SubscriptionRequest, Result]
+    result: tuple[SubscriptionRequest, Result]

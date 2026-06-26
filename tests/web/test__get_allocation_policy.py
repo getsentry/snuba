@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Union
 
 import pytest
 
@@ -141,7 +140,7 @@ join_query = CompositeQuery(
     ],
 )
 def test__get_allocation_policies(
-    query: Union[ClickhouseQuery, CompositeQuery[Table]],
+    query: ClickhouseQuery | CompositeQuery[Table],
     expected_allocation_policies: list[AllocationPolicy],
 ) -> None:
     assert _get_allocation_policies(query) == expected_allocation_policies

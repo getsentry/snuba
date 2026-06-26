@@ -1,4 +1,4 @@
-from typing import List, Sequence
+from collections.abc import Sequence
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
@@ -10,12 +10,8 @@ buckets = 40
 def get_hashed_attributes_column_expression() -> str:
     column_expressions = []
     for i in range(buckets):
-        hashed_keys_string = (
-            f"arrayMap(k -> cityHash64(k), mapKeys(attributes_string_{i}))"
-        )
-        hashed_keys_float = (
-            f"arrayMap(k -> cityHash64(k), mapKeys(attributes_float_{i}))"
-        )
+        hashed_keys_string = f"arrayMap(k -> cityHash64(k), mapKeys(attributes_string_{i}))"
+        hashed_keys_float = f"arrayMap(k -> cityHash64(k), mapKeys(attributes_float_{i}))"
         column_expressions.append(hashed_keys_string)
         column_expressions.append(hashed_keys_float)
 
@@ -23,7 +19,6 @@ def get_hashed_attributes_column_expression() -> str:
 
 
 class Migration(migration.ClickhouseNodeMigration):
-
     blocking = False
     storage_set_key = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
     granularity = "8192"
@@ -32,7 +27,7 @@ class Migration(migration.ClickhouseNodeMigration):
     dist_table_name = "eap_items_1_dist"
 
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:
-        ops: List[operations.SqlOperation] = [
+        ops: list[operations.SqlOperation] = [
             operations.RunSql(
                 storage_set=self.storage_set_key,
                 statement=f"ALTER TABLE {self.local_table_name} ADD COLUMN IF NOT EXISTS hashed_keys Array(UInt64) MATERIALIZED {get_hashed_attributes_column_expression()}",
@@ -57,7 +52,7 @@ class Migration(migration.ClickhouseNodeMigration):
         return ops
 
     def backwards_ops(self) -> Sequence[operations.SqlOperation]:
-        ops: List[operations.SqlOperation] = [
+        ops: list[operations.SqlOperation] = [
             operations.DropIndex(
                 storage_set=self.storage_set_key,
                 table_name=self.local_table_name,

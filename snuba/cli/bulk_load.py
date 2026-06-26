@@ -1,6 +1,5 @@
 import logging
 from functools import partial
-from typing import Optional
 
 import click
 import progressbar
@@ -52,12 +51,12 @@ from snuba.writer import BufferedWriterWrapper
 def bulk_load(
     *,
     storage_name: str,
-    dest_table: Optional[str],
+    dest_table: str | None,
     source: str,
     ignore_existing_data: bool,
     pre_processed: bool,
     show_progress: bool,
-    log_level: Optional[str] = None,
+    log_level: str | None = None,
 ) -> None:
     setup_logging(log_level)
     setup_sentry()
@@ -88,7 +87,7 @@ def bulk_load(
         progress = progressbar.ProgressBar(
             max_value=snapshot_source.get_table_file_size(storage.get_postgres_table())
         )
-        progress_func: Optional[ProgressCallback] = partial(progress_callback, progress)
+        progress_func: ProgressCallback | None = partial(progress_callback, progress)
     else:
         progress_func = None
 

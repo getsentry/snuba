@@ -1,4 +1,4 @@
-from typing import List, Sequence
+from collections.abc import Sequence
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages.tags_hash_map import get_array_vals_hash
@@ -9,7 +9,7 @@ from snuba.utils.schemas import Array, Column, Date, String, UInt
 
 num_attr_buckets = 40
 
-columns: List[Column[Modifiers]] = [
+columns: list[Column[Modifiers]] = [
     Column("organization_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("item_type", UInt(8)),
@@ -72,7 +72,7 @@ class Migration(migration.ClickhouseNodeMigration):
     new_mv_name = "eap_item_co_occurring_attrs_2_mv"
 
     def forwards_ops(self) -> Sequence[SqlOperation]:
-        ops: List[SqlOperation] = []
+        ops: list[SqlOperation] = []
 
         # Add bool_attribute_keys column to local table
         ops.append(
@@ -132,7 +132,7 @@ SELECT
     arrayConcat({_attr_num_names}) AS attributes_float
 FROM eap_items_1_local
 """
-        old_columns: List[Column[Modifiers]] = [
+        old_columns: list[Column[Modifiers]] = [
             Column("organization_id", UInt(64)),
             Column("project_id", UInt(64)),
             Column("item_type", UInt(8)),
@@ -165,7 +165,7 @@ FROM eap_items_1_local
             ),
         ]
 
-        ops: List[SqlOperation] = []
+        ops: list[SqlOperation] = []
 
         # Recreate old MV
         ops.append(

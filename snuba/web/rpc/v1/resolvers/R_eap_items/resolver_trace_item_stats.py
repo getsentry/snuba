@@ -1,7 +1,8 @@
 import uuid
 from collections import OrderedDict
+from collections.abc import Iterable
 from datetime import datetime
-from typing import Any, Dict, Iterable, Tuple
+from typing import Any
 
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -74,12 +75,12 @@ EAP_ITEMS_ENTITY = Entity(
 
 
 def _transform_attr_distribution_results(
-    results: Iterable[Dict[str, Any]],
+    results: Iterable[dict[str, Any]],
     request_meta: RequestMeta,
 ) -> Iterable[AttributeDistribution]:
     # Maintain the order of keys, so it is in descending order
     # of most prevelant key-value pair.
-    res: OrderedDict[Tuple[str, str], AttributeDistribution] = OrderedDict()
+    res: OrderedDict[tuple[str, str], AttributeDistribution] = OrderedDict()
 
     for row in results:
         attr_key = row["attr_key"]

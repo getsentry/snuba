@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import (
     Array,
@@ -60,19 +60,19 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("granularities", Array(UInt(8))),
         Column(
             "decasecond_retention_days",
-            UInt(8, Modifiers(default=str("7"))),
+            UInt(8, Modifiers(default="7")),
         ),
         Column(
             "min_retention_days",
-            UInt(8, Modifiers(default=str("30"))),
+            UInt(8, Modifiers(default="30")),
         ),
         Column(
             "hr_retention_days",
-            UInt(8, Modifiers(default=str("retention_days"))),
+            UInt(8, Modifiers(default="retention_days")),
         ),
         Column(
             "day_retention_days",
-            UInt(8, Modifiers(default=str("retention_days"))),
+            UInt(8, Modifiers(default="retention_days")),
         ),
     ]
 
