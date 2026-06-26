@@ -211,13 +211,17 @@ def type_array_to_typed_columns_select_expression(attr_key: AttributeKey) -> Fun
     """SELECT-clause representation of an array attribute built from the typed columns.
 
     Replaces the ``toJSONString(attributes_array.<name>:Array(JSON))`` form used for the
-    legacy JSON column: reads only the typed ``attributes_array_*`` map columns and
-    returns each element type as its own native ``Array(T)`` inside a
+    legacy JSON column: reads each typed ``attributes_array_*`` map column with the same
+    ``SubscriptableReference`` (``col[key]``) access used for the other attribute map
+    columns, returning each element type as its own native ``Array(T)`` inside a
     ``tuple(string[], int[], float[], bool[])`` — no JSON serialization. The caller's
     converter flattens the tuple into a typed ``val_array`` (see
-    ``_typed_array_columns_to_attribute_value``). Homogeneous arrays (the common case)
-    keep element order; a mixed-type array's elements are grouped by type, since the
-    typed columns store each element type separately.
+    ``_typed_array_columns_to_attribute_value``). A missing key reads as an empty array,
+    so these references are excluded from the NULL existence-check wrap (see
+    ``add_existence_check_to_subscriptable_references``) — ClickHouse has no
+    ``Nullable(Array)``. Homogeneous arrays (the common case) keep element order; a
+    mixed-type array's elements are grouped by type, since the typed columns store each
+    element type separately.
     """
     if attr_key.type != AttributeKey.Type.TYPE_ARRAY:
         raise MalformedAttributeException(
@@ -228,7 +232,7 @@ def type_array_to_typed_columns_select_expression(attr_key: AttributeKey) -> Fun
         alias=_build_label_mapping_key(attr_key),
         function_name="tuple",
         parameters=tuple(
-            arrayElement(None, column(col), literal(attr_key.name))
+            SubscriptableReference(alias=None, column=column(col), key=literal(attr_key.name))
             for col in TYPED_ARRAY_SELECT_COLUMNS
         ),
     )

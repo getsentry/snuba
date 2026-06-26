@@ -224,6 +224,18 @@ def merge_typed_array_maps(row: dict[str, Any]) -> list[tuple[str, list[Any]]]:
     return [(name, merged[name]) for name in order]
 
 
+def flatten_typed_array_tuple(raw: Any) -> list[Any]:
+    """Flatten a ``tuple(string[], int[], float[], bool[])`` from the typed array columns
+    (see ``type_array_to_typed_columns_select_expression``) into a single Python list with
+    native element types preserved. Used by per-attribute SELECTs that return the tuple
+    for a single array attribute. Mixed-type arrays are grouped by type; homogeneous
+    arrays (the common case) keep their order."""
+    if not isinstance(raw, (tuple, list)) or len(raw) != 4:
+        return raw if isinstance(raw, list) else []
+    strs, ints, floats, bools = raw
+    return [*(strs or []), *(ints or []), *(floats or []), *(bools or [])]
+
+
 def decode_attributes_array_value(key: str, raw: Any) -> list[Any] | str | None:
     """Decode a `toJSONString(...:Array(JSON))` payload for an allowlisted path.
 
@@ -418,6 +430,12 @@ def _typed_null_for_map_column(column_name: str) -> Expression:
 def add_existence_check_to_subscriptable_references(query: Query) -> None:
     def transform(exp: Expression) -> Expression:
         if not isinstance(exp, SubscriptableReference):
+            return exp
+
+        if exp.column.column_name in TYPED_ARRAY_MAP_COLUMNS:
+            # Array map columns (attributes_array_*) read as an empty array for a missing
+            # key, so they need no NULL existence guard — and ClickHouse has no
+            # Nullable(Array), so an `if(..., Array, NULL)` wrap would be illegal anyway.
             return exp
 
         return FunctionCall(
