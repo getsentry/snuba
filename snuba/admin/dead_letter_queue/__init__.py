@@ -1,22 +1,25 @@
 from __future__ import annotations
 
-from typing import NamedTuple, Optional, Sequence, TypedDict
+from collections.abc import Sequence
+from typing import NamedTuple, TypedDict
 
 from snuba import settings
 from snuba.datasets.slicing import is_storage_set_sliced
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_writable_storages
 
-Topic = TypedDict(
-    "Topic",
-    {"logicalName": str, "physicalName": str, "slice": Optional[int], "storage": str},
-)
+
+class Topic(TypedDict):
+    logicalName: str
+    physicalName: str
+    slice: int | None
+    storage: str
 
 
 class DlqTopic(NamedTuple):
     logical_name: str
     physical_name: str
-    slice_id: Optional[int]
+    slice_id: int | None
     storage: str
 
     def to_json(self) -> Topic:
@@ -51,10 +54,9 @@ def get_dlq_topics() -> Sequence[Topic]:
     return [t.to_json() for t in dlq_topics]
 
 
-def get_slices(storage: WritableTableStorage) -> Sequence[Optional[int]]:
+def get_slices(storage: WritableTableStorage) -> Sequence[int | None]:
     storage_set_key = storage.get_storage_set_key()
 
     if is_storage_set_sliced(storage_set_key):
         return list(range(settings.SLICED_STORAGE_SETS[storage_set_key.value]))
-    else:
-        return [None]
+    return [None]

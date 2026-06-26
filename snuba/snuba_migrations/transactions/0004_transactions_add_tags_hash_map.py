@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import Array, Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
@@ -55,7 +55,5 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
-            operations.DropColumn(
-                StorageSetKey.TRANSACTIONS, "transactions_dist", "_tags_hash_map"
-            )
+            operations.DropColumn(StorageSetKey.TRANSACTIONS, "transactions_dist", "_tags_hash_map")
         ]

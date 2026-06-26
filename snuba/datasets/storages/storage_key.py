@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 REGISTERED_STORAGE_KEYS: dict[str, str] = {}
 
 
 class _StorageKey(type):
-    def __getattr__(cls, attr: str) -> "StorageKey":
+    def __getattr__(cls, attr: str) -> StorageKey:
         if attr not in REGISTERED_STORAGE_KEYS:
             raise AttributeError(attr)
 

@@ -37,12 +37,12 @@ class NoopQueryProcessor(LogicalQueryProcessor):
 
 
 @pytest.fixture
-def mock_query_storage() -> Generator[QueryStorage, None, None]:
+def mock_query_storage() -> Generator[QueryStorage]:
     yield QueryStorage(key=_MOCK_STORAGE_KEY)
 
 
 @pytest.fixture
-def mock_storage() -> Generator[ReadableTableStorage, None, None]:
+def mock_storage() -> Generator[ReadableTableStorage]:
     # create a storage
     storkey = _MOCK_STORAGE_KEY
     storsetkey = StorageSetKey("mockstorageset")
@@ -78,7 +78,7 @@ def mock_storage() -> Generator[ReadableTableStorage, None, None]:
 @pytest.fixture
 def mock_entity(
     mock_storage: ReadableTableStorage,
-) -> Generator[PluggableEntity, None, None]:
+) -> Generator[PluggableEntity]:
     # setup
     entkey = EntityKey("mock_entity")
     entity = PluggableEntity(

@@ -1,9 +1,9 @@
 import json
 import time
 import uuid
+from collections.abc import Iterator, Mapping
 from concurrent.futures import Future
 from datetime import datetime, timedelta
-from typing import Iterator, Mapping, Optional
 from unittest import mock
 
 import pytest
@@ -117,7 +117,7 @@ def test_executor_consumer() -> None:
         TestingMetricsBackend(),
         None,
     )
-    for i in range(1, 5):
+    for _i in range(1, 5):
         # Give time to the executor to subscribe
         time.sleep(1)
         executor._run_once()
@@ -174,8 +174,8 @@ def test_executor_consumer() -> None:
 
 def generate_message(
     entity_key: EntityKey,
-    subscription_identifier: Optional[SubscriptionIdentifier] = None,
-    bad_query: Optional[bool] = False,
+    subscription_identifier: SubscriptionIdentifier | None = None,
+    bad_query: bool | None = False,
 ) -> Iterator[Message[KafkaPayload]]:
     codec = SubscriptionScheduledTaskEncoder()
     epoch = datetime(1970, 1, 1)
@@ -314,7 +314,7 @@ def test_poll_skips_non_retryable_query_exception() -> None:
     exc = QueryException("boom")
     exc.__cause__ = QueryTooLongException("query is too long")
 
-    future: "Future[object]" = Future()
+    future: Future[object] = Future()
     future.set_exception(exc)
 
     message = Message(BrokerValue("payload", Partition(Topic("test"), 0), 0, datetime(1970, 1, 1)))

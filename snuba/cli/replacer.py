@@ -1,5 +1,6 @@
 import signal
-from typing import Any, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import click
 
@@ -70,7 +71,7 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 )
 def replacer(
     *,
-    replacements_topic: Optional[str],
+    replacements_topic: str | None,
     consumer_group: str,
     bootstrap_server: Sequence[str],
     storage_name: str,
@@ -78,8 +79,8 @@ def replacer(
     no_strict_offset_reset: bool,
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
-    log_level: Optional[str] = None,
-    health_check_file: Optional[str] = None,
+    log_level: str | None = None,
+    health_check_file: str | None = None,
     max_poll_interval_ms: int = 30000,
 ) -> None:
     from arroyo import Topic, configure_metrics

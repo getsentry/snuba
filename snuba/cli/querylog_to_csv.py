@@ -1,6 +1,7 @@
 import csv
+from collections.abc import Sequence
 from datetime import datetime
-from typing import NamedTuple, Optional, Sequence, Tuple
+from typing import NamedTuple
 
 import click
 import structlog
@@ -53,7 +54,7 @@ def get_query_results(
     databases: list[str],
     tables: list[str],
     start_time: str,
-    end_time: Optional[str],
+    end_time: str | None,
 ) -> str:
     if start_time and end_time:
         start = f"toDateTime('{start_time}')"
@@ -81,7 +82,7 @@ def get_query_results(
     """
 
 
-def get_credentials() -> Tuple[str, str]:
+def get_credentials() -> tuple[str, str]:
     # TOOO don't hardcode credentials, use settings
     return ("default", "")
 
@@ -143,8 +144,8 @@ def querylog_to_csv(
     event_type: str,
     start_time: str,
     notify: bool,
-    end_time: Optional[str] = None,
-    log_level: Optional[str] = None,
+    end_time: str | None = None,
+    log_level: str | None = None,
 ) -> None:
     """
     Use this command when you want to capture the results from the

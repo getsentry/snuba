@@ -1,4 +1,5 @@
-from typing import Any, Mapping, Optional, Type, Union
+from collections.abc import Mapping
+from typing import Any
 
 import pytest
 
@@ -144,10 +145,10 @@ TESTS = [
 @pytest.mark.parametrize("entity_key, query, metadata, exception, offset", TESTS)
 def test_entity_subscription_processors(
     entity_key: EntityKey,
-    query: Union[CompositeQuery[QueryEntity], Query],
+    query: CompositeQuery[QueryEntity] | Query,
     metadata: Mapping[str, Any],
-    exception: Optional[Type[Exception]],
-    offset: Optional[int],
+    exception: type[Exception] | None,
+    offset: int | None,
 ) -> None:
     entity = get_entity(entity_key)
     subscription_processors = entity.get_subscription_processors()
@@ -156,7 +157,7 @@ def test_entity_subscription_processors(
         for processor in subscription_processors:
             if exception is not None:
                 with pytest.raises(exception):
-                    processor.to_dict(metadata) == {}
+                    processor.to_dict(metadata)
             else:
                 if isinstance(processor, AddColumnCondition):
                     processor.process(query, metadata, offset)
@@ -169,10 +170,10 @@ def test_entity_subscription_processors(
 @pytest.mark.parametrize("entity_key, query, metadata, exception, offset", TESTS)
 def test_entity_subscription_validators(
     entity_key: EntityKey,
-    query: Union[CompositeQuery[QueryEntity], Query],
+    query: CompositeQuery[QueryEntity] | Query,
     metadata: Mapping[str, Any],
-    exception: Optional[Type[Exception]],
-    offset: Optional[int],
+    exception: type[Exception] | None,
+    offset: int | None,
 ) -> None:
     entity = get_entity(entity_key)
     subscription_validators = entity.get_subscription_validators()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Mapping, Optional, Sequence, Set, Union
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Expression, FunctionCall, Literal
@@ -109,13 +110,15 @@ set_condition_pattern = {
 
 
 def __is_set_condition(exp: Expression, operator: str) -> bool:
-    if is_any_binary_condition(exp, operator):
-        if operator in set_condition_pattern:
-            if set_condition_pattern[operator].match(exp) is not None:
-                assert isinstance(exp, FunctionCall)  # mypy
-                assert isinstance(exp.parameters[1], FunctionCall)  # mypy
-                # Matchers can't currently match arbitrary numbers of parameters, so test this directly
-                return all(isinstance(c, Literal) for c in exp.parameters[1].parameters)
+    if (
+        is_any_binary_condition(exp, operator)
+        and operator in set_condition_pattern
+        and set_condition_pattern[operator].match(exp) is not None
+    ):
+        assert isinstance(exp, FunctionCall)  # mypy
+        assert isinstance(exp.parameters[1], FunctionCall)  # mypy
+        # Matchers can't currently match arbitrary numbers of parameters, so test this directly
+        return all(isinstance(c, Literal) for c in exp.parameters[1].parameters)
 
     return False
 
@@ -168,7 +171,7 @@ binary_condition_patterns = {
 
 
 def condition_pattern(
-    operators: Set[str],
+    operators: set[str],
     lhs_pattern: Pattern[Expression],
     rhs_pattern: Pattern[Expression],
     commutative: bool,
@@ -268,8 +271,7 @@ def _get_first_level_conditions(condition: Expression, function: str) -> Sequenc
             *_get_first_level_conditions(match.expression("left"), function),
             *_get_first_level_conditions(match.expression("right"), function),
         ]
-    else:
-        return [condition]
+    return [condition]
 
 
 def combine_or_conditions(conditions: Sequence[Expression]) -> Expression:
@@ -322,13 +324,13 @@ def is_condition(exp: Expression) -> bool:
 
 
 def build_match(
-    col: Optional[str] = None,
-    subscriptable: Optional[str] = None,
-    ops: Optional[Sequence[str]] = None,
-    array_ops: Optional[Sequence[str]] = None,
-    param_type: Optional[Any] = None,
-    alias: Optional[str] = None,
-    key: Optional[str] = None,
+    col: str | None = None,
+    subscriptable: str | None = None,
+    ops: Sequence[str] | None = None,
+    array_ops: Sequence[str] | None = None,
+    param_type: Any | None = None,
+    alias: str | None = None,
+    key: str | None = None,
 ) -> Or[Expression]:
     """
     There is a common use case of matching a specific condition in our code base.
@@ -342,7 +344,7 @@ def build_match(
     on a successful match.
     """
     alias_match = AnyOptionalString() if alias is None else String(alias)
-    pattern: Union[ColumnPattern, SubscriptableReferencePattern]
+    pattern: ColumnPattern | SubscriptableReferencePattern
 
     assert subscriptable is not None or col is not None
     if subscriptable is not None:

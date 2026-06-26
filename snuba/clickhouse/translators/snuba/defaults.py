@@ -1,5 +1,3 @@
-from typing import Optional
-
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
 from snuba.clickhouse.translators.snuba.allowed import (
     ArgumentMapper,
@@ -26,7 +24,7 @@ class DefaultLiteralMapper(LiteralMapper):
         self,
         expression: Literal,
         children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[Literal]:
+    ) -> Literal | None:
         return expression
 
 
@@ -35,7 +33,7 @@ class DefaultColumnMapper(ColumnMapper):
         self,
         expression: Column,
         children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[Column]:
+    ) -> Column | None:
         return expression
 
 
@@ -44,7 +42,7 @@ class DefaultSubscriptableMapper(SubscriptableReferenceMapper):
         self,
         expression: SubscriptableReference,
         children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[SubscriptableReference]:
+    ) -> SubscriptableReference | None:
         # TODO: remove a default for SubscriptableReference entirely.
         # Since there is not SubscriptableReference in clickhouse, such
         # columns have to be translated by a valid rule. They cannot have
@@ -62,7 +60,7 @@ class DefaultFunctionMapper(FunctionCallMapper):
         self,
         expression: FunctionCall,
         children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[FunctionCall]:
+    ) -> FunctionCall | None:
         return FunctionCall(
             alias=expression.alias,
             function_name=expression.function_name,
@@ -75,7 +73,7 @@ class DefaultCurriedFunctionMapper(CurriedFunctionCallMapper):
         self,
         expression: CurriedFunctionCall,
         children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[CurriedFunctionCall]:
+    ) -> CurriedFunctionCall | None:
         return CurriedFunctionCall(
             alias=expression.alias,
             internal_function=children_translator.translate_function_strict(
@@ -90,7 +88,7 @@ class DefaultArgumentMapper(ArgumentMapper):
         self,
         expression: Argument,
         children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[Argument]:
+    ) -> Argument | None:
         return expression
 
 
@@ -99,7 +97,7 @@ class DefaultLambdaMapper(LambdaMapper):
         self,
         expression: Lambda,
         children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[Lambda]:
+    ) -> Lambda | None:
         return Lambda(
             alias=expression.alias,
             parameters=expression.parameters,

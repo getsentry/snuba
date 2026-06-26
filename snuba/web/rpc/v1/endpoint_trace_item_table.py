@@ -1,5 +1,3 @@
-from typing import Type
-
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
@@ -64,8 +62,8 @@ def _validate_select_and_groupby(in_msg: TraceItemTableRequest) -> None:
             f"group_by is not supported on array attributes: {', '.join(array_group_by_columns)}"
         )
 
-    non_aggregted_columns = set([c.key.name for c in in_msg.columns if c.HasField("key")])
-    grouped_by_columns = set([c.name for c in in_msg.group_by])
+    non_aggregted_columns = {c.key.name for c in in_msg.columns if c.HasField("key")}
+    grouped_by_columns = {c.name for c in in_msg.group_by}
 
     vis = ContainsAggregateVisitor()
     TraceItemTableRequestWrapper(in_msg).accept(vis)
@@ -166,7 +164,7 @@ class EndpointTraceItemTable(RPCEndpoint[TraceItemTableRequest, TraceItemTableRe
         return "v1"
 
     @classmethod
-    def request_class(cls) -> Type[TraceItemTableRequest]:
+    def request_class(cls) -> type[TraceItemTableRequest]:
         return TraceItemTableRequest
 
     def get_resolver(
@@ -178,7 +176,7 @@ class EndpointTraceItemTable(RPCEndpoint[TraceItemTableRequest, TraceItemTableRe
         )
 
     @classmethod
-    def response_class(cls) -> Type[TraceItemTableResponse]:
+    def response_class(cls) -> type[TraceItemTableResponse]:
         return TraceItemTableResponse
 
     def _execute(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:

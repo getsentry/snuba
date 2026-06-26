@@ -1,5 +1,6 @@
 from collections import defaultdict
-from typing import Final, Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Final
 
 from sentry_conventions.attributes import ATTRIBUTE_METADATA
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
@@ -353,12 +354,11 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
                 *expressions,
                 alias=alias,
             )
-        else:
-            return _generate_subscriptable_reference(
-                attr_key.name,
-                attr_key.type,
-                alias,
-            )
+        return _generate_subscriptable_reference(
+            attr_key.name,
+            attr_key.type,
+            alias,
+        )
 
     if attr_key.type == AttributeKey.Type.TYPE_ARRAY:
         # Legacy JSON column (used pre-cutoff and for aggregations); the typed-column read

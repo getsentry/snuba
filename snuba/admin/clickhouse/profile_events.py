@@ -1,7 +1,7 @@
 import json
 import socket
 import time
-from typing import Dict, List, cast
+from typing import cast
 
 import structlog
 from flask import g
@@ -26,14 +26,14 @@ def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
         query_trace: TraceOutput object to update with profile events
         storage: Storage identifier
     """
-    profile_events_raw_sql = "SELECT ProfileEvents FROM system.query_log WHERE query_id = '{}' AND type = 'QueryFinish'"
+    profile_events_raw_sql = (
+        "SELECT ProfileEvents FROM system.query_log WHERE query_id = '{}' AND type = 'QueryFinish'"
+    )
 
     for query_trace_data in parse_trace_for_query_ids(query_trace):
         sql = profile_events_raw_sql.format(query_trace_data.query_id)
         logger.info(
-            "Gathering profile event using host: {}, port = {}, storage = {}, sql = {}, g.user = {}".format(
-                query_trace_data.host, query_trace_data.port, storage, sql, g.user
-            )
+            f"Gathering profile event using host: {query_trace_data.host}, port = {query_trace_data.port}, storage = {storage}, sql = {sql}, g.user = {g.user}"
         )
 
         system_query_result = None
@@ -46,6 +46,7 @@ def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
                     int(query_trace_data.port),
                     storage,
                     sql,
+                    False,
                     False,
                     g.user,
                 )
@@ -65,9 +66,7 @@ def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
 
         if system_query_result is not None and len(system_query_result.results) > 0:
             query_trace.profile_events_meta.append(system_query_result.meta)
-            query_trace.profile_events_profile = cast(
-                Dict[str, int], system_query_result.profile
-            )
+            query_trace.profile_events_profile = cast(dict[str, int], system_query_result.profile)
             columns = system_query_result.meta
             if columns:
                 res = {}
@@ -82,19 +81,19 @@ def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
 def hostname_resolves(hostname: str) -> bool:
     try:
         socket.gethostbyname(hostname)
-    except socket.error:
+    except OSError:
         return False
     else:
         return True
 
 
-def parse_trace_for_query_ids(trace_output: TraceOutput) -> List[QueryTraceData]:
+def parse_trace_for_query_ids(trace_output: TraceOutput) -> list[QueryTraceData]:
     summarized_trace_output = trace_output.summarized_trace_output
     node_name_to_query_id = {
         node_name: query_summary.query_id
         for node_name, query_summary in summarized_trace_output.query_summaries.items()
     }
-    logger.info("node to query id mapping: {}".format(node_name_to_query_id))
+    logger.info(f"node to query id mapping: {node_name_to_query_id}")
     return [
         QueryTraceData(
             host=node_name if hostname_resolves(node_name) else "127.0.0.1",

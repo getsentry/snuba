@@ -3,9 +3,8 @@ from unittest import mock
 
 import pytest
 
-from snuba.clickhouse.columns import ColumnSet, DateTime
+from snuba.clickhouse.columns import ColumnSet, DateTime, String, UInt
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
-from snuba.clickhouse.columns import String, UInt
 from snuba.clickhouse.query import Query
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.readiness_state import ReadinessState
@@ -82,9 +81,7 @@ test_data = [
             selected_columns=[
                 SelectedExpression(
                     name="_snuba_count_unique_sdk_version",
-                    expression=FunctionCall(
-                        None, "uniq", (Column(None, None, "mismatched1"),)
-                    ),
+                    expression=FunctionCall(None, "uniq", (Column(None, None, "mismatched1"),)),
                 )
             ],
         ),
@@ -118,9 +115,7 @@ test_data = [
             selected_columns=[
                 SelectedExpression(
                     name="_snuba_count_unique_sdk_version",
-                    expression=FunctionCall(
-                        None, "uniq", (Column(None, None, "mismatched2"),)
-                    ),
+                    expression=FunctionCall(None, "uniq", (Column(None, None, "mismatched2"),)),
                 )
             ],
         ),
@@ -154,9 +149,7 @@ test_data = [
             selected_columns=[
                 SelectedExpression(
                     name="_snuba_count_unique_sdk_version",
-                    expression=FunctionCall(
-                        None, "uniq", (Column(None, None, "not_mismatched"),)
-                    ),
+                    expression=FunctionCall(None, "uniq", (Column(None, None, "not_mismatched"),)),
                 )
             ],
         ),
@@ -165,9 +158,7 @@ test_data = [
             selected_columns=[
                 SelectedExpression(
                     name="_snuba_count_unique_sdk_version",
-                    expression=FunctionCall(
-                        None, "uniq", (Column(None, None, "not_mismatched"),)
-                    ),
+                    expression=FunctionCall(None, "uniq", (Column(None, None, "not_mismatched"),)),
                 )
             ],
         ),
@@ -208,10 +199,9 @@ test_data = [
 def _mock_get_storage(storage_key: StorageKey) -> ReadableTableStorage:
     if storage_key == StorageKey("storage1"):
         return Storage1
-    elif storage_key == StorageKey("storage2"):
+    if storage_key == StorageKey("storage2"):
         return Storage2
-    else:
-        raise Exception("UNKNOWN STORAGE KEY " + str(storage_key))
+    raise Exception("UNKNOWN STORAGE KEY " + str(storage_key))
 
 
 def test_find_mismatched_columns():

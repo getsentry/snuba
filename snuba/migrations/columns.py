@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import List, Optional, Sequence
 
 from snuba.clickhouse.columns import (
     Nullable,
@@ -19,13 +19,13 @@ class MigrationModifiers(TypeModifiers):
 
     nullable: bool = False
     low_cardinality: bool = False
-    default: Optional[str] = None
-    materialized: Optional[str] = None
-    codecs: Optional[Sequence[str]] = None
-    ttl: Optional[str] = None
+    default: str | None = None
+    materialized: str | None = None
+    codecs: Sequence[str] | None = None
+    ttl: str | None = None
 
     def _get_modifiers(self) -> Sequence[TypeModifier]:
-        ret: List[TypeModifier] = []
+        ret: list[TypeModifier] = []
         if self.nullable:
             ret.append(Nullable())
         if self.low_cardinality:
@@ -53,7 +53,7 @@ class MigrationModifiers(TypeModifiers):
     def __eq__(self, other: object) -> bool:
         if isinstance(other, SchemaModifiers):
             return self.nullable == other.nullable
-        elif isinstance(other, MigrationModifiers):
+        if isinstance(other, MigrationModifiers):
             return (
                 self.nullable == other.nullable
                 and self.low_cardinality == other.low_cardinality
@@ -70,7 +70,7 @@ class Materialized(TypeModifier):
     expression: str
 
     def for_schema(self, content: str) -> str:
-        return "{} MATERIALIZED {}".format(content, self.expression)
+        return f"{content} MATERIALIZED {self.expression}"
 
 
 @dataclass(frozen=True)
@@ -86,13 +86,13 @@ class WithDefault(TypeModifier):
     default: str
 
     def for_schema(self, content: str) -> str:
-        return "{} DEFAULT {}".format(content, self.default)
+        return f"{content} DEFAULT {self.default}"
 
 
 @dataclass(frozen=True)
 class LowCardinality(TypeModifier):
     def for_schema(self, content: str) -> str:
-        return "LowCardinality({})".format(content)
+        return f"LowCardinality({content})"
 
 
 @dataclass(frozen=True)

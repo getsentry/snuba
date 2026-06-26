@@ -1,5 +1,6 @@
 import json
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 import click
 
@@ -49,8 +50,8 @@ def get(*, key: str, format: str) -> None:
 
     try:
         rv = state.get_raw_configs()[key]
-    except KeyError:
-        raise click.ClickException(f"Key {key!r} not found.")
+    except KeyError as e:
+        raise click.ClickException(f"Key {key!r} not found.") from e
     click.echo(FORMATS[format]({key: rv}))
 
 
@@ -88,8 +89,8 @@ def delete(*, key: str) -> None:
 
     try:
         rv = state.get_raw_configs()[key]
-    except KeyError:
-        raise click.ClickException(f"Key {key!r} not found.")
+    except KeyError as e:
+        raise click.ClickException(f"Key {key!r} not found.") from e
 
     click.echo(human_fmt({key: rv}))
     click.confirm("\nAre you sure you want to delete this?", abort=True)

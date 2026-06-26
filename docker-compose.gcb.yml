@@ -43,7 +43,7 @@ services:
     command:
       - "-m"
       - "pytest"
-      - "-x"
+      - "--maxfail=50"
       - "--ignore"
       - "tests/migrations"
       - "-vv"
@@ -60,7 +60,7 @@ services:
     command:
       - "-m"
       - "pytest"
-      - "-x"
+      - "--maxfail=50"
       - "-vv"
       - "tests/migrations"
       - "--junit-xml"

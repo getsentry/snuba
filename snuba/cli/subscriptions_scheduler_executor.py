@@ -1,6 +1,7 @@
 import signal
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
-from typing import Any, Iterator, Optional, Sequence
+from typing import Any
 
 import click
 import structlog
@@ -87,9 +88,9 @@ def subscriptions_scheduler_executor(
     auto_offset_reset: str,
     no_strict_offset_reset: bool,
     schedule_ttl: int,
-    stale_threshold_seconds: Optional[int],
-    health_check_file: Optional[str],
-    log_level: Optional[str],
+    stale_threshold_seconds: int | None,
+    health_check_file: str | None,
+    log_level: str | None,
 ) -> None:
     """
     Combined subscriptions scheduler and executor. Alternative to the separate scheduler and executor processes.
@@ -154,7 +155,7 @@ def subscriptions_scheduler_executor(
 
 
 @contextmanager
-def closing(producer: KafkaProducer) -> Iterator[Optional[KafkaProducer]]:
+def closing(producer: KafkaProducer) -> Iterator[KafkaProducer | None]:
     try:
         yield producer
     finally:

@@ -1,5 +1,5 @@
+from collections.abc import Sequence
 from copy import deepcopy
-from typing import List, Sequence
 
 from snuba.clickhouse.columns import Array, Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
@@ -15,7 +15,7 @@ def hash_map_column_name(attribute_type: str, i: int) -> str:
     return f"_hash_map_{attribute_type}_{i}"
 
 
-columns: List[Column[Modifiers]] = [
+columns: list[Column[Modifiers]] = [
     Column("organization_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("item_type", UInt(8)),
@@ -151,7 +151,6 @@ def get_mv_expr_sampling_factor(sampling_weight: int) -> str:
 
 
 class Migration(migration.ClickhouseNodeMigration):
-
     blocking = False
     storage_set_key = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
     granularity = "8192"
@@ -159,7 +158,7 @@ class Migration(migration.ClickhouseNodeMigration):
     sampling_weights = [8, 8**2, 8**3]
 
     def forwards_ops(self) -> Sequence[SqlOperation]:
-        ops: List[SqlOperation] = []
+        ops: list[SqlOperation] = []
         for sampling_weight in self.sampling_weights:
             local_table_name = f"eap_items_1_downsample_{sampling_weight}_local"
             mv_name = f"eap_items_1_downsample_{sampling_weight}_mv_2"
@@ -191,7 +190,7 @@ class Migration(migration.ClickhouseNodeMigration):
         return ops
 
     def backwards_ops(self) -> Sequence[SqlOperation]:
-        ops: List[SqlOperation] = []
+        ops: list[SqlOperation] = []
         for sampling_weight in self.sampling_weights:
             local_table_name = f"eap_items_1_downsample_{sampling_weight}_local"
             mv_name = f"eap_items_1_downsample_{sampling_weight}_mv"

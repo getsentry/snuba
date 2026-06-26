@@ -1,7 +1,8 @@
 import uuid
+from collections.abc import Callable, Sequence
 from dataclasses import replace
 from itertools import islice
-from typing import Any, Callable, List, Optional, Sequence
+from typing import Any
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -201,7 +202,7 @@ def _apply_virtual_columns(
             return get_field_existence_expression(from_column)
         return f.transform(
             f.CAST(f.ifNull(from_column, literal("")), "String"),
-            literals_array(None, [literal(k) for k in context.value_map.keys()]),
+            literals_array(None, [literal(k) for k in context.value_map]),
             literals_array(None, [literal(v) for v in context.value_map.values()]),
             literal(context.default_value if context.default_value != "" else "unknown"),
             alias=context.to_column_name,
@@ -235,7 +236,7 @@ def aggregation_filter_to_expression(
                 raise BadSnubaRPCRequestException(
                     "Cannot use formula and conditional aggregation in the same ComparisonFilter"
                 )
-            elif agg_filter.comparison_filter.HasField("formula"):
+            if agg_filter.comparison_filter.HasField("formula"):
                 return op_expr(
                     _formula_to_expression(agg_filter.comparison_filter.formula, request_meta),
                     agg_filter.comparison_filter.val,
@@ -291,7 +292,7 @@ def _groupby_order_by_expression(attr_key: AttributeKey) -> Expression:
 
 
 def _convert_order_by(
-    groupby: List[Expression],
+    groupby: list[Expression],
     order_by: Sequence[TraceItemTableRequest.OrderBy],
     request_meta: RequestMeta,
 ) -> Sequence[OrderBy]:
@@ -403,15 +404,18 @@ def _get_reliability_context_columns(
                 context_cols.extend(_get_reliability_context_columns(col, request_meta))
 
         # Note: 'match' is a Python keyword, so use getattr
-        for col in [getattr(conditional, "match"), conditional.default]:
-            if not col.HasField("formula") and not col.HasField("conditional_formula"):
-                if col.label:
-                    context_cols.append(
-                        SelectedExpression(
-                            name=col.label,
-                            expression=_column_to_expression(col, request_meta),
-                        )
+        for col in [conditional.match, conditional.default]:
+            if (
+                not col.HasField("formula")
+                and not col.HasField("conditional_formula")
+                and col.label
+            ):
+                context_cols.append(
+                    SelectedExpression(
+                        name=col.label,
+                        expression=_column_to_expression(col, request_meta),
                     )
+                )
             context_cols.extend(_get_reliability_context_columns(col, request_meta))
 
         return context_cols
@@ -517,7 +521,7 @@ def _conditional_formula_to_expression(
     comparison_expr = COMPARISON_OP_TO_EXPR[condition.op](left_expr, right_expr)
     # 'match' is the value when condition is true, 'default' is when false
     # Note: 'match' is a Python keyword in 3.10+, but protobuf accesses it as an attribute
-    match_expr = _column_to_expression(getattr(conditional_formula, "match"), request_meta)
+    match_expr = _column_to_expression(conditional_formula.match, request_meta)
     default_expr = _column_to_expression(conditional_formula.default, request_meta)
 
     return if_cond(comparison_expr, match_expr, default_expr)
@@ -529,7 +533,7 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
     """
     if column.HasField("key"):
         return attribute_key_to_expression(column.key)
-    elif column.HasField("conditional_aggregation"):
+    if column.HasField("conditional_aggregation"):
         function_expr = aggregation_to_expression(
             column.conditional_aggregation,
             attribute_key_to_expression,
@@ -556,23 +560,22 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
         # aggregation label may not be set and the column label takes priority anyways.
         function_expr = replace(function_expr, alias=column.label)
         return function_expr
-    elif column.HasField("formula"):
+    if column.HasField("formula"):
         formula_expr = _formula_to_expression(column.formula, request_meta)
         formula_expr = replace(formula_expr, alias=column.label)
         return formula_expr
-    elif column.HasField("conditional_formula"):
+    if column.HasField("conditional_formula"):
         conditional_expr = _conditional_formula_to_expression(
             column.conditional_formula,
             request_meta,
         )
         conditional_expr = replace(conditional_expr, alias=column.label)
         return conditional_expr
-    elif column.HasField("literal"):
+    if column.HasField("literal"):
         return literal(column.literal.val_double)
-    else:
-        raise BadSnubaRPCRequestException(
-            "Column is not one of: aggregate, attribute key, formula, or conditional_formula"
-        )
+    raise BadSnubaRPCRequestException(
+        "Column is not one of: aggregate, attribute key, formula, or conditional_formula"
+    )
 
 
 def _reads_typed_array_columns(column: Column, request_meta: RequestMeta) -> bool:
@@ -611,8 +614,8 @@ def _get_offset_from_page_token(page_token: PageToken | None) -> int:
 def build_query(
     request: TraceItemTableRequest,
     time_window: TimeWindow | None = None,
-    sampling_tier: Optional[Tier] = None,
-    timer: Optional[Timer] = None,
+    sampling_tier: Tier | None = None,
+    timer: Timer | None = None,
 ) -> Query:
     entity = Entity(
         key=EntityKey("eap_items"),
@@ -640,7 +643,7 @@ def build_query(
     item_type_conds = [f.equals(snuba_column("item_type"), request.meta.trace_item_type)]
 
     # Handle cross item queries by first getting trace IDs
-    additional_conditions: List[Expression] = []
+    additional_conditions: list[Expression] = []
     if request.trace_filters and timer is not None and sampling_tier is not None:
         trace_ids_sql, _ = get_trace_ids_sql_for_cross_item_query(
             request, request.meta, list(request.trace_filters), sampling_tier, timer
@@ -717,30 +720,27 @@ def _get_page_token(
             return FlexibleTimeWindowPageWithFilters.create(
                 request, time_window, response
             ).page_token
-        else:
-            if time_window.start_timestamp.seconds <= original_time_window.start_timestamp.seconds:
-                # this is the last window because our start timestamp is the same as the original start timestamp
-                # we tell the client that there is no more data to fetch
-                return PageToken(end_pagination=True)
-            else:
-                # there are no more rows in this window so we return the next window
-                # return the next window where the end timestamp is the start timestamp and the start timestamp is the original start timestamp
-                # the routing strategy will properly truncate the time window of the next request
-                return FlexibleTimeWindowPageWithFilters.create(
-                    request,
-                    TimeWindow(original_time_window.start_timestamp, time_window.start_timestamp),
-                    response,
-                ).page_token
-    else:
-        return PageToken(offset=request.page_token.offset + num_rows_in_response)
+        if time_window.start_timestamp.seconds <= original_time_window.start_timestamp.seconds:
+            # this is the last window because our start timestamp is the same as the original start timestamp
+            # we tell the client that there is no more data to fetch
+            return PageToken(end_pagination=True)
+        # there are no more rows in this window so we return the next window
+        # return the next window where the end timestamp is the start timestamp and the start timestamp is the original start timestamp
+        # the routing strategy will properly truncate the time window of the next request
+        return FlexibleTimeWindowPageWithFilters.create(
+            request,
+            TimeWindow(original_time_window.start_timestamp, time_window.start_timestamp),
+            response,
+        ).page_token
+    return PageToken(offset=request.page_token.offset + num_rows_in_response)
 
 
 def _build_snuba_request(
     request: TraceItemTableRequest,
     query_settings: HTTPQuerySettings,
     time_window: TimeWindow | None = None,
-    sampling_tier: Optional[Tier] = None,
-    timer: Optional[Timer] = None,
+    sampling_tier: Tier | None = None,
+    timer: Timer | None = None,
 ) -> SnubaRequest:
     if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
         team = "ourlogs"

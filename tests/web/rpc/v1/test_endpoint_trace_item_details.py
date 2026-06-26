@@ -17,7 +17,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
 
 from snuba import state
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_trace_item_details import (
     EndpointTraceItemDetails,
@@ -39,7 +39,7 @@ _TRACE_ID = str(uuid.uuid4())
 
 @pytest.fixture(autouse=False)
 def setup_logs_in_db(eap: None, redis_db: None) -> None:
-    logs_storage = get_storage(StorageKey("eap_items"))
+    logs_storage = get_writable_storage(StorageKey("eap_items"))
     messages = []
     for i in range(120):
         timestamp = BASE_TIME + timedelta(minutes=i)
@@ -64,12 +64,12 @@ def setup_logs_in_db(eap: None, redis_db: None) -> None:
                 },
             )
         )
-    write_raw_unprocessed_events(logs_storage, messages)  # type: ignore
+    write_raw_unprocessed_events(logs_storage, messages)
 
 
 @pytest.fixture(autouse=False)
 def setup_spans_in_db(eap: None, redis_db: None) -> None:
-    spans_storage = get_storage(StorageKey("eap_items"))
+    spans_storage = get_writable_storage(StorageKey("eap_items"))
     messages = [
         gen_item_message(
             start_timestamp=BASE_TIME - timedelta(minutes=i),
@@ -82,7 +82,7 @@ def setup_spans_in_db(eap: None, redis_db: None) -> None:
         for i in range(120)
     ]
 
-    write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+    write_raw_unprocessed_events(spans_storage, messages)
 
 
 def _str_tags_array(*values: str) -> AnyValue:
@@ -261,9 +261,9 @@ class TestTraceItemDetails(BaseApiTest):
     def test_endpoint_returns_array_attribute(self, eap: None, redis_db: None) -> None:
         """Allowlisted attributes_array paths are exposed as val_array on TraceItemDetails."""
         span_ts = BASE_TIME - timedelta(minutes=1)
-        storage = get_storage(StorageKey("eap_items"))
+        storage = get_writable_storage(StorageKey("eap_items"))
         write_raw_unprocessed_events(
-            storage,  # type: ignore
+            storage,
             [
                 gen_item_message(
                     span_ts,
@@ -435,9 +435,9 @@ class TestTraceItemDetails(BaseApiTest):
     def test_dotted_key_array_attribute_parsed_properly(self, eap: None, redis_db: None) -> None:
         trace_id = uuid.uuid4().hex
         span_ts = BASE_TIME - timedelta(minutes=1)
-        storage = get_storage(StorageKey("eap_items"))
+        storage = get_writable_storage(StorageKey("eap_items"))
         write_raw_unprocessed_events(
-            storage,  # type: ignore
+            storage,
             [
                 gen_item_message(
                     span_ts,

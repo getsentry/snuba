@@ -44,19 +44,19 @@ Usage:
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Type, TypedDict, Union, cast
+from typing import Any, TypedDict, cast
 
 import rapidjson
 
 # mypy has not figured out recursive types yet so this can't be totally typesafe
-JsonSerializable = Union[str, int, float, bool, None, Dict[str, Any], List[Any]]
+JsonSerializable = str | int | float | bool | None | dict[str, Any] | list[Any]
 
 
 class SerializableExceptionDict(TypedDict):
     __type__: str
     __name__: str
     __message__: str
-    __extra_data__: Dict[str, JsonSerializable]
+    __extra_data__: dict[str, JsonSerializable]
     __should_report__: bool
 
 
@@ -64,14 +64,14 @@ class _ExceptionRegistry:
     """Keep a mapping of SerializableExceptions to their names"""
 
     def __init__(self) -> None:
-        self.__mapping: Dict[str, Type["SerializableException"]] = {}
+        self.__mapping: dict[str, type[SerializableException]] = {}
 
-    def register_class(self, cls: Type["SerializableException"]) -> None:
+    def register_class(self, cls: type[SerializableException]) -> None:
         existing_class = self.__mapping.get(cls.__name__)
         if not existing_class:
             self.__mapping[cls.__name__] = cls
 
-    def get_class_by_name(self, cls_name: str) -> Optional[Type["SerializableException"]]:
+    def get_class_by_name(self, cls_name: str) -> type[SerializableException] | None:
         return self.__mapping.get(cls_name)
 
 
@@ -96,7 +96,7 @@ class SerializableException(Exception):
 
     def __init__(
         self,
-        message: Optional[str] = None,
+        message: str | None = None,
         should_report: bool = True,
         **extra_data: JsonSerializable,
     ) -> None:
@@ -112,7 +112,7 @@ class SerializableException(Exception):
         """
         return message
 
-    def _format_message(self, message: Optional[str]) -> str:
+    def _format_message(self, message: str | None) -> str:
         if not message:
             return ""
 
@@ -128,7 +128,7 @@ class SerializableException(Exception):
         }
 
     @classmethod
-    def from_dict(cls, edict: SerializableExceptionDict) -> "SerializableException":
+    def from_dict(cls, edict: SerializableExceptionDict) -> SerializableException:
         assert edict["__type__"] == "SerializableException"
         defined_exception = _get_registry().get_class_by_name(edict.get("__name__", ""))
 
@@ -160,7 +160,7 @@ class SerializableException(Exception):
         return super().__init_subclass__()
 
     @classmethod
-    def from_standard_exception_instance(cls, exc: Exception) -> "SerializableException":
+    def from_standard_exception_instance(cls, exc: Exception) -> SerializableException:
         if isinstance(exc, cls):
             return exc
         return cls.from_dict(

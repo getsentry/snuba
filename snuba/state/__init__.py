@@ -1,20 +1,15 @@
-from __future__ import absolute_import, annotations
+from __future__ import annotations
 
 import logging
 import os
 import time
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import partial
 from typing import (
     Any,
-    Iterable,
-    Mapping,
-    Optional,
     Protocol,
-    Sequence,
     SupportsFloat,
-    Tuple,
-    Type,
 )
 
 import simplejson as json
@@ -64,8 +59,8 @@ def _kafka_producer() -> Producer:
 @dataclass(frozen=True)
 class MismatchedTypeException(Exception):
     key: str
-    original_type: Type[Any]
-    new_type: Type[Any]
+    original_type: type[Any]
+    new_type: type[Any]
 
 
 class ConfigKeyCallable(Protocol):  # Necessary for typing the memoize
@@ -120,13 +115,13 @@ def get_typed_value(value: Any) -> Any:
 
 def set_config(
     key: str,
-    value: Optional[Any],
-    user: Optional[str] = None,
+    value: Any | None,
+    user: str | None = None,
     force: bool = False,
     config_key: str = config_hash,
 ) -> None:
     value = get_typed_value(value)
-    enc_value = "{}".format(value).encode("utf-8") if value is not None else None
+    enc_value = f"{value}".encode() if value is not None else None
     try:
         enc_original_value = rds.hget(config_key, key)
         if enc_original_value is not None and value is not None:
@@ -159,8 +154,8 @@ def set_config(
 
 
 def set_configs(
-    values: Mapping[str, Optional[Any]],
-    user: Optional[str] = None,
+    values: Mapping[str, Any | None],
+    user: str | None = None,
     force: bool = False,
     config_key: str = config_hash,
 ) -> None:
@@ -169,52 +164,48 @@ def set_configs(
 
 
 def get_int_config(
-    key: str, default: Optional[int] = None, config_key: str = config_hash
-) -> Optional[int]:
+    key: str, default: int | None = None, config_key: str = config_hash
+) -> int | None:
     config = _get_config(key, default, config_key)
     return int(config) if config is not None else None
 
 
 def get_float_config(
-    key: str, default: Optional[float] = None, config_key: str = config_hash
-) -> Optional[float]:
+    key: str, default: float | None = None, config_key: str = config_hash
+) -> float | None:
     config = _get_config(key, default, config_key)
     return float(config) if config is not None else None
 
 
 def get_str_config(
-    key: str, default: Optional[str] = None, config_key: str = config_hash
-) -> Optional[str]:
+    key: str, default: str | None = None, config_key: str = config_hash
+) -> str | None:
     config = _get_config(key, default, config_key)
     return str(config) if config is not None else None
 
 
 # To be deprecated, use get_int_config, get_float_config, get_str_config instead
-def get_config(
-    key: str, default: Optional[Any] = None, config_key: str = config_hash
-) -> Optional[Any]:
+def get_config(key: str, default: Any | None = None, config_key: str = config_hash) -> Any | None:
     return _get_config(key, default, config_key)
 
 
-def _get_config(
-    key: str, default: Optional[Any] = None, config_key: str = config_hash
-) -> Optional[Any]:
+def _get_config(key: str, default: Any | None = None, config_key: str = config_hash) -> Any | None:
     return get_all_configs(config_key=config_key).get(key, default)
 
 
 def get_configs(
-    key_defaults: Iterable[Tuple[str, Optional[Any]]], config_key: str = config_hash
-) -> Sequence[Optional[Any]]:
+    key_defaults: Iterable[tuple[str, Any | None]], config_key: str = config_hash
+) -> Sequence[Any | None]:
     all_confs = get_all_configs(config_key=config_key)
     return [all_confs.get(k, d) for k, d in key_defaults]
 
 
-def get_all_configs(config_key: str = config_hash) -> Mapping[str, Optional[Any]]:
-    return {k: v for k, v in get_raw_configs(config_key=config_key).items()}
+def get_all_configs(config_key: str = config_hash) -> Mapping[str, Any | None]:
+    return dict(get_raw_configs(config_key=config_key).items())
 
 
 @memoize(settings.CONFIG_MEMOIZE_TIMEOUT)
-def get_raw_configs(config_key: str = config_hash) -> Mapping[str, Optional[Any]]:
+def get_raw_configs(config_key: str = config_hash) -> Mapping[str, Any | None]:
     try:
         all_configs = rds.hgetall(config_key)
         configs = {
@@ -234,11 +225,11 @@ def get_raw_configs(config_key: str = config_hash) -> Mapping[str, Optional[Any]
         return {}
 
 
-def delete_config(key: str, user: Optional[Any] = None, config_key: str = config_hash) -> None:
+def delete_config(key: str, user: Any | None = None, config_key: str = config_hash) -> None:
     set_config(key, None, user=user, config_key=config_key)
 
 
-def get_uncached_config(key: str, config_key: str = config_hash) -> Optional[Any]:
+def get_uncached_config(key: str, config_key: str = config_hash) -> Any | None:
     value = rds.hget(config_key, key.encode("utf-8"))
     if value is not None:
         return get_typed_value(value.decode("utf-8"))
@@ -249,7 +240,7 @@ def get_config_changes_legacy() -> Sequence[Any]:
     return [json.loads(change) for change in rds.lrange(config_changes_list, 0, -1)]
 
 
-def get_config_changes() -> Sequence[Tuple[str, float, Optional[str], Any, Any]]:
+def get_config_changes() -> Sequence[tuple[str, float, str | None, Any, Any]]:
     """
     Like get_config_changes_legacy() but ensures that values are cast to their correct type
     """
@@ -265,9 +256,9 @@ def get_config_changes() -> Sequence[Tuple[str, float, Optional[str], Any, Any]]
 
 
 def set_config_description(
-    key: str, description: Optional[str] = None, user: Optional[str] = None
+    key: str, description: str | None = None, user: str | None = None
 ) -> None:
-    enc_desc = "{}".format(description).encode("utf-8") if description is not None else None
+    enc_desc = f"{description}".encode() if description is not None else None
 
     try:
         enc_original_desc = rds.hget(config_description_hash, key)
@@ -290,7 +281,7 @@ def set_config_description(
         logger.exception(e)
 
 
-def get_config_description(key: str) -> Optional[str]:
+def get_config_description(key: str) -> str | None:
     try:
         enc_desc = rds.hget(config_description_hash, key)
         return enc_desc.decode("utf-8") if enc_desc is not None else None
@@ -299,7 +290,7 @@ def get_config_description(key: str) -> Optional[str]:
         return None
 
 
-def get_all_config_descriptions() -> Mapping[str, Optional[str]]:
+def get_all_config_descriptions() -> Mapping[str, str | None]:
     try:
         all_descriptions = rds.hgetall(config_description_hash)
         return {
@@ -312,7 +303,7 @@ def get_all_config_descriptions() -> Mapping[str, Optional[str]]:
         return {}
 
 
-def delete_config_description(key: str, user: Optional[str] = None) -> None:
+def delete_config_description(key: str, user: str | None = None) -> None:
     set_config_description(key, None, user=user)
 
 
@@ -328,7 +319,7 @@ def safe_dumps_default(value: Any) -> Any:
 safe_dumps = partial(json.dumps, for_json=True, default=safe_dumps_default)
 
 
-def _record_query_delivery_callback(error: Optional[KafkaError], message: KafkaMessage) -> None:
+def _record_query_delivery_callback(error: KafkaError | None, message: KafkaMessage) -> None:
     metrics.increment(
         "record_query.delivery_callback",
         tags={"status": "success" if error is None else "failure"},

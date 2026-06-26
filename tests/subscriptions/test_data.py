@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Optional, Type
 
 import pytest
 from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
@@ -182,9 +181,9 @@ class TestBuildRequestBase:
     def compare_conditions(
         self,
         subscription: SubscriptionData,
-        exception: Optional[Type[Exception]],
+        exception: type[Exception] | None,
         aggregate: str,
-        value: Optional[int | float],
+        value: int | float | None,
     ) -> None:
         timer = Timer("test")
         if exception is not None:
@@ -195,7 +194,7 @@ class TestBuildRequestBase:
                     100,
                     timer,
                 )
-                subscription.run_query(self.dataset, request, timer)  # type: ignore
+                subscription.run_query(self.dataset, request, timer)  # type: ignore[arg-type]
             return
 
         request = subscription.build_request(
@@ -204,7 +203,7 @@ class TestBuildRequestBase:
             100,
             timer,
         )
-        result = subscription.run_query(self.dataset, request, timer)  # type: ignore
+        result = subscription.run_query(self.dataset, request, timer)  # type: ignore[arg-type]
 
         assert result.result["data"][0][aggregate] == value
 
@@ -216,8 +215,8 @@ class TestBuildRequest(BaseSubscriptionTest, TestBuildRequestBase):
     def test_conditions(
         self,
         subscription: SubscriptionData,
-        expected_value: Optional[int | float],
-        exception: Optional[Type[Exception]],
+        expected_value: int | float | None,
+        exception: type[Exception] | None,
     ) -> None:
         self.compare_conditions(subscription, exception, "count", expected_value)
 
@@ -227,7 +226,7 @@ class TestBuildRequest(BaseSubscriptionTest, TestBuildRequestBase):
     def test_conditions_eap(
         self,
         subscription: SubscriptionData,
-        expected_value: Optional[int | float],
-        exception: Optional[Type[Exception]],
+        expected_value: int | float | None,
+        exception: type[Exception] | None,
     ) -> None:
         self.compare_conditions(subscription, exception, "count", expected_value)
