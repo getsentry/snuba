@@ -414,10 +414,10 @@ def test_conditional_aggregation_array_filter_uses_typed_columns() -> None:
     typed_cols = _aggregation_column_names(
         aggregation_to_expression(agg, attribute_key_to_expression, use_array_map_columns=True)
     )
-    assert {
-        "attributes_array_string",
-        "attributes_array_int",
-        "attributes_array_float",
-        "attributes_array_bool",
-    } <= typed_cols
+    # A LIKE pattern can only match string elements, so the array filter reads just the
+    # typed string array column — not the other typed columns nor the legacy JSON column.
+    assert "attributes_array_string" in typed_cols
+    assert "attributes_array_int" not in typed_cols
+    assert "attributes_array_float" not in typed_cols
+    assert "attributes_array_bool" not in typed_cols
     assert "attributes_array" not in typed_cols
