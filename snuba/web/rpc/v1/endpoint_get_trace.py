@@ -29,6 +29,10 @@ from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
+from snuba.protos.common import (
+    TYPED_ARRAY_SELECT_COLUMNS,
+    type_array_typed_columns_select_expressions,
+)
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
@@ -48,12 +52,13 @@ from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     attributes_array_selected_expressions,
     decode_attributes_array_value,
-    flatten_typed_array_tuple,
     merge_typed_array_maps,
+    merge_typed_array_subcolumns,
     project_id_and_org_conditions,
     timestamp_in_range_condition,
     treeify_or_and_conditions,
     typed_array_map_selected_expressions,
+    typed_array_select_subcolumn_name,
     use_array_map_columns,
 )
 from snuba.web.rpc.common.debug_info import (
@@ -208,14 +213,27 @@ def _build_query(
     read_typed_arrays = use_array_map_columns(request.meta)
     if len(item.attributes) > 0:
         for attribute_key in item.attributes:
-            selected_columns.append(
-                SelectedExpression(
-                    name=attribute_key.name,
-                    expression=attribute_key_to_expression(
-                        attribute_key, read_arrays_from_typed_columns=read_typed_arrays
-                    ),
+            if read_typed_arrays and attribute_key.type == AttributeKey.Type.TYPE_ARRAY:
+                # Past the cutoff, read the array from the typed array map columns as four
+                # native sub-columns merged back into the attribute name (see
+                # merge_typed_array_subcolumns) instead of the legacy JSON column.
+                for typed_col, expression in zip(
+                    TYPED_ARRAY_SELECT_COLUMNS,
+                    type_array_typed_columns_select_expressions(attribute_key),
+                ):
+                    selected_columns.append(
+                        SelectedExpression(
+                            name=typed_array_select_subcolumn_name(attribute_key.name, typed_col),
+                            expression=expression,
+                        )
+                    )
+            else:
+                selected_columns.append(
+                    SelectedExpression(
+                        name=attribute_key.name,
+                        expression=attribute_key_to_expression(attribute_key),
+                    )
                 )
-            )
     else:
         selected_columns += [
             SelectedExpression(
@@ -480,6 +498,7 @@ ProcessedResults = NamedTuple(
 def _process_results(
     data: Iterable[Dict[str, Any]],
     read_typed_arrays: bool = False,
+    array_attribute_names: Iterable[str] = (),
 ) -> ProcessedResults:
     """
     Used to process the results returned from clickhouse in two passes.
@@ -524,24 +543,20 @@ def _process_results(
                     if values:
                         add_attribute(name, values)
 
+            if array_attribute_names:
+                # Per-attribute mode past the cutoff: each requested array attribute was
+                # read as four native typed sub-columns; merge them back into the attribute
+                # name (see merge_typed_array_subcolumns).
+                for name, values in merge_typed_array_subcolumns(row, array_attribute_names):
+                    if values:
+                        add_attribute(name, values)
+
             for row_key, row_value in row.items():
                 if row_value is None:
                     continue
                 if isinstance(row_value, dict):
                     for column_key, column_value in row_value.items():
                         add_attribute(column_key, column_value)
-                elif (
-                    read_typed_arrays
-                    and isinstance(row_value, (tuple, list))
-                    and len(row_value) == 4
-                ):
-                    # Per-attribute mode past the cutoff: a single array attribute read as
-                    # a native typed-column tuple(string[], int[], float[], bool[]). The
-                    # driver may deliver the ClickHouse Tuple as a tuple or a list, so
-                    # accept both (matches flatten_typed_array_tuple / the table converter).
-                    flattened = flatten_typed_array_tuple(row_value)
-                    if flattened:
-                        add_attribute(row_key, flattened)
                 elif isinstance(row_value, str):
                     decoded = decode_attributes_array_value(row_key, row_value)
                     if decoded is None or (isinstance(decoded, list) and not decoded):
@@ -693,9 +708,19 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
             request=_build_snuba_request(in_msg, item, limit, page_token),
             timer=self._timer,
         )
+        read_typed_arrays = use_array_map_columns(in_msg.meta)
         processed_results = _process_results(
             results.result.get("data", []),
-            read_typed_arrays=use_array_map_columns(in_msg.meta),
+            read_typed_arrays=read_typed_arrays,
+            array_attribute_names=(
+                [
+                    attribute_key.name
+                    for attribute_key in item.attributes
+                    if attribute_key.type == AttributeKey.Type.TYPE_ARRAY
+                ]
+                if read_typed_arrays
+                else []
+            ),
         )
         items = processed_results.items
         last_seen_timestamp_precise = processed_results.last_seen_timestamp_precise

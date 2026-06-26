@@ -1,7 +1,7 @@
 import json
 import math
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, TypeVar, cast
+from typing import Any, Callable, Iterable, TypeVar, cast
 
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
@@ -70,22 +70,18 @@ def _in_or_has(value: Expression, array: Expression, *, as_has: bool) -> Functio
     return in_cond(value, array)
 
 
-def attribute_key_to_expression(
-    attr_key: AttributeKey, read_arrays_from_typed_columns: bool = False
-) -> Expression:
+def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
     """Convert an AttributeKey proto to a Snuba Expression.
 
     This is a wrapper around the proto-layer function that converts
     MalformedAttributeException to BadSnubaRPCRequestException for
-    HTTP-aware code paths. ``read_arrays_from_typed_columns`` makes a TYPE_ARRAY SELECT
-    read the typed ``attributes_array_*`` columns instead of the legacy JSON column
-    (pass ``use_array_map_columns(meta)``).
+    HTTP-aware code paths.
 
     Raises:
         BadSnubaRPCRequestException: If the attribute key is invalid or malformed.
     """
     try:
-        return _attribute_key_to_expression(attr_key, read_arrays_from_typed_columns)
+        return _attribute_key_to_expression(attr_key)
     except MalformedAttributeException as e:
         raise BadSnubaRPCRequestException(str(e)) from e
 
@@ -224,16 +220,41 @@ def merge_typed_array_maps(row: dict[str, Any]) -> list[tuple[str, list[Any]]]:
     return [(name, merged[name]) for name in order]
 
 
-def flatten_typed_array_tuple(raw: Any) -> list[Any]:
-    """Flatten a ``tuple(string[], int[], float[], bool[])`` from the typed array columns
-    (see ``type_array_to_typed_columns_select_expression``) into a single Python list with
-    native element types preserved. Used by per-attribute SELECTs that return the tuple
-    for a single array attribute. Mixed-type arrays are grouped by type; homogeneous
-    arrays (the common case) keep their order."""
-    if not isinstance(raw, (tuple, list)) or len(raw) != 4:
-        return raw if isinstance(raw, list) else []
-    strs, ints, floats, bools = raw
-    return [*(strs or []), *(ints or []), *(floats or []), *(bools or [])]
+def typed_array_select_subcolumn_name(base: str, typed_col: str) -> str:
+    """Result-column name for one typed sub-column of a per-attribute array SELECT.
+
+    Past the cutoff a single TYPE_ARRAY attribute is selected as four native
+    ``arrayElement(attributes_array_<type>, key)`` sub-columns (see
+    ``type_array_typed_columns_select_expressions``). Each is surfaced under
+    ``"<base>.<typed_col>"`` — ``base`` is the user-facing column label (TraceItemTable)
+    or the attribute name (GetTrace) — so ``merge_typed_array_subcolumns`` can collapse
+    them back into ``base``."""
+    return f"{base}.{typed_col}"
+
+
+def merge_typed_array_subcolumns(
+    row: dict[str, Any], bases: Iterable[str]
+) -> list[tuple[str, list[Any]]]:
+    """Pop the four typed sub-columns of each ``base`` array attribute from ``row`` and
+    merge them into a list of ``(base, elements)`` pairs.
+
+    Counterpart of ``merge_typed_array_maps`` for the per-attribute SELECT path: there
+    each whole map column is read; here a single named array attribute is read as four
+    native ``arrayElement`` sub-columns (see ``typed_array_select_subcolumn_name``). We
+    only store homogeneous arrays, so at most one sub-column is non-empty; the four are
+    concatenated in column order (string, int, float, bool) and a homogeneous array keeps
+    its element order. ``bases`` are the result-column names to collapse (column labels for
+    TraceItemTable, attribute names for GetTrace). Callers convert each ``elements`` list
+    to a ``val_array`` and decide how to treat empties."""
+    merged: list[tuple[str, list[Any]]] = []
+    for base in bases:
+        elements: list[Any] = []
+        for typed_col in TYPED_ARRAY_MAP_COLUMNS:
+            values = row.pop(typed_array_select_subcolumn_name(base, typed_col), None)
+            if values:
+                elements.extend(values)
+        merged.append((base, elements))
+    return merged
 
 
 def decode_attributes_array_value(key: str, raw: Any) -> list[Any] | str | None:

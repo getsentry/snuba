@@ -31,7 +31,11 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.downsampled_storage_tiers import Tier
-from snuba.protos.common import NORMALIZED_COLUMNS_EAP_ITEMS
+from snuba.protos.common import (
+    NORMALIZED_COLUMNS_EAP_ITEMS,
+    TYPED_ARRAY_SELECT_COLUMNS,
+    type_array_typed_columns_select_expressions,
+)
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
@@ -62,6 +66,7 @@ from snuba.web.rpc.common.common import (
     timestamp_in_range_condition,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
+    typed_array_select_subcolumn_name,
     use_array_map_columns,
     use_sampling_factor,
     valid_sampling_factor_conditions,
@@ -270,11 +275,15 @@ def aggregation_filter_to_expression(
             raise BadSnubaRPCRequestException(f"Unsupported aggregation filter type: {default}")
 
 
-def _groupby_order_by_expression(
-    attr_key: AttributeKey, read_arrays_from_typed_columns: bool = False
-) -> Expression:
+def _groupby_order_by_expressions(
+    attr_key: AttributeKey, request_meta: RequestMeta
+) -> list[Expression]:
     """
-    Maps an attribute key used in GROUP BY / ORDER BY to its expression.
+    Maps an attribute key used in GROUP BY / ORDER BY to its expression(s).
+
+    Returns a list because a TYPE_ARRAY key past the cutoff expands to one expression
+    per typed sub-column (see ``type_array_typed_columns_select_expressions``); every
+    other key returns a single expression.
 
     `sentry.timestamp` is grouped and ordered on the raw primary-key `timestamp`
     column rather than the `CAST(timestamp, 'Float64')` that
@@ -285,15 +294,16 @@ def _groupby_order_by_expression(
     the raw column. If the two diverged, ClickHouse would reject the query with
     "Column `timestamp` is not under aggregate function and not in GROUP BY".
 
-    ``read_arrays_from_typed_columns`` must match the SELECT (see
-    ``_column_to_expression``) so a TYPE_ARRAY group-by/order-by key uses the same
-    typed-column expression the SELECT does — otherwise the same divergence error.
+    For a TYPE_ARRAY key the SELECT emits the same four native sub-column expressions
+    (see ``build_query``), so GROUP BY / ORDER BY must list all four — they carry the
+    same aliases as the SELECT sub-columns, so ClickHouse matches them and the query
+    stays valid.
     """
     if attr_key.name == "sentry.timestamp":
-        return snuba_column("timestamp")
-    return attribute_key_to_expression(
-        attr_key, read_arrays_from_typed_columns=read_arrays_from_typed_columns
-    )
+        return [snuba_column("timestamp")]
+    if attr_key.type == AttributeKey.Type.TYPE_ARRAY and use_array_map_columns(request_meta):
+        return list(type_array_typed_columns_select_expressions(attr_key))
+    return [attribute_key_to_expression(attr_key)]
 
 
 def _convert_order_by(
@@ -343,18 +353,16 @@ def _convert_order_by(
             # order while staying read-in-order friendly. (The i == 0 / single-project /
             # no-groupby branch above already expands to the full table sort key; this
             # covers `sentry.timestamp` ordering anywhere else.) The GROUP BY uses the
-            # same expression (see `_groupby_order_by_expression`) so an aggregation
-            # query that orders by `sentry.timestamp` stays valid.
-            expression = _groupby_order_by_expression(
-                x.column.key,
-                read_arrays_from_typed_columns=use_array_map_columns(request_meta),
-            )
-            res.append(
-                OrderBy(
-                    direction=direction,
-                    expression=expression,
+            # same expression(s) (see `_groupby_order_by_expressions`) so an aggregation
+            # query that orders by `sentry.timestamp` (or a TYPE_ARRAY key, which expands
+            # to its four typed sub-columns) stays valid.
+            for expression in _groupby_order_by_expressions(x.column.key, request_meta):
+                res.append(
+                    OrderBy(
+                        direction=direction,
+                        expression=expression,
+                    )
                 )
-            )
         elif x.column.HasField("conditional_aggregation"):
             res.append(
                 OrderBy(
@@ -538,10 +546,7 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
     Given a column protobuf object, translates it into a Expression object and returns it.
     """
     if column.HasField("key"):
-        return attribute_key_to_expression(
-            column.key,
-            read_arrays_from_typed_columns=use_array_map_columns(request_meta),
-        )
+        return attribute_key_to_expression(column.key)
     elif column.HasField("conditional_aggregation"):
         function_expr = aggregation_to_expression(
             column.conditional_aggregation,
@@ -588,6 +593,34 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
         )
 
 
+def _reads_typed_array_columns(column: Column, request_meta: RequestMeta) -> bool:
+    """True if ``column`` is a TYPE_ARRAY attribute read from the typed array map columns
+    (past the cutoff) rather than the legacy ``attributes_array`` JSON column."""
+    return (
+        column.HasField("key")
+        and column.key.type == AttributeKey.Type.TYPE_ARRAY
+        and use_array_map_columns(request_meta)
+    )
+
+
+def _array_subcolumn_selected_expressions(column: Column) -> list[SelectedExpression]:
+    """Four native typed sub-columns for a TYPE_ARRAY column read past the cutoff.
+
+    Each is named ``"<label>.<typed_col>"`` so ``convert_results`` merges them back into
+    ``column.label`` (see ``merge_typed_array_subcolumns``). The expressions carry
+    label-mapping-key aliases so they match the GROUP BY / ORDER BY expansion."""
+    return [
+        SelectedExpression(
+            name=typed_array_select_subcolumn_name(column.label, typed_col),
+            expression=expression,
+        )
+        for typed_col, expression in zip(
+            TYPED_ARRAY_SELECT_COLUMNS,
+            type_array_typed_columns_select_expressions(column.key),
+        )
+    ]
+
+
 def _get_offset_from_page_token(page_token: PageToken | None) -> int:
     if page_token is None:
         return 0
@@ -613,12 +646,17 @@ def build_query(
         # The key_col expression alias may differ from the column label. That is okay
         # the attribute key name is used in the groupby, the column label is just the name of
         # the returned attribute value
-        selected_columns.append(
-            SelectedExpression(
-                name=column.label,
-                expression=_column_to_expression(column, request.meta),
+        if _reads_typed_array_columns(column, request.meta):
+            # A TYPE_ARRAY column past the cutoff is read as four native typed sub-columns
+            # (merged back into column.label by convert_results) instead of one JSON column.
+            selected_columns.extend(_array_subcolumn_selected_expressions(column))
+        else:
+            selected_columns.append(
+                SelectedExpression(
+                    name=column.label,
+                    expression=_column_to_expression(column, request.meta),
+                )
             )
-        )
         selected_columns.extend(_get_reliability_context_columns(column, request.meta))
 
     item_type_conds = [f.equals(snuba_column("item_type"), request.meta.trace_item_type)]
@@ -645,11 +683,9 @@ def build_query(
         additional_conditions.append(page_token_filter)
 
     groupby = [
-        _groupby_order_by_expression(
-            attr_key,
-            read_arrays_from_typed_columns=use_array_map_columns(request.meta),
-        )
+        expression
         for attr_key in request.group_by
+        for expression in _groupby_order_by_expressions(attr_key, request.meta)
     ]
 
     res = Query(
