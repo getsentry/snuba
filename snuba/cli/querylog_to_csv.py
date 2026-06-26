@@ -172,8 +172,11 @@ def querylog_to_csv(
     # http_port from, so use the configured CLICKHOUSE_HTTP_PORT (the same env
     # var the cluster config reads), defaulting to the well-known port.
     http_port = int(os.environ.get("CLICKHOUSE_HTTP_PORT", DEFAULT_CLICKHOUSE_HTTP_PORT))
+    # This exports system.query_log over an arbitrary time window and can scan a
+    # lot; it is a maintenance/export job, not a user-facing read, so use the
+    # unbounded INTERNAL profile rather than the 25s QUERY profile.
     connection = connection_cache.get_node_connection(
-        ClickhouseClientSettings.QUERY,
+        ClickhouseClientSettings.INTERNAL,
         ClickhouseNode(clickhouse_host, clickhouse_port, http_port=http_port),
         clickhouse_user,
         clickhouse_password,

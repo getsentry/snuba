@@ -68,12 +68,13 @@ class ClickhouseClientSettings(Enum):
     )
     DELETE = ClickhouseClientSettingsType({"mutations_sync": 1}, None)
     OPTIMIZE = ClickhouseClientSettingsType({}, settings.OPTIMIZE_QUERY_TIMEOUT)
-    # User-facing read queries get a 30s timeout. Migrations, DDL and other
-    # long-running operations keep their own (default or longer) timeouts
+    # User-facing read queries get a 25s timeout, leaving headroom under a ~30s
+    # frontend request budget to still return a response. Migrations, DDL and
+    # other long-running operations keep their own (default or longer) timeouts
     # above/below.
-    QUERY = ClickhouseClientSettingsType({}, 30)
+    QUERY = ClickhouseClientSettingsType({}, 25)
     # Internal/maintenance queries that are NOT user-facing reads and must not
-    # inherit QUERY's 30s cap: cluster topology discovery (system.clusters),
+    # inherit QUERY's 25s cap: cluster topology discovery (system.clusters),
     # storage-routing load lookups, delete-throttling system-table checks, the
     # span-export job and admin table copies. These can legitimately run long,
     # so they stay unbounded (their behavior before QUERY got a read timeout).

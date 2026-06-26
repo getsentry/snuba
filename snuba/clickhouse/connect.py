@@ -26,11 +26,13 @@ logger = logging.getLogger("snuba.clickhouse.connect")
 
 metrics = MetricsWrapper(environment.metrics, "clickhouse.connect")
 
-# Fallback send/receive timeout (seconds) used when a client settings profile
-# does not specify one. Matches clickhouse-connect's own default. Per-profile
-# timeouts (e.g. 30s for reads, longer for migrations) are honored as-is, the
-# same way the native driver uses them.
-DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS = 300
+# Stand-in for "no read timeout" on the HTTP path. The native driver maps a
+# profile with no timeout (``None``) to an unbounded socket, but clickhouse-connect
+# cannot safely take ``None`` (its progress-interval computation does arithmetic
+# on the value and would fail), so we pass a very large finite timeout instead —
+# effectively unbounded for any real operation. Per-profile timeouts that are set
+# (e.g. 25s for reads, longer for migrations) are honored as-is.
+UNBOUNDED_SEND_RECEIVE_TIMEOUT_SECONDS = 86_400  # 24h
 
 # Default ClickHouse HTTP port, used when a caller does not pass one.
 DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
@@ -129,13 +131,15 @@ class ClickhouseConnectPool(ClickhousePool):
                         ca_cert=self.ca_certs,
                         connect_timeout=self.connect_timeout,
                         # Honor the per-profile timeout as-is, like the native
-                        # driver does (reads get 30s, migrations/DDL keep their
-                        # longer timeouts). Fall back to the default when a
-                        # profile does not set one.
+                        # driver does (reads get 25s, migrations/DDL keep their
+                        # longer timeouts). A profile with no timeout means
+                        # "unbounded" on the native path; emulate that here with a
+                        # large finite timeout, since clickhouse-connect cannot
+                        # take None.
                         send_receive_timeout=(
                             self.send_receive_timeout
                             if self.send_receive_timeout is not None
-                            else DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS
+                            else UNBOUNDED_SEND_RECEIVE_TIMEOUT_SECONDS
                         ),
                         settings=dict(self.client_settings),
                         pool_mgr=pool_mgr,
