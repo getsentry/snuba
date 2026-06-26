@@ -1,5 +1,5 @@
 import threading
-from typing import Any, List, Tuple
+from typing import Any
 from unittest.mock import ANY, Mock, call
 
 from snuba.utils.threaded_function_delegator import Result, ThreadedFunctionDelegator
@@ -16,10 +16,10 @@ def test() -> None:
         "three": Mock(return_value=3),
     }
 
-    def selector_func(_: int) -> Tuple[str, List[str]]:
+    def selector_func(_: int) -> tuple[str, list[str]]:
         return ("one", ["two"])
 
-    def callback_func(primary: Tuple[str, int], other: List[Tuple[str, int]]) -> None:
+    def callback_func(primary: tuple[str, int], other: list[tuple[str, int]]) -> None:
         assert result_received.wait(timeout=5), "Timeout while waiting for the main thread."
         callback_done.set()
 

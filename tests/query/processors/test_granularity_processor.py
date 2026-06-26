@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import List, Optional
 
 import pytest
 
@@ -54,7 +53,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 def test_granularity_added(
     entity_key: EntityKey,
     column: str,
-    requested_granularity: Optional[int],
+    requested_granularity: int | None,
     query_granularity: int,
 ) -> None:
     query = Query(
@@ -119,7 +118,7 @@ def test_granularity_added(
 def test_granularity_added_in_condition(
     entity_key: EntityKey,
     column: str,
-    requested_granularity: Optional[int],
+    requested_granularity: int | None,
     query_granularity: int,
 ) -> None:
     query = Query(
@@ -188,8 +187,8 @@ def test_granularity_added_in_condition(
 def test_multiple_granularities_added_in_condition(
     entity_key: EntityKey,
     column: str,
-    requested_granularity: List[int],
-    query_granularity: List[int],
+    requested_granularity: list[int],
+    query_granularity: list[int],
 ) -> None:
     query_with_multiple_conditions = Query(
         QueryEntity(entity_key, ColumnSet([])),
@@ -309,7 +308,7 @@ def test_multiple_granularities_added_in_condition(
 def test_granularity_enum_mapping(
     entity_key: EntityKey,
     column: str,
-    requested_granularity: Optional[int],
+    requested_granularity: int | None,
     query_granularity: int,
 ) -> None:
     query = Query(
@@ -376,7 +375,7 @@ def test_granularity_enum_mapping(
 def test_granularity_enum_mapping_in_condition(
     entity_key: EntityKey,
     column: str,
-    requested_granularity: Optional[int],
+    requested_granularity: int | None,
     query_granularity: int,
 ) -> None:
     query = Query(
@@ -447,8 +446,8 @@ def test_granularity_enum_mapping_in_condition(
 def test_multiple_granularities_enum_mapping_in_condition(
     entity_key: EntityKey,
     column: str,
-    requested_granularity: List[int],
-    query_granularity: List[int],
+    requested_granularity: list[int],
+    query_granularity: list[int],
 ) -> None:
     query = Query(
         QueryEntity(entity_key, ColumnSet([])),

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 from snuba.query.expressions import (
     Column,
@@ -146,52 +146,52 @@ def literal(value: OptionalScalarType, alias: str | None = None) -> Literal:
     return Literal(alias, value)
 
 
-def literals_tuple(alias: Optional[str], literals: Sequence[Literal]) -> FunctionCall:
+def literals_tuple(alias: str | None, literals: Sequence[Literal]) -> FunctionCall:
     return FunctionCall(alias, "tuple", tuple(literals))
 
 
-def literals_array(alias: Optional[str], literals: Sequence[Literal]) -> FunctionCall:
+def literals_array(alias: str | None, literals: Sequence[Literal]) -> FunctionCall:
     return FunctionCall(alias, "array", tuple(literals))
 
 
 # Array functions
-def arrayElement(alias: Optional[str], array: Expression, index: Expression) -> FunctionCall:
+def arrayElement(alias: str | None, array: Expression, index: Expression) -> FunctionCall:
     return FunctionCall(alias, "arrayElement", (array, index))
 
 
-def arrayJoin(alias: Optional[str], content: Expression) -> Expression:
+def arrayJoin(alias: str | None, content: Expression) -> Expression:
     return FunctionCall(alias, "arrayJoin", (content,))
 
 
 # Tuple functions
-def tupleElement(alias: Optional[str], tuple_expr: Expression, index: Expression) -> FunctionCall:
+def tupleElement(alias: str | None, tuple_expr: Expression, index: Expression) -> FunctionCall:
     return FunctionCall(alias, "tupleElement", (tuple_expr, index))
 
 
 # arithmetic function
-def plus(lhs: Expression, rhs: Expression, alias: Optional[str] = None) -> FunctionCall:
+def plus(lhs: Expression, rhs: Expression, alias: str | None = None) -> FunctionCall:
     return FunctionCall(alias, "plus", (lhs, rhs))
 
 
-def minus(lhs: Expression, rhs: Expression, alias: Optional[str] = None) -> FunctionCall:
+def minus(lhs: Expression, rhs: Expression, alias: str | None = None) -> FunctionCall:
     return FunctionCall(alias, "minus", (lhs, rhs))
 
 
-def multiply(lhs: Expression, rhs: Expression, alias: Optional[str] = None) -> FunctionCall:
+def multiply(lhs: Expression, rhs: Expression, alias: str | None = None) -> FunctionCall:
     return FunctionCall(alias, "multiply", (lhs, rhs))
 
 
-def divide(lhs: Expression, rhs: Expression, alias: Optional[str] = None) -> FunctionCall:
+def divide(lhs: Expression, rhs: Expression, alias: str | None = None) -> FunctionCall:
     return FunctionCall(alias, "divide", (lhs, rhs))
 
 
-def if_in(lhs: Expression, rhs: Expression, alias: Optional[str] = None) -> FunctionCall:
+def if_in(lhs: Expression, rhs: Expression, alias: str | None = None) -> FunctionCall:
     return FunctionCall(alias, "in", (lhs, rhs))
 
 
 # boolean functions
 def binary_condition(
-    function_name: str, lhs: Expression, rhs: Expression, alias: Optional[str] = None
+    function_name: str, lhs: Expression, rhs: Expression, alias: str | None = None
 ) -> FunctionCall:
     return FunctionCall(alias, function_name, (lhs, rhs))
 
@@ -212,23 +212,23 @@ def or_cond(lhs: Expression, rhs: Expression, *args: Expression) -> FunctionCall
     return FunctionCall(None, "or", (lhs, rhs, *args))
 
 
-def in_cond(lhs: Expression, rhs: Expression, alias: Optional[str] = None) -> FunctionCall:
+def in_cond(lhs: Expression, rhs: Expression, alias: str | None = None) -> FunctionCall:
     return binary_condition("in", lhs, rhs, alias)
 
 
-def not_cond(expr: Expression, alias: Optional[str] = None) -> FunctionCall:
+def not_cond(expr: Expression, alias: str | None = None) -> FunctionCall:
     return FunctionCall(alias, "not", (expr,))
 
 
 # aggregate functions
-def count(column: Optional[Column] = None, alias: Optional[str] = None) -> FunctionCall:
+def count(column: Column | None = None, alias: str | None = None) -> FunctionCall:
     return FunctionCall(alias, "count", (column,) if column else ())
 
 
 def countIf(
     condition: FunctionCall,
-    column: Optional[Column] = None,
-    alias: Optional[str] = None,
+    column: Column | None = None,
+    alias: str | None = None,
 ) -> FunctionCall:
     return FunctionCall(alias, "countIf", (condition, column) if column else (condition,))
 
@@ -237,10 +237,10 @@ def if_cond(
     condition: FunctionCall,
     then_clause: Expression,
     else_clause: Expression,
-    alias: Optional[str] = None,
+    alias: str | None = None,
 ) -> FunctionCall:
     return FunctionCall(alias, "if", (condition, then_clause, else_clause))
 
 
-def identity(expression: Expression, alias: Optional[str]) -> FunctionCall:
+def identity(expression: Expression, alias: str | None) -> FunctionCall:
     return FunctionCall(alias, "identity", (expression,))

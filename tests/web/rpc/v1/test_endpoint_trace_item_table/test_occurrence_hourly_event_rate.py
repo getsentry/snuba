@@ -6,7 +6,7 @@ Tests the per-group conditional hourly rate calculation:
   else: rate = count / hours_since_first_seen
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -36,7 +36,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.base import BaseApiTest
@@ -47,9 +47,7 @@ WEEK_IN_HOURS = 168  # 7 days * 24 hours
 
 
 # Base time for test data - 3 hours ago to ensure data is within query window
-BASE_TIME = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0) - timedelta(
-    hours=3
-)
+BASE_TIME = datetime.now(tz=UTC).replace(minute=0, second=0, microsecond=0) - timedelta(hours=3)
 
 START_TIMESTAMP = Timestamp(seconds=int((BASE_TIME - timedelta(days=14)).timestamp()))
 END_TIMESTAMP = Timestamp(seconds=int((BASE_TIME + timedelta(hours=1)).timestamp()))
@@ -157,7 +155,7 @@ def setup_occurrence_data(clickhouse_db: None, redis_db: None) -> dict[str, Any]
     - Varying first_seen times (some older than a week, some newer)
     - Events spread over the past week for counting
     """
-    items_storage = get_storage(StorageKey("eap_items"))
+    items_storage = get_writable_storage(StorageKey("eap_items"))
     now = BASE_TIME
     one_week_ago = now - timedelta(days=7)
 
@@ -235,7 +233,7 @@ def setup_occurrence_data(clickhouse_db: None, redis_db: None) -> dict[str, Any]
         messages = _create_occurrence_items_for_group(group_id, timestamps[:event_count])
         all_messages.extend(messages)
 
-    write_raw_unprocessed_events(items_storage, all_messages)  # type: ignore
+    write_raw_unprocessed_events(items_storage, all_messages)
 
     return {
         "expected_rates": expected_rates,
@@ -399,7 +397,7 @@ class TestOccurrenceHourlyEventRateSupported(BaseApiTest):
         not over a computed formula.
         """
         # Create test data with pre-computed hourly rates as attributes
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         now = BASE_TIME
 
         # Create occurrences with explicit hourly_rate values
@@ -420,7 +418,7 @@ class TestOccurrenceHourlyEventRateSupported(BaseApiTest):
                 )
             )
 
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)
 
         # Query P95 of the pre-computed rate
         message = TraceItemTableRequest(

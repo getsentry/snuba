@@ -4,9 +4,10 @@ import json
 import logging
 import time
 import uuid
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -378,7 +379,7 @@ def test_tick_time_shift() -> None:
         pytest.param(timedelta(minutes=-5), id="with time shift"),
     ],
 )
-def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
+def test_tick_consumer(time_shift: timedelta | None) -> None:
     clock = MockedClock()
     broker: Broker[KafkaPayload] = Broker(MemoryMessageStorage(), clock)
 

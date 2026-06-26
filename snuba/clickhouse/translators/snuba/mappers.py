@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, Tuple
 
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
 from snuba.clickhouse.translators.snuba.allowed import (
@@ -35,7 +34,7 @@ from snuba.utils.hashes import fnv_1a
 # This is a workaround for a mypy bug, found here: https://github.com/python/mypy/issues/5374
 @dataclass(frozen=True)
 class _ColumnToExpression:
-    from_table_name: Optional[str]
+    from_table_name: str | None
     from_col_name: str
 
 
@@ -51,14 +50,13 @@ class ColumnToExpression(_ColumnToExpression, ColumnMapper, ABC):
         self,
         expression: ColumnExpr,
         children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[ValidColumnMappings]:
+    ) -> ValidColumnMappings | None:
         if (
             expression.column_name == self.from_col_name
             and expression.table_name == self.from_table_name
         ):
             return self._produce_output(expression)
-        else:
-            return None
+        return None
 
     @abstractmethod
     def _produce_output(self, expression: ColumnExpr) -> ValidColumnMappings:
@@ -73,7 +71,7 @@ class ColumnToColumn(ColumnToExpression):
     The alias is not transformed.
     """
 
-    to_table_name: Optional[str]
+    to_table_name: str | None
     to_col_name: str
 
     def _produce_output(self, expression: ColumnExpr) -> ColumnExpr:
@@ -103,7 +101,7 @@ class ColumnToFunction(ColumnToExpression):
     """
 
     to_function_name: str
-    to_function_params: Tuple[Expression, ...]
+    to_function_params: tuple[Expression, ...]
 
     def _produce_output(self, expression: ColumnExpr) -> FunctionCallExpr:
         return FunctionCallExpr(
@@ -137,8 +135,8 @@ class ColumnToIPAddress(ColumnToFunction):
     TODO: Can remove when we support dynamic expression parsing in config
     """
 
-    def __init__(self, from_table_name: Optional[str], from_col_name: str) -> None:
-        to_function_params: Tuple[FunctionCallExpr, ...] = (
+    def __init__(self, from_table_name: str | None, from_col_name: str) -> None:
+        to_function_params: tuple[FunctionCallExpr, ...] = (
             FunctionCallExpr(
                 None,
                 "IPv4NumToString",
@@ -160,8 +158,8 @@ class ColumnToNullIf(ColumnToFunction):
     TODO: Can remove when we support dynamic expression parsing in config
     """
 
-    def __init__(self, from_table_name: Optional[str], from_col_name: str) -> None:
-        to_function_params: Tuple[ColumnExpr, LiteralExpr] = (
+    def __init__(self, from_table_name: str | None, from_col_name: str) -> None:
+        to_function_params: tuple[ColumnExpr, LiteralExpr] = (
             ColumnExpr(None, from_table_name, from_col_name),
             LiteralExpr(None, ""),
         )
@@ -175,7 +173,7 @@ class ColumnToCurriedFunction(ColumnToExpression):
     """
 
     to_internal_function: FunctionCallExpr
-    to_function_params: Tuple[Expression, ...]
+    to_function_params: tuple[Expression, ...]
 
     def _produce_output(self, expression: ColumnExpr) -> CurriedFunctionCall:
         return CurriedFunctionCall(
@@ -192,9 +190,9 @@ class SubscriptableMapper(SubscriptableReferenceMapper):
     into a Clickhouse array access.
     """
 
-    from_column_table: Optional[str]
+    from_column_table: str | None
     from_column_name: str
-    to_nested_col_table: Optional[str]
+    to_nested_col_table: str | None
     to_nested_col_name: str
     value_subcolumn_name: str = "value"
     nullable: bool = False
@@ -203,7 +201,7 @@ class SubscriptableMapper(SubscriptableReferenceMapper):
         self,
         expression: SubscriptableReference,
         children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[FunctionCallExpr]:
+    ) -> FunctionCallExpr | None:
         if (
             expression.column.table_name == self.from_column_table
             and expression.column.column_name == self.from_column_name
@@ -226,8 +224,7 @@ class SubscriptableMapper(SubscriptableReferenceMapper):
                     self.value_subcolumn_name,
                 )
             )
-        else:
-            return None
+        return None
 
 
 @dataclass(frozen=True)
@@ -236,9 +233,9 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
     Maps a key into the appropriate bucket by hashing the key. For example, hello[test] might go to attr_str_22['test']
     """
 
-    from_column_table: Optional[str]
+    from_column_table: str | None
     from_column_name: str
-    to_col_table: Optional[str]
+    to_col_table: str | None
     to_col_name: str
     num_attribute_buckets: int
 
@@ -246,7 +243,7 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
         self,
         expression: SubscriptableReference,
         children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[FunctionCallExpr]:
+    ) -> FunctionCallExpr | None:
         if (
             expression.column.table_name != self.from_column_table
             or expression.column.column_name != self.from_column_name
@@ -273,7 +270,7 @@ class ColumnToMapping(ColumnToExpression):
     array access.
     """
 
-    to_nested_col_table_name: Optional[str]
+    to_nested_col_table_name: str | None
     to_nested_col_name: str
     to_nested_mapping_key: str
     nullable: bool = False
@@ -287,19 +284,18 @@ class ColumnToMapping(ColumnToExpression):
                 LiteralExpr(None, self.to_nested_mapping_key),
                 "value",
             )
-        else:
-            return build_nullable_mapping_expr(
-                expression.alias,
-                self.to_nested_col_table_name,
-                self.to_nested_col_name,
-                LiteralExpr(None, self.to_nested_mapping_key),
-                "value",
-            )
+        return build_nullable_mapping_expr(
+            expression.alias,
+            self.to_nested_col_table_name,
+            self.to_nested_col_name,
+            LiteralExpr(None, self.to_nested_mapping_key),
+            "value",
+        )
 
 
 def build_mapping_expr(
-    alias: Optional[str],
-    table_name: Optional[str],
+    alias: str | None,
+    table_name: str | None,
     col_name: str,
     mapping_key: Expression,
     value_subcolumn_name: str,
@@ -316,8 +312,8 @@ def build_mapping_expr(
 
 
 def build_nullable_mapping_expr(
-    alias: Optional[str],
-    table_name: Optional[str],
+    alias: str | None,
+    table_name: str | None,
     col_name: str,
     mapping_key: Expression,
     value_subcolumn_name: str,
@@ -375,7 +371,7 @@ class FunctionNameMapper(FunctionCallMapper):
         self,
         expression: FunctionCallExpr,
         children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[FunctionCallExpr]:
+    ) -> FunctionCallExpr | None:
         if expression.function_name != self.from_name:
             return None
 

@@ -1,6 +1,6 @@
 import warnings
 from abc import ABC, abstractmethod, abstractproperty
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 from snuba import settings
 from snuba.clusters.cluster import get_cluster
@@ -149,7 +149,7 @@ class ClickhouseNodeMigration(Migration, ABC):
         self,
         context: Context,
         dry_run: bool = False,
-        columns_state_to_check: Optional[ColumnStatesMapType] = None,
+        columns_state_to_check: ColumnStatesMapType | None = None,
     ) -> None:
         ops = self.forwards_ops()
 
@@ -181,7 +181,7 @@ class ClickhouseNodeMigration(Migration, ABC):
         self,
         context: Context,
         dry_run: bool,
-        columns_state_to_check: Optional[ColumnStatesMapType] = None,
+        columns_state_to_check: ColumnStatesMapType | None = None,
     ) -> None:
         ops = self.backwards_ops()
         if dry_run:
@@ -257,6 +257,7 @@ class ClickhouseNodeMigrationLegacy(ClickhouseNodeMigration, ABC):
         warnings.warn(
             "backwards_local and backwards_dist are deprecated. Use backwards_ops instead.",
             DeprecationWarning,
+            stacklevel=2,
         )
         local_ops, dist_ops = self.backwards_local(), self.backwards_dist()
         self._set_targets(local_ops, OperationTarget.LOCAL)
@@ -264,13 +265,13 @@ class ClickhouseNodeMigrationLegacy(ClickhouseNodeMigration, ABC):
 
         if self.backwards_local_first:
             return (*local_ops, *dist_ops)
-        else:
-            return (*dist_ops, *local_ops)
+        return (*dist_ops, *local_ops)
 
     def forwards_ops(self) -> Sequence[SqlOperation]:
         warnings.warn(
             "forwards_local and forwards_dist are deprecated. Use forwards_ops instead.",
             DeprecationWarning,
+            stacklevel=2,
         )
         local_ops, dist_ops = self.forwards_local(), self.forwards_dist()
         self._set_targets(local_ops, OperationTarget.LOCAL)
@@ -278,5 +279,4 @@ class ClickhouseNodeMigrationLegacy(ClickhouseNodeMigration, ABC):
 
         if self.forwards_local_first:
             return (*local_ops, *dist_ops)
-        else:
-            return (*dist_ops, *local_ops)
+        return (*dist_ops, *local_ops)

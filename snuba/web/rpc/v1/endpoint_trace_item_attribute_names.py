@@ -1,5 +1,4 @@
 import uuid
-from typing import Type
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
@@ -52,6 +51,10 @@ UNSEARCHABLE_ATTRIBUTE_KEYS = [
 ]
 
 NON_STORED_ATTRIBUTE_KEYS = ["sentry.service"]
+MATCH_MODES = {
+    TraceItemAttributeNamesRequest.MatchMode.MATCH_MODE_ANY: f.hasAny,
+    TraceItemAttributeNamesRequest.MatchMode.MATCH_MODE_ALL: f.hasAll,
+}
 
 
 def _order_by_count(request: TraceItemAttributeNamesRequest) -> bool:
@@ -145,23 +148,23 @@ def _add_substring_match_optimization(
 
     if request.type == AttributeKey.Type.TYPE_STRING:
         return and_cond(condition, f.arrayExists(like_lambda, column("attributes_string")))
-    elif request.type in (
+    if request.type in (
         AttributeKey.Type.TYPE_FLOAT,
         AttributeKey.Type.TYPE_DOUBLE,
         AttributeKey.Type.TYPE_INT,
     ):
         return and_cond(condition, f.arrayExists(like_lambda, column("attributes_float")))
-    elif request.type == AttributeKey.Type.TYPE_BOOLEAN:
+    if request.type == AttributeKey.Type.TYPE_BOOLEAN:
         return and_cond(condition, f.arrayExists(like_lambda, column("attributes_bool")))
-    else:  # TYPE_UNSPECIFIED - check all arrays with OR
-        return and_cond(
-            condition,
-            or_cond(
-                f.arrayExists(like_lambda, column("attributes_string")),
-                f.arrayExists(like_lambda, column("attributes_float")),
-                f.arrayExists(like_lambda, column("attributes_bool")),
-            ),
-        )
+    # TYPE_UNSPECIFIED - check all arrays with OR
+    return and_cond(
+        condition,
+        or_cond(
+            f.arrayExists(like_lambda, column("attributes_string")),
+            f.arrayExists(like_lambda, column("attributes_float")),
+            f.arrayExists(like_lambda, column("attributes_bool")),
+        ),
+    )
 
 
 def get_co_occurring_attributes(
@@ -244,7 +247,7 @@ def get_co_occurring_attributes(
     if attribute_keys_to_search:
         condition = and_cond(
             condition,
-            f.hasAll(
+            MATCH_MODES.get(request.match_mode, f.hasAll)(
                 column("attribute_keys_hash"),
                 f.array(*[f.cityHash64(k) for k in attribute_keys_to_search]),
             ),
@@ -462,11 +465,11 @@ class EndpointTraceItemAttributeNames(
         return "v1"
 
     @classmethod
-    def request_class(cls) -> Type[TraceItemAttributeNamesRequest]:
+    def request_class(cls) -> type[TraceItemAttributeNamesRequest]:
         return TraceItemAttributeNamesRequest
 
     @classmethod
-    def response_class(cls) -> Type[TraceItemAttributeNamesResponse]:
+    def response_class(cls) -> type[TraceItemAttributeNamesResponse]:
         return TraceItemAttributeNamesResponse
 
     def _build_response(

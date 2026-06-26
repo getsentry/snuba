@@ -37,6 +37,20 @@ test-distributed:
 
 tests: test
 
+lint:
+	uv run ruff check --fix .
+	uv run ruff format .
+.PHONY: lint
+
+lint-check:
+	uv run ruff check .
+	uv run ruff format --check .
+.PHONY: lint-check
+
+typecheck:
+	uv run mypy .
+.PHONY: typecheck
+
 api-tests:
 	SNUBA_SETTINGS=test pytest -vv tests/*_api.py
 

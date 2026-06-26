@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from abc import ABC, abstractmethod
-from typing import Type, cast
+from typing import cast
 
 from snuba.clickhouse.query import Expression
 from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
@@ -30,8 +30,8 @@ class ConditionChecker(ABC, metaclass=RegisteredClass):
         raise NotImplementedError
 
     @classmethod
-    def get_from_name(cls, name: str) -> Type["ConditionChecker"]:
-        return cast(Type["ConditionChecker"], cls.class_from_name(name))
+    def get_from_name(cls, name: str) -> type[ConditionChecker]:
+        return cast(type["ConditionChecker"], cls.class_from_name(name))
 
     @classmethod
     def from_kwargs(cls, **kwargs: str) -> ConditionChecker:

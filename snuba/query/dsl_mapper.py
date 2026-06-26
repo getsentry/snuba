@@ -1,4 +1,4 @@
-from typing import Callable, Sequence
+from collections.abc import Callable, Sequence
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.query import LimitBy, OrderBy, SelectedExpression
@@ -212,9 +212,9 @@ def ast_repr(
 ) -> str:
     if not exp:
         return "None"
-    elif isinstance(exp, Expression):
+    if isinstance(exp, Expression):
         return exp.accept(visitor)
-    elif isinstance(exp, LimitBy):
+    if isinstance(exp, LimitBy):
         return visitor.visit_limitby(exp)
 
     strings = []

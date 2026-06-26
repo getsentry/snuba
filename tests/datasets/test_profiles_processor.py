@@ -1,7 +1,8 @@
 import uuid
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from datetime import datetime
-from typing import Any, Mapping, Optional
+from typing import Any
 
 import pytest
 
@@ -17,7 +18,7 @@ class ProfileEvent:
     transaction_id: str
     received: int
     profile_id: str
-    android_api_level: Optional[int]
+    android_api_level: int | None
     device_classification: str
     device_locale: str
     device_manufacturer: str
@@ -27,7 +28,7 @@ class ProfileEvent:
     device_os_version: str
     architecture: str
     duration_ns: int
-    environment: Optional[str]
+    environment: str | None
     platform: str
     trace_id: str
     transaction_name: str
@@ -50,9 +51,7 @@ class ProfileEvent:
 
 class TestProfilesProcessor:
     def test_missing_profile_id(self) -> None:
-        meta = KafkaMessageMetadata(
-            offset=1, partition=0, timestamp=datetime(1970, 1, 1)
-        )
+        meta = KafkaMessageMetadata(offset=1, partition=0, timestamp=datetime(1970, 1, 1))
         message = ProfileEvent(
             android_api_level=None,
             architecture="aarch64",
@@ -83,13 +82,11 @@ class TestProfilesProcessor:
         del payload["profile_id"]
         processor = ProfilesMessageProcessor()
 
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # noqa: B017 missing field may raise various exception types
             processor.process_message(payload, meta)
 
     def test_valid_message(self) -> None:
-        meta = KafkaMessageMetadata(
-            offset=0, partition=0, timestamp=datetime(1970, 1, 1)
-        )
+        meta = KafkaMessageMetadata(offset=0, partition=0, timestamp=datetime(1970, 1, 1))
         message = ProfileEvent(
             android_api_level=None,
             architecture="aarch64",

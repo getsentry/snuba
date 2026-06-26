@@ -1,5 +1,5 @@
+from collections.abc import Mapping, MutableSequence
 from itertools import groupby
-from typing import Dict, List, Mapping, MutableSequence, Optional, Tuple
 
 from sentry_kafka_schemas.schema_types.snuba_queries_v1 import TimerData
 
@@ -10,7 +10,7 @@ from snuba.utils.serializable_exception import SerializableException
 
 
 class MissingTimerMarksException(SerializableException):
-    def __init__(self, marks: List[str]):
+    def __init__(self, marks: list[str]):
         super().__init__(f"Please pass in timer marks that exist: missing {marks}")
 
 
@@ -18,15 +18,15 @@ class Timer:
     def __init__(
         self,
         name: str,
-        clock: Clock = SystemClock(),
-        tags: Optional[Mapping[str, str]] = None,
+        clock: Clock | None = None,
+        tags: Mapping[str, str] | None = None,
     ):
         self.__name = name
-        self.__clock = clock
+        self.__clock = clock if clock is not None else SystemClock()
 
-        self.__marks: MutableSequence[Tuple[str, float]] = [(self.__name, self.__clock.time())]
-        self.__data: Optional[TimerData] = None
-        self.__tags: Dict[str, str] = dict(tags or {})
+        self.__marks: MutableSequence[tuple[str, float]] = [(self.__name, self.__clock.time())]
+        self.__data: TimerData | None = None
+        self.__tags: dict[str, str] = dict(tags or {})
 
     def mark(self, name: str) -> None:
         self.__data = None
@@ -95,7 +95,7 @@ class Timer:
         return self.__data
 
     @property
-    def tags(self) -> Optional[Mapping[str, str]]:
+    def tags(self) -> Mapping[str, str] | None:
         return self.__tags
 
     def for_json(self) -> TimerData:
@@ -104,8 +104,8 @@ class Timer:
     def send_metrics_to(
         self,
         backend: MetricsBackend,
-        tags: Optional[Tags] = None,
-        mark_tags: Optional[Tags] = None,
+        tags: Tags | None = None,
+        mark_tags: Tags | None = None,
     ) -> None:
         data = self.finish()
         merged_tags = {**data["tags"], **tags} if tags else self.__tags

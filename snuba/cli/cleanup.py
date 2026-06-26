@@ -1,5 +1,3 @@
-from typing import Optional
-
 import click
 
 from snuba.clusters.cluster import ClickhouseClientSettings
@@ -52,14 +50,14 @@ from snuba.environment import setup_logging, setup_sentry
 @click.option("--log-level", help="Logging level to use.")
 def cleanup(
     *,
-    clickhouse_host: Optional[str],
-    clickhouse_port: Optional[int],
+    clickhouse_host: str | None,
+    clickhouse_port: int | None,
     clickhouse_secure: bool,
-    clickhouse_ca_certs: Optional[str],
-    clickhouse_verify: Optional[bool],
+    clickhouse_ca_certs: str | None,
+    clickhouse_verify: bool | None,
     dry_run: bool,
     storage_name: str,
-    log_level: Optional[str] = None,
+    log_level: str | None = None,
 ) -> None:
     """
     Deletes stale partitions for ClickHouse tables
@@ -98,4 +96,4 @@ def cleanup(
         connection = cluster.get_query_connection(ClickhouseClientSettings.CLEANUP)
 
     num_dropped = run_cleanup(connection, storage, database, dry_run=dry_run)
-    logger.info("Dropped %s partitions on %s" % (num_dropped, cluster))
+    logger.info(f"Dropped {num_dropped} partitions on {cluster}")

@@ -42,31 +42,30 @@ class SparseAggregateAttributeTransformer:
         # get all the keys that are used in aggregates
         agg_keys = []
         for column in self.req.columns:
-            if column.WhichOneof("column") == "conditional_aggregation":
-                # not supported for KeyExpression in conditional_aggregate
-                if column.conditional_aggregation.key != AttributeKey():
-                    agg_keys.append(column.conditional_aggregation.key)
+            # not supported for KeyExpression in conditional_aggregate
+            if (
+                column.WhichOneof("column") == "conditional_aggregation"
+                and column.conditional_aggregation.key != AttributeKey()
+            ):
+                agg_keys.append(column.conditional_aggregation.key)
 
         if len(agg_keys) == 0:
             return self.req
-        else:
-            # add the exists filters for the agg_keys
-            filter_to_add = TraceItemFilter(
-                or_filter=OrFilter(
-                    filters=[
-                        TraceItemFilter(exists_filter=ExistsFilter(key=key)) for key in agg_keys
-                    ]
-                )
+        # add the exists filters for the agg_keys
+        filter_to_add = TraceItemFilter(
+            or_filter=OrFilter(
+                filters=[TraceItemFilter(exists_filter=ExistsFilter(key=key)) for key in agg_keys]
             )
-            # combine the new filters with the existing one
-            if self.req.HasField("filter"):
-                new_filter = TraceItemFilter(
-                    and_filter=AndFilter(filters=[self.req.filter, filter_to_add])
-                )
-            else:
-                new_filter = filter_to_add
+        )
+        # combine the new filters with the existing one
+        if self.req.HasField("filter"):
+            new_filter = TraceItemFilter(
+                and_filter=AndFilter(filters=[self.req.filter, filter_to_add])
+            )
+        else:
+            new_filter = filter_to_add
 
-            new_req = TraceItemTableRequest()
-            new_req.CopyFrom(self.req)
-            new_req.filter.CopyFrom(new_filter)
-            return new_req
+        new_req = TraceItemTableRequest()
+        new_req.CopyFrom(self.req)
+        new_req.filter.CopyFrom(new_filter)
+        return new_req

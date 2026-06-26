@@ -1,5 +1,5 @@
 import uuid
-from typing import Sequence, Tuple, Union
+from collections.abc import Sequence
 
 import pytest
 
@@ -29,7 +29,7 @@ def node(alias: str, name: str) -> IndividualNode[QueryEntity]:
 
 
 def join_clause(
-    lhs_alias: str, lhs: Union[str, JoinClause[QueryEntity]], rhs: str
+    lhs_alias: str, lhs: str | JoinClause[QueryEntity], rhs: str
 ) -> JoinClause[QueryEntity]:
     rhs_alias, rhs = rhs.split(":", 1)
     return JoinClause(
@@ -192,7 +192,7 @@ test_cases = [
 
 
 @pytest.mark.parametrize("clauses, expected", test_cases)
-def test_joins(clauses: Sequence[Tuple[str, str]], expected: JoinClause[QueryEntity]) -> None:
+def test_joins(clauses: Sequence[tuple[str, str]], expected: JoinClause[QueryEntity]) -> None:
     relationships = []
 
     for clause in clauses:

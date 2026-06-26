@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 from snuba import state
 from snuba.datasets.entities.storage_selectors import QueryStorageSelector

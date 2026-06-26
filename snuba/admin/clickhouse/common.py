@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import re
-from typing import MutableMapping
+from collections.abc import MutableMapping
 
-from sql_metadata import Parser, QueryType  # type: ignore
+from sql_metadata import Parser, QueryType  # type: ignore[import-untyped]
 
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
@@ -41,7 +41,7 @@ def is_valid_node(host: str, port: int, cluster: ClickhouseCluster, storage_name
                 "port": port,
                 "nodes": ",".join([node.host_name for node in nodes]),
             },
-        )
+        ) from e
 
     return any(node.host_name == host and node.port == port for node in nodes)
 
@@ -50,11 +50,11 @@ def _get_storage(storage_name: str) -> ReadableTableStorage:
     storage_key = None
     try:
         storage_key = StorageKey(storage_name)
-    except ValueError:
+    except ValueError as e:
         raise InvalidStorageError(
             f"storage {storage_name} is not a valid storage name",
             extra_data={"storage_name": storage_name},
-        )
+        ) from e
     return get_storage(storage_key)
 
 

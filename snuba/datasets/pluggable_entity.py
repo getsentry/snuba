@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, List, Mapping, Optional, Sequence
+from typing import Any
 
 from snuba.clickhouse.columns import Column, ColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
@@ -41,20 +42,20 @@ class PluggableEntity(Entity):
     """
 
     entity_key: EntityKey
-    storages: List[EntityStorageConnection]
+    storages: list[EntityStorageConnection]
     query_processors: Sequence[LogicalQueryProcessor]
     columns: Sequence[Column[SchemaModifiers]]
     validators: Sequence[QueryValidator]
-    required_time_column: Optional[str]
+    required_time_column: str | None
     storage_selector: QueryStorageSelector
     validate_data_model: ColumnValidationMode | None = None
     join_relationships: Mapping[str, JoinRelationship] = field(default_factory=dict)
     function_call_validators: Mapping[str, FunctionCallValidator] = field(default_factory=dict)
     # partition_key_column_name is used in data slicing (the value in this storage column
     # will be used to "choose" slices)
-    partition_key_column_name: Optional[str] = None
-    subscription_processors: Optional[Sequence[EntitySubscriptionProcessor]] = None
-    subscription_validators: Optional[Sequence[EntitySubscriptionValidator]] = None
+    partition_key_column_name: str | None = None
+    subscription_processors: Sequence[EntitySubscriptionProcessor] | None = None
+    subscription_validators: Sequence[EntitySubscriptionValidator] | None = None
 
     def _get_builtin_validators(self) -> Sequence[QueryValidator]:
         mappers = [s.translation_mappers for s in self.storages]
@@ -73,7 +74,7 @@ class PluggableEntity(Entity):
     def get_data_model(self) -> ColumnSet:
         return ColumnSet(self.columns)
 
-    def get_join_relationship(self, relationship: str) -> Optional[JoinRelationship]:
+    def get_join_relationship(self, relationship: str) -> JoinRelationship | None:
         return self.join_relationships.get(relationship)
 
     def get_all_join_relationships(self) -> Mapping[str, JoinRelationship]:
@@ -97,7 +98,7 @@ class PluggableEntity(Entity):
     def get_all_storage_connections(self) -> Sequence[EntityStorageConnection]:
         return self.storages
 
-    def get_writable_storage(self) -> Optional[WritableTableStorage]:
+    def get_writable_storage(self) -> WritableTableStorage | None:
         for storage_connection in self.storages:
             if storage_connection.is_writable and isinstance(
                 storage_connection.storage, WritableTableStorage
@@ -105,7 +106,7 @@ class PluggableEntity(Entity):
                 return storage_connection.storage
         return None
 
-    def get_storage_selector(self) -> Optional[QueryStorageSelector]:
+    def get_storage_selector(self) -> QueryStorageSelector | None:
         return self.storage_selector
 
     def get_function_call_validators(self) -> Mapping[str, FunctionCallValidator]:
@@ -116,12 +117,12 @@ class PluggableEntity(Entity):
 
     def get_subscription_processors(
         self,
-    ) -> Optional[Sequence[EntitySubscriptionProcessor]]:
+    ) -> Sequence[EntitySubscriptionProcessor] | None:
         return self.subscription_processors
 
     def get_subscription_validators(
         self,
-    ) -> Optional[Sequence[EntitySubscriptionValidator]]:
+    ) -> Sequence[EntitySubscriptionValidator] | None:
         return self.subscription_validators
 
     def __eq__(self, other: Any) -> bool:

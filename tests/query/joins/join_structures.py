@@ -1,4 +1,5 @@
-from typing import Optional, Sequence, TypeVar
+from collections.abc import Sequence
+from typing import TypeVar
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
@@ -29,13 +30,13 @@ def build_node(
     alias: str,
     from_clause: Entity,
     selected_columns: Sequence[SelectedExpression],
-    condition: Optional[Expression],
-    granularity: Optional[int] = None,
+    condition: Expression | None,
+    granularity: int | None = None,
 ) -> IndividualNode[Entity]:
     return IndividualNode(
         alias=alias,
-        data_source=EntityQuery.from_query(
-            LogicalQuery(  # type: ignore
+        data_source=EntityQuery.from_query(  # type: ignore[arg-type]
+            LogicalQuery(
                 from_clause=from_clause,
                 selected_columns=selected_columns,
                 condition=condition,
@@ -47,8 +48,8 @@ def build_node(
 
 def events_node(
     selected_columns: Sequence[SelectedExpression],
-    condition: Optional[Expression] = None,
-    granularity: Optional[int] = None,
+    condition: Expression | None = None,
+    granularity: int | None = None,
 ) -> IndividualNode[Entity]:
     return build_node(
         "ev",
@@ -61,8 +62,8 @@ def events_node(
 
 def groups_node(
     selected_columns: Sequence[SelectedExpression],
-    condition: Optional[Expression] = None,
-    granularity: Optional[int] = None,
+    condition: Expression | None = None,
+    granularity: int | None = None,
 ) -> IndividualNode[Entity]:
     return build_node(
         "gr",
@@ -77,8 +78,8 @@ def build_clickhouse_node(
     alias: str,
     from_clause: Table,
     selected_columns: Sequence[SelectedExpression],
-    condition: Optional[Expression],
-    groupby: Optional[Sequence[Expression]] = None,
+    condition: Expression | None,
+    groupby: Sequence[Expression] | None = None,
 ) -> IndividualNode[Table]:
     return IndividualNode(
         alias=alias,
@@ -93,8 +94,8 @@ def build_clickhouse_node(
 
 def clickhouse_events_node(
     selected_columns: Sequence[SelectedExpression],
-    condition: Optional[Expression] = None,
-    groupby: Optional[Sequence[Expression]] = None,
+    condition: Expression | None = None,
+    groupby: Sequence[Expression] | None = None,
 ) -> IndividualNode[Table]:
     return build_clickhouse_node(
         "ev",
@@ -107,7 +108,7 @@ def clickhouse_events_node(
 
 def clickhouse_groups_node(
     selected_columns: Sequence[SelectedExpression],
-    condition: Optional[Expression] = None,
+    condition: Expression | None = None,
 ) -> IndividualNode[Table]:
     return build_clickhouse_node(
         "gr",
@@ -119,7 +120,7 @@ def clickhouse_groups_node(
 
 def clickhouse_assignees_node(
     selected_columns: Sequence[SelectedExpression],
-    condition: Optional[Expression] = None,
+    condition: Expression | None = None,
 ) -> IndividualNode[Table]:
     return build_clickhouse_node(
         "as",

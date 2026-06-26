@@ -1,5 +1,4 @@
 import uuid
-from typing import Type
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
@@ -62,8 +61,8 @@ def _build_conditions(request: TraceItemAttributeValuesRequest) -> Expression:
 
     try:
         attributes_column = _ATTRIBUTE_TYPE_TO_COLUMN[request.key.type]
-    except KeyError:
-        raise BadSnubaRPCRequestException("Only string and boolean attributes can be used")
+    except KeyError as e:
+        raise BadSnubaRPCRequestException("Only string and boolean attributes can be used") from e
 
     # Key existence via map_key_exists (has(mapKeys(col), key)); routed to the
     # right bucket for the bucketed string/float maps and the un-bucketed bool map.
@@ -197,11 +196,11 @@ class AttributeValuesRequest(
         return "v1"
 
     @classmethod
-    def request_class(cls) -> Type[TraceItemAttributeValuesRequest]:
+    def request_class(cls) -> type[TraceItemAttributeValuesRequest]:
         return TraceItemAttributeValuesRequest
 
     @classmethod
-    def response_class(cls) -> Type[TraceItemAttributeValuesResponse]:
+    def response_class(cls) -> type[TraceItemAttributeValuesResponse]:
         return TraceItemAttributeValuesResponse
 
     def _execute(self, in_msg: TraceItemAttributeValuesRequest) -> TraceItemAttributeValuesResponse:

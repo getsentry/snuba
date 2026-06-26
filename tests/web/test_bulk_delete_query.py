@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Mapping, Optional
+from collections.abc import Mapping
+from typing import Any
 from unittest.mock import Mock, patch
 
 import pytest
@@ -38,7 +39,7 @@ CONSUMER_CONFIG = {
 }
 
 
-def get_attribution_info(tenant_ids: Optional[Mapping[str, int | str]] = None) -> Mapping[str, Any]:
+def get_attribution_info(tenant_ids: Mapping[str, int | str] | None = None) -> Mapping[str, Any]:
     return {
         "tenant_ids": tenant_ids or {"project_id": 1, "organization_id": 1},
         "referrer": "some_referrer",
@@ -178,16 +179,18 @@ def test_attribute_conditions_valid_occurrence() -> None:
     attr_info = get_attribution_info()
 
     # Mock out _enforce_max_rows to avoid needing actual data
-    with patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10):
-        with patch("snuba.web.bulk_delete_query.produce_delete_query") as mock_produce:
-            # Should not raise an exception, but should return empty dict since
-            # functionality is not yet launched (permit_delete_by_attribute=0 by default)
-            result = delete_from_storage(storage, conditions, attr_info, attribute_conditions)
+    with (
+        patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10),
+        patch("snuba.web.bulk_delete_query.produce_delete_query") as mock_produce,
+    ):
+        # Should not raise an exception, but should return empty dict since
+        # functionality is not yet launched (permit_delete_by_attribute=0 by default)
+        result = delete_from_storage(storage, conditions, attr_info, attribute_conditions)
 
-            # Should return empty because the feature flag is off
-            assert result == {}
-            # Should not have produced a message since we return early
-            assert mock_produce.call_count == 0
+        # Should return empty because the feature flag is off
+        assert result == {}
+        # Should not have produced a message since we return early
+        assert mock_produce.call_count == 0
 
 
 @pytest.mark.redis_db
@@ -226,10 +229,12 @@ def test_attribute_conditions_missing_item_type() -> None:
 
     # Since item_type is now in AttributeConditions, we need to test a different scenario
     # The validation now should pass, but we need to ensure item_type is also in conditions
-    with patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10):
-        with patch("snuba.web.bulk_delete_query.produce_delete_query"):
-            # This should now succeed since we're no longer checking conditions dict
-            delete_from_storage(storage, conditions, attr_info, attribute_conditions)
+    with (
+        patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10),
+        patch("snuba.web.bulk_delete_query.produce_delete_query"),
+    ):
+        # This should now succeed since we're no longer checking conditions dict
+        delete_from_storage(storage, conditions, attr_info, attribute_conditions)
 
 
 @pytest.mark.redis_db
@@ -269,27 +274,29 @@ def test_attribute_conditions_feature_flag_enabled() -> None:
 
     try:
         # Mock out _enforce_max_rows to avoid needing actual data
-        with patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10):
-            with patch("snuba.web.bulk_delete_query.produce_delete_query") as mock_produce:
-                # Should process normally and produce a message
-                result = delete_from_storage(storage, conditions, attr_info, attribute_conditions)
+        with (
+            patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10),
+            patch("snuba.web.bulk_delete_query.produce_delete_query") as mock_produce,
+        ):
+            # Should process normally and produce a message
+            result = delete_from_storage(storage, conditions, attr_info, attribute_conditions)
 
-                # Should have produced a message
-                assert mock_produce.call_count == 1
-                # Should return success results
-                assert result != {}
+            # Should have produced a message
+            assert mock_produce.call_count == 1
+            # Should return success results
+            assert result != {}
 
-                # Verify the message includes attribute_conditions
-                call_args = mock_produce.call_args[0][0]
-                assert "attribute_conditions" in call_args
-                assert call_args["attribute_conditions"] == {
-                    "group_id": {
-                        "attr_key_name": "group_id",
-                        "attr_key_type": AttributeKey.TYPE_INT,
-                        "attr_values": [12345],
-                    }
+            # Verify the message includes attribute_conditions
+            call_args = mock_produce.call_args[0][0]
+            assert "attribute_conditions" in call_args
+            assert call_args["attribute_conditions"] == {
+                "group_id": {
+                    "attr_key_name": "group_id",
+                    "attr_key_type": AttributeKey.TYPE_INT,
+                    "attr_values": [12345],
                 }
-                assert call_args["attribute_conditions_item_type"] == TRACE_ITEM_TYPE_OCCURRENCE
+            }
+            assert call_args["attribute_conditions_item_type"] == TRACE_ITEM_TYPE_OCCURRENCE
     finally:
         # Clean up: disable the feature flag
         set_config("permit_delete_by_attribute", 0)
@@ -316,11 +323,11 @@ def test_eap_items_counts_each_table_against_its_readonly_replica() -> None:
 
     set_config("permit_delete_by_attribute", 1)
     try:
-        with patch(
-            "snuba.web.bulk_delete_query._enforce_max_rows", return_value=10
-        ) as mock_enforce:
-            with patch("snuba.web.bulk_delete_query.produce_delete_query"):
-                delete_from_storage(storage, conditions, attr_info, attribute_conditions)
+        with (
+            patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10) as mock_enforce,
+            patch("snuba.web.bulk_delete_query.produce_delete_query"),
+        ):
+            delete_from_storage(storage, conditions, attr_info, attribute_conditions)
 
         count_storage_keys = [
             call.kwargs["count_storage_key"] for call in mock_enforce.call_args_list
