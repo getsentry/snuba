@@ -353,9 +353,7 @@ def _convert_order_by(
             res.append(
                 OrderBy(
                     direction=direction,
-                    expression=_groupby_order_by_expression(
-                        x.column.key, for_order_by=True
-                    ),
+                    expression=_groupby_order_by_expression(x.column.key, for_order_by=True),
                 )
             )
         elif x.column.HasField("conditional_aggregation"):
