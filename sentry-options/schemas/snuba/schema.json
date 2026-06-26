@@ -88,6 +88,61 @@
       },
       "default": {},
       "description": "Dict mapping dataset name to a flag; when true, SnQL queries against that dataset are rejected. Datasets with no entry default to membership in settings.SNQL_DISABLED_DATASETS. Migrated from per-dataset runtime config snql_disabled_dataset__<dataset>."
+    },
+    "enable_trace_pagination": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable pagination (page tokens / limit) in the EndpointGetTrace RPC. When false, the endpoint returns the full trace without pagination."
+    },
+    "cross_item_queries_no_sample_outer": {
+      "type": "boolean",
+      "default": true,
+      "description": "For cross-item EAP queries with trace filters, skip sampling on the outer query (the inner trace-id query still samples). When false, the outer query samples at the routing tier."
+    },
+    "use_sampling_factor_timestamp_seconds": {
+      "type": "integer",
+      "default": 1744131600,
+      "description": "Unix timestamp (seconds) cutoff controlling when the sampling-factor codepath applies for EAP queries."
+    },
+    "EndpointGetTrace.apply_final_rollout_percentage": {
+      "type": "number",
+      "default": 0.0,
+      "description": "Rollout percentage (0.0-1.0) for applying the FINAL keyword in EndpointGetTrace queries."
+    },
+    "rpc_logging_flush_logs": {
+      "type": "number",
+      "default": 0.0,
+      "description": "When greater than 0, flush buffered RPC logs. 0 disables flushing."
+    },
+    "ExecutionStage.max_query_size_bytes": {
+      "type": "integer",
+      "default": 131072,
+      "description": "Maximum allowed serialized ClickHouse query size in bytes before the execution stage rejects it."
+    },
+    "eap.reject_string_timestamp_filters": {
+      "type": "boolean",
+      "default": true,
+      "description": "When true, reject EAP time-series filters comparing sentry.timestamp to a TYPE_STRING value."
+    },
+    "trace_ids_cross_item_query_limit": {
+      "type": "integer",
+      "default": 50000000,
+      "description": "Maximum number of trace ids fetched by the cross-item-query trace-id lookup when no explicit limit is supplied."
+    },
+    "enable_eap_readonly_table": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, non-consistent EAP-items queries are routed to the read-only table replica."
+    },
+    "use_cross_item_path_for_single_item_queries": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, GetTraces uses the cross-item query path for single-item queries as well as cross-item queries."
+    },
+    "use_array_map_columns_timestamp_seconds": {
+      "type": "integer",
+      "default": 1782172800,
+      "description": "Unix timestamp (seconds) cutoff: EAP queries whose window starts on/after this read array attributes from the typed attributes_array_* map columns; older windows read the legacy attributes_array JSON column. 0 disables the typed-column read path entirely. Migrated from runtime config use_array_map_columns_timestamp_seconds."
     }
   }
 }
