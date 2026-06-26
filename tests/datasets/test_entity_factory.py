@@ -17,6 +17,7 @@ ENTITY_KEYS = [
     EntityKey.GROUPASSIGNEE,
     EntityKey.GROUPEDMESSAGE,
     EntityKey.OUTCOMES,
+    EntityKey.OUTCOMES_ORG,
     EntityKey.OUTCOMES_RAW,
     EntityKey.SEARCH_ISSUES,
     EntityKey.TRANSACTIONS,
