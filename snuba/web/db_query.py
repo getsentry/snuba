@@ -16,7 +16,7 @@ from clickhouse_driver.errors import ErrorCodes
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
 from sentry_sdk.api import configure_scope
 
-from snuba import environment, settings, state
+from snuba import environment, settings
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
@@ -59,6 +59,12 @@ from snuba.state.cache.redis.backend import (
 )
 from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import RateLimitExceeded
+from snuba.state.sentry_options import (
+    get_bool_option,
+    get_mapped_float_option,
+    get_mapped_str_option,
+    get_option,
+)
 from snuba.util import force_bytes
 from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.metrics.timer import Timer
@@ -202,7 +208,7 @@ def get_query_cache_key(formatted_query: FormattedQuery) -> str:
 
 
 def _get_cache_partition(reader: Reader) -> Cache[Result]:
-    enable_cache_partitioning = state.get_config("enable_cache_partitioning", 1)
+    enable_cache_partitioning = get_bool_option("enable_cache_partitioning", True)
     if not enable_cache_partitioning:
         return cache_partitions[DEFAULT_CACHE_PARTITION_ID]
 
@@ -236,7 +242,7 @@ def execute_query_with_query_id(
     robust: bool,
     referrer: str,
 ) -> Result:
-    if state.get_config("randomize_query_id", False):
+    if get_bool_option("randomize_query_id", False):
         query_id = uuid.uuid4().hex
     else:
         query_id = get_query_cache_key(formatted_query)
@@ -255,7 +261,7 @@ def execute_query_with_query_id(
             referrer,
         )
     except ClickhouseError as e:
-        if e.code != ErrorCodes.QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING or not state.get_config(
+        if e.code != ErrorCodes.QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING or not get_bool_option(
             "retry_duplicate_query_id", False
         ):
             raise
@@ -292,8 +298,8 @@ def execute_query_with_readthrough_caching(
     query_id: str,
     referrer: str,
 ) -> Result:
-    if referrer in settings.BYPASS_CACHE_REFERRERS and state.get_config(
-        "enable_bypass_cache_referrers"
+    if referrer in settings.BYPASS_CACHE_REFERRERS and get_bool_option(
+        "enable_bypass_cache_referrers", False
     ):
         query_id = f"randomized-{uuid.uuid4().hex}"
         clickhouse_query_settings["query_id"] = query_id
@@ -349,44 +355,61 @@ def execute_query_with_readthrough_caching(
     )
 
 
+def _query_settings_dict(option: str) -> Mapping[str, Any]:
+    """A dict-typed sentry-option of {clickhouse_setting: value}."""
+    value = get_option(option, {})
+    return value if isinstance(value, dict) else {}
+
+
+def _query_settings_override(option: str, name: str) -> Mapping[str, Any]:
+    """One entry of a dict-typed sentry-option whose values are JSON-object
+    strings ({"clickhouse_setting": "value"}), keyed by ``name`` (a query
+    prefix or referrer). sentry-options can't express dict-of-dict natively, so
+    the second level is a JSON string parsed here."""
+    raw = get_mapped_str_option(option, name, "")
+    if not raw:
+        return {}
+    try:
+        parsed = rapidjson.loads(raw)
+    except (TypeError, ValueError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
 def _get_query_settings_from_config(
     override_prefix: str | None,
     async_override: bool,
     referrer: str | None,
 ) -> MutableMapping[str, Any]:
     """
-    Helper function to get the query settings from the config. Order of precedence
-    for overlapping config within this method is:
-    1. referrer/<referrer>/query_settings/<setting>
-    2. <override_prefix>/query_settings/<setting>
-    3. query_settings/<setting>
+    Helper function to get the query settings from sentry-options. Order of
+    precedence for overlapping settings within this method is:
+    1. referrer/<referrer>  (query_settings_by_referrer)
+    2. <override_prefix>    (query_settings_by_prefix)
+    3. base                 (query_settings)
 
     #TODO: Make this configurable by entity/dataset. Since we want to use
     #      different settings across different clusters belonging to the
     #      same entity/dataset, using cache_partition right now. This is
     #      not ideal but it works for now.
     """
-    all_confs = state.get_all_configs()
-
-    # Populate the query settings with the default values
-    clickhouse_query_settings: MutableMapping[str, Any] = {
-        k.split("/", 1)[1]: v for k, v in all_confs.items() if k.startswith("query_settings/")
-    }
+    # Populate the query settings with the base values.
+    clickhouse_query_settings: MutableMapping[str, Any] = dict(
+        _query_settings_dict("query_settings")
+    )
 
     if async_override:
-        for k, v in all_confs.items():
-            if k.startswith("async_query_settings/"):
-                clickhouse_query_settings[k.split("/", 1)[1]] = v
+        clickhouse_query_settings.update(_query_settings_dict("async_query_settings"))
 
     if override_prefix:
-        for k, v in all_confs.items():
-            if k.startswith(f"{override_prefix}/query_settings/"):
-                clickhouse_query_settings[k.split("/", 2)[2]] = v
+        clickhouse_query_settings.update(
+            _query_settings_override("query_settings_by_prefix", override_prefix)
+        )
 
     if referrer:
-        for k, v in all_confs.items():
-            if k.startswith(f"referrer/{referrer}/query_settings/"):
-                clickhouse_query_settings[k.split("/", 3)[3]] = v
+        clickhouse_query_settings.update(
+            _query_settings_override("query_settings_by_referrer", referrer)
+        )
 
     return clickhouse_query_settings
 
@@ -429,9 +452,10 @@ def _raw_query(
     consistent = query_settings.get_consistent()
     stats["consistent"] = consistent
     if consistent:
-        sample_rate = state.get_config(f"{dataset_name}_ignore_consistent_queries_sample_rate", 0)
-        assert sample_rate is not None
-        ignore_consistent = random.random() < float(sample_rate)
+        sample_rate = get_mapped_float_option(
+            "ignore_consistent_queries_sample_rate", dataset_name, 0.0
+        )
+        ignore_consistent = random.random() < sample_rate
         if not ignore_consistent:
             clickhouse_query_settings["load_balancing"] = "in_order"
             clickhouse_query_settings["max_threads"] = 1

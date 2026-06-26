@@ -4,7 +4,7 @@ from typing import Any
 from snuba.clickhouse.query import Query
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
-from snuba.state import get_str_config
+from snuba.state.sentry_options import get_str_option
 
 
 class ClickhouseSettingsOverride(ClickhouseQueryProcessor):
@@ -40,7 +40,7 @@ class ClickhouseSettingsOverride(ClickhouseQueryProcessor):
             new_settings.update(self.__settings)
             new_settings.update(query_settings.get_clickhouse_settings())
 
-        ignored_settings = get_str_config("ignore_clickhouse_settings_override")
+        ignored_settings = get_str_option("ignore_clickhouse_settings_override", "")
         if ignored_settings:
             new_settings = {
                 setting: value

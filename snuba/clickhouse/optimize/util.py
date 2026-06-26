@@ -1,7 +1,6 @@
-import typing
 from dataclasses import dataclass
 
-from snuba.state import get_config
+from snuba.state.sentry_options import get_int_option
 
 _OPTIMIZE_PARALLEL_THREADS_KEY = "optimize_parallel_threads"
 
@@ -20,4 +19,7 @@ class MergeInfo:
 
 
 def get_num_threads(default_parallel_threads: int) -> int:
-    return typing.cast(int, get_config(_OPTIMIZE_PARALLEL_THREADS_KEY, default_parallel_threads))
+    # A 0 (the schema default) means "unset": fall back to the value passed via
+    # the optimize command's --parallel flag, preserving the prior runtime-config
+    # behavior where the option was only an override.
+    return get_int_option(_OPTIMIZE_PARALLEL_THREADS_KEY, 0) or default_parallel_threads

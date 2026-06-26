@@ -286,6 +286,224 @@
       "type": "integer",
       "default": 5,
       "description": "Window in minutes for which a project that recently received replacements is kept in the auto-replacements bypass set. Migrated from runtime config replacements_expiry_window_minutes."
+    },
+    "use.low.cardinality.processor": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable the low-cardinality query processor that hints ClickHouse to treat certain columns as low cardinality. When false, the processor is a no-op."
+    },
+    "enable_cache_partitioning": {
+      "type": "boolean",
+      "default": true,
+      "description": "When true, query results use the per-storage cache partition; when false they fall back to the default cache partition."
+    },
+    "randomize_query_id": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, assign a random ClickHouse query_id per execution instead of the deterministic content-based id."
+    },
+    "retry_duplicate_query_id": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, retry a query that ClickHouse rejected because another query with the same id is already running."
+    },
+    "enable_bypass_cache_referrers": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, referrers in settings.BYPASS_CACHE_REFERRERS skip the read-through query cache."
+    },
+    "debug_buffer_size_bytes": {
+      "type": "integer",
+      "default": 0,
+      "description": "Size in bytes of the prefix of an INSERT stream kept in memory so a failing row can be attached to the Sentry error. 0 disables the debug buffer."
+    },
+    "throw_on_uniq_select_and_having": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, raise MismatchedAggregationException if a uniq aggregation appears in HAVING but not SELECT instead of only logging it."
+    },
+    "function-validator.enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, invalid function names raise InvalidFunctionCall; otherwise only an invalid_funcs metric is emitted."
+    },
+    "enable_events_readonly_table": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, non-consistent errors/events queries are routed to the read-only table replica."
+    },
+    "snuba_api_cogs_probability": {
+      "type": "number",
+      "default": 0.0,
+      "description": "Sampling probability [0,1] for recording per-query COGS (cost-of-goods) accounting from the querylog."
+    },
+    "cache_expiry_sec": {
+      "type": "integer",
+      "default": 1,
+      "description": "TTL in seconds applied to query-result cache entries written to Redis."
+    },
+    "read_through_cache.short_circuit": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, bypass the read-through query cache entirely and call the underlying function directly (escape hatch for Redis issues)."
+    },
+    "lw_deletions_offpeak_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, lightweight deletes are only processed during the configured off-peak window."
+    },
+    "lw_deletions_offpeak_start": {
+      "type": "integer",
+      "default": 0,
+      "description": "UTC hour (0-24) at which the lightweight-deletes off-peak window starts."
+    },
+    "lw_deletions_offpeak_end": {
+      "type": "integer",
+      "default": 24,
+      "description": "UTC hour (0-24) at which the lightweight-deletes off-peak window ends."
+    },
+    "org_ids_delete_allowlist": {
+      "type": "string",
+      "default": "",
+      "description": "Comma-separated org ids allowed to issue EAP-items lightweight deletes; empty means all orgs are allowed."
+    },
+    "max_parts_mutating_for_delete": {
+      "type": "integer",
+      "default": 20,
+      "description": "Maximum number of parts that may be mutating before a lightweight delete is deferred."
+    },
+    "permit_delete_by_attribute": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, delete-by-attribute requests are permitted; otherwise they are ignored."
+    },
+    "MAX_ONGOING_MUTATIONS_FOR_DELETE": {
+      "type": "integer",
+      "default": 5,
+      "description": "Maximum number of ongoing mutations allowed before a delete is rejected."
+    },
+    "storage_deletes_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Master switch for storage delete (DELETE FROM) support; when false all delete requests are rejected."
+    },
+    "enforce_max_rows_to_delete": {
+      "type": "boolean",
+      "default": true,
+      "description": "When true, reject deletes whose estimated row count exceeds the storage's max_rows_to_delete."
+    },
+    "ignore_clickhouse_settings_override": {
+      "type": "string",
+      "default": "",
+      "description": "Comma/space-delimited ClickHouse setting names to strip from a query's settings override; empty keeps all."
+    },
+    "consistent_override": {
+      "type": "string",
+      "default": "",
+      "description": "Semicolon-delimited referrer=probability pairs; for a matching referrer, consistency is dropped with the given probability. Empty means no override."
+    },
+    "ignore_consistent_queries_sample_rate": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number"
+      },
+      "default": {},
+      "description": "Dict mapping dataset name to a [0,1] probability of dropping consistency for an otherwise-consistent query. Datasets with no entry default to 0 (never drop consistency). Migrated from per-dataset runtime config <dataset>_ignore_consistent_queries_sample_rate."
+    },
+    "slicing_mega_cluster_partitions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Dict mapping sliced storage-set name to a bracketed list of logical partitions that must query the mega cluster (e.g. \"[1, 2]\"). Storage sets with no entry never use the mega cluster. Migrated from per-storage-set runtime config slicing_mega_cluster_partitions_<storage_set>."
+    },
+    "tags_hash_map_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Killswitch for the MappingOptimizer tags-hashmap query optimization (transactions, search_issues, discover, replays storages). When false the optimizer is a no-op for those storages."
+    },
+    "query_settings": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Dict of base ClickHouse query settings (setting name -> value as a string) applied to all queries. Migrated from per-setting runtime config query_settings/<setting>."
+    },
+    "async_query_settings": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Dict of ClickHouse query settings (setting name -> value as a string) applied additionally when the async override is active. Migrated from per-setting runtime config async_query_settings/<setting>."
+    },
+    "query_settings_by_prefix": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Dict mapping a query prefix to a JSON-object string of ClickHouse query settings ({\"setting\": \"value\"}) applied for that prefix, overriding the base query_settings. Migrated from per-setting runtime config <prefix>/query_settings/<setting>."
+    },
+    "query_settings_by_referrer": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Dict mapping a referrer to a JSON-object string of ClickHouse query settings ({\"setting\": \"value\"}) applied for that referrer, taking precedence over prefix and base settings. Migrated from per-setting runtime config referrer/<referrer>/query_settings/<setting>."
+    },
+    "optimize_parallel_threads": {
+      "type": "integer",
+      "default": 0,
+      "description": "Number of parallel threads the table-optimize cron uses when running OPTIMIZE. 0 (the default) means unset: the optimize command's --parallel flag is used instead. Migrated from runtime config optimize_parallel_threads."
+    },
+    "http_batch_join_timeout": {
+      "type": "integer",
+      "default": 0,
+      "description": "Timeout in seconds the ClickHouse HTTP batch writer waits when joining the upload thread. 0 (the default) means unset: settings.BATCH_JOIN_TIMEOUT is used instead. Migrated from runtime config http_batch_join_timeout."
+    },
+    "simultaneous_queries_sleep_seconds": {
+      "type": "integer",
+      "default": 0,
+      "description": "Base sleep in seconds used when retrying a ClickHouse query rejected with TOO_MANY_SIMULTANEOUS_QUERIES. 0 disables the native-driver retry (it re-raises immediately); the robust-execute path always uses at least 1 second. Migrated from runtime config simultaneous_queries_sleep_seconds."
+    },
+    "max_days": {
+      "type": "integer",
+      "default": 0,
+      "description": "Maximum number of days a query time range may span before the lower bound is clamped. 0 means no limit (the time range is left unchanged). Migrated from runtime config max_days."
+    },
+    "date_align_seconds": {
+      "type": "integer",
+      "default": 1,
+      "description": "Granularity in seconds to which query time-range bounds are aligned (truncated). Must be non-zero. Migrated from runtime config date_align_seconds."
+    },
+    "lightweight_deletes_sync": {
+      "type": "integer",
+      "default": -1,
+      "description": "Value for the ClickHouse lightweight_deletes_sync setting applied to lightweight-delete queries. -1 (the default) means unset: ClickHouse's own default (2 since 24.4) is left in place. Migrated from runtime config lightweight_deletes_sync."
+    },
+    "lightweight_delete_mode": {
+      "type": "string",
+      "default": "",
+      "description": "ClickHouse lightweight_delete_mode applied to lightweight-delete queries. Empty (the default) leaves the setting unset. One of: alter_update (heavyweight ALTER UPDATE mutation), lightweight_update (lightweight if possible, else ALTER UPDATE), lightweight_update_force (lightweight if possible, else throw); any other non-empty value is treated as lightweight_update. Migrated from runtime config lightweight_delete_mode."
+    },
+    "events_tags_hash_map_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Killswitch for the MappingOptimizer tags-hashmap query optimization on the errors/errors_ro storages. When false the optimizer is a no-op."
+    },
+    "events_flags_hash_map_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Killswitch for the MappingOptimizer flags-hashmap query optimization on the errors/errors_ro storages. When false the optimizer is a no-op."
+    },
+    "generic_metrics/tags_hash_map_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Killswitch for the MappingOptimizer tags-hashmap query optimization on generic-metrics storages (distributions, gauges). When false the optimizer is a no-op."
     }
   }
 }

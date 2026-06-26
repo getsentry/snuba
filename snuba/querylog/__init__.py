@@ -21,6 +21,7 @@ from snuba.querylog.query_metadata import (
     get_request_status,
 )
 from snuba.request import Request
+from snuba.state.sentry_options import get_float_option
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import QueryException, QueryResult
@@ -143,7 +144,7 @@ def _record_cogs(
     cluster_name = query_metadata.query_list[0].stats.get("cluster_name", "")
 
     if cluster_name.startswith("snuba-events-analytics-platform"):
-        if random() < (state.get_config("snuba_api_cogs_probability") or 0):
+        if random() < get_float_option("snuba_api_cogs_probability", 0.0):
             record_cogs(
                 resource_id="eap_clickhouse",
                 app_feature=_get_eap_app_feature(request),
@@ -178,7 +179,7 @@ def _record_cogs(
         .replace("_0", "")
     )
 
-    if random() < (state.get_config("snuba_api_cogs_probability") or 0):
+    if random() < get_float_option("snuba_api_cogs_probability", 0.0):
         record_cogs(
             resource_id=f"{cluster_name}",
             app_feature=app_feature,

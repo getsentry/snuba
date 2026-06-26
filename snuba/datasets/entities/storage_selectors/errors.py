@@ -1,6 +1,5 @@
 from collections.abc import Sequence
 
-from snuba import state
 from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.storage import (
     EntityStorageConnection,
@@ -10,6 +9,7 @@ from snuba.datasets.storage import (
 )
 from snuba.query.logical import Query
 from snuba.query.query_settings import QuerySettings
+from snuba.state.sentry_options import get_bool_option
 
 
 class ErrorsQueryStorageSelector(QueryStorageSelector):
@@ -21,7 +21,7 @@ class ErrorsQueryStorageSelector(QueryStorageSelector):
         storage_connections: Sequence[EntityStorageConnection],
     ) -> EntityStorageConnection:
         use_readonly_storage = (
-            state.get_config("enable_events_readonly_table", False)
+            get_bool_option("enable_events_readonly_table", False)
             and not query_settings.get_consistent()
         )
 
