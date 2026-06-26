@@ -84,19 +84,17 @@ class TestTraceItemTableCrossItemSampling(BaseApiTest):
         with (
             override_options("snuba", {"cross_item_queries_no_sample_outer": True}),
             storage_tracker,
+            patch.object(RPCEndpoint, "_RPCEndpoint__before_execute"),
         ):
-            with patch.object(RPCEndpoint, "_RPCEndpoint__before_execute"):
-                message = create_trace_item_table_request(
-                    start_time=start_time,
-                    end_time=end_time,
-                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                    columns=[
-                        Column(
-                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.span_id")
-                        )
-                    ],
-                    trace_filters=trace_filters,
-                )
+            message = create_trace_item_table_request(
+                start_time=start_time,
+                end_time=end_time,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                columns=[
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.span_id"))
+                ],
+                trace_filters=trace_filters,
+            )
 
             mock_routing_decision = create_mock_routing_decision(Tier.TIER_8, message)
 
@@ -140,19 +138,17 @@ class TestTraceItemTableCrossItemSampling(BaseApiTest):
         with (
             override_options("snuba", {"cross_item_queries_no_sample_outer": False}),
             storage_tracker,
+            patch.object(RPCEndpoint, "_RPCEndpoint__before_execute"),
         ):
-            with patch.object(RPCEndpoint, "_RPCEndpoint__before_execute"):
-                message = create_trace_item_table_request(
-                    start_time=start_time,
-                    end_time=end_time,
-                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                    columns=[
-                        Column(
-                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.span_id")
-                        )
-                    ],
-                    trace_filters=trace_filters,
-                )
+            message = create_trace_item_table_request(
+                start_time=start_time,
+                end_time=end_time,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                columns=[
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.span_id"))
+                ],
+                trace_filters=trace_filters,
+            )
 
             mock_routing_decision = create_mock_routing_decision(Tier.TIER_8, message)
 

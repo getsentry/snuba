@@ -103,16 +103,16 @@ class TestTimeSeriesCrossItemSampling(BaseApiTest):
         with (
             override_options("snuba", {"cross_item_queries_no_sample_outer": True}),
             storage_tracker,
+            patch.object(RPCEndpoint, "_RPCEndpoint__before_execute"),
         ):
-            with patch.object(RPCEndpoint, "_RPCEndpoint__before_execute"):
-                message = create_time_series_request(
-                    start_time=start_time,
-                    end_time=end_time,
-                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                    expressions=[create_count_expression()],
-                    trace_filters=trace_filters,
-                    granularity_secs=3600,
-                )
+            message = create_time_series_request(
+                start_time=start_time,
+                end_time=end_time,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                expressions=[create_count_expression()],
+                trace_filters=trace_filters,
+                granularity_secs=3600,
+            )
 
             mock_routing_decision = create_mock_routing_decision(Tier.TIER_8, message)
 
@@ -156,16 +156,16 @@ class TestTimeSeriesCrossItemSampling(BaseApiTest):
         with (
             override_options("snuba", {"cross_item_queries_no_sample_outer": False}),
             storage_tracker,
+            patch.object(RPCEndpoint, "_RPCEndpoint__before_execute"),
         ):
-            with patch.object(RPCEndpoint, "_RPCEndpoint__before_execute"):
-                message = create_time_series_request(
-                    start_time=start_time,
-                    end_time=end_time,
-                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                    expressions=[create_count_expression()],
-                    trace_filters=trace_filters,
-                    granularity_secs=3600,
-                )
+            message = create_time_series_request(
+                start_time=start_time,
+                end_time=end_time,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                expressions=[create_count_expression()],
+                trace_filters=trace_filters,
+                granularity_secs=3600,
+            )
 
             mock_routing_decision = create_mock_routing_decision(Tier.TIER_8, message)
 
