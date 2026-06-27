@@ -8,6 +8,7 @@ from sql_metadata import Parser, QueryType  # type: ignore[import-untyped]
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import (
+    DEFAULT_CLICKHOUSE_HTTP_PORT,
     ClickhouseClientSettings,
     ClickhouseCluster,
     ClickhouseNode,
@@ -106,9 +107,22 @@ def _build_validated_pool(
     # Go through the shared connection cache so the driver (native vs
     # clickhouse-connect/HTTP) is selected by the runtime config, behind the
     # abstract ClickhousePool type, just like the cluster's own connections.
+    #
+    # Admin always targets a *specific* node by hostname. The native driver
+    # talks to it directly on clickhouse_port, so that path is unchanged. The
+    # clickhouse-connect (HTTP) driver, however, must NOT reuse
+    # cluster.get_http_port(): that port belongs to the cluster's query
+    # endpoint (which may sit behind a proxy/load balancer), not to an
+    # arbitrary individual node. A direct by-host HTTP connection has to reach
+    # the node's own ClickHouse HTTP listener, which is the well-known default
+    # port — so use that instead of the cluster's configured http_port.
     return connection_cache.get_node_connection(
         client_settings,
-        ClickhouseNode(clickhouse_host, clickhouse_port, http_port=cluster.get_http_port()),
+        ClickhouseNode(
+            clickhouse_host,
+            clickhouse_port,
+            http_port=DEFAULT_CLICKHOUSE_HTTP_PORT,
+        ),
         username,
         password,
         database,

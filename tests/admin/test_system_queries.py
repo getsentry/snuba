@@ -342,6 +342,75 @@ def test_clusterless_rejects_unvalidated_host(
 
 
 @pytest.mark.parametrize(
+    "helper_name",
+    [
+        "get_ro_node_connection",
+        "get_sudo_node_connection",
+        "get_clusterless_node_connection",
+        "get_ro_clusterless_node_connection",
+    ],
+)
+def test_by_host_connection_uses_default_http_port(helper_name: str) -> None:
+    """
+    Admin always connects to a *specific* node by hostname. The cluster's
+    configured http_port belongs to the cluster's query endpoint (which may
+    sit behind a proxy/load balancer), not to an individual node, so a by-host
+    HTTP connection must target the node's own ClickHouse HTTP listener — the
+    well-known default port — rather than cluster.get_http_port().
+
+    Regression: the clickhouse-connect (HTTP) driver path passed
+    cluster.get_http_port(), which would send admin by-host traffic to the
+    wrong port. The native driver is unaffected (it uses the native port), but
+    the node we build must carry the default HTTP port for the HTTP driver.
+    """
+    from snuba.admin.clickhouse import common
+    from snuba.clusters.cluster import (
+        DEFAULT_CLICKHOUSE_HTTP_PORT,
+        ClickhouseCluster,
+        connection_cache,
+    )
+
+    helper = getattr(common, helper_name)
+
+    def clear_cache() -> None:
+        for key in [k for k in common.NODE_CONNECTIONS if k.startswith("errors-")]:
+            del common.NODE_CONNECTIONS[key]
+
+    # A port that is deliberately not the well-known default, so the assertions
+    # below distinguish "used the default" from "used the cluster's port" even
+    # if the test cluster happens to be configured with the default port.
+    sentinel_cluster_http_port = 65432
+
+    clear_cache()
+    try:
+        with (
+            patch.object(common, "_validate_node"),  # treat the host as valid
+            patch.object(
+                ClickhouseCluster,
+                "get_http_port",
+                return_value=sentinel_cluster_http_port,
+            ),
+            patch.object(connection_cache, "get_node_connection") as mock_pool,
+        ):
+            helper(
+                "specific-node.example.com",
+                9000,
+                "errors",
+                ClickhouseClientSettings.QUERY,
+            )
+
+        assert mock_pool.called, "expected a pool to be acquired for a valid host"
+        node = mock_pool.call_args.args[1]
+        assert node.http_port == DEFAULT_CLICKHOUSE_HTTP_PORT
+        assert node.http_port != sentinel_cluster_http_port, (
+            "by-host connections must not use the cluster's configured http_port"
+        )
+    finally:
+        # Don't leak the mocked connection into other tests via the cache.
+        clear_cache()
+
+
+@pytest.mark.parametrize(
     "sql_query, sudo_mode",
     [
         ("SELECT * FROM system.clusters;", True),
