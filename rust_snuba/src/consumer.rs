@@ -21,7 +21,7 @@ use sentry_options::init_with_schemas;
 use crate::config;
 use crate::factory_v2::ConsumerStrategyFactoryV2;
 use crate::logging::{setup_logging, setup_sentry};
-use crate::metrics::statsd::DogStatsDBackend;
+use crate::metrics::statsd::create_dogstatsd_backend;
 use crate::processors;
 use crate::rebalancing;
 use crate::types::{InsertOrReplacement, KafkaMessageMetadata};
@@ -162,27 +162,7 @@ pub fn consumer_impl(
             ("consumer_group", consumer_group.to_owned()),
         ];
 
-        let backend = if let Some(socket_path) = env_config.dogstatsd_socket_path.clone() {
-            Some(DogStatsDBackend::new_uds(
-                &socket_path,
-                "snuba.consumer",
-                &tags,
-            ))
-        } else if let (Some(host), Some(port)) = (
-            consumer_config.env.dogstatsd_host,
-            consumer_config.env.dogstatsd_port,
-        ) {
-            Some(DogStatsDBackend::new_udp(
-                &host,
-                port,
-                "snuba.consumer",
-                &tags,
-            ))
-        } else {
-            None
-        };
-
-        if let Some(backend) = backend {
+        if let Some(backend) = create_dogstatsd_backend(&env_config, "snuba.consumer", &tags) {
             metrics::init(backend).unwrap();
         }
     }

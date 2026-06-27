@@ -19,7 +19,7 @@ use pyo3::prelude::*;
 use crate::config;
 use crate::logging::{setup_logging, setup_sentry};
 use crate::metrics::global_tags::set_global_tag;
-use crate::metrics::statsd::DogStatsDBackend;
+use crate::metrics::statsd::create_dogstatsd_backend;
 use crate::strategies::accepted_outcomes::aggregator::OutcomesAggregator;
 use crate::strategies::accepted_outcomes::commit_outcomes::CommitOutcomes;
 use crate::strategies::accepted_outcomes::produce_outcome::ProduceAcceptedOutcome;
@@ -127,6 +127,8 @@ pub fn accepted_outcomes_consumer_impl(
 
     assert_eq!(consumer_config.storages.len(), 1);
 
+    let env_config = consumer_config.env.clone();
+
     let mut _sentry_guard = None;
 
     // setup sentry
@@ -156,27 +158,7 @@ pub fn accepted_outcomes_consumer_impl(
             ("consumer_group", consumer_group.to_owned()),
         ];
 
-        let backend = if let Some(socket_path) = consumer_config.env.dogstatsd_socket_path.clone() {
-            Some(DogStatsDBackend::new_uds(
-                &socket_path,
-                "snuba.consumer",
-                &tags,
-            ))
-        } else if let (Some(host), Some(port)) = (
-            consumer_config.env.dogstatsd_host,
-            consumer_config.env.dogstatsd_port,
-        ) {
-            Some(DogStatsDBackend::new_udp(
-                &host,
-                port,
-                "snuba.consumer",
-                &tags,
-            ))
-        } else {
-            None
-        };
-
-        if let Some(backend) = backend {
+        if let Some(backend) = create_dogstatsd_backend(&env_config, "snuba.consumer", &tags) {
             metrics::init(backend).unwrap();
         }
     }
