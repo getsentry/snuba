@@ -372,16 +372,19 @@ def test_by_host_connection_uses_default_http_port(helper_name: str) -> None:
 
     helper = getattr(common, helper_name)
 
-    def clear_cache() -> None:
-        for key in [k for k in common.NODE_CONNECTIONS if k.startswith("errors-")]:
-            del common.NODE_CONNECTIONS[key]
-
     # A port that is deliberately not the well-known default, so the assertions
     # below distinguish "used the default" from "used the cluster's port" even
     # if the test cluster happens to be configured with the default port.
     sentinel_cluster_http_port = 65432
 
-    clear_cache()
+    # Snapshot and restore the module-level connection cache around the call.
+    # The cache key is built from str(StorageKey), which falls back to its repr
+    # ("StorageKey.ERRORS-..."), so matching on a literal prefix is brittle;
+    # snapshot/restore is independent of the key format. Clearing it first also
+    # guarantees the helper builds a fresh node instead of returning a cached
+    # entry, so connection_cache.get_node_connection is actually invoked.
+    saved_connections = dict(common.NODE_CONNECTIONS)
+    common.NODE_CONNECTIONS.clear()
     try:
         with (
             patch.object(common, "_validate_node"),  # treat the host as valid
@@ -406,8 +409,10 @@ def test_by_host_connection_uses_default_http_port(helper_name: str) -> None:
             "by-host connections must not use the cluster's configured http_port"
         )
     finally:
-        # Don't leak the mocked connection into other tests via the cache.
-        clear_cache()
+        # Restore the cache exactly, so this test never leaks a mocked
+        # connection into others (regardless of the cache key format).
+        common.NODE_CONNECTIONS.clear()
+        common.NODE_CONNECTIONS.update(saved_connections)
 
 
 @pytest.mark.parametrize(
