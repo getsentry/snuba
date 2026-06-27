@@ -352,8 +352,9 @@ def test_clusterless_rejects_unvalidated_host(
 )
 def test_by_host_connection_uses_default_http_port(helper_name: str) -> None:
     """
-    Admin always connects to a *specific* node by hostname. The cluster's
-    configured http_port belongs to the cluster's query endpoint (which may
+    These helpers connect to a *specific individual* node by hostname (not the
+    cluster's query endpoint — see test_query_node_connection_uses_cluster_http_port).
+    The cluster's configured http_port belongs to the query endpoint (which may
     sit behind a proxy/load balancer), not to an individual node, so a by-host
     HTTP connection must target the node's own ClickHouse HTTP listener — the
     well-known default port — rather than cluster.get_http_port().
@@ -413,6 +414,56 @@ def test_by_host_connection_uses_default_http_port(helper_name: str) -> None:
         # connection into others (regardless of the cache key format).
         common.NODE_CONNECTIONS.clear()
         common.NODE_CONNECTIONS.update(saved_connections)
+
+
+def test_query_node_connection_uses_cluster_http_port() -> None:
+    """
+    Counterpart to test_by_host_connection_uses_default_http_port: the
+    query-node helper (get_ro_query_node_connection — used by the tracing,
+    querylog and cardinality tools) connects to the cluster's *configured query
+    endpoint*, the same host the normal read path reaches on
+    cluster.get_http_port(). That endpoint may be a load balancer on a
+    non-default HTTP port, so this path must keep using cluster.get_http_port()
+    rather than the by-host default — otherwise the HTTP driver would send those
+    tools to the wrong port.
+    """
+    from snuba.admin.clickhouse import common
+    from snuba.clusters.cluster import ClickhouseCluster, connection_cache
+
+    # A port that is deliberately not the well-known default, so the assertion
+    # below proves the query-node path uses the cluster's configured port and
+    # not the by-host default.
+    sentinel_cluster_http_port = 65432
+
+    # get_ro_query_node_connection caches in CLUSTER_CONNECTIONS, and the
+    # underlying get_ro_node_connection caches in NODE_CONNECTIONS; snapshot and
+    # restore both so the call is exercised and nothing leaks.
+    saved_node = dict(common.NODE_CONNECTIONS)
+    saved_cluster = dict(common.CLUSTER_CONNECTIONS)
+    common.NODE_CONNECTIONS.clear()
+    common.CLUSTER_CONNECTIONS.clear()
+    try:
+        with (
+            patch.object(common, "_validate_node"),  # treat the host as valid
+            patch.object(
+                ClickhouseCluster,
+                "get_http_port",
+                return_value=sentinel_cluster_http_port,
+            ),
+            patch.object(connection_cache, "get_node_connection") as mock_pool,
+        ):
+            common.get_ro_query_node_connection("errors", ClickhouseClientSettings.QUERY)
+
+        assert mock_pool.called, "expected a pool to be acquired for the query node"
+        node = mock_pool.call_args.args[1]
+        assert node.http_port == sentinel_cluster_http_port, (
+            "the query-node connection must use the cluster's configured http_port"
+        )
+    finally:
+        common.NODE_CONNECTIONS.clear()
+        common.NODE_CONNECTIONS.update(saved_node)
+        common.CLUSTER_CONNECTIONS.clear()
+        common.CLUSTER_CONNECTIONS.update(saved_cluster)
 
 
 @pytest.mark.parametrize(
