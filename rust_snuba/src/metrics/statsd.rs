@@ -35,6 +35,10 @@ impl DogStatsDBackend {
             .set_global_prefix(prefix)
             .with_global_labels(global_labels)
             .send_histograms_as_distributions(false)
+            // Disable the exporter's client telemetry so we don't start emitting new
+            // `datadog.dogstatsd.client.*` metrics that the previous statsdproxy pipeline
+            // never sent. This keeps the set of emitted metrics unchanged by the migration.
+            .with_telemetry(false)
             .install()
             .expect("failed to install DogStatsD exporter");
 
