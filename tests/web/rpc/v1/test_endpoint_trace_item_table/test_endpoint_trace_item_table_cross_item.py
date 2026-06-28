@@ -18,10 +18,12 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
+from snuba import state
 from snuba.web import QueryResult
 from snuba.web.query import run_query
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.base import BaseApiTest
+from tests.conftest import SnubaSetConfig
 from tests.web.rpc.v1.test_utils import (
     comparison_filter,
     create_cross_item_test_data,
@@ -105,6 +107,7 @@ class TestTraceItemTableCrossItemQueries(BaseApiTest):
         test_distributed this runs against the ``_dist`` tables, exercising the
         ``trace_id IN (subquery)`` + ``distributed_product_mode='local'`` path against
         the Distributed table engine (where the setting actually takes effect)."""
+        state.set_config("use_local_join_for_cross_item_queries", 1)
         trace_ids, all_items, start_time, end_time = create_cross_item_test_data()
         write_cross_item_data_to_storage(all_items)
 
@@ -286,3 +289,15 @@ class TestTraceItemTableCrossItemQueries(BaseApiTest):
 
         error_attr_values = [result.val_str for result in response.column_values[1].results]
         assert all(val == "val3" for val in error_attr_values)
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+class TestTraceItemTableCrossItemQueriesLocalJoin(TestTraceItemTableCrossItemQueries):
+    """Re-run the cross-item TraceItemTable tests with the local-join optimization
+    enabled (raw trace_id join + distributed_product_mode='local'). Result parity with
+    the default (legacy) path proves the gated path executes correctly. See EAP-377."""
+
+    @pytest.fixture(autouse=True)
+    def enable_local_join(self, snuba_set_config: SnubaSetConfig) -> None:
+        snuba_set_config("use_local_join_for_cross_item_queries", 1)
