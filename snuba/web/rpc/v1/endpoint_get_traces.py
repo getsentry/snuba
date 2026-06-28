@@ -36,7 +36,7 @@ from snuba.query.dsl import (
     literals_array,
     or_cond,
 )
-from snuba.query.expressions import DangerousRawSQL, Expression
+from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.request import Request as SnubaRequest
@@ -57,6 +57,8 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
     convert_trace_filters_to_trace_item_filter_with_type,
     get_trace_ids_sql_for_cross_item_query,
+    local_join_clickhouse_settings,
+    trace_id_in_subquery_condition,
 )
 
 _DEFAULT_ROW_LIMIT = 10_000
@@ -847,23 +849,17 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             sample=None,
         )
 
-        # Use DangerousRawSQL to embed the subquery instead of materializing trace IDs
+        # Embed the trace-ids query as a SQL subquery instead of materializing trace IDs
         if item_type:
             condition = base_conditions_and(
                 request.meta,
-                in_cond(
-                    column("trace_id"),
-                    DangerousRawSQL(None, f"({trace_ids_sql})"),
-                ),
+                trace_id_in_subquery_condition(trace_ids_sql),
                 f.equals(column("item_type"), item_type),
             )
         else:
             condition = base_conditions_and(
                 request.meta,
-                in_cond(
-                    column("trace_id"),
-                    DangerousRawSQL(None, f"({trace_ids_sql})"),
-                ),
+                trace_id_in_subquery_condition(trace_ids_sql),
             )
 
         query = Query(
@@ -891,7 +887,9 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
 
         results = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
-            request=_build_snuba_request(request, query),
+            request=_build_snuba_request(
+                request, query, clickhouse_settings=local_join_clickhouse_settings()
+            ),
             timer=self._timer,
         )
 

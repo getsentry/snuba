@@ -33,8 +33,8 @@ from snuba.downsampled_storage_tiers import Tier
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column, in_cond, literal
-from snuba.query.expressions import DangerousRawSQL, Expression
+from snuba.query.dsl import column, literal
+from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -68,6 +68,8 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
 )
 from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
     get_trace_ids_sql_for_cross_item_query,
+    local_join_clickhouse_settings,
+    trace_id_in_subquery_condition,
 )
 from snuba.web.rpc.v1.resolvers.common.formula_reliability import (
     FormulaReliabilityCalculator,
@@ -383,12 +385,7 @@ def build_query(
         trace_ids_sql, _ = get_trace_ids_sql_for_cross_item_query(
             request, request.meta, list(request.trace_filters), sampling_tier, timer
         )
-        additional_conditions.append(
-            in_cond(
-                column("trace_id"),
-                DangerousRawSQL(None, f"({trace_ids_sql})"),
-            )
-        )
+        additional_conditions.append(trace_id_in_subquery_condition(trace_ids_sql))
 
     res = Query(
         from_clause=entity,
@@ -516,6 +513,9 @@ class ResolverTimeSeriesEAPItems(ResolverTimeSeries):
             )
             if not (in_msg.trace_filters and cross_item_queries_no_sample_outer):
                 query_settings.set_sampling_tier(routing_decision.tier)
+            if in_msg.trace_filters:
+                for key, value in local_join_clickhouse_settings().items():
+                    query_settings.push_clickhouse_setting(key, value)
         except Exception as e:
             sentry_sdk.capture_message(f"Error merging clickhouse settings: {e}")
 

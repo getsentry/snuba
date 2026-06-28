@@ -994,3 +994,17 @@ class TestEndpointGetTracesCrossItem(TestEndpointGetTraces):
     ) -> None:
         """Enable the feature flag for cross-item path for all tests in this class."""
         snuba_set_config("use_cross_item_path_for_single_item_queries", 1)
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+class TestEndpointGetTracesCrossItemLocalJoin(TestEndpointGetTracesCrossItem):
+    """Re-run the cross-item GetTraces tests with the local-join optimization
+    enabled (raw trace_id join + distributed_product_mode='local'). Result parity
+    with the default path proves the new SQL executes correctly. See EAP-377."""
+
+    @pytest.fixture(autouse=True)
+    def enable_local_join(
+        self, clickhouse_db: Any, redis_db: Any, snuba_set_config: SnubaSetConfig
+    ) -> None:
+        snuba_set_config("use_local_join_for_cross_item_queries", 1)
