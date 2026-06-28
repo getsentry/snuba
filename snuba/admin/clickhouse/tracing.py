@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Mapping
+from typing import Any, cast
 from uuid import UUID
 
 from snuba.admin.clickhouse.common import (
@@ -49,7 +50,7 @@ def run_query_and_get_trace(
     return TraceOutput(
         trace_output=query_result.trace_output,
         summarized_trace_output=summarized_trace_output,
-        cols=query_result.meta,  # type: ignore
+        cols=cast("list[tuple[str, str]]", query_result.meta),
         num_rows_result=len(query_result.results),
         result=list(map(scrub_row, query_result.results)),
         profile_events_results={},

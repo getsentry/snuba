@@ -1,5 +1,4 @@
 import re
-from typing import Type
 
 from snuba.migrations.columns import LowCardinality, MigrationModifiers
 from snuba.migrations.operations import ModifyColumn, SqlOperation
@@ -27,7 +26,9 @@ def check_dangerous_operation(op: SqlOperation, columns_state: ColumnStatesMapTy
             table = op.get_table_name()
             nodes = op.get_nodes()
             for node in nodes:
-                old_type = columns_state.get((node.host_name, node.port, table, col.name), None)
+                old_type = columns_state.get(
+                    (node.host_name, node.native_port, table, col.name), None
+                )
                 if old_type:
                     _check_dangerous(old_type, col.type)
     except DangerousOperationError as err:
@@ -64,32 +65,32 @@ def _check_codecs(old_type: str, new_col_type: ColumnType[MigrationModifiers]) -
                     return True
             return False
 
-        if _has_codec("Delta", modifiers):
-            if not (_has_codec("ZSTD", modifiers) or _has_codec("LZ4", modifiers)):
-                raise DangerousOperationError(
-                    f"Changing column type from {old_type} to {new_col_type} is dangerous.\n"
-                    "Clickhouse 21 doesn't support Delta codec without ZSTD or LZ4. "
-                    "To attempt to run this migration set blocking=True"
-                )
+        if _has_codec("Delta", modifiers) and not (
+            _has_codec("ZSTD", modifiers) or _has_codec("LZ4", modifiers)
+        ):
+            raise DangerousOperationError(
+                f"Changing column type from {old_type} to {new_col_type} is dangerous.\n"
+                "Clickhouse 21 doesn't support Delta codec without ZSTD or LZ4. "
+                "To attempt to run this migration set blocking=True"
+            )
 
 
 def _check_modifiers(
     modifier_str: str,
-    modifier: Type[TypeModifier],
+    modifier: type[TypeModifier],
     old_type_str: str,
     new_col_type: ColumnType[MigrationModifiers],
 ) -> None:
     modifier_str = modifier_str.lower()
     new_modifiers = new_col_type.get_modifiers()
-    if isinstance(new_modifiers, MigrationModifiers):
-        if (
-            modifier_str in old_type_str
-            and not new_modifiers.has_modifier(modifier)
-            or modifier_str not in old_type_str
-            and new_modifiers.has_modifier(modifier)
-        ):
-            raise DangerousOperationError(
-                f"Changing column type from {old_type_str} to {new_col_type} is dangerous "
-                f"because only one has {modifier_str} type in it.\nChanging it will block or isn't supported. "
-                "To attempt to run this migration set blocking=True"
-            )
+    if isinstance(new_modifiers, MigrationModifiers) and (
+        modifier_str in old_type_str
+        and not new_modifiers.has_modifier(modifier)
+        or modifier_str not in old_type_str
+        and new_modifiers.has_modifier(modifier)
+    ):
+        raise DangerousOperationError(
+            f"Changing column type from {old_type_str} to {new_col_type} is dangerous "
+            f"because only one has {modifier_str} type in it.\nChanging it will block or isn't supported. "
+            "To attempt to run this migration set blocking=True"
+        )

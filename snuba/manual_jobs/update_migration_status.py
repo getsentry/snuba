@@ -1,5 +1,6 @@
+from collections.abc import Mapping
 from datetime import datetime
-from typing import Any, Mapping, Optional
+from typing import Any
 
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
@@ -29,7 +30,7 @@ class UpdateMigrationStatus(Job):
         self.__validate_job_params(job_spec.params)
         super().__init__(job_spec)
 
-    def __validate_job_params(self, params: Optional[Mapping[Any, Any]]) -> None:
+    def __validate_job_params(self, params: Mapping[Any, Any] | None) -> None:
         assert params is not None, "group, migration_id, old_status, new_status parameters required"
         assert params["group"], "group required"
         assert params["migration_id"], "migration_id required"

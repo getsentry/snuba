@@ -16,10 +16,12 @@ use sentry_protos::snuba::v1::{ArrayValue, TraceItem, TraceItemType};
 use crate::config::ProcessorConfig;
 use crate::processors::utils::{
     enforce_retention, get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs,
+    record_invalid_timestamp_metric, SilencedDLQMessage,
 };
 use crate::runtime_config::get_str_config;
+use crate::strategies::clickhouse::rowbinary;
 use crate::types::CogsData;
-use crate::types::{InsertBatch, ItemTypeMetrics, KafkaMessageMetadata, TypedInsertBatch};
+use crate::types::{item_type_name, InsertBatch, ItemTypeMetrics, KafkaMessageMetadata};
 
 /// Runtime config key prefix. Per-storage key
 /// `eap_items_dlq_grace_period_min:<storage_name>`: a non-negative integer
@@ -37,7 +39,7 @@ use crate::types::{InsertBatch, ItemTypeMetrics, KafkaMessageMetadata, TypedInse
 const DLQ_GRACE_PERIOD_MIN_KEY: &str = "eap_items_dlq_grace_period_min";
 
 /// Precision factor for sampling_factor calculations to compensate for floating point errors
-const SAMPLING_FACTOR_PRECISION: f64 = 1e9;
+const SAMPLING_FACTOR_PRECISION: f64 = 1e6;
 /// Minimum allowed sampling_factor value
 const MIN_SAMPLING_FACTOR: f64 = 1.0 / SAMPLING_FACTOR_PRECISION;
 
@@ -61,23 +63,26 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
         .as_ref()
         .and_then(|ts| DateTime::from_timestamp(ts.seconds, 0));
 
+    let item_type =
+        TraceItemType::try_from(trace_item.item_type).unwrap_or(TraceItemType::Unspecified);
+
     let mut should_skip = false;
     if let Some(event_ts) = event_timestamp {
         let now = Utc::now();
 
         // should_skip=true will drop messages that are too old or too far in the future
         if get_drop_invalid_timestamps_enabled() && out_of_valid_interval_secs(event_ts, now) {
-            counter!("eap_items.messages.dropped_out_of_range_timestamp", 1);
+            let is_future = event_ts > now;
+            record_invalid_timestamp_metric("eap_items.messages", is_future, item_type);
             should_skip = true;
         }
-        // only DLQ messages that we don't want to drop (should_skip=false)
+        // only DLQ messages that we don't want to drop (when should_skip=false)
         if !should_skip {
             if let Some(grace_min) = get_dlq_grace_period_min(&config.storage_name) {
                 if should_dlq_for_prior_partition(event_ts, now, grace_min) {
-                    counter!("eap_items.messages.dlqed_prior_partition", 1);
-                    anyhow::bail!(
-                        "eap-items message DLQed: event timestamp {event_ts} is before the prior weekly partition boundary; routed to DLQ"
-                    );
+                    let item_type_str = item_type_name(item_type);
+                    counter!("eap_items.messages.dlqed_prior_partition", 1, "item_type" => item_type_str);
+                    anyhow::bail!(SilencedDLQMessage);
                 }
             }
         }
@@ -93,8 +98,6 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
         retention_days
     };
 
-    let item_type =
-        TraceItemType::try_from(trace_item.item_type).unwrap_or(TraceItemType::Unspecified);
     let mut eap_item = EAPItem::try_from(trace_item)?;
 
     eap_item.retention_days = retention_days;
@@ -128,6 +131,7 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
         TraceItemType::Attachment => "attachments",
         TraceItemType::Preprod => "preprod",
         TraceItemType::UserSession => "sessions",
+        TraceItemType::ProcessingError => "processing_errors",
         TraceItemType::Unspecified => "null",
     }
     .to_string();
@@ -196,18 +200,56 @@ pub fn process_message_row_binary(
     msg: KafkaPayload,
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
-) -> anyhow::Result<TypedInsertBatch<EAPItemRow>> {
+) -> anyhow::Result<InsertBatch> {
     let processed = process_eap_item(msg, config)?;
     if processed.should_skip {
-        return Ok(TypedInsertBatch::from_rows(vec![], None));
+        return Ok(InsertBatch::skip());
     }
-    let mut batch = TypedInsertBatch::from_rows(
-        vec![EAPItemRow::try_from(processed.eap_item)?],
-        processed.origin_timestamp,
-    );
-    batch.item_type_metrics = Some(processed.item_type_metrics);
+    let row = EAPItemRow::try_from(processed.eap_item)?;
+
+    // Encode the row to RowBinary bytes inline so the wide typed struct (~80
+    // Vec<(String, _)> buckets) drops here instead of riding the pipeline to
+    // the writer step. The batch downstream sees only a compact Vec<u8>.
+    let mut encoded_rows = Vec::new();
+    rowbinary::serialize_into(&mut encoded_rows, &row)?;
+
+    let mut batch = InsertBatch::from_encoded_rows(encoded_rows, 1, processed.origin_timestamp);
     batch.cogs_data = Some(processed.cogs_data);
+    batch.item_type_metrics = Some(processed.item_type_metrics);
     Ok(batch)
+}
+
+/// Test-only: returns the typed `EAPItemRow` (plus the metadata fields the
+/// pipeline carries) without the bytes serialization step. Tests that
+/// inspect individual columns use this; the production path goes through
+/// `process_message_row_binary` and never holds the typed struct beyond
+/// `process_eap_item`.
+#[cfg(test)]
+pub(crate) struct EAPItemRowBatch {
+    pub rows: Vec<EAPItemRow>,
+    pub cogs_data: Option<CogsData>,
+    pub item_type_metrics: Option<ItemTypeMetrics>,
+}
+
+#[cfg(test)]
+pub(crate) fn process_message_row_binary_typed(
+    msg: KafkaPayload,
+    _metadata: KafkaMessageMetadata,
+    config: &ProcessorConfig,
+) -> anyhow::Result<EAPItemRowBatch> {
+    let processed = process_eap_item(msg, config)?;
+    if processed.should_skip {
+        return Ok(EAPItemRowBatch {
+            rows: vec![],
+            cogs_data: None,
+            item_type_metrics: None,
+        });
+    }
+    Ok(EAPItemRowBatch {
+        rows: vec![EAPItemRow::try_from(processed.eap_item)?],
+        cogs_data: Some(processed.cogs_data),
+        item_type_metrics: Some(processed.item_type_metrics),
+    })
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -217,7 +259,15 @@ struct EAPItem {
     item_type: u8,
     timestamp: u32,
     trace_id: Uuid,
+    session_id: Uuid,
+    /// The TraceItem `conversation_id` field, stored in the `ai_conversation_id`
+    /// String column. The deprecated UUID `conversation_id` column is not written.
+    ai_conversation_id: String,
     item_id: u128,
+
+    /// Per-item-type primary name attribute, promoted to a dedicated column.
+    /// Sourced from `sentry.op` for spans and `sentry.metric.name` for metrics.
+    indexed_name: String,
 
     #[serde(flatten)]
     attributes: AttributeMap,
@@ -237,13 +287,35 @@ impl TryFrom<TraceItem> for EAPItem {
 
     fn try_from(from: TraceItem) -> Result<Self, Self::Error> {
         let timestamp = from.timestamp.context("Expected a timestamp")?;
+
+        // Promote the per-item-type primary name attribute into a dedicated
+        // `indexed_name` column: `sentry.op` for spans, `sentry.metric.name`
+        // for metrics. Read it before `from.attributes` is consumed by the loop
+        // below; the attribute is also still written to the attribute maps.
+        let item_type =
+            TraceItemType::try_from(from.item_type).unwrap_or(TraceItemType::Unspecified);
+        let indexed_name = match item_type {
+            TraceItemType::Span => Some("sentry.op"),
+            TraceItemType::Metric => Some("sentry.metric.name"),
+            _ => None,
+        }
+        .and_then(|key| from.attributes.get(key))
+        .and_then(|value| match &value.value {
+            Some(Value::StringValue(string)) => Some(string.clone()),
+            _ => None,
+        })
+        .unwrap_or_default();
+
         let mut eap_item = EAPItem {
             organization_id: from.organization_id,
             project_id: from.project_id,
             item_type: from.item_type as u8,
             trace_id: Uuid::parse_str(&from.trace_id)?,
+            session_id: parse_uuid_or_random(&from.session_id),
+            ai_conversation_id: from.conversation_id,
             item_id: read_item_id(from.item_id)?,
             timestamp: timestamp.seconds as u32,
+            indexed_name,
             attributes: Default::default(),
             retention_days: Default::default(),
             downsampled_retention_days: Default::default(),
@@ -266,12 +338,15 @@ impl TryFrom<TraceItem> for EAPItem {
             }
         }
 
-        if from.client_sample_rate > 0.0 {
+        // Sample rates must be in (0, 1]. Values outside that range are treated as
+        // missing and fall back to the default of 1.0. This mirrors the normalization
+        // Relay does on `sentry.client_sample_rate` / `sentry.server_sample_rate`.
+        if is_valid_sample_rate(from.client_sample_rate) {
             eap_item.sampling_factor *= from.client_sample_rate;
             eap_item.client_sample_rate = from.client_sample_rate;
         }
 
-        if from.server_sample_rate > 0.0 {
+        if is_valid_sample_rate(from.server_sample_rate) {
             eap_item.sampling_factor *= from.server_sample_rate;
             eap_item.server_sample_rate = from.server_sample_rate;
         }
@@ -292,6 +367,10 @@ impl TryFrom<TraceItem> for EAPItem {
     }
 }
 
+fn is_valid_sample_rate(rate: f64) -> bool {
+    rate > 0.0 && rate <= 1.0
+}
+
 fn fnv_1a(input: &[u8]) -> u32 {
     const FNV_1A_PRIME: u32 = 16777619;
     const FNV_1A_OFFSET_BASIS: u32 = 2166136261;
@@ -303,6 +382,20 @@ fn fnv_1a(input: &[u8]) -> u32 {
     }
 
     res
+}
+
+/// Parse a UUID-valued TraceItem field (e.g. `session_id`) for its non-nullable
+/// UUID column. An absent, malformed, or all-zero value is replaced with a fresh
+/// random UUID, avoiding the all-zero "magic" UUID that would balloon the
+/// bloom-filter index with a single high-frequency value.
+fn parse_uuid_or_random(value: &str) -> Uuid {
+    if value.is_empty() {
+        return Uuid::new_v4();
+    }
+    match Uuid::parse_str(value) {
+        Ok(uuid) if !uuid.is_nil() => uuid,
+        _ => Uuid::new_v4(),
+    }
 }
 
 fn read_item_id(from: Vec<u8>) -> anyhow::Result<u128> {
@@ -342,6 +435,22 @@ struct AttributeMap {
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     attributes_array: HashMap<String, Vec<EAPValue>>,
 
+    // Typed map columns for array-valued attributes (migration 0059). Arrays are
+    // double-written here, alongside the legacy `attributes_array` JSON column, on
+    // both the JSON and RowBinary paths so the read path can filter/aggregate on
+    // values and enumerate keys via `mapKeys(...)` like the scalar attribute maps.
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attributes_array_string: HashMap<String, Vec<String>>,
+
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attributes_array_int: HashMap<String, Vec<i64>>,
+
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attributes_array_float: HashMap<String, Vec<f64>>,
+
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attributes_array_bool: HashMap<String, Vec<bool>>,
+
     #(
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     attributes_string_~N: HashMap<String, String>,
@@ -378,8 +487,6 @@ impl AttributeMap {
     }
 
     pub fn insert_bool(&mut self, k: String, v: bool) {
-        // double write as float and bool
-        self.insert_float(k.clone(), v as u8 as f64);
         self.attributes_bool.insert(k, v);
     }
 
@@ -390,14 +497,42 @@ impl AttributeMap {
     }
 
     pub fn insert_array(&mut self, k: String, v: ArrayValue) {
+        // Each element is appended to its typed `Map(String, Array(T))` column as
+        // it is read, and also to the legacy `attributes_array` JSON column. A
+        // homogeneous array (the common case) lands in a single typed column;
+        // mixed arrays are split across columns by element type.
         let mut values: Vec<EAPValue> = Vec::default();
 
         for value in v.values {
             match value.value {
-                Some(Value::StringValue(string)) => values.push(EAPValue::String(string)),
-                Some(Value::DoubleValue(double)) => values.push(EAPValue::Double(double)),
-                Some(Value::IntValue(int)) => values.push(EAPValue::Int(int)),
-                Some(Value::BoolValue(bool)) => values.push(EAPValue::Bool(bool)),
+                Some(Value::StringValue(string)) => {
+                    self.attributes_array_string
+                        .entry(k.clone())
+                        .or_default()
+                        .push(string.clone());
+                    values.push(EAPValue::String(string));
+                }
+                Some(Value::DoubleValue(double)) => {
+                    self.attributes_array_float
+                        .entry(k.clone())
+                        .or_default()
+                        .push(double);
+                    values.push(EAPValue::Double(double));
+                }
+                Some(Value::IntValue(int)) => {
+                    self.attributes_array_int
+                        .entry(k.clone())
+                        .or_default()
+                        .push(int);
+                    values.push(EAPValue::Int(int));
+                }
+                Some(Value::BoolValue(bool)) => {
+                    self.attributes_array_bool
+                        .entry(k.clone())
+                        .or_default()
+                        .push(bool);
+                    values.push(EAPValue::Bool(bool));
+                }
                 Some(Value::BytesValue(_)) => (),
                 Some(Value::KvlistValue(_)) => (),
                 Some(Value::ArrayValue(_)) => (),
@@ -410,15 +545,20 @@ impl AttributeMap {
 }
 
 seq_attrs! {
-#[derive(Debug, Clone, clickhouse::Row, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct EAPItemRow {
     organization_id: u64,
     project_id: u64,
     item_type: u8,
     timestamp: u32,
-    #[serde(with = "clickhouse::serde::uuid")]
+    #[serde(with = "crate::strategies::clickhouse::rowbinary::uuid")]
     trace_id: Uuid,
+    #[serde(with = "crate::strategies::clickhouse::rowbinary::uuid")]
+    session_id: Uuid,
+    ai_conversation_id: String,
     item_id: u128,
+
+    indexed_name: String,
 
     sampling_weight: u64,
     sampling_factor: f64,
@@ -437,31 +577,59 @@ pub struct EAPItemRow {
     )*
 
     attributes_array: String,
-}
-}
 
-fn vec_string_pair_size<B>(v: &[(String, B)]) -> usize {
-    let heap: usize = v.iter().map(|(s, _)| s.len()).sum();
-    std::mem::size_of_val(v) + heap
+    attributes_array_string: Vec<(String, Vec<String>)>,
+    attributes_array_int: Vec<(String, Vec<i64>)>,
+    attributes_array_float: Vec<(String, Vec<f64>)>,
+    attributes_array_bool: Vec<(String, Vec<bool>)>,
 }
-
-fn vec_string_string_pair_size(v: &[(String, String)]) -> usize {
-    let heap: usize = v.iter().map(|(k, v)| k.len() + v.len()).sum();
-    std::mem::size_of_val(v) + heap
 }
 
 seq_attrs! {
-impl crate::types::EstimatedSize for EAPItemRow {
-    fn estimated_size(&self) -> usize {
-        std::mem::size_of::<Self>()
-            + vec_string_pair_size(&self.attributes_bool)
-            + vec_string_pair_size(&self.attributes_int)
-            + self.attributes_array.len()
-            #(
-            + vec_string_string_pair_size(&self.attributes_string_~N)
-            + vec_string_pair_size(&self.attributes_float_~N)
-            )*
-    }
+impl EAPItemRow {
+    /// Column names in struct (= wire) order. We MUST pass this list to
+    /// ClickHouse on insert (`INSERT INTO t (col1, col2, ...) FORMAT RowBinary`)
+    /// because the on-disk column order in `eap_items_1_local` differs from
+    /// the struct order:
+    ///
+    /// * `client_sample_rate` and `server_sample_rate` were added with
+    ///   identical `AFTER sampling_factor` in migration 0048, so the table
+    ///   ends up with the pair reversed (server before client).
+    /// * The struct interleaves `attributes_string_N, attributes_float_N` for
+    ///   each `N` (per the `seq_attrs!` expansion), while the initial table
+    ///   put all `attributes_string_*` first, then all `attributes_float_*`.
+    ///
+    /// Without an explicit column list, ClickHouse falls back to the table's
+    /// positional order and misreads bytes (the integration test hits a
+    /// `CANNOT_READ_ALL_DATA` deep inside the maps section).
+    pub(crate) const COLUMN_NAMES: &'static [&'static str] = &[
+        "organization_id",
+        "project_id",
+        "item_type",
+        "timestamp",
+        "trace_id",
+        "session_id",
+        "ai_conversation_id",
+        "item_id",
+        "indexed_name",
+        "sampling_weight",
+        "sampling_factor",
+        "client_sample_rate",
+        "server_sample_rate",
+        "retention_days",
+        "downsampled_retention_days",
+        "attributes_bool",
+        "attributes_int",
+        #(
+        concat!("attributes_string_", stringify!(N)),
+        concat!("attributes_float_", stringify!(N)),
+        )*
+        "attributes_array",
+        "attributes_array_string",
+        "attributes_array_int",
+        "attributes_array_float",
+        "attributes_array_bool",
+    ];
 }
 }
 
@@ -481,7 +649,10 @@ impl TryFrom<EAPItem> for EAPItemRow {
                 item_type: item.item_type,
                 timestamp: item.timestamp,
                 trace_id: item.trace_id,
+                session_id: item.session_id,
+                ai_conversation_id: item.ai_conversation_id,
                 item_id: item.item_id,
+                indexed_name: item.indexed_name,
                 sampling_weight: item.sampling_weight,
                 sampling_factor: item.sampling_factor,
                 client_sample_rate: item.client_sample_rate,
@@ -495,6 +666,18 @@ impl TryFrom<EAPItem> for EAPItemRow {
                 attributes_float_~N: item.attributes.attributes_float_~N.into_iter().collect(),
                 )*
                 attributes_array,
+                attributes_array_string: item
+                    .attributes
+                    .attributes_array_string
+                    .into_iter()
+                    .collect(),
+                attributes_array_int: item.attributes.attributes_array_int.into_iter().collect(),
+                attributes_array_float: item
+                    .attributes
+                    .attributes_array_float
+                    .into_iter()
+                    .collect(),
+                attributes_array_bool: item.attributes.attributes_array_bool.into_iter().collect(),
             });
         }
     }
@@ -530,6 +713,8 @@ mod tests {
                 nanos: 0,
             }),
             trace_id: Uuid::new_v4().to_string(),
+            conversation_id: Default::default(),
+            session_id: Default::default(),
             client_sample_rate: 1.0,
             server_sample_rate: 1.0,
             outcomes: Default::default(),
@@ -783,7 +968,7 @@ mod tests {
         );
 
         // RowBinary path
-        let rb_batch = process_message_row_binary(
+        let rb_batch = process_message_row_binary_typed(
             KafkaPayload::new(None, None, Some(payload_bytes)),
             meta,
             &ProcessorConfig::default(),
@@ -833,7 +1018,7 @@ mod tests {
             .contains_key("sentry._internal.received_at"));
 
         // RowBinary path
-        let rb_batch = process_message_row_binary(
+        let rb_batch = process_message_row_binary_typed(
             KafkaPayload::new(None, None, Some(payload_bytes)),
             meta,
             &ProcessorConfig::default(),
@@ -905,6 +1090,43 @@ mod tests {
         assert!(!should_dlq_for_prior_partition(event_ts, now, 45));
     }
 
+    /// The column list we ship with `INSERT INTO ... FORMAT RowBinary` must
+    /// match the struct's field order exactly — otherwise ClickHouse misreads
+    /// bytes (e.g., a `Map(String, String)` worth of data lands in a column
+    /// declared `Map(String, Float64)`). Lock the order down here so anyone
+    /// adding/reordering fields on `EAPItemRow` also updates this list.
+    #[test]
+    fn test_column_names_match_struct_layout() {
+        let names = EAPItemRow::COLUMN_NAMES;
+        // 14 scalars (incl. session_id + ai_conversation_id) + indexed_name +
+        // attributes_bool + attributes_int + 80 buckets + attributes_array +
+        // 4 typed array maps
+        assert_eq!(names.len(), 102);
+        assert_eq!(names[0], "organization_id");
+        assert_eq!(names[4], "trace_id");
+        assert_eq!(names[5], "session_id");
+        assert_eq!(names[6], "ai_conversation_id");
+        assert_eq!(names[7], "item_id");
+        assert_eq!(names[8], "indexed_name");
+        assert_eq!(names[9], "sampling_weight");
+        assert_eq!(names[10], "sampling_factor");
+        assert_eq!(names[11], "client_sample_rate");
+        assert_eq!(names[12], "server_sample_rate");
+        // Bucket pairs are interleaved (string_N then float_N) per the
+        // `seq_attrs!` expansion on EAPItemRow.
+        assert_eq!(names[17], "attributes_string_0");
+        assert_eq!(names[18], "attributes_float_0");
+        assert_eq!(names[19], "attributes_string_1");
+        assert_eq!(names[95], "attributes_string_39");
+        assert_eq!(names[96], "attributes_float_39");
+        assert_eq!(names[97], "attributes_array");
+        // Typed array map columns follow the JSON column.
+        assert_eq!(names[98], "attributes_array_string");
+        assert_eq!(names[99], "attributes_array_int");
+        assert_eq!(names[100], "attributes_array_float");
+        assert_eq!(names[101], "attributes_array_bool");
+    }
+
     #[test]
     fn test_should_not_dlq_event_at_boundary() {
         // event_ts == boundary belongs to the new week — must not DLQ.
@@ -952,7 +1174,7 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
+        let batch = process_message_row_binary_typed(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
 
         assert_eq!(batch.rows.len(), 1);
@@ -965,6 +1187,82 @@ mod tests {
         assert_eq!(row.item_id, item_id.as_u128());
         assert_eq!(row.sampling_weight, 1);
         assert!((row.sampling_factor - 1.0).abs() < f64::EPSILON);
+        assert!(!row.session_id.is_nil());
+        assert!(row.ai_conversation_id.is_empty());
+    }
+
+    #[test]
+    fn test_conversation_and_session_id_parsed_when_present() {
+        let item_id = Uuid::new_v4();
+        let conversation_id = "conversation-123".to_string();
+        let session_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.conversation_id = conversation_id.clone();
+        trace_item.session_id = session_id.to_string();
+
+        let eap_item = EAPItem::try_from(trace_item).unwrap();
+        assert_eq!(eap_item.ai_conversation_id, conversation_id);
+        assert_eq!(eap_item.session_id, session_id);
+    }
+
+    #[test]
+    fn test_conversation_and_session_id_when_absent() {
+        let item_id = Uuid::new_v4();
+        let trace_item = generate_trace_item(item_id);
+
+        let eap_item = EAPItem::try_from(trace_item).unwrap();
+        // Absent conversation id → empty String; absent session id → random UUID.
+        assert!(eap_item.ai_conversation_id.is_empty());
+        assert!(!eap_item.session_id.is_nil());
+    }
+
+    #[test]
+    fn test_session_id_malformed_is_randomized() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.conversation_id = "not-a-uuid".to_string();
+        trace_item.session_id = "also-not-a-uuid".to_string();
+
+        let eap_item = EAPItem::try_from(trace_item).unwrap();
+        // The conversation id is free-form, so it is stored verbatim.
+        assert_eq!(eap_item.ai_conversation_id, "not-a-uuid");
+        assert!(!eap_item.session_id.is_nil());
+    }
+
+    #[test]
+    fn test_explicit_nil_session_id_is_randomized() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.session_id = Uuid::nil().to_string();
+
+        let eap_item = EAPItem::try_from(trace_item).unwrap();
+        assert!(!eap_item.session_id.is_nil());
+    }
+
+    #[test]
+    fn test_row_binary_conversation_and_session_id() {
+        let item_id = Uuid::new_v4();
+        let conversation_id = "conversation-abc".to_string();
+        let session_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.conversation_id = conversation_id.clone();
+        trace_item.session_id = session_id.to_string();
+
+        let mut payload = Vec::new();
+        trace_item.encode(&mut payload).unwrap();
+
+        let payload = KafkaPayload::new(None, None, Some(payload));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        let batch = process_message_row_binary_typed(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+
+        let row = &batch.rows[0];
+        assert_eq!(row.ai_conversation_id, conversation_id);
+        assert_eq!(row.session_id, session_id);
     }
 
     #[test]
@@ -980,7 +1278,7 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
+        let batch = process_message_row_binary_typed(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
 
         let row = &batch.rows[0];
@@ -1002,7 +1300,7 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
+        let batch = process_message_row_binary_typed(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
 
         let row = &batch.rows[0];
@@ -1026,7 +1324,7 @@ mod tests {
             timestamp: DateTime::from(SystemTime::now()),
         };
 
-        let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
+        let batch = process_message_row_binary_typed(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
 
         assert!(batch.item_type_metrics.is_some());
@@ -1055,7 +1353,7 @@ mod tests {
             timestamp: DateTime::from(SystemTime::now()),
         };
 
-        let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
+        let batch = process_message_row_binary_typed(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
 
         assert!(batch.cogs_data.is_some());
@@ -1101,7 +1399,7 @@ mod tests {
             timestamp: DateTime::from(SystemTime::now()),
         };
 
-        let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
+        let batch = process_message_row_binary_typed(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
 
         let row = &batch.rows[0];
@@ -1121,6 +1419,166 @@ mod tests {
         // Array attributes are serialized as JSON string in the attributes_array column
         assert!(row.attributes_array.contains("my_array"));
         assert!(row.attributes_array.contains("elem"));
+
+        // ...and double-written to the typed `attributes_array_string` column.
+        assert!(row
+            .attributes_array_string
+            .iter()
+            .any(|(k, v)| k == "my_array" && v == &vec!["elem".to_string()]));
+    }
+
+    #[test]
+    fn test_array_typed_columns_double_write() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+
+        // Homogeneous arrays of each element type.
+        trace_item.attributes.insert(
+            "strs".to_string(),
+            AnyValue {
+                value: Some(Value::ArrayValue(ArrayValue {
+                    values: vec![
+                        AnyValue {
+                            value: Some(Value::StringValue("a".to_string())),
+                        },
+                        AnyValue {
+                            value: Some(Value::StringValue("b".to_string())),
+                        },
+                    ],
+                })),
+            },
+        );
+        trace_item.attributes.insert(
+            "ints".to_string(),
+            AnyValue {
+                value: Some(Value::ArrayValue(ArrayValue {
+                    values: vec![
+                        AnyValue {
+                            value: Some(Value::IntValue(1)),
+                        },
+                        AnyValue {
+                            value: Some(Value::IntValue(2)),
+                        },
+                    ],
+                })),
+            },
+        );
+        trace_item.attributes.insert(
+            "floats".to_string(),
+            AnyValue {
+                value: Some(Value::ArrayValue(ArrayValue {
+                    values: vec![AnyValue {
+                        value: Some(Value::DoubleValue(1.5)),
+                    }],
+                })),
+            },
+        );
+        trace_item.attributes.insert(
+            "bools".to_string(),
+            AnyValue {
+                value: Some(Value::ArrayValue(ArrayValue {
+                    values: vec![AnyValue {
+                        value: Some(Value::BoolValue(true)),
+                    }],
+                })),
+            },
+        );
+
+        // The typed maps live on AttributeMap, which both the JSON and RowBinary
+        // paths serialize, so checking them here covers both write paths.
+        let attrs = EAPItem::try_from(trace_item).unwrap().attributes;
+
+        assert_eq!(
+            attrs.attributes_array_string.get("strs"),
+            Some(&vec!["a".to_string(), "b".to_string()])
+        );
+        assert_eq!(attrs.attributes_array_int.get("ints"), Some(&vec![1i64, 2]));
+        assert_eq!(
+            attrs.attributes_array_float.get("floats"),
+            Some(&vec![1.5f64])
+        );
+        assert_eq!(attrs.attributes_array_bool.get("bools"), Some(&vec![true]));
+
+        // Ints are NOT double-written to the float column.
+        assert_eq!(attrs.attributes_array_float.get("ints"), None);
+        // Typed maps are not cross-populated across element types.
+        assert_eq!(attrs.attributes_array_int.get("strs"), None);
+        assert_eq!(attrs.attributes_array_bool.get("ints"), None);
+
+        // The legacy JSON column is still populated (double write).
+        assert!(attrs.attributes_array.contains_key("strs"));
+        assert!(attrs.attributes_array.contains_key("ints"));
+    }
+
+    #[test]
+    fn test_indexed_name_from_sentry_op_for_spans() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.item_type = TraceItemType::Span.into();
+        trace_item.attributes.insert(
+            "sentry.op".to_string(),
+            AnyValue {
+                value: Some(Value::StringValue("db.query".to_string())),
+            },
+        );
+
+        let eap_item = EAPItem::try_from(trace_item).unwrap();
+        assert_eq!(eap_item.indexed_name, "db.query");
+    }
+
+    #[test]
+    fn test_indexed_name_from_sentry_metric_name_for_metrics() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.item_type = TraceItemType::Metric.into();
+        trace_item.attributes.insert(
+            "sentry.metric.name".to_string(),
+            AnyValue {
+                value: Some(Value::StringValue("my.metric".to_string())),
+            },
+        );
+
+        let eap_item = EAPItem::try_from(trace_item).unwrap();
+        assert_eq!(eap_item.indexed_name, "my.metric");
+    }
+
+    #[test]
+    fn test_indexed_name_empty_when_source_attribute_missing() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.item_type = TraceItemType::Span.into();
+        // No sentry.op attribute set.
+
+        let eap_item = EAPItem::try_from(trace_item).unwrap();
+        assert_eq!(eap_item.indexed_name, "");
+    }
+
+    #[test]
+    fn test_indexed_name_serialized_in_row_binary() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.item_type = TraceItemType::Span.into();
+        trace_item.attributes.insert(
+            "sentry.op".to_string(),
+            AnyValue {
+                value: Some(Value::StringValue("http.server".to_string())),
+            },
+        );
+
+        let mut payload = Vec::new();
+        trace_item.encode(&mut payload).unwrap();
+
+        let payload = KafkaPayload::new(None, None, Some(payload));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+
+        let batch = process_message_row_binary_typed(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+
+        assert_eq!(batch.rows[0].indexed_name, "http.server");
     }
 
     #[test]
@@ -1140,7 +1598,7 @@ mod tests {
             timestamp: DateTime::from(SystemTime::now()),
         };
 
-        let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
+        let batch = process_message_row_binary_typed(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
 
         let row = &batch.rows[0];
@@ -1218,8 +1676,9 @@ mod tests {
 
         // Process through RowBinary path
         let rb_payload = KafkaPayload::new(None, None, Some(payload_bytes));
-        let rb_batch = process_message_row_binary(rb_payload, meta, &ProcessorConfig::default())
-            .expect("RowBinary path should succeed");
+        let rb_batch =
+            process_message_row_binary_typed(rb_payload, meta, &ProcessorConfig::default())
+                .expect("RowBinary path should succeed");
 
         // Parse the JSON output
         let json_str =
@@ -1411,6 +1870,35 @@ mod tests {
             );
         }
 
+        // Compare the typed array columns. Both paths double-write them, and
+        // array_attr = [String "a", Int 1] splits across the string and int maps.
+        let json_arr_string: HashMap<String, Vec<String>> = json_row
+            .get("attributes_array_string")
+            .map(|v| serde_json::from_value(v.clone()).unwrap())
+            .unwrap_or_default();
+        let rb_arr_string: HashMap<String, Vec<String>> =
+            rb_row.attributes_array_string.iter().cloned().collect();
+        assert_eq!(
+            json_arr_string.get("array_attr"),
+            Some(&vec!["a".to_string()])
+        );
+        assert_eq!(
+            json_arr_string, rb_arr_string,
+            "attributes_array_string mismatch between JSON and RowBinary"
+        );
+
+        let json_arr_int: HashMap<String, Vec<i64>> = json_row
+            .get("attributes_array_int")
+            .map(|v| serde_json::from_value(v.clone()).unwrap())
+            .unwrap_or_default();
+        let rb_arr_int: HashMap<String, Vec<i64>> =
+            rb_row.attributes_array_int.iter().cloned().collect();
+        assert_eq!(json_arr_int.get("array_attr"), Some(&vec![1i64]));
+        assert_eq!(
+            json_arr_int, rb_arr_int,
+            "attributes_array_int mismatch between JSON and RowBinary"
+        );
+
         // Compare cogs_data
         assert_eq!(
             json_batch.cogs_data, rb_batch.cogs_data,
@@ -1424,6 +1912,12 @@ mod tests {
         );
     }
 
+    /// End-to-end test of the production RowBinary path against a live
+    /// ClickHouse instance: process_message_row_binary produces bytes via the
+    /// vendored serializer, those bytes are POSTed verbatim with
+    /// `FORMAT RowBinary`, and the row is read back via `FORMAT JSON`. This
+    /// is the cross-boundary check that our wire format matches what
+    /// ClickHouse expects — pure unit tests can't catch that.
     #[tokio::test]
     async fn test_row_binary_clickhouse_insert() {
         let host = std::env::var("CLICKHOUSE_HOST").unwrap_or("127.0.0.1".to_string());
@@ -1432,12 +1926,9 @@ mod tests {
             .parse()
             .unwrap();
         let database = std::env::var("CLICKHOUSE_DATABASE").unwrap_or("default".to_string());
+        let base_url = format!("http://{host}:{http_port}");
 
-        let client = clickhouse::Client::default()
-            .with_url(format!("http://{host}:{http_port}"))
-            .with_database(&database)
-            .with_option("input_format_binary_read_json_as_string", "1")
-            .with_option("insert_deduplicate", "0");
+        let http = reqwest::Client::new();
 
         // Use a unique organization_id to avoid conflicts with other test data
         let unique_org_id: u64 = 999_999_000 + (rand::random::<u32>() % 1000) as u64;
@@ -1484,56 +1975,167 @@ mod tests {
             timestamp: DateTime::from(SystemTime::now()),
         };
 
+        // Production path: encodes the row to RowBinary bytes inside the processor.
         let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
+        assert_eq!(batch.rows.num_rows, 1);
 
-        assert_eq!(batch.rows.len(), 1);
-        let row = batch.rows[0].clone();
-
-        // Insert via RowBinary (same code path as production)
-        let mut insert = client
-            .insert("eap_items_1_local")
-            .expect("Failed to create insert");
-        insert.write(&row).await.expect("Failed to write row");
-        insert.end().await.expect("Failed to end insert");
-
-        // Read it back using organization_id (primary key prefix) for reliable lookup
-        let count: u64 = client
-            .query(&format!(
-                "SELECT count() FROM eap_items_1_local WHERE organization_id = {unique_org_id}"
-            ))
-            .fetch_one()
+        // Insert: POST the pre-encoded bytes with FORMAT RowBinary. We must
+        // pass the column list — the struct's wire order does NOT match the
+        // table's on-disk column order (see EAPItemRow::COLUMN_NAMES).
+        let insert_query = format!(
+            "INSERT INTO eap_items_1_local ({}) FORMAT RowBinary",
+            EAPItemRow::COLUMN_NAMES.join(", "),
+        );
+        let insert_resp = http
+            .post(&base_url)
+            .header("X-ClickHouse-Database", &database)
+            .query(&[
+                ("query", insert_query.as_str()),
+                ("input_format_binary_read_json_as_string", "1"),
+                ("insert_deduplicate", "0"),
+            ])
+            .body(batch.rows.encoded_rows.clone())
+            .send()
             .await
-            .expect("Failed to count rows");
+            .expect("Insert request failed to send");
         assert!(
-            count > 0,
-            "No rows found after insert for org_id={unique_org_id}"
+            insert_resp.status().is_success(),
+            "Insert failed: {}",
+            insert_resp.text().await.unwrap_or_default()
         );
 
-        let result = client
-            .query(&format!(
-                "SELECT organization_id, project_id, item_type, sampling_weight \
-                 FROM eap_items_1_local \
-                 WHERE organization_id = {unique_org_id} \
-                 LIMIT 1"
-            ))
-            .fetch_one::<(u64, u64, u8, u64)>()
+        // Read it back via FORMAT JSON. We use organization_id (primary key prefix)
+        // for a deterministic lookup. ClickHouse's FORMAT JSON renders 64-bit
+        // ints as strings to avoid JS-precision loss, so we parse them back.
+        //
+        // GET (not POST) for the read-back: ClickHouse 25.x rejects bodyless
+        // POSTs with HTTP 411 because reqwest doesn't emit a Content-Length
+        // header by default when there's nothing to send.
+        let select_resp = http
+            .get(&base_url)
+            .header("X-ClickHouse-Database", &database)
+            .query(&[(
+                "query",
+                format!(
+                    "SELECT organization_id, project_id, item_type, sampling_weight \
+                     FROM eap_items_1_local \
+                     WHERE organization_id = {unique_org_id} \
+                     LIMIT 1 FORMAT JSON"
+                ),
+            )])
+            .send()
             .await
-            .expect("Failed to read back inserted row");
+            .expect("Select request failed to send");
+        let select_status = select_resp.status();
+        let body_text = select_resp.text().await.expect("response body");
+        assert!(
+            select_status.is_success(),
+            "Select failed: status={select_status}, body={body_text}"
+        );
+        let body: serde_json::Value = serde_json::from_str(&body_text).expect("JSON response");
+        let data = body["data"].as_array().expect("data array");
+        assert_eq!(data.len(), 1, "no rows found for org_id={unique_org_id}");
+        let row = &data[0];
+        assert_eq!(
+            row["organization_id"]
+                .as_str()
+                .unwrap()
+                .parse::<u64>()
+                .unwrap(),
+            unique_org_id
+        );
+        assert_eq!(
+            row["project_id"].as_str().unwrap().parse::<u64>().unwrap(),
+            1
+        );
+        assert_eq!(
+            row["item_type"].as_u64().unwrap() as u8,
+            TraceItemType::Span as u8
+        );
+        assert_eq!(
+            row["sampling_weight"]
+                .as_str()
+                .unwrap()
+                .parse::<u64>()
+                .unwrap(),
+            1
+        );
 
-        assert_eq!(result.0, unique_org_id); // organization_id
-        assert_eq!(result.1, 1); // project_id
-        assert_eq!(result.2, TraceItemType::Span as u8); // item_type
-        assert_eq!(result.3, 1); // sampling_weight
+        // Clean up. POST with an empty body (rather than no body) so reqwest
+        // emits Content-Length: 0 and ClickHouse 25.x doesn't reject with 411.
+        let _ = http
+            .post(&base_url)
+            .header("X-ClickHouse-Database", &database)
+            .query(&[(
+                "query",
+                format!(
+                    "ALTER TABLE eap_items_1_local DELETE WHERE organization_id = {unique_org_id}"
+                ),
+            )])
+            .body("")
+            .send()
+            .await;
+    }
 
-        // Clean up
-        client
-            .query(&format!(
-                "ALTER TABLE eap_items_1_local DELETE WHERE organization_id = {unique_org_id}"
-            ))
-            .execute()
-            .await
-            .ok();
+    #[test]
+    fn test_out_of_range_sample_rates_are_normalized_to_one() {
+        for (client, server) in [
+            (1.5, 0.5),  // client > 1
+            (0.5, 1.5),  // server > 1
+            (-0.1, 0.5), // client < 0
+            (0.5, -0.1), // server < 0
+            (0.0, 0.5),  // client == 0
+            (0.5, 0.0),  // server == 0
+        ] {
+            let item_id = Uuid::new_v4();
+            let mut trace_item = generate_trace_item(item_id);
+            trace_item.client_sample_rate = client;
+            trace_item.server_sample_rate = server;
+
+            let eap_item = EAPItem::try_from(trace_item).expect("conversion should succeed");
+
+            let expected_client = if is_valid_sample_rate(client) {
+                client
+            } else {
+                1.0
+            };
+            let expected_server = if is_valid_sample_rate(server) {
+                server
+            } else {
+                1.0
+            };
+            let expected_factor = expected_client * expected_server;
+
+            assert_eq!(
+                eap_item.client_sample_rate, expected_client,
+                "client_sample_rate {client} should normalize to {expected_client}"
+            );
+            assert_eq!(
+                eap_item.server_sample_rate, expected_server,
+                "server_sample_rate {server} should normalize to {expected_server}"
+            );
+            assert!(
+                (eap_item.sampling_factor - expected_factor).abs() < 1e-9,
+                "sampling_factor for ({client}, {server}) should be {expected_factor}, got {}",
+                eap_item.sampling_factor
+            );
+        }
+    }
+
+    #[test]
+    fn test_nan_sample_rates_are_normalized_to_one() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.client_sample_rate = f64::NAN;
+        trace_item.server_sample_rate = f64::NAN;
+
+        let eap_item = EAPItem::try_from(trace_item).expect("conversion should succeed");
+
+        assert_eq!(eap_item.client_sample_rate, 1.0);
+        assert_eq!(eap_item.server_sample_rate, 1.0);
+        assert_eq!(eap_item.sampling_factor, 1.0);
+        assert_eq!(eap_item.sampling_weight, 1);
     }
 
     #[test]
@@ -1541,10 +2143,10 @@ mod tests {
         let item_id = Uuid::new_v4();
         let mut trace_item = generate_trace_item(item_id);
 
-        // Set extremely low sample rates that would multiply to a value smaller than 1e-9
-        trace_item.client_sample_rate = 0.00001; // 1e-5
-        trace_item.server_sample_rate = 0.00001; // 1e-5
-                                                 // Combined: 1e-10, which is smaller than MIN_SAMPLING_FACTOR (1e-9)
+        // Set extremely low sample rates that would multiply to a value smaller than 1e-6
+        trace_item.client_sample_rate = 0.001; // 1e-3
+        trace_item.server_sample_rate = 0.0001; // 1e-4
+                                                // Combined: 1e-7, which is smaller than MIN_SAMPLING_FACTOR (1e-6)
 
         let eap_item = EAPItem::try_from(trace_item);
 

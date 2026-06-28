@@ -2,7 +2,6 @@ import logging
 import socket
 import threading
 import time
-from typing import Union
 
 import sentry_sdk
 from sentry_sdk.tracing import NoOpSpan, Transaction
@@ -31,7 +30,7 @@ def _profiler_main() -> None:
             logger.warning("starting ondemand profile for %s", own_hostname)
 
             with sentry_sdk.Hub.main:
-                open_transaction: Union[Transaction, NoOpSpan, None] = sentry_sdk.start_transaction(
+                open_transaction: Transaction | NoOpSpan | None = sentry_sdk.start_transaction(
                     name=f"ondemand profile: {own_hostname}", sampled=True
                 )
                 assert isinstance(open_transaction, Transaction)

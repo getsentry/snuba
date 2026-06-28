@@ -1,5 +1,4 @@
 import uuid
-from typing import Type
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
@@ -7,11 +6,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeValuesResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import PageToken
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
-from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
-    ComparisonFilter,
-    TraceItemFilter,
-)
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -24,8 +19,8 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import combine_or_conditions
 from snuba.query.data_source.simple import Entity, LogicalDataSource
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column
-from snuba.query.expressions import Expression
+from snuba.query.dsl import column, map_key_exists
+from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -52,12 +47,28 @@ def _map_key_names_for_existence_check(request_key: AttributeKey) -> list[str]:
     return names
 
 
+# Attribute value types this endpoint can enumerate, mapped to the ClickHouse
+# attribute map they live in. The response proto only carries strings, so every
+# supported type must also have a well-defined string form (see _execute).
+_ATTRIBUTE_TYPE_TO_COLUMN: dict["AttributeKey.Type.ValueType", str] = {
+    AttributeKey.TYPE_STRING: "attributes_string",
+    AttributeKey.TYPE_BOOLEAN: "attributes_bool",
+}
+
+
 def _build_conditions(request: TraceItemAttributeValuesRequest) -> Expression:
     attribute_key = attribute_key_to_expression(request.key)
 
+    try:
+        attributes_column = _ATTRIBUTE_TYPE_TO_COLUMN[request.key.type]
+    except KeyError as e:
+        raise BadSnubaRPCRequestException("Only string and boolean attributes can be used") from e
+
+    # Key existence via map_key_exists (has(mapKeys(col), key)); routed to the
+    # right bucket for the bucketed string/float maps and the un-bucketed bool map.
     key_existence = combine_or_conditions(
         [
-            f.has(column("attributes_string"), name)
+            map_key_exists(column(attributes_column), name)
             for name in _map_key_names_for_existence_check(request.key)
         ]
     )
@@ -67,6 +78,10 @@ def _build_conditions(request: TraceItemAttributeValuesRequest) -> Expression:
         conditions.append(f.equals(column("item_type"), request.meta.trace_item_type))
 
     if request.value_substring_match:
+        if request.key.type != AttributeKey.TYPE_STRING:
+            raise BadSnubaRPCRequestException(
+                "substring matches can only be used on string attributes"
+            )
         conditions.append(
             f.like(
                 attribute_key,
@@ -126,12 +141,22 @@ def _build_query(
         selected_columns=[
             SelectedExpression(
                 name="attr_value",
-                expression=f.distinct(column(attr_value.alias, alias="attr_value")),
+                expression=column(attr_value.alias, alias="attr_value"),
+            ),
+            SelectedExpression(
+                name="count()",
+                expression=FunctionCall(
+                    alias="count()",
+                    function_name="count",
+                    parameters=(),
+                ),
             ),
         ],
         order_by=[
+            OrderBy(direction=OrderByDirection.DESC, expression=column("count()")),
             OrderBy(direction=OrderByDirection.ASC, expression=column("attr_value")),
         ],
+        groupby=[column("attr_value")],
         limit=request.limit,
         offset=(request.page_token.offset if request.page_token.HasField("offset") else 0),
     )
@@ -171,11 +196,11 @@ class AttributeValuesRequest(
         return "v1"
 
     @classmethod
-    def request_class(cls) -> Type[TraceItemAttributeValuesRequest]:
+    def request_class(cls) -> type[TraceItemAttributeValuesRequest]:
         return TraceItemAttributeValuesRequest
 
     @classmethod
-    def response_class(cls) -> Type[TraceItemAttributeValuesResponse]:
+    def response_class(cls) -> type[TraceItemAttributeValuesResponse]:
         return TraceItemAttributeValuesResponse
 
     def _execute(self, in_msg: TraceItemAttributeValuesRequest) -> TraceItemAttributeValuesResponse:
@@ -184,6 +209,7 @@ class AttributeValuesRequest(
         if in_msg.key.name == "sentry.item_id" and in_msg.value_substring_match:
             return TraceItemAttributeValuesResponse(
                 values=[in_msg.value_substring_match],
+                counts=[1],
                 page_token=None,
             )
         in_msg.limit = in_msg.limit or 1000
@@ -193,25 +219,28 @@ class AttributeValuesRequest(
             request=snuba_request,
             timer=self._timer,
         )
-        values = [r["attr_value"] for r in res.result.get("data", [])]
+        # The response proto only carries strings. Boolean values are serialized
+        # to the lowercase "true"/"false" form used across the EAP filter API so
+        # that returned values round-trip as filter inputs.
+        is_boolean = in_msg.key.type == AttributeKey.TYPE_BOOLEAN
+        values, counts = [], []
+        for row in res.result.get("data", []):
+            value = row["attr_value"]
+            values.append(str(bool(value)).lower() if is_boolean else value)
+            counts.append(row.get("count()", 0))
         if len(values) == 0:
             return TraceItemAttributeValuesResponse(
                 values=values,
+                counts=counts,
                 page_token=None,
             )
         return TraceItemAttributeValuesResponse(
             values=values,
+            counts=counts,
             page_token=(
-                PageToken(offset=in_msg.page_token.offset + len(values))
-                if in_msg.page_token.HasField("offset") or len(values) == 0
-                else PageToken(
-                    filter_offset=TraceItemFilter(
-                        comparison_filter=ComparisonFilter(
-                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="attr_value"),
-                            op=ComparisonFilter.OP_GREATER_THAN,
-                            value=AttributeValue(val_str=values[-1]),
-                        )
-                    )
+                PageToken(
+                    offset=(in_msg.page_token.offset if in_msg.page_token.HasField("offset") else 0)
+                    + len(values)
                 )
             ),
         )

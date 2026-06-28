@@ -3,7 +3,8 @@ from __future__ import annotations
 import importlib
 import os
 from abc import ABCMeta
-from typing import Any, Dict, Sequence, Tuple, Type, cast
+from collections.abc import Sequence
+from typing import Any, cast
 
 
 class NoConfigKeyError(Exception):
@@ -22,9 +23,9 @@ class _ClassRegistry:
     """Keep a mapping of classes to their names"""
 
     def __init__(self) -> None:
-        self.__mapping: Dict[str, RegisteredClass] = {}
+        self.__mapping: dict[str, RegisteredClass] = {}
 
-    def register_class(self, cls: "RegisteredClass") -> None:
+    def register_class(self, cls: RegisteredClass) -> None:
         key = cls.config_key()
         existing_class = self.__mapping.get(key)
         if not existing_class:
@@ -34,7 +35,7 @@ class _ClassRegistry:
                 f"Class with name {key} already exists in the registry, change the config_key property in the class {cls} or {existing_class}"
             )
 
-    def get_class_from_name(self, config_key: str) -> "RegisteredClass":
+    def get_class_from_name(self, config_key: str) -> RegisteredClass:
         res = self.__mapping.get(config_key)
         if res is None:
             raise InvalidConfigKeyError(
@@ -42,7 +43,7 @@ class _ClassRegistry:
             )
         return res
 
-    def all_classes(self) -> Sequence["RegisteredClass"]:
+    def all_classes(self) -> Sequence[RegisteredClass]:
         return list(self.__mapping.values())
 
     def all_names(self) -> Sequence[str]:
@@ -78,30 +79,34 @@ class RegisteredClass(ABCMeta):
 
     """
 
+    # Injected onto each class that uses this metaclass in __new__ below.
+    # Declared here so attribute access on registered classes type-checks.
+    _registry: _ClassRegistry
+
     def config_key(cls) -> str:
         raise NotImplementedError
 
-    def __new__(cls, name: str, bases: Tuple[Type[Any]], dct: Dict[str, Any]) -> Any:
+    def __new__(cls, name: str, bases: tuple[type[Any]], dct: dict[str, Any]) -> Any:
         res = super().__new__(cls, name, bases, dct)
         if not hasattr(res, "config_key"):
             raise NoConfigKeyError("RegisteredClass(es) must define the `config-key` property")
         if not hasattr(res, "_registry"):
-            setattr(res, "_registry", _ClassRegistry())
+            res._registry = _ClassRegistry()
         else:
-            getattr(res, "_registry").register_class(res)
+            res._registry.register_class(res)
         return res
 
-    def class_from_name(self, name: str) -> Type[Any]:
+    def class_from_name(self, name: str) -> type[Any]:
         return cast(
-            Type[Any],
-            getattr(self, "_registry").get_class_from_name(name),
+            type[Any],
+            self._registry.get_class_from_name(name),
         )
 
-    def all_classes(self) -> Sequence[Type[Any]]:
-        return [cast(Type[Any], rclass) for rclass in getattr(self, "_registry").all_classes()]
+    def all_classes(self) -> Sequence[type[Any]]:
+        return [cast(type[Any], rclass) for rclass in self._registry.all_classes()]
 
     def all_names(self) -> Sequence[str]:
-        return list(getattr(self, "_registry").all_names())
+        return list(self._registry.all_names())
 
 
 TModule = object

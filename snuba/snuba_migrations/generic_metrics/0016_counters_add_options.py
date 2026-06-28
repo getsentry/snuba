@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
@@ -19,28 +19,28 @@ class Migration(migration.ClickhouseNodeMigration):
         (
             Column(
                 "decasecond_retention_days",
-                UInt(8, MigrationModifiers(default=str("retention_days"))),
+                UInt(8, MigrationModifiers(default="retention_days")),
             ),
             "granularities",
         ),
         (
             Column(
                 "min_retention_days",
-                UInt(8, MigrationModifiers(default=str("retention_days"))),
+                UInt(8, MigrationModifiers(default="retention_days")),
             ),
             "decasecond_retention_days",
         ),
         (
             Column(
                 "hr_retention_days",
-                UInt(8, MigrationModifiers(default=str("retention_days"))),
+                UInt(8, MigrationModifiers(default="retention_days")),
             ),
             "min_retention_days",
         ),
         (
             Column(
                 "day_retention_days",
-                UInt(8, MigrationModifiers(default=str("retention_days"))),
+                UInt(8, MigrationModifiers(default="retention_days")),
             ),
             "hr_retention_days",
         ),

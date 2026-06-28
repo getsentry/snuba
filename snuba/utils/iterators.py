@@ -1,4 +1,5 @@
-from typing import Iterable, Iterator, MutableSequence, Sequence, TypeVar
+from collections.abc import Iterable, Iterator, MutableSequence, Sequence
+from typing import TypeVar
 
 T = TypeVar("T")
 

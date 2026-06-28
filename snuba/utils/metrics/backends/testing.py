@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, MutableMapping
 from dataclasses import dataclass
-from typing import List, Mapping, MutableMapping, Optional, Union
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.types import Tags
@@ -20,19 +20,19 @@ class RecordedEventCall:
     tags: Tags
 
 
-RecordedMetricCalls = List[RecordedMetricCall]
+RecordedMetricCalls = list[RecordedMetricCall]
 
 
-RECORDED_METRIC_CALLS: MutableMapping[str, MutableMapping[str, List[RecordedMetricCall]]] = {}
-RECORDED_EVENT_CALLS: MutableMapping[str, List[RecordedEventCall]] = {}
+RECORDED_METRIC_CALLS: MutableMapping[str, MutableMapping[str, list[RecordedMetricCall]]] = {}
+RECORDED_EVENT_CALLS: MutableMapping[str, list[RecordedEventCall]] = {}
 
 
 def record_metric_call(
     mtype: str,
     name: str,
     value: int | float,
-    tags: Optional[Tags],
-    unit: Optional[str] = None,
+    tags: Tags | None,
+    unit: str | None = None,
 ) -> None:
     if mtype not in RECORDED_METRIC_CALLS:
         RECORDED_METRIC_CALLS[mtype] = {}
@@ -46,7 +46,7 @@ def record_metric_call(
 
 
 def record_event_call(
-    title: str, text: str, alert_type: str, priority: str, tags: Optional[Tags] = None
+    title: str, text: str, alert_type: str, priority: str, tags: Tags | None = None
 ) -> None:
     value = str(
         {
@@ -69,7 +69,7 @@ def get_recorded_metric_calls(mtype: str, name: str) -> RecordedMetricCalls | No
     """
     Used in tests to determine if the metrics were called with the correct values
     """
-    return RECORDED_METRIC_CALLS.get(mtype, dict()).get(name)
+    return RECORDED_METRIC_CALLS.get(mtype, {}).get(name)
 
 
 class TestingMetricsBackend(MetricsBackend):
@@ -92,9 +92,9 @@ class TestingMetricsBackend(MetricsBackend):
     def increment(
         self,
         name: str,
-        value: Union[int, float] = 1,
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        value: int | float = 1,
+        tags: Tags | None = None,
+        unit: str | None = None,
     ) -> None:
         record_metric_call("increment", name, value, tags)
         if self.__strict:
@@ -106,9 +106,9 @@ class TestingMetricsBackend(MetricsBackend):
     def gauge(
         self,
         name: str,
-        value: Union[int, float],
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        value: int | float,
+        tags: Tags | None = None,
+        unit: str | None = None,
     ) -> None:
         record_metric_call("gauge", name, value, tags)
         if self.__strict:
@@ -120,9 +120,9 @@ class TestingMetricsBackend(MetricsBackend):
     def timing(
         self,
         name: str,
-        value: Union[int, float],
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        value: int | float,
+        tags: Tags | None = None,
+        unit: str | None = None,
     ) -> None:
         record_metric_call("timing", name, value, tags)
         if self.__strict:
@@ -134,9 +134,9 @@ class TestingMetricsBackend(MetricsBackend):
     def distribution(
         self,
         name: str,
-        value: Union[int, float],
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        value: int | float,
+        tags: Tags | None = None,
+        unit: str | None = None,
     ) -> None:
         record_metric_call("distribution", name, value, tags)
         if self.__strict:
@@ -151,7 +151,7 @@ class TestingMetricsBackend(MetricsBackend):
         text: str,
         alert_type: str,
         priority: str,
-        tags: Optional[Tags] = None,
+        tags: Tags | None = None,
     ) -> None:
         record_event_call(title, text, alert_type, priority, tags)
         if self.__strict:

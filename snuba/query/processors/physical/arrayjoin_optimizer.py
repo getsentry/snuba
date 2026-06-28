@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Sequence, Set, Tuple
+from collections.abc import Sequence
 
 from snuba.clickhouse.query import Query
 from snuba.query.conditions import (
@@ -54,11 +54,11 @@ class ArrayJoinOptimizer(AbstractArrayJoinOptimizer):
                 return LiteralExpr(None, i + 1)
         raise ValueError(f"Unknown column: {column_name}")
 
-    def __get_array_joins_in_query(self, query: Query) -> Set[str]:
+    def __get_array_joins_in_query(self, query: Query) -> set[str]:
         """
         Get all of the arrayJoins on the possible columns that are present in the query.
         """
-        array_joins_in_query: Set[str] = set()
+        array_joins_in_query: set[str] = set()
 
         for e in query.get_all_expressions():
             match = self.__array_join_pattern.match(e)
@@ -125,7 +125,7 @@ class ArrayJoinOptimizer(AbstractArrayJoinOptimizer):
                 )
 
             # Only array join present is one of the key columns
-            elif len(array_joins_in_query) == 1 and any(
+            if len(array_joins_in_query) == 1 and any(
                 column in array_joins_in_query for column in self.key_columns
             ):
                 column_name = array_joins_in_query.pop()
@@ -141,12 +141,12 @@ class ArrayJoinOptimizer(AbstractArrayJoinOptimizer):
 
 
 def filtered_mapping_tuples(
-    alias: Optional[str],
+    alias: str | None,
     tuple_alias: str,
     tuple_index: LiteralExpr,
     column_names: Sequence[str],
-    single_filtered: Dict[LiteralExpr, Sequence[str]],
-    multiple_filtered: Dict[Tuple[LiteralExpr, ...], Sequence[Tuple[str, ...]]],
+    single_filtered: dict[LiteralExpr, Sequence[str]],
+    multiple_filtered: dict[tuple[LiteralExpr, ...], Sequence[tuple[str, ...]]],
 ) -> Expression:
     return tupleElement(
         alias,
@@ -164,13 +164,13 @@ def filtered_mapping_tuples(
 
 def filter_expression(
     columns: Expression,
-    single_filtered: Dict[LiteralExpr, Sequence[str]],
-    multiple_filtered: Dict[Tuple[LiteralExpr, ...], Sequence[Tuple[str, ...]]],
+    single_filtered: dict[LiteralExpr, Sequence[str]],
+    multiple_filtered: dict[tuple[LiteralExpr, ...], Sequence[tuple[str, ...]]],
 ) -> Expression:
     argument_name = "arg"
     argument = Argument(None, argument_name)
 
-    conditions: List[Expression] = []
+    conditions: list[Expression] = []
 
     for index in single_filtered:
         conditions.append(
@@ -217,7 +217,7 @@ def filter_expression(
 
 
 def unfiltered_mapping_tuples(
-    alias: Optional[str],
+    alias: str | None,
     tuple_alias: str,
     tuple_index: LiteralExpr,
     column_names: Sequence[str],
@@ -233,7 +233,7 @@ def unfiltered_mapping_tuples(
 
 
 def filtered_mapping_keys(
-    alias: Optional[str], column_name: str, filtered: Sequence[str]
+    alias: str | None, column_name: str, filtered: Sequence[str]
 ) -> Expression:
     return arrayJoin(
         alias,

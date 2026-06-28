@@ -14,7 +14,7 @@ from snuba.migrations.connect import (
 )
 from snuba.migrations.groups import MigrationGroup
 
-_ALL_STORAGE_SET_KEYS = set([s.value for s in StorageSetKey])
+_ALL_STORAGE_SET_KEYS = {s.value for s in StorageSetKey}
 _REMAINING_STORAGE_SET_KEYS = _ALL_STORAGE_SET_KEYS - {"events", "querylog"}
 
 _QUERYLOG_CLUSTER = cluster.ClickhouseCluster(
@@ -102,21 +102,21 @@ def test_get_clickhouse_clusters_for_migration_group(override_cluster: Any) -> N
             [ReadinessState.PARTIAL],
             [_QUERYLOG_CLUSTER, _EVENTS_CLUSTER],
             [_QUERYLOG_CLUSTER],
-            set([StorageSetKey.QUERYLOG]),
+            {StorageSetKey.QUERYLOG},
             id="partial only",
         ),
         pytest.param(
             [ReadinessState.COMPLETE],
             [_QUERYLOG_CLUSTER, _EVENTS_CLUSTER],
             [_EVENTS_CLUSTER],
-            set([StorageSetKey.EVENTS]),
+            {StorageSetKey.EVENTS},
             id="complete only",
         ),
         pytest.param(
             [ReadinessState.COMPLETE, ReadinessState.PARTIAL],
             [_QUERYLOG_CLUSTER, _EVENTS_CLUSTER],
             [_QUERYLOG_CLUSTER, _EVENTS_CLUSTER],
-            set([StorageSetKey.EVENTS, StorageSetKey.QUERYLOG]),
+            {StorageSetKey.EVENTS, StorageSetKey.QUERYLOG},
             id="complete and partial",
         ),
     ],

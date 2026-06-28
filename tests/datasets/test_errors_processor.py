@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 import random
 import uuid
+from collections.abc import Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Any, Mapping, MutableMapping, Never, Sequence
+from datetime import UTC, datetime, timedelta
+from typing import Any, Never
 from unittest.mock import ANY
 
 import pytest
@@ -265,7 +266,7 @@ class ErrorEvent:
     def build_result(self, meta: KafkaMessageMetadata) -> MutableMapping[str, Any]:
         expected_result = {
             "project_id": self.project_id,
-            "timestamp": int(self.timestamp.replace(tzinfo=timezone.utc).timestamp()),
+            "timestamp": int(self.timestamp.replace(tzinfo=UTC).timestamp()),
             "event_id": self.event_id,
             "platform": self.platform,
             "dist": self.dist,
@@ -330,15 +331,15 @@ class ErrorEvent:
             ],
             "partition": meta.partition,
             "offset": meta.offset,
-            "message_timestamp": int(self.timestamp.replace(tzinfo=timezone.utc).timestamp()),
-            "timestamp_ms": int(self.timestamp.replace(tzinfo=timezone.utc).timestamp() * 1000),
+            "message_timestamp": int(self.timestamp.replace(tzinfo=UTC).timestamp()),
+            "timestamp_ms": int(self.timestamp.replace(tzinfo=UTC).timestamp() * 1000),
             "retention_days": 90,
             "deleted": 0,
             "group_id": self.group_id,
             "group_first_seen": int((self.timestamp - timedelta(days=2)).timestamp()),
             "primary_hash": "04233d08-ac90-cf6f-c015-b1be5932e7e2",
             "received": int(
-                self.received_timestamp.replace(tzinfo=timezone.utc)
+                self.received_timestamp.replace(tzinfo=UTC)
                 .replace(tzinfo=None, microsecond=0)
                 .timestamp()
             ),

@@ -1,4 +1,4 @@
-from typing import Optional, Sequence, Tuple
+from collections.abc import Sequence
 from unittest.mock import Mock, patch
 
 import pytest
@@ -9,6 +9,7 @@ from snuba.admin.clickhouse.migration_checks import (
     RunReason,
     RunResult,
     StatusChecker,
+    run_migration_checks_and_policies,
 )
 from snuba.migrations.group_loader import DirectoryLoader, GroupLoader
 from snuba.migrations.groups import MigrationGroup
@@ -51,7 +52,7 @@ def test_status_checker_run(
     mock_loader: Mock,
     migration_id: str,
     expected_allowed: bool,
-    expected_reason: Optional[RunReason],
+    expected_reason: RunReason | None,
 ) -> None:
     group = MigrationGroup("querylog")
     checker = StatusChecker(group, RUN_MIGRATIONS)
@@ -84,7 +85,7 @@ def test_status_checker_reverse(
     mock_loader: Mock,
     migration_id: str,
     expected_allowed: bool,
-    expected_reason: Optional[ReverseReason],
+    expected_reason: ReverseReason | None,
 ) -> None:
     group = MigrationGroup("querylog")
     checker = StatusChecker(group, REVERSE_MIGRATIONS)
@@ -122,9 +123,6 @@ def test_status_checker_errors() -> None:
         checker.can_reverse(MigrationKey(MigrationGroup("events"), migration_id))
 
 
-from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
-
-
 @patch(
     "snuba.admin.clickhouse.migration_checks.get_group_loader",
     return_value=group_loader(),
@@ -146,9 +144,9 @@ def test_run_migration_checks_and_policies(
     group_loader: Mock,
     mock_checker: Mock,
     mock_runner: Mock,
-    policy_result: Tuple[bool, bool],
-    status_result: Tuple[bool, bool],
-    expected: Tuple[bool, bool],
+    policy_result: tuple[bool, bool],
+    status_result: tuple[bool, bool],
+    expected: tuple[bool, bool],
 ) -> None:
     mock_policy = Mock()
     checker = mock_checker()

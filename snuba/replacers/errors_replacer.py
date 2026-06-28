@@ -6,20 +6,12 @@ import random
 import uuid
 from abc import abstractmethod
 from collections import deque
+from collections.abc import Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from functools import cached_property
 from typing import (
     Any,
-    Deque,
-    List,
-    Mapping,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Tuple,
-    Type,
-    Union,
     cast,
 )
 
@@ -78,7 +70,7 @@ class ExcludeGroups:
     group_ids: Sequence[int]
 
 
-QueryTimeFlags = Union[NeedsFinal, ExcludeGroups]
+QueryTimeFlags = NeedsFinal | ExcludeGroups
 
 
 @dataclass(frozen=True)
@@ -97,11 +89,11 @@ class Replacement(ReplacementBase):
     @abstractmethod
     def parse_message(
         cls, message: ReplacementMessage[Any], context: ReplacementContext
-    ) -> Optional[Replacement]:
+    ) -> Replacement | None:
         raise NotImplementedError()
 
     @abstractmethod
-    def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
+    def get_query_time_flags(self) -> QueryTimeFlags | None:
         raise NotImplementedError()
 
     @abstractmethod
@@ -111,9 +103,7 @@ class Replacement(ReplacementBase):
     def should_write_every_node(self) -> bool:
         write_node_replacement_setting = get_float_config("write_node_replacements_global", 1.0)
         assert isinstance(write_node_replacement_setting, float)
-        if random.random() < write_node_replacement_setting:
-            return True
-        return False
+        return random.random() < write_node_replacement_setting
 
 
 class ErrorsReplacer(ReplacerProcessor[Replacement]):
@@ -155,9 +145,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             promoted_tags=self.__promoted_tags,
         )
 
-    def process_message(
-        self, message: ReplacementMessage[Mapping[str, Any]]
-    ) -> Optional[Replacement]:
+    def process_message(self, message: ReplacementMessage[Mapping[str, Any]]) -> Replacement | None:
         if not self.__schema:
             self.__initialize_schema()
         assert self.__schema is not None
@@ -174,7 +162,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                 tags={"type": type_, "consumer_group": message.metadata.consumer_group},
             )
 
-        processed: Optional[Replacement]
+        processed: Replacement | None
 
         if type_ in (
             ReplacementType.START_DELETE_GROUPS,
@@ -183,13 +171,13 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             ReplacementType.START_DELETE_TAG,
         ):
             return None
-        elif type_ in _REPLACEMENT_BY_TYPE:
+        if type_ in _REPLACEMENT_BY_TYPE:
             processed = _REPLACEMENT_BY_TYPE[type_].parse_message(
                 message,
                 self.__replacement_context,
             )
         else:
-            raise InvalidMessageType("Invalid message type: {}".format(type_))
+            raise InvalidMessageType(f"Invalid message type: {type_}")
 
         if processed is not None:
             manual_bypass_projects = get_config("replacements_bypass_projects", "[]")
@@ -262,10 +250,10 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
 def _build_event_set_filter(
     project_id: int,
     event_ids: Sequence[str],
-    from_timestamp: Optional[str],
-    to_timestamp: Optional[str],
-) -> Tuple[List[str], List[str], MutableMapping[str, str]]:
-    def get_timestamp_condition(msg_value: Optional[str], operator: str) -> str:
+    from_timestamp: str | None,
+    to_timestamp: str | None,
+) -> tuple[list[str], list[str], MutableMapping[str, str]]:
+    def get_timestamp_condition(msg_value: str | None, operator: str) -> str:
         if not msg_value:
             return ""
 
@@ -280,7 +268,7 @@ def _build_event_set_filter(
     to_condition = get_timestamp_condition(to_timestamp, "<=")
 
     event_id_lhs = "event_id"
-    event_id_list = ", ".join("'%s'" % uuid.UUID(eid) for eid in event_ids)
+    event_id_list = ", ".join(f"'{uuid.UUID(eid)}'" for eid in event_ids)
 
     prewhere = [f"{event_id_lhs} IN (%(event_ids)s)"]
     where = ["project_id = %(project_id)s", "NOT deleted"]
@@ -313,8 +301,8 @@ class ReplaceGroupReplacement(Replacement):
 
     event_ids: Sequence[str]
     project_id: int
-    from_timestamp: Optional[str]
-    to_timestamp: Optional[str]
+    from_timestamp: str | None
+    to_timestamp: str | None
     new_group_id: int
     all_columns: Sequence[FlattenedColumn]
 
@@ -323,7 +311,7 @@ class ReplaceGroupReplacement(Replacement):
         cls,
         message: ReplacementMessage[ReplaceGroupMessageBody],
         context: ReplacementContext,
-    ) -> Optional[ReplaceGroupReplacement]:
+    ) -> ReplaceGroupReplacement | None:
         event_ids = message.data["event_ids"]
         if not event_ids:
             return None
@@ -340,7 +328,7 @@ class ReplaceGroupReplacement(Replacement):
     def get_project_id(self) -> int:
         return self.project_id
 
-    def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
+    def get_query_time_flags(self) -> QueryTimeFlags | None:
         return None
 
     @classmethod
@@ -358,20 +346,17 @@ class ReplaceGroupReplacement(Replacement):
 
         return f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}" % query_args
 
-    def get_count_query(self, table_name: str) -> Optional[str]:
+    def get_count_query(self, table_name: str) -> str | None:
         return f"""\
             SELECT count()
             FROM {table_name} FINAL
             {self._where_clause}
         """
 
-    def get_insert_query(self, table_name: str) -> Optional[str]:
+    def get_insert_query(self, table_name: str) -> str | None:
         all_column_names = [c.escaped for c in self.all_columns]
         select_columns = ", ".join(
-            map(
-                lambda i: i if i != "group_id" else str(self.new_group_id),
-                all_column_names,
-            )
+            i if i != "group_id" else str(self.new_group_id) for i in all_column_names
         )
 
         all_columns = ", ".join(all_column_names)
@@ -396,7 +381,7 @@ class DeleteGroupsReplacement(Replacement):
         cls,
         message: ReplacementMessage[EndDeleteGroupsMessageBody],
         context: ReplacementContext,
-    ) -> Optional[DeleteGroupsReplacement]:
+    ) -> DeleteGroupsReplacement | None:
         group_ids = message.data["group_ids"]
         if not group_ids:
             return None
@@ -415,7 +400,7 @@ class DeleteGroupsReplacement(Replacement):
     def get_project_id(self) -> int:
         return self.project_id
 
-    def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
+    def get_query_time_flags(self) -> QueryTimeFlags | None:
         return ExcludeGroups(group_ids=self.group_ids)
 
     @classmethod
@@ -434,18 +419,16 @@ class DeleteGroupsReplacement(Replacement):
             AND NOT deleted
         """
 
-    def get_count_query(self, table_name: str) -> Optional[str]:
+    def get_count_query(self, table_name: str) -> str | None:
         return f"""\
             SELECT count()
             FROM {table_name} FINAL
             {self._where_clause}
         """
 
-    def get_insert_query(self, table_name: str) -> Optional[str]:
+    def get_insert_query(self, table_name: str) -> str | None:
         required_columns = ", ".join(self.required_columns)
-        select_columns = ", ".join(
-            map(lambda i: i if i != "deleted" else "1", self.required_columns)
-        )
+        select_columns = ", ".join(i if i != "deleted" else "1" for i in self.required_columns)
         return f"""\
             INSERT INTO {table_name} ({required_columns})
             SELECT {select_columns}
@@ -457,10 +440,10 @@ class DeleteGroupsReplacement(Replacement):
 @dataclass
 class TombstoneEventsReplacement(Replacement):
     event_ids: Sequence[str]
-    old_primary_hash: Optional[str]
+    old_primary_hash: str | None
     project_id: int
-    from_timestamp: Optional[str]
-    to_timestamp: Optional[str]
+    from_timestamp: str | None
+    to_timestamp: str | None
 
     required_columns: Sequence[str]
 
@@ -469,7 +452,7 @@ class TombstoneEventsReplacement(Replacement):
         cls,
         message: ReplacementMessage[TombstoneEventsMessageBody],
         context: ReplacementContext,
-    ) -> Optional[TombstoneEventsReplacement]:
+    ) -> TombstoneEventsReplacement | None:
         event_ids = message.data["event_ids"]
         if not event_ids:
             return None
@@ -493,24 +476,22 @@ class TombstoneEventsReplacement(Replacement):
         )
 
         if self.old_primary_hash:
-            query_args["old_primary_hash"] = "'%s'" % (str(uuid.UUID(self.old_primary_hash)),)
+            query_args["old_primary_hash"] = f"'{str(uuid.UUID(self.old_primary_hash))}'"
 
             prewhere.append("primary_hash = %(old_primary_hash)s")
 
         return f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}" % query_args
 
-    def get_count_query(self, table_name: str) -> Optional[str]:
+    def get_count_query(self, table_name: str) -> str | None:
         return f"""\
             SELECT count()
             FROM {table_name} FINAL
             {self._where_clause}
         """
 
-    def get_insert_query(self, table_name: str) -> Optional[str]:
+    def get_insert_query(self, table_name: str) -> str | None:
         required_columns = ", ".join(self.required_columns)
-        select_columns = ", ".join(
-            map(lambda i: i if i != "deleted" else "1", self.required_columns)
-        )
+        select_columns = ", ".join(i if i != "deleted" else "1" for i in self.required_columns)
 
         return f"""\
             INSERT INTO {table_name} ({required_columns})
@@ -519,7 +500,7 @@ class TombstoneEventsReplacement(Replacement):
             {self._where_clause}
         """
 
-    def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
+    def get_query_time_flags(self) -> QueryTimeFlags | None:
         return None
 
     def get_project_id(self) -> int:
@@ -556,7 +537,7 @@ class ExcludeGroupsReplacement(Replacement):
         cls,
         message: ReplacementMessage[ExcludeGroupsMessageBody],
         context: ReplacementContext,
-    ) -> Optional[ExcludeGroupsReplacement]:
+    ) -> ExcludeGroupsReplacement | None:
         if not message.data["group_ids"]:
             return None
 
@@ -568,21 +549,21 @@ class ExcludeGroupsReplacement(Replacement):
     def get_project_id(self) -> int:
         return self.project_id
 
-    def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
+    def get_query_time_flags(self) -> QueryTimeFlags | None:
         return ExcludeGroups(group_ids=self.group_ids)
 
     @classmethod
     def get_replacement_type(cls) -> ReplacementType:
         return ReplacementType.EXCLUDE_GROUPS
 
-    def get_insert_query(self, table_name: str) -> Optional[str]:
+    def get_insert_query(self, table_name: str) -> str | None:
         return None
 
-    def get_count_query(self, table_name: str) -> Optional[str]:
+    def get_count_query(self, table_name: str) -> str | None:
         return None
 
 
-SEEN_MERGE_TXN_CACHE: Deque[str] = deque(maxlen=100)
+SEEN_MERGE_TXN_CACHE: deque[str] = deque(maxlen=100)
 
 
 @dataclass
@@ -612,7 +593,7 @@ class MergeReplacement(Replacement):
         cls,
         message: ReplacementMessage[EndMergeMessageBody],
         context: ReplacementContext,
-    ) -> Optional[MergeReplacement]:
+    ) -> MergeReplacement | None:
         project_id = message.data["project_id"]
         previous_group_ids = message.data["previous_group_ids"]
         if not previous_group_ids:
@@ -632,8 +613,7 @@ class MergeReplacement(Replacement):
                     extra={"project_id": project_id},
                 )
                 return None
-            else:
-                SEEN_MERGE_TXN_CACHE.append(txn)
+            SEEN_MERGE_TXN_CACHE.append(txn)
 
         # new_group_first_seen was added to the message schema; keep this check
         # for backwards compatibility.
@@ -666,14 +646,14 @@ class MergeReplacement(Replacement):
             AND NOT deleted
         """
 
-    def get_count_query(self, table_name: str) -> Optional[str]:
+    def get_count_query(self, table_name: str) -> str | None:
         return f"""\
             SELECT count()
             FROM {table_name} FINAL
             {self._where_clause}
         """
 
-    def get_insert_query(self, table_name: str) -> Optional[str]:
+    def get_insert_query(self, table_name: str) -> str | None:
         all_column_names = [c.escaped for c in self.all_columns]
         all_columns = ", ".join(all_column_names)
         replacement_columns = {"group_id": str(self.new_group_id)}
@@ -682,13 +662,7 @@ class MergeReplacement(Replacement):
             group_first_seen_str = self.new_group_first_seen.strftime(DATETIME_FORMAT)
             replacement_columns["group_first_seen"] = f"CAST('{group_first_seen_str}' AS DateTime)"
 
-        select_columns = ", ".join(
-            map(
-                # Get i from replacement_columns; default to i if no replacement.
-                lambda i: replacement_columns.get(i, i),
-                all_column_names,
-            )
-        )
+        select_columns = ", ".join(replacement_columns.get(i, i) for i in all_column_names)
         return f"""\
             INSERT INTO {table_name} ({all_columns})
             SELECT {select_columns}
@@ -722,7 +696,7 @@ class UnmergeGroupsReplacement(Replacement):
         cls,
         message: ReplacementMessage[EndUnmergeMessageBody],
         context: ReplacementContext,
-    ) -> Optional["Replacement"]:
+    ) -> Replacement | None:
         hashes = message.data["hashes"]
         if not hashes:
             return None
@@ -744,7 +718,7 @@ class UnmergeGroupsReplacement(Replacement):
     def get_project_id(self) -> int:
         return self.project_id
 
-    def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
+    def get_query_time_flags(self) -> QueryTimeFlags | None:
         return NeedsFinal()
 
     @classmethod
@@ -754,9 +728,9 @@ class UnmergeGroupsReplacement(Replacement):
     @cached_property
     def _where_clause(self) -> str:
         if self.state_name == ReplacerState.ERRORS:
-            hashes = ", ".join(["'%s'" % str(uuid.UUID(_hashify(h))) for h in self.hashes])
+            hashes = ", ".join([f"'{str(uuid.UUID(_hashify(h)))}'" for h in self.hashes])
         else:
-            hashes = ", ".join("'%s'" % _hashify(h) for h in self.hashes)
+            hashes = ", ".join(f"'{_hashify(h)}'" for h in self.hashes)
 
         timestamp = self.timestamp.strftime(DATETIME_FORMAT)
 
@@ -768,20 +742,17 @@ class UnmergeGroupsReplacement(Replacement):
             AND NOT deleted
         """
 
-    def get_count_query(self, table_name: str) -> Optional[str]:
+    def get_count_query(self, table_name: str) -> str | None:
         return f"""\
             SELECT count()
             FROM {table_name} FINAL
             {self._where_clause}
         """
 
-    def get_insert_query(self, table_name: str) -> Optional[str]:
+    def get_insert_query(self, table_name: str) -> str | None:
         all_column_names = [c.escaped for c in self.all_columns]
         select_columns = ", ".join(
-            map(
-                lambda i: i if i != "group_id" else str(self.new_group_id),
-                all_column_names,
-            )
+            i if i != "group_id" else str(self.new_group_id) for i in all_column_names
         )
 
         all_columns = ", ".join(all_column_names)
@@ -797,14 +768,11 @@ class UnmergeGroupsReplacement(Replacement):
 def _convert_hash(hash: str, state_name: ReplacerState, convert_types: bool = False) -> str:
     if state_name == ReplacerState.ERRORS:
         if convert_types:
-            return "toUUID('%s')" % str(uuid.UUID(_hashify(hash)))
-        else:
-            return "'%s'" % str(uuid.UUID(_hashify(hash)))
-    else:
-        if convert_types:
-            return "toFixedString('%s', 32)" % _hashify(hash)
-        else:
-            return "'%s'" % _hashify(hash)
+            return f"toUUID('{str(uuid.UUID(_hashify(hash)))}')"
+        return f"'{str(uuid.UUID(_hashify(hash)))}'"
+    if convert_types:
+        return f"toFixedString('{_hashify(hash)}', 32)"
+    return f"'{_hashify(hash)}'"
 
 
 @dataclass
@@ -822,7 +790,7 @@ class DeleteTagReplacement(Replacement):
         cls,
         message: ReplacementMessage[EndDeleteTagMessageBody],
         context: ReplacementContext,
-    ) -> Optional[DeleteTagReplacement]:
+    ) -> DeleteTagReplacement | None:
         tag = message.data["tag"]
         if not tag:
             return None
@@ -870,20 +838,18 @@ class DeleteTagReplacement(Replacement):
                     select_columns.append("''")
             elif col.flattened == "tags.key":
                 select_columns.append(
-                    "arrayFilter(x -> (indexOf(`tags.key`, x) != indexOf(`tags.key`, %s)), `tags.key`)"
-                    % escape_string(self.tag)
+                    f"arrayFilter(x -> (indexOf(`tags.key`, x) != indexOf(`tags.key`, {escape_string(self.tag)})), `tags.key`)"
                 )
             elif col.flattened == "tags.value":
                 select_columns.append(
-                    "arrayMap(x -> arrayElement(`tags.value`, x), arrayFilter(x -> x != indexOf(`tags.key`, %s), arrayEnumerate(`tags.value`)))"
-                    % escape_string(self.tag)
+                    f"arrayMap(x -> arrayElement(`tags.value`, x), arrayFilter(x -> x != indexOf(`tags.key`, {escape_string(self.tag)}), arrayEnumerate(`tags.value`)))"
                 )
             else:
                 select_columns.append(col.escaped)
 
         return select_columns
 
-    def get_insert_query(self, table_name: str) -> Optional[str]:
+    def get_insert_query(self, table_name: str) -> str | None:
         all_columns = ", ".join(col.escaped for col in self.all_columns)
         select_columns = ", ".join(self._select_columns)
 
@@ -894,7 +860,7 @@ class DeleteTagReplacement(Replacement):
             {self._where_clause}
         """
 
-    def get_count_query(self, table_name: str) -> Optional[str]:
+    def get_count_query(self, table_name: str) -> str | None:
         return f"""\
             SELECT count()
             FROM {table_name} FINAL
@@ -912,10 +878,10 @@ class DeleteTagReplacement(Replacement):
         return ReplacementType.END_DELETE_TAG
 
 
-_REPLACEMENT_BY_TYPE: Mapping[ReplacementType, Type[Replacement]] = dict(
-    (cls.get_replacement_type(), cls)
+_REPLACEMENT_BY_TYPE: Mapping[ReplacementType, type[Replacement]] = {
+    cls.get_replacement_type(): cls
     for cls in cast(
-        Sequence[Type[Replacement]],
+        Sequence[type[Replacement]],
         [
             DeleteGroupsReplacement,
             MergeReplacement,
@@ -926,4 +892,4 @@ _REPLACEMENT_BY_TYPE: Mapping[ReplacementType, Type[Replacement]] = dict(
             ExcludeGroupsReplacement,
         ],
     )
-)
+}

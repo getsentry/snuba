@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import MutableMapping, Sequence
 from dataclasses import dataclass, field, replace
-from typing import MutableMapping, Sequence
 
 from snuba.clickhouse.query import Expression
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator

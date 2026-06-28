@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
-from typing import Any, Sequence, Tuple, Type
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -50,7 +51,7 @@ def admin_api() -> FlaskClient:
 
 
 @pytest.fixture(scope="session")
-def rpc_test_setup() -> Tuple[Type[Any], Type[RPCEndpoint[Any, TimeSeriesResponse]]]:
+def rpc_test_setup() -> tuple[type[Any], type[RPCEndpoint[Any, TimeSeriesResponse]]]:
     class TestRPC(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
         @classmethod
         def version(cls) -> str:
@@ -240,6 +241,36 @@ def test_system_query(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
+def test_run_copy_table_query_invalid_node_returns_400(admin_api: FlaskClient) -> None:
+    """
+    Regression for EAP-488 follow-up: the clusterless connection helper now
+    raises InvalidNodeError for an attacker-supplied host, and the endpoint
+    must surface that as a 400 (like /run_clickhouse_system_query) rather
+    than letting it bubble into a 500.
+    """
+    from snuba.admin.clickhouse.common import InvalidNodeError
+
+    with mock.patch(
+        "snuba.admin.views.copy_tables",
+        side_effect=InvalidNodeError("host attacker.example.com not in cluster"),
+    ):
+        response = admin_api.post(
+            "/run_copy_table_query",
+            headers={"Content-Type": "application/json"},
+            data=json.dumps(
+                {
+                    "storage": "errors",
+                    "source_host": "attacker.example.com",
+                }
+            ),
+        )
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert data["error"]["type"] == "request"
+    assert "attacker.example.com" in data["error"]["message"]
+
+
+@pytest.mark.redis_db
 def test_predefined_system_queries(admin_api: FlaskClient) -> None:
     response = admin_api.get(
         "/clickhouse_queries",
@@ -307,7 +338,7 @@ def test_query_trace_bad_query(admin_api: FlaskClient) -> None:
         "Exception: Unknown expression or function identifier" in data["error"]["message"]
         or "Exception: Missing columns" in data["error"]["message"]
     )
-    assert "clickhouse" == data["error"]["type"]
+    assert data["error"]["type"] == "clickhouse"
 
 
 @pytest.mark.redis_db
@@ -322,7 +353,7 @@ def test_query_trace_invalid_query(admin_api: FlaskClient) -> None:
     assert response.status_code == 400
     data = json.loads(response.data)
     assert "; is not allowed in the query" in data["error"]["message"]
-    assert "validation" == data["error"]["type"]
+    assert data["error"]["type"] == "validation"
 
 
 @pytest.mark.redis_db
@@ -510,7 +541,19 @@ def test_get_routing_strategy_configs(admin_api: FlaskClient) -> None:
         "value": 50,
         "params": {},
     } in strategy_data["configurations"]
-    assert strategy_data["optional_config_definitions"] == []
+    assert {
+        "name": "organization_max_threads_override",
+        "type": "int",
+        "default": -1,
+        "description": (
+            "Per-organization_id override for the ClickHouse max_threads setting. "
+            "Replaces any value set by allocation policies or the routing strategy, "
+            "including raising it above the policy-derived value. Default -1 means "
+            "no override; note that 0 is a legitimate value (ClickHouse interprets "
+            "max_threads=0 as 'use all available physical cores')."
+        ),
+        "params": [{"name": "organization_id", "type": "int"}],
+    } in strategy_data["optional_config_definitions"]
 
     # Check policies data
     assert len(strategy_data["policies_data"]) == 2
@@ -882,7 +925,7 @@ def test_set_allocation_policy_config_for_strategy(admin_api: FlaskClient) -> No
         nonlocal auditlog_records
         auditlog_records.append((user, action, data, notify))
 
-    def mock_get_from_name(strategy_name: str) -> Type[BaseRoutingStrategy]:
+    def mock_get_from_name(strategy_name: str) -> type[BaseRoutingStrategy]:
         return FakeRoutingStrategy
 
     with (
@@ -981,7 +1024,7 @@ def test_prod_snql_query_invalid_dataset(admin_api: FlaskClient) -> None:
     response = admin_api.post(
         "/production_snql_query", data=json.dumps({"dataset": "", "query": ""})
     )
-    assert response.status_code == 400
+    assert response.status_code == 404
     data = json.loads(response.data)
     assert data["error"]["message"] == "dataset '' does not exist"
 
@@ -999,7 +1042,7 @@ def test_prod_snql_query_invalid_query(admin_api: FlaskClient) -> None:
 @pytest.mark.redis_db
 @pytest.mark.events_db
 def test_force_overwrite(admin_api: FlaskClient) -> None:
-    migration_id = "0011_add_timestamp_ms"
+    migration_id = "0012_add_group_id_bloom_filter_index"
     migrations = json.loads(admin_api.get("/migrations/search_issues/list").data)
     downgraded_migration = [m for m in migrations if m.get("migration_id") == migration_id][0]
     assert downgraded_migration["status"] == "completed"
@@ -1079,7 +1122,7 @@ def test_prod_mql_query_invalid_dataset(admin_api: FlaskClient) -> None:
         "/production_mql_query",
         data=json.dumps({"dataset": "", "query": "", "mql_context": {}}),
     )
-    assert response.status_code == 400
+    assert response.status_code == 404
     data = json.loads(response.data)
     assert data["error"]["message"] == "dataset '' does not exist"
 
@@ -1253,7 +1296,7 @@ def test_clickhouse_node_info(
     response_data = json.loads(response.data)
     assert (
         len(response_data) > 0
-        and {k: response_data[0][k] for k in expected_result.keys()} == expected_result
+        and {k: response_data[0][k] for k in expected_result} == expected_result
     )
 
 
@@ -1323,7 +1366,7 @@ def test_clickhouse_system_settings(
 @pytest.mark.clickhouse_db
 def test_execute_rpc_endpoint_success(
     admin_api: FlaskClient,
-    rpc_test_setup: Tuple[Type[Any], Type[RPCEndpoint[Any, TimeSeriesResponse]]],
+    rpc_test_setup: tuple[type[Any], type[RPCEndpoint[Any, TimeSeriesResponse]]],
 ) -> None:
     MyRequest, TestRPC = rpc_test_setup
 
@@ -1379,7 +1422,7 @@ def test_execute_rpc_endpoint_unknown_endpoint(admin_api: FlaskClient) -> None:
 @pytest.mark.redis_db
 def test_execute_rpc_endpoint_invalid_payload(
     admin_api: FlaskClient,
-    rpc_test_setup: Tuple[Type[Any], Type[RPCEndpoint[Any, TimeSeriesResponse]]],
+    rpc_test_setup: tuple[type[Any], type[RPCEndpoint[Any, TimeSeriesResponse]]],
 ) -> None:
     MyRequest, TestRPC = rpc_test_setup
 
@@ -1396,7 +1439,7 @@ def test_execute_rpc_endpoint_invalid_payload(
 @pytest.mark.redis_db
 def test_execute_rpc_endpoint_org_id_not_allowed(
     admin_api: FlaskClient,
-    rpc_test_setup: Tuple[Type[Any], Type[RPCEndpoint[Any, TimeSeriesResponse]]],
+    rpc_test_setup: tuple[type[Any], type[RPCEndpoint[Any, TimeSeriesResponse]]],
 ) -> None:
     MyRequest, TestRPC = rpc_test_setup
 
@@ -1437,5 +1480,5 @@ def test_list_rpc_endpoints(admin_api: FlaskClient) -> None:
         assert isinstance(endpoint[1], str)
 
     registered_endpoints = {tuple(name.split("__")) for name in RPCEndpoint.all_names()}
-    response_endpoints = set(tuple(endpoint) for endpoint in endpoint_names)
+    response_endpoints = {tuple(endpoint) for endpoint in endpoint_names}
     assert response_endpoints == registered_endpoints

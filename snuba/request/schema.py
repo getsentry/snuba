@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import itertools
-from typing import Any, Mapping, MutableMapping, NamedTuple, Type
+from collections.abc import Mapping, MutableMapping
+from typing import Any, NamedTuple
 
 import jsonschema
 
@@ -78,7 +79,7 @@ class RequestSchema:
     @classmethod
     def build(
         cls,
-        settings_class: Type[QuerySettings],
+        settings_class: type[QuerySettings],
         is_mql: bool = False,
         is_delete: bool = False,
     ) -> RequestSchema:
@@ -96,17 +97,17 @@ class RequestSchema:
             raise JsonSchemaValidationException(str(error)) from error
 
         query_body = {
-            key: value.get(key) for key in self.__query_schema["properties"].keys() if key in value
+            key: value.get(key) for key in self.__query_schema["properties"] if key in value
         }
         query_settings = {
             key: value.get(key)
-            for key in self.__query_settings_schema["properties"].keys()
+            for key in self.__query_settings_schema["properties"]
             if key in value
         }
 
         attribution_info = {
             key: value.get(key)
-            for key in self.__attribution_info_schema["properties"].keys()
+            for key in self.__attribution_info_schema["properties"]
             if key in value
         }
 
@@ -125,14 +126,14 @@ class RequestSchema:
         if "default" in schema:
             default = schema["default"]
             return default() if callable(default) else default
-        elif typ == "object":
+        if typ == "object":
             return {
                 prop: self.__generate_template_impl(subschema)
                 for prop, subschema in schema.get("properties", {}).items()
             }
-        elif typ == "array":
+        if typ == "array":
             return []
-        elif typ == "string":
+        if typ == "string":
             return ""
         return None
 
@@ -154,7 +155,7 @@ ATTRIBUTION_INFO_SCHEMA = {
 }
 
 
-SETTINGS_SCHEMAS: Mapping[Type[QuerySettings], Schema] = {
+SETTINGS_SCHEMAS: Mapping[type[QuerySettings], Schema] = {
     HTTPQuerySettings: {
         "type": "object",
         "properties": {

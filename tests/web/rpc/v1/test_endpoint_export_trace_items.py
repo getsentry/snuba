@@ -1,7 +1,7 @@
 import re
 import uuid
 from collections import namedtuple
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -11,7 +11,7 @@ from sentry_protos.snuba.v1.endpoint_trace_items_pb2 import ExportTraceItemsRequ
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_pb2 import TraceItem
 
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web import QueryResult
 from snuba.web.query import run_query
@@ -76,14 +76,17 @@ def _assert_attributes_keys(trace_items: list[TraceItem]) -> None:
                 "sentry._internal.received_at",
             }
         )
+        # Past the cutoff every array attribute is read from the typed attributes_array_*
+        # map columns, so arbitrary array attributes (e.g. "i_am_an_array") are exported
+        # too — no longer limited to the attributes_array JSON-column allowlist.
         assert actual_keys == expected_keys
 
 
 @pytest.fixture(autouse=False)
 def setup_teardown(eap: None, redis_db: None) -> None:
-    items_storage = get_storage(StorageKey("eap_items"))
-    write_raw_unprocessed_events(items_storage, _SPANS)  # type: ignore
-    write_raw_unprocessed_events(items_storage, _LOGS)  # type: ignore
+    items_storage = get_writable_storage(StorageKey("eap_items"))
+    write_raw_unprocessed_events(items_storage, _SPANS)
+    write_raw_unprocessed_events(items_storage, _LOGS)
 
 
 @pytest.mark.eap
@@ -150,8 +153,8 @@ class TestExportTraceItems(BaseApiTest):
             )
             for _ in range(num_items)
         ]
-        items_storage = get_storage(StorageKey("eap_items"))
-        write_raw_unprocessed_events(items_storage, items_data)  # type: ignore
+        items_storage = get_writable_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(items_storage, items_data)
 
         message = ExportTraceItemsRequest(
             meta=RequestMeta(
@@ -241,7 +244,7 @@ class TestExportTraceItems(BaseApiTest):
         routed_start_sec = start_sec + 5
 
         write_raw_unprocessed_events(
-            get_storage(StorageKey("eap_items")),  # type: ignore[arg-type]
+            get_writable_storage(StorageKey("eap_items")),
             [
                 gen_item_message(
                     start_timestamp=BASE_TIME + timedelta(seconds=i),
@@ -289,9 +292,7 @@ class TestExportTraceItems(BaseApiTest):
 
                 def _to_sec(s: str) -> int:
                     return int(
-                        datetime.strptime(s, "%Y-%m-%d %H:%M:%S")
-                        .replace(tzinfo=timezone.utc)
-                        .timestamp()
+                        datetime.strptime(s, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC).timestamp()
                     )
 
                 sql_queried_windows.append((_to_sec(start_m.group(1)), _to_sec(end_m.group(1))))

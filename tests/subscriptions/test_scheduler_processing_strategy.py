@@ -1,8 +1,8 @@
 import uuid
 from collections import deque
+from collections.abc import Sequence
 from concurrent.futures import Future
 from datetime import datetime, timedelta
-from typing import Optional, Sequence
 from unittest import mock
 
 import pytest
@@ -206,7 +206,7 @@ def test_tick_buffer_wait_slowest() -> None:
 
 
 def make_message_for_next_step(
-    message: Message[Tick], offset_to_commit: Optional[int]
+    message: Message[Tick], offset_to_commit: int | None
 ) -> Message[CommittableTick]:
     return message.replace(CommittableTick(message.payload, offset_to_commit))
 

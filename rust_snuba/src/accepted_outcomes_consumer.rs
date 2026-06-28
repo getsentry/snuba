@@ -20,7 +20,6 @@ use crate::config;
 use crate::logging::{setup_logging, setup_sentry};
 use crate::metrics::global_tags::set_global_tag;
 use crate::metrics::statsd::StatsDBackend;
-use crate::runtime_config::get_str_config;
 use crate::strategies::accepted_outcomes::aggregator::OutcomesAggregator;
 use crate::strategies::accepted_outcomes::commit_outcomes::CommitOutcomes;
 use crate::strategies::accepted_outcomes::produce_outcome::ProduceAcceptedOutcome;
@@ -34,7 +33,6 @@ pub struct AcceptedOutcomesStrategyFactory {
     produce_topic: Topic,
     producer: Arc<KafkaProducer>,
     concurrency: ConcurrencyConfig,
-    skip_produce: bool,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for AcceptedOutcomesStrategyFactory {
@@ -51,7 +49,6 @@ impl ProcessingStrategyFactory<KafkaPayload> for AcceptedOutcomesStrategyFactory
             self.producer.clone(),
             self.produce_topic,
             &self.concurrency,
-            self.skip_produce,
         );
         let commit = CommitOutcomes::new(produce, Some(self.commit_frequency));
         Box::new(OutcomesAggregator::new(
@@ -203,12 +200,6 @@ pub fn accepted_outcomes_consumer_impl(
         KafkaConfig::new_producer_config(vec![], Some(topic_config.broker_config));
     let producer = Arc::new(KafkaProducer::new(producer_config));
     let produce_topic = Topic::new(&topic_config.physical_topic_name);
-    // Default to skipping produce for now
-    let skip_produce = get_str_config("accepted_outcomes_skip_produce")
-        .ok()
-        .flatten()
-        .unwrap_or("1".to_string())
-        == "1";
 
     let factory = AcceptedOutcomesStrategyFactory {
         bucket_interval,
@@ -218,7 +209,6 @@ pub fn accepted_outcomes_consumer_impl(
         produce_topic,
         producer,
         concurrency: ConcurrencyConfig::new(concurrency),
-        skip_produce,
     };
     let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);
 

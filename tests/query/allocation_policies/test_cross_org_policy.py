@@ -191,4 +191,7 @@ class TestCrossOrgQueryAllocationPolicy:
             query_id="2",
         )
         assert not allowance.can_run
-        assert allowance.explanation["cross_org_query"] == "This referrer is not registered for the current storage generic_metrics_distributions, if you want to increase its limits, register it in the yaml of the CrossOrgQueryAllocationPolicy"  # type: ignore
+        assert (
+            allowance.explanation["cross_org_query"]
+            == "This referrer is not registered for the current storage generic_metrics_distributions, if you want to increase its limits, register it in the yaml of the CrossOrgQueryAllocationPolicy"
+        )

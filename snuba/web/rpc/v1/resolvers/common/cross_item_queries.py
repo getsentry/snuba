@@ -1,7 +1,7 @@
 import uuid
 
 from google.protobuf.json_format import MessageToDict
-from proto import Message  # type: ignore
+from proto import Message  # type: ignore[import-untyped]
 from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import GetTracesRequest
 from sentry_protos.snuba.v1.request_common_pb2 import (
     RequestMeta,
@@ -30,6 +30,7 @@ from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
+    use_array_map_columns,
 )
 
 # 50 million trace ids * 16 bytes per id = a limit of 1gigabyte memory usage per cross item query
@@ -65,9 +66,15 @@ def get_trace_ids_sql_for_cross_item_query(
     Returns:
         tuple: (sql_string, query_result) where query_result contains metadata like sampling_tier
     """
+    # filter_expressions feed the WHERE or_cond (keep the prepared IN-sets for
+    # partition/primary-key pruning); having_filter_expressions feed the HAVING countIf
+    # (a SELECT-clause aggregate), where the membership must be has(array, x) so its
+    # result-block column name is stable across mixed-version ClickHouse nodes
+    # (membership_as_has, see common._in_or_has).
     filter_expressions = []
+    having_filter_expressions = []
     if trace_filters:
-        converted_trace_filters = [trace_filter for trace_filter in trace_filters]
+        converted_trace_filters = list(trace_filters)
         if isinstance(trace_filters[0], GetTracesRequest.TraceFilter):
             converted_trace_filters = [
                 TraceItemFilterWithType(
@@ -77,19 +84,32 @@ def get_trace_ids_sql_for_cross_item_query(
             ]
 
         for trace_filter in converted_trace_filters:
+            item_type_cond = f.equals(column("item_type"), trace_filter.item_type)
             filter_expressions.append(
                 and_cond(
-                    f.equals(column("item_type"), trace_filter.item_type),
+                    item_type_cond,
                     trace_item_filters_to_expression(
                         trace_filter.filter,
                         attribute_key_to_expression,
+                        use_array_map_columns=use_array_map_columns(request_meta),
+                    ),
+                )
+            )
+            having_filter_expressions.append(
+                and_cond(
+                    item_type_cond,
+                    trace_item_filters_to_expression(
+                        trace_filter.filter,
+                        attribute_key_to_expression,
+                        membership_as_has=True,
+                        use_array_map_columns=use_array_map_columns(request_meta),
                     ),
                 )
             )
 
     if len(filter_expressions) > 1:
         trace_item_filters_and_expression = and_cond(
-            *[f.greater(f.countIf(expression), 0) for expression in filter_expressions]
+            *[f.greater(f.countIf(expression), 0) for expression in having_filter_expressions]
         )
         trace_item_filters_or_expression = or_cond(*filter_expressions)
     elif len(filter_expressions) == 1:

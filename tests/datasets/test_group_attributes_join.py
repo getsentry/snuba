@@ -1,7 +1,8 @@
 import uuid
-from datetime import datetime, timedelta, timezone
+from collections.abc import Mapping
+from datetime import UTC, datetime, timedelta
 from functools import partial
-from typing import Any, Dict, Mapping, Union
+from typing import Any
 
 import pytest
 import simplejson as json
@@ -46,9 +47,7 @@ def write_group_attribute_row(row: Mapping[str, Any]) -> None:
 
 def _convert_clickhouse_datetime_str(str: str) -> str:
     return (
-        datetime.strptime(str, "%Y-%m-%d %H:%M:%S")
-        .replace(microsecond=0, tzinfo=timezone.utc)
-        .isoformat()
+        datetime.strptime(str, "%Y-%m-%d %H:%M:%S").replace(microsecond=0, tzinfo=UTC).isoformat()
     )
 
 
@@ -62,16 +61,16 @@ class TestEventsGroupAttributes(BaseApiTest):
         self.app.post = partial(self.app.post, headers={"referer": "test"})  # type: ignore[method-assign]
         self.event = get_raw_event()
         self.project_id = self.event["project_id"]
-        self.base_time = datetime.utcnow().replace(
-            second=0, microsecond=0, tzinfo=timezone.utc
-        ) - timedelta(minutes=90)
+        self.base_time = datetime.utcnow().replace(second=0, microsecond=0, tzinfo=UTC) - timedelta(
+            minutes=90
+        )
         self.next_time = self.base_time + timedelta(minutes=95)
 
         self.events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
         assert self.events_storage is not None
         write_unprocessed_events(self.events_storage, [self.event])
 
-        self.initial_group_attributes: Dict[str, Any] = {
+        self.initial_group_attributes: dict[str, Any] = {
             "deleted": False,
             "project_id": self.project_id,
             "group_id": self.event["group_id"],
@@ -360,9 +359,9 @@ class TestSearchIssuesGroupAttributes(BaseApiTest):
     def setup_fixture(self, events_db: Any, redis_db: Any) -> None:
         self.app.post = partial(self.app.post, headers={"referer": "test"})  # type: ignore[method-assign]
 
-        self.base_time = datetime.utcnow().replace(
-            second=0, microsecond=0, tzinfo=timezone.utc
-        ) - timedelta(minutes=90)
+        self.base_time = datetime.utcnow().replace(second=0, microsecond=0, tzinfo=UTC) - timedelta(
+            minutes=90
+        )
         self.next_time = self.base_time + timedelta(minutes=95)
         self.occurrence = self.get_search_issue_occurrence(self.base_time)
         self.project_id = self.occurrence["project_id"]
@@ -371,7 +370,7 @@ class TestSearchIssuesGroupAttributes(BaseApiTest):
         assert self.search_issues_storage is not None
         write_unprocessed_events(self.search_issues_storage, [self.occurrence])
 
-        self.initial_group_attributes: Dict[str, Any] = {
+        self.initial_group_attributes: dict[str, Any] = {
             "deleted": False,
             "project_id": self.project_id,
             "group_id": self.occurrence["group_id"],
@@ -447,7 +446,7 @@ class TestSearchIssuesGroupAttributes(BaseApiTest):
         }
 
         def assert_joined_final(
-            clickhouse_query: Union[ClickhouseQuery, CompositeQuery[Table]],
+            clickhouse_query: ClickhouseQuery | CompositeQuery[Table],
             query_settings: QuerySettings,
             reader: Reader,
             cluster_name: str,
