@@ -66,3 +66,28 @@ def test_create_metrics_uses_udp_when_flag_disabled(dogstatsd: MagicMock) -> Non
         namespace="snuba.test",
         constant_tags=None,
     )
+
+
+@patch("datadog.DogStatsd")
+def test_create_metrics_uses_uds_without_host_or_port(dogstatsd: MagicMock) -> None:
+    # A UDS-only deployment (no UDP host/port configured) must still emit metrics
+    # over the socket, not silently fall back to the no-op DummyMetricsBackend.
+    with (
+        patch.multiple(
+            "snuba.settings",
+            TESTING=False,
+            DOGSTATSD_HOST=None,
+            DOGSTATSD_PORT=None,
+            DOGSTATSD_SOCKET_PATH="/var/run/dogstatsd.sock",
+        ),
+        patch("snuba.state.get_config", side_effect=_runtime_config("1")),
+    ):
+        backend = create_metrics("snuba.test")
+        assert isinstance(backend, SentryDatadogMetricsBackend)
+        backend.increment("snuba.test.metric")
+
+    dogstatsd.assert_called_once_with(
+        socket_path="/var/run/dogstatsd.sock",
+        namespace="snuba.test",
+        constant_tags=None,
+    )

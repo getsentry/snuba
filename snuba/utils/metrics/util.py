@@ -17,7 +17,8 @@ def create_metrics(
     sample_rates: Mapping[str, float] | None = None,
 ) -> MetricsBackend:
     """Create a DogStatsd object if DOGSTATSD_HOST and DOGSTATSD_PORT are defined,
-    with the specified prefix and tags. Return a DummyMetricsBackend otherwise.
+    or if Unix domain socket support is enabled via the ``use_dogstatsd_uds`` runtime
+    flag and ``DOGSTATSD_SOCKET_PATH``. Return a DummyMetricsBackend otherwise.
     Prefixes must start with `snuba.<category>`, for example: `snuba.processor`.
     """
     host: str | None = settings.DOGSTATSD_HOST
@@ -27,27 +28,37 @@ def create_metrics(
         from snuba.utils.metrics.backends.testing import TestingMetricsBackend
 
         return TestingMetricsBackend()
-    if host is None and port is None:
-        from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 
-        return DummyMetricsBackend()
-    if host is None or port is None:
-        raise ValueError(
-            f"DOGSTATSD_HOST and DOGSTATSD_PORT should both be None or not None. Found DOGSTATSD_HOST: {host}, DOGSTATSD_PORT: {port} instead."
-        )
+    from snuba import state
+
+    # UDS is an independent transport: when the runtime flag is enabled and a socket
+    # path is configured it is used regardless of whether DOGSTATSD_HOST/PORT are set.
+    # This must be evaluated before the host/port guards below, otherwise a UDS-only
+    # deployment would fall through to DummyMetricsBackend and silently drop metrics.
+    use_uds = (
+        str(state.get_config("use_dogstatsd_uds", "0")) == "1"
+        and settings.DOGSTATSD_SOCKET_PATH is not None
+    )
+
+    if not use_uds:
+        if host is None and port is None:
+            from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
+
+            return DummyMetricsBackend()
+        if host is None or port is None:
+            raise ValueError(
+                f"DOGSTATSD_HOST and DOGSTATSD_PORT should both be None or not None. Found DOGSTATSD_HOST: {host}, DOGSTATSD_PORT: {port} instead."
+            )
 
     from datadog import DogStatsd  # type: ignore[attr-defined]  # datadog lacks explicit re-export
 
-    from snuba import state
     from snuba.utils.metrics.backends.datadog import DatadogMetricsBackend
     from snuba.utils.metrics.backends.dualwrite import SentryDatadogMetricsBackend
     from snuba.utils.metrics.backends.sentry import SentryMetricsBackend
 
     constant_tags = [f"{key}:{value}" for key, value in tags.items()] if tags is not None else None
 
-    use_uds = str(state.get_config("use_dogstatsd_uds", "0")) == "1"
-
-    if use_uds and settings.DOGSTATSD_SOCKET_PATH is not None:
+    if use_uds:
         return SentryDatadogMetricsBackend(
             DatadogMetricsBackend(
                 partial(
