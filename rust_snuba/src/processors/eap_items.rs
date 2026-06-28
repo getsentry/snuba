@@ -19,9 +19,10 @@ use crate::processors::utils::{
     record_invalid_timestamp_metric, SilencedDLQMessage,
 };
 use crate::runtime_config::get_str_config;
-use crate::strategies::clickhouse::rowbinary;
 use crate::types::CogsData;
-use crate::types::{item_type_name, InsertBatch, ItemTypeMetrics, KafkaMessageMetadata};
+use crate::types::{
+    item_type_name, InsertBatch, ItemTypeMetrics, KafkaMessageMetadata, TypedInsertBatch,
+};
 
 /// Runtime config key prefix. Per-storage key
 /// `eap_items_dlq_grace_period_min:<storage_name>`: a non-negative integer
@@ -196,33 +197,38 @@ pub fn process_message(
     Ok(batch)
 }
 
-pub fn process_message_row_binary(
+/// Production RowBinary path: build the typed `EAPItemRow` and hand it
+/// downstream to the `clickhouse`-crate inserter sink, which serializes it
+/// itself (`write(&row)`) the moment it arrives and drops the wide struct,
+/// keeping only the inserter's byte buffer in memory. No bytes are encoded
+/// here — the crate owns RowBinary encoding + schema validation.
+pub fn process_message_eap_row(
     msg: KafkaPayload,
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
-) -> anyhow::Result<InsertBatch> {
+) -> anyhow::Result<TypedInsertBatch<EAPItemRow>> {
+    // Source proto length, used as the byte-size estimate for byte-based batch
+    // sizing (the sink also reports the exact encoded size after each flush).
+    let num_bytes = msg.payload().map(|p| p.len()).unwrap_or(0);
     let processed = process_eap_item(msg, config)?;
     if processed.should_skip {
-        return Ok(InsertBatch::skip());
+        return Ok(TypedInsertBatch::skip());
     }
     let row = EAPItemRow::try_from(processed.eap_item)?;
-
-    // Encode the row to RowBinary bytes inline so the wide typed struct (~80
-    // Vec<(String, _)> buckets) drops here instead of riding the pipeline to
-    // the writer step. The batch downstream sees only a compact Vec<u8>.
-    let mut encoded_rows = Vec::new();
-    rowbinary::serialize_into(&mut encoded_rows, &row)?;
-
-    let mut batch = InsertBatch::from_encoded_rows(encoded_rows, 1, processed.origin_timestamp);
-    batch.cogs_data = Some(processed.cogs_data);
-    batch.item_type_metrics = Some(processed.item_type_metrics);
-    Ok(batch)
+    Ok(TypedInsertBatch {
+        row: Some(row),
+        origin_timestamp: processed.origin_timestamp,
+        sentry_received_timestamp: None,
+        cogs_data: Some(processed.cogs_data),
+        item_type_metrics: Some(processed.item_type_metrics),
+        num_bytes,
+    })
 }
 
 /// Test-only: returns the typed `EAPItemRow` (plus the metadata fields the
 /// pipeline carries) without the bytes serialization step. Tests that
 /// inspect individual columns use this; the production path goes through
-/// `process_message_row_binary` and never holds the typed struct beyond
+/// `process_message_eap_row` and never holds the typed struct beyond
 /// `process_eap_item`.
 #[cfg(test)]
 pub(crate) struct EAPItemRowBatch {
@@ -545,15 +551,15 @@ impl AttributeMap {
 }
 
 seq_attrs! {
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, clickhouse::Row)]
 pub struct EAPItemRow {
     organization_id: u64,
     project_id: u64,
     item_type: u8,
     timestamp: u32,
-    #[serde(with = "crate::strategies::clickhouse::rowbinary::uuid")]
+    #[serde(with = "clickhouse::serde::uuid")]
     trace_id: Uuid,
-    #[serde(with = "crate::strategies::clickhouse::rowbinary::uuid")]
+    #[serde(with = "clickhouse::serde::uuid")]
     session_id: Uuid,
     ai_conversation_id: String,
     item_id: u128,
@@ -582,54 +588,6 @@ pub struct EAPItemRow {
     attributes_array_int: Vec<(String, Vec<i64>)>,
     attributes_array_float: Vec<(String, Vec<f64>)>,
     attributes_array_bool: Vec<(String, Vec<bool>)>,
-}
-}
-
-seq_attrs! {
-impl EAPItemRow {
-    /// Column names in struct (= wire) order. We MUST pass this list to
-    /// ClickHouse on insert (`INSERT INTO t (col1, col2, ...) FORMAT RowBinary`)
-    /// because the on-disk column order in `eap_items_1_local` differs from
-    /// the struct order:
-    ///
-    /// * `client_sample_rate` and `server_sample_rate` were added with
-    ///   identical `AFTER sampling_factor` in migration 0048, so the table
-    ///   ends up with the pair reversed (server before client).
-    /// * The struct interleaves `attributes_string_N, attributes_float_N` for
-    ///   each `N` (per the `seq_attrs!` expansion), while the initial table
-    ///   put all `attributes_string_*` first, then all `attributes_float_*`.
-    ///
-    /// Without an explicit column list, ClickHouse falls back to the table's
-    /// positional order and misreads bytes (the integration test hits a
-    /// `CANNOT_READ_ALL_DATA` deep inside the maps section).
-    pub(crate) const COLUMN_NAMES: &'static [&'static str] = &[
-        "organization_id",
-        "project_id",
-        "item_type",
-        "timestamp",
-        "trace_id",
-        "session_id",
-        "ai_conversation_id",
-        "item_id",
-        "indexed_name",
-        "sampling_weight",
-        "sampling_factor",
-        "client_sample_rate",
-        "server_sample_rate",
-        "retention_days",
-        "downsampled_retention_days",
-        "attributes_bool",
-        "attributes_int",
-        #(
-        concat!("attributes_string_", stringify!(N)),
-        concat!("attributes_float_", stringify!(N)),
-        )*
-        "attributes_array",
-        "attributes_array_string",
-        "attributes_array_int",
-        "attributes_array_float",
-        "attributes_array_bool",
-    ];
 }
 }
 
@@ -1097,7 +1055,9 @@ mod tests {
     /// adding/reordering fields on `EAPItemRow` also updates this list.
     #[test]
     fn test_column_names_match_struct_layout() {
-        let names = EAPItemRow::COLUMN_NAMES;
+        // Column names now come from the `clickhouse::Row` derive (declaration
+        // order). This still guards that field names/order match the schema.
+        let names = <EAPItemRow as clickhouse::Row>::COLUMN_NAMES;
         // 14 scalars (incl. session_id + ai_conversation_id) + indexed_name +
         // attributes_bool + attributes_int + 80 buckets + attributes_array +
         // 4 typed array maps
@@ -1606,7 +1566,7 @@ mod tests {
         assert!((row.sampling_factor - 0.125).abs() < 1e-6);
     }
 
-    /// Compares the output of process_message (JSON path) and process_message_row_binary
+    /// Compares the output of process_message (JSON path) and process_message_row_binary_typed
     /// (RowBinary path) to ensure both produce equivalent data for the same input.
     #[test]
     fn test_json_and_row_binary_produce_equivalent_output() {
@@ -1913,11 +1873,11 @@ mod tests {
     }
 
     /// End-to-end test of the production RowBinary path against a live
-    /// ClickHouse instance: process_message_row_binary produces bytes via the
-    /// vendored serializer, those bytes are POSTed verbatim with
-    /// `FORMAT RowBinary`, and the row is read back via `FORMAT JSON`. This
-    /// is the cross-boundary check that our wire format matches what
-    /// ClickHouse expects — pure unit tests can't catch that.
+    /// ClickHouse instance: `process_message_eap_row` produces a typed
+    /// `EAPItemRow`, the official clickhouse-crate `Inserter` serializes +
+    /// inserts it (RowBinaryWithNamesAndTypes + schema validation), and the row
+    /// is read back via `FORMAT JSON`. This is the cross-boundary check that our
+    /// types match the live schema — pure unit tests can't catch that.
     #[tokio::test]
     async fn test_row_binary_clickhouse_insert() {
         let host = std::env::var("CLICKHOUSE_HOST").unwrap_or("127.0.0.1".to_string());
@@ -1926,6 +1886,8 @@ mod tests {
             .parse()
             .unwrap();
         let database = std::env::var("CLICKHOUSE_DATABASE").unwrap_or("default".to_string());
+        let user = std::env::var("CLICKHOUSE_USER").unwrap_or("default".to_string());
+        let password = std::env::var("CLICKHOUSE_PASSWORD").unwrap_or_default();
         let base_url = format!("http://{host}:{http_port}");
 
         let http = reqwest::Client::new();
@@ -1975,35 +1937,29 @@ mod tests {
             timestamp: DateTime::from(SystemTime::now()),
         };
 
-        // Production path: encodes the row to RowBinary bytes inside the processor.
-        let batch = process_message_row_binary(payload, meta, &ProcessorConfig::default())
+        // Production path: build the typed row, then insert it through the
+        // official clickhouse-crate inserter. Exercises the real EAPItemRow →
+        // live-schema mapping (UUID, Map columns, DateTime, UInt128, the
+        // JSON attributes_array column, …). Validation is off (plain RowBinary
+        // + input_format_binary_read_json_as_string) — see build_client in
+        // inserter_sink.rs for why the JSON column requires this.
+        let batch = process_message_eap_row(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
-        assert_eq!(batch.rows.num_rows, 1);
+        let row = batch.row.expect("row should be present");
 
-        // Insert: POST the pre-encoded bytes with FORMAT RowBinary. We must
-        // pass the column list — the struct's wire order does NOT match the
-        // table's on-disk column order (see EAPItemRow::COLUMN_NAMES).
-        let insert_query = format!(
-            "INSERT INTO eap_items_1_local ({}) FORMAT RowBinary",
-            EAPItemRow::COLUMN_NAMES.join(", "),
-        );
-        let insert_resp = http
-            .post(&base_url)
-            .header("X-ClickHouse-Database", &database)
-            .query(&[
-                ("query", insert_query.as_str()),
-                ("input_format_binary_read_json_as_string", "1"),
-                ("insert_deduplicate", "0"),
-            ])
-            .body(batch.rows.encoded_rows.clone())
-            .send()
-            .await
-            .expect("Insert request failed to send");
-        assert!(
-            insert_resp.status().is_success(),
-            "Insert failed: {}",
-            insert_resp.text().await.unwrap_or_default()
-        );
+        let client = clickhouse::Client::default()
+            .with_url(base_url.as_str())
+            .with_user(user)
+            .with_password(password)
+            .with_database(database.clone())
+            .with_validation(false)
+            .with_setting("input_format_binary_read_json_as_string", "1");
+        let mut inserter = client
+            .inserter::<EAPItemRow>("eap_items_1_local")
+            .with_max_rows(1);
+        inserter.write(&row).await.expect("write row");
+        let quantities = inserter.end().await.expect("flush insert");
+        assert_eq!(quantities.rows, 1);
 
         // Read it back via FORMAT JSON. We use organization_id (primary key prefix)
         // for a deterministic lookup. ClickHouse's FORMAT JSON renders 64-bit

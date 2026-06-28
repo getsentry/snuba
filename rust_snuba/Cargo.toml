@@ -27,6 +27,15 @@ anyhow = { version = "1.0.69", features = ["backtrace"] }
 cadence = "1.0.0"
 chrono = { version = "0.4.26", features = ["serde"] }
 cityhash-rs = "1.0.1"
+clickhouse = { version = "0.15", default-features = false, features = [
+    "inserter",
+    "lz4",
+    "uuid",
+    # TLS for `secure: true` clusters (https URLs). native-tls matches the
+    # existing reqwest-based writer (OpenSSL + system roots), and openssl-sys is
+    # already pulled in by reqwest, so this adds no new system dependency.
+    "native-tls",
+] }
 ctrlc = { version = "3.2.5", features = ["termination"] }
 data-encoding = "2.5.0"
 futures = "0.3.21"
