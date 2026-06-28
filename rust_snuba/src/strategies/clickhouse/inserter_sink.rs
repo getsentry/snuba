@@ -117,29 +117,41 @@ impl Acc {
 }
 
 /// Push the accumulated window downstream as a ready flush, then reset the
-/// accumulator — the rows are now durable.
+/// accumulator — the rows are now durable. Returns `false` (after sending a
+/// `FlushOutcome::Err`) when the invariant below is violated; the caller MUST
+/// then stop the actor so the pipeline fail-stops instead of committing offsets
+/// for rows that may not be durable.
 ///
 /// Invariant: `rows` (the count actually flushed) must equal the retained
-/// window `acc.rows.len()`. We hold it because we `commit()` after every single
-/// `write()`, and the crate's flush ends the *entire* current INSERT (it never
-/// flushes a strict subset) — so a flush always covers exactly the retained
+/// window `acc.rows.len()`. It holds by construction today — we `commit()` after
+/// every single `write()`, the crate's `Quantities` is a *client-side* count of
+/// rows written (it is `pending.rows += 1` per `write()`, never a server ack
+/// subject to dedup/filtering), and a flush ends the *entire* current INSERT
+/// (never a strict subset) — so a flush always covers exactly the retained
 /// window, and emitting all of `acc.committable` only ever advances offsets for
-/// rows that are now durable. The assert guards against a future change (e.g.
-/// batching multiple writes before a commit) silently breaking that and
-/// committing offsets past not-yet-durable rows.
+/// rows that are now durable. We enforce it at runtime (not just
+/// `debug_assert!`, which compiles out of release builds) because a future
+/// change — e.g. batching multiple writes before a commit — could silently
+/// break it and commit offsets past not-yet-durable rows, losing data. On
+/// mismatch we fail the batch (it replays from the last committed offset)
+/// rather than risk that.
+#[must_use]
 fn emit_ready(
     out_tx: &mpsc::UnboundedSender<FlushOutcome>,
     acc: &mut Acc,
     bytes: u64,
     rows: u64,
     elapsed: Duration,
-) {
-    debug_assert_eq!(
-        rows as usize,
-        acc.rows.len(),
-        "flush count must equal the retained window; committing more offsets \
-         than were made durable would lose data",
-    );
+) -> bool {
+    if rows as usize != acc.rows.len() {
+        let _ = out_tx.send(FlushOutcome::Err(format!(
+            "flush count ({}) != retained window ({}); refusing to commit \
+             offsets for rows that may not be durable",
+            rows,
+            acc.rows.len(),
+        )));
+        return false;
+    }
     acc.rows.clear();
     let committable = std::mem::take(&mut acc.committable);
     let meta = std::mem::take(&mut acc.meta);
@@ -150,6 +162,7 @@ fn emit_ready(
         rows,
         elapsed,
     })));
+    true
 }
 
 fn build_client(cfg: &ClickhouseConfig) -> clickhouse::Client {
@@ -337,13 +350,15 @@ async fn run_inserter_actor(
                         max_batch_time,
                     );
                     let elapsed = $start.elapsed().unwrap_or_default();
-                    emit_ready(
+                    if !emit_ready(
                         &out_tx,
                         &mut acc,
                         quantities.bytes,
                         quantities.rows,
                         elapsed,
-                    );
+                    ) {
+                        return;
+                    }
                     skip_deadline = Deadline::new(max_batch_time);
                 }
                 Err(e) => {
@@ -372,7 +387,9 @@ async fn run_inserter_actor(
                     match inserter.commit().await {
                         Ok(q) if q.rows > 0 => {
                             let elapsed = start.elapsed().unwrap_or_default();
-                            emit_ready(&out_tx, &mut acc, q.bytes, q.rows, elapsed);
+                            if !emit_ready(&out_tx, &mut acc, q.bytes, q.rows, elapsed) {
+                                return;
+                            }
                             skip_deadline = Deadline::new(max_batch_time);
                         }
                         Ok(_) => {}
@@ -385,7 +402,9 @@ async fn run_inserter_actor(
             _ = interval.tick() => {
                 if skip_write {
                     if acc.has_offsets() && skip_deadline.has_elapsed() {
-                        emit_ready(&out_tx, &mut acc, 0, 0, Duration::ZERO);
+                        if !emit_ready(&out_tx, &mut acc, 0, 0, Duration::ZERO) {
+                            return;
+                        }
                         skip_deadline = Deadline::new(max_batch_time);
                     }
                     continue;
@@ -394,7 +413,9 @@ async fn run_inserter_actor(
                 match inserter.commit().await {
                     Ok(q) if q.rows > 0 => {
                         let elapsed = start.elapsed().unwrap_or_default();
-                        emit_ready(&out_tx, &mut acc, q.bytes, q.rows, elapsed);
+                        if !emit_ready(&out_tx, &mut acc, q.bytes, q.rows, elapsed) {
+                            return;
+                        }
                         skip_deadline = Deadline::new(max_batch_time);
                     }
                     Ok(_) => {
@@ -404,7 +425,9 @@ async fn run_inserter_actor(
                         // their offsets are lower than later skips, so committing
                         // past them would lose data.
                         if acc.has_offsets() && acc.rows.is_empty() && skip_deadline.has_elapsed() {
-                            emit_ready(&out_tx, &mut acc, 0, 0, Duration::ZERO);
+                            if !emit_ready(&out_tx, &mut acc, 0, 0, Duration::ZERO) {
+                                return;
+                            }
                             skip_deadline = Deadline::new(max_batch_time);
                         }
                     }
@@ -417,7 +440,9 @@ async fn run_inserter_actor(
     // Finalize: flush the last partial window (with the same retry on error).
     if skip_write {
         if acc.has_offsets() {
-            emit_ready(&out_tx, &mut acc, 0, 0, Duration::ZERO);
+            // Last window before shutdown: a mismatch here has already sent a
+            // `FlushOutcome::Err`; either way we return next, so ignore the bool.
+            let _ = emit_ready(&out_tx, &mut acc, 0, 0, Duration::ZERO);
         }
         return;
     }
@@ -441,7 +466,9 @@ async fn run_inserter_actor(
         Ok(quantities) => {
             if acc.has_offsets() {
                 let elapsed = start.elapsed().unwrap_or_default();
-                emit_ready(
+                // End of the actor: a mismatch has already sent a
+                // `FlushOutcome::Err`, and we return regardless, so ignore the bool.
+                let _ = emit_ready(
                     &out_tx,
                     &mut acc,
                     quantities.bytes,
