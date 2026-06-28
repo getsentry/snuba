@@ -38,13 +38,39 @@ from snuba.web.rpc.common.common import (
 # most queries do not hit this number this is just an upper bound
 _TRACE_LIMIT = 50_000_000
 
-# ClickHouse settings used to push the cross-item subquery JOIN down to the local
-# storage nodes. Because eap_items is sharded by ``trace_id``, running the
-# ``trace_id IN (subquery)`` join locally on each shard lets ClickHouse use the
-# ``trace_id`` bloom-filter index to skip scanning large amounts of data, instead
-# of materializing a temporary table of trace ids on the distributed (query) node.
-# See EAP-377.
-LOCAL_JOIN_CLICKHOUSE_SETTINGS = {"distributed_product_mode": "local"}
+# ``distributed_product_mode='local'`` pushes the cross-item ``trace_id IN (subquery)``
+# join down to the local storage nodes. Because eap_items is sharded by ``trace_id``,
+# running the join locally on each shard lets ClickHouse use the ``trace_id``
+# bloom-filter index to skip scanning large amounts of data, instead of materializing
+# a temporary table of trace ids on the distributed (query) node. See EAP-377.
+LOCAL_JOIN_DISTRIBUTED_PRODUCT_MODE = "local"
+
+
+def apply_cross_item_outer_query_settings(
+    query_settings: HTTPQuerySettings,
+    has_trace_filters: bool,
+    sampling_tier: Tier,
+) -> None:
+    """Apply the ClickHouse settings for the outer query of a (potentially) cross-item
+    query. Shared by all EAP resolvers so the logic lives in one place.
+
+    For cross-item queries (``has_trace_filters``):
+    - skip sampling on the outer query when ``cross_item_queries_no_sample_outer`` is
+      set — the inner trace-ids query is sampled, the outer one should not be;
+    - set ``distributed_product_mode='local'`` so the ``trace_id`` join runs locally
+      on each shard and can use the bloom-filter index (see EAP-377).
+
+    For non-cross-item queries, the sampling tier is applied as usual.
+    """
+    cross_item_queries_no_sample_outer = state.get_int_config(
+        "cross_item_queries_no_sample_outer", 1
+    )
+    if not (has_trace_filters and cross_item_queries_no_sample_outer):
+        query_settings.set_sampling_tier(sampling_tier)
+    if has_trace_filters:
+        query_settings.push_clickhouse_setting(
+            "distributed_product_mode", LOCAL_JOIN_DISTRIBUTED_PRODUCT_MODE
+        )
 
 
 def trace_id_in_subquery_condition(trace_ids_sql: str) -> Expression:

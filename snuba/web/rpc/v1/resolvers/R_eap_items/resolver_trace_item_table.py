@@ -25,7 +25,6 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     VirtualColumnContext,
 )
 
-from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
@@ -88,7 +87,7 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_count_column,
 )
 from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
-    LOCAL_JOIN_CLICKHOUSE_SETTINGS,
+    apply_cross_item_outer_query_settings,
     get_trace_ids_sql_for_cross_item_query,
     trace_id_in_subquery_condition,
 )
@@ -787,16 +786,9 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
             )
         try:
             routing_decision.strategy.merge_clickhouse_settings(routing_decision, query_settings)
-            # When trace_filters are present and the feature is enabled, don't use sampling on the outer query
-            # The inner query (getting trace IDs) will use sampling
-            cross_item_queries_no_sample_outer = state.get_int_config(
-                "cross_item_queries_no_sample_outer", 1
+            apply_cross_item_outer_query_settings(
+                query_settings, bool(in_msg.trace_filters), routing_decision.tier
             )
-            if not (in_msg.trace_filters and cross_item_queries_no_sample_outer):
-                query_settings.set_sampling_tier(routing_decision.tier)
-            if in_msg.trace_filters:
-                for key, value in LOCAL_JOIN_CLICKHOUSE_SETTINGS.items():
-                    query_settings.push_clickhouse_setting(key, value)
         except Exception as e:
             sentry_sdk.capture_message(f"Error merging clickhouse settings: {e}")
         original_time_window = TimeWindow(
