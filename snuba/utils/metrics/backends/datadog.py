@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import threading
-from typing import Callable, Mapping, Optional, Sequence, Union
+from collections.abc import Callable, Mapping
 
-from datadog import DogStatsd
+from datadog.dogstatsd.base import DogStatsd
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.types import Tags
@@ -17,7 +17,7 @@ class DatadogMetricsBackend(MetricsBackend):
     def __init__(
         self,
         client_factory: Callable[[], DogStatsd],
-        sample_rates: Optional[Mapping[str, float]] = None,
+        sample_rates: Mapping[str, float] | None = None,
     ) -> None:
         """
         :param client_factory: A function that returns a new ``DogStatsd``
@@ -35,23 +35,22 @@ class DatadogMetricsBackend(MetricsBackend):
     @property
     def __client(self) -> DogStatsd:
         try:
-            client = self.__thread_state.client
+            client: DogStatsd = self.__thread_state.client
         except AttributeError:
             client = self.__thread_state.client = self.__client_factory()
         return client
 
-    def __normalize_tags(self, tags: Optional[Tags]) -> Optional[Sequence[str]]:
+    def __normalize_tags(self, tags: Tags | None) -> list[str] | None:
         if tags is None:
             return None
-        else:
-            return [f"{key}:{value.replace('|', '_')}" for key, value in tags.items()]
+        return [f"{key}:{value.replace('|', '_')}" for key, value in tags.items()]
 
     def increment(
         self,
         name: str,
-        value: Union[int, float] = 1,
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        value: int | float = 1,
+        tags: Tags | None = None,
+        unit: str | None = None,
     ) -> None:
         self.__client.increment(
             name,
@@ -63,9 +62,9 @@ class DatadogMetricsBackend(MetricsBackend):
     def gauge(
         self,
         name: str,
-        value: Union[int, float],
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        value: int | float,
+        tags: Tags | None = None,
+        unit: str | None = None,
     ) -> None:
         self.__client.gauge(
             name,
@@ -77,9 +76,9 @@ class DatadogMetricsBackend(MetricsBackend):
     def timing(
         self,
         name: str,
-        value: Union[int, float],
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        value: int | float,
+        tags: Tags | None = None,
+        unit: str | None = None,
     ) -> None:
         self.__client.timing(
             name,
@@ -91,9 +90,9 @@ class DatadogMetricsBackend(MetricsBackend):
     def distribution(
         self,
         name: str,
-        value: Union[int, float],
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        value: int | float,
+        tags: Tags | None = None,
+        unit: str | None = None,
     ) -> None:
         self.__client.distribution(
             name,
@@ -108,9 +107,12 @@ class DatadogMetricsBackend(MetricsBackend):
         text: str,
         alert_type: str,
         priority: str,
-        tags: Optional[Tags] = None,
+        tags: Tags | None = None,
     ) -> None:
-        self.__client.event(
+        # datadog's DogStatsd.event is untyped and its second positional
+        # parameter is named ``message`` in the installed package; keep the
+        # existing keyword call to preserve runtime behavior.
+        self.__client.event(  # type: ignore[no-untyped-call, call-arg]
             title=title,
             text=text,
             alert_type=alert_type,

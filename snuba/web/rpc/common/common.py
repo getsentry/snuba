@@ -1,6 +1,8 @@
 import json
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, TypeVar, cast
+import math
+from collections.abc import Callable, Iterable
+from datetime import UTC, datetime, timedelta
+from typing import Any, TypeVar, cast
 
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
@@ -12,19 +14,32 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 
 from snuba import settings, state
-from snuba.protos.common import MalformedAttributeException
+from snuba.clickhouse import DATETIME_FORMAT
+from snuba.protos.common import (
+    ATTRIBUTES_TO_COALESCE,
+    COLUMN_PREFIX,
+    PROTO_TYPE_TO_ATTRIBUTE_COLUMN,
+    PROTO_TYPE_TO_CLICKHOUSE_TYPE,
+    TYPED_ARRAY_MAP_COLUMNS,
+    MalformedAttributeException,
+    type_array_to_membership_array_expression,
+    type_array_to_membership_array_expression_from_typed_columns,
+    type_array_typed_column_native_array,
+)
 from snuba.protos.common import (
     attribute_key_to_expression as _attribute_key_to_expression,
 )
-from snuba.query import Query
+from snuba.query import Query, SelectedExpression
 from snuba.query.conditions import combine_and_conditions, combine_or_conditions
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import (
     and_cond,
+    arrayElement,
     column,
     in_cond,
     literal,
     literals_array,
+    map_key_exists,
     not_cond,
     or_cond,
 )
@@ -32,10 +47,30 @@ from snuba.query.expressions import (
     Argument,
     Expression,
     FunctionCall,
+    JsonPath,
     Lambda,
     SubscriptableReference,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+
+
+def _in_or_has(value: Expression, array: Expression, *, as_has: bool) -> FunctionCall:
+    """Build the membership test ``value IN array``.
+
+    Returns ``in(value, array)`` by default, so ClickHouse keeps a prepared set for
+    partition/primary-key pruning — correct for WHERE clauses. When ``as_has`` is set,
+    returns ``has(array, value)`` instead, for expressions that land in a SELECT clause
+    / projection / aggregate condition / ``HAVING``. There the prepared set's
+    server-generated ``__set_<Type>_<hash>_<hash>`` identifier leaks into the
+    result-block column name and is not byte-stable across mixed-version distributed
+    ClickHouse nodes, which fails the read with
+    ``Code: 10 ... Not found column ... While executing Remote.`` (SNUBA-9W6, SNUBA-B82).
+    ``has`` over a constant array keeps the array inline in the column name and is
+    equivalent to ``value IN (array)`` for scalar membership.
+    """
+    if as_has:
+        return f.has(array, value)
+    return in_cond(value, array)
 
 
 def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
@@ -54,13 +89,41 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
         raise BadSnubaRPCRequestException(str(e)) from e
 
 
+def _trace_item_filter_key_expression(
+    attr_to_key_expression_callable: Callable[[AttributeKey], Expression],
+    key: AttributeKey,
+    use_array_map_columns: bool = False,
+) -> Expression:
+    """predicates must use the normalized
+    ``arrayMap`` (``type_array_to_membership_array_expression``) so
+    ``arrayExists`` compares per element. It is different from SELECT predicate.
+
+    When ``use_array_map_columns`` is set, array predicates read the typed
+    ``attributes_array_*`` map columns instead of the legacy ``attributes_array``
+    JSON column (see ``use_array_map_columns``).
+    """
+    if key.type == AttributeKey.Type.TYPE_ARRAY:
+        try:
+            if use_array_map_columns:
+                return type_array_to_membership_array_expression_from_typed_columns(key)
+            return type_array_to_membership_array_expression(key)
+        except MalformedAttributeException as e:
+            raise BadSnubaRPCRequestException(str(e)) from e
+    return attr_to_key_expression_callable(key)
+
+
 Tin = TypeVar("Tin", bound=ProtobufMessage)
 Tout = TypeVar("Tout", bound=ProtobufMessage)
 
 BUCKET_COUNT = 40
 
 
-def transform_array_value(value: dict[str, str]) -> Any:
+def transform_array_value(value: Any) -> Any:
+    """Decode one array element: with a String, Int, Double, or Bool tag."""
+    if not isinstance(value, dict):
+        raise BadSnubaRPCRequestException(
+            f"array element must be an object with a String/Int/Double/Bool tag, got {type(value).__name__}"
+        )
     for t, v in value.items():
         if t == "Int":
             return int(v)
@@ -69,16 +132,128 @@ def transform_array_value(value: dict[str, str]) -> Any:
         if t == "Bool":
             return str(v).lower() == "true"
         if t == "String":
-            return v
-    raise BadSnubaRPCRequestException(f"array value type unknown: {type(v)}")
+            return str(v)
+    raise BadSnubaRPCRequestException(
+        f"array value has no recognized tag, keys={list(value.keys())}"
+    )
 
 
-def process_arrays(raw: str) -> dict[str, list[Any]]:
-    parsed = json.loads(raw) or {}
-    arrays = {}
-    for key, values in parsed.items():
-        arrays[key] = [transform_array_value(v) for v in values]
-    return arrays
+# Allowlist of `attributes_array` JSON sub-paths exposed by endpoints that
+# return all attributes (TraceItemDetails, GetTrace bulk-fetch). Each path is
+# read as its own JSON sub-column so we don't materialize the full dynamic
+# JSON value on every request.
+ATTRIBUTES_ARRAY_ALLOWLIST: tuple[str, ...] = (
+    "gen_ai.input.messages",
+    "gen_ai.output.messages",
+    "gen_ai.request.messages",
+    "gen_ai.response.text",
+    "gen_ai.system_instructions",
+    "gen_ai.tool.definitions",
+    "gen_ai.response.object",
+    "gen_ai.tool.call.arguments",
+    "gen_ai.tool.input",
+    "workflow_ids",
+    "triggered_workflow_ids",
+    "action_filter_group_ids",
+    "triggered_action_ids",
+)
+
+
+def attributes_array_selected_expressions() -> list[SelectedExpression]:
+    """Per-path `toJSONString(attributes_array.<path>.:Array(JSON))` selects for the allowlist."""
+    return [
+        SelectedExpression(
+            path,
+            FunctionCall(
+                alias=path,
+                function_name="toJSONString",
+                parameters=(
+                    JsonPath(
+                        alias=None,
+                        base=column("attributes_array"),
+                        path=path,
+                        return_type="Array(JSON)",
+                    ),
+                ),
+            ),
+        )
+        for path in ATTRIBUTES_ARRAY_ALLOWLIST
+    ]
+
+
+def typed_array_map_selected_expressions() -> list[SelectedExpression]:
+    """Select the four typed array map columns whole, for endpoints that return every
+    attribute of an item (TraceItemDetails, GetTrace, ExportTraceItems). Replaces the
+    JSON-column allowlist (see ``attributes_array_selected_expressions``) past the
+    cutoff so all array attributes are returned, not just the allowlisted paths."""
+    return [SelectedExpression(col, column(col, alias=col)) for col in TYPED_ARRAY_MAP_COLUMNS]
+
+
+def merge_typed_array_maps(row: dict[str, Any]) -> list[tuple[str, list[Any]]]:
+    """Pop the four typed array map columns from ``row`` and merge them into a list of
+    ``(attribute_name, elements)`` pairs.
+
+    Each map is ``{name: [native elements of one type]}``. An array attribute whose
+    elements span several types appears in multiple maps; its elements are concatenated
+    in column order (string, int, float, bool) — the typed columns store each element
+    type separately, so cross-type element order is not preserved (homogeneous arrays,
+    the common case, keep their order). Names are returned in first-seen order. Callers
+    convert each ``elements`` list to a ``val_array`` and skip empty ones."""
+    merged: dict[str, list[Any]] = {}
+    order: list[str] = []
+    for col in TYPED_ARRAY_MAP_COLUMNS:
+        column_map = row.pop(col, None) or {}
+        for name, values in column_map.items():
+            if name not in merged:
+                merged[name] = []
+                order.append(name)
+            merged[name].extend(values)
+    return [(name, merged[name]) for name in order]
+
+
+def typed_array_select_subcolumn_name(base: str, typed_col: str) -> str:
+    """Result-column name ``"<base>.<typed_col>"`` for one typed sub-column of a
+    per-attribute array SELECT (``base`` is the column label or attribute name)."""
+    return f"{base}.{typed_col}"
+
+
+def merge_typed_array_subcolumns(
+    row: dict[str, Any], bases: Iterable[str]
+) -> list[tuple[str, list[Any]]]:
+    """Pop the four typed sub-columns of each ``base`` array attribute and merge them into
+    ``(base, elements)`` pairs (per-attribute counterpart of ``merge_typed_array_maps``).
+    Arrays are homogeneous, so one sub-column is non-empty; the four are concatenated in
+    column order."""
+    merged: list[tuple[str, list[Any]]] = []
+    for base in bases:
+        elements: list[Any] = []
+        for typed_col in TYPED_ARRAY_MAP_COLUMNS:
+            values = row.pop(typed_array_select_subcolumn_name(base, typed_col), None)
+            if values:
+                elements.extend(values)
+        merged.append((base, elements))
+    return merged
+
+
+def decode_attributes_array_value(key: str, raw: Any) -> list[Any] | str | None:
+    """Decode a `toJSONString(...:Array(JSON))` payload for an allowlisted path.
+
+    Returns None if `raw` is not a string (caller should skip). If `key` is
+    in `ATTRIBUTES_ARRAY_ALLOWLIST` and `raw` looks like a JSON array (starts
+    with '['), parse it and normalize each element via
+    `transform_array_value`. Malformed JSON or non-tagged elements fall back
+    to the raw string. Otherwise return `raw` unchanged — either the JSON
+    path resolved to a non-array or `key` isn't an attributes_array path at
+    all. Callers should still skip empty list results.
+    """
+    if not isinstance(raw, str):
+        return None
+    if key not in ATTRIBUTES_ARRAY_ALLOWLIST or not raw.startswith("["):
+        return raw
+    try:
+        return [transform_array_value(elem) for elem in json.loads(raw)]
+    except (json.JSONDecodeError, BadSnubaRPCRequestException):
+        return raw
 
 
 def _check_non_string_values_cannot_ignore_case(
@@ -139,6 +314,27 @@ def use_sampling_factor(meta: RequestMeta) -> bool:
     return meta.start_timestamp.seconds >= use_sampling_factor_timestamp_seconds
 
 
+def use_array_map_columns(meta: RequestMeta) -> bool:
+    """
+    Array attributes were double-written into the typed ``attributes_array_*`` map
+    columns starting 2026-06-22, so we should only read those columns on queries
+    whose window starts on/after the cutoff (2026-06-23 UTC by default). Older data
+    only exists in the legacy ``attributes_array`` JSON column. A config value of 0
+    disables the typed-column read path entirely.
+    """
+    use_array_map_columns_timestamp_seconds = cast(
+        int,
+        state.get_int_config(
+            "use_array_map_columns_timestamp_seconds",
+            settings.USE_ARRAY_MAP_COLUMNS_TIMESTAMP_SECONDS,
+        ),
+    )
+    if use_array_map_columns_timestamp_seconds == 0:
+        return False
+
+    return meta.start_timestamp.seconds >= use_array_map_columns_timestamp_seconds
+
+
 def treeify_or_and_conditions(query: Query) -> None:
     """
     look for expressions like or(a, b, c) and turn them into or(a, or(b, c))
@@ -151,7 +347,12 @@ def treeify_or_and_conditions(query: Query) -> None:
 
     Note: does not apply to the conditions of a from_clause subquery (the nested one)
         this is bc transform_expressions is not implemented for composite queries
+
+    This also removes structurally-identical conjuncts from the top-level WHERE AND
+    (`A AND A` == `A`); see dedupe_and_conditions. Nothing downstream in the query
+    pipeline dedupes conditions, so without this the duplicate would reach ClickHouse.
     """
+    dedupe_and_conditions(query)
 
     def transform(exp: Expression) -> Expression:
         if not isinstance(exp, FunctionCall):
@@ -159,12 +360,69 @@ def treeify_or_and_conditions(query: Query) -> None:
 
         if exp.function_name == "and":
             return combine_and_conditions(exp.parameters)
-        elif exp.function_name == "or":
+        if exp.function_name == "or":
             return combine_or_conditions(exp.parameters)
-        else:
-            return exp
+        return exp
 
     query.transform_expressions(transform)
+
+
+def dedupe_and_conditions(query: Query) -> None:
+    """Remove structurally-identical conjuncts from the query's top-level AND.
+
+    ``A AND A`` is equivalent to ``A``, so dropping exact duplicates never changes
+    results. The motivating case: when a client sends a ``sentry.timestamp`` range
+    filter whose bounds equal the mandatory time-range condition, both now produce
+    byte-identical expressions (see timestamp_seconds_to_datetime_literal) and
+    collapse to a single condition. Distinct ranges are left untouched (the AND of
+    them naturally yields the tightest window).
+
+    Conditions nested inside OR/NOT subtrees are treated as opaque leaves -- we only
+    flatten the top-level AND. The query is left unchanged unless a duplicate is
+    actually found, so existing queries keep their exact condition tree.
+    """
+    condition = query.get_condition()
+    if condition is None:
+        return
+
+    def flatten_and(exp: Expression) -> list[Expression]:
+        if isinstance(exp, FunctionCall) and exp.function_name == "and":
+            flattened: list[Expression] = []
+            for param in exp.parameters:
+                flattened.extend(flatten_and(param))
+            return flattened
+        return [exp]
+
+    conjuncts = flatten_and(condition)
+    deduped: list[Expression] = []
+    for conjunct in conjuncts:
+        if conjunct not in deduped:
+            deduped.append(conjunct)
+
+    if len(deduped) != len(conjuncts):
+        query.set_ast_condition(combine_and_conditions(deduped))
+
+
+# Map column -> the Nullable type its values resolve to, used to emit a typed
+# NULL as the `if(...)` else-branch below. A bare, untyped NULL default trips
+# the ClickHouse "new analyzer": it canonicalizes the very same `if(...)`
+# expression inconsistently when it appears both as an IN operand and elsewhere
+# (e.g. the NOT_IN predicate in `_get_field_existence_expression`), wrapping the
+# NULL in a redundant CAST in one place but not the other. The aggregate column
+# computed in the block then no longer matches the projection name, surfacing as
+# "Code: 10. DB::Exception: Not found column ... in block". Emitting an
+# already-typed NULL leaves nothing for the analyzer to fold inconsistently.
+_MAP_COLUMN_NULL_TYPE = {
+    "attributes_string": "Nullable(String)",
+    "attributes_float": "Nullable(Float64)",
+}
+
+
+def _typed_null_for_map_column(column_name: str) -> Expression:
+    for prefix, null_type in _MAP_COLUMN_NULL_TYPE.items():
+        if column_name.startswith(prefix):
+            return f.cast(literal(None), null_type)
+    return literal(None)
 
 
 def add_existence_check_to_subscriptable_references(query: Query) -> None:
@@ -176,13 +434,103 @@ def add_existence_check_to_subscriptable_references(query: Query) -> None:
             alias=exp.alias,
             function_name="if",
             parameters=(
-                f.mapContains(exp.column, exp.key),
+                map_key_exists(exp.column, exp.key),
                 SubscriptableReference(None, exp.column, exp.key),
-                literal(None),
+                _typed_null_for_map_column(exp.column.column_name),
             ),
         )
 
     query.transform_expressions(transform)
+
+
+def _contains_subscriptable_reference(exp: Expression) -> bool:
+    """True if ``exp`` contains a ``SubscriptableReference`` (a map lookup) — the
+    map-backed keys we route through ``_map_backed_operands``."""
+    found = False
+
+    def visit(node: Expression) -> Expression:
+        nonlocal found
+        if isinstance(node, SubscriptableReference):
+            found = True
+        return node
+
+    exp.transform(visit)
+    return found
+
+
+def _map_backed_operands(k: AttributeKey) -> tuple[Expression, Expression]:
+    """Build ``(value, exists)`` for a map-backed key directly, NULL-free.
+
+    The legacy ``if(<exists>, arrayElement, NULL)`` form puts a NULL constant
+    into the predicate; the new ClickHouse analyzer canonicalizes that NULL
+    inconsistently between an aggregate's projection name and its computed block
+    (notably inside ``in(...)``), so the column isn't found ("Code: 10 ... Not
+    found column ... in block"). We write a ``has(mapKeys(...))`` existence check
+    (see ``map_key_exists``) + ``arrayElement`` directly, so no NULL appears:
+
+        value  = arrayElement(k)                                       # single key
+        value  = multiIf(has(mapKeys(k1)), arrayElement(k1), ...,      # coalesced:
+                         arrayElement(kn))                             # first present
+        exists = has(mapKeys(k1)) OR ... OR has(mapKeys(kn))
+
+    Callers build ``cmp(value, v)``, wrapped in ``and(exists, ...)`` only when the
+    literal could be the column default (see ``_comparison_can_match_column_default``)
+    — then ``exists``, not the value, distinguishes a missing key from a stored
+    empty value, since ``arrayElement`` reads both as the '' / 0 default. The
+    ``multiIf`` else is only reached when all keys are absent.
+
+    Built without aliases: conditions don't need them, and an alias here would
+    collide with the SELECT clause's existence ``if(...)`` for the same attribute
+    (same alias, different expression). Only valid for map-backed keys
+    (string/int/float); booleans / normalized columns / arrays take the legacy
+    path, and SELECT keeps its own ``coalesce(...)`` representation untouched.
+    """
+    col_name = PROTO_TYPE_TO_ATTRIBUTE_COLUMN[k.type]
+    names = [k.name] + list(ATTRIBUTES_TO_COALESCE.get(k.name, ()))
+
+    def _value(name: str) -> Expression:
+        elem = arrayElement(None, column(col_name), literal(name))
+        # ints live in the float map and surface as Int64, so they need a cast.
+        if k.type == AttributeKey.Type.TYPE_INT:
+            return f.cast(elem, f"Nullable({PROTO_TYPE_TO_CLICKHOUSE_TYPE[k.type]})")
+        return elem
+
+    values = [_value(name) for name in names]
+    existences = [map_key_exists(column(col_name), literal(name)) for name in names]
+
+    exists = combine_or_conditions(existences) if len(existences) > 1 else existences[0]
+    if len(values) == 1:
+        value: Expression = values[0]
+    else:
+        args: list[Expression] = []
+        for cond, val in zip(existences[:-1], values[:-1], strict=True):
+            args.extend((cond, val))
+        args.append(values[-1])
+        value = f.multiIf(*args)
+    return value, exists
+
+
+def _analyzer_safe_in_expression(
+    k: AttributeKey,
+    v_expression: Expression,
+    *,
+    negated: bool,
+    ignore_case: bool = False,
+    guard: bool = True,
+    membership_as_has: bool = False,
+) -> Expression:
+    """``IN`` / ``NOT IN`` as ``[not] in(value, set)``, wrapped in
+    ``and(exists, ...)`` only when ``guard`` is set (see ``_map_backed_operands``
+    and ``_comparison_can_match_column_default``). The value lists carry only
+    scalars, so the set never contains NULL — the legacy ``has(set, NULL)`` branch
+    was always ``false``. ``membership_as_has`` emits ``has(set, value)`` instead of
+    ``in(value, set)`` for SELECT-clause use (see ``_in_or_has``)."""
+    value, exists = _map_backed_operands(k)
+    if ignore_case:
+        value = f.lower(value)
+    membership = _in_or_has(value, v_expression, as_has=membership_as_has)
+    present = and_cond(exists, membership) if guard else membership
+    return not_cond(present) if negated else present
 
 
 def _scalar_value(v: AttributeValue) -> bool | str | int | float | None:
@@ -198,10 +546,27 @@ def _scalar_value(v: AttributeValue) -> bool | str | int | float | None:
             return v.val_double
         case "val_int":
             return v.val_int
-        case None:
+        case "val_null" | None:
             return None
         case other:
             raise NotImplementedError(f"not a scalar AttributeValue type: {other}")
+
+
+def _comparison_can_match_column_default(
+    attr_type: AttributeKey.Type.ValueType, v: AttributeValue, value_type: str
+) -> bool:
+    """True if any compared literal is the column default ('' / 0), which an
+    absent key also reads as — so the existence guard is needed to avoid
+    matching absent keys. When no literal is the default the guard is dropped (the
+    simplest form). LIKE/NOT_LIKE always guard; null comparisons are separate."""
+    default: str | int = "" if attr_type == AttributeKey.Type.TYPE_STRING else 0
+    if value_type == "val_array":
+        scalars: list[Any] = [_scalar_value(x) for x in v.val_array.values]
+    elif value_type in ("val_str_array", "val_int_array", "val_float_array", "val_double_array"):
+        scalars = list(getattr(v, value_type).values)
+    else:
+        scalars = [_scalar_value(v)]
+    return any(s == default for s in scalars)
 
 
 def _attribute_value_to_expression(v: AttributeValue) -> Expression:
@@ -265,8 +630,170 @@ _ARRAY_VALUE_TYPES = {
 }
 
 
+def _validate_comparison_filter_type_array(
+    op: ComparisonFilter.Op.ValueType, v: AttributeValue
+) -> None:
+    if op in (ComparisonFilter.OP_LIKE, ComparisonFilter.OP_NOT_LIKE):
+        if v.WhichOneof("value") != "val_str":
+            raise BadSnubaRPCRequestException(
+                "LIKE/NOT_LIKE on array keys requires a string pattern"
+            )
+        return
+    if op in (ComparisonFilter.OP_EQUALS, ComparisonFilter.OP_NOT_EQUALS):
+        # Array can be empty or non-empty. It can never be null, or can never have null elements.
+        vt = v.WhichOneof("value")
+        if vt in (
+            None,
+            "val_null",
+            "val_array",
+            "val_str_array",
+            "val_int_array",
+            "val_float_array",
+            "val_double_array",
+        ):
+            raise BadSnubaRPCRequestException(
+                "OP_EQUALS/OP_NOT_EQUALS on array keys require a scalar value "
+                "(e.g. val_str, val_int) or null (is_null / val_null) to match null elements"
+            )
+        return
+    raise BadSnubaRPCRequestException(
+        f"{ComparisonFilter.Op.Name(op)} is not supported on array keys "
+        "(supported: LIKE, NOT_LIKE, OP_EQUALS, OP_NOT_EQUALS)"
+    )
+
+
+def _type_array_membership_rhs_expression(v: AttributeValue) -> Expression:
+    """RHS as String, comparable to TYPE_ARRAY arrayMap output (Array(String) in CH)."""
+    value_type = v.WhichOneof("value")
+    match value_type:
+        case "val_str":
+            return literal(v.val_str)
+        case "val_int":
+            return f.toString(literal(v.val_int))
+        case "val_double":
+            return f.toString(literal(v.val_double))
+        case "val_float":
+            return f.toString(literal(v.val_float))
+        case "val_bool":
+            return literal(str(v.val_bool).lower())
+        case _:
+            raise BadSnubaRPCRequestException(
+                f"unsupported AttributeValue for array membership: {value_type}"
+            )
+
+
+def _type_array_includes_scalar_expression(
+    array_expr: Expression,
+    v: AttributeValue,
+    ignore_case: bool,
+) -> Expression:
+    """Any element equals scalar (includes / [*])"""
+    if v.WhichOneof("value") == "val_null" or v.is_null:
+        raise BadSnubaRPCRequestException("Arrays can't be NULL or cannot have NULL elements")
+    x = Argument(None, "x")
+    rhs = _type_array_membership_rhs_expression(v)
+    if ignore_case and v.WhichOneof("value") == "val_str":
+        return f.arrayExists(
+            Lambda(None, ("x",), f.equals(f.lower(x), f.lower(rhs))),
+            array_expr,
+        )
+    return f.arrayExists(Lambda(None, ("x",), f.equals(x, rhs)), array_expr)
+
+
+def _coerce_int(s: str) -> int | None:
+    try:
+        return int(s)
+    except ValueError:
+        return None
+
+
+def _coerce_float(s: str) -> float | None:
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _typed_array_native_membership_candidates(
+    v: AttributeValue,
+) -> list[tuple[str, Expression]]:
+    """``(typed column, native rhs)`` pairs to OR for an array-membership comparison on
+    the typed ``attributes_array_*`` columns.
+
+    Sentry sends every array-membership value as ``val_str`` (the filter key only says
+    TYPE_ARRAY, never the element type), so coerce the string to each native type it
+    parses as and match that column natively: a numeric string searches the int/float
+    columns, ``true``/``false`` the bool column, and every string searches the string
+    column. A natively-typed value, if one is ever sent, maps to its own column.
+    """
+    value_type = v.WhichOneof("value")
+    candidates: list[tuple[str, Expression]] = []
+    if value_type == "val_str":
+        s = v.val_str
+        candidates.append(("attributes_array_string", literal(s)))
+        int_val = _coerce_int(s)
+        if int_val is not None:
+            candidates.append(("attributes_array_int", literal(int_val)))
+        float_val = _coerce_float(s)
+        if float_val is not None:
+            candidates.append(("attributes_array_float", literal(float_val)))
+        if s.lower() in ("true", "false"):
+            candidates.append(("attributes_array_bool", literal(s.lower() == "true")))
+    elif value_type == "val_int":
+        candidates.append(("attributes_array_int", literal(v.val_int)))
+        candidates.append(("attributes_array_float", literal(float(v.val_int))))
+    elif value_type in ("val_float", "val_double"):
+        candidates.append(("attributes_array_float", literal(getattr(v, value_type))))
+    elif value_type == "val_bool":
+        candidates.append(("attributes_array_bool", literal(v.val_bool)))
+    else:
+        raise BadSnubaRPCRequestException(
+            f"unsupported AttributeValue for array membership: {value_type}"
+        )
+    return candidates
+
+
+def _typed_array_includes_scalar_expression(
+    attr_key: AttributeKey,
+    v: AttributeValue,
+    ignore_case: bool,
+) -> Expression:
+    """Any element equals scalar (includes / [*]) against the typed ``attributes_array_*``
+    columns: a native ``arrayExists`` per candidate column, OR-ed together (see
+    ``_typed_array_native_membership_candidates``)."""
+    if v.WhichOneof("value") == "val_null" or v.is_null:
+        raise BadSnubaRPCRequestException("Arrays can't be NULL or cannot have NULL elements")
+    exprs: list[Expression] = []
+    for col, rhs in _typed_array_native_membership_candidates(v):
+        array_expr = type_array_typed_column_native_array(attr_key, col)
+        x = Argument(None, "x")
+        if ignore_case and col == "attributes_array_string":
+            lam = Lambda(None, ("x",), f.equals(f.lower(x), f.lower(rhs)))
+        else:
+            lam = Lambda(None, ("x",), f.equals(x, rhs))
+        exprs.append(f.arrayExists(lam, array_expr))
+    if len(exprs) == 1:
+        return exprs[0]
+    return or_cond(exprs[0], exprs[1], *exprs[2:])
+
+
+def _typed_array_like_expression(
+    attr_key: AttributeKey, pattern: Expression, ignore_case: bool
+) -> Expression:
+    """LIKE membership against the typed columns. A pattern can only match string
+    elements, so read just ``attributes_array_string``."""
+    array_expr = type_array_typed_column_native_array(attr_key, "attributes_array_string")
+    like_fn = f.ilike if ignore_case else f.like
+    return f.arrayExists(
+        Lambda(None, ("x",), like_fn(Argument(None, "x"), pattern)),
+        array_expr,
+    )
+
+
 def _any_attribute_filter_to_expression(
     filt: AnyAttributeFilter,
+    *,
+    membership_as_has: bool = False,
 ) -> Expression:
     """Build an expression that searches across attribute values.
 
@@ -277,7 +804,10 @@ def _any_attribute_filter_to_expression(
 
         arrayExists(x -> <comparison>(x, value), mapValues(column))
 
-    wrapped with NOT(...) for negative ops.
+    wrapped with NOT(...) for negative ops. ``membership_as_has`` builds the IN/NOT_IN
+    comparison as ``has(array, x)`` rather than ``in(x, array)`` so the (arrayExists'd)
+    expression carries no ``__set_*`` prepared-set identifier — required when it lands
+    in a SELECT-clause aggregate on a mixed-version distributed read (see ``_in_or_has``).
     """
     # 1. Extract and validate the comparison value
     v = filt.value
@@ -355,12 +885,13 @@ def _any_attribute_filter_to_expression(
                 lowered = [literal(s.lower()) for s in v.val_str_array.values]
             else:
                 lowered = [literal(elem.val_str.lower()) for elem in v.val_array.values]
-            comparison = in_cond(
+            comparison = _in_or_has(
                 f.lower(x),
                 literals_array(None, lowered),
+                as_has=membership_as_has,
             )
         else:
-            comparison = in_cond(x, v_expression)
+            comparison = _in_or_has(x, v_expression, as_has=membership_as_has)
     else:
         raise BadSnubaRPCRequestException(
             f"Unsupported any_attribute_filter op: {AnyAttributeFilter.Op.Name(filt.op)}"
@@ -379,44 +910,95 @@ def _any_attribute_filter_to_expression(
 def trace_item_filters_to_expression(
     item_filter: TraceItemFilter,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    membership_as_has: bool = False,
+    use_array_map_columns: bool = False,
 ) -> Expression:
     """
     Trace Item Filters are things like (span.id=12345 AND start_timestamp >= "june 4th, 2024")
     This maps those filters into an expression which can be used in a WHERE clause
     :param item_filter:
+    :param membership_as_has: build ``IN``/``NOT IN`` membership as ``has(array, x)``
+        rather than ``x IN (array)``. Pass ``True`` only when the result lands in a
+        SELECT clause / projection / aggregate condition / ``HAVING`` — there a constant
+        ``IN`` set leaks an unstable ``__set_*`` identifier into the result-block column
+        name and breaks mixed-version distributed reads (see ``_in_or_has``). Leave the
+        default for WHERE clauses, where the prepared ``IN`` set drives pruning.
+    :param use_array_map_columns: resolve ``TYPE_ARRAY`` predicates against the typed
+        ``attributes_array_*`` map columns instead of the legacy ``attributes_array``
+        JSON column. Pass ``use_array_map_columns(meta)`` so this is only enabled for
+        query windows new enough that the typed columns are fully populated.
     :return:
     """
     if item_filter.HasField("and_filter"):
         filters = item_filter.and_filter.filters
         if len(filters) == 0:
             return literal(True)
-        elif len(filters) == 1:
-            return trace_item_filters_to_expression(filters[0], attribute_key_to_expression)
+        if len(filters) == 1:
+            return trace_item_filters_to_expression(
+                filters[0],
+                attribute_key_to_expression,
+                membership_as_has,
+                use_array_map_columns,
+            )
         return and_cond(
-            *(trace_item_filters_to_expression(x, attribute_key_to_expression) for x in filters)
+            *(
+                trace_item_filters_to_expression(
+                    x,
+                    attribute_key_to_expression,
+                    membership_as_has,
+                    use_array_map_columns,
+                )
+                for x in filters
+            )
         )
 
     if item_filter.HasField("or_filter"):
         filters = item_filter.or_filter.filters
         if len(filters) == 0:
             raise BadSnubaRPCRequestException("Invalid trace item filter, empty 'or' clause")
-        elif len(filters) == 1:
-            return trace_item_filters_to_expression(filters[0], attribute_key_to_expression)
+        if len(filters) == 1:
+            return trace_item_filters_to_expression(
+                filters[0],
+                attribute_key_to_expression,
+                membership_as_has,
+                use_array_map_columns,
+            )
         return or_cond(
-            *(trace_item_filters_to_expression(x, attribute_key_to_expression) for x in filters)
+            *(
+                trace_item_filters_to_expression(
+                    x,
+                    attribute_key_to_expression,
+                    membership_as_has,
+                    use_array_map_columns,
+                )
+                for x in filters
+            )
         )
 
     if item_filter.HasField("not_filter"):
         filters = item_filter.not_filter.filters
         if len(filters) == 0:
             raise BadSnubaRPCRequestException("Invalid trace item filter, empty 'not' clause")
-        elif len(filters) == 1:
+        if len(filters) == 1:
             return not_cond(
-                trace_item_filters_to_expression(filters[0], attribute_key_to_expression)
+                trace_item_filters_to_expression(
+                    filters[0],
+                    attribute_key_to_expression,
+                    membership_as_has,
+                    use_array_map_columns,
+                )
             )
         return not_cond(
             and_cond(
-                *(trace_item_filters_to_expression(x, attribute_key_to_expression) for x in filters)
+                *(
+                    trace_item_filters_to_expression(
+                        x,
+                        attribute_key_to_expression,
+                        membership_as_has,
+                        use_array_map_columns,
+                    )
+                    for x in filters
+                )
             )
         )
 
@@ -425,33 +1007,96 @@ def trace_item_filters_to_expression(
         op = item_filter.comparison_filter.op
         v = item_filter.comparison_filter.value
 
-        # TYPE_ARRAY only supports LIKE/NOT_LIKE with string patterns — validate early.
         if k.type == AttributeKey.Type.TYPE_ARRAY:
-            if op not in (
-                ComparisonFilter.OP_LIKE,
-                ComparisonFilter.OP_NOT_LIKE,
-            ):
-                raise BadSnubaRPCRequestException(
-                    "only LIKE and NOT_LIKE comparisons are supported on array keys"
-                )
-            if v.WhichOneof("value") != "val_str":
-                raise BadSnubaRPCRequestException(
-                    "LIKE/NOT_LIKE on array keys requires a string pattern"
-                )
+            _validate_comparison_filter_type_array(op, v)
 
-        k_expression = attribute_key_to_expression(k)
+        k_expression = _trace_item_filter_key_expression(
+            attr_to_key_expression_callable=attribute_key_to_expression,
+            key=k,
+            use_array_map_columns=use_array_map_columns,
+        )
 
         value_type = v.WhichOneof("value")
         if value_type is None:
             raise BadSnubaRPCRequestException("comparison does not have a right hand side")
 
-        if v.is_null:
+        v_is_null = v.is_null or value_type == "val_null"
+        if v_is_null:
             v_expression: Expression = literal(None)
         else:
             v_expression = _attribute_value_to_expression(v)
 
+        # `sentry.timestamp` is a normalized column that `attribute_key_to_expression`
+        # maps to `CAST(timestamp, 'Float64')`. Wrapping the primary-key/partition
+        # column in a CAST prevents ClickHouse from using it for granule and partition
+        # pruning, so range filters on it scan far more data than necessary. It also
+        # duplicates the mandatory time-range condition (timestamp_in_range_condition)
+        # that is already applied on the raw column. For range comparisons, compare
+        # against the raw DateTime `timestamp` column instead so the condition is
+        # index- and partition-prunable. We reuse timestamp_seconds_to_datetime_literal
+        # so a bound equal to the mandatory range is byte-identical to it and gets
+        # collapsed by dedupe_timestamp_conditions.
+        if k.name == f"{COLUMN_PREFIX}timestamp" and value_type in (
+            "val_int",
+            "val_float",
+            "val_double",
+        ):
+            scalar_value = _scalar_value(v)
+            assert isinstance(scalar_value, (int, float))
+            raw_timestamp = column("timestamp")
+            # `timestamp` is a second-resolution DateTime, so a fractional bound must be
+            # rounded to the integer second that preserves the original
+            # `CAST(timestamp, 'Float64') OP value` result: `<`/`>=` round up (ceil) and
+            # `<=`/`>` round down (floor). Integer bounds are left unchanged, so the
+            # rewritten mandatory-range bounds stay byte-identical and
+            # dedupe_timestamp_conditions can still collapse them.
+            if op == ComparisonFilter.OP_LESS_THAN:
+                return f.less(
+                    raw_timestamp,
+                    timestamp_seconds_to_datetime_literal(math.ceil(scalar_value)),
+                )
+            if op == ComparisonFilter.OP_LESS_THAN_OR_EQUALS:
+                return f.lessOrEquals(
+                    raw_timestamp,
+                    timestamp_seconds_to_datetime_literal(math.floor(scalar_value)),
+                )
+            if op == ComparisonFilter.OP_GREATER_THAN:
+                return f.greater(
+                    raw_timestamp,
+                    timestamp_seconds_to_datetime_literal(math.floor(scalar_value)),
+                )
+            if op == ComparisonFilter.OP_GREATER_THAN_OR_EQUALS:
+                return f.greaterOrEquals(
+                    raw_timestamp,
+                    timestamp_seconds_to_datetime_literal(math.ceil(scalar_value)),
+                )
+
         if op == ComparisonFilter.OP_EQUALS:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
+
+            if k.type == AttributeKey.Type.TYPE_ARRAY:
+                if use_array_map_columns:
+                    return _typed_array_includes_scalar_expression(
+                        k, v, item_filter.comparison_filter.ignore_case
+                    )
+                return _type_array_includes_scalar_expression(
+                    k_expression, v, item_filter.comparison_filter.ignore_case
+                )
+            if _contains_subscriptable_reference(k_expression):
+                # Map-backed: NULL-free (exists, value) form (see _map_backed_operands).
+                value, exists = _map_backed_operands(k)
+                if v_is_null:  # `attr = null` <=> key absent
+                    return not_cond(exists)
+                lhs, rhs = (
+                    (f.lower(value), f.lower(v_expression))
+                    if item_filter.comparison_filter.ignore_case
+                    else (value, v_expression)
+                )
+                cmp = f.equals(lhs, rhs)
+                # existence guard only needed when '' / 0 could match an absent key.
+                if _comparison_can_match_column_default(k.type, v, value_type):
+                    return and_cond(exists, cmp)
+                return cmp
             expr = (
                 f.equals(f.lower(k_expression), f.lower(v_expression))
                 if item_filter.comparison_filter.ignore_case
@@ -463,6 +1108,30 @@ def trace_item_filters_to_expression(
             return expr_with_null
         if op == ComparisonFilter.OP_NOT_EQUALS:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
+            if k.type == AttributeKey.Type.TYPE_ARRAY:
+                includes = (
+                    _typed_array_includes_scalar_expression(
+                        k, v, item_filter.comparison_filter.ignore_case
+                    )
+                    if use_array_map_columns
+                    else _type_array_includes_scalar_expression(
+                        k_expression, v, item_filter.comparison_filter.ignore_case
+                    )
+                )
+                return not_cond(includes)
+            if _contains_subscriptable_reference(k_expression):
+                # Negation of OP_EQUALS; an absent key is "not equal".
+                value, exists = _map_backed_operands(k)
+                if v_is_null:  # `attr != null` <=> key present
+                    return exists
+                lhs, rhs = (
+                    (f.lower(value), f.lower(v_expression))
+                    if item_filter.comparison_filter.ignore_case
+                    else (value, v_expression)
+                )
+                if _comparison_can_match_column_default(k.type, v, value_type):
+                    return not_cond(and_cond(exists, f.equals(lhs, rhs)))
+                return f.notEquals(lhs, rhs)
             expr = (
                 f.notEquals(f.lower(k_expression), f.lower(v_expression))
                 if item_filter.comparison_filter.ignore_case
@@ -474,6 +1143,10 @@ def trace_item_filters_to_expression(
             return expr_with_null
         if op == ComparisonFilter.OP_LIKE:
             if k.type == AttributeKey.Type.TYPE_ARRAY:
+                if use_array_map_columns:
+                    return _typed_array_like_expression(
+                        k, v_expression, item_filter.comparison_filter.ignore_case
+                    )
                 like_fn = f.ilike if item_filter.comparison_filter.ignore_case else f.like
                 return f.arrayExists(
                     Lambda(
@@ -488,9 +1161,18 @@ def trace_item_filters_to_expression(
                     "the LIKE comparison is only supported on string and array keys"
                 )
             comparison_function = f.ilike if item_filter.comparison_filter.ignore_case else f.like
+            if _contains_subscriptable_reference(k_expression):
+                value, exists = _map_backed_operands(k)
+                return and_cond(exists, comparison_function(value, v_expression))
             return comparison_function(k_expression, v_expression)
         if op == ComparisonFilter.OP_NOT_LIKE:
             if k.type == AttributeKey.Type.TYPE_ARRAY:
+                if use_array_map_columns:
+                    return not_cond(
+                        _typed_array_like_expression(
+                            k, v_expression, item_filter.comparison_filter.ignore_case
+                        )
+                    )
                 like_fn = f.ilike if item_filter.comparison_filter.ignore_case else f.like
                 return not_cond(
                     f.arrayExists(
@@ -506,6 +1188,11 @@ def trace_item_filters_to_expression(
                 raise BadSnubaRPCRequestException(
                     "the NOT LIKE comparison is only supported on string and array keys"
                 )
+            if _contains_subscriptable_reference(k_expression):
+                # Negation of OP_LIKE; an absent key is "not like".
+                like_fn = f.ilike if item_filter.comparison_filter.ignore_case else f.like
+                value, exists = _map_backed_operands(k)
+                return not_cond(and_cond(exists, like_fn(value, v_expression)))
             comparison_function = (
                 f.notILike if item_filter.comparison_filter.ignore_case else f.notLike
             )
@@ -524,8 +1211,8 @@ def trace_item_filters_to_expression(
             return f.greaterOrEquals(k_expression, v_expression)
         if op == ComparisonFilter.OP_IN:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
-            if item_filter.comparison_filter.ignore_case:
-                k_expression = f.lower(k_expression)
+            ignore_case = item_filter.comparison_filter.ignore_case
+            if ignore_case:
                 if value_type == "val_str_array":
                     v_expression = literals_array(
                         None,
@@ -536,10 +1223,22 @@ def trace_item_filters_to_expression(
                         None,
                         [literal(elem.val_str.lower()) for elem in v.val_array.values],
                     )
-            expr = in_cond(k_expression, v_expression)
             # note: v_expression must be an array
             # we redefine the way in works for nulls
             # now null in ['hi', null] is true
+            if _contains_subscriptable_reference(k_expression):
+                # Map-backed: keep the existence if(...) out of in() (see helper).
+                return _analyzer_safe_in_expression(
+                    k,
+                    v_expression,
+                    negated=False,
+                    ignore_case=ignore_case,
+                    guard=_comparison_can_match_column_default(k.type, v, value_type),
+                    membership_as_has=membership_as_has,
+                )
+            if ignore_case:
+                k_expression = f.lower(k_expression)
+            expr = _in_or_has(k_expression, v_expression, as_has=membership_as_has)
             expr_with_null = or_cond(
                 expr,
                 and_cond(f.isNull(k_expression), f.has(v_expression, literal(None))),
@@ -547,8 +1246,8 @@ def trace_item_filters_to_expression(
             return expr_with_null
         if op == ComparisonFilter.OP_NOT_IN:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
-            if item_filter.comparison_filter.ignore_case:
-                k_expression = f.lower(k_expression)
+            ignore_case = item_filter.comparison_filter.ignore_case
+            if ignore_case:
                 if value_type == "val_str_array":
                     v_expression = literals_array(
                         None,
@@ -559,10 +1258,22 @@ def trace_item_filters_to_expression(
                         None,
                         [literal(elem.val_str.lower()) for elem in v.val_array.values],
                     )
-            expr = not_cond(in_cond(k_expression, v_expression))
             # note: v_expression must be an array
             # we redefine the way not in works for nulls
             # now null not in ['hi'] is true
+            if _contains_subscriptable_reference(k_expression):
+                # Map-backed: keep the existence if(...) out of in() (see helper).
+                return _analyzer_safe_in_expression(
+                    k,
+                    v_expression,
+                    negated=True,
+                    ignore_case=ignore_case,
+                    guard=_comparison_can_match_column_default(k.type, v, value_type),
+                    membership_as_has=membership_as_has,
+                )
+            if ignore_case:
+                k_expression = f.lower(k_expression)
+            expr = not_cond(_in_or_has(k_expression, v_expression, as_has=membership_as_has))
             expr_with_null = or_cond(
                 expr,
                 and_cond(
@@ -578,13 +1289,19 @@ def trace_item_filters_to_expression(
 
     if item_filter.HasField("exists_filter"):
         return get_field_existence_expression(
-            attribute_key_to_expression(item_filter.exists_filter.key)
+            _trace_item_filter_key_expression(
+                attr_to_key_expression_callable=attribute_key_to_expression,
+                key=item_filter.exists_filter.key,
+                use_array_map_columns=use_array_map_columns,
+            )
         )
 
     if item_filter.HasField("any_attribute_filter"):
         if not state.get_int_config("enable_any_attribute_filter", 1):
             return literal(True)
-        return _any_attribute_filter_to_expression(item_filter.any_attribute_filter)
+        return _any_attribute_filter_to_expression(
+            item_filter.any_attribute_filter, membership_as_has=membership_as_has
+        )
 
     return literal(True)
 
@@ -602,20 +1319,18 @@ def project_id_and_org_conditions(meta: RequestMeta) -> Expression:
     )
 
 
+def timestamp_seconds_to_datetime_literal(ts_seconds: int) -> Expression:
+    """Build the canonical ``toDateTime('YYYY-MM-DD HH:MM:SS')`` expression for a unix
+    timestamp. The mandatory time-range bounds and rewritten ``sentry.timestamp`` range
+    filters share this form so equal bounds produce structurally identical expressions
+    (which lets dedupe_timestamp_conditions collapse the duplicates)."""
+    return f.toDateTime(datetime.fromtimestamp(ts_seconds, tz=UTC).strftime(DATETIME_FORMAT))
+
+
 def timestamp_in_range_condition(start_ts: int, end_ts: int) -> Expression:
     return and_cond(
-        f.less(
-            column("timestamp"),
-            f.toDateTime(
-                datetime.fromtimestamp(end_ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-            ),
-        ),
-        f.greaterOrEquals(
-            column("timestamp"),
-            f.toDateTime(
-                datetime.fromtimestamp(start_ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-            ),
-        ),
+        f.less(column("timestamp"), timestamp_seconds_to_datetime_literal(end_ts)),
+        f.greaterOrEquals(column("timestamp"), timestamp_seconds_to_datetime_literal(start_ts)),
     )
 
 
@@ -662,11 +1377,12 @@ def get_field_existence_expression(field: Expression) -> Expression:
         """
         if isinstance(field, SubscriptableReference):
             return field
-        elif isinstance(field, FunctionCall) and len(field.parameters) > 0:
-            if len(field.parameters) > 0 and isinstance(
-                field.parameters[0], SubscriptableReference
-            ):
-                return field.parameters[0]
+        if (
+            isinstance(field, FunctionCall)
+            and len(field.parameters) > 0
+            and isinstance(field.parameters[0], SubscriptableReference)
+        ):
+            return field.parameters[0]
 
         return None
 
@@ -677,14 +1393,17 @@ def get_field_existence_expression(field: Expression) -> Expression:
 
     subscriptable_field = get_subscriptable_field(field)
     if subscriptable_field is not None:
-        return f.mapContains(subscriptable_field.column, subscriptable_field.key)
+        return map_key_exists(subscriptable_field.column, subscriptable_field.key)
 
     if isinstance(field, FunctionCall) and field.function_name == "arrayElement":
-        return f.mapContains(field.parameters[0], field.parameters[1])
+        return map_key_exists(field.parameters[0], field.parameters[1])
 
-    if isinstance(field, FunctionCall) and field.function_name == "arrayMap":
-        # Array attributes in the JSON column return empty arrays (not NULL)
-        # for missing keys, so notEmpty is the correct existence check.
+    if isinstance(field, FunctionCall) and field.function_name in ("arrayMap", "arrayConcat"):
+        # Array attributes return empty arrays (not NULL) for missing keys, so
+        # notEmpty is the correct existence check. This covers both the JSON-column
+        # membership expression (arrayMap) and the typed-column one (arrayConcat of
+        # the per-type map lookups, see
+        # type_array_to_membership_array_expression_from_typed_columns).
         return f.notEmpty(field)
 
     return f.isNotNull(field)

@@ -2,16 +2,13 @@ from __future__ import annotations
 
 import os
 from abc import ABC
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import UTC
 from typing import (
     Any,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    TypeAlias,
+    NamedTuple,
     TypedDict,
-    Union,
     cast,
     final,
 )
@@ -63,12 +60,44 @@ _SAMPLING_IN_STORAGE_PREFIX = "sampling_in_storage_"
 _START_ESTIMATION_MARK = "start_sampling_in_storage_estimation"
 _END_ESTIMATION_MARK = "end_sampling_in_storage_estimation"
 DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX = "StorageRouting"
-MetricsBackendType: TypeAlias = Callable[
-    [str, Union[int, float], Optional[Dict[str, str]], Optional[str]], None
-]
+MetricsBackendType = Callable[[str, int | float, dict[str, str] | None, str | None], None]
 CBRS_HASH = "cbrs"
-RoutedRequestType = Union[TimeSeriesRequest, TraceItemTableRequest]
-ClickhouseQuerySettings = Dict[str, Any]
+RoutedRequestType = TimeSeriesRequest | TraceItemTableRequest
+ClickhouseQuerySettings = dict[str, Any]
+
+
+class _OrgOverridableSetting(NamedTuple):
+    """One entry in the per-org ClickHouse setting override allowlist.
+
+    `unset_sentinel` is the value stored when no override is configured — chosen
+    so it cannot collide with a legitimate value an operator might want to set
+    (e.g. ClickHouse treats max_threads=0 as 'use all available cores', so 0 is
+    a real value and -1 is the sentinel). `description` is the operator-facing
+    string shown in the admin UI for this setting's override.
+    """
+
+    value_type: type
+    unset_sentinel: Any
+    description: str
+
+
+# Allowlist of ClickHouse settings that operators may override per-organization
+# via routing-strategy config. Each entry adds an `organization_<name>_override`
+# Configuration to every routing strategy, keyed by organization_id. The override
+# is applied after _update_routing_decision and replaces any prior value.
+ORG_OVERRIDABLE_CLICKHOUSE_SETTINGS: dict[str, _OrgOverridableSetting] = {
+    "max_threads": _OrgOverridableSetting(
+        value_type=int,
+        unset_sentinel=-1,
+        description=(
+            "Per-organization_id override for the ClickHouse max_threads setting. "
+            "Replaces any value set by allocation policies or the routing strategy, "
+            "including raising it above the policy-derived value. Default -1 means "
+            "no override; note that 0 is a legitimate value (ClickHouse interprets "
+            "max_threads=0 as 'use all available physical cores')."
+        ),
+    ),
+}
 
 
 @dataclass
@@ -76,7 +105,7 @@ class RoutingContext:
     timer: Timer
     in_msg: ProtobufMessage
     query_id: str
-    query_result: Optional[QueryResult] = field(default=None)
+    query_result: QueryResult | None = field(default=None)
     extra_info: dict[str, Any] = field(default_factory=dict)
     allocation_policies_recommendations: dict[str, QuotaAllowance] = field(default_factory=dict)
     cluster_load_info: LoadInfo | None = field(default=None)
@@ -104,12 +133,12 @@ class TimeWindow:
         return (self.end_timestamp.seconds - self.start_timestamp.seconds) / 3600
 
     def __repr__(self) -> str:
-        from datetime import datetime, timezone
+        from datetime import datetime
 
-        start = datetime.fromtimestamp(self.start_timestamp.seconds, tz=timezone.utc).strftime(
+        start = datetime.fromtimestamp(self.start_timestamp.seconds, tz=UTC).strftime(
             "%Y-%m-%d %H:%M:%S"
         )
-        end = datetime.fromtimestamp(self.end_timestamp.seconds, tz=timezone.utc).strftime(
+        end = datetime.fromtimestamp(self.end_timestamp.seconds, tz=UTC).strftime(
             "%Y-%m-%d %H:%M:%S"
         )
 
@@ -178,7 +207,7 @@ def get_stats_dict(
 
 
 def _construct_hacky_querylog_payload(
-    strategy: "BaseRoutingStrategy", routing_decision: RoutingDecision
+    strategy: BaseRoutingStrategy, routing_decision: RoutingDecision
 ) -> snuba_queries_v1.Querylog:
     cur_span = sentry_sdk.get_current_span()
     assert routing_decision.routing_context is not None
@@ -250,7 +279,9 @@ class StrategyData(ConfigurableComponentData):
 
 
 class BaseRoutingStrategy(ConfigurableComponent, ABC):
-    def __init__(self, default_config_overrides: dict[str, Any] = {}) -> None:
+    def __init__(self, default_config_overrides: dict[str, Any] | None = None) -> None:
+        if default_config_overrides is None:
+            default_config_overrides = {}
         self._default_config_definitions = [
             RoutingStrategyConfig(
                 name="some_default_config",
@@ -259,6 +290,16 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 default=100,
             ),
         ]
+        for setting_name, setting in ORG_OVERRIDABLE_CLICKHOUSE_SETTINGS.items():
+            self._default_config_definitions.append(
+                RoutingStrategyConfig(
+                    name=f"organization_{setting_name}_override",
+                    description=setting.description,
+                    value_type=setting.value_type,
+                    default=setting.unset_sentinel,
+                    param_types={"organization_id": int},
+                )
+            )
         self._overridden_additional_config_definitions = (
             self._get_overridden_additional_config_defaults(default_config_overrides)
         )
@@ -268,6 +309,17 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
 
     def _get_default_config_definitions(self) -> list[Configuration]:
         return cast(list[Configuration], self._default_config_definitions)
+
+    def _get_default_routing_decision_tier(self) -> Tier:
+        tier_int = state.get_int_config("default_tier", 1)
+
+        if tier_int == 512:
+            return Tier.TIER_512
+        if tier_int == 64:
+            return Tier.TIER_64
+        if tier_int == 8:
+            return Tier.TIER_8
+        return Tier.TIER_1
 
     def additional_config_definitions(self) -> list[Configuration]:
         return self._overridden_additional_config_definitions
@@ -287,7 +339,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         )
 
     @classmethod
-    def create_minimal_instance(cls, resource_identifier: str) -> "ConfigurableComponent":
+    def create_minimal_instance(cls, resource_identifier: str) -> ConfigurableComponent:
         return cls(
             default_config_overrides={},
         )
@@ -346,7 +398,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         metrics_backend_func: MetricsBackendType,
         name: str,
         value: float | int,
-        tags: Dict[str, str] | None = None,
+        tags: dict[str, str] | None = None,
     ) -> None:
         name = _SAMPLING_IN_STORAGE_PREFIX + name
         metrics_backend_func(name, value, tags, None)
@@ -363,8 +415,24 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
     ) -> None:
         raise NotImplementedError
 
+    def _get_org_clickhouse_setting_overrides(
+        self, tenant_ids: dict[str, str | int]
+    ) -> dict[str, Any]:
+        org_id = tenant_ids.get("organization_id")
+        if org_id is None:
+            return {}
+        overrides: dict[str, Any] = {}
+        for setting_name, setting in ORG_OVERRIDABLE_CLICKHOUSE_SETTINGS.items():
+            value = self.get_config_value(
+                f"organization_{setting_name}_override",
+                {"organization_id": org_id},
+            )
+            if value != setting.unset_sentinel:
+                overrides[setting_name] = value
+        return overrides
+
     def _get_combined_allocation_policies_recommendations(
-        self, policy_recommendations: List[QuotaAllowance]
+        self, policy_recommendations: list[QuotaAllowance]
     ) -> CombinedAllocationPoliciesRecommendations:
         # decides how to combine the recommendations from the allocation policies
         settings = {}
@@ -410,6 +478,8 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             OutcomesBasedRoutingStrategy,
         )
 
+        default_tier = self._get_default_routing_decision_tier()
+
         with sentry_sdk.start_span(op="decide_tier") as span:
             try:
                 routing_context.timer.mark(_START_ESTIMATION_MARK)
@@ -426,7 +496,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 routing_decision = RoutingDecision(
                     routing_context=routing_context,
                     strategy=self,
-                    tier=Tier.TIER_1,
+                    tier=default_tier,
                     clickhouse_settings=combined_allocation_policies_recommendations["settings"],
                     can_run=combined_allocation_policies_recommendations["can_run"],
                     is_throttled=combined_allocation_policies_recommendations["is_throttled"],
@@ -434,11 +504,18 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
 
                 routing_context.cluster_load_info = (
                     get_cluster_loadinfo()
-                    if state.get_config("storage_routing.enable_get_cluster_loadinfo", True)
+                    if state.get_config("storage_routing.enable_get_cluster_loadinfo", False)
                     else None
                 )
 
                 self._update_routing_decision(routing_decision)
+
+                org_overrides = self._get_org_clickhouse_setting_overrides(
+                    routing_context.tenant_ids
+                )
+                if org_overrides:
+                    routing_decision.clickhouse_settings.update(org_overrides)
+                    routing_context.extra_info["org_clickhouse_setting_overrides"] = org_overrides
 
                 routing_context.timer.mark(_END_ESTIMATION_MARK)
                 self._record_value_in_span_and_DD(
@@ -457,7 +534,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 routing_decision = RoutingDecision(
                     routing_context=routing_context,
                     strategy=OutcomesBasedRoutingStrategy(),
-                    tier=Tier.TIER_1,
+                    tier=default_tier,
                     can_run=True,
                 )
 
@@ -618,7 +695,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
     def to_dict(self) -> StrategyData:
         base_data = super().to_dict()
         policies = self.get_allocation_policies() + self.get_delete_allocation_policies()
-        return StrategyData(**base_data, policies_data=[policy.to_dict() for policy in policies])  # type: ignore
+        return StrategyData(**base_data, policies_data=[policy.to_dict() for policy in policies])
 
 
 import_submodules_in_directory(

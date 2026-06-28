@@ -1,5 +1,5 @@
+from collections.abc import Mapping
 from enum import Enum
-from typing import Mapping
 
 from sentry_kafka_schemas import SchemaNotFound, get_topic
 
@@ -57,7 +57,6 @@ class Topic(Enum):
     DEAD_LETTER_QUERYLOG = "snuba-dead-letter-querylog"
     DEAD_LETTER_GROUP_ATTRIBUTES = "snuba-dead-letter-group-attributes"
 
-    SPANS = "snuba-spans"
     EAP_SPANS_COMMIT_LOG = "snuba-eap-spans-commit-log"
     SUBSCRIPTION_SCHEDULED_EAP_SPANS = "scheduled-subscriptions-eap-spans"
     SUBSCRIPTION_RESULTS_EAP_SPANS = "eap-spans-subscription-results"

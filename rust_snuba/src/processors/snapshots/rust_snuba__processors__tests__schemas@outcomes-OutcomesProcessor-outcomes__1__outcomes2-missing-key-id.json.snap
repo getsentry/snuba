@@ -12,6 +12,7 @@ expression: snapshot_payload
     "outcome": 4,
     "project_id": 1,
     "quantity": 3,
+    "quantity64": 3,
     "reason": null,
     "timestamp": 1680029449
   }

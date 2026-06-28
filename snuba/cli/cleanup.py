@@ -1,5 +1,3 @@
-from typing import Optional
-
 import click
 
 from snuba.clusters.cluster import ClickhouseClientSettings
@@ -52,14 +50,14 @@ from snuba.environment import setup_logging, setup_sentry
 @click.option("--log-level", help="Logging level to use.")
 def cleanup(
     *,
-    clickhouse_host: Optional[str],
-    clickhouse_port: Optional[int],
+    clickhouse_host: str | None,
+    clickhouse_port: int | None,
     clickhouse_secure: bool,
-    clickhouse_ca_certs: Optional[str],
-    clickhouse_verify: Optional[bool],
+    clickhouse_ca_certs: str | None,
+    clickhouse_verify: bool | None,
     dry_run: bool,
     storage_name: str,
-    log_level: Optional[str] = None,
+    log_level: str | None = None,
 ) -> None:
     """
     Deletes stale partitions for ClickHouse tables
@@ -70,6 +68,7 @@ def cleanup(
 
     from snuba.cleanup import logger, run_cleanup
     from snuba.clickhouse.native import ClickhousePool
+    from snuba.clusters.cluster import ClickhouseNode, connection_cache
 
     storage = get_writable_storage(StorageKey(storage_name))
 
@@ -81,16 +80,20 @@ def cleanup(
     cluster = storage.get_cluster()
     database = cluster.get_database()
 
+    connection: ClickhousePool
     if clickhouse_host and clickhouse_port:
-        connection = ClickhousePool(
-            clickhouse_host,
-            clickhouse_port,
+        # Go through the shared connection cache so the driver (native vs
+        # clickhouse-connect/HTTP) is selected by the runtime config, behind
+        # the abstract ClickhousePool type.
+        connection = connection_cache.get_node_connection(
+            ClickhouseClientSettings.CLEANUP,
+            ClickhouseNode(clickhouse_host, clickhouse_port, http_port=cluster.get_http_port()),
             clickhouse_user,
             clickhouse_password,
             database,
-            clickhouse_secure,
-            clickhouse_ca_certs,
-            clickhouse_verify,
+            secure=clickhouse_secure,
+            ca_certs=clickhouse_ca_certs,
+            verify=clickhouse_verify,
         )
     elif not cluster.is_single_node():
         raise click.ClickException("Provide ClickHouse host and port for cleanup")
@@ -98,4 +101,4 @@ def cleanup(
         connection = cluster.get_query_connection(ClickhouseClientSettings.CLEANUP)
 
     num_dropped = run_cleanup(connection, storage, database, dry_run=dry_run)
-    logger.info("Dropped %s partitions on %s" % (num_dropped, cluster))
+    logger.info(f"Dropped {num_dropped} partitions on {cluster}")

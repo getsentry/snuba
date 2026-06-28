@@ -4,9 +4,10 @@ import csv
 import json
 import logging
 import os.path
+from collections.abc import Generator, Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Generator, Iterable, Iterator, NewType, Sequence
+from typing import NewType
 
 import jsonschema
 
@@ -115,7 +116,7 @@ class PostgresSnapshot(BulkLoadSource):
     @classmethod
     def load(cls, product: str, path: str) -> PostgresSnapshot:
         meta_file_name = os.path.join(path, "metadata.json")
-        with open(meta_file_name, "r") as meta_file:
+        with open(meta_file_name) as meta_file:
             json_desc = json.load(meta_file)
             jsonschema.validate(
                 json_desc,
@@ -124,8 +125,9 @@ class PostgresSnapshot(BulkLoadSource):
 
             if json_desc["product"] != product:
                 raise ValueError(
-                    "Invalid product in Postgres snapshot %s. Expected %s"
-                    % (json_desc["product"], product)
+                    "Invalid product in Postgres snapshot {}. Expected {}".format(
+                        json_desc["product"], product
+                    )
                 )
 
             desc_content = [TableConfig.from_dict(table) for table in json_desc["content"]]
@@ -158,13 +160,13 @@ class PostgresSnapshot(BulkLoadSource):
     def get_parsed_table_file(
         self,
         table: str,
-    ) -> Generator[Iterator[SnapshotTableRow], None, None]:
+    ) -> Generator[Iterator[SnapshotTableRow]]:
         table_desc = self.__descriptor.get_table(table)
         assert not table_desc.zip, "Cannot parse a gzip table file on the fly"
 
         table_path = self.__get_table_path(table)
         try:
-            with open(table_path, "r") as table_file:
+            with open(table_path) as table_file:
                 csv_file = csv.DictReader(table_file)
                 columns = csv_file.fieldnames
 
@@ -179,11 +181,7 @@ class PostgresSnapshot(BulkLoadSource):
                     existing_set = set(columns)
                     if not expected_set <= existing_set:
                         raise ValueError(
-                            "The table %s is missing columns %r "
-                            % (
-                                table,
-                                expected_set - existing_set,
-                            )
+                            f"The table {table} is missing columns {expected_set - existing_set!r} "
                         )
 
                     if len(existing_set) != len(expected_set):
@@ -199,27 +197,24 @@ class PostgresSnapshot(BulkLoadSource):
 
                 yield csv_file
 
-        except FileNotFoundError:
+        except FileNotFoundError as e:
             raise ValueError(
-                "The snapshot does not contain the requested table %s" % table,
-            )
+                f"The snapshot does not contain the requested table {table}",
+            ) from e
 
     @contextmanager
-    def get_preprocessed_table_file(self, table: str) -> Generator[Iterator[bytes], None, None]:
+    def get_preprocessed_table_file(self, table: str) -> Generator[Iterator[bytes]]:
         table_path = self.__get_table_path(table)
 
         try:
             with open(table_path, "rb") as table_file:
 
                 def chunks_provider() -> Iterator[bytes]:
-                    for chunk in iter(
-                        lambda: table_file.read(settings.BULK_BINARY_LOAD_CHUNK), b""
-                    ):
-                        yield chunk
+                    yield from iter(lambda: table_file.read(settings.BULK_BINARY_LOAD_CHUNK), b"")
 
                 yield chunks_provider()
 
-        except FileNotFoundError:
+        except FileNotFoundError as e:
             raise ValueError(
-                "The snapshot does not contain the requested table %s" % table,
-            )
+                f"The snapshot does not contain the requested table {table}",
+            ) from e

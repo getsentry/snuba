@@ -32,7 +32,7 @@ test_data = [
                     "p90(x)",
                     cf.quantileIf(0.9)(
                         attr_num["x"],
-                        f.mapContains(column("attr_num", alias="_snuba_attr_num"), "x"),
+                        f.has(f.mapKeys(column("attr_num", alias="_snuba_attr_num")), "x"),
                         alias="p90(x)",
                     ),
                 ),
@@ -53,7 +53,7 @@ test_data = [
                     "avg(x)",
                     f.avgIf(
                         attr_num["x"],
-                        f.mapContains(column("attr_num", alias="_snuba_attr_num"), "x"),
+                        f.has(f.mapKeys(column("attr_num", alias="_snuba_attr_num")), "x"),
                         alias="avg(x)",
                     ),
                 ),
@@ -83,7 +83,7 @@ test_data = [
                             attr_num["x"],
                             column("sampling_weight"),
                         ),
-                        f.mapContains(column("attr_num", alias="_snuba_attr_num"), "x"),
+                        f.has(f.mapKeys(column("attr_num", alias="_snuba_attr_num")), "x"),
                         alias="sum(x)",
                     ),
                 ),

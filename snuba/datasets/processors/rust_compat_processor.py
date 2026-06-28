@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import timezone
-from typing import Any, Optional
+from datetime import UTC
+from typing import Any
 
 import simplejson as json
 
@@ -17,12 +17,12 @@ class RustCompatProcessor(DatasetMessageProcessor):
     def __init__(self, processor_name: str):
         import rust_snuba
 
-        self.__process_message = rust_snuba.process_message  # type: ignore
+        self.__process_message = rust_snuba.process_message  # type: ignore[attr-defined]
         self.__processor_name = processor_name
 
     def process_message(
         self, message: Any, metadata: KafkaMessageMetadata
-    ) -> Optional[ProcessedMessage]:
+    ) -> ProcessedMessage | None:
         if self.__processor_name == "EAPItemsProcessor":
             payload = message
         else:
@@ -32,7 +32,7 @@ class RustCompatProcessor(DatasetMessageProcessor):
             payload,
             metadata.partition,
             metadata.offset,
-            int(metadata.timestamp.replace(tzinfo=timezone.utc).timestamp() * 1000),
+            int(metadata.timestamp.replace(tzinfo=UTC).timestamp() * 1000),
         )
 
         if insert_payload is not None:
@@ -45,11 +45,10 @@ class RustCompatProcessor(DatasetMessageProcessor):
                 origin_timestamp=None,
                 sentry_received_timestamp=None,
             )
-        elif replacement_payload is not None:
+        if replacement_payload is not None:
             assert insert_payload is None
             key, values_bytes = replacement_payload
 
             values = [json.loads(line) for line in values_bytes.rstrip(b"\n").split(b"\n") if line]
             return ReplacementBatch(key=key.decode("utf8"), values=values)
-        else:
-            raise ValueError("unsupported return value from snuba_rust")
+        raise ValueError("unsupported return value from snuba_rust")

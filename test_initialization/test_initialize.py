@@ -6,7 +6,7 @@ from snuba.core.initialize import initialize_snuba
 class TestInitialization:
     def test_init(
         self,
-    ):
+    ) -> None:
         # first make sure all the factories are not initialized
         # this is accessing private module variables but we don't have a
         # better way of knowing things are initialized (2022-10-27)

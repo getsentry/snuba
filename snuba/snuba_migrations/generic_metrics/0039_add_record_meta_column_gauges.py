@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
@@ -17,14 +17,14 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.AddColumn(
                 storage_set=self.storage_set_key,
                 table_name=self.local_table_name,
-                column=Column("record_meta", UInt(8, Modifiers(default=str("0")))),
+                column=Column("record_meta", UInt(8, Modifiers(default="0"))),
                 target=operations.OperationTarget.LOCAL,
                 after="materialization_version",
             ),
             operations.AddColumn(
                 storage_set=self.storage_set_key,
                 table_name=self.dist_table_name,
-                column=Column("record_meta", UInt(8, Modifiers(default=str("0")))),
+                column=Column("record_meta", UInt(8, Modifiers(default="0"))),
                 target=operations.OperationTarget.DISTRIBUTED,
                 after="materialization_version",
             ),

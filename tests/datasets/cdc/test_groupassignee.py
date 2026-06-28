@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -136,7 +136,7 @@ class TestGroupassignee:
         "record_deleted": 0,
         "user_id": 1,
         "team_id": None,
-        "date_added": datetime(2019, 9, 19, 0, 17, 55, tzinfo=timezone.utc),
+        "date_added": datetime(2019, 9, 19, 0, 17, 55, tzinfo=UTC),
     }
 
     PROCESSED_UPDATE = {
@@ -146,7 +146,7 @@ class TestGroupassignee:
         "record_deleted": 0,
         "user_id": 1,
         "team_id": None,
-        "date_added": datetime(2019, 9, 19, 0, 17, 55, tzinfo=timezone.utc),
+        "date_added": datetime(2019, 9, 19, 0, 17, 55, tzinfo=UTC),
     }
 
     DELETED = {
@@ -167,7 +167,7 @@ class TestGroupassignee:
         ret = processor.process_message(self.INSERT_MSG, metadata)
         assert ret == InsertBatch(
             [self.PROCESSED],
-            datetime(2019, 9, 19, 0, 17, 55, 32443, tzinfo=timezone.utc),
+            datetime(2019, 9, 19, 0, 17, 55, 32443, tzinfo=UTC),
         )
         write_processed_messages(self.storage, [ret])
         results = (
@@ -189,7 +189,7 @@ class TestGroupassignee:
         ret = processor.process_message(self.UPDATE_MSG_NO_KEY_CHANGE, metadata)
         assert ret == InsertBatch(
             [self.PROCESSED],
-            datetime(2019, 9, 19, 0, 6, 56, 376853, tzinfo=timezone.utc),
+            datetime(2019, 9, 19, 0, 6, 56, 376853, tzinfo=UTC),
         )
 
         # Tests an update with key change which becomes a two inserts:
@@ -197,13 +197,13 @@ class TestGroupassignee:
         ret = processor.process_message(self.UPDATE_MSG_WITH_KEY_CHANGE, metadata)
         assert ret == InsertBatch(
             [self.DELETED, self.PROCESSED_UPDATE],
-            datetime(2019, 9, 19, 0, 6, 56, 376853, tzinfo=timezone.utc),
+            datetime(2019, 9, 19, 0, 6, 56, 376853, tzinfo=UTC),
         )
 
         ret = processor.process_message(self.DELETE_MSG, metadata)
         assert ret == InsertBatch(
             [self.DELETED],
-            datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=timezone.utc),
+            datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=UTC),
         )
 
     def test_bulk_load(self) -> None:

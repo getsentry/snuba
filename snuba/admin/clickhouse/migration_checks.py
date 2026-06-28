@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Mapping, Optional, Sequence, Set, Tuple, Union
 
 from snuba.migrations.groups import MigrationGroup, get_group_loader
 from snuba.migrations.policies import MigrationPolicy
@@ -28,7 +28,7 @@ class ReverseReason(Enum):
 @dataclass
 class Result:
     allowed: bool
-    reason: Optional[Union[RunReason, ReverseReason]] = None
+    reason: RunReason | ReverseReason | None = None
 
     def __post_init__(self) -> None:
         if self.allowed and self.reason:
@@ -39,12 +39,12 @@ class Result:
 
 @dataclass
 class RunResult(Result):
-    reason: Optional[RunReason] = None
+    reason: RunReason | None = None
 
 
 @dataclass
 class ReverseResult(Result):
-    reason: Optional[ReverseReason] = None
+    reason: ReverseReason | None = None
 
 
 @dataclass
@@ -154,8 +154,8 @@ class StatusChecker(Checker):
 
 
 def run_migration_checks_and_policies(
-    group_policies: Mapping[str, Set[MigrationPolicy]], runner: Runner
-) -> Sequence[Tuple[MigrationGroup, Sequence[MigrationData]]]:
+    group_policies: Mapping[str, set[MigrationPolicy]], runner: Runner
+) -> Sequence[tuple[MigrationGroup, Sequence[MigrationData]]]:
     """
     Runs the policies for the given groups in addition to status
     checks for all groups.
@@ -163,17 +163,19 @@ def run_migration_checks_and_policies(
     Returns the results of those checks along with the statuses
     for the migrations.
     """
-    group_results: List[Tuple[MigrationGroup, Sequence[MigrationData]]] = []
+    group_results: list[tuple[MigrationGroup, Sequence[MigrationData]]] = []
 
-    for group, migrations in runner.show_all([g for g in group_policies.keys()]):
-        migration_ids: List[MigrationData] = []
+    for group, migrations in runner.show_all(list(group_policies.keys())):
+        migration_ids: list[MigrationData] = []
 
         status_checker = StatusChecker(group, migrations)
         policies = group_policies[group.value]
 
         def do_checking(
             migration_key: MigrationKey,
-        ) -> Tuple[RunResult, ReverseResult]:
+            status_checker: StatusChecker = status_checker,
+            policies: set[MigrationPolicy] = policies,
+        ) -> tuple[RunResult, ReverseResult]:
             run_result = status_checker.can_run(migration_key)
             reverse_result = status_checker.can_reverse(migration_key)
 

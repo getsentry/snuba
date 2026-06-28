@@ -1,7 +1,6 @@
 import logging
 import time
 from datetime import datetime
-from typing import Optional
 
 import click
 import simplejson as json
@@ -61,7 +60,7 @@ def offline_replacer(
     dry_run: bool,
     start_from: int,
     delay: int,
-    log_level: Optional[str] = None,
+    log_level: str | None = None,
 ) -> None:
     """
     Executes a list of replacements taken from a file instead of taking

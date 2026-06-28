@@ -8,7 +8,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from typing import Any, Dict, Optional
+from typing import Any
 
 GO_SERVER_URL = os.environ["GO_SERVER_URL"]
 
@@ -16,12 +16,12 @@ GO_SERVER_URL = os.environ["GO_SERVER_URL"]
 MAX_FETCHES = 100
 
 
-def pipeline_passed(pipeline: Dict[str, Any]) -> bool:
-    stage_status_dict: Dict[str, str] = {
+def pipeline_passed(pipeline: dict[str, Any]) -> bool:
+    stage_status_dict: dict[str, str] = {
         stage["name"]: stage["status"] for stage in pipeline["stages"]
     }
 
-    return stage_status_dict.get("pipeline-complete", None) == "Passed"
+    return stage_status_dict.get("pipeline-complete") == "Passed"
 
 
 # print the most recent passing sha for a repo
@@ -33,7 +33,7 @@ def main(pipeline_name: str = "deploy-snuba-us", repo: str = "snuba") -> int:
             GOCD_ACCESS_TOKEN not set. It should be an access token belonging to bot@sentry.io.
             """
         )
-    fetch_url: Optional[str] = f"{GO_SERVER_URL}/api/pipelines/{pipeline_name}/history"
+    fetch_url: str | None = f"{GO_SERVER_URL}/api/pipelines/{pipeline_name}/history"
     fetches = 0
     while fetch_url and fetches < MAX_FETCHES:
         fetches += 1
@@ -47,7 +47,7 @@ def main(pipeline_name: str = "deploy-snuba-us", repo: str = "snuba") -> int:
         try:
             resp = urllib.request.urlopen(req)
         except urllib.error.HTTPError as e:
-            raise SystemExit(f"Failed to fetch pipeline history:\n{e.read().decode()}")
+            raise SystemExit(f"Failed to fetch pipeline history:\n{e.read().decode()}") from e
 
         print("fetching pipeline history for", pipeline_name, fetch_url, file=sys.stderr)
         data = json.loads(resp.read())
@@ -65,11 +65,11 @@ def main(pipeline_name: str = "deploy-snuba-us", repo: str = "snuba") -> int:
                 for r in pipeline["build_cause"]["material_revisions"]:
                     # example material description format... `in` is good enough
                     # 'URL: git@github.com:getsentry/devinfra-example-service.git, Branch: main'
-                    if f"git@github.com:getsentry/{repo}.git" in r["material"]["description"]:
-                        rev = r["modifications"][0]["revision"]
-                        print(rev)
-                        return 0
-                    elif f"https://github.com/getsentry/{repo}.git" in r["material"]["description"]:
+                    if (
+                        f"git@github.com:getsentry/{repo}.git" in r["material"]["description"]
+                        or f"https://github.com/getsentry/{repo}.git"
+                        in r["material"]["description"]
+                    ):
                         rev = r["modifications"][0]["revision"]
                         print(rev)
                         return 0
@@ -83,7 +83,7 @@ def main(pipeline_name: str = "deploy-snuba-us", repo: str = "snuba") -> int:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--pipeline", default="deploy-snuba-s4s")
+    parser.add_argument("--pipeline", default="deploy-snuba-py-s4s2")
     parser.add_argument("--repo", default="snuba")
     args = parser.parse_args()
     main(args.pipeline, args.repo)

@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Set
+from collections.abc import Callable
+from typing import cast
 
 from snuba.clickhouse.query import Query
 from snuba.query.conditions import ConditionFunctions
@@ -19,7 +20,7 @@ class ColumnTypeError(ValidationException):
 
 
 class BaseTypeConverter(ClickhouseQueryProcessor, ABC):
-    def __init__(self, columns: Set[str], optimize_ordering: bool = False):
+    def __init__(self, columns: set[str], optimize_ordering: bool = False):
         self.columns = columns
         self.optimize_ordering = optimize_ordering
         column_match = Or([String(col) for col in columns])
@@ -181,15 +182,20 @@ class BaseTypeConverter(ClickhouseQueryProcessor, ABC):
             for param in params:
                 assert isinstance(param, Literal)
 
-            wrapper = tuple if collection_func.function_name == "tuple" else list
+            wrapper: Callable[[list[Expression]], tuple[Expression, ...] | list[Expression]] = (
+                tuple if collection_func.function_name == "tuple" else list
+            )
             new_collection_func = FunctionCall(
                 collection_func.alias,
                 collection_func.function_name,
-                parameters=wrapper(
-                    [
-                        self._translate_literal(assert_literal(lit))
-                        for lit in collection_func.parameters
-                    ]
+                parameters=cast(
+                    "tuple[Expression, ...]",
+                    wrapper(
+                        [
+                            self._translate_literal(assert_literal(lit))
+                            for lit in collection_func.parameters
+                        ]
+                    ),
                 ),
             )
             return FunctionCall(

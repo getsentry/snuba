@@ -1,6 +1,8 @@
+import json
 import re
 from collections import defaultdict
-from typing import Any, Callable, Dict, Iterable
+from collections.abc import Callable, Iterable
+from typing import Any
 
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
@@ -8,18 +10,64 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableRequest,
 )
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    Array,
     AttributeKey,
     AttributeValue,
     Function,
     Reliability,
 )
 
+from snuba.web.rpc.common.common import (
+    merge_typed_array_subcolumns,
+    use_array_map_columns,
+)
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_get_trace import convert_to_attribute_value
 from snuba.web.rpc.v1.resolvers.common.aggregation import ExtrapolationContext
 
 
+def _json_array_element_to_scalar(obj: Any) -> Any:
+    if not isinstance(obj, dict) or len(obj) != 1:
+        return obj
+    (tag, val) = next(iter(obj.items()))
+    if tag == "String":
+        return str(val)
+    if tag == "Int":
+        return int(val)
+    if tag in ("Double", "Float"):
+        return float(val)
+    if tag == "Bool":
+        if isinstance(val, bool):
+            return val
+        return str(val).lower() == "true"
+    return obj
+
+
 def _array_raw_to_attribute_value(raw: Any) -> AttributeValue:
+    """
+    Array values will be JSON String
+    """
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as e:
+            raise BadSnubaRPCRequestException(
+                f"TYPE_ARRAY column value is not valid JSON: {e}"
+            ) from e
+        if not isinstance(parsed, list):
+            raise BadSnubaRPCRequestException(
+                f"TYPE_ARRAY column JSON must decode to a list, got {type(parsed)}"
+            )
+        return AttributeValue(
+            val_array=Array(
+                values=[
+                    convert_to_attribute_value(_json_array_element_to_scalar(elem))
+                    for elem in parsed
+                ]
+            )
+        )
+    if isinstance(raw, (list, tuple)):
+        return convert_to_attribute_value(list(raw))
     return convert_to_attribute_value(raw)
 
 
@@ -29,20 +77,18 @@ def _get_converter_for_type(
     """Returns a converter function for the given attribute type."""
     if key_type == AttributeKey.TYPE_BOOLEAN:
         return lambda x: AttributeValue(val_bool=bool(x))
-    elif key_type == AttributeKey.TYPE_STRING:
+    if key_type == AttributeKey.TYPE_STRING:
         return lambda x: AttributeValue(val_str=str(x))
-    elif key_type == AttributeKey.TYPE_INT:
+    if key_type == AttributeKey.TYPE_INT:
         return lambda x: AttributeValue(val_int=int(x))
-    elif key_type == AttributeKey.TYPE_FLOAT:
+    if key_type == AttributeKey.TYPE_FLOAT:
         return lambda x: AttributeValue(val_float=float(x))
-    elif key_type == AttributeKey.TYPE_DOUBLE:
+    if key_type == AttributeKey.TYPE_DOUBLE:
         return lambda x: AttributeValue(val_double=float(x))
-    elif key_type == AttributeKey.TYPE_ARRAY:
+    if key_type == AttributeKey.TYPE_ARRAY:
+        # Native list (typed sub-columns merged in convert_results) or legacy JSON string.
         return _array_raw_to_attribute_value
-    else:
-        raise BadSnubaRPCRequestException(
-            f"unknown attribute type: {AttributeKey.Type.Name(key_type)}"
-        )
+    raise BadSnubaRPCRequestException(f"unknown attribute type: {AttributeKey.Type.Name(key_type)}")
 
 
 def _get_double_converter() -> Callable[[Any], AttributeValue]:
@@ -50,7 +96,7 @@ def _get_double_converter() -> Callable[[Any], AttributeValue]:
     return lambda x: AttributeValue(val_double=float(x))
 
 
-def _add_converter(column: Column, converters: Dict[str, Callable[[Any], AttributeValue]]) -> None:
+def _add_converter(column: Column, converters: dict[str, Callable[[Any], AttributeValue]]) -> None:
     if column.HasField("key"):
         converters[column.label] = _get_converter_for_type(column.key.type)
     elif column.HasField("aggregation"):
@@ -81,7 +127,7 @@ def _add_converter(column: Column, converters: Dict[str, Callable[[Any], Attribu
             _add_converter(conditional.condition.left, converters)
             _add_converter(conditional.condition.right, converters)
         if conditional.HasField("match"):
-            _add_converter(getattr(conditional, "match"), converters)
+            _add_converter(conditional.match, converters)
         if conditional.HasField("default"):
             _add_converter(conditional.default, converters)
     elif column.HasField("literal"):
@@ -94,12 +140,12 @@ def _add_converter(column: Column, converters: Dict[str, Callable[[Any], Attribu
 
 def get_converters_for_columns(
     columns: Iterable[Column],
-) -> Dict[str, Callable[[Any], AttributeValue]]:
+) -> dict[str, Callable[[Any], AttributeValue]]:
     """
     Returns a dictionary of column labels to their corresponding converters.
     Converters are functions that convert a value returned by a clickhouse query to an AttributeValue.
     """
-    converters: Dict[str, Callable[[Any], AttributeValue]] = {}
+    converters: dict[str, Callable[[Any], AttributeValue]] = {}
     for column in columns:
         _add_converter(column, converters)
     return converters
@@ -115,7 +161,7 @@ def _is_sub_column(result_column_name: str, column: Column) -> bool:
 
 
 def _get_reliabilities_for_formula(
-    column: Column, res: Dict[str, TraceItemColumnValues]
+    column: Column, res: dict[str, TraceItemColumnValues]
 ) -> list[Reliability.ValueType]:
     """
     Compute and return the reliabilities for the given formula column,
@@ -162,14 +208,34 @@ def _get_reliabilities_for_formula(
 
 
 def convert_results(
-    request: TraceItemTableRequest, data: Iterable[Dict[str, Any]]
+    request: TraceItemTableRequest, data: Iterable[dict[str, Any]]
 ) -> list[TraceItemColumnValues]:
     converters = get_converters_for_columns(request.columns)
 
+    # Past the cutoff a TYPE_ARRAY column is selected as four typed sub-columns; collapse
+    # them back into the column label so its converter sees one native list.
+    array_labels = (
+        [
+            column.label
+            for column in request.columns
+            if column.HasField("key") and column.key.type == AttributeKey.TYPE_ARRAY
+        ]
+        if use_array_map_columns(request.meta)
+        else []
+    )
+
     res: defaultdict[str, TraceItemColumnValues] = defaultdict(TraceItemColumnValues)
     for row in data:
+        if array_labels:
+            for label, elements in merge_typed_array_subcolumns(row, array_labels):
+                # An absent array attribute reads as four empty typed sub-columns; surface
+                # it as NULL (like a missing scalar attribute) rather than an empty array.
+                # Keep the label in the row so every requested column stays aligned across
+                # rows. The typed columns can't tell an absent array from a stored-empty
+                # one, so both map to NULL.
+                row[label] = elements if elements else None
         for column_name, value in row.items():
-            if column_name in converters.keys():
+            if column_name in converters:
                 extrapolation_context = ExtrapolationContext.from_row(column_name, row)
                 res[column_name].attribute_name = column_name
                 if value is None:
@@ -193,14 +259,11 @@ def convert_results(
                 res[column.label].reliabilities.append(e)
 
     # remove any columns that were not explicitly requested by the user in the request
-    requested_column_labels = set(e.label for e in request.columns)
+    requested_column_labels = {e.label for e in request.columns}
     to_delete = list(filter(lambda k: k not in requested_column_labels, res.keys()))
     for name in to_delete:
         del res[name]
 
     column_ordering = {column.label: i for i, column in enumerate(request.columns)}
 
-    return list(
-        # we return the columns in the order they were requested
-        sorted(res.values(), key=lambda c: column_ordering.__getitem__(c.attribute_name))
-    )
+    return sorted(res.values(), key=lambda c: column_ordering.__getitem__(c.attribute_name))

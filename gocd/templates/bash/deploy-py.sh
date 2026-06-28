@@ -2,10 +2,15 @@
 
 eval $(regions-project-env-vars --region="${SENTRY_REGION}")
 
+IMAGE_TAG="${GO_REVISION_SNUBA_REPO}"
+if [ "${SENTRY_REGION}" = "s4s2" ] || [ "${SENTRY_REGION}" = "de" ]; then
+  IMAGE_TAG="${GO_REVISION_SNUBA_REPO}-distroless"
+fi
+
 /devinfra/scripts/get-cluster-credentials \
 && k8s-deploy \
   --label-selector="${LABEL_SELECTOR}" \
-  --image="us-docker.pkg.dev/sentryio/snuba-mr/image:${GO_REVISION_SNUBA_REPO}" \
+  --image="us-docker.pkg.dev/sentryio/snuba-mr/image:${IMAGE_TAG}" \
   --container-name="api" \
   --container-name="dlq-consumer" \
   --container-name="eap-items-subscriptions-executor" \
@@ -31,7 +36,7 @@ eval $(regions-project-env-vars --region="${SENTRY_REGION}")
   --container-name="transactions-subscriptions-scheduler" \
 && k8s-deploy \
   --label-selector="${LABEL_SELECTOR}" \
-  --image="us-docker.pkg.dev/sentryio/snuba-mr/image:${GO_REVISION_SNUBA_REPO}" \
+  --image="us-docker.pkg.dev/sentryio/snuba-mr/image:${IMAGE_TAG}" \
   --type="cronjob" \
   --container-name="optimize" \
   --container-name="cleanup" \

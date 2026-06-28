@@ -1,5 +1,6 @@
 import os
-from typing import Any, Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 from snuba.settings.settings_test import *  # noqa
 
@@ -53,8 +54,8 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "generic_metrics_distributions",
             "search_issues",
             "generic_metrics_counters",
-            "spans",
             "events_analytics_platform",
+            "events_analytics_platform_ro",
             "group_attributes",
             "generic_metrics_gauges",
             "profile_chunks",

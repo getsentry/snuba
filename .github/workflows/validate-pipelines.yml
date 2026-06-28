@@ -17,7 +17,7 @@ jobs:
         outputs:
             gocd: ${{ steps.changes.outputs.gocd }}
         steps:
-          - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+          - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
           - name: Check for relevant file changes
             uses: getsentry/paths-filter@4512585405083f25c027a35db413c2b3b9006d50 # v2.11.1
             id: changes
@@ -39,7 +39,7 @@ jobs:
             id-token: "write"
 
         steps:
-            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
             - id: 'auth'
               uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
               with:
@@ -53,7 +53,7 @@ jobs:
                 jb-install: true
                 jsonnet-dir: gocd/templates
                 generated-dir: gocd/generated-pipelines
-            - uses: getsentry/action-validate-gocd-pipelines@80fde540c1403d52e17783368930fa28bd93447f # v1
+            - uses: getsentry/action-validate-gocd-pipelines@5662a2b631d4e2aa1bfc21e878f9e131c31c40c1 # v1
               with:
                 configrepo: snuba__master
                 gocd_access_token: ${{ secrets.GOCD_ACCESS_TOKEN }}

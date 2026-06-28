@@ -3,16 +3,15 @@ from __future__ import annotations
 import logging
 import time
 import typing
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta
-from typing import Mapping, Sequence
-
-logger = logging.getLogger(__name__)
-
 
 from snuba import environment
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state import get_int_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
+
+logger = logging.getLogger(__name__)
 
 metrics = MetricsWrapper(environment.metrics, "replacements_and_expiry")
 

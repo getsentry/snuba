@@ -7,6 +7,11 @@
       "default": false,
       "description": "true to use the item timestamp, false for the received timestamp"
     },
+    "consumer.log_duplicates": {
+      "type": "boolean",
+      "default": false,
+      "description": "true to emit a tracing log each time a duplicate trace item is detected in the accepted-outcomes aggregator"
+    },
     "consumer.blq_enabled": {
       "type": "boolean",
       "default": false,

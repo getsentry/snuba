@@ -1,5 +1,5 @@
 import re
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 import click
 
@@ -73,13 +73,13 @@ def list() -> None:
 @click.option("--check-dangerous", is_flag=True)
 @click.option("--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS))
 def migrate(
-    group: Optional[str],
-    readiness_state: Optional[Sequence[str]],
+    group: str | None,
+    readiness_state: Sequence[str] | None,
     through: str,
     force: bool,
     fake: bool,
     check_dangerous: bool,
-    log_level: Optional[str] = None,
+    log_level: str | None = None,
 ) -> None:
     """
     If group is specified, runs all the migrations for a group (including any pending
@@ -117,7 +117,7 @@ def migrate(
             check_dangerous=check_dangerous,
         )
     except MigrationError as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
 
     click.echo("Finished running migrations")
 
@@ -137,13 +137,13 @@ def migrate(
 @click.option("--include-system", is_flag=True)
 @click.option("--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS))
 def revert(
-    group: Optional[str],
-    readiness_state: Optional[Sequence[str]],
+    group: str | None,
+    readiness_state: Sequence[str] | None,
     through: str,
     force: bool,
     fake: bool,
     include_system: bool,
-    log_level: Optional[str] = None,
+    log_level: str | None = None,
 ) -> None:
     """
     If group is specified, reverse all the migrations for a group.
@@ -185,7 +185,7 @@ def revert(
             readiness_states=readiness_states,
         )
     except MigrationError as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
 
     click.echo("Finished reversing migrations")
 
@@ -207,7 +207,7 @@ def run(
     dry_run: bool,
     yes: bool,
     check_dangerous: bool,
-    log_level: Optional[str] = None,
+    log_level: str | None = None,
 ) -> None:
     """
     Runs a single migration.
@@ -237,7 +237,7 @@ def run(
             )
         runner.run_migration(migration_key, force=force, fake=fake, check_dangerous=check_dangerous)
     except MigrationError as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
 
     click.echo(f"Finished running migration {migration_key}")
 
@@ -257,7 +257,7 @@ def reverse(
     fake: bool,
     dry_run: bool,
     yes: bool,
-    log_level: Optional[str] = None,
+    log_level: str | None = None,
 ) -> None:
     """
     Reverses a single migration.
@@ -284,7 +284,7 @@ def reverse(
             )
         runner.reverse_migration(migration_key, force=force, fake=fake)
     except MigrationError as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
 
     click.echo(f"Finished reversing migration {migration_key}")
 
@@ -299,8 +299,8 @@ def reverse_in_progress(
     fake: bool,
     dry_run: bool,
     yes: bool,
-    group: Optional[str] = None,
-    log_level: Optional[str] = None,
+    group: str | None = None,
+    log_level: str | None = None,
 ) -> None:
     """
     Reverses any in progress migrations for all migration groups.
@@ -332,7 +332,7 @@ def reverse_in_progress(
             )
         runner.reverse_in_progress(group=migration_group, fake=fake)
     except MigrationError as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
 
     click.echo("Finished reversing in progress migrations")
 
@@ -340,7 +340,7 @@ def reverse_in_progress(
 @migrations.command()
 @click.argument("storage_path", type=str)
 @click.option("--name", type=str, help="optional name for the migration")
-def generate(storage_path: str, name: Optional[str] = None) -> None:
+def generate(storage_path: str, name: str | None = None) -> None:
     """
     Given a path to user-modified storage.yaml definition (inside snuba/datasets/configuration/*/storages/*.yaml),
     and an optional name for the migration,

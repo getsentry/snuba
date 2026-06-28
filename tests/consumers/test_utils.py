@@ -2,7 +2,10 @@ from unittest.mock import Mock, patch
 
 import pytest
 from confluent_kafka import KafkaException
-from confluent_kafka.admin import AdminClient, ClusterMetadata
+from confluent_kafka.admin import (  # type: ignore[attr-defined]  # ClusterMetadata lacks explicit re-export
+    AdminClient,
+    ClusterMetadata,
+)
 
 from snuba import settings
 from snuba.consumers.utils import TopicNotFound, get_partition_count

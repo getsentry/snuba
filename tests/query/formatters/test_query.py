@@ -1,10 +1,7 @@
-from typing import Union
-
 import pytest
 
-from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.columns import ColumnSet, UInt
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
-from snuba.clickhouse.columns import UInt
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.storages.storage_key import StorageKey
@@ -61,14 +58,10 @@ LOGICAL_QUERY = LogicalQuery(
     from_clause=Entity(EntityKey.EVENTS, EVENTS_SCHEMA, 0.5),
     selected_columns=[
         SelectedExpression("c1", Column("_snuba_c1", "t", "c")),
-        SelectedExpression(
-            "f1", FunctionCall("_snuba_f1", "f", (Column(None, "t", "c2"),))
-        ),
+        SelectedExpression("f1", FunctionCall("_snuba_f1", "f", (Column(None, "t", "c2"),))),
     ],
     array_join=Column(None, None, "col"),
-    condition=binary_condition(
-        "equals", Column(None, None, "c4"), Literal(None, "asd")
-    ),
+    condition=binary_condition("equals", Column(None, None, "c4"), Literal(None, "asd")),
     groupby=[Column(None, "t", "c4")],
     having=binary_condition("equals", Column(None, None, "c6"), Literal(None, "asd2")),
     order_by=[OrderBy(OrderByDirection.ASC, Column(None, "t", "c"))],
@@ -116,9 +109,7 @@ TEST_JOIN = [
         CompositeQuery(
             from_clause=LOGICAL_QUERY,
             selected_columns=[
-                SelectedExpression(
-                    "f", FunctionCall("f", "avg", (Column(None, "t", "c"),))
-                )
+                SelectedExpression("f", FunctionCall("f", "avg", (Column(None, "t", "c"),)))
             ],
         ),
         [
@@ -187,9 +178,7 @@ TEST_JOIN = [
                 from_clause=CompositeQuery(
                     from_clause=SIMPLE_SELECT_QUERY,
                     selected_columns=[
-                        SelectedExpression(
-                            "f", FunctionCall("f", "avg", (Column(None, "t", "c"),))
-                        )
+                        SelectedExpression("f", FunctionCall("f", "avg", (Column(None, "t", "c"),)))
                     ],
                 ),
                 selected_columns=[SelectedExpression("tc", Column(None, "t", "c"))],
@@ -258,10 +247,10 @@ TEST_JOIN = [
 
 @pytest.mark.parametrize("query, formatted", TEST_JOIN)
 def test_query_formatter(
-    query: Union[ProcessableQuery, CompositeQuery[Entity]],
+    query: ProcessableQuery | CompositeQuery[Entity],
     formatted: TExpression,
 ) -> None:
-    formatted_query = format_query(query)  # type: ignore
+    formatted_query = format_query(query)  # type: ignore[arg-type]
     assert formatted_query == formatted
     # make sure there are no empty lines
     assert [line for line in formatted_query if not line] == []

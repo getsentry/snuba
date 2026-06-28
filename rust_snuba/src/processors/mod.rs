@@ -10,7 +10,7 @@ mod profiles;
 mod querylog;
 mod release_health_metrics;
 mod replays;
-mod utils;
+pub mod utils;
 
 use crate::config::ProcessorConfig;
 use crate::types::{InsertBatch, InsertOrReplacement, KafkaMessageMetadata};
@@ -161,6 +161,12 @@ mod tests {
                         ".*.*[\"sentry._internal.ingested_at\"]",
                         "<ingestion timestamp>",
                     );
+                    settings.add_redaction(
+                        ".*.*[\"sentry._internal.received_at\"]",
+                        "<received timestamp>",
+                    );
+                    // session_id is randomized when absent, so redact it.
+                    settings.add_redaction(".*.session_id", "<random uuid>");
                 }
 
                 // This payload is protobuf (so binary), not JSON (so text).

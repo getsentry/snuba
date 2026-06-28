@@ -6,6 +6,7 @@ use serde_json::Value;
 #[derive(Clone, Default)]
 pub struct ProcessorConfig {
     pub env_config: EnvConfig,
+    pub storage_name: String,
 }
 
 #[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]

@@ -1,11 +1,11 @@
 import importlib
-from typing import Generator
+from collections.abc import Generator
 from unittest.mock import patch
 
 import pytest
 
 from snuba import settings
-from snuba.clickhouse.native import ClickhousePool, ClickhouseResult
+from snuba.clickhouse.native import ClickhouseNativePool, ClickhouseResult
 from snuba.clusters import cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages.factory import get_storage
@@ -111,7 +111,7 @@ SLICED_CLUSTERS_CONFIG = [
 
 
 @pytest.fixture(autouse=True)
-def setup_teardown(clickhouse_db: None) -> Generator[None, None, None]:
+def setup_teardown(clickhouse_db: None) -> Generator[None]:
     yield
     importlib.reload(settings)
     importlib.reload(cluster)
@@ -135,21 +135,31 @@ def test_clusters() -> None:
 @patch("snuba.settings.CLUSTERS", FULL_CONFIG)
 @pytest.mark.clickhouse_db
 def test_cache_partition() -> None:
-    get_storage(
-        StorageKey("transactions")
-    ).get_cluster().get_reader().cache_partition_id == "host_2_cache"
+    importlib.reload(cluster)
+    assert (
+        get_storage(StorageKey("transactions")).get_cluster().get_reader().cache_partition_id
+        == "host_2_cache"
+    )
 
-    get_storage(StorageKey("errors")).get_cluster().get_reader().cache_partition_id is None
+    assert get_storage(StorageKey("errors")).get_cluster().get_reader().cache_partition_id is None
 
 
 @patch("snuba.settings.CLUSTERS", FULL_CONFIG)
 @pytest.mark.clickhouse_db
 def test_query_settings_prefix() -> None:
-    get_storage(
-        StorageKey("transactions")
-    ).get_cluster().get_reader().get_query_settings_prefix() == "transactions"
+    importlib.reload(cluster)
+    assert (
+        get_storage(StorageKey("transactions"))
+        .get_cluster()
+        .get_reader()
+        .get_query_settings_prefix()
+        == "transactions"
+    )
 
-    get_storage(StorageKey("errors")).get_cluster().get_reader().get_query_settings_prefix() is None
+    assert (
+        get_storage(StorageKey("errors")).get_cluster().get_reader().get_query_settings_prefix()
+        is None
+    )
 
 
 @patch("snuba.settings.CLUSTERS", FULL_CONFIG)
@@ -168,22 +178,21 @@ def test_disabled_cluster() -> None:
 
     cluster.get_cluster(StorageSetKey.OUTCOMES)
 
-    with patch("snuba.settings.ENABLE_DEV_FEATURES", False):
-        with pytest.raises(AssertionError):
-            cluster.get_cluster(StorageSetKey.OUTCOMES)
+    with patch("snuba.settings.ENABLE_DEV_FEATURES", False), pytest.raises(AssertionError):
+        cluster.get_cluster(StorageSetKey.OUTCOMES)
 
 
 @patch("snuba.settings.CLUSTERS", FULL_CONFIG)
 @pytest.mark.clickhouse_db
 def test_get_local_nodes() -> None:
     importlib.reload(cluster)
-    with patch.object(ClickhousePool, "execute") as execute:
+    with patch.object(ClickhouseNativePool, "execute") as execute:
         execute.return_value = ClickhouseResult([("host_1", 9000, 1, 1), ("host_2", 9000, 2, 1)])
 
         local_cluster = get_storage(StorageKey("errors")).get_cluster()
         assert len(local_cluster.get_local_nodes()) == 1
         assert local_cluster.get_local_nodes()[0].host_name == "host_1"
-        assert local_cluster.get_local_nodes()[0].port == 9000
+        assert local_cluster.get_local_nodes()[0].native_port == 9000
         assert local_cluster.get_local_nodes()[0].shard is None
         assert local_cluster.get_local_nodes()[0].replica is None
 
@@ -260,6 +269,48 @@ def test_cache_connections() -> None:
     ) != cluster_3.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
 
 
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_get_node_connection_selects_driver() -> None:
+    from snuba import state
+    from snuba.clickhouse.connect import ClickhouseConnectPool
+    from snuba.clickhouse.native import ClickhouseNativePool, ClickhouseReader
+
+    test_cluster = cluster.ClickhouseCluster(
+        "127.0.0.1",
+        8000,
+        "default",
+        "",
+        "default",
+        8001,
+        False,
+        None,
+        False,
+        {"events"},
+        True,
+    )
+
+    # The driver is selected at the pool level; the reader is the single
+    # driver-agnostic ClickhouseReader regardless.
+    # Default: native pool.
+    state.set_config("use_clickhouse_connect_driver", 0)
+    native_pool = test_cluster.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
+    assert isinstance(native_pool, ClickhouseNativePool)
+    assert isinstance(test_cluster.get_reader(), ClickhouseReader)
+
+    # Flip on at runtime: HTTP pool.
+    state.set_config("use_clickhouse_connect_driver", 1)
+    http_pool = test_cluster.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
+    assert isinstance(http_pool, ClickhouseConnectPool)
+
+    # Flip back: native pool again.
+    state.set_config("use_clickhouse_connect_driver", 0)
+    assert isinstance(
+        test_cluster.get_query_connection(cluster.ClickhouseClientSettings.QUERY),
+        ClickhouseNativePool,
+    )
+
+
 @patch("snuba.settings.SLICED_CLUSTERS", SLICED_CLUSTERS_CONFIG)
 @pytest.mark.clickhouse_db
 def test_sliced_cluster() -> None:
@@ -267,14 +318,14 @@ def test_sliced_cluster() -> None:
 
     res_cluster = cluster.get_cluster(StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS, 1)
 
-    assert res_cluster.is_single_node() == True
+    assert res_cluster.is_single_node()
     assert res_cluster.get_database() == "slice_1_default"
     assert res_cluster.get_host() == "host_slice"
     assert res_cluster.get_port() == 9001
 
     res_cluster_default = cluster.get_cluster(StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS, 0)
 
-    assert res_cluster_default.is_single_node() == True
+    assert res_cluster_default.is_single_node()
     assert res_cluster_default.get_database() == "default"
     assert res_cluster_default.get_host() == "host_slice"
     assert res_cluster_default.get_port() == 9000
