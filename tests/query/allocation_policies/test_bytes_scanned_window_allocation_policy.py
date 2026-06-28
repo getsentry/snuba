@@ -225,10 +225,7 @@ def test_passthrough_subscriptions(policy: AllocationPolicy) -> None:
 def test_single_thread_referrers(policy: AllocationPolicy) -> None:
     _configure_policy(policy)
     tenant_ids: dict[str, str | int] = {"referrer": "delete-events-from-file"}
-    assert (
-        policy.get_quota_allowance(tenant_ids=tenant_ids, query_id=QUERY_ID).max_threads
-        == 1
-    )
+    assert policy.get_quota_allowance(tenant_ids=tenant_ids, query_id=QUERY_ID).max_threads == 1
     policy.update_quota_balance(
         tenant_ids,
         QUERY_ID,
@@ -240,10 +237,7 @@ def test_single_thread_referrers(policy: AllocationPolicy) -> None:
             error=None,
         ),
     )
-    assert (
-        policy.get_quota_allowance(tenant_ids=tenant_ids, query_id=QUERY_ID).max_threads
-        == 1
-    )
+    assert policy.get_quota_allowance(tenant_ids=tenant_ids, query_id=QUERY_ID).max_threads == 1
 
 
 @pytest.mark.redis_db
@@ -281,4 +275,4 @@ def test_cross_org(policy: AllocationPolicy) -> None:
     )
     # make sure that this can be called with cross org queries
     # and nothing raises
-    policy.update_quota_balance(tenant_ids, QUERY_ID, None)  # type: ignore
+    policy.update_quota_balance(tenant_ids, QUERY_ID, None)  # type: ignore[arg-type]

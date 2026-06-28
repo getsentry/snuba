@@ -13,9 +13,9 @@ class TestState:
     def setup_method(self) -> None:
         from snuba.web.views import application
 
-        assert application.testing == True
+        assert application.testing
         self.app = application.test_client()
-        self.app.post = partial(self.app.post, headers={"referer": "test"})  # type: ignore
+        self.app.post = partial(self.app.post, headers={"referer": "test"})  # type: ignore[method-assign]
 
     @pytest.mark.redis_db
     def test_config(self) -> None:
@@ -97,7 +97,7 @@ class TestState:
 
     @pytest.mark.redis_db
     def test_memoize(self) -> None:
-        @state.memoize(0.1)  # type: ignore
+        @state.memoize(0.1)  # type: ignore[arg-type]
         def rand(config_key: str = "test") -> float:
             return random.random()
 
@@ -109,7 +109,7 @@ class TestState:
 
     @pytest.mark.redis_db
     def test_memoize_with_args(self) -> None:
-        @state.memoize(0.1)  # type: ignore
+        @state.memoize(0.1)  # type: ignore[arg-type]
         def rand(config_key: str = "test1") -> str:
             return f"{random.random()}:{config_key}"
 

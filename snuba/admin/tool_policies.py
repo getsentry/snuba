@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from enum import Enum
 from functools import wraps
-from typing import Any, Callable
+from typing import Any
 
 from flask import Response, g, jsonify, make_response
 

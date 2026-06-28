@@ -50,7 +50,7 @@ TEST_CASES = [
             "sumMergeIf",
             (
                 Column("_snuba_value", None, "value"),
-                FunctionCall(None, "cond", tuple()),
+                FunctionCall(None, "cond", ()),
             ),
         ),
         id="Test counters entity with mergeIf",
@@ -75,7 +75,7 @@ TEST_CASES = [
             "maxMergeIf",
             (
                 Column(None, None, "max"),
-                FunctionCall(None, "cond", tuple()),
+                FunctionCall(None, "cond", ()),
             ),
         ),
         id="Test distribution max with condition",
@@ -100,7 +100,7 @@ TEST_CASES = [
             "minMergeIf",
             (
                 Column(None, None, "min"),
-                FunctionCall(None, "cond", tuple()),
+                FunctionCall(None, "cond", ()),
             ),
         ),
         id="Test distribution min with condition",
@@ -125,7 +125,7 @@ TEST_CASES = [
             "avgMergeIf",
             (
                 Column(None, None, "avg"),
-                FunctionCall(None, "cond", tuple()),
+                FunctionCall(None, "cond", ()),
             ),
         ),
         id="Test distribution avg with condition",
@@ -167,7 +167,7 @@ TEST_CASES = [
                 "quantilesMergeIf",
                 tuple(Literal(None, quant) for quant in [0.5, 0.75, 0.9, 0.95, 0.99]),
             ),
-            (Column(None, None, "percentiles"), FunctionCall(None, "cond", tuple())),
+            (Column(None, None, "percentiles"), FunctionCall(None, "cond", ())),
         ),
         id="Test distribution quantiles",
     ),
@@ -202,7 +202,7 @@ TEST_CASES = [
             FunctionCall(None, "histogramMergeIf", (Literal(None, 250),)),
             (
                 Column(None, None, "histogram_buckets"),
-                FunctionCall(None, "cond", tuple()),
+                FunctionCall(None, "cond", ()),
             ),
         ),
         id="Test distribution histogram",
@@ -210,9 +210,7 @@ TEST_CASES = [
 ]
 
 
-@pytest.mark.parametrize(
-    "entity_name, column_name, entity_key, translated_value", TEST_CASES
-)
+@pytest.mark.parametrize("entity_name, column_name, entity_key, translated_value", TEST_CASES)
 @pytest.mark.clickhouse_db
 def test_metrics_processing(
     entity_name: str,

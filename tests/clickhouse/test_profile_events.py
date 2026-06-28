@@ -11,8 +11,8 @@ from snuba.admin.clickhouse.tracing import QueryTraceData
 
 
 def test_hostname_resolves() -> None:
-    assert hostname_resolves("localhost") == True
-    assert hostname_resolves("invalid-hostname-that-doesnt-exist-123.local") == False
+    assert hostname_resolves("localhost")
+    assert not hostname_resolves("invalid-hostname-that-doesnt-exist-123.local")
 
 
 def test_parse_trace_for_query_ids() -> None:
@@ -77,6 +77,7 @@ def test_gather_profile_events() -> None:
                     "test_storage",
                     "SELECT ProfileEvents FROM system.query_log WHERE query_id = 'query1' AND type = 'QueryFinish'",
                     False,
+                    False,
                     "test_user",
                 )
 
@@ -106,18 +107,20 @@ def test_gather_profile_events_retry_logic() -> None:
         "snuba.admin.clickhouse.profile_events.run_system_query_on_host_with_sql"
     ) as mock_query:
         mock_query.side_effect = [empty_result, empty_result, success_result]
-        with patch("snuba.admin.clickhouse.profile_events.hostname_resolves", return_value=True):
-            with patch("time.sleep") as mock_sleep:
-                from flask import Flask
+        with (
+            patch("snuba.admin.clickhouse.profile_events.hostname_resolves", return_value=True),
+            patch("time.sleep") as mock_sleep,
+        ):
+            from flask import Flask
 
-                app = Flask(__name__)
-                with app.app_context():
-                    g.user = "test_user"
+            app = Flask(__name__)
+            with app.app_context():
+                g.user = "test_user"
 
-                    gather_profile_events(trace_output, "test_storage")
+                gather_profile_events(trace_output, "test_storage")
 
-                    assert mock_query.call_count == 3
-                    assert mock_sleep.call_count == 2
+                assert mock_query.call_count == 3
+                assert mock_sleep.call_count == 2
 
-                    assert mock_sleep.call_args_list[0][0][0] == 2
-                    assert mock_sleep.call_args_list[1][0][0] == 4
+                assert mock_sleep.call_args_list[0][0][0] == 2
+                assert mock_sleep.call_args_list[1][0][0] == 4

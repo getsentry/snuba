@@ -2,22 +2,14 @@ from __future__ import annotations
 
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Iterator, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
 from functools import partial
 from itertools import chain
 from typing import Any as AnyType
 from typing import (
-    Callable,
     Generic,
-    Iterator,
-    List,
-    Mapping,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Type,
     TypeVar,
-    Union,
     cast,
 )
 
@@ -68,7 +60,7 @@ class TypeModifiers(ABC):
         """
         raise NotImplementedError
 
-    def has_modifier(self, modifier: Type[TypeModifier]) -> bool:
+    def has_modifier(self, modifier: type[TypeModifier]) -> bool:
         """
         Returns true if a modifier of the type provided is present in
         this container.
@@ -88,20 +80,15 @@ TModifiers = TypeVar("TModifiers", bound=TypeModifiers)
 # have to be provided everytime we define a column in a migration or
 # in a schema.
 class ColumnType(Generic[TModifiers]):
-    def __init__(self, modifiers: Optional[TModifiers] = None):
+    def __init__(self, modifiers: TModifiers | None = None):
         self.__modifiers = modifiers
 
     def __repr__(self) -> str:
         # return f"{self.__class__.__name__}({self._repr_content()})[{self.__modifiers}]"
         repr_content = self._repr_content()
         if repr_content:
-            return "schemas.{}({}, modifiers={})".format(
-                self.__class__.__name__, repr_content, repr(self.__modifiers)
-            )
-        else:
-            return "schemas.{}(modifiers={})".format(
-                self.__class__.__name__, repr(self.__modifiers)
-            )
+            return f"schemas.{self.__class__.__name__}({repr_content}, modifiers={repr(self.__modifiers)})"
+        return f"schemas.{self.__class__.__name__}(modifiers={repr(self.__modifiers)})"
 
     def _repr_content(self) -> str:
         """
@@ -111,10 +98,7 @@ class ColumnType(Generic[TModifiers]):
         return ""
 
     def __eq__(self, other: object) -> bool:
-        return (
-            self.__class__ == other.__class__
-            and self.__modifiers == cast(ColumnType[TModifiers], other).get_modifiers()
-        )
+        return self.__class__ == other.__class__ and self.__modifiers == other.get_modifiers()
 
     def for_schema(self) -> str:
         return (
@@ -133,10 +117,10 @@ class ColumnType(Generic[TModifiers]):
     def flatten(self, name: str) -> Sequence[FlattenedColumn]:
         return [FlattenedColumn(None, name, self)]
 
-    def get_modifiers(self) -> Optional[TModifiers]:
+    def get_modifiers(self) -> TModifiers | None:
         return self.__modifiers
 
-    def set_modifiers(self, modifiers: Optional[TModifiers]) -> ColumnType[TModifiers]:
+    def set_modifiers(self, modifiers: TModifiers | None) -> ColumnType[TModifiers]:
         """
         Returns a new instance of this class with the provided
         modifiers.
@@ -146,7 +130,7 @@ class ColumnType(Generic[TModifiers]):
     def get_raw(self) -> ColumnType[TModifiers]:
         return type(self)()
 
-    def has_modifier(self, modifier: Type[TypeModifier]) -> bool:
+    def has_modifier(self, modifier: type[TypeModifier]) -> bool:
         if self.__modifiers is None:
             return False
         return self.__modifiers.has_modifier(modifier)
@@ -162,46 +146,44 @@ class Column(Generic[TModifiers]):
         self.escaped: str = escaped
 
     def __repr__(self) -> str:
-        return "Column({}, {})".format(repr(self.name), repr(self.type))
+        return f"Column({repr(self.name)}, {repr(self.type)})"
 
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.name == cast(Column[TModifiers], other).name
-            and self.type == cast(Column[TModifiers], other).type
+            and self.name == other.name
+            and self.type == other.type
         )
 
     def for_schema(self) -> str:
-        return "{} {}".format(escape_identifier(self.name), self.type.for_schema())
+        return f"{escape_identifier(self.name)} {self.type.for_schema()}"
 
     @staticmethod
     def to_columns(
-        columns: Sequence[Union[Column[TModifiers], tuple[str, ColumnType[TModifiers]]]],
+        columns: Sequence[Column[TModifiers] | tuple[str, ColumnType[TModifiers]]],
     ) -> Sequence[Column[TModifiers]]:
         return [Column(*col) if not isinstance(col, Column) else col for col in columns]
 
 
 class FlattenedColumn:
-    def __init__(self, base_name: Optional[str], name: str, type: ColumnType[TModifiers]) -> None:
+    def __init__(self, base_name: str | None, name: str, type: ColumnType[TModifiers]) -> None:
         self.base_name = base_name
         self.name = name
         self.type = type
 
-        self.flattened = "{}.{}".format(self.base_name, self.name) if self.base_name else self.name
+        self.flattened = f"{self.base_name}.{self.name}" if self.base_name else self.name
         escaped = escape_identifier(self.flattened)
         assert escaped is not None
         self.escaped: str = escaped
 
     def __repr__(self) -> str:
-        return "FlattenedColumn({}, {}, {})".format(
-            repr(self.base_name), repr(self.name), repr(self.type)
-        )
+        return f"FlattenedColumn({repr(self.base_name)}, {repr(self.name)}, {repr(self.type)})"
 
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.flattened == cast(FlattenedColumn, other).flattened
-            and self.type == cast(FlattenedColumn, other).type
+            and self.flattened == other.flattened
+            and self.type == other.type
         )
 
 
@@ -215,7 +197,7 @@ class SchemaModifiers(TypeModifiers):
     readonly: bool = False
 
     def _get_modifiers(self) -> Sequence[TypeModifier]:
-        ret: List[TypeModifier] = []
+        ret: list[TypeModifier] = []
         if self.nullable:
             ret.append(Nullable())
         if self.readonly:
@@ -236,10 +218,10 @@ class ReadOnly(TypeModifier):
 @dataclass(frozen=True)
 class Nullable(TypeModifier):
     def for_schema(self, content: str) -> str:
-        return "Nullable({})".format(content)
+        return f"Nullable({content})"
 
 
-class ColumnSet(ABC):
+class ColumnSet(ABC):  # noqa: B024 - intentional abstract base shared by entity and ClickHouse column sets
     """
     Base column set extended by both ClickHouse column set and entity column set
     A base column set class that will be shared by logical (entity) and physical (ClickHouse)
@@ -256,7 +238,7 @@ class ColumnSet(ABC):
         self._lookup: MutableMapping[str, Sequence[FlattenedColumn]] = {}
         self._nested = {}
 
-        self._flattened: List[FlattenedColumn] = []
+        self._flattened: list[FlattenedColumn] = []
         self._flattened_lookup: MutableMapping[str, FlattenedColumn] = {}
 
         for column in self.__columns:
@@ -268,7 +250,7 @@ class ColumnSet(ABC):
 
         for col in self._flattened:
             if col.flattened in self._flattened_lookup:
-                raise RuntimeError("Duplicate column: {}".format(col.flattened))
+                raise RuntimeError(f"Duplicate column: {col.flattened}")
             if col.base_name:
                 self._nested[col.flattened] = col
 
@@ -278,8 +260,8 @@ class ColumnSet(ABC):
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self._flattened == cast(ColumnSet, other)._flattened
-            and self._wildcard_columns == cast(ColumnSet, other)._wildcard_columns
+            and self._flattened == other._flattened
+            and self._wildcard_columns == other._wildcard_columns
         )
 
     def __getitem__(self, key: str) -> FlattenedColumn:
@@ -296,7 +278,7 @@ class ColumnSet(ABC):
 
         raise KeyError(key)
 
-    def get(self, key: str, default: Optional[FlattenedColumn] = None) -> Optional[FlattenedColumn]:
+    def get(self, key: str, default: FlattenedColumn | None = None) -> FlattenedColumn | None:
         try:
             return self[key]
         except KeyError:
@@ -350,7 +332,7 @@ class Any(ColumnType[SchemaModifiers]):
 
 class Array(ColumnType[TModifiers]):
     def __init__(
-        self, inner_type: ColumnType[TModifiers], modifiers: Optional[TModifiers] = None
+        self, inner_type: ColumnType[TModifiers], modifiers: TModifiers | None = None
     ) -> None:
         super().__init__(modifiers)
         self.inner_type = inner_type
@@ -361,8 +343,8 @@ class Array(ColumnType[TModifiers]):
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.inner_type == cast(Array[TModifiers], other).inner_type
-            and self.get_modifiers() == cast(Array[TModifiers], other).get_modifiers()
+            and self.inner_type == other.inner_type
+            and self.get_modifiers() == other.get_modifiers()
         )
 
     def _for_schema_impl(self) -> str:
@@ -370,11 +352,10 @@ class Array(ColumnType[TModifiers]):
         if len(inner_schema) == 1:
             inner_type = inner_schema[0]
             return f"Array({inner_type})"
-        else:
-            inner_type, codec_modifiers = inner_schema
-            return f"Array({inner_type}) CODEC {codec_modifiers}"
+        inner_type, codec_modifiers = inner_schema
+        return f"Array({inner_type}) CODEC {codec_modifiers}"
 
-    def set_modifiers(self, modifiers: Optional[TModifiers]) -> Array[TModifiers]:
+    def set_modifiers(self, modifiers: TModifiers | None) -> Array[TModifiers]:
         return Array(inner_type=self.inner_type, modifiers=modifiers)
 
     def get_raw(self) -> Array[TModifiers]:
@@ -386,7 +367,7 @@ class Map(ColumnType[TModifiers]):
         self,
         key: ColumnType[TModifiers],
         value: ColumnType[TModifiers],
-        modifiers: Optional[TModifiers] = None,
+        modifiers: TModifiers | None = None,
     ) -> None:
         super().__init__(modifiers)
         self.key = key
@@ -398,15 +379,15 @@ class Map(ColumnType[TModifiers]):
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.key == cast(Map[TModifiers], other).key
-            and self.value == cast(Map[TModifiers], other).value
-            and self.get_modifiers() == cast(Map[TModifiers], other).get_modifiers()
+            and self.key == other.key
+            and self.value == other.value
+            and self.get_modifiers() == other.get_modifiers()
         )
 
     def _for_schema_impl(self) -> str:
         return f"Map({self.key.for_schema()}, {self.value.for_schema()})"
 
-    def set_modifiers(self, modifiers: Optional[TModifiers]) -> Map[TModifiers]:
+    def set_modifiers(self, modifiers: TModifiers | None) -> Map[TModifiers]:
         return Map(key=self.key, value=self.value, modifiers=modifiers)
 
     def get_raw(self) -> Map[TModifiers]:
@@ -416,8 +397,8 @@ class Map(ColumnType[TModifiers]):
 class Nested(ColumnType[TModifiers]):
     def __init__(
         self,
-        nested_columns: Sequence[Union[Column[TModifiers], tuple[str, ColumnType[TModifiers]]]],
-        modifiers: Optional[TModifiers] = None,
+        nested_columns: Sequence[Column[TModifiers] | tuple[str, ColumnType[TModifiers]]],
+        modifiers: TModifiers | None = None,
     ) -> None:
         super().__init__(modifiers)
         self.nested_columns = Column.to_columns(nested_columns)
@@ -428,8 +409,8 @@ class Nested(ColumnType[TModifiers]):
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.get_modifiers() == cast(Nested[TModifiers], other).get_modifiers()
-            and self.nested_columns == cast(Nested[TModifiers], other).nested_columns
+            and self.get_modifiers() == other.get_modifiers()
+            and self.nested_columns == other.nested_columns
         )
 
     def _for_schema_impl(self) -> str:
@@ -440,7 +421,7 @@ class Nested(ColumnType[TModifiers]):
             FlattenedColumn(name, column.name, Array(column.type)) for column in self.nested_columns
         ]
 
-    def set_modifiers(self, modifiers: Optional[TModifiers]) -> Nested[TModifiers]:
+    def set_modifiers(self, modifiers: TModifiers | None) -> Nested[TModifiers]:
         return Nested(nested_columns=self.nested_columns, modifiers=modifiers)
 
     def get_raw(self) -> Nested[TModifiers]:
@@ -453,7 +434,7 @@ class AggregateFunction(ColumnType[TModifiers]):
         self,
         func: str,
         arg_types: Sequence[ColumnType[TModifiers]],
-        modifiers: Optional[TModifiers] = None,
+        modifiers: TModifiers | None = None,
     ) -> None:
         super().__init__(modifiers)
         self.func = func
@@ -465,9 +446,9 @@ class AggregateFunction(ColumnType[TModifiers]):
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.get_modifiers() == cast(AggregateFunction[TModifiers], other).get_modifiers()
-            and self.func == cast(AggregateFunction[TModifiers], other).func
-            and self.arg_types == cast(AggregateFunction[TModifiers], other).arg_types
+            and self.get_modifiers() == other.get_modifiers()
+            and self.func == other.func
+            and self.arg_types == other.arg_types
         )
 
     def _for_schema_impl(self) -> str:
@@ -475,7 +456,7 @@ class AggregateFunction(ColumnType[TModifiers]):
             ", ".join(chain([self.func], (x.for_schema() for x in self.arg_types))),
         )
 
-    def set_modifiers(self, modifiers: Optional[TModifiers]) -> AggregateFunction[TModifiers]:
+    def set_modifiers(self, modifiers: TModifiers | None) -> AggregateFunction[TModifiers]:
         return AggregateFunction(self.func, self.arg_types, modifiers)
 
     def get_raw(self) -> AggregateFunction[TModifiers]:
@@ -487,7 +468,7 @@ class SimpleAggregateFunction(ColumnType[TModifiers]):
         self,
         func: str,
         arg_types: Sequence[ColumnType[TModifiers]],
-        modifiers: Optional[TModifiers] = None,
+        modifiers: TModifiers | None = None,
     ) -> None:
         super().__init__(modifiers)
         self.func = func
@@ -499,10 +480,9 @@ class SimpleAggregateFunction(ColumnType[TModifiers]):
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.get_modifiers()
-            == cast(SimpleAggregateFunction[TModifiers], other).get_modifiers()
-            and self.func == cast(SimpleAggregateFunction[TModifiers], other).func
-            and self.arg_types == cast(SimpleAggregateFunction[TModifiers], other).arg_types
+            and self.get_modifiers() == other.get_modifiers()
+            and self.func == other.func
+            and self.arg_types == other.arg_types
         )
 
     def _for_schema_impl(self) -> str:
@@ -510,7 +490,7 @@ class SimpleAggregateFunction(ColumnType[TModifiers]):
             ", ".join(chain([self.func], (x.for_schema() for x in self.arg_types))),
         )
 
-    def set_modifiers(self, modifiers: Optional[TModifiers]) -> SimpleAggregateFunction[TModifiers]:
+    def set_modifiers(self, modifiers: TModifiers | None) -> SimpleAggregateFunction[TModifiers]:
         return SimpleAggregateFunction(self.func, self.arg_types, modifiers)
 
     def get_raw(self) -> SimpleAggregateFunction[TModifiers]:
@@ -534,7 +514,7 @@ class IPv6(ColumnType[TModifiers]):
 
 
 class FixedString(ColumnType[TModifiers]):
-    def __init__(self, length: int, modifiers: Optional[TModifiers] = None) -> None:
+    def __init__(self, length: int, modifiers: TModifiers | None = None) -> None:
         super().__init__(modifiers)
         self.length = length
 
@@ -544,14 +524,14 @@ class FixedString(ColumnType[TModifiers]):
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.get_modifiers() == cast(FixedString[TModifiers], other).get_modifiers()
-            and self.length == cast(FixedString[TModifiers], other).length
+            and self.get_modifiers() == other.get_modifiers()
+            and self.length == other.length
         )
 
     def _for_schema_impl(self) -> str:
-        return "FixedString({})".format(self.length)
+        return f"FixedString({self.length})"
 
-    def set_modifiers(self, modifiers: Optional[TModifiers]) -> FixedString[TModifiers]:
+    def set_modifiers(self, modifiers: TModifiers | None) -> FixedString[TModifiers]:
         return FixedString(length=self.length, modifiers=modifiers)
 
     def get_raw(self) -> FixedString[TModifiers]:
@@ -559,7 +539,7 @@ class FixedString(ColumnType[TModifiers]):
 
 
 class UInt(ColumnType[TModifiers]):
-    def __init__(self, size: int, modifiers: Optional[TModifiers] = None) -> None:
+    def __init__(self, size: int, modifiers: TModifiers | None = None) -> None:
         super().__init__(modifiers)
         assert size in (8, 16, 32, 64, 128)
         self.size = size
@@ -570,14 +550,14 @@ class UInt(ColumnType[TModifiers]):
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.get_modifiers() == cast(UInt[TModifiers], other).get_modifiers()
-            and self.size == cast(UInt[TModifiers], other).size
+            and self.get_modifiers() == other.get_modifiers()
+            and self.size == other.size
         )
 
     def _for_schema_impl(self) -> str:
-        return "UInt{}".format(self.size)
+        return f"UInt{self.size}"
 
-    def set_modifiers(self, modifiers: Optional[TModifiers]) -> UInt[TModifiers]:
+    def set_modifiers(self, modifiers: TModifiers | None) -> UInt[TModifiers]:
         return UInt(size=self.size, modifiers=modifiers)
 
     def get_raw(self) -> UInt[TModifiers]:
@@ -585,7 +565,7 @@ class UInt(ColumnType[TModifiers]):
 
 
 class Int(ColumnType[TModifiers]):
-    def __init__(self, size: int, modifiers: Optional[TModifiers] = None) -> None:
+    def __init__(self, size: int, modifiers: TModifiers | None = None) -> None:
         super().__init__(modifiers)
         assert size in (8, 16, 32, 64, 128)
         self.size = size
@@ -596,14 +576,14 @@ class Int(ColumnType[TModifiers]):
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.get_modifiers() == cast(Int[TModifiers], other).get_modifiers()
-            and self.size == cast(Int[TModifiers], other).size
+            and self.get_modifiers() == other.get_modifiers()
+            and self.size == other.size
         )
 
     def _for_schema_impl(self) -> str:
-        return "Int{}".format(self.size)
+        return f"Int{self.size}"
 
-    def set_modifiers(self, modifiers: Optional[TModifiers]) -> Int[TModifiers]:
+    def set_modifiers(self, modifiers: TModifiers | None) -> Int[TModifiers]:
         return Int(size=self.size, modifiers=modifiers)
 
     def get_raw(self) -> Int[TModifiers]:
@@ -614,7 +594,7 @@ class Float(ColumnType[TModifiers]):
     def __init__(
         self,
         size: int,
-        modifiers: Optional[TModifiers] = None,
+        modifiers: TModifiers | None = None,
     ) -> None:
         super().__init__(modifiers)
         assert size in (32, 64)
@@ -626,14 +606,14 @@ class Float(ColumnType[TModifiers]):
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.get_modifiers() == cast(Float[TModifiers], other).get_modifiers()
-            and self.size == cast(Float[TModifiers], other).size
+            and self.get_modifiers() == other.get_modifiers()
+            and self.size == other.size
         )
 
     def _for_schema_impl(self) -> str:
-        return "Float{}".format(self.size)
+        return f"Float{self.size}"
 
-    def set_modifiers(self, modifiers: Optional[TModifiers]) -> Float[TModifiers]:
+    def set_modifiers(self, modifiers: TModifiers | None) -> Float[TModifiers]:
         return Float(size=self.size, modifiers=modifiers)
 
     def get_raw(self) -> Float[TModifiers]:
@@ -652,8 +632,8 @@ class DateTime64(ColumnType[TModifiers]):
     def __init__(
         self,
         precision: int = 3,
-        timezone: Optional[str] = None,
-        modifiers: Optional[TModifiers] = None,
+        timezone: str | None = None,
+        modifiers: TModifiers | None = None,
     ) -> None:
         assert precision <= 9
         super().__init__(modifiers)
@@ -669,19 +649,15 @@ class DateTime64(ColumnType[TModifiers]):
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.get_modifiers()
-            == cast(
-                DateTime64[TModifiers],
-                other,
-            ).get_modifiers()
-            and self.precision == cast(DateTime64[TModifiers], other).precision
-            and self.timezone == cast(DateTime64[TModifiers], other).timezone
+            and self.get_modifiers() == other.get_modifiers()
+            and self.precision == other.precision
+            and self.timezone == other.timezone
         )
 
     def _for_schema_impl(self) -> str:
         return f"DateTime64({self._repr_content()})"
 
-    def set_modifiers(self, modifiers: Optional[TModifiers]) -> DateTime64[TModifiers]:
+    def set_modifiers(self, modifiers: TModifiers | None) -> DateTime64[TModifiers]:
         return DateTime64(
             precision=self.precision,
             timezone=self.timezone,
@@ -699,25 +675,25 @@ class Enum(ColumnType[TModifiers]):
     def __init__(
         self,
         values: Sequence[tuple[str, int]],
-        modifiers: Optional[TModifiers] = None,
+        modifiers: TModifiers | None = None,
     ) -> None:
         super().__init__(modifiers)
         self.values = values
 
     def _repr_content(self) -> str:
-        return ", ".join("'{}' = {}".format(v[0], v[1]) for v in self.values)
+        return ", ".join(f"'{v[0]}' = {v[1]}" for v in self.values)
 
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.get_modifiers() == cast(Enum[TModifiers], other).get_modifiers()
-            and self.values == cast(Enum[TModifiers], other).values
+            and self.get_modifiers() == other.get_modifiers()
+            and self.values == other.values
         )
 
     def _for_schema_impl(self) -> str:
-        return "Enum({})".format(", ".join("'{}' = {}".format(v[0], v[1]) for v in self.values))
+        return "Enum({})".format(", ".join(f"'{v[0]}' = {v[1]}" for v in self.values))
 
-    def set_modifiers(self, modifiers: Optional[TModifiers]) -> Enum[TModifiers]:
+    def set_modifiers(self, modifiers: TModifiers | None) -> Enum[TModifiers]:
         return Enum(values=self.values, modifiers=modifiers)
 
     def get_raw(self) -> Enum[TModifiers]:
@@ -728,25 +704,25 @@ class Tuple(ColumnType[TModifiers]):
     def __init__(
         self,
         types: tuple[ColumnType[TModifiers], ...],
-        modifiers: Optional[TModifiers] = None,
+        modifiers: TModifiers | None = None,
     ) -> None:
         super().__init__(modifiers)
         self.types = types
 
     def _repr_content(self) -> str:
-        return ", ".join("{}".format(v) for v in self.types)
+        return ", ".join(f"{v}" for v in self.types)
 
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.get_modifiers() == cast(Tuple[TModifiers], other).get_modifiers()
-            and self.types == cast(Tuple[TModifiers], other).types
+            and self.get_modifiers() == other.get_modifiers()
+            and self.types == other.types
         )
 
     def _for_schema_impl(self) -> str:
-        return "Tuple({})".format(", ".join("{}".format(t.for_schema()) for t in self.types))
+        return "Tuple({})".format(", ".join(f"{t.for_schema()}" for t in self.types))
 
-    def set_modifiers(self, modifiers: Optional[TModifiers]) -> Tuple[TModifiers]:
+    def set_modifiers(self, modifiers: TModifiers | None) -> Tuple[TModifiers]:
         return Tuple(types=self.types, modifiers=modifiers)
 
     def get_raw(self) -> Tuple[TModifiers]:
@@ -822,7 +798,7 @@ class ColumnValidator:
 
 
 class Bool(ColumnType[TModifiers]):
-    def __init__(self, modifiers: Optional[TModifiers] = None) -> None:
+    def __init__(self, modifiers: TModifiers | None = None) -> None:
         super().__init__(modifiers)
 
     def __eq__(self, other: object) -> bool:
@@ -834,7 +810,7 @@ class Bool(ColumnType[TModifiers]):
     def _for_schema_impl(self) -> str:
         return "Bool"
 
-    def set_modifiers(self, modifiers: Optional[TModifiers]) -> Bool[TModifiers]:
+    def set_modifiers(self, modifiers: TModifiers | None) -> Bool[TModifiers]:
         return Bool(modifiers=modifiers)
 
     def get_raw(self) -> Bool[TModifiers]:
@@ -844,13 +820,17 @@ class Bool(ColumnType[TModifiers]):
 class JSON(ColumnType[TModifiers]):
     def __init__(
         self,
-        max_dynamic_paths: Optional[int] = None,
-        max_dynamic_types: Optional[int] = None,
+        max_dynamic_paths: int | None = None,
+        max_dynamic_types: int | None = None,
         type_hints: Mapping[str, ColumnType[TModifiers]] = {},
-        skip_paths: list[str] = [],
-        skip_regexp: list[str] = [],
-        modifiers: Optional[TModifiers] = None,
+        skip_paths: list[str] | None = None,
+        skip_regexp: list[str] | None = None,
+        modifiers: TModifiers | None = None,
     ) -> None:
+        if skip_regexp is None:
+            skip_regexp = []
+        if skip_paths is None:
+            skip_paths = []
         super().__init__(modifiers)
         self.max_dynamic_paths = max_dynamic_paths
         self.max_dynamic_types = max_dynamic_types
@@ -872,12 +852,12 @@ class JSON(ColumnType[TModifiers]):
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.get_modifiers() == cast(JSON[TModifiers], other).get_modifiers()
-            and self.max_dynamic_paths == cast(JSON[TModifiers], other).max_dynamic_paths
-            and self.max_dynamic_types == cast(JSON[TModifiers], other).max_dynamic_types
-            and self.type_hints == cast(JSON[TModifiers], other).type_hints
-            and self.skip_paths == cast(JSON[TModifiers], other).skip_paths
-            and self.skip_regexp == cast(JSON[TModifiers], other).skip_regexp
+            and self.get_modifiers() == other.get_modifiers()
+            and self.max_dynamic_paths == other.max_dynamic_paths
+            and self.max_dynamic_types == other.max_dynamic_types
+            and self.type_hints == other.type_hints
+            and self.skip_paths == other.skip_paths
+            and self.skip_regexp == other.skip_regexp
         )
 
     def _for_schema_impl(self) -> str:
@@ -904,10 +884,9 @@ class JSON(ColumnType[TModifiers]):
 
         if parts:
             return f"JSON({', '.join(parts)})"
-        else:
-            return "JSON"
+        return "JSON"
 
-    def set_modifiers(self, modifiers: Optional[TModifiers]) -> JSON[TModifiers]:
+    def set_modifiers(self, modifiers: TModifiers | None) -> JSON[TModifiers]:
         return JSON(
             max_dynamic_paths=self.max_dynamic_paths,
             max_dynamic_types=self.max_dynamic_types,

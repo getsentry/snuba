@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import re
 from abc import ABC, abstractmethod
+from collections.abc import Mapping, Sequence
 from datetime import datetime
-from typing import Any, List, Mapping, Optional, Sequence, Type
+from typing import Any
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors import DatasetMessageProcessor
@@ -25,8 +26,7 @@ def parse_postgres_datetime(date: str) -> datetime:
     date = f"{date}00"
     if date_with_nanosec.match(date):
         return datetime.strptime(date, POSTGRES_DATE_FORMAT_WITH_NS)
-    else:
-        return datetime.strptime(date, POSTGRES_DATE_FORMAT_WITHOUT_NS)
+    return datetime.strptime(date, POSTGRES_DATE_FORMAT_WITHOUT_NS)
 
 
 def postgres_date_to_clickhouse(date: str) -> str:
@@ -71,7 +71,7 @@ class CdcMessageRow(ABC):
 
 
 class CdcProcessor(DatasetMessageProcessor, metaclass=RegisteredClass):
-    def __init__(self, pg_table: str, message_row_class: Type[CdcMessageRow]):
+    def __init__(self, pg_table: str, message_row_class: type[CdcMessageRow]):
         self.pg_table = pg_table
         self._message_row_class = message_row_class
 
@@ -96,10 +96,10 @@ class CdcProcessor(DatasetMessageProcessor, metaclass=RegisteredClass):
         columnnames: Sequence[str],
         columnvalues: Sequence[Any],
     ) -> Sequence[WriterTableRow]:
-        old_key = dict(zip(key["keynames"], key["keyvalues"]))
+        old_key = dict(zip(key["keynames"], key["keyvalues"], strict=False))
         new_key = {key: columnvalues[columnnames.index(key)] for key in key["keynames"]}
 
-        ret: List[WriterTableRow] = []
+        ret: list[WriterTableRow] = []
         if old_key != new_key:
             ret.extend(self._process_delete(offset, key))
 
@@ -117,12 +117,12 @@ class CdcProcessor(DatasetMessageProcessor, metaclass=RegisteredClass):
 
     def process_message(
         self, value: Mapping[str, Any], metadata: KafkaMessageMetadata
-    ) -> Optional[ProcessedMessage]:
+    ) -> ProcessedMessage | None:
         assert isinstance(value, dict)
 
         offset = metadata.offset
         event = value["event"]
-        timestamp: Optional[datetime] = None
+        timestamp: datetime | None = None
         if event == "begin":
             messages = self._process_begin(offset)
         elif event == "commit":
@@ -148,10 +148,12 @@ class CdcProcessor(DatasetMessageProcessor, metaclass=RegisteredClass):
                 messages = self._process_delete(offset, value["oldkeys"])
             else:
                 raise ValueError(
-                    "Invalid value for operation in replication log: %s" % value["kind"]
+                    "Invalid value for operation in replication log: {}".format(value["kind"])
                 )
         else:
-            raise ValueError("Invalid value for event in replication log: %s" % value["event"])
+            raise ValueError(
+                "Invalid value for event in replication log: {}".format(value["event"])
+            )
 
         if not messages:
             return None

@@ -1,6 +1,7 @@
 import os
 from abc import ABC, abstractmethod
-from typing import Sequence, Type, cast
+from collections.abc import Sequence
+from typing import cast
 
 from snuba.datasets.storage import EntityStorageConnection
 from snuba.query.logical import Query
@@ -19,8 +20,8 @@ class QueryStorageSelector(ABC, metaclass=RegisteredClass):
         return cls.__name__
 
     @classmethod
-    def get_from_name(cls, name: str) -> Type["QueryStorageSelector"]:
-        return cast(Type["QueryStorageSelector"], cls.class_from_name(name))
+    def get_from_name(cls, name: str) -> type["QueryStorageSelector"]:
+        return cast(type["QueryStorageSelector"], cls.class_from_name(name))
 
     @abstractmethod
     def select_storage(

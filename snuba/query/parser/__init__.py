@@ -1,5 +1,5 @@
+from collections.abc import Mapping, MutableMapping, Sequence
 from dataclasses import replace
-from typing import Mapping, MutableMapping, Optional, Sequence, Tuple, Union
 
 from snuba import environment
 from snuba.query.composite import CompositeQuery
@@ -25,7 +25,7 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 metrics = MetricsWrapper(environment.metrics, "parser")
 
 
-def validate_aliases(query: Union[CompositeQuery[LogicalDataSource], Query]) -> None:
+def validate_aliases(query: CompositeQuery[LogicalDataSource] | Query) -> None:
     """
     Ensures that no alias has been defined multiple times for different
     expressions in the query. Thus rejecting queries with shadowing.
@@ -46,11 +46,10 @@ def validate_aliases(query: Union[CompositeQuery[LogicalDataSource], Query]) -> 
                     ),
                     should_report=False,
                 )
-            else:
-                all_declared_aliases[exp.alias] = exp
+            all_declared_aliases[exp.alias] = exp
 
 
-def parse_subscriptables(query: Union[CompositeQuery[LogicalDataSource], Query]) -> None:
+def parse_subscriptables(query: CompositeQuery[LogicalDataSource] | Query) -> None:
     """
     Turns columns formatted as tags[asd] into SubscriptableReference.
     """
@@ -74,7 +73,7 @@ def parse_subscriptables(query: Union[CompositeQuery[LogicalDataSource], Query])
     query.transform_expressions(transform)
 
 
-def apply_column_aliases(query: Union[CompositeQuery[LogicalDataSource], Query]) -> None:
+def apply_column_aliases(query: CompositeQuery[LogicalDataSource] | Query) -> None:
     """
     Applies an alias to all the columns in the query equal to the column
     name unless a column already has one or the alias is already defined.
@@ -89,13 +88,12 @@ def apply_column_aliases(query: Union[CompositeQuery[LogicalDataSource], Query])
     def apply_aliases(exp: Expression) -> Expression:
         if not isinstance(exp, Column) or exp.alias or exp.column_name in current_aliases:
             return exp
-        else:
-            return replace(exp, alias=exp.column_name)
+        return replace(exp, alias=exp.column_name)
 
     query.transform_expressions(apply_aliases)
 
 
-def expand_aliases(query: Union[CompositeQuery[LogicalDataSource], Query]) -> None:
+def expand_aliases(query: CompositeQuery[LogicalDataSource] | Query) -> None:
     """
     Recursively expand all the references to aliases in the query. This
     makes life easy to query processors and translators that only have to
@@ -179,10 +177,9 @@ class AliasExpanderVisitor(ExpressionVisitor[Expression]):
         if self.__expand_nested:
             # The expanded expression may contain more alias references to expand.
             return self.__alias_lookup_table[name].accept(self)
-        else:
-            return self.__alias_lookup_table[name]
+        return self.__alias_lookup_table[name]
 
-    def __append_alias(self, alias: Optional[str]) -> Sequence[str]:
+    def __append_alias(self, alias: str | None) -> Sequence[str]:
         return [*self.__visited_stack, alias] if alias is not None else self.__visited_stack
 
     def visit_subscriptable_reference(self, exp: SubscriptableReference) -> Expression:
@@ -196,21 +193,25 @@ class AliasExpanderVisitor(ExpressionVisitor[Expression]):
         assert isinstance(expanded_column, Column), (
             "A subscriptable column cannot be resolved to anything other than a column"
         )
+        expanded_key = exp.key.accept(
+            AliasExpanderVisitor(
+                self.__alias_lookup_table,
+                self.__append_alias(exp.alias),
+                self.__expand_nested,
+            )
+        )
+        assert isinstance(expanded_key, Literal), (
+            "A subscriptable key cannot be resolved to anything other than a literal"
+        )
         return replace(
             exp,
             column=expanded_column,
-            key=exp.key.accept(
-                AliasExpanderVisitor(
-                    self.__alias_lookup_table,
-                    self.__append_alias(exp.alias),
-                    self.__expand_nested,
-                )
-            ),
+            key=expanded_key,
         )
 
     def __visit_sequence(
-        self, alias: Optional[str], parameters: Sequence[Expression]
-    ) -> Tuple[Expression, ...]:
+        self, alias: str | None, parameters: Sequence[Expression]
+    ) -> tuple[Expression, ...]:
         return tuple(
             p.accept(
                 AliasExpanderVisitor(
@@ -226,15 +227,20 @@ class AliasExpanderVisitor(ExpressionVisitor[Expression]):
         return replace(exp, parameters=self.__visit_sequence(exp.alias, exp.parameters))
 
     def visit_curried_function_call(self, exp: CurriedFunctionCall) -> Expression:
+        internal_function = exp.internal_function.accept(
+            AliasExpanderVisitor(
+                self.__alias_lookup_table,
+                self.__append_alias(exp.alias),
+                self.__expand_nested,
+            )
+        )
+        assert isinstance(internal_function, FunctionCall), (
+            "The internal function of a curried function call cannot be resolved "
+            "to anything other than a function call"
+        )
         return replace(
             exp,
-            internal_function=exp.internal_function.accept(
-                AliasExpanderVisitor(
-                    self.__alias_lookup_table,
-                    self.__append_alias(exp.alias),
-                    self.__expand_nested,
-                )
-            ),
+            internal_function=internal_function,
             parameters=self.__visit_sequence(exp.alias, exp.parameters),
         )
 

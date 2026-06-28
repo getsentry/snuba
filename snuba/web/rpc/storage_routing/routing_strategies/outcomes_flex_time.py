@@ -60,7 +60,7 @@ def _get_request_time_window(routing_context: RoutingContext) -> TimeWindow:
     meta = extract_message_meta(routing_context.in_msg)
     if routing_context.in_msg.HasField("page_token"):
         time_window = FlexibleTimeWindowPageWithFilters(
-            getattr(routing_context.in_msg, "page_token")
+            getattr(routing_context.in_msg, "page_token")  # noqa: B009  # proto dynamic attr
         ).get_time_window()
         if time_window:
             return time_window
@@ -148,7 +148,7 @@ class OutcomesFlexTimeRoutingStrategy(BaseRoutingStrategy):
             window_length = original_end_ts - original_start_ts
 
             start_timestamp_proto = TimestampProto(
-                seconds=original_end_ts - math.floor((window_length / factor))
+                seconds=original_end_ts - math.floor(window_length / factor)
             )
             end_timestamp_proto = TimestampProto(seconds=original_end_ts)
             return TimeWindow(start_timestamp_proto, end_timestamp_proto)

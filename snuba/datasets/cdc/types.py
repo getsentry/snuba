@@ -1,4 +1,5 @@
-from typing import Any, Literal, Sequence, TypedDict, Union
+from collections.abc import Sequence
+from typing import Any, Literal, TypedDict
 
 
 class BeginEvent(TypedDict):
@@ -44,10 +45,4 @@ class CommitEvent(TypedDict):
     event: Literal["commit"]
 
 
-Event = Union[
-    BeginEvent,
-    InsertEvent,
-    UpdateEvent,
-    DeleteEvent,
-    CommitEvent,
-]
+Event = BeginEvent | InsertEvent | UpdateEvent | DeleteEvent | CommitEvent

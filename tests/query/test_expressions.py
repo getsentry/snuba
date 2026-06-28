@@ -1,7 +1,6 @@
 import uuid
 from dataclasses import replace
 from datetime import datetime
-from typing import Set
 
 import pytest
 
@@ -191,7 +190,7 @@ def test_hash() -> None:
     function_2 = CurriedFunctionCall(None, function_1, (column1,))
     lm = Lambda(None, ("x", "y"), FunctionCall(None, "test", (Argument(None, "x"),)))
 
-    s: Set[Expression] = set()
+    s: set[Expression] = set()
     s.add(column1)
     s.add(column2)
     s.add(function_1)

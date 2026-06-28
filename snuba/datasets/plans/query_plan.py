@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 from abc import ABC
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Generic, Mapping, Optional, Sequence, Tuple, TypeVar, Union
+from typing import Generic, NamedTuple, TypeVar
 
 from snuba.clickhouse.query import Query
+from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.query import ProcessableQuery
 from snuba.query import Query as AbstractQuery
 from snuba.query.composite import CompositeQuery
+from snuba.query.data_source.join import JoinClause
 from snuba.query.data_source.simple import Table
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 
@@ -39,7 +42,7 @@ class QueryPlan(ABC, Generic[TQuery]):
 
 
 @dataclass(frozen=True)
-class ClickhouseQueryPlan(QueryPlan[Union[Query, ProcessableQuery[Table]]]):
+class ClickhouseQueryPlan(QueryPlan[Query | ProcessableQuery[Table]]):
     """
     Query plan for a single entity, single storage query.
 
@@ -68,12 +71,6 @@ class SubqueryProcessors:
     db_processors: Sequence[ClickhouseQueryProcessor]
 
 
-from typing import NamedTuple
-
-from snuba.clickhouse.query import Query as ClickhouseQuery
-from snuba.query.data_source.join import JoinClause
-
-
 class CompositeQueryPlan(NamedTuple):
     """
     Intermediate query plan data structure maintained when visiting
@@ -85,19 +82,16 @@ class CompositeQueryPlan(NamedTuple):
     (e.g. aliased processors).
     """
 
-    translated_source: Union[
-        ClickhouseQuery,
-        ProcessableQuery[Table],
-        CompositeQuery[Table],
-        JoinClause[Table],
-    ]
+    translated_source: (
+        ClickhouseQuery | ProcessableQuery[Table] | CompositeQuery[Table] | JoinClause[Table]
+    )
     storage_set_key: StorageSetKey
-    root_processors: Optional[SubqueryProcessors] = None
-    aliased_processors: Optional[Mapping[str, SubqueryProcessors]] = None
+    root_processors: SubqueryProcessors | None = None
+    aliased_processors: Mapping[str, SubqueryProcessors] | None = None
 
     def get_db_processors(
         self,
-    ) -> Tuple[
+    ) -> tuple[
         Sequence[ClickhouseQueryProcessor],
         Mapping[str, Sequence[ClickhouseQueryProcessor]],
     ]:
@@ -115,7 +109,7 @@ class CompositeQueryPlan(NamedTuple):
 
     def get_plan_processors(
         self,
-    ) -> Tuple[
+    ) -> tuple[
         Sequence[ClickhouseQueryProcessor],
         Mapping[str, Sequence[ClickhouseQueryProcessor]],
     ]:

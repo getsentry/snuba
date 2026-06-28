@@ -1,5 +1,6 @@
 from abc import abstractmethod
-from typing import Any, Mapping, Optional, Type, Union, cast
+from collections.abc import Mapping
+from typing import Any, cast
 
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
@@ -20,8 +21,8 @@ class EntitySubscriptionProcessor(metaclass=RegisteredClass):
         return cls.__name__
 
     @classmethod
-    def get_from_name(cls, name: str) -> Type["EntitySubscriptionProcessor"]:
-        return cast(Type["EntitySubscriptionProcessor"], cls.class_from_name(name))
+    def get_from_name(cls, name: str) -> type["EntitySubscriptionProcessor"]:
+        return cast(type["EntitySubscriptionProcessor"], cls.class_from_name(name))
 
     @abstractmethod
     def to_dict(self, metadata: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -30,9 +31,9 @@ class EntitySubscriptionProcessor(metaclass=RegisteredClass):
     @abstractmethod
     def process(
         self,
-        query: Union[CompositeQuery[Entity], Query],
+        query: CompositeQuery[Entity] | Query,
         metadata: Mapping[str, Any],
-        offset: Optional[int] = None,
+        offset: int | None = None,
     ) -> None:
         raise NotImplementedError
 
@@ -51,9 +52,9 @@ class AddColumnCondition(EntitySubscriptionProcessor):
 
     def process(
         self,
-        query: Union[CompositeQuery[Entity], Query],
+        query: CompositeQuery[Entity] | Query,
         metadata: Mapping[str, Any],
-        offset: Optional[int] = None,
+        offset: int | None = None,
     ) -> None:
         if self.extra_condition_data_key not in metadata:
             raise InvalidQueryException(

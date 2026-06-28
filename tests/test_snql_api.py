@@ -211,21 +211,16 @@ class TestSnQLApi(BaseApiTest):
             "/discover/snql",
             data=json.dumps(
                 {
-                    "query": """MATCH {
+                    "query": f"""MATCH {{
                         MATCH (discover_events)
                         SELECT count() AS count BY project_id, tags[custom_tag]
-                        WHERE type != 'transaction' AND project_id = %s
-                        AND timestamp >= toDateTime('%s')
-                        AND timestamp < toDateTime('%s')
-                    }
+                        WHERE type != 'transaction' AND project_id = {self.project_id}
+                        AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                        AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    }}
                     SELECT avg(count) AS avg_count
                     ORDER BY avg_count ASC
-                    LIMIT 1000"""
-                    % (
-                        self.project_id,
-                        self.base_time.isoformat(),
-                        self.next_time.isoformat(),
-                    ),
+                    LIMIT 1000""",
                     "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),

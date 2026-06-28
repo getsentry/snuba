@@ -23,6 +23,8 @@ x-test-common: &test-common
     REDIS_PORT: 7000
     REDIS_DB: 0
     DEFAULT_BROKERS: "kafka:9092"
+    SNUBA_TEST_SHARD: "${SNUBA_TEST_SHARD:-0}"
+    SNUBA_TEST_SHARD_TOTAL: "${SNUBA_TEST_SHARD_TOTAL:-1}"
   # override the `snuba` user to write to the /.artifacts mount
   user: root
 
@@ -41,7 +43,7 @@ services:
     command:
       - "-m"
       - "pytest"
-      - "-x"
+      - "--maxfail=50"
       - "--ignore"
       - "tests/migrations"
       - "-vv"
@@ -58,7 +60,7 @@ services:
     command:
       - "-m"
       - "pytest"
-      - "-x"
+      - "--maxfail=50"
       - "-vv"
       - "tests/migrations"
       - "--junit-xml"

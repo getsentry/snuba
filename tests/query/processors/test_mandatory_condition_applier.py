@@ -1,5 +1,4 @@
 import copy
-from typing import List
 
 import pytest
 
@@ -52,7 +51,7 @@ test_data = [
 
 
 @pytest.mark.parametrize("table, mand_conditions", test_data)
-def test_mand_conditions(table: str, mand_conditions: List[FunctionCall]) -> None:
+def test_mand_conditions(table: str, mand_conditions: list[FunctionCall]) -> None:
     query = Query(
         Table(
             table,

@@ -1,6 +1,6 @@
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from typing import Callable, Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -61,7 +61,7 @@ class TestCleanup:
         self,
         current_time: MagicMock,
         storage_key: StorageKey,
-        create_event_row_for_date: Callable[[datetime, Optional[int]], InsertBatch],
+        create_event_row_for_date: Callable[[datetime, int | None], InsertBatch],
     ) -> None:
         def to_monday(d: datetime) -> datetime:
             rounded = d - timedelta(days=d.weekday())
@@ -119,14 +119,12 @@ class TestCleanup:
         write_processed_messages(storage, [create_event_row_for_date(one_week_ago, 30)])
         parts = cleanup.get_active_partitions(clickhouse, storage, database, table)
 
-        assert {(p.date, p.retention_days) for p in parts} == set(
-            [
-                (to_monday(thirteen_weeks_ago), 90),
-                (to_monday(three_weeks_ago), 90),
-                (to_monday(one_week_ago), 30),
-                (to_monday(base), 90),
-            ]
-        )
+        assert {(p.date, p.retention_days) for p in parts} == {
+            (to_monday(thirteen_weeks_ago), 90),
+            (to_monday(three_weeks_ago), 90),
+            (to_monday(one_week_ago), 30),
+            (to_monday(base), 90),
+        }
         stale = cleanup.filter_stale_partitions(parts)
         assert [(p.date, p.retention_days) for p in stale] == [(to_monday(thirteen_weeks_ago), 90)]
 
@@ -134,30 +132,27 @@ class TestCleanup:
         five_weeks_ago = base - timedelta(days=7 * 5)
         write_processed_messages(storage, [create_event_row_for_date(five_weeks_ago, 30)])
         parts = cleanup.get_active_partitions(clickhouse, storage, database, table)
-        assert {(p.date, p.retention_days) for p in parts} == set(
-            [
-                (to_monday(thirteen_weeks_ago), 90),
-                (to_monday(five_weeks_ago), 30),
-                (to_monday(three_weeks_ago), 90),
-                (to_monday(one_week_ago), 30),
-                (to_monday(base), 90),
-            ]
-        )
+        assert {(p.date, p.retention_days) for p in parts} == {
+            (to_monday(thirteen_weeks_ago), 90),
+            (to_monday(five_weeks_ago), 30),
+            (to_monday(three_weeks_ago), 90),
+            (to_monday(one_week_ago), 30),
+            (to_monday(base), 90),
+        }
         stale = cleanup.filter_stale_partitions(parts)
-        assert {(p.date, p.retention_days) for p in stale} == set(
-            [(to_monday(thirteen_weeks_ago), 90), (to_monday(five_weeks_ago), 30)]
-        )
+        assert {(p.date, p.retention_days) for p in stale} == {
+            (to_monday(thirteen_weeks_ago), 90),
+            (to_monday(five_weeks_ago), 30),
+        }
 
         cleanup.drop_partitions(clickhouse, database, table, stale, dry_run=False)
 
         parts = cleanup.get_active_partitions(clickhouse, storage, database, table)
-        assert {(p.date, p.retention_days) for p in parts} == set(
-            [
-                (to_monday(three_weeks_ago), 90),
-                (to_monday(one_week_ago), 30),
-                (to_monday(base), 90),
-            ]
-        )
+        assert {(p.date, p.retention_days) for p in parts} == {
+            (to_monday(three_weeks_ago), 90),
+            (to_monday(one_week_ago), 30),
+            (to_monday(base), 90),
+        }
 
     @pytest.mark.parametrize(
         "storage_key, create_event_row_for_date",
@@ -168,7 +163,7 @@ class TestCleanup:
         self,
         current_time: MagicMock,
         storage_key: StorageKey,
-        create_event_row_for_date: Callable[[datetime, Optional[int]], InsertBatch],
+        create_event_row_for_date: Callable[[datetime, int | None], InsertBatch],
     ) -> None:
         """
         This test is simulating a failure case that happened in production, where when the script ran,

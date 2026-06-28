@@ -1,6 +1,6 @@
 import uuid
+from collections.abc import Sequence
 from datetime import datetime
-from typing import Optional, Sequence
 
 import pytest
 
@@ -37,9 +37,9 @@ from snuba.utils.metrics.timer import Timer
 
 
 def build_query(
-    selected_columns: Optional[Sequence[Expression]] = None,
-    condition: Optional[Expression] = None,
-    having: Optional[Expression] = None,
+    selected_columns: Sequence[Expression] | None = None,
+    condition: Expression | None = None,
+    having: Expression | None = None,
 ) -> ClickhouseQuery:
     return ClickhouseQuery(
         None,
@@ -437,8 +437,9 @@ def parse_and_process(snql_query: str) -> ClickhouseQuery:
         )
         .data
     )
-    ArrayJoinKeyValueOptimizer("tags").process_query(clickhouse_query, request.query_settings)  # type: ignore
-    return clickhouse_query  # type: ignore
+    assert isinstance(clickhouse_query, ClickhouseQuery)
+    ArrayJoinKeyValueOptimizer("tags").process_query(clickhouse_query, request.query_settings)
+    return clickhouse_query
 
 
 @pytest.mark.redis_db

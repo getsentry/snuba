@@ -46,9 +46,7 @@ def test_classify_and_replace() -> None:
 
     assert condition.transform(
         partial(_replace_col, "ev", "project_id", "gr", "project_id")
-    ) == binary_condition(
-        ConditionFunctions.EQ, Column(None, "gr", "project_id"), Literal(None, 1)
-    )
+    ) == binary_condition(ConditionFunctions.EQ, Column(None, "gr", "project_id"), Literal(None, 1))
 
 
 ENTITY_GROUP_JOIN = JoinClause(
@@ -67,19 +65,13 @@ ENTITY_GROUP_JOIN = JoinClause(
 
 TEST_REPLACEMENT = [
     pytest.param(
-        binary_condition(
-            ConditionFunctions.EQ, Column(None, "ev", "event_id"), Literal(None, 1)
-        ),
+        binary_condition(ConditionFunctions.EQ, Column(None, "ev", "event_id"), Literal(None, 1)),
         ENTITY_GROUP_JOIN,
-        binary_condition(
-            ConditionFunctions.EQ, Column(None, "ev", "event_id"), Literal(None, 1)
-        ),
+        binary_condition(ConditionFunctions.EQ, Column(None, "ev", "event_id"), Literal(None, 1)),
         id="No condition to add",
     ),
     pytest.param(
-        binary_condition(
-            ConditionFunctions.EQ, Column(None, "ev", "event_id"), Literal(None, 1)
-        ),
+        binary_condition(ConditionFunctions.EQ, Column(None, "ev", "event_id"), Literal(None, 1)),
         JoinClause(
             IndividualNode("ev", EntitySource(EntityKey.EVENTS, EVENTS_SCHEMA, None)),
             IndividualNode("ev2", EntitySource(EntityKey.EVENTS, EVENTS_SCHEMA, None)),
@@ -109,9 +101,7 @@ TEST_REPLACEMENT = [
         id="Self join. Duplicate condition",
     ),
     pytest.param(
-        binary_condition(
-            ConditionFunctions.EQ, Column(None, "ev", "project_id"), Literal(None, 1)
-        ),
+        binary_condition(ConditionFunctions.EQ, Column(None, "ev", "project_id"), Literal(None, 1)),
         ENTITY_GROUP_JOIN,
         combine_and_conditions(
             [
@@ -255,9 +245,7 @@ TEST_REPLACEMENT = [
 ]
 
 
-@pytest.mark.parametrize(
-    "initial_condition, join_clause, expected_expr", TEST_REPLACEMENT
-)
+@pytest.mark.parametrize("initial_condition, join_clause, expected_expr", TEST_REPLACEMENT)
 def test_add_equivalent_condition(
     initial_condition: Expression,
     join_clause: JoinClause[EntitySource],

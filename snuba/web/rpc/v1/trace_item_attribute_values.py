@@ -1,5 +1,4 @@
 import uuid
-from typing import Type
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
@@ -20,7 +19,7 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import combine_or_conditions
 from snuba.query.data_source.simple import Entity, LogicalDataSource
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column
+from snuba.query.dsl import column, map_key_exists
 from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -62,15 +61,14 @@ def _build_conditions(request: TraceItemAttributeValuesRequest) -> Expression:
 
     try:
         attributes_column = _ATTRIBUTE_TYPE_TO_COLUMN[request.key.type]
-    except KeyError:
-        raise BadSnubaRPCRequestException("Only string and boolean attributes can be used")
+    except KeyError as e:
+        raise BadSnubaRPCRequestException("Only string and boolean attributes can be used") from e
 
-    # Use mapContains (not has) for key existence: it's the correct ClickHouse
-    # function for Map columns and is handled by HashBucketFunctionTransformer
-    # for the bucketed string/float maps as well as the un-bucketed bool map.
+    # Key existence via map_key_exists (has(mapKeys(col), key)); routed to the
+    # right bucket for the bucketed string/float maps and the un-bucketed bool map.
     key_existence = combine_or_conditions(
         [
-            f.mapContains(column(attributes_column), name)
+            map_key_exists(column(attributes_column), name)
             for name in _map_key_names_for_existence_check(request.key)
         ]
     )
@@ -198,11 +196,11 @@ class AttributeValuesRequest(
         return "v1"
 
     @classmethod
-    def request_class(cls) -> Type[TraceItemAttributeValuesRequest]:
+    def request_class(cls) -> type[TraceItemAttributeValuesRequest]:
         return TraceItemAttributeValuesRequest
 
     @classmethod
-    def response_class(cls) -> Type[TraceItemAttributeValuesResponse]:
+    def response_class(cls) -> type[TraceItemAttributeValuesResponse]:
         return TraceItemAttributeValuesResponse
 
     def _execute(self, in_msg: TraceItemAttributeValuesRequest) -> TraceItemAttributeValuesResponse:
