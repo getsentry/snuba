@@ -40,15 +40,10 @@ def create_metrics(
         and settings.DOGSTATSD_SOCKET_PATH is not None
     )
 
-    if not use_uds:
-        if host is None and port is None:
-            from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
+    if not use_uds and host is None and port is None:
+        from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 
-            return DummyMetricsBackend()
-        if host is None or port is None:
-            raise ValueError(
-                f"DOGSTATSD_HOST and DOGSTATSD_PORT should both be None or not None. Found DOGSTATSD_HOST: {host}, DOGSTATSD_PORT: {port} instead."
-            )
+        return DummyMetricsBackend()
 
     from datadog import DogStatsd  # type: ignore[attr-defined]  # datadog lacks explicit re-export
 
@@ -70,6 +65,11 @@ def create_metrics(
                 sample_rates,
             ),
             SentryMetricsBackend(),
+        )
+
+    if host is None or port is None:
+        raise ValueError(
+            f"DOGSTATSD_HOST and DOGSTATSD_PORT should both be None or not None. Found DOGSTATSD_HOST: {host}, DOGSTATSD_PORT: {port} instead."
         )
 
     return SentryDatadogMetricsBackend(
