@@ -557,12 +557,11 @@ where
                     }
                 }
                 Ok(FlushOutcome::Err(e)) => {
-                    counter!(
-                        "rust_consumer.clickhouse_insert_error",
-                        1,
-                        "status" => "insert_error",
-                        "retried" => "false"
-                    );
+                    // The `clickhouse_insert_error` metric is already emitted at
+                    // the point of terminal failure in `flush_window_with_retry`
+                    // (alongside the per-attempt `retried="true"` counter), so we
+                    // do NOT re-emit here — doing so would double-count. We only
+                    // log and propagate the error to fail-stop the pipeline.
                     tracing::error!("ClickHouse inserter flush failed: {}", e);
                     return Err(StrategyError::Other(e.into()));
                 }
