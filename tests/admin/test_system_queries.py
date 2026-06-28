@@ -304,14 +304,15 @@ def test_clusterless_rejects_unvalidated_host(
     helper_name: str, client_settings: ClickhouseClientSettings
 ) -> None:
     """
-    Regression for EAP-488: the clusterless helpers used to construct a
+    Regression for EAP-488: the clusterless helpers used to acquire a
     ClickhousePool against any attacker-supplied host/port, which leaked the
-    configured ClickHouse user/password in the first hello packet of the
-    native protocol. Both helpers must now call _validate_node before
-    constructing the pool, so an invalid host produces InvalidNodeError and
-    no credentials ever leave the process.
+    configured ClickHouse user/password to the node (the native protocol's
+    first hello packet, or the HTTP auth header). Both helpers must now call
+    _validate_node before acquiring the pool, so an invalid host produces
+    InvalidNodeError and no credentials ever leave the process.
     """
     from snuba.admin.clickhouse import common
+    from snuba.clusters.cluster import connection_cache
 
     helper = getattr(common, helper_name)
 
@@ -321,7 +322,9 @@ def test_clusterless_rejects_unvalidated_host(
             "_validate_node",
             side_effect=InvalidNodeError("host not in cluster"),
         ) as mock_validate,
-        patch.object(common, "ClickhousePool") as mock_pool,
+        # connection_cache is the shared singleton; patching the method on the
+        # object affects the reference bound inside common as well.
+        patch.object(connection_cache, "get_node_connection") as mock_pool,
     ):
         # Clear any cached connection for this storage so the cache lookup
         # can't short-circuit validation.
@@ -331,9 +334,9 @@ def test_clusterless_rejects_unvalidated_host(
         with pytest.raises(InvalidNodeError):
             helper("attacker.example.com", 9009, "errors", client_settings)
 
-        assert mock_validate.called, "_validate_node must run before pool construction"
+        assert mock_validate.called, "_validate_node must run before pool acquisition"
         assert not mock_pool.called, (
-            "ClickhousePool must not be constructed for an unvalidated host — "
+            "A pool must not be acquired for an unvalidated host — "
             "doing so would transmit ClickHouse credentials to the attacker"
         )
 
@@ -389,11 +392,24 @@ def test_sudo_mode_skips_experimental_analyzer(sql_query: str, sudo_mode: bool) 
             )
 
 
+# Names that acquire a ClickhousePool (and therefore send credentials to a
+# node): the connection cache accessor and direct construction of either pool
+# implementation. Any of these in admin code must sit behind _validate_node.
+_POOL_ACQUISITION_NAMES = frozenset(
+    {
+        "get_node_connection",
+        "ClickhouseNativePool",
+        "ClickhouseConnectPool",
+    }
+)
+
+
 def _find_clickhouse_pool_calls(tree: ast.AST) -> list[tuple[ast.Call, list[str]]]:
     """
-    Walks an AST and returns every `ClickhousePool(...)` call site, paired
-    with the chain of enclosing function names (outermost first) so the
-    regression guard below can assert *where* construction happens.
+    Walks an AST and returns every pool-acquisition call site (cache accessor
+    or direct pool construction), paired with the chain of enclosing function
+    names (outermost first) so the regression guard below can assert *where*
+    acquisition happens.
     """
     results: list[tuple[ast.Call, list[str]]] = []
 
@@ -420,7 +436,7 @@ def _find_clickhouse_pool_calls(tree: ast.AST) -> list[tuple[ast.Call, list[str]
                 if isinstance(func, ast.Attribute)
                 else None
             )
-            if name == "ClickhousePool":
+            if name in _POOL_ACQUISITION_NAMES:
                 results.append((node, list(self.scope)))
             self.generic_visit(node)
 
@@ -430,19 +446,21 @@ def _find_clickhouse_pool_calls(tree: ast.AST) -> list[tuple[ast.Call, list[str]
 
 def test_no_direct_clickhouse_pool_construction_in_admin() -> None:
     """
-    Defense-in-depth for EAP-488: ClickhousePool ships the configured
-    user/password in the first hello packet of the native protocol, so any
-    admin code path that constructs one against a caller-supplied host
-    leaks credentials to whatever listener answers. `_build_validated_pool`
-    in snuba/admin/clickhouse/common.py is the single chokepoint that runs
-    `_validate_node` first — every other admin module must go through it.
+    Defense-in-depth for EAP-488: a ClickhousePool ships the configured
+    user/password to the node (the native protocol's first hello packet, or
+    the HTTP auth header), so any admin code path that acquires one against a
+    caller-supplied host leaks credentials to whatever listener answers.
+    `_build_validated_pool` in snuba/admin/clickhouse/common.py is the single
+    chokepoint that runs `_validate_node` first — every other admin module
+    must go through it.
 
-    This test enforces that structural invariant by AST-walking every
-    snuba/admin/**/*.py file:
+    "Acquiring" a pool means either constructing one of the pool
+    implementations directly or fetching one from the shared connection cache
+    via `get_node_connection`. This test enforces that structural invariant by
+    AST-walking every snuba/admin/**/*.py file:
 
-    * common.py may only construct ClickhousePool from inside
-      `_build_validated_pool`.
-    * No other admin module may construct ClickhousePool at all.
+    * common.py may only acquire a pool from inside `_build_validated_pool`.
+    * No other admin module may acquire a pool at all.
 
     If this fails, a new caller has likely re-introduced the vulnerability.
     """
@@ -460,13 +478,13 @@ def test_no_direct_clickhouse_pool_construction_in_admin() -> None:
             if py_file == common_path:
                 if scope != ["_build_validated_pool"]:
                     offenders.append(
-                        f"{location} constructs ClickhousePool inside "
+                        f"{location} acquires a ClickhousePool inside "
                         f"{'.'.join(scope) or '<module>'} — must be inside "
                         "_build_validated_pool so _validate_node runs first."
                     )
             else:
                 offenders.append(
-                    f"{location} constructs ClickhousePool directly — call "
+                    f"{location} acquires a ClickhousePool directly — call "
                     "_build_validated_pool (or a helper that wraps it) so "
                     "_validate_node guards the host before credentials are sent."
                 )
