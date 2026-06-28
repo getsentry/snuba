@@ -16,9 +16,13 @@ def create_metrics(
     tags: Tags | None = None,
     sample_rates: Mapping[str, float] | None = None,
 ) -> MetricsBackend:
-    """Create a DogStatsd object if DOGSTATSD_HOST and DOGSTATSD_PORT are defined,
-    or if a Unix domain socket is configured via ``DOGSTATSD_SOCKET_PATH``. Return a
-    DummyMetricsBackend otherwise.
+    """Create a DogStatsd object if DOGSTATSD_HOST and DOGSTATSD_PORT are defined.
+
+    When the ``use_dogstatsd_uds`` runtime flag is ``"1"`` and ``DOGSTATSD_SOCKET_PATH``
+    is configured, metrics are sent over the Unix domain socket instead of UDP; with the
+    flag off (or no socket configured) they use UDP (host/port). The flag is authoritative
+    -- it never falls back to the socket when off -- so host/port stay configured as the
+    UDP transport/rollback target. Return a DummyMetricsBackend when no host/port is set.
     Prefixes must start with `snuba.<category>`, for example: `snuba.processor`.
     """
     host: str | None = settings.DOGSTATSD_HOST
@@ -30,12 +34,12 @@ def create_metrics(
 
         return TestingMetricsBackend()
 
-    if host is None and port is None and socket_path is None:
+    if host is None and port is None:
         from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 
         return DummyMetricsBackend()
 
-    if (host is None) != (port is None):
+    if host is None or port is None:
         raise ValueError(
             f"DOGSTATSD_HOST and DOGSTATSD_PORT should both be None or not None. Found DOGSTATSD_HOST: {host}, DOGSTATSD_PORT: {port} instead."
         )
@@ -47,7 +51,7 @@ def create_metrics(
     from snuba.utils.metrics.backends.sentry import SentryMetricsBackend
 
     constant_tags = [f"{key}:{value}" for key, value in tags.items()] if tags is not None else None
-    udp = (host, port) if host is not None and port is not None else None
+    udp = (host, port)
 
     def make_client() -> DogStatsd:
         # The use_dogstatsd_uds flag is read lazily here -- when the first metric is
@@ -58,18 +62,15 @@ def create_metrics(
         from snuba import state
 
         use_uds = socket_path is not None and str(state.get_config("use_dogstatsd_uds", "0")) == "1"
-
-        # Use UDP when it is configured and UDS is not enabled; otherwise (UDS enabled,
-        # or only a socket configured) use the Unix domain socket.
-        if udp is not None and not use_uds:
+        if use_uds:
             return DogStatsd(
-                host=udp[0],
-                port=udp[1],
+                socket_path=socket_path,
                 namespace=prefix,
                 constant_tags=constant_tags,
             )
         return DogStatsd(
-            socket_path=socket_path,
+            host=udp[0],
+            port=udp[1],
             namespace=prefix,
             constant_tags=constant_tags,
         )

@@ -55,19 +55,20 @@ enum DogStatsDTransport<'a> {
 
 /// Decide which DogStatsD transport to use.
 ///
-/// UDS is selected only when `use_uds` is true *and* a socket path is configured;
-/// otherwise we fall back to UDP (host/port), and to disabled when nothing is
-/// configured. Crucially, a configured socket path alone does *not* force UDS — the
-/// runtime flag gates it — so a deployment can ship with both transports available
-/// and flip between them at runtime. Kept pure (no global recorder install) so the
-/// gating is unit-testable.
+/// host/port (UDP) is the baseline transport: when it is configured, UDS is selected
+/// only if `use_uds` is true *and* a socket path is configured, otherwise UDP is used.
+/// The runtime flag is authoritative — a configured socket path alone never forces UDS,
+/// so a deployment ships with both available and flips between them at runtime, keeping
+/// host/port as the UDP fallback. When no host/port is configured there is no transport
+/// and metrics are disabled (matching the Python `create_metrics()` gating). Kept pure
+/// (no global recorder install) so the gating is unit-testable.
 fn select_transport(env: &EnvConfig, use_uds: bool) -> DogStatsDTransport<'_> {
-    match (use_uds, env.dogstatsd_socket_path.as_deref()) {
-        (true, Some(socket_path)) => DogStatsDTransport::Uds(socket_path),
-        _ => match (env.dogstatsd_host.as_deref(), env.dogstatsd_port) {
-            (Some(host), Some(port)) => DogStatsDTransport::Udp(host, port),
-            _ => DogStatsDTransport::Disabled,
+    match (env.dogstatsd_host.as_deref(), env.dogstatsd_port) {
+        (Some(host), Some(port)) => match (use_uds, env.dogstatsd_socket_path.as_deref()) {
+            (true, Some(socket_path)) => DogStatsDTransport::Uds(socket_path),
+            _ => DogStatsDTransport::Udp(host, port),
         },
+        _ => DogStatsDTransport::Disabled,
     }
 }
 
@@ -218,13 +219,17 @@ mod tests {
     }
 
     #[test]
-    fn disabled_when_no_transport_available() {
+    fn disabled_when_no_host_port() {
         // Nothing configured at all.
         let env = env_with(None, None, None);
         assert_eq!(select_transport(&env, true), DogStatsDTransport::Disabled);
         assert_eq!(select_transport(&env, false), DogStatsDTransport::Disabled);
-        // Socket set but flag off and no host/port to fall back to -> disabled.
+
+        // host/port is the baseline transport: a socket alone (no host/port) is not a
+        // usable transport, so metrics are disabled regardless of the flag. This keeps
+        // the flag authoritative and consistent with the Python create_metrics().
         let env = env_with(None, None, Some("/var/run/dd.sock"));
+        assert_eq!(select_transport(&env, true), DogStatsDTransport::Disabled);
         assert_eq!(select_transport(&env, false), DogStatsDTransport::Disabled);
     }
 }

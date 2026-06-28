@@ -68,10 +68,11 @@ def test_create_metrics_uses_udp_when_flag_disabled(dogstatsd: MagicMock) -> Non
     )
 
 
-@patch("datadog.DogStatsd")
-def test_create_metrics_uses_uds_without_host_or_port(dogstatsd: MagicMock) -> None:
-    # A UDS-only deployment (no UDP host/port configured) must still emit metrics
-    # over the socket, not silently fall back to the no-op DummyMetricsBackend.
+def test_create_metrics_socket_only_without_host_port_is_dummy() -> None:
+    # UDS is gated by the flag and uses host/port as the UDP transport, so a deployment
+    # with only a socket and no host/port has no UDP target -> DummyMetricsBackend, even
+    # with the flag on. This keeps the flag authoritative and matches the Rust
+    # select_transport behavior. The decision is static (no snuba.state lookup).
     with (
         patch.multiple(
             "snuba.settings",
@@ -80,17 +81,14 @@ def test_create_metrics_uses_uds_without_host_or_port(dogstatsd: MagicMock) -> N
             DOGSTATSD_PORT=None,
             DOGSTATSD_SOCKET_PATH="/var/run/dogstatsd.sock",
         ),
-        patch("snuba.state.get_config", side_effect=_runtime_config("1")),
+        patch("snuba.state.get_config") as get_config,
     ):
         backend = create_metrics("snuba.test")
-        assert isinstance(backend, SentryDatadogMetricsBackend)
-        backend.increment("snuba.test.metric")
+        get_config.assert_not_called()
 
-    dogstatsd.assert_called_once_with(
-        socket_path="/var/run/dogstatsd.sock",
-        namespace="snuba.test",
-        constant_tags=None,
-    )
+    from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
+
+    assert isinstance(backend, DummyMetricsBackend)
 
 
 def test_create_metrics_dummy_does_not_import_state() -> None:
