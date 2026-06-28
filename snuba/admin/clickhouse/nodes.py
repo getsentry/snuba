@@ -48,7 +48,7 @@ def _get_nodes(storage_key: StorageKey, local: bool = True) -> Sequence[Node]:
             # discover is not a single node, but also does not belong to any cluster.
             return []
         return [
-            {"host": node.host_name, "port": node.port}
+            {"host": node.host_name, "port": node.native_port}
             for node in (cluster.get_local_nodes() if local else cluster.get_distributed_nodes())
         ]
     except (AssertionError, KeyError, UndefinedClickhouseCluster) as e:
@@ -60,7 +60,7 @@ def _get_query_node(storage_key: StorageKey) -> Node | None:
     try:
         cluster = get_storage(storage_key).get_cluster()
         query_node = cluster.get_query_node()
-        return {"host": query_node.host_name, "port": query_node.port}
+        return {"host": query_node.host_name, "port": query_node.native_port}
     except (AssertionError, KeyError, UndefinedClickhouseCluster):
         return None
 
