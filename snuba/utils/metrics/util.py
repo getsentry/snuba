@@ -29,16 +29,17 @@ def create_metrics(
 
         return TestingMetricsBackend()
 
-    from snuba import state
+    # Only consult the runtime flag (which imports snuba.state) when a socket path is
+    # configured. create_metrics() runs at snuba.environment import time, before
+    # snuba.state can be initialized (snuba.state reads environment.metrics), so an
+    # unconditional import here is circular. Gating on the socket path keeps the
+    # no-metrics path from importing snuba.state while still letting a UDS-only
+    # deployment use the socket instead of falling through to DummyMetricsBackend.
+    use_uds = False
+    if settings.DOGSTATSD_SOCKET_PATH is not None:
+        from snuba import state
 
-    # UDS is an independent transport: when the runtime flag is enabled and a socket
-    # path is configured it is used regardless of whether DOGSTATSD_HOST/PORT are set.
-    # This must be evaluated before the host/port guards below, otherwise a UDS-only
-    # deployment would fall through to DummyMetricsBackend and silently drop metrics.
-    use_uds = (
-        str(state.get_config("use_dogstatsd_uds", "0")) == "1"
-        and settings.DOGSTATSD_SOCKET_PATH is not None
-    )
+        use_uds = str(state.get_config("use_dogstatsd_uds", "0")) == "1"
 
     if not use_uds and host is None and port is None:
         from snuba.utils.metrics.backends.dummy import DummyMetricsBackend

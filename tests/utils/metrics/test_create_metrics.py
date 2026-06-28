@@ -91,3 +91,26 @@ def test_create_metrics_uses_uds_without_host_or_port(dogstatsd: MagicMock) -> N
         namespace="snuba.test",
         constant_tags=None,
     )
+
+
+def test_create_metrics_dummy_does_not_import_state() -> None:
+    # With nothing configured, create_metrics() must return the dummy backend without
+    # consulting snuba.state. create_metrics() runs at snuba.environment import time,
+    # and importing snuba.state there is a circular import, so the no-metrics path
+    # must not reach the runtime-config lookup.
+    with (
+        patch.multiple(
+            "snuba.settings",
+            TESTING=False,
+            DOGSTATSD_HOST=None,
+            DOGSTATSD_PORT=None,
+            DOGSTATSD_SOCKET_PATH=None,
+        ),
+        patch("snuba.state.get_config") as get_config,
+    ):
+        backend = create_metrics("snuba.test")
+        get_config.assert_not_called()
+
+    from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
+
+    assert isinstance(backend, DummyMetricsBackend)
