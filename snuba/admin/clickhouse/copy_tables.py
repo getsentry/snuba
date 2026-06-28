@@ -129,7 +129,9 @@ def copy_tables(
     skip_on_cluster: bool = False,
     cluster_name_override: str | None = None,
 ) -> CopyTablesResponse:
-    settings = ClickhouseClientSettings.QUERY
+    # Table copies can run long, so use the unbounded INTERNAL profile rather
+    # than the 30s user-read QUERY profile.
+    settings = ClickhouseClientSettings.INTERNAL
     source_connection = get_clusterless_node_connection(
         source_host, 9000, storage_name, client_settings=settings
     )
