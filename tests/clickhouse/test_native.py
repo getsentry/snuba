@@ -11,7 +11,7 @@ from sentry_options.testing import override_options
 
 from snuba import state
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.clickhouse.native import ClickhousePool, transform_datetime
+from snuba.clickhouse.native import ClickhouseNativePool, transform_datetime
 
 
 def test_transform_datetime() -> None:
@@ -29,7 +29,7 @@ def test_robust_concurrency_limit() -> None:
     connection = mock.Mock()
     connection.execute.side_effect = ClickhouseError("some error", extra_data={"code": 1})
 
-    pool = ClickhousePool("host", 100, "test", "test", "test")
+    pool = ClickhouseNativePool("host", 100, "test", "test", "test")
     pool.pool = queue.LifoQueue(1)
     pool.pool.put(connection, block=False)
 
@@ -63,7 +63,7 @@ def test_concurrency_limit() -> None:
     connection = mock.Mock()
     connection.execute.side_effect = TestError("some error")
 
-    pool = ClickhousePool("host", 100, "test", "test", "test")
+    pool = ClickhouseNativePool("host", 100, "test", "test", "test")
     pool.pool = queue.LifoQueue(1)
     pool.pool.put(connection, block=False)
 
@@ -101,7 +101,7 @@ def test_execute_retries(retryable: bool, expected: int) -> None:
     socket_timeout_connection = mock.Mock()
     socket_timeout_connection.execute.side_effect = errors.SocketTimeoutError
 
-    pool = ClickhousePool(CLUSTER_HOST, CLUSTER_PORT, "test", "test", TEST_DB_NAME)
+    pool = ClickhouseNativePool(CLUSTER_HOST, CLUSTER_PORT, "test", "test", TEST_DB_NAME)
 
     with mock.patch.object(pool, "_create_conn", lambda: socket_timeout_connection):
         pool.pool = queue.LifoQueue(1)
