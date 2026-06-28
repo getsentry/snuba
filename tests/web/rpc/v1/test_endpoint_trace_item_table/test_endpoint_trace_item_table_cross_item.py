@@ -19,8 +19,8 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
 from snuba.web import QueryResult
+from snuba.web.query import run_query
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
-from snuba.web.rpc.v1.resolvers.R_eap_items import resolver_trace_item_table
 from tests.base import BaseApiTest
 from tests.web.rpc.v1.test_utils import (
     comparison_filter,
@@ -127,16 +127,18 @@ class TestTraceItemTableCrossItemQueries(BaseApiTest):
         )
 
         captured: dict[str, Any] = {}
-        real_run_query = resolver_trace_item_table.run_query
 
         def capturing_run_query(
             dataset: Any, request: Any, timer: Any, **kwargs: Any
         ) -> QueryResult:
             # Capture the outer (cross-item) query's ClickHouse settings.
             captured["clickhouse_settings"] = dict(request.query_settings.get_clickhouse_settings())
-            return real_run_query(dataset, request, timer, **kwargs)
+            return run_query(dataset, request, timer, **kwargs)
 
-        with patch.object(resolver_trace_item_table, "run_query", side_effect=capturing_run_query):
+        with patch(
+            "snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_table.run_query",
+            side_effect=capturing_run_query,
+        ):
             response = EndpointTraceItemTable().execute(message)
 
         # Correct results end-to-end (against _dist tables in distributed mode).
