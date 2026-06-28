@@ -555,7 +555,7 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
                 pass
             case "default_value_double":
                 function_expr = f.coalesce(
-                    replace(function_expr, alias=None),
+                    f.CAST(replace(function_expr, alias=None), "Float64"),
                     column.conditional_aggregation.default_value_double,
                 )
             case "default_value_int64":

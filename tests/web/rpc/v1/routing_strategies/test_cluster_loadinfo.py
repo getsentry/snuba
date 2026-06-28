@@ -42,7 +42,7 @@ def test_get_cluster_loadinfo_if_cache_fails() -> None:
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
 def test_get_cluster_load_error_handling() -> None:
-    with patch("snuba.clusters.cluster.ClickhousePool.execute") as mock_execute:
+    with patch("snuba.clusters.cluster.ClickhouseNativePool.execute") as mock_execute:
         mock_execute.side_effect = Exception("Test error")
         load_info = get_cluster_loadinfo()
         assert load_info is not None

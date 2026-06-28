@@ -311,7 +311,7 @@ def _proto_expression_to_ast_expression(
                     pass
                 case "default_value_double":
                     aggregate_expr = f.coalesce(
-                        replace(aggregate_expr, alias=None),
+                        f.CAST(replace(aggregate_expr, alias=None), "Float64"),
                         expr.conditional_aggregation.default_value_double,
                     )
                 case "default_value_int64":
