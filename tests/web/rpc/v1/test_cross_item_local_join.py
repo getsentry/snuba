@@ -4,7 +4,7 @@ from snuba.downsampled_storage_tiers import Tier
 from snuba.query.expressions import Column, DangerousRawSQL
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
-    LOCAL_JOIN_DISTRIBUTED_PRODUCT_MODE,
+    CROSS_ITEM_DISTRIBUTED_PRODUCT_MODE,
     apply_cross_item_outer_query_settings,
     trace_id_in_subquery_condition,
 )
@@ -37,7 +37,7 @@ class TestApplyCrossItemOuterQuerySettings:
         )
         assert (
             query_settings.get_clickhouse_settings().get("distributed_product_mode")
-            == LOCAL_JOIN_DISTRIBUTED_PRODUCT_MODE
+            == CROSS_ITEM_DISTRIBUTED_PRODUCT_MODE
         )
 
     def test_non_cross_item_leaves_local_join_unset(self) -> None:

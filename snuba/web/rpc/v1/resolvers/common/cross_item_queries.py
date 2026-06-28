@@ -43,7 +43,7 @@ _TRACE_LIMIT = 50_000_000
 # running the join locally on each shard lets ClickHouse use the ``trace_id``
 # bloom-filter index to skip scanning large amounts of data, instead of materializing
 # a temporary table of trace ids on the distributed (query) node. See EAP-377.
-LOCAL_JOIN_DISTRIBUTED_PRODUCT_MODE = "local"
+CROSS_ITEM_DISTRIBUTED_PRODUCT_MODE = "local"
 
 
 def apply_cross_item_outer_query_settings(
@@ -69,7 +69,7 @@ def apply_cross_item_outer_query_settings(
         query_settings.set_sampling_tier(sampling_tier)
     if has_trace_filters:
         query_settings.push_clickhouse_setting(
-            "distributed_product_mode", LOCAL_JOIN_DISTRIBUTED_PRODUCT_MODE
+            "distributed_product_mode", CROSS_ITEM_DISTRIBUTED_PRODUCT_MODE
         )
 
 

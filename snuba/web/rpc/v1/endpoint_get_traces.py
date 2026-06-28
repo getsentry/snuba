@@ -55,7 +55,7 @@ from snuba.web.rpc.common.debug_info import (
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
-    LOCAL_JOIN_DISTRIBUTED_PRODUCT_MODE,
+    CROSS_ITEM_DISTRIBUTED_PRODUCT_MODE,
     convert_trace_filters_to_trace_item_filter_with_type,
     get_trace_ids_sql_for_cross_item_query,
     trace_id_in_subquery_condition,
@@ -891,7 +891,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                 request,
                 query,
                 clickhouse_settings={
-                    "distributed_product_mode": LOCAL_JOIN_DISTRIBUTED_PRODUCT_MODE
+                    "distributed_product_mode": CROSS_ITEM_DISTRIBUTED_PRODUCT_MODE
                 },
             ),
             timer=self._timer,
