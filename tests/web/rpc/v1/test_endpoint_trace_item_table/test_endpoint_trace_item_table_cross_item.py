@@ -136,9 +136,7 @@ class TestTraceItemTableCrossItemQueries(BaseApiTest):
             captured["clickhouse_settings"] = dict(request.query_settings.get_clickhouse_settings())
             return real_run_query(dataset, request, timer, **kwargs)
 
-        with patch.object(
-            resolver_trace_item_table, "run_query", side_effect=capturing_run_query
-        ):
+        with patch.object(resolver_trace_item_table, "run_query", side_effect=capturing_run_query):
             response = EndpointTraceItemTable().execute(message)
 
         # Correct results end-to-end (against _dist tables in distributed mode).
