@@ -1,3 +1,3 @@
-from typing import Mapping
+from collections.abc import Mapping
 
 Tags = Mapping[str, str]

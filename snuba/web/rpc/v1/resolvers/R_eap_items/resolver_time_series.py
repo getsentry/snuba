@@ -1,8 +1,9 @@
 import uuid
 from collections import defaultdict
+from collections.abc import Callable, Iterable
 from dataclasses import replace
 from datetime import datetime
-from typing import Any, Callable, Dict, Iterable, Optional
+from typing import Any
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -45,6 +46,7 @@ from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
+    use_array_map_columns,
     use_sampling_factor,
     valid_sampling_factor_conditions,
 )
@@ -86,7 +88,7 @@ def _get_attribute_key_to_expression_function(
 
 
 def _convert_result_timeseries(
-    request: TimeSeriesRequest, data: list[Dict[str, Any]]
+    request: TimeSeriesRequest, data: list[dict[str, Any]]
 ) -> Iterable[TimeSeries]:
     """This function takes the results of the clickhouse query and converts it to a list of TimeSeries objects. It also handles
     zerofilling data points where data was not present for a specific bucket.
@@ -129,9 +131,9 @@ def _convert_result_timeseries(
     """
 
     # the aggregations that we will include in the result
-    aggregation_labels = set([expr.label for expr in request.expressions])
+    aggregation_labels = {expr.label for expr in request.expressions}
 
-    group_by_labels = set([attr.name for attr in request.group_by])
+    group_by_labels = {attr.name for attr in request.group_by}
 
     # create a mapping with (all the group by attribute key,val pairs as strs, label name)
     # In the example in the docstring it would look like:
@@ -144,7 +146,7 @@ def _convert_result_timeseries(
     #       time_converted_to_integer_timestamp: row_data_for_that_time_bucket
     #   }
     # }
-    result_timeseries_timestamp_to_row: defaultdict[tuple[str, str], dict[int, Dict[str, Any]]] = (
+    result_timeseries_timestamp_to_row: defaultdict[tuple[str, str], dict[int, dict[str, Any]]] = (
         defaultdict(dict)
     )
 
@@ -217,9 +219,9 @@ def _remove_non_requested_expressions(
     expressions: Iterable[ProtoExpression],
     result_timeseries: dict[tuple[str, str], TimeSeries],
 ) -> None:
-    requested_expressions = set([expr.label for expr in expressions])
+    requested_expressions = {expr.label for expr in expressions}
     to_remove = []
-    for timeseries_key in result_timeseries.keys():
+    for timeseries_key in result_timeseries:
         if timeseries_key[1] not in requested_expressions:
             to_remove.append(timeseries_key)
     for timeseries_key in to_remove:
@@ -246,7 +248,9 @@ def _get_reliability_context_columns(
             ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY,
         ]:
             confidence_interval_column = get_confidence_interval_column(
-                aggregation, _get_attribute_key_to_expression_function(request_meta)
+                aggregation,
+                _get_attribute_key_to_expression_function(request_meta),
+                use_array_map_columns=use_array_map_columns(request_meta),
             )
             if confidence_interval_column is not None:
                 additional_context_columns.append(
@@ -257,7 +261,9 @@ def _get_reliability_context_columns(
                 )
 
             average_sample_rate_column = get_average_sample_rate_column(
-                aggregation, _get_attribute_key_to_expression_function(request_meta)
+                aggregation,
+                _get_attribute_key_to_expression_function(request_meta),
+                use_array_map_columns=use_array_map_columns(request_meta),
             )
             additional_context_columns.append(
                 SelectedExpression(
@@ -266,7 +272,9 @@ def _get_reliability_context_columns(
                 )
             )
         count_column = get_count_column(
-            aggregation, _get_attribute_key_to_expression_function(request_meta)
+            aggregation,
+            _get_attribute_key_to_expression_function(request_meta),
+            use_array_map_columns=use_array_map_columns(request_meta),
         )
         additional_context_columns.append(
             SelectedExpression(name=count_column.alias, expression=count_column)
@@ -296,13 +304,14 @@ def _proto_expression_to_ast_expression(
                 expr.conditional_aggregation,
                 (attribute_key_to_expression),
                 use_sampling_factor(request_meta),
+                use_array_map_columns(request_meta),
             )
             match expr.conditional_aggregation.WhichOneof("default_value"):
                 case None:
                     pass
                 case "default_value_double":
                     aggregate_expr = f.coalesce(
-                        replace(aggregate_expr, alias=None),
+                        f.CAST(replace(aggregate_expr, alias=None), "Float64"),
                         expr.conditional_aggregation.default_value_double,
                     )
                 case "default_value_int64":
@@ -339,7 +348,7 @@ def _proto_expression_to_ast_expression(
 
 
 def build_query(
-    request: TimeSeriesRequest, sampling_tier: Optional[Tier] = None, timer: Optional[Timer] = None
+    request: TimeSeriesRequest, sampling_tier: Tier | None = None, timer: Timer | None = None
 ) -> Query:
     entity = Entity(
         key=EntityKey("eap_items"),
@@ -419,7 +428,9 @@ def build_query(
         condition=base_conditions_and(
             request.meta,
             trace_item_filters_to_expression(
-                request.filter, _get_attribute_key_to_expression_function(request.meta)
+                request.filter,
+                _get_attribute_key_to_expression_function(request.meta),
+                use_array_map_columns=use_array_map_columns(request.meta),
             ),
             valid_sampling_factor_conditions(),
             *item_type_conds,
@@ -442,8 +453,8 @@ def build_query(
 def _build_snuba_request(
     request: TimeSeriesRequest,
     query_settings: HTTPQuerySettings,
-    sampling_tier: Optional[Tier] = None,
-    timer: Optional[Timer] = None,
+    sampling_tier: Tier | None = None,
+    timer: Timer | None = None,
 ) -> SnubaRequest:
     if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
         team = "ourlogs"

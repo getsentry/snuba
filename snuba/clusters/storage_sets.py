@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, FrozenSet, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 _HARDCODED_STORAGE_SET_KEYS = {
     "CDC": "cdc",
@@ -27,7 +28,7 @@ _REGISTERED_STORAGE_SET_KEYS: dict[str, str] = {}
 
 
 class _StorageSetKey(type):
-    def __getattr__(self, attr: str) -> "StorageSetKey":
+    def __getattr__(self, attr: str) -> StorageSetKey:
         if attr not in _HARDCODED_STORAGE_SET_KEYS and attr not in _REGISTERED_STORAGE_SET_KEYS:
             raise AttributeError(attr)
 
@@ -76,12 +77,12 @@ def register_storage_set_key(key: str) -> StorageSetKey:
 
 
 # Storage sets enabled only when development features are enabled.
-DEV_STORAGE_SETS: FrozenSet[StorageSetKey] = frozenset()
+DEV_STORAGE_SETS: frozenset[StorageSetKey] = frozenset()
 
 # Storage sets in a group share the same query and distributed nodes but
 # do not have the same local node cluster configuration.
 # Joins can be performed across storage sets in the same group.
-JOINABLE_STORAGE_SETS: FrozenSet[FrozenSet[StorageSetKey]] = frozenset(
+JOINABLE_STORAGE_SETS: frozenset[frozenset[StorageSetKey]] = frozenset(
     {
         frozenset({StorageSetKey.EVENTS, StorageSetKey.EVENTS_RO}),
         frozenset(
@@ -101,8 +102,4 @@ def is_valid_storage_set_combination(*storage_sets: StorageSetKey) -> bool:
     if len(all_storage_sets) <= 1:
         return True
 
-    for group in JOINABLE_STORAGE_SETS:
-        if all_storage_sets.issubset(group):
-            return True
-
-    return False
+    return any(all_storage_sets.issubset(group) for group in JOINABLE_STORAGE_SETS)

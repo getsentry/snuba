@@ -1,4 +1,4 @@
-from typing import Dict, Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import FlattenedColumn, SchemaModifiers
 from snuba.clickhouse.query import Query
@@ -60,7 +60,7 @@ class NullColumnCaster(ClickhouseQueryProcessor):
 
     """
 
-    def _find_mismatched_null_columns(self) -> Dict[str, FlattenedColumn]:
+    def _find_mismatched_null_columns(self) -> dict[str, FlattenedColumn]:
         # This has to be imported here since the storage factory will also initialize this query processor
         # and importing it at the top will create an import cycle
 
@@ -68,8 +68,8 @@ class NullColumnCaster(ClickhouseQueryProcessor):
         # good first-class support for merge tables in snuba atm (12/06/2022) which makes us rely on this hack
         from snuba.datasets.storages.factory import get_storage
 
-        mismatched_col_name_to_col: Dict[str, FlattenedColumn] = {}
-        col_name_to_nullable: Dict[str, bool] = {}
+        mismatched_col_name_to_col: dict[str, FlattenedColumn] = {}
+        col_name_to_nullable: dict[str, bool] = {}
         for table_storage_key in self.__merge_table_sources_keys:
             table_storage = get_storage(StorageKey(table_storage_key))
             for col in table_storage.get_schema().get_columns():
@@ -92,10 +92,10 @@ class NullColumnCaster(ClickhouseQueryProcessor):
 
         """
         self.__merge_table_sources_keys = merge_table_sources
-        self.__mismatched_null_columns: Dict[str, FlattenedColumn] = {}
+        self.__mismatched_null_columns: dict[str, FlattenedColumn] = {}
 
     @property
-    def mismatched_null_columns(self) -> Dict[str, FlattenedColumn]:
+    def mismatched_null_columns(self) -> dict[str, FlattenedColumn]:
         # The first time the query processor is run, we calculate the mismatched null columns
         # which never change. We don't do this at initialization time because there is no guarantee that
         # all the storages will be loaded at the time this query processor is
@@ -106,29 +106,28 @@ class NullColumnCaster(ClickhouseQueryProcessor):
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         def cast_column_to_nullable(exp: Expression) -> Expression:
-            if isinstance(exp, Column):
-                if exp.column_name in self.mismatched_null_columns:
-                    # depending on the order of the storage, this dictionary will contain
-                    # either the nullable or non-nullable version of the column. No matter
-                    # which one is in there, due to the mismatch on the merge table it needs to
-                    # be cast as nullable anyways
-                    mismatched_column = self.mismatched_null_columns[exp.column_name]
-                    col_is_nullable = _col_is_nullable(mismatched_column)
-                    col_type = mismatched_column.type.for_schema()
-                    cast_str = col_type if col_is_nullable else f"Nullable({col_type})"
-                    return FunctionCall(
-                        exp.alias,
-                        "cast",
-                        (
-                            # move the alias up to the cast function
-                            Column(
-                                None,
-                                table_name=exp.table_name,
-                                column_name=exp.column_name,
-                            ),
-                            Literal(None, cast_str),
+            if isinstance(exp, Column) and exp.column_name in self.mismatched_null_columns:
+                # depending on the order of the storage, this dictionary will contain
+                # either the nullable or non-nullable version of the column. No matter
+                # which one is in there, due to the mismatch on the merge table it needs to
+                # be cast as nullable anyways
+                mismatched_column = self.mismatched_null_columns[exp.column_name]
+                col_is_nullable = _col_is_nullable(mismatched_column)
+                col_type = mismatched_column.type.for_schema()
+                cast_str = col_type if col_is_nullable else f"Nullable({col_type})"
+                return FunctionCall(
+                    exp.alias,
+                    "cast",
+                    (
+                        # move the alias up to the cast function
+                        Column(
+                            None,
+                            table_name=exp.table_name,
+                            column_name=exp.column_name,
                         ),
-                    )
+                        Literal(None, cast_str),
+                    ),
+                )
             return exp
 
         def transform_aggregate_functions_with_mismatched_nullable_parameters(

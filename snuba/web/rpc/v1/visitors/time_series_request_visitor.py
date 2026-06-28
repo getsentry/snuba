@@ -126,11 +126,14 @@ class RejectTimestampAsStringVisitor(RequestVisitor):
                 self.visit(f)
         elif node.HasField("comparison_filter"):
             k = node.comparison_filter.key
-            if k.name == "sentry.timestamp" and k.type == AttributeKey.TYPE_STRING:
-                if get_config("eap.reject_string_timestamp_filters", 1):
-                    raise BadSnubaRPCRequestException(
-                        "sentry.timestamp can only be compared to TYPE_INT or TYPE_DOUBLE, got TYPE_STRING"
-                    )
+            if (
+                k.name == "sentry.timestamp"
+                and k.type == AttributeKey.TYPE_STRING
+                and get_config("eap.reject_string_timestamp_filters", 1)
+            ):
+                raise BadSnubaRPCRequestException(
+                    "sentry.timestamp can only be compared to TYPE_INT or TYPE_DOUBLE, got TYPE_STRING"
+                )
 
 
 class GetSubformulaLabelsVisitor(RequestVisitor):

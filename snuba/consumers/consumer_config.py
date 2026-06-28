@@ -1,5 +1,6 @@
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any
 
 from snuba import settings
 from snuba.datasets.schemas.tables import TableSchema
@@ -41,14 +42,14 @@ class TopicConfig:
     broker_config: Mapping[str, Any]
     logical_topic_name: str
     physical_topic_name: str
-    quantized_rebalance_consumer_group_delay_secs: Optional[int]
+    quantized_rebalance_consumer_group_delay_secs: int | None
 
 
 @dataclass(frozen=True)
 class EnvConfig:
-    sentry_dsn: Optional[str]
-    dogstatsd_host: Optional[str]
-    dogstatsd_port: Optional[int]
+    sentry_dsn: str | None
+    dogstatsd_host: str | None
+    dogstatsd_port: int | None
     default_retention_days: int
     lower_retention_days: int
     valid_retention_days: list[int]
@@ -64,14 +65,14 @@ class ConsumerConfig:
 
     storages: Sequence[StorageConfig]
     raw_topic: TopicConfig
-    commit_log_topic: Optional[TopicConfig]
-    replacements_topic: Optional[TopicConfig]
-    accepted_outcomes_topic: Optional[TopicConfig]
-    dlq_topic: Optional[TopicConfig]
+    commit_log_topic: TopicConfig | None
+    replacements_topic: TopicConfig | None
+    accepted_outcomes_topic: TopicConfig | None
+    dlq_topic: TopicConfig | None
     max_batch_size: int
     max_batch_time_ms: int
     max_batch_size_calculation: str
-    env: Optional[EnvConfig]
+    env: EnvConfig | None
     accountant_topic: TopicConfig
 
 
@@ -86,18 +87,18 @@ def _add_to_topic_broker_config(
     assert isinstance(param_key, str)
 
     # copy the broker config to avoid modifying the original
-    broker_config = {k: v for k, v in topic_config.broker_config.items()}
+    broker_config = dict(topic_config.broker_config.items())
     broker_config[param_key] = param_value
     return replace(topic_config, broker_config=broker_config)
 
 
 def _resolve_topic_config(
     param: str,
-    topic_spec: Optional[KafkaTopicSpec],
-    cli_param: Optional[str],
-    slice_id: Optional[int],
-    quantized_rebalance_consumer_group_delay_secs: Optional[int] = None,
-) -> Optional[TopicConfig]:
+    topic_spec: KafkaTopicSpec | None,
+    cli_param: str | None,
+    slice_id: int | None,
+    quantized_rebalance_consumer_group_delay_secs: int | None = None,
+) -> TopicConfig | None:
     if topic_spec is None:
         if cli_param is not None:
             raise ValueError(f"{param} not supported for this storage")
@@ -144,22 +145,22 @@ def _resolve_env_config() -> EnvConfig:
 def resolve_consumer_config(
     *,
     storage_names: Sequence[str],
-    raw_topic: Optional[str],
-    commit_log_topic: Optional[str],
-    replacements_topic: Optional[str],
+    raw_topic: str | None,
+    commit_log_topic: str | None,
+    replacements_topic: str | None,
     bootstrap_servers: Sequence[str],
     commit_log_bootstrap_servers: Sequence[str],
     replacement_bootstrap_servers: Sequence[str],
-    slice_id: Optional[int],
+    slice_id: int | None,
     max_batch_size: int,
     max_batch_time_ms: int,
     max_batch_size_calculation: str = "rows",
-    accepted_outcomes_topic: Optional[str] = None,
+    accepted_outcomes_topic: str | None = None,
     accepted_outcomes_bootstrap_servers: Sequence[str] = (),
-    queued_max_messages_kbytes: Optional[int] = None,
-    queued_min_messages: Optional[int] = None,
-    group_instance_id: Optional[str] = None,
-    quantized_rebalance_consumer_group_delay_secs: Optional[int] = None,
+    queued_max_messages_kbytes: int | None = None,
+    queued_min_messages: int | None = None,
+    group_instance_id: str | None = None,
+    quantized_rebalance_consumer_group_delay_secs: int | None = None,
 ) -> ConsumerConfig:
     """
     Resolves the ClickHouse cluster and Kafka brokers, and the physical topic name
@@ -318,36 +319,30 @@ def validate_storages(storages: Sequence[WritableTableStorage]) -> None:
     """
     assert (
         len(
-            set(
-                [
-                    storage.get_table_writer().get_stream_loader().get_default_topic_spec()
-                    for storage in storages
-                ]
-            )
+            {
+                storage.get_table_writer().get_stream_loader().get_default_topic_spec()
+                for storage in storages
+            }
         )
         < 2
     ), "All storages must have the same default topic spec"
 
     assert (
         len(
-            set(
-                [
-                    storage.get_table_writer().get_stream_loader().get_commit_log_topic_spec()
-                    for storage in storages
-                ]
-            )
+            {
+                storage.get_table_writer().get_stream_loader().get_commit_log_topic_spec()
+                for storage in storages
+            }
         )
         < 2
     ), "All storages must have the same commit log topic spec"
 
     assert (
         len(
-            set(
-                [
-                    storage.get_table_writer().get_stream_loader().get_replacement_topic_spec()
-                    for storage in storages
-                ]
-            )
+            {
+                storage.get_table_writer().get_stream_loader().get_replacement_topic_spec()
+                for storage in storages
+            }
         )
         < 2
     ), "All storages must have the same replacement topic spec"

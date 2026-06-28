@@ -1,5 +1,6 @@
+from collections.abc import Mapping, Sequence
 from datetime import timedelta
-from typing import Mapping, NamedTuple, Optional, Sequence
+from typing import NamedTuple
 
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Producer
@@ -48,10 +49,10 @@ def build_scheduler_executor_consumer(
     auto_offset_reset: str,
     strict_offset_reset: bool,
     schedule_ttl: int,
-    stale_threshold_seconds: Optional[int],
+    stale_threshold_seconds: int | None,
     total_concurrent_queries: int,
     metrics: MetricsBackend,
-    health_check_file: Optional[str] = None,
+    health_check_file: str | None = None,
 ) -> StreamProcessor[Tick]:
     dataset = get_dataset(dataset_name)
 
@@ -156,10 +157,10 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
         total_concurrent_queries: int,
         producer: Producer[KafkaPayload],
         metrics: MetricsBackend,
-        stale_threshold_seconds: Optional[int],
+        stale_threshold_seconds: int | None,
         result_topic: str,
         schedule_ttl: int,
-        health_check_file: Optional[str] = None,
+        health_check_file: str | None = None,
     ) -> None:
         self.__partitions = partitions
         self.__entity_names = entity_names
@@ -260,7 +261,7 @@ class ForwardToExecutor(ProcessingStrategy[Tick]):
 
         tasks = []
         for entity_scheduler in self.__schedulers:
-            tasks.extend([task for task in entity_scheduler[tick.partition].find(tick)])
+            tasks.extend(list(entity_scheduler[tick.partition].find(tick)))
 
         encoded_tasks = [self.__encoder.encode(task) for task in tasks]
 
@@ -275,5 +276,5 @@ class ForwardToExecutor(ProcessingStrategy[Tick]):
         self.__closed = True
         self.__next_step.terminate()
 
-    def join(self, timeout: Optional[float] = None) -> None:
+    def join(self, timeout: float | None = None) -> None:
         self.__next_step.join(timeout)

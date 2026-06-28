@@ -1,5 +1,3 @@
-from typing import Tuple
-
 import pytest
 
 from snuba.clickhouse.columns import (
@@ -15,8 +13,10 @@ from snuba.clickhouse.columns import (
     Enum,
     FixedString,
     Float,
+    Int,
     IPv4,
     IPv6,
+    Map,
     String,
     UInt,
 )
@@ -63,6 +63,14 @@ test_data = [
         ("Array(Array(Nullable(UUID)))", "", "", ""),
         Array(Array(UUID(Modifiers(nullable=True)))),
     ),
+    # Map
+    (("Map(String, String)", "", "", ""), Map(String(), String())),
+    (("Map(String, UInt64)", "", "", ""), Map(String(), UInt(64))),
+    # Map with array values (typed array attribute columns)
+    (("Map(String, Array(String))", "", "", ""), Map(String(), Array(String()))),
+    (("Map(String, Array(Int64))", "", "", ""), Map(String(), Array(Int(64)))),
+    (("Map(String, Array(Float64))", "", "", ""), Map(String(), Array(Float(64)))),
+    (("Map(String, Array(Bool))", "", "", ""), Map(String(), Array(Bool()))),
     # Nullable
     (("Nullable(String)", "", "", ""), String(Modifiers(nullable=True))),
     (
@@ -152,8 +160,8 @@ test_data = [
 
 @pytest.mark.parametrize("input, expected_output", test_data)
 def test_parse_column(
-    input: Tuple[str, str, str, str],
-    expected_output: Tuple[Tuple[str, str, str, str, str], ColumnType[Modifiers]],
+    input: tuple[str, str, str, str],
+    expected_output: tuple[tuple[str, str, str, str, str], ColumnType[Modifiers]],
 ) -> None:
     (input_name, input_type, default_expr, codec_expr) = input
     assert _get_column(input_name, input_type, default_expr, codec_expr) == expected_output

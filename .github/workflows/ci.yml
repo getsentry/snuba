@@ -19,7 +19,7 @@ jobs:
       api_changes: ${{ steps.changes.outputs.api_changes }}
       devservices_changes: ${{ steps.changes.outputs.devservices_changes }}
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Check for backend file changes
         uses: getsentry/paths-filter@66f7f1844185eb7fb6738ea4ea59d74bb99199e5 # v2
@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         name: Checkout code
 
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
@@ -53,7 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         name: Checkout code
       - name: Internal github app token
         id: token
@@ -75,7 +75,7 @@ jobs:
           # NOTE: can't pass --only-dev yet since we're missing some mypy stub packages
           install-cmd: uv sync --frozen --active
 
-      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
         with:
           path: ~/.cache/pre-commit
           key: cache-epoch-1|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml', 'uv.lock') }}
@@ -119,7 +119,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         name: Checkout code
 
       - name: Install protoc
@@ -141,7 +141,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         name: Checkout code
 
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
@@ -163,11 +163,14 @@ jobs:
     name: Build snuba CI image
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
     outputs:
       branch: ${{ steps.branch.outputs.branch }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Get branch name
         id: branch
@@ -175,16 +178,35 @@ jobs:
         # it can be used as a docker tag
         run: echo "branch=$(echo ${GITHUB_REF#refs/heads/} | tr / -)" >> "$GITHUB_OUTPUT"
 
-      - uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
-        with:
-          image_name: 'snuba-ci'
-          platforms: 'linux/amd64'
-          dockerfile_path: 'Dockerfile'
-          ghcr: false
-          tag_nightly: false
-          tag_latest: false
-          tags: 'ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}'
-          outputs: 'type=docker,dest=/tmp/snuba-ci.tar'
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      - name: Log in to GHCR for build cache
+        if: ${{ github.event.pull_request.head.repo.fork != true }}
+        run: docker login --username '${{ github.actor }}' --password-stdin ghcr.io <<< "$GHCR_TOKEN"
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build snuba CI image
+        env:
+          IMAGE: ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}
+          CACHE_REF: ghcr.io/getsentry/snuba-ci:buildcache
+          # Write the cache on master only; PRs read-only, so a cache miss never costs more than baseline.
+          PUSH_CACHE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+        run: |
+          cache_to=""
+          if [ "$PUSH_CACHE" = "true" ]; then
+            cache_to="--cache-to type=registry,ref=${CACHE_REF},mode=max,image-manifest=true,oci-mediatypes=true"
+          fi
+          docker buildx build \
+            --platform linux/amd64 \
+            --file Dockerfile \
+            --target testing \
+            --tag "$IMAGE" \
+            --cache-from "type=registry,ref=${CACHE_REF}" \
+            $cache_to \
+            --output "type=docker,dest=/tmp/snuba-ci.tar" \
+            .
 
       - name: Publish snuba-ci image to artifacts
       # we publish to github artifacts separately so that third-party
@@ -204,11 +226,11 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Restore Docker dependency image cache
         id: cache-restore
-        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
         with:
           path: /tmp/docker-deps
           key: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
@@ -241,7 +263,7 @@ jobs:
 
       - name: Save Docker dependency image cache
         if: steps.load-pull.outputs.pulled == '1'
-        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
         with:
           path: /tmp/docker-deps
           key: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
@@ -253,18 +275,21 @@ jobs:
     timeout-minutes: 40
     strategy:
       matrix:
-        snuba_settings:
-          [
-            "test",
-            "test_rust",
-            "test_distributed",
-            "test_distributed_migrations",
-            "test_migrations",
-            "test_migrations_distributed"
-          ]
+        include:
+          - snuba_settings: test
+          - snuba_settings: test_rust
+          - snuba_settings: test_distributed
+            shard: 0
+            shard_total: 2
+          - snuba_settings: test_distributed
+            shard: 1
+            shard_total: 2
+          - snuba_settings: test_distributed_migrations
+          - snuba_settings: test_migrations
+          - snuba_settings: test_migrations_distributed
     steps:
       - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Download snuba-ci image from artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -278,7 +303,7 @@ jobs:
           docker image ls -a
 
       - name: Restore Docker dependency image cache
-        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
         with:
           path: /tmp/docker-deps
           key: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
@@ -311,8 +336,11 @@ jobs:
         if: ${{ matrix.snuba_settings == 'test_rust' }}
 
       - name: Docker Snuba tests
+        env:
+          SNUBA_TEST_SHARD: ${{ matrix.shard || 0 }}
+          SNUBA_TEST_SHARD_TOTAL: ${{ matrix.shard_total || 1 }}
         run: |
-          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=${{ matrix.snuba_settings }} docker compose -f docker-compose.gcb.yml run --rm snuba-test
+          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }} SNUBA_SETTINGS=${{ matrix.snuba_settings }} docker compose -f docker-compose.gcb.yml run --rm -e SNUBA_TEST_SHARD -e SNUBA_TEST_SHARD_TOTAL snuba-test
         if: ${{ matrix.snuba_settings == 'test' || matrix.snuba_settings  == 'test_distributed' }}
 
       - name: Docker Snuba Migrations tests
@@ -351,7 +379,7 @@ jobs:
     name: Front end tests for snuba admin
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         name: Checkout code
       - uses: volta-cli/action@615a78f6c83e116339c53b94f3f82b4d6c0b7d18 # v5.0.0
       - name: Set up and run tests through yarn
@@ -372,10 +400,12 @@ jobs:
       # XXX: `MATRIX_INSTANCE_TOTAL` must be hardcoded to the length of `strategy.matrix.instance`.
       MATRIX_INSTANCE_TOTAL: 16
       TEST_GROUP_STRATEGY: ROUND_ROBIN
+      XDIST_WORKERS: 2
+      XDIST_PER_WORKER_SNUBA: '1'
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Download snuba-ci image from artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -389,7 +419,7 @@ jobs:
           docker image ls -a
 
       - name: Checkout sentry
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: getsentry/sentry
           path: sentry
@@ -430,13 +460,21 @@ jobs:
             ghcr.io/getsentry/snuba-ci:${{ github.event.pull_request.head.sha || github.sha }}
           docker exec snuba-snuba-1 snuba migrations migrate --force
 
+      - name: Bootstrap per-worker Snuba instances
+        run: python3 sentry/.github/workflows/scripts/bootstrap-snuba.py
+
       - name: Run snuba tests
         if: needs.files-changed.outputs.api_changes == 'false'
         working-directory: sentry
         run: |
-          pytest -k 'not __In' tests \
+          # Only these dirs carry the `snuba_ci` marker; collecting all of tests/ just to find them is wasteful.
+          pytest -k 'not __In' \
+            tests/sentry/snuba \
+            tests/sentry/workflow_engine/endpoints \
+            tests/snuba/rules/conditions \
             -m snuba_ci \
-            -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
+            -n "$XDIST_WORKERS" --dist=loadfile --reuse-db \
+            -vv
 
       - name: Run full tests
         if: needs.files-changed.outputs.api_changes == 'true'
@@ -457,12 +495,20 @@ jobs:
               tests/sentry/api/endpoints/test_organization_traces.py \
               tests/sentry/api/endpoints/test_organization_spans_fields.py \
               tests/sentry/sentry_metrics/querying \
-              -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
+              -n "$XDIST_WORKERS" --dist=loadfile --reuse-db \
+              -vv
 
       - name: Run CI module tests
         if: needs.files-changed.outputs.api_changes == 'true'
         working-directory: sentry
-        run: pytest -k 'not __In' tests -vv -m snuba_ci
+        run: |
+          pytest -k 'not __In' \
+            tests/sentry/snuba \
+            tests/sentry/workflow_engine/endpoints \
+            tests/snuba/rules/conditions \
+            -m snuba_ci \
+            -n "$XDIST_WORKERS" --dist=loadfile --reuse-db \
+            -vv
 
   clickhouse-versions:
     needs: [linting, snuba-image, docker-deps]
@@ -481,7 +527,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Download snuba-ci image from artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -495,7 +541,7 @@ jobs:
           docker image ls -a
 
       - name: Restore Docker dependency image cache
-        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
         with:
           path: /tmp/docker-deps
           key: docker-deps-${{ hashFiles('docker-compose.gcb.yml') }}-${{ github.run_id }}
@@ -538,7 +584,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
@@ -550,8 +596,7 @@ jobs:
           target: application-distroless
           load: true
           tags: snuba-distroless:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=ghcr.io/getsentry/snuba-ci:buildcache
 
       - name: Verify --help works
         run: docker run --rm snuba-distroless:test --help
@@ -592,7 +637,7 @@ jobs:
     needs: files-changed
     if: ${{ needs.files-changed.outputs.devservices_changes == 'true' }}
     steps:
-    - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       name: Checkout repository
 
     - name: Get devservices version

@@ -1,5 +1,3 @@
-from typing import List
-
 import pytest
 
 from snuba.datasets.dataset import Dataset
@@ -62,7 +60,7 @@ TEST_CASES = [
 def test_default_query_storage_selector(
     snql_query: str,
     dataset: Dataset,
-    storage_connections: List[EntityStorageConnection],
+    storage_connections: list[EntityStorageConnection],
     selector: QueryStorageSelector,
     expected_storage: Storage,
 ) -> None:

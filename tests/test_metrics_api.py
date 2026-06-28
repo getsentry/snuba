@@ -1,5 +1,6 @@
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Generator, Optional, Tuple, Union, cast
+from collections.abc import Callable, Generator
+from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 
 import pytest
 import simplejson as json
@@ -64,7 +65,7 @@ def teardown_common() -> None:
 
 def utc_yesterday_12_15() -> datetime:
     return (datetime.utcnow() - timedelta(days=1)).replace(
-        hour=12, minute=15, second=0, microsecond=0, tzinfo=timezone.utc
+        hour=12, minute=15, second=0, microsecond=0, tzinfo=UTC
     )
 
 
@@ -80,13 +81,13 @@ class TestMetricsApiCounters(BaseApiTest):
         return self.app
 
     @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
+    def test_entity(self) -> str | tuple[str, str]:
         return "metrics_counters"
 
     @pytest.fixture(autouse=True)
     def setup_teardown(
         self, _build_snql_post_methods: Callable[[str], Any], clickhouse_db: None
-    ) -> Generator[None, None, None]:
+    ) -> Generator[None]:
         self.post = _build_snql_post_methods
 
         # values for test data
@@ -153,11 +154,11 @@ class TestMetricsApiCounters(BaseApiTest):
 
     def build_simple_query(
         self,
-        metric_id: Optional[int] = None,
-        org_id: Optional[int] = None,
-        start_time: Optional[str] = None,
-        end_time: Optional[str] = None,
-        granularity: Optional[int] = None,
+        metric_id: int | None = None,
+        org_id: int | None = None,
+        start_time: str | None = None,
+        end_time: str | None = None,
+        granularity: int | None = None,
     ) -> str:
         if not metric_id:
             metric_id = self.metric_id
@@ -237,7 +238,7 @@ class TestOrgMetricsApiCounters(BaseApiTest):
         return self.app
 
     @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
+    def test_entity(self) -> str | tuple[str, str]:
         return "org_metrics_counters"
 
     @pytest.fixture(autouse=True)
@@ -254,11 +255,9 @@ class TestOrgMetricsApiCounters(BaseApiTest):
 
         self.skew = timedelta(seconds=self.seconds)
 
-        self.base_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0, tzinfo=timezone.utc
-        )
+        self.base_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0, tzinfo=UTC)
         self.sentry_received_timestamp = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0, tzinfo=timezone.utc
+            minute=0, second=0, microsecond=0, tzinfo=UTC
         )
         self.storage = cast(
             WritableTableStorage,
@@ -303,10 +302,10 @@ class TestOrgMetricsApiCounters(BaseApiTest):
 
     def build_simple_query(
         self,
-        metric_id: Optional[int] = None,
-        start_time: Optional[str] = None,
-        end_time: Optional[str] = None,
-        granularity: Optional[int] = None,
+        metric_id: int | None = None,
+        start_time: str | None = None,
+        end_time: str | None = None,
+        granularity: int | None = None,
     ) -> str:
         if not metric_id:
             metric_id = self.metric_id
@@ -377,7 +376,7 @@ class TestMetricsApiSets(BaseApiTest):
         return self.app
 
     @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
+    def test_entity(self) -> str | tuple[str, str]:
         return "metrics_sets"
 
     @pytest.fixture(autouse=True)
@@ -440,20 +439,15 @@ class TestMetricsApiSets(BaseApiTest):
         write_processed_messages(self.storage, events)
 
     def test_sets_basic(self) -> None:
-        query_str = """MATCH (metrics_sets)
+        query_str = f"""MATCH (metrics_sets)
                     SELECT uniq(value) AS unique_values BY project_id, org_id
-                    WHERE org_id = {org_id}
+                    WHERE org_id = {self.org_id}
                     AND project_id = 1
-                    AND metric_id = {metric_id}
-                    AND timestamp >= toDateTime('{start_time}')
-                    AND timestamp < toDateTime('{end_time}')
+                    AND metric_id = {self.metric_id}
+                    AND timestamp >= toDateTime('{(self.base_time - self.skew).isoformat()}')
+                    AND timestamp < toDateTime('{(self.base_time + self.skew).isoformat()}')
                     GRANULARITY 60
-                    """.format(
-            metric_id=self.metric_id,
-            org_id=self.org_id,
-            start_time=(self.base_time - self.skew).isoformat(),
-            end_time=(self.base_time + self.skew).isoformat(),
-        )
+                    """
         response = self.app.post(
             SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "metrics"})
         )
@@ -477,7 +471,7 @@ class TestMetricsApiDistributions(BaseApiTest):
         return self.app
 
     @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
+    def test_entity(self) -> str | tuple[str, str]:
         return "metrics_distributions"
 
     @pytest.fixture(autouse=True)
@@ -546,20 +540,15 @@ class TestMetricsApiDistributions(BaseApiTest):
         have_generated_dists = True
 
     def test_dists_percentiles(self) -> None:
-        query_str = """MATCH (metrics_distributions)
+        query_str = f"""MATCH (metrics_distributions)
                     SELECT quantiles(0.5,0.9,0.95,0.99)(value) AS quants BY project_id, org_id
-                    WHERE org_id = {org_id}
+                    WHERE org_id = {self.org_id}
                     AND project_id = 1
-                    AND metric_id = {metric_id}
-                    AND timestamp >= toDateTime('{start_time}')
-                    AND timestamp < toDateTime('{end_time}')
+                    AND metric_id = {self.metric_id}
+                    AND timestamp >= toDateTime('{(self.base_time - self.skew).isoformat()}')
+                    AND timestamp < toDateTime('{(self.base_time + self.skew).isoformat()}')
                     GRANULARITY 60
-                    """.format(
-            metric_id=self.metric_id,
-            org_id=self.org_id,
-            start_time=(self.base_time - self.skew).isoformat(),
-            end_time=(self.base_time + self.skew).isoformat(),
-        )
+                    """
         response = self.app.post(
             SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "metrics"})
         )
@@ -580,25 +569,20 @@ class TestMetricsApiDistributions(BaseApiTest):
         ]
 
     def test_dists_min_max_avg_one_day_granularity(self) -> None:
-        query_str = """MATCH (metrics_distributions)
+        query_str = f"""MATCH (metrics_distributions)
                     SELECT min(value) AS dist_min,
                         max(value) AS dist_max,
                         avg(value) AS dist_avg,
                         sum(value) AS dist_sum,
                         count(value) AS dist_count
                     BY project_id, org_id
-                    WHERE org_id = {org_id}
+                    WHERE org_id = {self.org_id}
                     AND project_id = 1
-                    AND metric_id = {metric_id}
-                    AND timestamp >= toDateTime('{start_time}')
-                    AND timestamp < toDateTime('{end_time}')
+                    AND metric_id = {self.metric_id}
+                    AND timestamp >= toDateTime('{timestamp_to_bucket(self.base_time, 86400).isoformat()}')
+                    AND timestamp < toDateTime('{(timestamp_to_bucket(self.base_time + timedelta(days=2), 86400)).isoformat()}')
                     GRANULARITY 86400
-                    """.format(
-            metric_id=self.metric_id,
-            org_id=self.org_id,
-            start_time=timestamp_to_bucket(self.base_time, 86400).isoformat(),
-            end_time=(timestamp_to_bucket(self.base_time + timedelta(days=2), 86400)).isoformat(),
-        )
+                    """
         response = self.app.post(
             SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "metrics"})
         )
@@ -619,20 +603,15 @@ class TestMetricsApiDistributions(BaseApiTest):
         )
 
     def test_bucketed_time(self) -> None:
-        query_str = """MATCH (metrics_distributions)
+        query_str = f"""MATCH (metrics_distributions)
                     SELECT bucketed_time, quantiles(0.5,0.9,0.95,0.99)(value) AS quants BY bucketed_time
-                    WHERE org_id = {org_id}
+                    WHERE org_id = {self.org_id}
                     AND project_id = 1
-                    AND metric_id = {metric_id}
-                    AND timestamp >= toDateTime('{start_time}')
-                    AND timestamp < toDateTime('{end_time}')
+                    AND metric_id = {self.metric_id}
+                    AND timestamp >= toDateTime('{timestamp_to_bucket(self.base_time - self.skew, 3600).isoformat()}')
+                    AND timestamp < toDateTime('{timestamp_to_bucket(self.base_time + self.skew, 3600).isoformat()}')
                     GRANULARITY 3600
-                    """.format(
-            metric_id=self.metric_id,
-            org_id=self.org_id,
-            start_time=timestamp_to_bucket(self.base_time - self.skew, 3600).isoformat(),
-            end_time=timestamp_to_bucket(self.base_time + self.skew, 3600).isoformat(),
-        )
+                    """
         response = self.app.post(
             SNQL_ROUTE, data=json.dumps({"query": query_str, "dataset": "metrics"})
         )

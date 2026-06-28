@@ -1,5 +1,3 @@
-from typing import Set
-
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, if_cond, literal
 from snuba.query.expressions import (
@@ -17,7 +15,7 @@ from snuba.query.processors.physical.type_converters import (
 
 
 class HexIntColumnProcessor(BaseTypeConverter):
-    def __init__(self, columns: Set[str], size: int = 16) -> None:
+    def __init__(self, columns: set[str], size: int = 16) -> None:
         """
         size is the number of characters in the hex string representation of the integer (e.g. 32 for 128 bit integers)
         """
@@ -31,8 +29,8 @@ class HexIntColumnProcessor(BaseTypeConverter):
             if self._size == 32:
                 return Literal(alias=exp.alias, value=str(int(exp.value, 16)))
             return Literal(alias=exp.alias, value=int(exp.value, 16))
-        except (AssertionError, ValueError):
-            raise ColumnTypeError("Invalid hexint", should_report=False)
+        except (AssertionError, ValueError) as e:
+            raise ColumnTypeError("Invalid hexint", should_report=False) from e
 
     def _process_expressions(self, exp: Expression) -> Expression:
         if isinstance(exp, Column) and exp.column_name in self.columns:
@@ -63,8 +61,8 @@ class HexIntArrayColumnProcessor(BaseTypeConverter):
         try:
             assert isinstance(exp.value, str)
             return Literal(alias=exp.alias, value=int(exp.value, 16))
-        except (AssertionError, ValueError):
-            raise ColumnTypeError("Invalid hexint", should_report=False)
+        except (AssertionError, ValueError) as e:
+            raise ColumnTypeError("Invalid hexint", should_report=False) from e
 
     def _process_expressions(self, exp: Expression) -> Expression:
         if isinstance(exp, Column) and exp.column_name in self.columns:

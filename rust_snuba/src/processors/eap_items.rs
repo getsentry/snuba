@@ -228,7 +228,7 @@ pub fn process_message_eap_row(
 /// Test-only: returns the typed `EAPItemRow` (plus the metadata fields the
 /// pipeline carries) without the bytes serialization step. Tests that
 /// inspect individual columns use this; the production path goes through
-/// `process_message_row_binary` and never holds the typed struct beyond
+/// `process_message_eap_row` and never holds the typed struct beyond
 /// `process_eap_item`.
 #[cfg(test)]
 pub(crate) struct EAPItemRowBatch {
@@ -265,6 +265,10 @@ struct EAPItem {
     item_type: u8,
     timestamp: u32,
     trace_id: Uuid,
+    session_id: Uuid,
+    /// The TraceItem `conversation_id` field, stored in the `ai_conversation_id`
+    /// String column. The deprecated UUID `conversation_id` column is not written.
+    ai_conversation_id: String,
     item_id: u128,
 
     /// Per-item-type primary name attribute, promoted to a dedicated column.
@@ -313,6 +317,8 @@ impl TryFrom<TraceItem> for EAPItem {
             project_id: from.project_id,
             item_type: from.item_type as u8,
             trace_id: Uuid::parse_str(&from.trace_id)?,
+            session_id: parse_uuid_or_random(&from.session_id),
+            ai_conversation_id: from.conversation_id,
             item_id: read_item_id(from.item_id)?,
             timestamp: timestamp.seconds as u32,
             indexed_name,
@@ -384,6 +390,20 @@ fn fnv_1a(input: &[u8]) -> u32 {
     res
 }
 
+/// Parse a UUID-valued TraceItem field (e.g. `session_id`) for its non-nullable
+/// UUID column. An absent, malformed, or all-zero value is replaced with a fresh
+/// random UUID, avoiding the all-zero "magic" UUID that would balloon the
+/// bloom-filter index with a single high-frequency value.
+fn parse_uuid_or_random(value: &str) -> Uuid {
+    if value.is_empty() {
+        return Uuid::new_v4();
+    }
+    match Uuid::parse_str(value) {
+        Ok(uuid) if !uuid.is_nil() => uuid,
+        _ => Uuid::new_v4(),
+    }
+}
+
 fn read_item_id(from: Vec<u8>) -> anyhow::Result<u128> {
     let bytes: [u8; 16] = from
         .get(..std::mem::size_of::<u128>())
@@ -420,6 +440,22 @@ struct AttributeMap {
 
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     attributes_array: HashMap<String, Vec<EAPValue>>,
+
+    // Typed map columns for array-valued attributes (migration 0059). Arrays are
+    // double-written here, alongside the legacy `attributes_array` JSON column, on
+    // both the JSON and RowBinary paths so the read path can filter/aggregate on
+    // values and enumerate keys via `mapKeys(...)` like the scalar attribute maps.
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attributes_array_string: HashMap<String, Vec<String>>,
+
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attributes_array_int: HashMap<String, Vec<i64>>,
+
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attributes_array_float: HashMap<String, Vec<f64>>,
+
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attributes_array_bool: HashMap<String, Vec<bool>>,
 
     #(
     #[serde(skip_serializing_if = "HashMap::is_empty")]
@@ -467,14 +503,42 @@ impl AttributeMap {
     }
 
     pub fn insert_array(&mut self, k: String, v: ArrayValue) {
+        // Each element is appended to its typed `Map(String, Array(T))` column as
+        // it is read, and also to the legacy `attributes_array` JSON column. A
+        // homogeneous array (the common case) lands in a single typed column;
+        // mixed arrays are split across columns by element type.
         let mut values: Vec<EAPValue> = Vec::default();
 
         for value in v.values {
             match value.value {
-                Some(Value::StringValue(string)) => values.push(EAPValue::String(string)),
-                Some(Value::DoubleValue(double)) => values.push(EAPValue::Double(double)),
-                Some(Value::IntValue(int)) => values.push(EAPValue::Int(int)),
-                Some(Value::BoolValue(bool)) => values.push(EAPValue::Bool(bool)),
+                Some(Value::StringValue(string)) => {
+                    self.attributes_array_string
+                        .entry(k.clone())
+                        .or_default()
+                        .push(string.clone());
+                    values.push(EAPValue::String(string));
+                }
+                Some(Value::DoubleValue(double)) => {
+                    self.attributes_array_float
+                        .entry(k.clone())
+                        .or_default()
+                        .push(double);
+                    values.push(EAPValue::Double(double));
+                }
+                Some(Value::IntValue(int)) => {
+                    self.attributes_array_int
+                        .entry(k.clone())
+                        .or_default()
+                        .push(int);
+                    values.push(EAPValue::Int(int));
+                }
+                Some(Value::BoolValue(bool)) => {
+                    self.attributes_array_bool
+                        .entry(k.clone())
+                        .or_default()
+                        .push(bool);
+                    values.push(EAPValue::Bool(bool));
+                }
                 Some(Value::BytesValue(_)) => (),
                 Some(Value::KvlistValue(_)) => (),
                 Some(Value::ArrayValue(_)) => (),
@@ -495,6 +559,9 @@ pub struct EAPItemRow {
     timestamp: u32,
     #[serde(with = "clickhouse::serde::uuid")]
     trace_id: Uuid,
+    #[serde(with = "clickhouse::serde::uuid")]
+    session_id: Uuid,
+    ai_conversation_id: String,
     item_id: u128,
 
     indexed_name: String,
@@ -516,6 +583,11 @@ pub struct EAPItemRow {
     )*
 
     attributes_array: String,
+
+    attributes_array_string: Vec<(String, Vec<String>)>,
+    attributes_array_int: Vec<(String, Vec<i64>)>,
+    attributes_array_float: Vec<(String, Vec<f64>)>,
+    attributes_array_bool: Vec<(String, Vec<bool>)>,
 }
 }
 
@@ -535,6 +607,8 @@ impl TryFrom<EAPItem> for EAPItemRow {
                 item_type: item.item_type,
                 timestamp: item.timestamp,
                 trace_id: item.trace_id,
+                session_id: item.session_id,
+                ai_conversation_id: item.ai_conversation_id,
                 item_id: item.item_id,
                 indexed_name: item.indexed_name,
                 sampling_weight: item.sampling_weight,
@@ -550,6 +624,18 @@ impl TryFrom<EAPItem> for EAPItemRow {
                 attributes_float_~N: item.attributes.attributes_float_~N.into_iter().collect(),
                 )*
                 attributes_array,
+                attributes_array_string: item
+                    .attributes
+                    .attributes_array_string
+                    .into_iter()
+                    .collect(),
+                attributes_array_int: item.attributes.attributes_array_int.into_iter().collect(),
+                attributes_array_float: item
+                    .attributes
+                    .attributes_array_float
+                    .into_iter()
+                    .collect(),
+                attributes_array_bool: item.attributes.attributes_array_bool.into_iter().collect(),
             });
         }
     }
@@ -585,6 +671,8 @@ mod tests {
                 nanos: 0,
             }),
             trace_id: Uuid::new_v4().to_string(),
+            conversation_id: Default::default(),
+            session_id: Default::default(),
             client_sample_rate: 1.0,
             server_sample_rate: 1.0,
             outcomes: Default::default(),
@@ -970,23 +1058,33 @@ mod tests {
         // Column names now come from the `clickhouse::Row` derive (declaration
         // order). This still guards that field names/order match the schema.
         let names = <EAPItemRow as clickhouse::Row>::COLUMN_NAMES;
-        // 12 scalars + indexed_name + attributes_bool + attributes_int + 80 buckets + attributes_array
-        assert_eq!(names.len(), 96);
+        // 14 scalars (incl. session_id + ai_conversation_id) + indexed_name +
+        // attributes_bool + attributes_int + 80 buckets + attributes_array +
+        // 4 typed array maps
+        assert_eq!(names.len(), 102);
         assert_eq!(names[0], "organization_id");
-        assert_eq!(names[5], "item_id");
-        assert_eq!(names[6], "indexed_name");
-        assert_eq!(names[7], "sampling_weight");
-        assert_eq!(names[8], "sampling_factor");
-        assert_eq!(names[9], "client_sample_rate");
-        assert_eq!(names[10], "server_sample_rate");
+        assert_eq!(names[4], "trace_id");
+        assert_eq!(names[5], "session_id");
+        assert_eq!(names[6], "ai_conversation_id");
+        assert_eq!(names[7], "item_id");
+        assert_eq!(names[8], "indexed_name");
+        assert_eq!(names[9], "sampling_weight");
+        assert_eq!(names[10], "sampling_factor");
+        assert_eq!(names[11], "client_sample_rate");
+        assert_eq!(names[12], "server_sample_rate");
         // Bucket pairs are interleaved (string_N then float_N) per the
         // `seq_attrs!` expansion on EAPItemRow.
-        assert_eq!(names[15], "attributes_string_0");
-        assert_eq!(names[16], "attributes_float_0");
-        assert_eq!(names[17], "attributes_string_1");
-        assert_eq!(names[93], "attributes_string_39");
-        assert_eq!(names[94], "attributes_float_39");
-        assert_eq!(names[95], "attributes_array");
+        assert_eq!(names[17], "attributes_string_0");
+        assert_eq!(names[18], "attributes_float_0");
+        assert_eq!(names[19], "attributes_string_1");
+        assert_eq!(names[95], "attributes_string_39");
+        assert_eq!(names[96], "attributes_float_39");
+        assert_eq!(names[97], "attributes_array");
+        // Typed array map columns follow the JSON column.
+        assert_eq!(names[98], "attributes_array_string");
+        assert_eq!(names[99], "attributes_array_int");
+        assert_eq!(names[100], "attributes_array_float");
+        assert_eq!(names[101], "attributes_array_bool");
     }
 
     #[test]
@@ -1049,6 +1147,82 @@ mod tests {
         assert_eq!(row.item_id, item_id.as_u128());
         assert_eq!(row.sampling_weight, 1);
         assert!((row.sampling_factor - 1.0).abs() < f64::EPSILON);
+        assert!(!row.session_id.is_nil());
+        assert!(row.ai_conversation_id.is_empty());
+    }
+
+    #[test]
+    fn test_conversation_and_session_id_parsed_when_present() {
+        let item_id = Uuid::new_v4();
+        let conversation_id = "conversation-123".to_string();
+        let session_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.conversation_id = conversation_id.clone();
+        trace_item.session_id = session_id.to_string();
+
+        let eap_item = EAPItem::try_from(trace_item).unwrap();
+        assert_eq!(eap_item.ai_conversation_id, conversation_id);
+        assert_eq!(eap_item.session_id, session_id);
+    }
+
+    #[test]
+    fn test_conversation_and_session_id_when_absent() {
+        let item_id = Uuid::new_v4();
+        let trace_item = generate_trace_item(item_id);
+
+        let eap_item = EAPItem::try_from(trace_item).unwrap();
+        // Absent conversation id → empty String; absent session id → random UUID.
+        assert!(eap_item.ai_conversation_id.is_empty());
+        assert!(!eap_item.session_id.is_nil());
+    }
+
+    #[test]
+    fn test_session_id_malformed_is_randomized() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.conversation_id = "not-a-uuid".to_string();
+        trace_item.session_id = "also-not-a-uuid".to_string();
+
+        let eap_item = EAPItem::try_from(trace_item).unwrap();
+        // The conversation id is free-form, so it is stored verbatim.
+        assert_eq!(eap_item.ai_conversation_id, "not-a-uuid");
+        assert!(!eap_item.session_id.is_nil());
+    }
+
+    #[test]
+    fn test_explicit_nil_session_id_is_randomized() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.session_id = Uuid::nil().to_string();
+
+        let eap_item = EAPItem::try_from(trace_item).unwrap();
+        assert!(!eap_item.session_id.is_nil());
+    }
+
+    #[test]
+    fn test_row_binary_conversation_and_session_id() {
+        let item_id = Uuid::new_v4();
+        let conversation_id = "conversation-abc".to_string();
+        let session_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+        trace_item.conversation_id = conversation_id.clone();
+        trace_item.session_id = session_id.to_string();
+
+        let mut payload = Vec::new();
+        trace_item.encode(&mut payload).unwrap();
+
+        let payload = KafkaPayload::new(None, None, Some(payload));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        let batch = process_message_row_binary_typed(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+
+        let row = &batch.rows[0];
+        assert_eq!(row.ai_conversation_id, conversation_id);
+        assert_eq!(row.session_id, session_id);
     }
 
     #[test]
@@ -1205,6 +1379,95 @@ mod tests {
         // Array attributes are serialized as JSON string in the attributes_array column
         assert!(row.attributes_array.contains("my_array"));
         assert!(row.attributes_array.contains("elem"));
+
+        // ...and double-written to the typed `attributes_array_string` column.
+        assert!(row
+            .attributes_array_string
+            .iter()
+            .any(|(k, v)| k == "my_array" && v == &vec!["elem".to_string()]));
+    }
+
+    #[test]
+    fn test_array_typed_columns_double_write() {
+        let item_id = Uuid::new_v4();
+        let mut trace_item = generate_trace_item(item_id);
+
+        // Homogeneous arrays of each element type.
+        trace_item.attributes.insert(
+            "strs".to_string(),
+            AnyValue {
+                value: Some(Value::ArrayValue(ArrayValue {
+                    values: vec![
+                        AnyValue {
+                            value: Some(Value::StringValue("a".to_string())),
+                        },
+                        AnyValue {
+                            value: Some(Value::StringValue("b".to_string())),
+                        },
+                    ],
+                })),
+            },
+        );
+        trace_item.attributes.insert(
+            "ints".to_string(),
+            AnyValue {
+                value: Some(Value::ArrayValue(ArrayValue {
+                    values: vec![
+                        AnyValue {
+                            value: Some(Value::IntValue(1)),
+                        },
+                        AnyValue {
+                            value: Some(Value::IntValue(2)),
+                        },
+                    ],
+                })),
+            },
+        );
+        trace_item.attributes.insert(
+            "floats".to_string(),
+            AnyValue {
+                value: Some(Value::ArrayValue(ArrayValue {
+                    values: vec![AnyValue {
+                        value: Some(Value::DoubleValue(1.5)),
+                    }],
+                })),
+            },
+        );
+        trace_item.attributes.insert(
+            "bools".to_string(),
+            AnyValue {
+                value: Some(Value::ArrayValue(ArrayValue {
+                    values: vec![AnyValue {
+                        value: Some(Value::BoolValue(true)),
+                    }],
+                })),
+            },
+        );
+
+        // The typed maps live on AttributeMap, which both the JSON and RowBinary
+        // paths serialize, so checking them here covers both write paths.
+        let attrs = EAPItem::try_from(trace_item).unwrap().attributes;
+
+        assert_eq!(
+            attrs.attributes_array_string.get("strs"),
+            Some(&vec!["a".to_string(), "b".to_string()])
+        );
+        assert_eq!(attrs.attributes_array_int.get("ints"), Some(&vec![1i64, 2]));
+        assert_eq!(
+            attrs.attributes_array_float.get("floats"),
+            Some(&vec![1.5f64])
+        );
+        assert_eq!(attrs.attributes_array_bool.get("bools"), Some(&vec![true]));
+
+        // Ints are NOT double-written to the float column.
+        assert_eq!(attrs.attributes_array_float.get("ints"), None);
+        // Typed maps are not cross-populated across element types.
+        assert_eq!(attrs.attributes_array_int.get("strs"), None);
+        assert_eq!(attrs.attributes_array_bool.get("ints"), None);
+
+        // The legacy JSON column is still populated (double write).
+        assert!(attrs.attributes_array.contains_key("strs"));
+        assert!(attrs.attributes_array.contains_key("ints"));
     }
 
     #[test]
@@ -1303,7 +1566,7 @@ mod tests {
         assert!((row.sampling_factor - 0.125).abs() < 1e-6);
     }
 
-    /// Compares the output of process_message (JSON path) and process_message_row_binary
+    /// Compares the output of process_message (JSON path) and process_message_row_binary_typed
     /// (RowBinary path) to ensure both produce equivalent data for the same input.
     #[test]
     fn test_json_and_row_binary_produce_equivalent_output() {
@@ -1566,6 +1829,35 @@ mod tests {
                 "attributes_array mismatch between JSON and RowBinary"
             );
         }
+
+        // Compare the typed array columns. Both paths double-write them, and
+        // array_attr = [String "a", Int 1] splits across the string and int maps.
+        let json_arr_string: HashMap<String, Vec<String>> = json_row
+            .get("attributes_array_string")
+            .map(|v| serde_json::from_value(v.clone()).unwrap())
+            .unwrap_or_default();
+        let rb_arr_string: HashMap<String, Vec<String>> =
+            rb_row.attributes_array_string.iter().cloned().collect();
+        assert_eq!(
+            json_arr_string.get("array_attr"),
+            Some(&vec!["a".to_string()])
+        );
+        assert_eq!(
+            json_arr_string, rb_arr_string,
+            "attributes_array_string mismatch between JSON and RowBinary"
+        );
+
+        let json_arr_int: HashMap<String, Vec<i64>> = json_row
+            .get("attributes_array_int")
+            .map(|v| serde_json::from_value(v.clone()).unwrap())
+            .unwrap_or_default();
+        let rb_arr_int: HashMap<String, Vec<i64>> =
+            rb_row.attributes_array_int.iter().cloned().collect();
+        assert_eq!(json_arr_int.get("array_attr"), Some(&vec![1i64]));
+        assert_eq!(
+            json_arr_int, rb_arr_int,
+            "attributes_array_int mismatch between JSON and RowBinary"
+        );
 
         // Compare cogs_data
         assert_eq!(

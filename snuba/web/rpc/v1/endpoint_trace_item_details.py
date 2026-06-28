@@ -1,5 +1,6 @@
 import uuid
-from typing import Any, Dict, Iterable, Tuple, Type
+from collections.abc import Iterable
+from typing import Any
 
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -32,8 +33,11 @@ from snuba.web.rpc.common.common import (
     attributes_array_selected_expressions,
     base_conditions_and,
     decode_attributes_array_value,
+    merge_typed_array_maps,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
+    typed_array_map_selected_expressions,
+    use_array_map_columns,
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
@@ -51,6 +55,14 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
         key=EntityKey("eap_items"),
         schema=get_entity(EntityKey("eap_items")).get_data_model(),
         sample=None,
+    )
+    # Past the cutoff, read every array attribute from the typed array map columns
+    # instead of the legacy attributes_array JSON-column allowlist.
+    read_typed_arrays = use_array_map_columns(request.meta)
+    array_selected_expressions = (
+        typed_array_map_selected_expressions()
+        if read_typed_arrays
+        else attributes_array_selected_expressions()
     )
     res = Query(
         from_clause=entity,
@@ -86,7 +98,7 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
             SelectedExpression(
                 "attributes_bool", column("attributes_bool", alias="attributes_bool")
             ),
-            *attributes_array_selected_expressions(),
+            *array_selected_expressions,
         ],
         condition=base_conditions_and(
             request.meta,
@@ -99,7 +111,11 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
                 column("trace_id"),
                 literal(request.trace_id),
             ),
-            trace_item_filters_to_expression(request.filter, attribute_key_to_expression),
+            trace_item_filters_to_expression(
+                request.filter,
+                attribute_key_to_expression,
+                use_array_map_columns=use_array_map_columns(request.meta),
+            ),
         ),
         limit=1,
     )
@@ -131,8 +147,9 @@ def _build_snuba_request(request: TraceItemDetailsRequest) -> SnubaRequest:
 
 
 def _convert_results(
-    data: Iterable[Dict[str, Any]],
-) -> Tuple[str, Timestamp, list[TraceItemDetailsAttribute]]:
+    data: Iterable[dict[str, Any]],
+    read_typed_arrays: bool,
+) -> tuple[str, Timestamp, list[TraceItemDetailsAttribute]]:
     row = next(iter(data))
     item_id = row.pop("hex_item_id")
     dt = row.pop("timestamp")
@@ -140,14 +157,13 @@ def _convert_results(
     timestamp.FromSeconds(dt)
     attrs = []
 
-    if (val := row.pop("trace_id")) is not None:
-        if val != "0" * 32:
-            attrs.append(
-                TraceItemDetailsAttribute(
-                    name="sentry.trace_id",
-                    value=AttributeValue(val_str=str(uuid.UUID(val))),
-                )
+    if (val := row.pop("trace_id")) is not None and val != "0" * 32:
+        attrs.append(
+            TraceItemDetailsAttribute(
+                name="sentry.trace_id",
+                value=AttributeValue(val_str=str(uuid.UUID(val))),
             )
+        )
     if (val := row.pop("organization_id")) is not None:
         attrs.append(
             TraceItemDetailsAttribute(
@@ -184,12 +200,23 @@ def _convert_results(
             continue
         attrs.append(TraceItemDetailsAttribute(name=k, value=AttributeValue(val_double=v)))
 
-    # Everything popped above; whatever's left is an attributes_array path column.
-    for key, raw in row.items():
-        decoded = decode_attributes_array_value(key, raw)
-        if decoded is None or (isinstance(decoded, list) and not decoded):
-            continue
-        attrs.append(TraceItemDetailsAttribute(name=key, value=convert_to_attribute_value(decoded)))
+    if read_typed_arrays:
+        # Every array attribute, merged from the four typed array map columns.
+        for name, values in merge_typed_array_maps(row):
+            if not values:
+                continue
+            attrs.append(
+                TraceItemDetailsAttribute(name=name, value=convert_to_attribute_value(values))
+            )
+    else:
+        # Everything popped above; whatever's left is an allowlisted attributes_array column.
+        for key, raw in row.items():
+            decoded = decode_attributes_array_value(key, raw)
+            if decoded is None or (isinstance(decoded, list) and not decoded):
+                continue
+            attrs.append(
+                TraceItemDetailsAttribute(name=key, value=convert_to_attribute_value(decoded))
+            )
 
     return item_id, timestamp, attrs
 
@@ -200,11 +227,11 @@ class EndpointTraceItemDetails(RPCEndpoint[TraceItemDetailsRequest, TraceItemDet
         return "v1"
 
     @classmethod
-    def request_class(cls) -> Type[TraceItemDetailsRequest]:
+    def request_class(cls) -> type[TraceItemDetailsRequest]:
         return TraceItemDetailsRequest
 
     @classmethod
-    def response_class(cls) -> Type[TraceItemDetailsResponse]:
+    def response_class(cls) -> type[TraceItemDetailsResponse]:
         return TraceItemDetailsResponse
 
     def _execute(self, in_msg: TraceItemDetailsRequest) -> TraceItemDetailsResponse:
@@ -216,13 +243,12 @@ class EndpointTraceItemDetails(RPCEndpoint[TraceItemDetailsRequest, TraceItemDet
             raise BadSnubaRPCRequestException("This endpoint requires item_id to be set.")
         if in_msg.trace_id == "":
             raise BadSnubaRPCRequestException("This endpoint requires trace_id to be set.")
-        else:
-            try:
-                _ = uuid.UUID(in_msg.trace_id)
-            except ValueError:
-                raise BadSnubaRPCRequestException(
-                    "This endpoint requires trace_id to be a valid UUID."
-                )
+        try:
+            _ = uuid.UUID(in_msg.trace_id)
+        except ValueError as e:
+            raise BadSnubaRPCRequestException(
+                "This endpoint requires trace_id to be a valid UUID."
+            ) from e
 
         snuba_request = _build_snuba_request(in_msg)
         res = run_query(
@@ -231,12 +257,15 @@ class EndpointTraceItemDetails(RPCEndpoint[TraceItemDetailsRequest, TraceItemDet
             timer=self._timer,
         )
         try:
-            item_id, timestamp, attributes = _convert_results(res.result.get("data", []))
-        except StopIteration:
+            item_id, timestamp, attributes = _convert_results(
+                res.result.get("data", []),
+                read_typed_arrays=use_array_map_columns(in_msg.meta),
+            )
+        except StopIteration as e:
             raise RPCRequestException(
                 status_code=404,
                 message=f"no item found with ID={in_msg.item_id}",
-            )
+            ) from e
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,

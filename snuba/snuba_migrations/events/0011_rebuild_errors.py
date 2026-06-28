@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import (
     UUID,
@@ -123,8 +123,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
                 engine=table_engines.ReplacingMergeTree(
                     storage_set=StorageSetKey.EVENTS,
                     version_column="deleted",
-                    order_by="(project_id, toStartOfDay(timestamp), primary_hash, %s)"
-                    % sample_expr,
+                    order_by=f"(project_id, toStartOfDay(timestamp), primary_hash, {sample_expr})",
                     partition_by="(retention_days, toMonday(timestamp))",
                     sample_by=sample_expr,
                     ttl="timestamp + toIntervalDay(retention_days)",
@@ -143,11 +142,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
         ]
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
-        return [
-            operations.DropTable(
-                storage_set=StorageSetKey.EVENTS, table_name="errors_local"
-            )
-        ]
+        return [operations.DropTable(storage_set=StorageSetKey.EVENTS, table_name="errors_local")]
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
@@ -182,10 +177,6 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
-            operations.DropTable(
-                storage_set=StorageSetKey.EVENTS, table_name="errors_dist"
-            ),
-            operations.DropTable(
-                storage_set=StorageSetKey.EVENTS_RO, table_name="errors_dist_ro"
-            ),
+            operations.DropTable(storage_set=StorageSetKey.EVENTS, table_name="errors_dist"),
+            operations.DropTable(storage_set=StorageSetKey.EVENTS_RO, table_name="errors_dist_ro"),
         ]

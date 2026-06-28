@@ -28,6 +28,10 @@ repos:
         language: system
         types: [python]
         require_serial: true
+        # Keep in sync with [tool.mypy] exclude in pyproject.toml. pre-commit
+        # passes filenames explicitly, which bypasses mypy's own `exclude`, so
+        # these dirs must be re-excluded here to honor the same policy.
+        exclude: '^(rust_snuba/|tests/datasets/|tests/query/|test_distributed_migrations/)'
 
       - id: validate-configs-syntax
         name: validate-configs-syntax

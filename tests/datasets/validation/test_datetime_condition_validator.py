@@ -1,6 +1,5 @@
 import datetime
 import re
-from typing import Optional
 
 import pytest
 
@@ -43,7 +42,7 @@ required_column_tests = [
 
 
 @pytest.mark.parametrize("condition", required_column_tests)
-def test_datetime_column_validation(condition: Optional[Expression]) -> None:
+def test_datetime_column_validation(condition: Expression | None) -> None:
     query = LogicalQuery(
         QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
         selected_columns=[

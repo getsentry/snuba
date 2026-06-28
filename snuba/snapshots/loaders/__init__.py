@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Callable, Optional
+from collections.abc import Callable
 
 from snuba.clickhouse.http import JSONRow
 from snuba.writer import BatchWriter, BufferedWriterWrapper, WriterTableRow
@@ -21,7 +21,7 @@ class BulkLoader(ABC):
         self,
         writer: BufferedWriterWrapper[JSONRow, WriterTableRow],
         ignore_existing_data: bool,
-        progress_callback: Optional[ProgressCallback],
+        progress_callback: ProgressCallback | None,
     ) -> None:
         raise NotImplementedError
 
@@ -30,6 +30,6 @@ class BulkLoader(ABC):
         self,
         writer: BatchWriter[bytes],
         ignore_existing_data: bool,
-        progress_callback: Optional[ProgressCallback],
+        progress_callback: ProgressCallback | None,
     ) -> None:
         raise NotImplementedError

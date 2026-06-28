@@ -116,7 +116,7 @@ consumer_builder_with_opt = ConsumerBuilder(
 
 
 @pytest.mark.parametrize("con_build", [consumer_builder, consumer_builder_with_opt])
-def test_consumer_builder_non_optional_attributes(con_build) -> None:  # type: ignore
+def test_consumer_builder_non_optional_attributes(con_build: ConsumerBuilder) -> None:
     # Ensures that the ConsumerBuilders are assigning a
     # not-None value to the required attributes
 
@@ -139,7 +139,7 @@ def test_consumer_builder_non_optional_attributes(con_build) -> None:  # type: i
 
 
 @pytest.mark.parametrize("con_build", [consumer_builder, consumer_builder_with_opt])
-def test_consumer_builder_optional_attributes(con_build) -> None:  # type: ignore
+def test_consumer_builder_optional_attributes(con_build: ConsumerBuilder) -> None:
     # Ensures that the ConsumerBuilders are assigning
     # some value, None or not, to the optional attributes
 
@@ -147,16 +147,16 @@ def test_consumer_builder_optional_attributes(con_build) -> None:  # type: ignor
     # are passed in, stronger checks are performed
     # in a separate test below
 
-    con_build.replacements_topic
-    con_build.commit_log_topic
+    con_build.replacements_topic  # noqa: B018 access verifies attribute is assigned
+    con_build.commit_log_topic  # noqa: B018 access verifies attribute is assigned
 
-    con_build.replacements_producer
-    con_build.commit_log_producer
+    con_build.replacements_producer  # noqa: B018 access verifies attribute is assigned
+    con_build.commit_log_producer  # noqa: B018 access verifies attribute is assigned
 
-    con_build.strict_offset_reset
-    con_build.processes
-    con_build.input_block_size
-    con_build.output_block_size
+    con_build.strict_offset_reset  # noqa: B018 access verifies attribute is assigned
+    con_build.processes  # noqa: B018 access verifies attribute is assigned
+    con_build.input_block_size  # noqa: B018 access verifies attribute is assigned
+    con_build.output_block_size  # noqa: B018 access verifies attribute is assigned
 
 
 @pytest.mark.events_db
@@ -181,7 +181,7 @@ def test_run_processing_strategy() -> None:
     strategy.submit(message)
 
     # Wait for the commit
-    for i in range(10):
+    for _i in range(10):
         time.sleep(0.5)
         strategy.poll()
         if commit.call_count == 1:

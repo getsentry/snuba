@@ -1,7 +1,8 @@
 from collections import defaultdict
+from collections.abc import Mapping, MutableMapping, Sequence
 from datetime import datetime
 from functools import partial
-from typing import List, Mapping, MutableMapping, NamedTuple, Optional, Sequence, Tuple
+from typing import NamedTuple
 
 import structlog
 from clickhouse_driver import errors
@@ -77,9 +78,9 @@ class Runner:
             ClickhouseClientSettings.MIGRATE
         )
 
-        self.__status: MutableMapping[MigrationKey, Tuple[Status, Optional[datetime]]] = {}
+        self.__status: MutableMapping[MigrationKey, tuple[Status, datetime | None]] = {}
 
-    def get_status(self, migration_key: MigrationKey) -> Tuple[Status, Optional[datetime]]:
+    def get_status(self, migration_key: MigrationKey) -> tuple[Status, datetime | None]:
         """
         Returns the status and timestamp of a migration.
         """
@@ -128,12 +129,12 @@ class Runner:
         )
 
     def show_all(
-        self, groups: Optional[Sequence[str]] = None, include_nonexistent: bool = False
-    ) -> List[Tuple[MigrationGroup, List[MigrationDetails]]]:
+        self, groups: Sequence[str] | None = None, include_nonexistent: bool = False
+    ) -> list[tuple[MigrationGroup, list[MigrationDetails]]]:
         """
         Returns the list of migrations and their statuses for each group.
         """
-        migrations: List[Tuple[MigrationGroup, List[MigrationDetails]]] = []
+        migrations: list[tuple[MigrationGroup, list[MigrationDetails]]] = []
 
         if groups:
             migration_groups: Sequence[MigrationGroup] = [MigrationGroup(group) for group in groups]
@@ -142,14 +143,14 @@ class Runner:
 
         migration_status = self._get_migration_status(migration_groups)
         clickhouse_group_migrations = defaultdict(set)
-        for group, migration_id in migration_status.keys():
+        for group, migration_id in migration_status:
             clickhouse_group_migrations[group].add(migration_id)
 
         def get_status(migration_key: MigrationKey) -> Status:
             return migration_status.get(migration_key, Status.NOT_STARTED)
 
         for group in migration_groups:
-            group_migrations: List[MigrationDetails] = []
+            group_migrations: list[MigrationDetails] = []
             group_loader = get_group_loader(group)
 
             migration_ids = group_loader.get_migrations()
@@ -185,8 +186,8 @@ class Runner:
         through: str = "all",
         fake: bool = False,
         force: bool = False,
-        group: Optional[MigrationGroup] = None,
-        readiness_states: Optional[Sequence[ReadinessState]] = None,
+        group: MigrationGroup | None = None,
+        readiness_states: Sequence[ReadinessState] | None = None,
         check_dangerous: bool = False,
     ) -> None:
         """
@@ -215,7 +216,7 @@ class Runner:
                 if get_group_readiness_state(m.group) in readiness_states
             ]
 
-        use_through = False if through == "all" else True
+        use_through = through != "all"
 
         def exact_migration_exists(through: str) -> bool:
             migration_ids = [
@@ -223,9 +224,7 @@ class Runner:
                 for key in pending_migrations
                 if key.migration_id.startswith(through)
             ]
-            if len(migration_ids) == 1:
-                return True
-            return False
+            return len(migration_ids) == 1
 
         if use_through and not exact_migration_exists(through):
             raise MigrationError(f"No exact match for: {through}")
@@ -376,8 +375,8 @@ class Runner:
         fake: bool = False,
         force: bool = False,
         include_system: bool = False,
-        group: Optional[MigrationGroup] = None,
-        readiness_states: Optional[Sequence[ReadinessState]] = None,
+        group: MigrationGroup | None = None,
+        readiness_states: Sequence[ReadinessState] | None = None,
     ) -> None:
         if not force:
             raise MigrationError("Requires force to reverse migrations")
@@ -426,7 +425,7 @@ class Runner:
     def reverse_in_progress(
         self,
         fake: bool = False,
-        group: Optional[MigrationGroup] = None,
+        group: MigrationGroup | None = None,
         dry_run: bool = False,
     ) -> None:
         """
@@ -446,7 +445,7 @@ class Runner:
         else:
             migration_groups = get_active_migration_groups()
 
-        def get_in_progress_migration(group: MigrationGroup) -> Optional[MigrationKey]:
+        def get_in_progress_migration(group: MigrationGroup) -> MigrationKey | None:
             group_migrations = get_group_loader(group).get_migrations()
             for migration_id in group_migrations:
                 migration_key = MigrationKey(group, migration_id)
@@ -485,11 +484,11 @@ class Runner:
 
         migration.backwards(context, dry_run)
 
-    def _get_pending_migrations(self) -> List[MigrationKey]:
+    def _get_pending_migrations(self) -> list[MigrationKey]:
         """
         Gets pending migration list.
         """
-        migrations: List[MigrationKey] = []
+        migrations: list[MigrationKey] = []
 
         for group in get_active_migration_groups():
             group_migrations = self._get_pending_migrations_for_group(group)
@@ -497,7 +496,7 @@ class Runner:
 
         return migrations
 
-    def _get_pending_migrations_for_group(self, group: MigrationGroup) -> List[MigrationKey]:
+    def _get_pending_migrations_for_group(self, group: MigrationGroup) -> list[MigrationKey]:
         """
         Gets pending migrations list for a specific group
         """
@@ -507,7 +506,7 @@ class Runner:
             return migration_status.get(migration_key, Status.NOT_STARTED)
 
         group_loader = get_group_loader(group)
-        group_migrations: List[MigrationKey] = []
+        group_migrations: list[MigrationKey] = []
 
         for migration_id in group_loader.get_migrations():
             migration_key = MigrationKey(group, migration_id)
@@ -523,13 +522,13 @@ class Runner:
 
         return group_migrations
 
-    def _get_completed_migrations(self, groups: Sequence[MigrationGroup]) -> List[MigrationKey]:
+    def _get_completed_migrations(self, groups: Sequence[MigrationGroup]) -> list[MigrationKey]:
         """
         Get a list of completed migrations for a list of groups
         """
         migration_status = self._get_migration_status()
 
-        group_migrations: List[MigrationKey] = []
+        group_migrations: list[MigrationKey] = []
         for group in groups:
             group_loader = get_group_loader(group)
             completed_migrations = 0
@@ -539,7 +538,7 @@ class Runner:
                 if status == Status.IN_PROGRESS:
                     # can't reverse migrations if one is stuck pending
                     raise MigrationInProgress(str(migration_key))
-                elif status == Status.COMPLETED:
+                if status == Status.COMPLETED:
                     group_migrations.append(migration_key)
                     completed_migrations += 1
                 elif completed_migrations > 0:
@@ -583,7 +582,7 @@ class Runner:
         return 1
 
     def _get_migration_status(
-        self, groups: Optional[Sequence[MigrationGroup]] = None
+        self, groups: Sequence[MigrationGroup] | None = None
     ) -> Mapping[MigrationKey, Status]:
         data: MutableMapping[MigrationKey, Status] = {}
 

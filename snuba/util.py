@@ -2,18 +2,15 @@ from __future__ import annotations
 
 import _strptime  # NOQA fixes _strptime deferred import issue
 import re
+from collections.abc import Callable, MutableMapping, Sequence
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from functools import wraps
+from re import Pattern
 from typing import (
     Any,
-    Callable,
-    MutableMapping,
     NamedTuple,
-    Pattern,
-    Sequence,
     TypeVar,
-    Union,
     cast,
 )
 
@@ -120,14 +117,12 @@ def decode_part_str(part_str: str, partition_format: Sequence[PartSegment]) -> P
             int(retention_days),
         )
 
-    else:
-        raise ValueError("Unknown part name/format: " + str(part_str))
+    raise ValueError("Unknown part name/format: " + str(part_str))
 
 
-def force_bytes(s: Union[bytes, str]) -> bytes:
+def force_bytes(s: bytes | str) -> bytes:
     if isinstance(s, bytes):
         return s
-    elif isinstance(s, str):
+    if isinstance(s, str):
         return s.encode("utf-8", "replace")
-    else:
-        raise TypeError(f"cannot convert {type(s).__name__} to bytes")
+    raise TypeError(f"cannot convert {type(s).__name__} to bytes")
