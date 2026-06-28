@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import Array, Column, UInt
 from snuba.migrations import migration, operations

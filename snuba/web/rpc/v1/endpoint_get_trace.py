@@ -1,8 +1,9 @@
 import random
 import uuid
+from collections.abc import Iterable
 from datetime import datetime
 from operator import attrgetter
-from typing import Any, Dict, Iterable, NamedTuple, Optional, Type
+from typing import Any, NamedTuple, Optional
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -29,6 +30,10 @@ from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
+from snuba.protos.common import (
+    TYPED_ARRAY_MAP_COLUMNS,
+    type_array_typed_columns_select_expressions,
+)
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
@@ -47,10 +52,15 @@ from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     attributes_array_selected_expressions,
-    pop_attributes_array_paths,
+    decode_attributes_array_value,
+    merge_typed_array_maps,
+    merge_typed_array_subcolumns,
     project_id_and_org_conditions,
     timestamp_in_range_condition,
     treeify_or_and_conditions,
+    typed_array_map_selected_expressions,
+    typed_array_select_subcolumn_name,
+    use_array_map_columns,
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
@@ -201,14 +211,29 @@ def _build_query(
         ),
     ]
 
+    read_typed_arrays = use_array_map_columns(request.meta)
     if len(item.attributes) > 0:
         for attribute_key in item.attributes:
-            selected_columns.append(
-                SelectedExpression(
-                    name=attribute_key.name,
-                    expression=(attribute_key_to_expression(attribute_key)),
+            if read_typed_arrays and attribute_key.type == AttributeKey.Type.TYPE_ARRAY:
+                # Read as four typed sub-columns, merged back in _process_results.
+                for typed_col, expression in zip(
+                    TYPED_ARRAY_MAP_COLUMNS,
+                    type_array_typed_columns_select_expressions(attribute_key),
+                    strict=True,
+                ):
+                    selected_columns.append(
+                        SelectedExpression(
+                            name=typed_array_select_subcolumn_name(attribute_key.name, typed_col),
+                            expression=expression,
+                        )
+                    )
+            else:
+                selected_columns.append(
+                    SelectedExpression(
+                        name=attribute_key.name,
+                        expression=attribute_key_to_expression(attribute_key),
+                    )
                 )
-            )
     else:
         selected_columns += [
             SelectedExpression(
@@ -227,19 +252,23 @@ def _build_query(
                     tuple(column(f"attributes_float_{i}") for i in range(40)),
                 ),
             ),
-            *attributes_array_selected_expressions(),
+            # Past the cutoff, read every array attribute from the typed array map
+            # columns instead of the legacy attributes_array JSON-column allowlist.
+            *(
+                typed_array_map_selected_expressions()
+                if read_typed_arrays
+                else attributes_array_selected_expressions()
+            ),
         ]
         selected_columns.extend(
-            map(
-                lambda col_name: SelectedExpression(
-                    name=col_name,
-                    expression=column(
-                        col_name,
-                        alias=f"selected_{col_name}",
-                    ),
+            SelectedExpression(
+                name=col_name,
+                expression=column(
+                    col_name,
+                    alias=f"selected_{col_name}",
                 ),
-                (NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS),
             )
+            for col_name in (NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS)
         )
 
     entity = Entity(
@@ -379,28 +408,27 @@ def convert_to_attribute_value(value: Any) -> AttributeValue:
         return AttributeValue(
             val_bool=value,
         )
-    elif isinstance(value, int):
+    if isinstance(value, int):
         return AttributeValue(
             val_int=value,
         )
-    elif isinstance(value, float):
+    if isinstance(value, float):
         return AttributeValue(
             val_double=value,
         )
-    elif isinstance(value, str):
+    if isinstance(value, str):
         return AttributeValue(
             val_str=value,
         )
-    elif isinstance(value, (list, tuple)):
+    if isinstance(value, (list, tuple)):
         return AttributeValue(
             val_array=Array(values=[convert_to_attribute_value(v) for v in value])
         )
-    elif isinstance(value, datetime):
+    if isinstance(value, datetime):
         return AttributeValue(
             val_double=value.timestamp(),
         )
-    else:
-        raise BadSnubaRPCRequestException(f"data type unknown: {type(value)}")
+    raise BadSnubaRPCRequestException(f"data type unknown: {type(value)}")
 
 
 def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeValue]:
@@ -412,7 +440,7 @@ def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeVa
             ),
             convert_to_attribute_value(value),
         )
-    elif isinstance(value, int):
+    if isinstance(value, int):
         return (
             AttributeKey(
                 name=key,
@@ -420,7 +448,7 @@ def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeVa
             ),
             convert_to_attribute_value(value),
         )
-    elif isinstance(value, float):
+    if isinstance(value, float):
         return (
             AttributeKey(
                 name=key,
@@ -428,7 +456,7 @@ def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeVa
             ),
             convert_to_attribute_value(value),
         )
-    elif isinstance(value, str):
+    if isinstance(value, str):
         return (
             AttributeKey(
                 name=key,
@@ -436,12 +464,12 @@ def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeVa
             ),
             convert_to_attribute_value(value),
         )
-    elif isinstance(value, list):
+    if isinstance(value, list):
         return (
             AttributeKey(name=key, type=AttributeKey.Type.TYPE_ARRAY),
             convert_to_attribute_value(value),
         )
-    elif isinstance(value, datetime):
+    if isinstance(value, datetime):
         return (
             AttributeKey(
                 name=key,
@@ -449,23 +477,20 @@ def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeVa
             ),
             convert_to_attribute_value(value),
         )
-    else:
-        raise BadSnubaRPCRequestException(f"data type unknown: {type(value)}")
+    raise BadSnubaRPCRequestException(f"data type unknown: {type(value)}")
 
 
-ProcessedResults = NamedTuple(
-    "ProcessedResults",
-    [
-        ("items", list[GetTraceResponse.Item]),
-        ("last_seen_timestamp_precise", float),
-        ("last_seen_id", str),
-    ],
-)
+class ProcessedResults(NamedTuple):
+    items: list[GetTraceResponse.Item]
+    last_seen_timestamp_precise: float
+    last_seen_id: str
 
 
 @with_span(op="function")
 def _process_results(
-    data: Iterable[Dict[str, Any]],
+    data: Iterable[dict[str, Any]],
+    read_typed_arrays: bool = False,
+    array_attribute_names: Iterable[str] = (),
 ) -> ProcessedResults:
     """
     Used to process the results returned from clickhouse in two passes.
@@ -496,20 +521,41 @@ def _process_results(
 
             attributes: dict[str, GetTraceResponse.Item.Attribute] = {}
 
-            def add_attribute(key: str, value: Any) -> None:
+            def add_attribute(
+                key: str,
+                value: Any,
+                attributes: dict[str, GetTraceResponse.Item.Attribute] = attributes,
+            ) -> None:
                 attribute_key, attribute_value = _value_to_attribute(key, value)
                 attributes[key] = GetTraceResponse.Item.Attribute(
                     key=attribute_key,
                     value=attribute_value,
                 )
 
-            for array_key, array_value in pop_attributes_array_paths(row):
-                add_attribute(array_key, array_value)
+            if read_typed_arrays:
+                # Bulk mode: every array attribute, merged from the typed array map
+                # columns (no-op for the per-attribute mode, where they aren't selected).
+                for name, values in merge_typed_array_maps(row):
+                    if values:
+                        add_attribute(name, values)
+
+            if array_attribute_names:
+                # Per-attribute mode: merge each array's four typed sub-columns by name.
+                for name, values in merge_typed_array_subcolumns(row, array_attribute_names):
+                    if values:
+                        add_attribute(name, values)
 
             for row_key, row_value in row.items():
+                if row_value is None:
+                    continue
                 if isinstance(row_value, dict):
                     for column_key, column_value in row_value.items():
                         add_attribute(column_key, column_value)
+                elif isinstance(row_value, str):
+                    decoded = decode_attributes_array_value(row_key, row_value)
+                    if decoded is None or (isinstance(decoded, list) and not decoded):
+                        continue
+                    add_attribute(row_key, decoded)
                 else:
                     add_attribute(row_key, row_value)
 
@@ -576,11 +622,11 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
         return "v1"
 
     @classmethod
-    def request_class(cls) -> Type[GetTraceRequest]:
+    def request_class(cls) -> type[GetTraceRequest]:
         return GetTraceRequest
 
     @classmethod
-    def response_class(cls) -> Type[GetTraceResponse]:
+    def response_class(cls) -> type[GetTraceResponse]:
         return GetTraceResponse
 
     def _execute(self, in_msg: GetTraceRequest) -> GetTraceResponse:
@@ -656,8 +702,19 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
             request=_build_snuba_request(in_msg, item, limit, page_token),
             timer=self._timer,
         )
+        read_typed_arrays = use_array_map_columns(in_msg.meta)
         processed_results = _process_results(
             results.result.get("data", []),
+            read_typed_arrays=read_typed_arrays,
+            array_attribute_names=(
+                [
+                    attribute_key.name
+                    for attribute_key in item.attributes
+                    if attribute_key.type == AttributeKey.Type.TYPE_ARRAY
+                ]
+                if read_typed_arrays
+                else []
+            ),
         )
         items = processed_results.items
         last_seen_timestamp_precise = processed_results.last_seen_timestamp_precise

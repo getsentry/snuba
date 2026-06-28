@@ -1,5 +1,6 @@
-from datetime import UTC, datetime, timedelta, timezone
-from typing import Any, Generator, List
+from collections.abc import Generator
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -12,16 +13,15 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 from sentry_protos.snuba.v1.trace_item_pb2 import TraceItem as TraceItemMessage
 
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.trace_item_attribute_values import AttributeValuesRequest
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import gen_item_message
 
-BASE_TIME = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0) - timedelta(
-    minutes=180
-)
+BASE_TIME = datetime.now(UTC).replace(minute=0, second=0, microsecond=0) - timedelta(minutes=180)
 COMMON_META = RequestMeta(
     project_ids=[1, 2, 3],
     organization_id=1,
@@ -54,8 +54,8 @@ COMMON_META = RequestMeta(
 
 
 @pytest.fixture(autouse=True)
-def setup_teardown(eap: None, redis_db: None) -> Generator[List[bytes], None, None]:
-    items_storage = get_storage(StorageKey("eap_items"))
+def setup_teardown(eap: None, redis_db: None) -> Generator[list[bytes]]:
+    items_storage = get_writable_storage(StorageKey("eap_items"))
     start_timestamp = BASE_TIME
     messages = [
         gen_item_message(
@@ -63,6 +63,7 @@ def setup_teardown(eap: None, redis_db: None) -> Generator[List[bytes], None, No
             attributes={
                 "tag1": AnyValue(string_value="herp"),
                 "tag2": AnyValue(string_value="herp"),
+                "custom_flag": AnyValue(bool_value=True),
             },
         ),
         gen_item_message(
@@ -70,6 +71,7 @@ def setup_teardown(eap: None, redis_db: None) -> Generator[List[bytes], None, No
             attributes={
                 "tag1": AnyValue(string_value="herpderp"),
                 "tag2": AnyValue(string_value="herp"),
+                "custom_flag": AnyValue(bool_value=False),
             },
         ),
         gen_item_message(
@@ -95,12 +97,20 @@ def setup_teardown(eap: None, redis_db: None) -> Generator[List[bytes], None, No
         ),
         gen_item_message(
             start_timestamp=start_timestamp,
+            attributes={
+                "tag1": AnyValue(string_value="derpderp"),
+                "tag2": AnyValue(string_value="derp"),
+            },
+        ),
+        gen_item_message(
+            start_timestamp=start_timestamp,
             attributes={"tag2": AnyValue(string_value="hehe")},
         ),
         gen_item_message(
             start_timestamp=start_timestamp,
             attributes={
                 "tag1": AnyValue(string_value="some_last_value"),
+                "sentry.is_segment": AnyValue(bool_value=False),
             },
         ),
         gen_item_message(
@@ -110,7 +120,7 @@ def setup_teardown(eap: None, redis_db: None) -> Generator[List[bytes], None, No
             },
         ),
     ]
-    write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+    write_raw_unprocessed_events(items_storage, messages)
     yield messages
 
 
@@ -135,7 +145,8 @@ class TestTraceItemAttributes(BaseApiTest):
             key=AttributeKey(name="tag1", type=AttributeKey.TYPE_STRING),
         )
         response = AttributeValuesRequest().execute(message)
-        assert response.values == ["blah", "derpderp", "durp", "herp", "herpderp"]
+        assert response.values == ["derpderp", "blah", "durp", "herp", "herpderp"]
+        assert response.counts == [2, 1, 1, 1, 1]
 
     def test_with_value_substring_match(self, setup_teardown: Any) -> None:
         message = TraceItemAttributeValuesRequest(
@@ -146,6 +157,7 @@ class TestTraceItemAttributes(BaseApiTest):
         )
         response = AttributeValuesRequest().execute(message)
         assert response.values == ["derpderp", "herp", "herpderp"]
+        assert response.counts == [2, 1, 1]
 
     def test_empty_results(self) -> None:
         req = TraceItemAttributeValuesRequest(
@@ -162,8 +174,9 @@ class TestTraceItemAttributes(BaseApiTest):
         )
         res = AttributeValuesRequest().execute(req)
         assert res.values == []
+        assert res.counts == []
 
-    def test_item_id_substring_match(self, setup_teardown: List[bytes]) -> None:
+    def test_item_id_substring_match(self, setup_teardown: list[bytes]) -> None:
         first_msg_bytes = setup_teardown[0]
         first_msg = TraceItemMessage()
         first_msg.ParseFromString(first_msg_bytes)
@@ -182,13 +195,14 @@ class TestTraceItemAttributes(BaseApiTest):
         )
         res = AttributeValuesRequest().execute(req)
         assert res.values == [item_id]
+        assert res.counts == [1]
 
     def test_deprecated_alias_attribute(self) -> None:
         """db.system.name request returns values stored only under deprecated key db.system."""
 
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         write_raw_unprocessed_events(
-            items_storage,  # type: ignore
+            items_storage,
             [
                 gen_item_message(
                     start_timestamp=BASE_TIME,
@@ -218,3 +232,68 @@ class TestTraceItemAttributes(BaseApiTest):
         )
         response = AttributeValuesRequest().execute(message)
         assert sorted(response.values) == ["postgresql", "redis"]
+        assert response.counts == [1, 1]
+
+    def test_pagination(self, setup_teardown: Any) -> None:
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=1,
+            key=AttributeKey(name="tag1", type=AttributeKey.TYPE_STRING),
+        )
+        response = AttributeValuesRequest().execute(message)
+        assert response.values == ["derpderp"]
+        assert response.counts == [2]
+
+        for expected in ["blah", "durp", "herp", "herpderp"]:
+            message = TraceItemAttributeValuesRequest(
+                meta=COMMON_META,
+                limit=1,
+                key=AttributeKey(name="tag1", type=AttributeKey.TYPE_STRING),
+                page_token=response.page_token,
+            )
+            response = AttributeValuesRequest().execute(message)
+            assert response.values == [expected]
+            assert response.counts == [1]
+
+    def test_boolean_case(self, setup_teardown: Any) -> None:
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=5,
+            key=AttributeKey(name="sentry.is_segment", type=AttributeKey.TYPE_BOOLEAN),
+        )
+        response = AttributeValuesRequest().execute(message)
+        assert response.values == ["true", "false"]
+        assert response.counts == [8, 1]
+
+    def test_boolean_existence_check(self, setup_teardown: Any) -> None:
+        # `custom_flag` is set on exactly two items (one True, one False); the
+        # other items do not have the key. The existence check must exclude the
+        # items missing the key, otherwise they'd be miscounted as "false".
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=5,
+            key=AttributeKey(name="custom_flag", type=AttributeKey.TYPE_BOOLEAN),
+        )
+        response = AttributeValuesRequest().execute(message)
+        # Equal counts, so ties break on attr_value ASC ("false" before "true").
+        assert response.values == ["false", "true"]
+        assert response.counts == [1, 1]
+
+    def test_substring_match_on_boolean_rejected(self, setup_teardown: Any) -> None:
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=5,
+            key=AttributeKey(name="sentry.is_segment", type=AttributeKey.TYPE_BOOLEAN),
+            value_substring_match="tru",
+        )
+        with pytest.raises(BadSnubaRPCRequestException):
+            AttributeValuesRequest().execute(message)
+
+    def test_unsupported_attribute_type_rejected(self, setup_teardown: Any) -> None:
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=5,
+            key=AttributeKey(name="sentry.duration_ms", type=AttributeKey.TYPE_DOUBLE),
+        )
+        with pytest.raises(BadSnubaRPCRequestException):
+            AttributeValuesRequest().execute(message)

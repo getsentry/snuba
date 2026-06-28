@@ -1,6 +1,7 @@
 import typing
 import uuid
-from typing import Any, Dict, Mapping, Optional, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 from snuba import settings
 from snuba.attribution import get_app_id
@@ -13,6 +14,7 @@ from snuba.clickhouse.translators.snuba.mapping import SnubaClickhouseMappingTra
 from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -153,7 +155,7 @@ def _delete_from_table(
         for col, values in conditions.items():
             column_validator.validate(col, values)
     except InvalidColumnType as e:
-        raise InvalidQueryException(e.message)
+        raise InvalidQueryException(e.message) from e
 
     try:
         _enforce_max_rows(query)
@@ -199,7 +201,7 @@ FROM (
     )
 """
     return int(
-        cluster.get_query_connection(ClickhouseClientSettings.QUERY).execute(query).results[0][0]
+        cluster.get_query_connection(ClickhouseClientSettings.INTERNAL).execute(query).results[0][0]
     )
 
 
@@ -218,7 +220,7 @@ FROM clusterAllReplicas('{cluster.get_clickhouse_cluster_name()}', 'system', met
 WHERE metric = 'PartMutation'
 """
     return int(
-        cluster.get_query_connection(ClickhouseClientSettings.QUERY).execute(query).results[0][0]
+        cluster.get_query_connection(ClickhouseClientSettings.INTERNAL).execute(query).results[0][0]
     )
 
 
@@ -228,16 +230,20 @@ def deletes_are_enabled() -> bool:
 
 def _get_rows_to_delete(storage_key: StorageKey, select_query_to_count_rows: Query) -> int:
     formatted_select_query_to_count_rows = format_query(select_query_to_count_rows)
-    select_query_results = (
+    # This count scans every row matching the delete predicate and can run long
+    # on large tables. It is delete-validation infra, not a user-facing read, so
+    # run it on the unbounded INTERNAL profile rather than the 30s QUERY profile
+    # that get_reader() would use (consistent with the other delete checks).
+    count_result = (
         get_storage(storage_key)
         .get_cluster()
-        .get_reader()
-        .execute(formatted_select_query_to_count_rows)
+        .get_query_connection(ClickhouseClientSettings.INTERNAL)
+        .execute(formatted_select_query_to_count_rows.get_sql())
     )
-    return typing.cast(int, select_query_results["data"][0]["count"])
+    return typing.cast(int, count_result.results[0][0])
 
 
-def _enforce_max_rows(delete_query: Query) -> int:
+def _enforce_max_rows(delete_query: Query, count_storage_key: StorageKey | None = None) -> int:
     """
     The cost of a lightweight delete operation depends on the number of matching rows in the WHERE clause and the current number of data parts.
     This operation will be most efficient when matching a small number of rows, **and on wide parts** (where the `_row_exists` column is stored
@@ -245,8 +251,15 @@ def _enforce_max_rows(delete_query: Query) -> int:
 
     Because of the above, we want to limit the number of rows one deletes at a time. The `MaxRowsEnforcer` will query clickhouse to see how many
       rows we plan on deleting and if it crosses the `max_rows_to_delete` set for that storage we will reject the query.
+
+    Counting matching rows is a read-only query, so `count_storage_key` lets the
+    caller run it against a read-only replica storage (its cluster and table)
+    instead of the read/write storage that the delete itself targets. This both
+    keeps the count off the read/write cluster and lets each table (e.g. the
+    downsampled EAP tables, whose row counts differ) be counted individually.
     """
     storage_key = delete_query.get_from_clause().storage_key
+    reader_storage_key = count_storage_key or storage_key
 
     def get_new_from_clause() -> Table:
         """
@@ -254,12 +267,17 @@ def _enforce_max_rows(delete_query: Query) -> int:
         row count we are querying the dist tables (if applicable). This function
         updates the from_clause to have the correct table.
         """
-        dist_table_name = (
-            get_writable_storage((storage_key)).get_table_writer().get_schema().get_table_name()
-        )
+        if reader_storage_key == storage_key:
+            count_table_name = (
+                get_writable_storage(storage_key).get_table_writer().get_schema().get_table_name()
+            )
+        else:
+            count_schema = get_storage(reader_storage_key).get_schema()
+            assert isinstance(count_schema, TableSchema)
+            count_table_name = count_schema.get_table_name()
         from_clause = delete_query.get_from_clause()
         return Table(
-            table_name=dist_table_name,
+            table_name=count_table_name,
             schema=from_clause.schema,
             storage_key=from_clause.storage_key,
             allocation_policies=from_clause.allocation_policies,
@@ -273,7 +291,7 @@ def _enforce_max_rows(delete_query: Query) -> int:
         condition=delete_query.get_condition(),
     )
     rows_to_delete = _get_rows_to_delete(
-        storage_key=storage_key, select_query_to_count_rows=select_query_to_count_rows
+        storage_key=reader_storage_key, select_query_to_count_rows=select_query_to_count_rows
     )
     if rows_to_delete == 0:
         raise NoRowsToDeleteException
@@ -308,7 +326,7 @@ def _execute_query(
     query: Query,
     storage: WritableTableStorage,
     table: str,
-    cluster_name: Optional[str],
+    cluster_name: str | None,
     attribution_info: AttributionInfo,
     query_settings: HTTPQuerySettings,
 ) -> Result:
@@ -324,7 +342,7 @@ def _execute_query(
     result = None
     error = None
 
-    stats: Dict[str, Any] = {
+    stats: dict[str, Any] = {
         "clickhouse_table": table,
         "referrer": attribution_info.referrer,
         "cluster_name": cluster_name or "<unknown>",
@@ -387,7 +405,7 @@ def _execute_query(
                 result_or_error=result_or_error,
             )
         if result:
-            return result
+            return result  # noqa: B012 quota balance must run before returning/raising
         raise error or Exception("No error or result when running query, this should never happen")
 
 

@@ -1,4 +1,4 @@
-from typing import Mapping
+from collections.abc import Mapping
 
 import pytest
 
@@ -16,7 +16,7 @@ from snuba.query.parser.exceptions import CyclicAliasException
 TEST_CASES = [
     pytest.param(
         Column(alias="a", table_name=None, column_name="a"),
-        {"b": FunctionCall(alias="b", function_name="f", parameters=tuple())},
+        {"b": FunctionCall(alias="b", function_name="f", parameters=())},
         False,
         Column(alias="a", table_name=None, column_name="a"),
         id="Simple Column - do nothing",
@@ -30,9 +30,9 @@ TEST_CASES = [
     ),
     pytest.param(
         Column(alias=None, table_name=None, column_name="ref"),
-        {"ref": FunctionCall(alias="ref", function_name="f", parameters=tuple())},
+        {"ref": FunctionCall(alias="ref", function_name="f", parameters=())},
         False,
-        FunctionCall(alias="ref", function_name="f", parameters=tuple()),
+        FunctionCall(alias="ref", function_name="f", parameters=()),
         id="Alias resolves to a simple function",
     ),
     pytest.param(
@@ -142,7 +142,7 @@ TEST_CASES = [
     pytest.param(
         CurriedFunctionCall(
             alias=None,
-            internal_function=FunctionCall(alias=None, function_name="f", parameters=tuple()),
+            internal_function=FunctionCall(alias=None, function_name="f", parameters=()),
             parameters=(Column(alias=None, table_name=None, column_name="a"),),
         ),
         {
@@ -155,7 +155,7 @@ TEST_CASES = [
         False,
         CurriedFunctionCall(
             alias=None,
-            internal_function=FunctionCall(alias=None, function_name="f", parameters=tuple()),
+            internal_function=FunctionCall(alias=None, function_name="f", parameters=()),
             parameters=(
                 FunctionCall(
                     alias="a",
@@ -171,7 +171,7 @@ TEST_CASES = [
         {
             "a": Lambda(
                 alias="a",
-                parameters=tuple(),
+                parameters=(),
                 transformation=FunctionCall(
                     alias="b",
                     function_name="f",
@@ -183,7 +183,7 @@ TEST_CASES = [
         True,
         Lambda(
             alias="a",
-            parameters=tuple(),
+            parameters=(),
             transformation=FunctionCall(
                 alias="b",
                 function_name="f",

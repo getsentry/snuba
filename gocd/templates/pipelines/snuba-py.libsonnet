@@ -40,33 +40,6 @@ local migrate_stage(stage_name, region) = [
   },
 ];
 
-// Snuba deploy to SaaS is blocked till S4S deploy is healthy
-local s4s_health_check(region) =
-  if region == 's4s' then
-    [
-      {
-        health_check: {
-          jobs: {
-            health_check: {
-              environment_variables: {
-                SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
-                DATADOG_API_KEY: '{{SECRET:[devinfra][st_datadog_api_key]}}',
-                DATADOG_APP_KEY: '{{SECRET:[devinfra][st_datadog_app_key]}}',
-                LABEL_SELECTOR: 'service=snuba',
-              },
-              elastic_profile_id: 'snuba',
-              tasks: [
-                gocdtasks.script(importstr '../bash/s4s-sentry-health-check.sh'),
-                gocdtasks.script(importstr '../bash/s4s-ddog-health-check.sh'),
-              ],
-            },
-          },
-        },
-      },
-    ]
-  else
-    [];
-
 // Snuba deploy to ST is blocked till SaaS deploy is healthy
 local saas_health_check(region) =
   if region == 'us' || region == 'de' then
@@ -245,5 +218,5 @@ function(region) {
       },
     },
 
-  ] + migrate_stage('migrate', region) + s4s_health_check(region) + saas_health_check(region),
+  ] + migrate_stage('migrate', region) + saas_health_check(region),
 }

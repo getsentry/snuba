@@ -1,14 +1,20 @@
 import csv
+import os
+from collections.abc import Sequence
 from datetime import datetime
-from typing import NamedTuple, Optional, Sequence, Tuple
+from typing import NamedTuple
 
 import click
 import structlog
 
 from snuba import settings
 from snuba.admin.notifications.slack.client import SlackClient
-from snuba.clickhouse.native import ClickhousePool
-from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.clusters.cluster import (
+    DEFAULT_CLICKHOUSE_HTTP_PORT,
+    ClickhouseClientSettings,
+    ClickhouseNode,
+    connection_cache,
+)
 from snuba.environment import setup_logging, setup_sentry
 
 logger = structlog.get_logger().bind(module=__name__)
@@ -53,7 +59,7 @@ def get_query_results(
     databases: list[str],
     tables: list[str],
     start_time: str,
-    end_time: Optional[str],
+    end_time: str | None,
 ) -> str:
     if start_time and end_time:
         start = f"toDateTime('{start_time}')"
@@ -81,7 +87,7 @@ def get_query_results(
     """
 
 
-def get_credentials() -> Tuple[str, str]:
+def get_credentials() -> tuple[str, str]:
     # TOOO don't hardcode credentials, use settings
     return ("default", "")
 
@@ -143,8 +149,8 @@ def querylog_to_csv(
     event_type: str,
     start_time: str,
     notify: bool,
-    end_time: Optional[str] = None,
-    log_level: Optional[str] = None,
+    end_time: str | None = None,
+    log_level: str | None = None,
 ) -> None:
     """
     Use this command when you want to capture the results from the
@@ -160,13 +166,24 @@ def querylog_to_csv(
     query = get_query_results(event_type, [database], tables, start_time, end_time)
 
     (clickhouse_user, clickhouse_password) = get_credentials()
-    connection = ClickhousePool(
-        host=clickhouse_host,
-        port=clickhouse_port,
-        user=clickhouse_user,
-        password=clickhouse_password,
-        database=database,
-        client_settings=ClickhouseClientSettings.QUERY.value.settings,
+    # Go through the shared connection cache so the driver (native vs
+    # clickhouse-connect/HTTP) is selected by the runtime config, behind the
+    # abstract ClickhousePool type. There is no cluster here to read an
+    # http_port from, so use the configured CLICKHOUSE_HTTP_PORT (the same env
+    # var the cluster config reads), defaulting to the well-known port.
+    http_port = int(os.environ.get("CLICKHOUSE_HTTP_PORT", DEFAULT_CLICKHOUSE_HTTP_PORT))
+    # This exports system.query_log over an arbitrary time window and can scan a
+    # lot; it is a maintenance/export job, not a user-facing read, so use the
+    # unbounded INTERNAL profile rather than the 25s QUERY profile.
+    connection = connection_cache.get_node_connection(
+        ClickhouseClientSettings.INTERNAL,
+        ClickhouseNode(clickhouse_host, clickhouse_port, http_port=http_port),
+        clickhouse_user,
+        clickhouse_password,
+        database,
+        secure=False,
+        ca_certs=None,
+        verify=False,
     )
     results = connection.execute(query)
     filename = format_filename(table)

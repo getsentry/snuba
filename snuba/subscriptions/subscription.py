@@ -49,7 +49,7 @@ class SubscriptionCreator:
 
     def _test_request(self, data: SubscriptionData, timer: Timer) -> None:
         request = data.build_request(self.dataset, datetime.utcnow(), None, timer)
-        data.run_query(self.dataset, request, timer)  # type: ignore
+        data.run_query(self.dataset, request, timer)  # type: ignore[arg-type]
 
 
 class SubscriptionDeleter:

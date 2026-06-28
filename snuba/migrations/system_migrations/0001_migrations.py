@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import Column, DateTime, Enum, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey

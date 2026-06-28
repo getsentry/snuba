@@ -1,21 +1,13 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable, Iterable, MutableMapping, Sequence
 from dataclasses import replace
 from datetime import datetime, timedelta
 from functools import partial
 from typing import (
     Any,
-    Callable,
-    Iterable,
-    List,
-    MutableMapping,
     NamedTuple,
-    Optional,
-    Sequence,
-    Set,
-    Tuple,
-    Union,
     cast,
 )
 
@@ -236,13 +228,13 @@ class OrTuple(NamedTuple):
     exp: Expression
 
 
-class SnQLVisitor(NodeVisitor):  # type: ignore
+class SnQLVisitor(NodeVisitor):  # type: ignore[misc]
     """
     Builds Snuba AST expressions from the SnQL Parsimonious parse tree.
     """
 
     @staticmethod
-    def __extract_alias_from_match(alias: Union[Node, List[Node]]) -> str:
+    def __extract_alias_from_match(alias: Node | list[Node]) -> str:
         extracted_alias: str
         if isinstance(alias, list):
             # Validate that we are parsing an expression that is
@@ -256,7 +248,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
 
     def visit_query_exp(
         self, node: Node, visited_children: Iterable[Any]
-    ) -> Union[LogicalQuery, CompositeQuery[LogicalDataSource]]:
+    ) -> LogicalQuery | CompositeQuery[LogicalDataSource]:
         args: MutableMapping[str, Any] = {}
         (
             data_source,
@@ -302,29 +294,21 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_match_clause(
         self,
         node: Node,
-        visited_children: Tuple[
+        visited_children: tuple[
             Any,
             Any,
             Any,
-            Union[
-                QueryEntity,
-                CompositeQuery[LogicalDataSource],
-                LogicalQuery,
-                RelationshipTuple,
-                Sequence[RelationshipTuple],
-            ],
+            QueryEntity
+            | CompositeQuery[LogicalDataSource]
+            | LogicalQuery
+            | RelationshipTuple
+            | Sequence[RelationshipTuple],
         ],
-    ) -> Union[
-        CompositeQuery[LogicalDataSource],
-        LogicalQuery,
-        QueryEntity,
-        # joins not availble for storage queries as of 2024-04-12
-        JoinClause[QueryEntity],
-    ]:
+    ) -> CompositeQuery[LogicalDataSource] | LogicalQuery | QueryEntity | JoinClause[QueryEntity]:
         _, _, _, match = visited_children
         if isinstance(match, (CompositeQuery, LogicalQuery)):
             return match
-        elif isinstance(match, RelationshipTuple):
+        if isinstance(match, RelationshipTuple):
             join_clause = build_join_clause([match])
             return join_clause
         if isinstance(match, list) and all(isinstance(m, RelationshipTuple) for m in match):
@@ -337,7 +321,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_entity_single(
         self,
         node: Node,
-        visited_children: Tuple[Any, Any, EntityKey, Union[Optional[float], Node], Any, Any],
+        visited_children: tuple[Any, Any, EntityKey, float | None | Node, Any, Any],
     ) -> QueryEntity:
         _, _, name, sample, _, _ = visited_children
         if isinstance(sample, Node):
@@ -348,9 +332,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_storage_single(
         self,
         node: Node,
-        visited_children: Tuple[
-            Any, Any, Any, Any, StorageKey, Union[Optional[float], Node], Any, Any
-        ],
+        visited_children: tuple[Any, Any, Any, Any, StorageKey, float | None | Node, Any, Any],
     ) -> QueryStorage:
         _, _, _, _, storage_key, sample, _, _ = visited_children
         if isinstance(sample, Node):
@@ -361,9 +343,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_entity_match(
         self,
         node: Node,
-        visited_children: Tuple[
-            Any, str, Any, Any, EntityKey, Union[Optional[float], Node], Any, Any
-        ],
+        visited_children: tuple[Any, str, Any, Any, EntityKey, float | None | Node, Any, Any],
     ) -> IndividualNode[QueryEntity]:
         _, alias, _, _, name, sample, _, _ = visited_children
         if isinstance(sample, Node):
@@ -371,25 +351,25 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
 
         return IndividualNode(alias, QueryEntity(name, get_entity(name).get_data_model(), sample))
 
-    def visit_entity_alias(self, node: Node, visited_children: Tuple[Any]) -> str:
+    def visit_entity_alias(self, node: Node, visited_children: tuple[Any]) -> str:
         return str(node.text)
 
-    def visit_entity_name(self, node: Node, visited_children: Tuple[Any]) -> EntityKey:
+    def visit_entity_name(self, node: Node, visited_children: tuple[Any]) -> EntityKey:
         try:
             return EntityKey(node.text)
-        except Exception:
-            raise ParsingException(f"{node.text} is not a valid entity name")
+        except Exception as e:
+            raise ParsingException(f"{node.text} is not a valid entity name") from e
 
-    def visit_storage_name(self, node: Node, visited_children: Tuple[Any]) -> StorageKey:
+    def visit_storage_name(self, node: Node, visited_children: tuple[Any]) -> StorageKey:
         try:
             return StorageKey(node.text)
-        except Exception:
-            raise ParsingException(f"{node.text} is not a valid Storage name")
+        except Exception as e:
+            raise ParsingException(f"{node.text} is not a valid Storage name") from e
 
     def visit_relationships(
         self,
         node: Node,
-        visited_children: Tuple[RelationshipTuple, Any],
+        visited_children: tuple[RelationshipTuple, Any],
     ) -> Sequence[RelationshipTuple]:
         relationships = [visited_children[0]]
         if isinstance(visited_children[1], Node):
@@ -406,7 +386,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_relationship_match(
         self,
         node: Node,
-        visited_children: Tuple[
+        visited_children: tuple[
             Any,
             IndividualNode[QueryEntity],
             Any,
@@ -424,20 +404,20 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
             raise ParsingException(
                 f"{lhs.data_source.key.value} does not have a join relationship -[{relationship}]->"
             )
-        elif data.rhs_entity != rhs.data_source.key:
+        if data.rhs_entity != rhs.data_source.key:
             raise ParsingException(
                 f"-[{relationship}]-> cannot be used to join {lhs.data_source.key.value} to {rhs.data_source.key.value}"
             )
 
         return RelationshipTuple(lhs, relationship, rhs, data)
 
-    def visit_relationship_link(self, node: Node, visited_children: Tuple[Any, Node, Any]) -> str:
+    def visit_relationship_link(self, node: Node, visited_children: tuple[Any, Node, Any]) -> str:
         _, relationship, _ = visited_children
         return str(relationship.text)
 
     def visit_subquery(
-        self, node: Node, visited_children: Tuple[Any, Node, Any]
-    ) -> Union[LogicalQuery, CompositeQuery[LogicalDataSource]]:
+        self, node: Node, visited_children: tuple[Any, Node, Any]
+    ) -> LogicalQuery | CompositeQuery[LogicalDataSource]:
         _, query, _ = visited_children
         assert isinstance(query, (CompositeQuery, LogicalQuery))  # mypy
         return query
@@ -460,34 +440,34 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         return x
 
     def visit_and_tuple(
-        self, node: Node, visited_children: Tuple[Any, Node, Expression]
+        self, node: Node, visited_children: tuple[Any, Node, Expression]
     ) -> AndTuple:
         _, and_string, exp = visited_children
         return AndTuple(and_string.text, exp)
 
-    def visit_or_tuple(self, node: Node, visited_children: Tuple[Any, Node, Expression]) -> OrTuple:
+    def visit_or_tuple(self, node: Node, visited_children: tuple[Any, Node, Expression]) -> OrTuple:
         _, or_string, exp = visited_children
         return OrTuple(or_string.text, exp)
 
     def visit_parenthesized_cdn(
-        self, node: Node, visited_children: Tuple[Any, Any, Expression, Any]
+        self, node: Node, visited_children: tuple[Any, Any, Expression, Any]
     ) -> Expression:
         _, _, condition, _ = visited_children
         return condition
 
     def visit_parenthesized_arithm(
-        self, node: Node, visited_children: Tuple[Any, Expression, Any]
+        self, node: Node, visited_children: tuple[Any, Expression, Any]
     ) -> Expression:
         _, arithm, _ = visited_children
         return arithm
 
     def visit_low_pri_tuple(
-        self, node: Node, visited_children: Tuple[LowPriOperator, Any, Expression]
+        self, node: Node, visited_children: tuple[LowPriOperator, Any, Expression]
     ) -> LowPriTuple:
         return visit_low_pri_tuple(node, visited_children)
 
     def visit_high_pri_tuple(
-        self, node: Node, visited_children: Tuple[HighPriOperator, Any, Expression]
+        self, node: Node, visited_children: tuple[HighPriOperator, Any, Expression]
     ) -> HighPriTuple:
         return visit_high_pri_tuple(node, visited_children)
 
@@ -498,21 +478,21 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         return visit_high_pri_op(node, visited_children)
 
     def visit_arithmetic_term(
-        self, node: Node, visited_children: Tuple[Any, Expression]
+        self, node: Node, visited_children: tuple[Any, Expression]
     ) -> Expression:
         return visit_arithmetic_term(node, visited_children)
 
     def visit_low_pri_arithmetic(
         self,
         node: Node,
-        visited_children: Tuple[Any, Expression, LowPriArithmetic],
+        visited_children: tuple[Any, Expression, LowPriArithmetic],
     ) -> Expression:
         return visit_low_pri_arithmetic(node, visited_children)
 
     def visit_high_pri_arithmetic(
         self,
         node: Node,
-        visited_children: Tuple[Any, Expression, HighPriArithmetic],
+        visited_children: tuple[Any, Expression, HighPriArithmetic],
     ) -> Expression:
         return visit_high_pri_arithmetic(node, visited_children)
 
@@ -531,17 +511,17 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_null_literal(self, node: Node, visited_children: Iterable[Any]) -> Literal:
         return Literal(None, None)
 
-    def visit_quoted_literal(self, node: Node, visited_children: Tuple[Node]) -> Literal:
+    def visit_quoted_literal(self, node: Node, visited_children: tuple[Node]) -> Literal:
         return visit_quoted_literal(node, visited_children)
 
     def visit_where_clause(
-        self, node: Node, visited_children: Tuple[Any, Any, Any, Expression]
+        self, node: Node, visited_children: tuple[Any, Any, Any, Expression]
     ) -> Expression:
         _, _, _, conditions = visited_children
         return conditions
 
     def visit_having_clause(
-        self, node: Node, visited_children: Tuple[Any, Any, Any, Expression]
+        self, node: Node, visited_children: tuple[Any, Any, Any, Expression]
     ) -> Expression:
         _, _, _, conditions = visited_children
         return conditions
@@ -549,7 +529,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_and_expression(
         self,
         node: Node,
-        visited_children: Tuple[Any, Expression, Node],
+        visited_children: tuple[Any, Expression, Node],
     ) -> Expression:
         _, left_condition, and_condition = visited_children
         args = [left_condition]
@@ -560,16 +540,16 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         if isinstance(and_condition, (AndTuple, OrTuple)):
             _, exp = and_condition
             return combine_and_conditions([left_condition, exp])
-        elif isinstance(and_condition, list):
+        if isinstance(and_condition, list):
             for elem in and_condition:
                 if isinstance(elem, Node):
                     continue
-                elif isinstance(elem, (AndTuple, OrTuple)):
+                if isinstance(elem, (AndTuple, OrTuple)):
                     args.append(elem.exp)
         return combine_and_conditions(args)
 
     def visit_or_expression(
-        self, node: Node, visited_children: Tuple[Any, Expression, Node]
+        self, node: Node, visited_children: tuple[Any, Expression, Node]
     ) -> Expression:
         _, left_condition, or_condition = visited_children
         args = [left_condition]
@@ -580,16 +560,16 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         if isinstance(or_condition, (AndTuple, OrTuple)):
             _, exp = or_condition
             return combine_or_conditions([left_condition, exp])
-        elif isinstance(or_condition, list):
+        if isinstance(or_condition, list):
             for elem in or_condition:
                 if isinstance(elem, Node):
                     continue
-                elif isinstance(elem, (AndTuple, OrTuple)):
+                if isinstance(elem, (AndTuple, OrTuple)):
                     args.append(elem.exp)
         return combine_or_conditions(args)
 
     def visit_unary_condition(
-        self, node: Node, visited_children: Tuple[Expression, Any, str]
+        self, node: Node, visited_children: tuple[Expression, Any, str]
     ) -> Expression:
         exp, _, op = visited_children
         return unary_condition(op, exp)
@@ -600,7 +580,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_main_condition(
         self,
         node: Node,
-        visited_children: Tuple[Expression, Any, str, Any, Expression],
+        visited_children: tuple[Expression, Any, str, Any, Expression],
     ) -> Expression:
         exp, _, op, _, literal = visited_children
         return binary_condition(op, exp, literal)
@@ -609,16 +589,16 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         return OPERATOR_TO_FUNCTION[node.text]
 
     def visit_order_by_clause(
-        self, node: Node, visited_children: Tuple[Any, Any, Any, Sequence[OrderBy]]
+        self, node: Node, visited_children: tuple[Any, Any, Any, Sequence[OrderBy]]
     ) -> Sequence[OrderBy]:
         _, _, _, order_columns = visited_children
         return order_columns
 
     def visit_order_list(
-        self, node: Node, visited_children: Tuple[OrderBy, Expression, Any, Node]
+        self, node: Node, visited_children: tuple[OrderBy, Expression, Any, Node]
     ) -> Sequence[OrderBy]:
         left_order_list, right_order, _, order = visited_children
-        ret: List[OrderBy] = []
+        ret: list[OrderBy] = []
 
         # in the case of one OrderBy
         # left_order_list will be an empty node
@@ -635,7 +615,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         return ret
 
     def visit_order_columns(
-        self, node: Node, visited_children: Tuple[Expression, Any, Node, Any, Any, Any]
+        self, node: Node, visited_children: tuple[Expression, Any, Node, Any, Any, Any]
     ) -> OrderBy:
         column, _, order, _, _, _ = visited_children
 
@@ -643,21 +623,21 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         return OrderBy(direction, column)
 
     def visit_sample_clause(
-        self, node: Node, visited_children: Tuple[Any, Any, Any, Literal]
+        self, node: Node, visited_children: tuple[Any, Any, Any, Literal]
     ) -> float:
         _, _, _, sample = visited_children
         assert isinstance(sample.value, float)  # mypy
         return sample.value
 
     def visit_granularity_clause(
-        self, node: Node, visited_children: Tuple[Any, Any, Any, Literal]
+        self, node: Node, visited_children: tuple[Any, Any, Any, Literal]
     ) -> float:
         _, _, _, granularity = visited_children
         assert isinstance(granularity.value, int)  # mypy
         return granularity.value
 
     def visit_totals_clause(
-        self, node: Node, visited_children: Tuple[Any, Any, Any, Literal]
+        self, node: Node, visited_children: tuple[Any, Any, Any, Literal]
     ) -> float:
         _, _, _, totals = visited_children
         assert isinstance(totals.value, bool)  # mypy
@@ -666,8 +646,8 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_limit_by_clause(
         self,
         node: Node,
-        visited_children: Tuple[
-            Any, Any, Any, Literal, Any, Any, Any, Column, Optional[Sequence[Column]]
+        visited_children: tuple[
+            Any, Any, Any, Literal, Any, Any, Any, Column, Sequence[Column] | None
         ],
     ) -> LimitBy:
         _, _, _, limit, _, _, _, column_one, columns_rest = visited_children
@@ -678,23 +658,23 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         return LimitBy(limit.value, columns)
 
     def visit_limit_by_columns(
-        self, node: Node, visited_children: Sequence[Tuple[Any, Any, Any, Column]]
+        self, node: Node, visited_children: Sequence[tuple[Any, Any, Any, Column]]
     ) -> Sequence[Column]:
-        columns: List[Column] = []
+        columns: list[Column] = []
         for column_visit in visited_children:
             _, _, _, column_inst = column_visit
             columns.append(column_inst)
         return columns
 
     def visit_limit_clause(
-        self, node: Node, visited_children: Tuple[Any, Any, Any, Literal]
+        self, node: Node, visited_children: tuple[Any, Any, Any, Literal]
     ) -> int:
         _, _, _, limit = visited_children
         assert isinstance(limit.value, int)  # mypy
         return limit.value
 
     def visit_offset_clause(
-        self, node: Node, visited_children: Tuple[Any, Any, Any, Literal]
+        self, node: Node, visited_children: tuple[Any, Any, Any, Literal]
     ) -> int:
         _, _, _, offset = visited_children
         assert isinstance(offset.value, int)  # mypy
@@ -703,13 +683,13 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_group_by_clause(
         self,
         node: Node,
-        visited_children: Tuple[Any, Any, Any, Sequence[SelectedExpression]],
+        visited_children: tuple[Any, Any, Any, Sequence[SelectedExpression]],
     ) -> Sequence[SelectedExpression]:
         _, _, _, group_columns = visited_children
         return group_columns
 
     def visit_group_columns(
-        self, node: Node, visited_children: Tuple[SelectedExpression, Any, Any]
+        self, node: Node, visited_children: tuple[SelectedExpression, Any, Any]
     ) -> SelectedExpression:
         columns, _, _ = visited_children
         return columns
@@ -717,10 +697,10 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_group_list(
         self,
         node: Node,
-        visited_children: Tuple[SelectedExpression, SelectedExpression],
+        visited_children: tuple[SelectedExpression, SelectedExpression],
     ) -> Sequence[SelectedExpression]:
         left_group_list, right_group = visited_children
-        ret: List[SelectedExpression] = []
+        ret: list[SelectedExpression] = []
 
         # in the case of one GroupBy / By
         # left_group_list will be an empty node
@@ -737,7 +717,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_select_clause(
         self,
         node: Node,
-        visited_children: Tuple[Any, Any, Any, Sequence[SelectedExpression]],
+        visited_children: tuple[Any, Any, Any, Sequence[SelectedExpression]],
     ) -> Sequence[SelectedExpression]:
         _, _, _, selected_columns = visited_children
         return selected_columns
@@ -745,7 +725,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_selected_expression(
         self,
         node: Node,
-        visited_children: Tuple[Any, Union[SelectedExpression, Expression]],
+        visited_children: tuple[Any, SelectedExpression | Expression],
     ) -> SelectedExpression:
         _, exp = visited_children
         if isinstance(exp, SelectedExpression):
@@ -757,7 +737,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         return SelectedExpression(alias, exp)
 
     def visit_select_columns(
-        self, node: Node, visited_children: Tuple[SelectedExpression, Any, Any]
+        self, node: Node, visited_children: tuple[SelectedExpression, Any, Any]
     ) -> SelectedExpression:
         columns, _, _ = visited_children
         return columns
@@ -765,10 +745,10 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_select_list(
         self,
         node: Node,
-        visited_children: Tuple[SelectedExpression, SelectedExpression],
+        visited_children: tuple[SelectedExpression, SelectedExpression],
     ) -> Sequence[SelectedExpression]:
         column_list, right_column = visited_children
-        ret: List[SelectedExpression] = []
+        ret: list[SelectedExpression] = []
 
         # in the case of one Collect
         # column_list will be an empty node
@@ -785,7 +765,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_arrayjoin_clause(
         self,
         node: Node,
-        visited_children: Tuple[Any, Any, Any, Expression, Optional[List[Expression]]],
+        visited_children: tuple[Any, Any, Any, Expression, list[Expression] | None],
     ) -> Sequence[Expression]:
         _, _, _, join_first, join_rest = visited_children
         exprs = [join_first]
@@ -798,9 +778,9 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_arrayjoin_optional(
         self,
         node: Node,
-        visited_children: List[Tuple[Any, Any, Any, Expression]],
-    ) -> List[Expression]:
-        exprs: List[Expression] = list()
+        visited_children: list[tuple[Any, Any, Any, Expression]],
+    ) -> list[Expression]:
+        exprs: list[Expression] = []
         if visited_children is not None:
             for child in visited_children:
                 _, _, _, exp = child
@@ -808,27 +788,27 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         return exprs
 
     def visit_parameter(
-        self, node: Node, visited_children: Tuple[Expression, Any, Any, Any]
+        self, node: Node, visited_children: tuple[Expression, Any, Any, Any]
     ) -> Expression:
         return visit_parameter(node, visited_children)
 
     def visit_parameters_list(
         self,
         node: Node,
-        visited_children: Tuple[Union[Expression, List[Expression]], Expression],
-    ) -> List[Expression]:
+        visited_children: tuple[Expression | list[Expression], Expression],
+    ) -> list[Expression]:
         return visit_parameters_list(node, visited_children)
 
     def visit_function_call(
         self,
         node: Node,
-        visited_children: Tuple[
+        visited_children: tuple[
             str,
             Any,
-            List[Expression],
+            list[Expression],
             Any,
-            Union[Node, List[Expression]],
-            Union[Node, List[Any]],
+            Node | list[Expression],
+            Node | list[Any],
         ],
     ) -> Expression:
         name, _, params1, _, params2, alias = visited_children
@@ -856,7 +836,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_aliased_tag_column(
         self,
         node: Node,
-        visited_children: Tuple[Column, Any, Any, Any, Node],
+        visited_children: tuple[Column, Any, Any, Any, Node],
     ) -> SelectedExpression:
         column, _, _, _, alias = visited_children
         return SelectedExpression(self.__extract_alias_from_match(alias), column)
@@ -864,7 +844,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_aliased_subscriptable(
         self,
         node: Node,
-        visited_children: Tuple[Column, Any, Any, Any, Node],
+        visited_children: tuple[Column, Any, Any, Any, Node],
     ) -> SelectedExpression:
         column, _, _, _, alias = visited_children
         return SelectedExpression(self.__extract_alias_from_match(alias), column)
@@ -872,22 +852,22 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_aliased_column_name(
         self,
         node: Node,
-        visited_children: Tuple[Column, Any, Any, Any, Node],
+        visited_children: tuple[Column, Any, Any, Any, Node],
     ) -> SelectedExpression:
         column, _, _, _, alias = visited_children
         return SelectedExpression(self.__extract_alias_from_match(alias), column)
 
-    def visit_identifier(self, node: Node, visited_children: Tuple[Any, Node, Any]) -> Argument:
+    def visit_identifier(self, node: Node, visited_children: tuple[Any, Node, Any]) -> Argument:
         return Argument(None, visited_children[1].text)
 
     def visit_lambda(
         self,
         node: Node,
-        visited_children: Tuple[
+        visited_children: tuple[
             Any,
             Any,
             Argument,
-            Union[Node, List[Node | Argument]],
+            Node | list[Node | Argument],
             Any,
             Any,
             Any,
@@ -915,7 +895,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
 
 def parse_snql_query_initial(
     body: str,
-) -> Union[CompositeQuery[LogicalDataSource], LogicalQuery]:
+) -> CompositeQuery[LogicalDataSource] | LogicalQuery:
     """
     Parses the query body generating the AST. This only takes into
     account the initial query body. Extensions are parsed by extension
@@ -937,12 +917,12 @@ def parse_snql_query_initial(
         idx = e.column()
         prefix = line[max(0, idx - 3) : idx]
         suffix = line[idx : (idx + 10)]
-        raise ParsingException(f"Parsing error on line {e.line()} at '{prefix}{suffix}'")
+        raise ParsingException(f"Parsing error on line {e.line()} at '{prefix}{suffix}'") from e
     except Exception as e:
         message = str(e)
         if "\n" in message:
             message, _ = message.split("\n", 1)
-        raise ParsingException(message)
+        raise ParsingException(message) from e
 
     assert isinstance(parsed, (CompositeQuery, LogicalQuery))  # mypy
 
@@ -959,7 +939,7 @@ def parse_snql_query_initial(
     return parsed
 
 
-def _qualify_columns(query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]) -> None:
+def _qualify_columns(query: CompositeQuery[LogicalDataSource] | LogicalQuery) -> None:
     """
     All columns in a join query should be qualified with the entity alias, e.g. e.event_id
     Take those aliases and put them in the table name. This has to be done in a post
@@ -988,7 +968,7 @@ def _qualify_columns(query: Union[CompositeQuery[LogicalDataSource], LogicalQuer
 
 
 def _treeify_or_and_conditions(
-    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery],
+    query: CompositeQuery[LogicalDataSource] | LogicalQuery,
 ) -> None:
     """
     look for expressions like or(a, b, c) and turn them into or(a, or(b, c))
@@ -1009,10 +989,9 @@ def _treeify_or_and_conditions(
 
         if exp.function_name == "and":
             return combine_and_conditions(exp.parameters)
-        elif exp.function_name == "or":
+        if exp.function_name == "or":
             return combine_or_conditions(exp.parameters)
-        else:
-            return exp
+        return exp
 
     query.transform_expressions(transform)
 
@@ -1022,7 +1001,7 @@ DATETIME_MATCH = FunctionCallMatch(
 )
 
 
-def _parse_datetime_literals(query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]) -> None:
+def _parse_datetime_literals(query: CompositeQuery[LogicalDataSource] | LogicalQuery) -> None:
     def parse(exp: Expression) -> Expression:
         result = DATETIME_MATCH.match(exp)
         if result is not None:
@@ -1047,7 +1026,7 @@ ARRAY_JOIN_MATCH = FunctionCallMatch(
 
 
 def _array_join_transformation(
-    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery],
+    query: CompositeQuery[LogicalDataSource] | LogicalQuery,
 ) -> None:
     def parse(exp: Expression) -> Expression:
         result = ARRAY_JOIN_MATCH.match(exp)
@@ -1091,10 +1070,8 @@ def _array_join_transformation(
     query.transform_expressions(parse)
 
 
-def _transform_array_condition(array_columns: Set[str], exp: Expression) -> Expression:
-    if not is_condition(exp) or not isinstance(exp, FunctionCall):
-        return exp
-    elif len(exp.parameters) < 2:
+def _transform_array_condition(array_columns: set[str], exp: Expression) -> Expression:
+    if not is_condition(exp) or not isinstance(exp, FunctionCall) or len(exp.parameters) < 2:
         return exp
 
     lhs = exp.parameters[0]
@@ -1138,11 +1115,11 @@ def _transform_array_condition(array_columns: Set[str], exp: Expression) -> Expr
 
 
 def _unpack_array_conditions(
-    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery],
+    query: CompositeQuery[LogicalDataSource] | LogicalQuery,
     schema: ColumnSet,
-    entity_alias: Optional[str] = None,
+    entity_alias: str | None = None,
 ) -> None:
-    array_columns: Set[str] = set()
+    array_columns: set[str] = set()
     array_join_arguments = query.get_arrayjoin()
     array_join_columns = set()
     if array_join_arguments is not None:
@@ -1170,7 +1147,7 @@ def _unpack_array_conditions(
         )
 
 
-def _array_column_conditions(query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]) -> None:
+def _array_column_conditions(query: CompositeQuery[LogicalDataSource] | LogicalQuery) -> None:
     """
     Find conditions on array columns, and if those columns are not in the array join,
     convert them to the appropriate higher order function.
@@ -1191,7 +1168,7 @@ def _array_column_conditions(query: Union[CompositeQuery[LogicalDataSource], Log
 
 
 def _mangle_query_aliases(
-    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery],
+    query: CompositeQuery[LogicalDataSource] | LogicalQuery,
 ) -> None:
     """
     If a query has a subquery, the inner query will get its aliases mangled. This is
@@ -1227,14 +1204,14 @@ def _mangle_query_aliases(
 
 
 def validate_identifiers_in_lambda(
-    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery],
+    query: CompositeQuery[LogicalDataSource] | LogicalQuery,
 ) -> None:
     """
     Check to make sure that any identifiers referenced in a lambda were defined in that lambda
     or in an outer lambda.
     """
-    identifiers: Set[str] = set()
-    unseen_identifiers: Set[str] = set()
+    identifiers: set[str] = set()
+    unseen_identifiers: set[str] = set()
 
     def validate_lambda(exp: Lambda) -> None:
         for p in exp.parameters:
@@ -1260,10 +1237,7 @@ def validate_identifiers_in_lambda(
 
 
 def _replace_time_condition(
-    query: Union[
-        CompositeQuery[LogicalDataSource],
-        LogicalQuery,
-    ],
+    query: CompositeQuery[LogicalDataSource] | LogicalQuery,
 ) -> None:
     condition = query.get_condition()
     top_level = get_first_level_and_conditions(condition) if condition is not None else []
@@ -1295,9 +1269,9 @@ def _replace_time_condition(
 def _align_max_days_date_align(
     key: EntityKey | StorageKey,
     old_top_level: Sequence[Expression],
-    max_days: Optional[int],
+    max_days: int | None,
     date_align: int,
-    alias: Optional[str] = None,
+    alias: str | None = None,
 ) -> Sequence[Expression]:
     data_source: Entity | Storage | None = None
     data_source_name = "entity"
@@ -1330,7 +1304,7 @@ def _align_max_days_date_align(
             f"Missing >= condition with a datetime literal on column {data_source.required_time_column} for {data_source_name} {key.value}. "
             f"Example: {data_source.required_time_column} >= toDateTime('2023-05-16 00:00')"
         )
-    elif not upper:
+    if not upper:
         raise ParsingException(
             f"Missing < condition with a datetime literal on column {data_source.required_time_column} for {data_source_name} {key.value}. "
             f"Example: {data_source.required_time_column} < toDateTime('2023-05-16 00:00')"
@@ -1353,12 +1327,12 @@ def _align_max_days_date_align(
     def replace_cond(exp: Expression) -> Expression:
         if not isinstance(exp, FunctionCall):
             return exp
-        elif exp == from_exp:
+        if exp == from_exp:
             return replace(
                 exp,
                 parameters=(from_exp.parameters[0], Literal(None, from_date)),
             )
-        elif exp == to_exp:
+        if exp == to_exp:
             return replace(exp, parameters=(to_exp.parameters[0], Literal(None, to_date)))
 
         return exp
@@ -1368,8 +1342,8 @@ def _align_max_days_date_align(
 
 def _select_entity_for_dataset(
     dataset: Dataset,
-) -> Callable[[Union[CompositeQuery[LogicalDataSource], LogicalQuery]], None]:
-    def selector(query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]) -> None:
+) -> Callable[[CompositeQuery[LogicalDataSource] | LogicalQuery], None]:
+    def selector(query: CompositeQuery[LogicalDataSource] | LogicalQuery) -> None:
         # If you are doing a JOIN, then you have to specify the entity
         if isinstance(query, CompositeQuery):
             return
@@ -1417,8 +1391,8 @@ def _select_entity_for_dataset(
 
 
 def _post_process(
-    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery],
-    funcs: Sequence[Callable[[Union[CompositeQuery[LogicalDataSource], LogicalQuery]], None]],
+    query: CompositeQuery[LogicalDataSource] | LogicalQuery,
+    funcs: Sequence[Callable[[CompositeQuery[LogicalDataSource] | LogicalQuery], None]],
     settings: QuerySettings | None = None,
 ) -> None:
     for func in funcs:
@@ -1456,17 +1430,15 @@ VALIDATORS = [
 ]
 
 
-CustomProcessors = Sequence[
-    Callable[[Union[CompositeQuery[LogicalDataSource], LogicalQuery]], None]
-]
+CustomProcessors = Sequence[Callable[[CompositeQuery[LogicalDataSource] | LogicalQuery], None]]
 
 
 def parse_snql_query(
     body: str,
     dataset: Dataset,
-    custom_processing: Optional[CustomProcessors] = None,
+    custom_processing: CustomProcessors | None = None,
     settings: QuerySettings | None = None,
-) -> Union[CompositeQuery[LogicalDataSource], LogicalQuery]:
+) -> CompositeQuery[LogicalDataSource] | LogicalQuery:
     with sentry_sdk.start_span(op="parser", description="parse_snql_query_initial"):
         query = parse_snql_query_initial(body)
 
@@ -1495,8 +1467,8 @@ def parse_snql_query(
         return res.data
     except InvalidQueryException:
         raise
-    except Exception:
-        raise PostProcessingError(query)
+    except Exception as e:
+        raise PostProcessingError(query) from e
 
 
 class PostProcessAndValidateQuery(

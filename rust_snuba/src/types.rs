@@ -9,12 +9,6 @@ use sentry_arroyo::timer;
 use sentry_protos::snuba::v1::TraceItemType;
 use serde::{Deserialize, Serialize};
 
-/// Trait for row types that can estimate their in-memory byte size.
-/// Used by byte-based batch size calculation in the Reduce step.
-pub trait EstimatedSize {
-    fn estimated_size(&self) -> usize;
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct CommitLogEntry {
     pub offset: u64,
@@ -224,6 +218,27 @@ impl InsertBatch {
             cogs_data: None,
             item_type_metrics: None,
         })
+    }
+
+    /// Constructor for processors that have already serialized their rows into
+    /// the wire format (e.g. the RowBinary path encodes each `EAPItemRow`
+    /// inside the processor instead of carrying the typed struct downstream).
+    /// `num_rows` is the count those bytes represent.
+    pub fn from_encoded_rows(
+        encoded_rows: Vec<u8>,
+        num_rows: usize,
+        origin_timestamp: Option<DateTime<Utc>>,
+    ) -> Self {
+        Self {
+            rows: RowData {
+                encoded_rows,
+                num_rows,
+            },
+            origin_timestamp,
+            sentry_received_timestamp: None,
+            cogs_data: None,
+            item_type_metrics: None,
+        }
     }
 
     /// In case the processing function wants to skip the message, we return an empty batch.
@@ -453,48 +468,6 @@ impl BytesInsertBatch<RowData> {
         self.cogs_data.merge(other.cogs_data);
         self.item_type_metrics.merge(other.item_type_metrics);
         self
-    }
-}
-
-impl<T> BytesInsertBatch<Vec<T>> {
-    pub fn len(&self) -> usize {
-        self.rows.len()
-    }
-
-    pub fn merge(mut self, other: Self) -> Self {
-        self.rows.extend(other.rows);
-        self.num_bytes += other.num_bytes;
-        self.commit_log_offsets.merge(other.commit_log_offsets);
-        self.message_timestamp.merge(other.message_timestamp);
-        self.origin_timestamp.merge(other.origin_timestamp);
-        self.sentry_received_timestamp
-            .merge(other.sentry_received_timestamp);
-        self.cogs_data.merge(other.cogs_data);
-        self.item_type_metrics.merge(other.item_type_metrics);
-        self
-    }
-}
-
-/// The return value of message processors that produce typed rows for RowBinary insertion.
-/// A single Kafka message may produce multiple rows, hence Vec<T>.
-#[derive(Clone, Debug)]
-pub struct TypedInsertBatch<T> {
-    pub rows: Vec<T>,
-    pub origin_timestamp: Option<DateTime<Utc>>,
-    pub sentry_received_timestamp: Option<DateTime<Utc>>,
-    pub cogs_data: Option<CogsData>,
-    pub item_type_metrics: Option<ItemTypeMetrics>,
-}
-
-impl<T> TypedInsertBatch<T> {
-    pub fn from_rows(rows: Vec<T>, origin_timestamp: Option<DateTime<Utc>>) -> Self {
-        Self {
-            rows,
-            origin_timestamp,
-            sentry_received_timestamp: None,
-            cogs_data: None,
-            item_type_metrics: None,
-        }
     }
 }
 

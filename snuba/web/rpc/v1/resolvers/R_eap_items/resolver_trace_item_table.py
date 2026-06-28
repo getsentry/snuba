@@ -1,7 +1,8 @@
 import uuid
+from collections.abc import Callable, Sequence
 from dataclasses import replace
 from itertools import islice
-from typing import Any, Callable, List, Optional, Sequence
+from typing import Any
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -31,17 +32,27 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.downsampled_storage_tiers import Tier
-from snuba.protos.common import NORMALIZED_COLUMNS_EAP_ITEMS
+from snuba.protos.common import (
+    NORMALIZED_COLUMNS_EAP_ITEMS,
+    TYPED_ARRAY_MAP_COLUMNS,
+    type_array_typed_columns_select_expressions,
+)
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, if_cond, in_cond, literal, literals_array, or_cond
 from snuba.query.dsl import column as snuba_column
 from snuba.query.expressions import (
+    Column as ColumnExpr,
+)
+from snuba.query.expressions import (
     DangerousRawSQL,
     Expression,
     FunctionCall,
     SubscriptableReference,
+)
+from snuba.query.expressions import (
+    Literal as LiteralExpr,
 )
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -52,9 +63,12 @@ from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
     attribute_key_to_expression,
     base_conditions_and,
+    get_field_existence_expression,
     timestamp_in_range_condition,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
+    typed_array_select_subcolumn_name,
+    use_array_map_columns,
     use_sampling_factor,
     valid_sampling_factor_conditions,
 )
@@ -137,31 +151,62 @@ def _apply_virtual_columns(
     mapped_column_to_context = {c.to_column_name: c for c in virtual_column_contexts}
 
     def transform_expressions(expression: Expression) -> Expression:
-        # virtual columns will show up as `attr_str[virtual_column_name]` or `attr_num[virtual_column_name]`
-        if not isinstance(expression, SubscriptableReference):
+        # An attribute read appears as attributes_string[key] (SELECT / group by),
+        # as arrayElement over attributes_string (value), or as the existence guard
+        # has(mapKeys(attributes_string), key) (see snuba.query.dsl.map_key_exists).
+        # For a virtual column the value forms map to the value transform and the
+        # existence guard maps to the backing column, so filters resolve against
+        # from_column_name.
+        is_existence = False
+        if isinstance(expression, SubscriptableReference):
+            if expression.column.column_name != "attributes_string":
+                return expression
+            key = str(expression.key.value)
+        elif (
+            isinstance(expression, FunctionCall)
+            and expression.function_name == "has"
+            and len(expression.parameters) == 2
+            and isinstance(expression.parameters[0], FunctionCall)
+            and expression.parameters[0].function_name == "mapKeys"
+            and len(expression.parameters[0].parameters) == 1
+            and isinstance(expression.parameters[0].parameters[0], ColumnExpr)
+            and expression.parameters[0].parameters[0].column_name == "attributes_string"
+            and isinstance(expression.parameters[1], LiteralExpr)
+        ):
+            key = str(expression.parameters[1].value)
+            is_existence = True
+        elif (
+            isinstance(expression, FunctionCall)
+            and expression.function_name == "arrayElement"
+            and isinstance(expression.parameters[0], ColumnExpr)
+            and expression.parameters[0].column_name == "attributes_string"
+            and isinstance(expression.parameters[1], LiteralExpr)
+        ):
+            key = str(expression.parameters[1].value)
+        else:
             return expression
 
-        if expression.column.column_name != "attributes_string":
+        context = mapped_column_to_context.get(key)
+        if context is None:
             return expression
-        context = mapped_column_to_context.get(str(expression.key.value))
-        if context:
-            attribute_expression = attribute_key_to_expression(
-                AttributeKey(
-                    name=context.from_column_name,
-                    type=NORMALIZED_COLUMNS_EAP_ITEMS.get(
-                        context.from_column_name, [AttributeKey.TYPE_STRING]
-                    )[0],
-                )
-            )
-            return f.transform(
-                f.CAST(f.ifNull(attribute_expression, literal("")), "String"),
-                literals_array(None, [literal(k) for k in context.value_map.keys()]),
-                literals_array(None, [literal(v) for v in context.value_map.values()]),
-                literal(context.default_value if context.default_value != "" else "unknown"),
-                alias=context.to_column_name,
-            )
 
-        return expression
+        from_column = attribute_key_to_expression(
+            AttributeKey(
+                name=context.from_column_name,
+                type=NORMALIZED_COLUMNS_EAP_ITEMS.get(
+                    context.from_column_name, [AttributeKey.TYPE_STRING]
+                )[0],
+            )
+        )
+        if is_existence:
+            return get_field_existence_expression(from_column)
+        return f.transform(
+            f.CAST(f.ifNull(from_column, literal("")), "String"),
+            literals_array(None, [literal(k) for k in context.value_map]),
+            literals_array(None, [literal(v) for v in context.value_map.values()]),
+            literal(context.default_value if context.default_value != "" else "unknown"),
+            alias=context.to_column_name,
+        )
 
     query.transform_expressions(transform_expressions)
 
@@ -191,7 +236,7 @@ def aggregation_filter_to_expression(
                 raise BadSnubaRPCRequestException(
                     "Cannot use formula and conditional aggregation in the same ComparisonFilter"
                 )
-            elif agg_filter.comparison_filter.HasField("formula"):
+            if agg_filter.comparison_filter.HasField("formula"):
                 return op_expr(
                     _formula_to_expression(agg_filter.comparison_filter.formula, request_meta),
                     agg_filter.comparison_filter.val,
@@ -201,6 +246,7 @@ def aggregation_filter_to_expression(
                     agg_filter.comparison_filter.conditional_aggregation,
                     attribute_key_to_expression,
                     use_sampling_factor(request_meta),
+                    use_array_map_columns(request_meta),
                 ),
                 agg_filter.comparison_filter.val,
             )
@@ -230,8 +276,23 @@ def aggregation_filter_to_expression(
             raise BadSnubaRPCRequestException(f"Unsupported aggregation filter type: {default}")
 
 
+def _groupby_order_by_expression(attr_key: AttributeKey) -> Expression:
+    """
+    Maps an attribute key used in GROUP BY / ORDER BY to its expression.
+
+    `sentry.timestamp` groups/orders on the raw primary-key `timestamp` column (not the
+    SELECT's `CAST(timestamp, 'Float64')`) so ClickHouse can read in primary-key order
+    while keeping the cast valid as a function of the grouped column. TYPE_ARRAY keys are
+    rejected upstream (see _validate_select_and_groupby / _validate_order_by), so they
+    never reach here.
+    """
+    if attr_key.name == "sentry.timestamp":
+        return snuba_column("timestamp")
+    return attribute_key_to_expression(attr_key)
+
+
 def _convert_order_by(
-    groupby: List[Expression],
+    groupby: list[Expression],
     order_by: Sequence[TraceItemTableRequest.OrderBy],
     request_meta: RequestMeta,
 ) -> Sequence[OrderBy]:
@@ -271,10 +332,18 @@ def _convert_order_by(
                 ]
             )
         elif x.column.HasField("key"):
+            # `sentry.timestamp` maps to `CAST(timestamp, 'Float64')`; the cast stops
+            # ClickHouse from sorting against the primary-key `timestamp` column. The
+            # cast is monotonic, so ordering by the raw DateTime column yields the same
+            # order while staying read-in-order friendly. (The i == 0 / single-project /
+            # no-groupby branch above already expands to the full table sort key; this
+            # covers `sentry.timestamp` ordering anywhere else.) GROUP BY uses the same
+            # expression so an aggregation query that orders by `sentry.timestamp` stays
+            # valid.
             res.append(
                 OrderBy(
                     direction=direction,
-                    expression=attribute_key_to_expression(x.column.key),
+                    expression=_groupby_order_by_expression(x.column.key),
                 )
             )
         elif x.column.HasField("conditional_aggregation"):
@@ -285,6 +354,7 @@ def _convert_order_by(
                         x.column.conditional_aggregation,
                         attribute_key_to_expression,
                         use_sampling_factor(request_meta),
+                        use_array_map_columns(request_meta),
                     ),
                 )
             )
@@ -334,15 +404,18 @@ def _get_reliability_context_columns(
                 context_cols.extend(_get_reliability_context_columns(col, request_meta))
 
         # Note: 'match' is a Python keyword, so use getattr
-        for col in [getattr(conditional, "match"), conditional.default]:
-            if not col.HasField("formula") and not col.HasField("conditional_formula"):
-                if col.label:
-                    context_cols.append(
-                        SelectedExpression(
-                            name=col.label,
-                            expression=_column_to_expression(col, request_meta),
-                        )
+        for col in [conditional.match, conditional.default]:
+            if (
+                not col.HasField("formula")
+                and not col.HasField("conditional_formula")
+                and col.label
+            ):
+                context_cols.append(
+                    SelectedExpression(
+                        name=col.label,
+                        expression=_column_to_expression(col, request_meta),
                     )
+                )
             context_cols.extend(_get_reliability_context_columns(col, request_meta))
 
         return context_cols
@@ -359,6 +432,7 @@ def _get_reliability_context_columns(
         confidence_interval_column = get_confidence_interval_column(
             column.conditional_aggregation,
             attribute_key_to_expression,
+            use_array_map_columns=use_array_map_columns(request_meta),
         )
         if confidence_interval_column is not None:
             context_columns.append(
@@ -371,6 +445,7 @@ def _get_reliability_context_columns(
         average_sample_rate_column = get_average_sample_rate_column(
             column.conditional_aggregation,
             attribute_key_to_expression,
+            use_array_map_columns=use_array_map_columns(request_meta),
         )
         context_columns.append(
             SelectedExpression(
@@ -382,6 +457,7 @@ def _get_reliability_context_columns(
         count_column = get_count_column(
             column.conditional_aggregation,
             attribute_key_to_expression,
+            use_array_map_columns=use_array_map_columns(request_meta),
         )
         context_columns.append(SelectedExpression(name=count_column.alias, expression=count_column))
         return context_columns
@@ -445,7 +521,7 @@ def _conditional_formula_to_expression(
     comparison_expr = COMPARISON_OP_TO_EXPR[condition.op](left_expr, right_expr)
     # 'match' is the value when condition is true, 'default' is when false
     # Note: 'match' is a Python keyword in 3.10+, but protobuf accesses it as an attribute
-    match_expr = _column_to_expression(getattr(conditional_formula, "match"), request_meta)
+    match_expr = _column_to_expression(conditional_formula.match, request_meta)
     default_expr = _column_to_expression(conditional_formula.default, request_meta)
 
     return if_cond(comparison_expr, match_expr, default_expr)
@@ -457,18 +533,19 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
     """
     if column.HasField("key"):
         return attribute_key_to_expression(column.key)
-    elif column.HasField("conditional_aggregation"):
+    if column.HasField("conditional_aggregation"):
         function_expr = aggregation_to_expression(
             column.conditional_aggregation,
             attribute_key_to_expression,
             use_sampling_factor(request_meta),
+            use_array_map_columns(request_meta),
         )
         match column.conditional_aggregation.WhichOneof("default_value"):
             case None:
                 pass
             case "default_value_double":
                 function_expr = f.coalesce(
-                    replace(function_expr, alias=None),
+                    f.CAST(replace(function_expr, alias=None), "Float64"),
                     column.conditional_aggregation.default_value_double,
                 )
             case "default_value_int64":
@@ -483,23 +560,48 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
         # aggregation label may not be set and the column label takes priority anyways.
         function_expr = replace(function_expr, alias=column.label)
         return function_expr
-    elif column.HasField("formula"):
+    if column.HasField("formula"):
         formula_expr = _formula_to_expression(column.formula, request_meta)
         formula_expr = replace(formula_expr, alias=column.label)
         return formula_expr
-    elif column.HasField("conditional_formula"):
+    if column.HasField("conditional_formula"):
         conditional_expr = _conditional_formula_to_expression(
             column.conditional_formula,
             request_meta,
         )
         conditional_expr = replace(conditional_expr, alias=column.label)
         return conditional_expr
-    elif column.HasField("literal"):
+    if column.HasField("literal"):
         return literal(column.literal.val_double)
-    else:
-        raise BadSnubaRPCRequestException(
-            "Column is not one of: aggregate, attribute key, formula, or conditional_formula"
+    raise BadSnubaRPCRequestException(
+        "Column is not one of: aggregate, attribute key, formula, or conditional_formula"
+    )
+
+
+def _reads_typed_array_columns(column: Column, request_meta: RequestMeta) -> bool:
+    """True if ``column`` is a TYPE_ARRAY attribute read from the typed array map columns
+    (past the cutoff) rather than the legacy ``attributes_array`` JSON column."""
+    return (
+        column.HasField("key")
+        and column.key.type == AttributeKey.Type.TYPE_ARRAY
+        and use_array_map_columns(request_meta)
+    )
+
+
+def _array_subcolumn_selected_expressions(column: Column) -> list[SelectedExpression]:
+    """Four native typed sub-columns for a TYPE_ARRAY column, named ``"<label>.<col>"`` so
+    ``convert_results`` merges them back into ``column.label``."""
+    return [
+        SelectedExpression(
+            name=typed_array_select_subcolumn_name(column.label, typed_col),
+            expression=expression,
         )
+        for typed_col, expression in zip(
+            TYPED_ARRAY_MAP_COLUMNS,
+            type_array_typed_columns_select_expressions(column.key),
+            strict=True,
+        )
+    ]
 
 
 def _get_offset_from_page_token(page_token: PageToken | None) -> int:
@@ -513,8 +615,8 @@ def _get_offset_from_page_token(page_token: PageToken | None) -> int:
 def build_query(
     request: TraceItemTableRequest,
     time_window: TimeWindow | None = None,
-    sampling_tier: Optional[Tier] = None,
-    timer: Optional[Timer] = None,
+    sampling_tier: Tier | None = None,
+    timer: Timer | None = None,
 ) -> Query:
     entity = Entity(
         key=EntityKey("eap_items"),
@@ -527,18 +629,22 @@ def build_query(
         # The key_col expression alias may differ from the column label. That is okay
         # the attribute key name is used in the groupby, the column label is just the name of
         # the returned attribute value
-        selected_columns.append(
-            SelectedExpression(
-                name=column.label,
-                expression=_column_to_expression(column, request.meta),
+        if _reads_typed_array_columns(column, request.meta):
+            # Read as four typed sub-columns, merged back by convert_results.
+            selected_columns.extend(_array_subcolumn_selected_expressions(column))
+        else:
+            selected_columns.append(
+                SelectedExpression(
+                    name=column.label,
+                    expression=_column_to_expression(column, request.meta),
+                )
             )
-        )
         selected_columns.extend(_get_reliability_context_columns(column, request.meta))
 
     item_type_conds = [f.equals(snuba_column("item_type"), request.meta.trace_item_type)]
 
     # Handle cross item queries by first getting trace IDs
-    additional_conditions: List[Expression] = []
+    additional_conditions: list[Expression] = []
     if request.trace_filters and timer is not None and sampling_tier is not None:
         trace_ids_sql, _ = get_trace_ids_sql_for_cross_item_query(
             request, request.meta, list(request.trace_filters), sampling_tier, timer
@@ -558,7 +664,7 @@ def build_query(
     if page_token_filter:
         additional_conditions.append(page_token_filter)
 
-    groupby = [attribute_key_to_expression(attr_key) for attr_key in request.group_by]
+    groupby = [_groupby_order_by_expression(attr_key) for attr_key in request.group_by]
 
     res = Query(
         from_clause=entity,
@@ -568,6 +674,7 @@ def build_query(
             trace_item_filters_to_expression(
                 request.filter,
                 attribute_key_to_expression,
+                use_array_map_columns=use_array_map_columns(request.meta),
             ),
             valid_sampling_factor_conditions(),
             *item_type_conds,
@@ -614,30 +721,27 @@ def _get_page_token(
             return FlexibleTimeWindowPageWithFilters.create(
                 request, time_window, response
             ).page_token
-        else:
-            if time_window.start_timestamp.seconds <= original_time_window.start_timestamp.seconds:
-                # this is the last window because our start timestamp is the same as the original start timestamp
-                # we tell the client that there is no more data to fetch
-                return PageToken(end_pagination=True)
-            else:
-                # there are no more rows in this window so we return the next window
-                # return the next window where the end timestamp is the start timestamp and the start timestamp is the original start timestamp
-                # the routing strategy will properly truncate the time window of the next request
-                return FlexibleTimeWindowPageWithFilters.create(
-                    request,
-                    TimeWindow(original_time_window.start_timestamp, time_window.start_timestamp),
-                    response,
-                ).page_token
-    else:
-        return PageToken(offset=request.page_token.offset + num_rows_in_response)
+        if time_window.start_timestamp.seconds <= original_time_window.start_timestamp.seconds:
+            # this is the last window because our start timestamp is the same as the original start timestamp
+            # we tell the client that there is no more data to fetch
+            return PageToken(end_pagination=True)
+        # there are no more rows in this window so we return the next window
+        # return the next window where the end timestamp is the start timestamp and the start timestamp is the original start timestamp
+        # the routing strategy will properly truncate the time window of the next request
+        return FlexibleTimeWindowPageWithFilters.create(
+            request,
+            TimeWindow(original_time_window.start_timestamp, time_window.start_timestamp),
+            response,
+        ).page_token
+    return PageToken(offset=request.page_token.offset + num_rows_in_response)
 
 
 def _build_snuba_request(
     request: TraceItemTableRequest,
     query_settings: HTTPQuerySettings,
     time_window: TimeWindow | None = None,
-    sampling_tier: Optional[Tier] = None,
-    timer: Optional[Timer] = None,
+    sampling_tier: Tier | None = None,
+    timer: Timer | None = None,
 ) -> SnubaRequest:
     if request.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_LOG:
         team = "ourlogs"

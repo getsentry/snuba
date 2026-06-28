@@ -1,5 +1,6 @@
 import logging
-from typing import Any, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any
 from unittest.mock import Mock, patch
 
 import pytest
@@ -49,7 +50,7 @@ class TestDangerousMigration:
             " ENGINE = MergeTree ORDER BY name"
         )
 
-    def _make_modify_op(self, column: Column[MigrationModifiers]) -> Tuple[SqlOperation, Any]:
+    def _make_modify_op(self, column: Column[MigrationModifiers]) -> tuple[SqlOperation, Any]:
         op = ModifyColumn(
             StorageSetKey.EVENTS, self.table_name, column, target=OperationTarget.LOCAL
         )

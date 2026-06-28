@@ -1,18 +1,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Generator, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass, replace
 from functools import partial
-from typing import (
-    Callable,
-    Generator,
-    List,
-    Mapping,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Set,
-)
 
 from snuba.query.expressions import (
     Argument,
@@ -29,7 +20,7 @@ from snuba.query.expressions import (
 )
 from snuba.query.functions import is_aggregation_function
 
-AliasGenerator = Generator[str, None, None]
+AliasGenerator = Generator[str]
 
 
 # This is a workaround for a mypy bug, found here: https://github.com/python/mypy/issues/5374
@@ -64,7 +55,7 @@ class MainQueryExpression(SubExpression):
     expression for the main query.
     """
 
-    cut_branches: Mapping[str, Set[Expression]]
+    cut_branches: Mapping[str, set[Expression]]
 
     def cut_branch(self, alias_generator: AliasGenerator) -> MainQueryExpression:
         return self
@@ -133,7 +124,7 @@ class UnclassifiedExpression(SubExpression):
 
 
 def _merge_subexpressions(
-    builder: Callable[[List[Expression]], Expression],
+    builder: Callable[[list[Expression]], Expression],
     sub_expressions: Sequence[SubExpression],
     alias_generator: AliasGenerator,
 ) -> SubExpression:
@@ -159,24 +150,22 @@ def _merge_subexpressions(
             # All parameters are not classified. This function is also
             # not classified.
             return UnclassifiedExpression(builder([v.main_expression for v in sub_expressions]))
-        else:
-            # All parameters are either not classified or in a single
-            # subquery. This function is also referencing that subquery
-            # only.
-            return SubqueryExpression(
-                builder([v.main_expression for v in sub_expressions]),
-                subquery_alias=subqueries.pop(),
-            )
-    else:
-        return _merge_and_cut(builder, sub_expressions, alias_generator)
+        # All parameters are either not classified or in a single
+        # subquery. This function is also referencing that subquery
+        # only.
+        return SubqueryExpression(
+            builder([v.main_expression for v in sub_expressions]),
+            subquery_alias=subqueries.pop(),
+        )
+    return _merge_and_cut(builder, sub_expressions, alias_generator)
 
 
 def _merge_and_cut(
-    builder: Callable[[List[Expression]], Expression],
+    builder: Callable[[list[Expression]], Expression],
     sub_expressions: Sequence[SubExpression],
     alias_generator: AliasGenerator,
 ) -> SubExpression:
-    cut_branches: MutableMapping[str, Set[Expression]] = {}
+    cut_branches: MutableMapping[str, set[Expression]] = {}
     parameters = []
     for v in sub_expressions:
         cut = v.cut_branch(alias_generator)
@@ -244,7 +233,7 @@ class BranchCutter(ExpressionVisitor[SubExpression]):
 
     def visit_function_call(self, exp: FunctionCall) -> SubExpression:
         def builder(
-            alias: Optional[str], func_name: str, params: Sequence[Expression]
+            alias: str | None, func_name: str, params: Sequence[Expression]
         ) -> FunctionCall:
             return FunctionCall(alias, func_name, tuple(params))
 
@@ -272,7 +261,7 @@ class BranchCutter(ExpressionVisitor[SubExpression]):
         )
 
     def visit_curried_function_call(self, exp: CurriedFunctionCall) -> SubExpression:
-        def builder(alias: Optional[str], params: List[Expression]) -> Expression:
+        def builder(alias: str | None, params: list[Expression]) -> Expression:
             # The first element in the sequence is the inner function.
             # Unfortunately I could not find a better way to reuse this
             # between FunctionCall and CurriedFunctionCall.
@@ -321,7 +310,7 @@ class AggregateBranchCutter(BranchCutter):
 
     def visit_function_call(self, exp: FunctionCall) -> SubExpression:
         def builder(
-            alias: Optional[str], func_name: str, params: Sequence[Expression]
+            alias: str | None, func_name: str, params: Sequence[Expression]
         ) -> FunctionCall:
             return FunctionCall(alias, func_name, tuple(params))
 

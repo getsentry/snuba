@@ -1,5 +1,5 @@
 import logging
-from typing import Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.query import Expression, Query
 from snuba.query.conditions import get_first_level_and_conditions
@@ -29,15 +29,14 @@ class MandatoryConditionEnforcer(ClickhouseQueryProcessor):
         self.__condition_checkers = condition_checkers
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
-        missing_checkers = {checker for checker in self.__condition_checkers}
+        missing_checkers = set(self.__condition_checkers)
 
         def inspect_expression(condition: Expression) -> None:
             top_level = get_first_level_and_conditions(condition)
             for condition in top_level:
                 for checker in self.__condition_checkers:
-                    if checker in missing_checkers:
-                        if checker.check(condition):
-                            missing_checkers.remove(checker)
+                    if checker in missing_checkers and checker.check(condition):
+                        missing_checkers.remove(checker)
 
         condition = query.get_condition()
         if condition is not None:

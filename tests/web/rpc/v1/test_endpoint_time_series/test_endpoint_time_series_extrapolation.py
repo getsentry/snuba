@@ -1,6 +1,6 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Callable
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -20,7 +20,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
 from tests.base import BaseApiTest
@@ -68,8 +68,8 @@ def store_timeseries(
                 server_sample_rate=real_server_sample_rate,
             ),
         )
-    items_storage = get_storage(StorageKey("eap_items"))
-    write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+    items_storage = get_writable_storage(StorageKey("eap_items"))
+    write_raw_unprocessed_events(items_storage, messages)
 
 
 @pytest.mark.clickhouse_db

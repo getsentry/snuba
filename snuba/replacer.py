@@ -4,18 +4,12 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from collections import defaultdict
+from collections.abc import Callable, Mapping, MutableMapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from functools import partial
 from typing import (
     Any,
-    Callable,
-    List,
-    Mapping,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Tuple,
     TypeVar,
 )
 
@@ -26,6 +20,7 @@ from arroyo.processing.strategies.abstract import (
     ProcessingStrategy,
     ProcessingStrategyFactory,
 )
+from arroyo.processing.strategies.healthcheck import Healthcheck
 from arroyo.types import BrokerValue, Commit, Message, Partition
 
 from snuba import settings
@@ -105,7 +100,7 @@ class InOrderConnectionPool(ShardedConnectionPool):
         cluster: ClickhouseCluster,
     ) -> None:
         self.__cluster = cluster
-        self.__nodes: Mapping[int, List[ClickhouseNode]] = defaultdict(list)
+        self.__nodes: Mapping[int, list[ClickhouseNode]] = defaultdict(list)
         self.__nodes_refreshed_at = time.time()
 
     def get_connections(self) -> Mapping[int, Sequence[ClickhouseNode]]:
@@ -288,8 +283,10 @@ class ReplacerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
     def __init__(
         self,
         worker: ReplacerWorker,
+        health_check_file: str | None = None,
     ) -> None:
         self.__worker = worker
+        self.__health_check_file = health_check_file
 
     def create_with_partitions(
         self,
@@ -303,7 +300,12 @@ class ReplacerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
 
         commit_offsets: ProcessingStrategy[Any] = CommitOffsets(commit)
 
-        return RunTask(processing_func, commit_offsets)
+        strategy: ProcessingStrategy[KafkaPayload] = RunTask(processing_func, commit_offsets)
+
+        if self.__health_check_file is not None:
+            strategy = Healthcheck(self.__health_check_file, strategy)
+
+        return strategy
 
 
 class ReplacerWorker:
@@ -327,7 +329,7 @@ class ReplacerWorker:
         self.__sharded_pool = InOrderConnectionPool(self.__storage.get_cluster())
         self.__rate_limiter = RateLimiter("replacements")
 
-        self.__last_offset_processed_per_partition: MutableMapping[str, int] = dict()
+        self.__last_offset_processed_per_partition: MutableMapping[str, int] = {}
         self.__consumer_group = consumer_group
 
     def __get_insert_executor(self, replacement: Replacement) -> InsertExecutor:
@@ -355,11 +357,11 @@ class ReplacerWorker:
         ) -> None:
             t = time.time()
 
-            logger.debug("Executing replace query: %s" % query)
+            logger.debug(f"Executing replace query: {query}")
             connection.execute_robust(query)
             duration = int((time.time() - t) * 1000)
 
-            logger.info("Replacing %s rows took %sms" % (records_count, duration))
+            logger.info(f"Replacing {records_count} rows took {duration}ms")
             metrics.timing(
                 "replacements.count",
                 records_count,
@@ -398,7 +400,7 @@ class ReplacerWorker:
 
     def process_message(
         self, message: Message[KafkaPayload]
-    ) -> Optional[Tuple[ReplacementMessageMetadata, Replacement]]:
+    ) -> tuple[ReplacementMessageMetadata, Replacement] | None:
         assert isinstance(message.value, BrokerValue)
         metadata = ReplacementMessageMetadata(
             partition_index=message.value.partition.index,
@@ -429,12 +431,10 @@ class ReplacerWorker:
             )
             if processed is not None:
                 return metadata, processed
-            else:
-                return None
-        else:
-            raise InvalidMessageVersion("Unknown message format: " + str(seq_message))
+            return None
+        raise InvalidMessageVersion("Unknown message format: " + str(seq_message))
 
-    def flush_batch(self, batch: Sequence[Tuple[ReplacementMessageMetadata, Replacement]]) -> None:
+    def flush_batch(self, batch: Sequence[tuple[ReplacementMessageMetadata, Replacement]]) -> None:
         need_optimize = False
         clickhouse_read = self.__storage.get_cluster().get_query_connection(
             ClickhouseClientSettings.REPLACE
@@ -479,7 +479,7 @@ class ReplacerWorker:
             num_dropped = run_optimize(
                 clickhouse_read, self.__storage, self.__database_name, before=today
             )
-            logger.info("Optimized %s partitions on %s" % (num_dropped, clickhouse_read.host))
+            logger.info(f"Optimized {num_dropped} partitions on {clickhouse_read.host}")
 
     def _message_already_processed(self, metadata: ReplacementMessageMetadata) -> bool:
         """
@@ -584,5 +584,5 @@ class ReplacerWorker:
                 ",".join(str(project_id) for project_id in projects_exceeding_limit)
             )
         )
-        for project_id in projects_exceeding_limit:
+        for _project_id in projects_exceeding_limit:
             self.metrics.increment("project_processing_time_exceeded_time_limit")

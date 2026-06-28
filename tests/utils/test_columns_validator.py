@@ -1,5 +1,6 @@
+from collections.abc import Sequence
 from datetime import datetime
-from typing import Any, Sequence
+from typing import Any
 
 import pytest
 
@@ -11,6 +12,7 @@ from snuba.utils.schemas import (
     Date,
     Float,
     Int,
+    InvalidColumnType,
     String,
     Tuple,
     UInt,
@@ -81,8 +83,10 @@ COLUMNS = ColumnSet(
 def test_validator(column_name: str, values: Sequence[Any], is_valid: bool) -> None:
     col_validator = ColumnValidator(COLUMNS)
 
-    if is_valid == True:
+    if is_valid:
         col_validator.validate(column_name, values)
     else:
-        with pytest.raises(Exception):
+        # invalid inputs raise InvalidColumnType, except tuple-arity mismatches
+        # which trip an assert in _valid_tuple
+        with pytest.raises((InvalidColumnType, AssertionError)):
             col_validator.validate(column_name, values)

@@ -1,4 +1,4 @@
-from typing import List, Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import Array, Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
@@ -14,7 +14,7 @@ def hash_map_column_name(attribute_type: str, i: int) -> str:
     return f"_hash_map_{attribute_type}_{i}"
 
 
-columns: List[Column[Modifiers]] = [
+columns: list[Column[Modifiers]] = [
     Column("organization_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("item_type", UInt(8)),
@@ -133,7 +133,6 @@ storage_set_name = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
 
 
 class Migration(migration.ClickhouseNodeMigration):
-
     blocking = False
     storage_set_key = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
     granularity = "8192"

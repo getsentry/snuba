@@ -214,6 +214,24 @@ query_processors:
   - processor: ArrayJoinKeyValueOptimizer
     args:
       column_name: tags
+  - processor: SubqueryFilterOptimizer
+    args:
+      key_column: replay_id
+      filter_columns:
+        - user_id
+        - user_email
+  - processor: PrewhereProcessor
+    args:
+      omit_if_final:
+        - environment
+      prewhere_candidates:
+        - environment
+  - processor: ClickhouseSettingsOverride
+    args:
+      overwrite_existing: false
+      settings:
+        max_execution_time: 25
+        timeout_before_checking_execution_speed: 0
 
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer

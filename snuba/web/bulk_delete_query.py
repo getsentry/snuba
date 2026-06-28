@@ -1,7 +1,8 @@
 import logging
 import time
+from collections.abc import Mapping, MutableMapping, Sequence
 from threading import Thread
-from typing import Any, Dict, Mapping, MutableMapping, Optional, Sequence, TypedDict
+from typing import Any, TypedDict
 
 import rapidjson
 from confluent_kafka import KafkaError, Producer
@@ -11,8 +12,12 @@ from snuba import environment, settings
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
+from snuba.clusters.cluster import UndefinedClickhouseCluster, get_cluster
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.deletion_settings import DeletionSettings, get_trace_item_type_name
+from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import WritableTableStorage
+from snuba.datasets.storages.factory import get_config_built_storages
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.lw_deletions.types import AttributeConditions, ConditionsBag, ConditionsType
 from snuba.query.conditions import combine_or_conditions
@@ -50,8 +55,8 @@ class DeleteQueryMessage(TypedDict, total=False):
     storage_name: str
     conditions: ConditionsType
     tenant_ids: Mapping[str, str | int]
-    attribute_conditions: Optional[Dict[str, WireAttributeCondition]]
-    attribute_conditions_item_type: Optional[int]
+    attribute_conditions: dict[str, WireAttributeCondition] | None
+    attribute_conditions_item_type: int | None
 
 
 PRODUCER_MAP: MutableMapping[str, Producer] = {}
@@ -95,7 +100,7 @@ def flush_producers() -> None:
     Thread(target=_flush_producers, name="flush_producers", daemon=True).start()
 
 
-def _delete_query_delivery_callback(error: Optional[KafkaError], message: KafkaMessage) -> None:
+def _delete_query_delivery_callback(error: KafkaError | None, message: KafkaMessage) -> None:
     metrics.increment(
         "delete_query.delivery_callback",
         tags={"status": "failure" if error else "success"},
@@ -155,7 +160,7 @@ def _validate_attribute_conditions(
     try:
         item_type_name = get_trace_item_type_name(attribute_conditions.item_type)
     except ValueError as e:
-        raise InvalidQueryException(str(e))
+        raise InvalidQueryException(str(e)) from e
 
     # Check if this specific item_type has any allowed attributes configured
     if item_type_name not in allowed_attrs_config:
@@ -183,9 +188,9 @@ def _validate_attribute_conditions(
 @with_span()
 def delete_from_storage(
     storage: WritableTableStorage,
-    column_conditions: Dict[str, list[Any]],
+    column_conditions: dict[str, list[Any]],
     attribution_info: Mapping[str, Any],
-    attribute_conditions: Optional[AttributeConditions] = None,
+    attribute_conditions: AttributeConditions | None = None,
 ) -> dict[str, Result]:
     """
     This method does a series of validation checks (outline below),
@@ -218,7 +223,7 @@ def delete_from_storage(
         for col, values in column_conditions.items():
             column_validator.validate(col, values)
     except InvalidColumnType as e:
-        raise InvalidQueryException(e.message)
+        raise InvalidQueryException(e.message) from e
 
     # validate attribute conditions if provided
     if attribute_conditions:
@@ -258,8 +263,8 @@ def construct_query(storage: WritableTableStorage, table: str, condition: Expres
 
 def _serialize_attribute_conditions(
     attribute_conditions: AttributeConditions,
-) -> Dict[str, WireAttributeCondition]:
-    result: Dict[str, WireAttributeCondition] = {}
+) -> dict[str, WireAttributeCondition]:
+    result: dict[str, WireAttributeCondition] = {}
     for key, (attr_key_enum, values) in attribute_conditions.attributes.items():
         result[key] = {
             "attr_key_type": attr_key_enum.type,
@@ -269,19 +274,63 @@ def _serialize_attribute_conditions(
     return result
 
 
+def _count_storage_key_by_local_table(
+    storage: WritableTableStorage,
+) -> dict[str, StorageKey]:
+    """
+    Maps each read/write local table to the read-only replica storage that its
+    rows should be counted against. Counting is a read-only query, so we run it
+    against the `*_ro` storages (in the `<storage set>_ro` storage set), keeping
+    it off the read/write cluster that handles ingestion and deletes. Each table
+    (e.g. the downsampled EAP tables) maps to its own replica so its rows are
+    counted individually.
+
+    Returns an empty mapping when there is no read-only replica to count against
+    (a storage without a read-only storage set, e.g. search_issues, or an
+    environment where the read-only cluster is not configured, e.g. self-hosted),
+    in which case the caller counts against the read/write table instead.
+    """
+    readonly_storage_set = StorageSetKey(f"{storage.get_storage_set_key().value}_ro")
+    mapping: dict[str, StorageKey] = {}
+    for storage_key, candidate in get_config_built_storages().items():
+        if candidate.get_storage_set_key() != readonly_storage_set:
+            continue
+        schema = candidate.get_schema()
+        if isinstance(schema, TableSchema):
+            mapping[schema.get_local_table_name()] = storage_key
+
+    # The read-only storages are always built from config, but their cluster may
+    # not be configured in this environment. Only route counts to them when it
+    # is; otherwise fall back to counting against the read/write table.
+    if mapping:
+        try:
+            get_cluster(readonly_storage_set)
+        except UndefinedClickhouseCluster:
+            return {}
+    return mapping
+
+
 def delete_from_tables(
     storage: WritableTableStorage,
     tables: Sequence[str],
     conditions: ConditionsBag,
     attribution_info: AttributionInfo,
 ) -> dict[str, Result]:
+    # Each table (the read/write table plus its downsampled counterparts) holds
+    # a different number of matching rows, so we count each one individually.
+    # Counting is read-only, so it runs against the read-only replica storages
+    # while the deletes themselves still target the read/write tables below.
+    count_storage_by_local = _count_storage_key_by_local_table(storage)
+    where_clause = _construct_condition(storage, conditions)
+
     highest_rows_to_delete = 0
     result: dict[str, Result] = {}
     for table in tables:
-        where_clause = _construct_condition(storage, conditions)
         query = construct_query(storage, table, where_clause)
         try:
-            num_rows_to_delete = _enforce_max_rows(query)
+            num_rows_to_delete = _enforce_max_rows(
+                query, count_storage_key=count_storage_by_local.get(table)
+            )
             highest_rows_to_delete = max(highest_rows_to_delete, num_rows_to_delete)
             result[table] = {"data": [{"rows_to_delete": num_rows_to_delete}]}
         except NoRowsToDeleteException:

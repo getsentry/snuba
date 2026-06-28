@@ -1,9 +1,10 @@
 import logging
 import time
+from collections.abc import Callable, Iterator, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import partial
-from typing import Callable, Generic, Iterator, List, Mapping, Optional, Tuple, TypeVar
+from typing import Generic, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +36,8 @@ class ThreadedFunctionDelegator(Generic[TInput, TResult]):
     def __init__(
         self,
         callables: Mapping[str, Callable[[], TResult]],
-        selector_func: Callable[[TInput], Tuple[str, List[str]]],
-        callback_func: Optional[Callable[[Optional[Result[TResult]], List[Result[TResult]]], None]],
+        selector_func: Callable[[TInput], tuple[str, list[str]]],
+        callback_func: Callable[[Result[TResult] | None, list[Result[TResult]]], None] | None,
         ignore_secondary_exceptions: bool = False,
     ) -> None:
         self.__callables = callables
@@ -66,8 +67,8 @@ class ThreadedFunctionDelegator(Generic[TInput, TResult]):
     def execute(self, input: TInput) -> TResult:
         generator = self.__execute_callables(input)
 
-        primary_result: Optional[Result[TResult]] = None
-        other_results: List[Result[TResult]] = []
+        primary_result: Result[TResult] | None = None
+        other_results: list[Result[TResult]] = []
 
         try:
             primary_result = next(generator)
