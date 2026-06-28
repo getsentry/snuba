@@ -88,8 +88,8 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_count_column,
 )
 from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
+    LOCAL_JOIN_CLICKHOUSE_SETTINGS,
     get_trace_ids_sql_for_cross_item_query,
-    local_join_clickhouse_settings,
     trace_id_in_subquery_condition,
 )
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
@@ -795,7 +795,7 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
             if not (in_msg.trace_filters and cross_item_queries_no_sample_outer):
                 query_settings.set_sampling_tier(routing_decision.tier)
             if in_msg.trace_filters:
-                for key, value in local_join_clickhouse_settings().items():
+                for key, value in LOCAL_JOIN_CLICKHOUSE_SETTINGS.items():
                     query_settings.push_clickhouse_setting(key, value)
         except Exception as e:
             sentry_sdk.capture_message(f"Error merging clickhouse settings: {e}")

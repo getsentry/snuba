@@ -55,9 +55,9 @@ from snuba.web.rpc.common.debug_info import (
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
+    LOCAL_JOIN_CLICKHOUSE_SETTINGS,
     convert_trace_filters_to_trace_item_filter_with_type,
     get_trace_ids_sql_for_cross_item_query,
-    local_join_clickhouse_settings,
     trace_id_in_subquery_condition,
 )
 
@@ -888,7 +888,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         results = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=_build_snuba_request(
-                request, query, clickhouse_settings=local_join_clickhouse_settings()
+                request, query, clickhouse_settings=dict(LOCAL_JOIN_CLICKHOUSE_SETTINGS)
             ),
             timer=self._timer,
         )
