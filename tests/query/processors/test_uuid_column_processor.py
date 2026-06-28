@@ -380,9 +380,7 @@ def test_raw_sql_in_subquery_predicate_keeps_column_bare() -> None:
             DangerousRawSQL(None, f"({subquery})"),
         )
     )
-    UUIDColumnProcessor({"column1", "column2"}).process_query(
-        wrapped_query, HTTPQuerySettings()
-    )
+    UUIDColumnProcessor({"column1", "column2"}).process_query(wrapped_query, HTTPQuerySettings())
     wrapped_condition = wrapped_query.get_condition()
     assert wrapped_condition is not None
     formatted = wrapped_condition.accept(ClickhouseExpressionFormatter())
