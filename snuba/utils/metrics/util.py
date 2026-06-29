@@ -1,6 +1,6 @@
 import _strptime  # NOQA fixes _strptime deferred import issue
 import inspect
-from functools import partial, wraps
+from functools import wraps
 from typing import Any, TypeVar, cast
 from collections.abc import Callable, Mapping
 
@@ -16,21 +16,29 @@ def create_metrics(
     tags: Tags | None = None,
     sample_rates: Mapping[str, float] | None = None,
 ) -> MetricsBackend:
-    """Create a DogStatsd object if DOGSTATSD_HOST and DOGSTATSD_PORT are defined,
-    with the specified prefix and tags. Return a DummyMetricsBackend otherwise.
+    """Create a DogStatsd object if DOGSTATSD_HOST and DOGSTATSD_PORT are defined.
+
+    When the ``use_dogstatsd_uds`` runtime flag is ``"1"`` and ``DOGSTATSD_SOCKET_PATH``
+    is configured, metrics are sent over the Unix domain socket instead of UDP; with the
+    flag off (or no socket configured) they use UDP (host/port). The flag is authoritative
+    -- it never falls back to the socket when off -- so host/port stay configured as the
+    UDP transport/rollback target. Return a DummyMetricsBackend when no host/port is set.
     Prefixes must start with `snuba.<category>`, for example: `snuba.processor`.
     """
     host: str | None = settings.DOGSTATSD_HOST
     port: int | None = settings.DOGSTATSD_PORT
+    socket_path: str | None = settings.DOGSTATSD_SOCKET_PATH
 
     if settings.TESTING:
         from snuba.utils.metrics.backends.testing import TestingMetricsBackend
 
         return TestingMetricsBackend()
+
     if host is None and port is None:
         from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 
         return DummyMetricsBackend()
+
     if host is None or port is None:
         raise ValueError(
             f"DOGSTATSD_HOST and DOGSTATSD_PORT should both be None or not None. Found DOGSTATSD_HOST: {host}, DOGSTATSD_PORT: {port} instead."
@@ -42,19 +50,33 @@ def create_metrics(
     from snuba.utils.metrics.backends.dualwrite import SentryDatadogMetricsBackend
     from snuba.utils.metrics.backends.sentry import SentryMetricsBackend
 
-    return SentryDatadogMetricsBackend(
-        DatadogMetricsBackend(
-            partial(
-                DogStatsd,
-                host=host,
-                port=port,
+    constant_tags = [f"{key}:{value}" for key, value in tags.items()] if tags is not None else None
+    udp = (host, port)
+
+    def make_client() -> DogStatsd:
+        # The use_dogstatsd_uds flag is read lazily here -- when the first metric is
+        # emitted -- not at create_metrics() time. create_metrics() runs while
+        # snuba.environment is being imported, and snuba.state binds
+        # MetricsWrapper(environment.metrics, ...) at its own import time, so importing
+        # snuba.state any earlier would be a circular import.
+        from snuba import state
+
+        use_uds = socket_path is not None and str(state.get_config("use_dogstatsd_uds", "0")) == "1"
+        if use_uds:
+            return DogStatsd(
+                socket_path=socket_path,
                 namespace=prefix,
-                constant_tags=(
-                    [f"{key}:{value}" for key, value in tags.items()] if tags is not None else None
-                ),
-            ),
-            sample_rates,
-        ),
+                constant_tags=constant_tags,
+            )
+        return DogStatsd(
+            host=udp[0],
+            port=udp[1],
+            namespace=prefix,
+            constant_tags=constant_tags,
+        )
+
+    return SentryDatadogMetricsBackend(
+        DatadogMetricsBackend(make_client, sample_rates),
         SentryMetricsBackend(),
     )
 

@@ -32,6 +32,7 @@ RUN set -ex; \
         g++ \
         gnupg \
         protobuf-compiler \
+        libcurl4-openssl-dev \
     '; \
     runtimeDeps=' \
         curl \

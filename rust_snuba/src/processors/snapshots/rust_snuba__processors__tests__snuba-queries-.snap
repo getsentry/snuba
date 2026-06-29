@@ -1,0 +1,48 @@
+---
+source: src/processors/mod.rs
+expression: diff
+---
+[
+    Change {
+        path: ".projects.?",
+        change: FormatAdd {
+            added: "uint64",
+        },
+    },
+    Change {
+        path: ".query_list.?.result_profile.<anyOf:0>.bytes",
+        change: FormatAdd {
+            added: "uint64",
+        },
+    },
+    Change {
+        path: ".query_list.?.result_profile.<anyOf:0>.elapsed",
+        change: FormatAdd {
+            added: "double",
+        },
+    },
+    Change {
+        path: ".query_list.?.result_profile.<anyOf:0>.progress_bytes",
+        change: FormatAdd {
+            added: "uint64",
+        },
+    },
+    Change {
+        path: ".request.id",
+        change: FormatAdd {
+            added: "uuid",
+        },
+    },
+    Change {
+        path: ".timing.duration_ms",
+        change: FormatAdd {
+            added: "uint64",
+        },
+    },
+    Change {
+        path: ".timing.timestamp",
+        change: FormatAdd {
+            added: "uint64",
+        },
+    },
+]

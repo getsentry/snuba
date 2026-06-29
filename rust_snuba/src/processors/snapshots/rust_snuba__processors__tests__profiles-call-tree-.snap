@@ -38,4 +38,46 @@ expression: diff
             added: "thread_id",
         },
     },
+    Change {
+        path: ".functions.?.fingerprint",
+        change: FormatAdd {
+            added: "uint64",
+        },
+    },
+    Change {
+        path: ".functions.?.self_times_ns.?",
+        change: FormatAdd {
+            added: "uint64",
+        },
+    },
+    Change {
+        path: ".profile_id",
+        change: FormatAdd {
+            added: "uuid",
+        },
+    },
+    Change {
+        path: ".project_id",
+        change: FormatAdd {
+            added: "uint64",
+        },
+    },
+    Change {
+        path: ".received",
+        change: FormatAdd {
+            added: "int64",
+        },
+    },
+    Change {
+        path: ".retention_days",
+        change: FormatAdd {
+            added: "uint32",
+        },
+    },
+    Change {
+        path: ".timestamp",
+        change: FormatAdd {
+            added: "uint64",
+        },
+    },
 ]
