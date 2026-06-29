@@ -32,9 +32,16 @@ def _run_sql_query_on_host(
     sql: str,
     sudo: bool,
     clusterless_mode: bool,
+    explain: bool = False,
 ) -> ClickhouseResult:
     """
-    Run the SQL query. It should be validated before getting to this point
+    Run the SQL query. It should be validated before getting to this point.
+
+    ``explain`` must be set for EXPLAIN statements (the EXPLAIN AST / QUERY TREE
+    queries this module runs to validate a query). Those go through the pool's
+    ``execute_explain`` rather than ``execute`` so they decode correctly on the
+    clickhouse-connect (HTTP) driver as well as the native one — over HTTP an
+    EXPLAIN cannot be read back through the normal query path.
     """
     if storage_name == "querylog":
         # querylog readonly user profile has readonly=2 set, but if you try
@@ -50,7 +57,7 @@ def _run_sql_query_on_host(
         # cluster credentials; read-only clusterless queries use the global
         # readonly user so anonymous/low-privilege admin users cannot connect
         # to ClickHouse with admin credentials via this path.
-        clusterless_connection = (
+        connection = (
             get_clusterless_node_connection(
                 clickhouse_host, clickhouse_port, storage_name, settings
             )
@@ -59,15 +66,16 @@ def _run_sql_query_on_host(
                 clickhouse_host, clickhouse_port, storage_name, settings
             )
         )
-        return clusterless_connection.execute(query=sql, with_column_types=True)
+    else:
+        connection = (
+            get_ro_node_connection(clickhouse_host, clickhouse_port, storage_name, settings)
+            if not sudo
+            else get_sudo_node_connection(clickhouse_host, clickhouse_port, storage_name, settings)
+        )
 
-    connection = (
-        get_ro_node_connection(clickhouse_host, clickhouse_port, storage_name, settings)
-        if not sudo
-        else get_sudo_node_connection(clickhouse_host, clickhouse_port, storage_name, settings)
-    )
-    query_result = connection.execute(query=sql, with_column_types=True)
-    return query_result
+    if explain:
+        return connection.execute_explain(sql)
+    return connection.execute(query=sql, with_column_types=True)
 
 
 DESCRIBE_QUERY_RE = re.compile(
@@ -190,6 +198,7 @@ def is_query_using_only_system_tables(
         explain_query_tree_query,
         False,
         clusterless_mode,
+        explain=True,
     )
 
     for line in explain_query_tree_result.results:
@@ -225,7 +234,13 @@ def is_valid_system_query(
     explain_ast_query = f"EXPLAIN AST {sql_query}"
     disallowed_ast_nodes = ["AlterQuery", "AlterCommand", "DropQuery", "InsertQuery"]
     explain_ast_result = _run_sql_query_on_host(
-        clickhouse_host, clickhouse_port, storage_name, explain_ast_query, False, clusterless_mode
+        clickhouse_host,
+        clickhouse_port,
+        storage_name,
+        explain_ast_query,
+        False,
+        clusterless_mode,
+        explain=True,
     )
 
     for node in disallowed_ast_nodes:
