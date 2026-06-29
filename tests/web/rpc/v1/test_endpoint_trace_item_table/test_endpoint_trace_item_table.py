@@ -4697,30 +4697,21 @@ class TestSemverSorting:
         releases = self._query_releases()
         idx_12 = releases.index("1.2")
         idx_120 = releases.index("1.2.0")
-        assert abs(idx_12 - idx_120) <= 1, (
-            "1.2 and 1.2.0 should sort as equal (both normalise to [1,2,0,0])"
+        # Both normalise to [1,2,0,0], so they are adjacent.  The raw-string
+        # tiebreaker then breaks the tie deterministically: "1.2" < "1.2.0".
+        assert idx_120 - idx_12 == 1, (
+            "1.2 and 1.2.0 normalise equally and must be adjacent, with '1.2' "
+            "first via the raw-string tiebreaker"
         )
 
     def test_desc_is_reverse_of_asc(self) -> None:
+        # The raw-string tiebreaker in semver_sort_key gives distinct release
+        # strings a deterministic total order (e.g. "1.2" < "1.2.0"), so DESC is
+        # the exact reverse of ASC even for versions that share the same numeric
+        # key.
         asc = self._query_releases(descending=False)
         desc = self._query_releases(descending=True)
-        # "1.2" and "1.2.0" share the same sort key ([1,2,0,0], 1); ClickHouse
-        # may return them in either relative order within the tied pair.
-        # Collapse contiguous tied elements into a frozenset before comparing so
-        # the assertion is order-insensitive within ties.
-        TIED: frozenset[str] = frozenset({"1.2", "1.2.0"})
-
-        def _canonicalize(releases: list[str]) -> list[object]:
-            out: list[object] = []
-            for r in releases:
-                if r in TIED:
-                    if not out or out[-1] != TIED:
-                        out.append(TIED)
-                else:
-                    out.append(r)
-            return out
-
-        assert _canonicalize(asc) == _canonicalize(list(reversed(desc)))
+        assert asc == list(reversed(desc))
 
 
 def test_uniq_with_default_value_double_casts_to_float64() -> None:

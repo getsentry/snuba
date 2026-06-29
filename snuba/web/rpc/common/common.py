@@ -95,12 +95,21 @@ SEMVER_SORT_ATTRIBUTES: frozenset[str] = frozenset({"sentry.release"})
 
 
 def semver_sort_key(expr: Expression, alias: str | None = None) -> Expression:
-    """Return a Tuple(Array(UInt32), UInt8) sort key for semantic-version ORDER BY.
+    """Return a Tuple(Array(UInt32), UInt8, String) sort key for semantic-version ORDER BY.
 
     Strips a leading 'package@' prefix, isolates the release part (before '-'),
     maps each dot-component to UInt32, pads to 4 elements so "1.2" == "1.2.0",
     and adds a stability flag (0=prerelease, 1=stable) so prerelease versions sort
     before their corresponding stable release.  Works on Altinity 25.3/25.8.
+
+    The third tuple element is the raw (non-null) string.  It is a tiebreaker:
+    distinct strings that map to the same numeric key + stability flag (e.g. "1.2"
+    and "1.2.0", or two prereleases of the same version) would otherwise compare
+    equal, which makes ordering non-deterministic and — more importantly — lets
+    the flextime pagination's strict `less` boundary filter skip rows tied with
+    the cursor.  Appending the raw string gives a deterministic total order over
+    distinct release strings and keeps the page-boundary comparison exact.  Both
+    ORDER BY and pagination call this function, so they stay consistent.
     """
     x = Argument(None, "x")
     # sentry.release is coalesced from multiple attribute columns and therefore
@@ -117,7 +126,7 @@ def semver_sort_key(expr: Expression, alias: str | None = None) -> Expression:
         literal(_SEMVER_COMPONENT_COUNT),
     )
     is_stable = f.equals(f.position(version_no_prefix, literal("-")), literal(0))
-    return FunctionCall(alias, "tuple", (numeric_key, is_stable))
+    return FunctionCall(alias, "tuple", (numeric_key, is_stable, non_null))
 
 
 def _trace_item_filter_key_expression(
