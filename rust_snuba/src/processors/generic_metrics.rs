@@ -1,5 +1,5 @@
 use adler::Adler32;
-use anyhow::{anyhow, Context, Error};
+use anyhow::{anyhow, Context};
 use chrono::DateTime;
 use serde::{
     de::value::{MapAccessDeserializer, SeqAccessDeserializer},
