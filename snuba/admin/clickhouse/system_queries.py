@@ -27,10 +27,11 @@ class UnauthorizedForSudo(SerializableException):
 
 def _client_settings_for_storage(storage_name: str) -> ClickhouseClientSettings:
     if storage_name == "querylog":
-        # querylog readonly user profile has readonly=2 set, but if you try
-        # and set readonly=2 as part of the request this will error since
-        # clickhouse doesn't let you set readonly setting if readonly=2 in
-        # the current settings https://github.com/ClickHouse/ClickHouse/blob/20.7/src/Access/SettingsConstraints.cpp#L243-L249
+        # querylog uses the QUERYLOG profile rather than QUERY purely for its
+        # timeout: both send empty ClickHouse settings, but QUERY caps reads at
+        # 25s (headroom under the frontend request budget) while QUERYLOG is
+        # unbounded. querylog admin queries scan the large system.query_log and
+        # can legitimately run longer than that cap, so they must not inherit it.
         return ClickhouseClientSettings.QUERYLOG
     return ClickhouseClientSettings.QUERY
 
