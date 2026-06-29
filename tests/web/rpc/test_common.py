@@ -55,6 +55,7 @@ from snuba.web.rpc.common.common import (
     dedupe_and_conditions,
     next_monday,
     prev_monday,
+    semver_sort_key,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
     use_array_map_columns,
@@ -1306,3 +1307,34 @@ class TestEmptyVsAbsentComparison:
     def test_not_like_wildcard_matches_only_absent(self) -> None:
         # Present rows all `like '%'`, so only the absent key survives NOT LIKE.
         assert self._execute(ComparisonFilter.OP_NOT_LIKE, value="%") == ["green"]
+
+
+class TestSemverSortKey:
+    def test_expression_structure(self) -> None:
+        from snuba.query.dsl import column as snuba_column
+
+        expr = semver_sort_key(snuba_column("release"))
+        assert isinstance(expr, FunctionCall)
+        assert expr.function_name == "tuple"
+        assert len(expr.parameters) == 3
+        numeric_key_expr, is_stable_expr, raw_str_expr = expr.parameters
+        assert isinstance(numeric_key_expr, FunctionCall)
+        assert numeric_key_expr.function_name == "arrayResize"
+        assert isinstance(is_stable_expr, FunctionCall)
+        assert is_stable_expr.function_name == "equals"
+        # Third element is the raw (non-null) string tiebreaker: ifNull(expr, '').
+        assert isinstance(raw_str_expr, FunctionCall)
+        assert raw_str_expr.function_name == "ifNull"
+
+    def test_alias_is_forwarded(self) -> None:
+        from snuba.query.dsl import column as snuba_column
+
+        expr = semver_sort_key(snuba_column("release"), alias="semver_key")
+        assert isinstance(expr, FunctionCall)
+        assert expr.alias == "semver_key"
+
+    def test_no_alias_by_default(self) -> None:
+        from snuba.query.dsl import column as snuba_column
+
+        expr = semver_sort_key(snuba_column("release"))
+        assert expr.alias is None
