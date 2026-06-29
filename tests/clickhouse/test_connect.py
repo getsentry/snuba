@@ -364,9 +364,7 @@ def test_explain_query_uses_command_not_native_query() -> None:
     client.command.return_value = ast_dump
 
     pool = _make_pool(client)
-    result = pool.execute(
-        "EXPLAIN AST SELECT query FROM system.clusters", with_column_types=True
-    )
+    result = pool.execute("EXPLAIN AST SELECT query FROM system.clusters", with_column_types=True)
 
     # Used the text command() path, never the Native query() path.
     client.command.assert_called_once()
