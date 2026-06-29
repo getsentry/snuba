@@ -340,14 +340,19 @@ impl Parse for CountersRawRow {
 }
 
 #[inline]
-fn should_use_killswitch(config: Result<Option<String>, Error>, payload_bytes: &[u8]) -> bool {
-    if let Some(killswitch) = config.ok().flatten() {
-        if let Ok(use_case) = serde_json::from_slice::<MessageUseCase>(payload_bytes) {
-            return killswitch.contains(use_case.use_case_id.as_str());
+fn should_use_killswitch(
+    killswitch_config: Result<Option<String>, anyhow::Error>,
+    payload_bytes: &[u8],
+) -> anyhow::Result<bool> {
+    if let Some(config) = killswitch_config.ok().flatten() {
+        let use_case = serde_json::from_slice::<MessageUseCase>(payload_bytes)?;
+        if config.contains(&use_case.use_case_id) {
+            counter!("generic_metrics.messages.killswitched_use_case", 1, "use_case_id" => &use_case.use_case_id);
+            return Ok(true);
         }
     }
 
-    false
+    Ok(false)
 }
 
 fn process_message<T>(
@@ -358,14 +363,10 @@ where
     T: Parse + Serialize,
 {
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let killswitch_config = get_str_config("generic_metrics_use_case_killswitch");
 
-    if let Some(config) = killswitch_config.ok().flatten() {
-        let use_case: MessageUseCase = serde_json::from_slice(payload_bytes)?;
-        if config.contains(use_case.use_case_id.as_str()) {
-            counter!("generic_metrics.messages.killswitched_use_case", 1, "use_case_id" => use_case.use_case_id.as_str());
-            return Ok(InsertBatch::skip());
-        }
+    let killswitch_config = get_str_config("generic_metrics_use_case_killswitch");
+    if should_use_killswitch(killswitch_config, payload_bytes)? {
+        return Ok(InsertBatch::skip());
     }
 
     let msg: FromGenericMetricsMessage = serde_json::from_slice(payload_bytes)?;
@@ -1366,7 +1367,7 @@ mod tests {
         let fake_config = Ok(Some("[custom]".to_string()));
         let payload = br#"{"use_case_id":"transactions"}"#;
 
-        assert!(!should_use_killswitch(fake_config, payload));
+        assert!(!should_use_killswitch(fake_config, payload).unwrap());
     }
 
     #[test]
@@ -1374,7 +1375,7 @@ mod tests {
         let payload = br#"{"use_case_id":"transactions"}"#;
         let fake_config = Ok(Some("[transactions]".to_string()));
 
-        assert!(should_use_killswitch(fake_config, payload));
+        assert!(should_use_killswitch(fake_config, payload).unwrap());
     }
 
     #[test]
@@ -1382,7 +1383,7 @@ mod tests {
         let payload = br#"{"use_case_id":"transactions"}"#;
         let fake_config = Ok(Some("[transactions, custom]".to_string()));
 
-        assert!(should_use_killswitch(fake_config, payload));
+        assert!(should_use_killswitch(fake_config, payload).unwrap());
     }
 
     #[test]
@@ -1390,7 +1391,7 @@ mod tests {
         let payload = br#"{"use_case_id":"transactions"}"#;
         let fake_config = Ok(Some("[]".to_string()));
 
-        assert!(!should_use_killswitch(fake_config, payload));
+        assert!(!should_use_killswitch(fake_config, payload).unwrap());
     }
 
     #[test]
@@ -1398,7 +1399,7 @@ mod tests {
         let payload = br#"{"use_case_id":"transactions"}"#;
         let fake_config = Ok(Some("".to_string()));
 
-        assert!(!should_use_killswitch(fake_config, payload));
+        assert!(!should_use_killswitch(fake_config, payload).unwrap());
     }
 
     #[test]
@@ -1406,7 +1407,7 @@ mod tests {
         let payload = br#"{"use_case_id":"transactions"}"#;
         let fake_config = Ok(None);
 
-        assert!(!should_use_killswitch(fake_config, payload));
+        assert!(!should_use_killswitch(fake_config, payload).unwrap());
     }
 
     #[test]
