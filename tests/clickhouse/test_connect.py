@@ -443,3 +443,24 @@ def test_explain_error_wrapped_and_preserves_code() -> None:
         raise AssertionError("expected a ClickhouseError to be raised")
     except ClickhouseError as error:
         assert error.code == UNKNOWN_TABLE
+
+
+def test_explain_forwards_query_id_and_trace_settings() -> None:
+    # query_id and capture_trace must not be silently dropped on the EXPLAIN
+    # path: they are folded into the settings handed to command() (via
+    # _build_query_settings), the same mapping the Native query() path receives.
+    # clickhouse-connect treats query_id as a transport setting and routes it to
+    # an HTTP param, so this keeps both driver paths consistent.
+    client = mock.Mock()
+    client.command.return_value = "ExpressionList (children 1)"
+
+    pool = _make_pool(client)
+    pool.execute(
+        "EXPLAIN AST SELECT 1",
+        query_id="qid-123",
+        capture_trace=True,
+    )
+
+    _, kwargs = client.command.call_args
+    assert kwargs["settings"]["query_id"] == "qid-123"
+    assert kwargs["settings"]["send_logs_level"] == "trace"

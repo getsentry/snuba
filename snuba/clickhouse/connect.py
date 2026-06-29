@@ -209,11 +209,10 @@ class ClickhouseConnectPool(ClickhousePool):
         capture_trace: bool,
     ) -> ClickhouseResult:
         client = self._get_client()
+        query_settings = self._build_query_settings(settings, query_id, capture_trace)
 
         if _is_explain_query(query):
-            return self._execute_explain(client, query, params, settings, with_column_types)
-
-        query_settings = self._build_query_settings(settings, query_id, capture_trace)
+            return self._execute_explain(client, query, params, query_settings, with_column_types)
 
         with sentry_sdk.start_span(description=query, op="db.clickhouse") as span:
             span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
@@ -280,7 +279,7 @@ class ClickhouseConnectPool(ClickhousePool):
         client: Client,
         query: str,
         params: Params,
-        settings: Mapping[str, Any] | None,
+        query_settings: Mapping[str, Any] | None,
         with_column_types: bool,
     ) -> ClickhouseResult:
         # EXPLAIN cannot go through the Native ``query()`` path (see the note on
@@ -289,12 +288,18 @@ class ClickhouseConnectPool(ClickhousePool):
         # of the single ``explain`` String column. We split it back into one row
         # per line so the result matches what the native driver returns for the
         # same EXPLAIN (a sequence of single-column tuples).
+        #
+        # ``query_settings`` is the same mapping the Native path hands to
+        # ``query()`` (built by ``_build_query_settings``), so query_id and any
+        # capture_trace-driven send_logs_level are honored identically on this
+        # path: clickhouse-connect routes query_id to an HTTP param (it is a
+        # transport setting) and forwards the rest as query settings.
         with sentry_sdk.start_span(description=query, op="db.clickhouse") as span:
             span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
             output = client.command(
                 query,
                 parameters=params if params else None,
-                settings=dict(settings) if settings else None,
+                settings=dict(query_settings) if query_settings else None,
             )
 
         if isinstance(output, str):
