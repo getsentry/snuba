@@ -361,8 +361,8 @@ class ClickhouseConnectPool(ClickhousePool):
         SYNTAX / PLAN / PIPELINE (the kinds admin system-query validation issues);
         the multi-column EXPLAIN ESTIMATE is not used on this path.
         """
-        client = self._get_client()
         with self._translate_clickhouse_errors():
+            client = self._get_client()
             with sentry_sdk.start_span(description=query, op="db.clickhouse") as span:
                 span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
                 output = client.command(query)

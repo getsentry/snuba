@@ -431,6 +431,23 @@ def test_execute_explain_error_wrapped_and_preserves_code() -> None:
         assert error.code == UNKNOWN_TABLE
 
 
+def test_execute_explain_wraps_client_init_errors() -> None:
+    # _get_client() opens the connection on first use and can raise on an
+    # unreachable host. Like the normal execute() path, execute_explain must run
+    # it inside the error-translation context, so the failure surfaces as a snuba
+    # ClickhouseError rather than a raw clickhouse-connect error -- the
+    # system-query validator's error handling relies on that contract.
+    from clickhouse_connect.driver.exceptions import OperationalError
+
+    pool = _make_pool(mock.Mock())
+    pool._get_client = mock.Mock(  # type: ignore[method-assign]
+        side_effect=OperationalError("connection refused")
+    )
+
+    with pytest.raises(ClickhouseError):
+        pool.execute_explain("EXPLAIN AST SELECT 1")
+
+
 def test_native_pool_execute_explain_delegates_to_execute() -> None:
     # The ClickhousePool default (used by the native driver) runs EXPLAIN through
     # the normal execute() path -- the native protocol decodes it fine, so only
