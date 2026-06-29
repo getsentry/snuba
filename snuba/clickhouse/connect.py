@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Mapping, Sequence
 from threading import Lock
 from typing import Any
@@ -42,6 +43,29 @@ DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
 # forwards whatever settings it is given to the server, so to preserve parity
 # we tell clickhouse-connect to drop unrecognized settings instead of failing.
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
+
+
+# clickhouse-connect's ``query()`` appends ``FORMAT Native`` to every statement
+# and decodes the response with its binary Native reader. That breaks for
+# ``EXPLAIN`` statements: the appended ``FORMAT Native`` is consumed by the
+# *inner* query being explained, so the EXPLAIN's own output comes back in
+# ClickHouse's default text format. The Native reader then tries to decode that
+# text as binary and misfires partway through, surfacing as the cryptic
+# ``Unrecognized ClickHouse type ...`` error (it reads a fragment of the explain
+# text as if it were a column type name). The native driver is unaffected
+# because it parses the native TCP protocol directly.
+#
+# We sidestep this by routing EXPLAIN through ``command()`` (see
+# ``_execute_explain``), which sends the statement verbatim — no FORMAT appended
+# — and returns the decoded text output. This assumes the single-column explain
+# output produced by EXPLAIN AST / QUERY TREE / SYNTAX / PLAN / PIPELINE (the
+# only kinds Snuba issues, all from admin system-query validation); the
+# multi-column EXPLAIN ESTIMATE is not used on this path.
+_EXPLAIN_QUERY_RE = re.compile(r"^\s*EXPLAIN\b", re.IGNORECASE)
+
+
+def _is_explain_query(query: str) -> bool:
+    return _EXPLAIN_QUERY_RE.match(query) is not None
 
 
 class ClickhouseConnectPool(ClickhousePool):
@@ -185,6 +209,10 @@ class ClickhouseConnectPool(ClickhousePool):
         capture_trace: bool,
     ) -> ClickhouseResult:
         client = self._get_client()
+
+        if _is_explain_query(query):
+            return self._execute_explain(client, query, params, settings, with_column_types)
+
         query_settings = self._build_query_settings(settings, query_id, capture_trace)
 
         with sentry_sdk.start_span(description=query, op="db.clickhouse") as span:
@@ -246,6 +274,55 @@ class ClickhouseConnectPool(ClickhousePool):
             profile=profile_data,
             trace_output="",
         )
+
+    def _execute_explain(
+        self,
+        client: Client,
+        query: str,
+        params: Params,
+        settings: Mapping[str, Any] | None,
+        with_column_types: bool,
+    ) -> ClickhouseResult:
+        # EXPLAIN cannot go through the Native ``query()`` path (see the note on
+        # ``_EXPLAIN_QUERY_RE``). ``command()`` sends the statement as-is and
+        # returns the decoded text — ClickHouse's default TabSeparated rendering
+        # of the single ``explain`` String column. We split it back into one row
+        # per line so the result matches what the native driver returns for the
+        # same EXPLAIN (a sequence of single-column tuples).
+        with sentry_sdk.start_span(description=query, op="db.clickhouse") as span:
+            span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
+            output = client.command(
+                query,
+                parameters=params if params else None,
+                settings=dict(settings) if settings else None,
+            )
+
+        if isinstance(output, str):
+            text = output
+        elif isinstance(output, int):
+            text = str(output)
+        elif isinstance(output, (list, tuple)):
+            # command() only returns a sequence when the response contained tab
+            # characters; the explain output we route here is space-indented and
+            # tab-free, so this is defensive. Re-join so the per-line split below
+            # preserves the original layout.
+            text = "\t".join(str(part) for part in output)
+        else:
+            # QuerySummary (empty body) or anything unexpected -> no rows.
+            text = ""
+
+        results: list[tuple[str, ...]] = [(line,) for line in text.split("\n")] if text else []
+        profile = ClickhouseProfile(
+            bytes=0, progress_bytes=0, blocks=0, rows=len(results), elapsed=0.0
+        )
+        if with_column_types:
+            return ClickhouseResult(
+                results=results,
+                meta=[("explain", "String")],
+                profile=profile,
+                trace_output="",
+            )
+        return ClickhouseResult(results=results, profile=profile, trace_output="")
 
     def execute(
         self,

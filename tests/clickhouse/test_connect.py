@@ -3,7 +3,7 @@ from unittest import mock
 
 import pytest
 
-from snuba.clickhouse.connect import ClickhouseConnectPool
+from snuba.clickhouse.connect import ClickhouseConnectPool, _is_explain_query
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
 
@@ -342,3 +342,106 @@ def test_connect_type_names_drive_reader_transforms() -> None:
     assert row["dt_tz"] == "2023-01-02T03:04:05+00:00"
     assert row["uid"] == "00000000-0000-0000-0000-000000000001"
     assert row["nuid"] == "00000000-0000-0000-0000-000000000001"
+
+
+def test_explain_query_uses_command_not_native_query() -> None:
+    # Regression: EXPLAIN statements must NOT go through clickhouse-connect's
+    # Native query() path. query() appends "FORMAT Native", which is swallowed
+    # by the inner query being explained, so the EXPLAIN output comes back as
+    # text and the Native reader misparses it -- the snuba-admin "Unrecognized
+    # ClickHouse type base: essionList ..." failure (a fragment of the EXPLAIN
+    # AST dump read as a column type). EXPLAIN must instead use command(), which
+    # sends the statement verbatim (no FORMAT appended) and returns decoded text.
+    client = mock.Mock()
+    ast_dump = (
+        "SelectWithUnionQuery (children 1)\n"
+        " ExpressionList (children 1)\n"
+        "  Identifier query\n"
+        " TablesInSelectQuery (children 1)"
+    )
+    # command() strips the trailing newline and (no tabs) returns the whole dump
+    # as a single string.
+    client.command.return_value = ast_dump
+
+    pool = _make_pool(client)
+    result = pool.execute(
+        "EXPLAIN AST SELECT query FROM system.clusters", with_column_types=True
+    )
+
+    # Used the text command() path, never the Native query() path.
+    client.command.assert_called_once()
+    client.query.assert_not_called()
+
+    # One single-column row per explain line, with indentation preserved --
+    # exactly the shape the native driver returns for the same EXPLAIN.
+    assert result.results == [
+        ("SelectWithUnionQuery (children 1)",),
+        (" ExpressionList (children 1)",),
+        ("  Identifier query",),
+        (" TablesInSelectQuery (children 1)",),
+    ]
+    assert result.meta == [("explain", "String")]
+
+
+def test_non_explain_query_uses_native_query_path() -> None:
+    # The EXPLAIN special-casing must not divert ordinary queries off the
+    # Native query() path.
+    client = mock.Mock()
+    client.query.return_value = FakeQueryResult(
+        result_set=[[1]],
+        column_names=("x",),
+        column_types=(FakeColumnType("UInt8"),),
+    )
+
+    pool = _make_pool(client)
+    pool.execute("SELECT 1", with_column_types=True)
+
+    client.query.assert_called_once()
+    client.command.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "query, is_explain",
+    [
+        ("EXPLAIN AST SELECT 1", True),
+        ("explain query tree SELECT 1", True),
+        ("  \n EXPLAIN PLAN SELECT 1", True),
+        ("SELECT 1", False),
+        ("SELECT 'EXPLAIN'", False),  # EXPLAIN only as a string literal
+        ("WITH x AS (SELECT 1) SELECT * FROM x", False),
+    ],
+)
+def test_is_explain_query_detection(query: str, is_explain: bool) -> None:
+    assert _is_explain_query(query) is is_explain
+
+
+def test_explain_empty_output_returns_no_rows() -> None:
+    # An empty response body makes command() return a QuerySummary (here stubbed
+    # by a bare Mock, which is neither str/int/list): that must yield zero rows,
+    # not a single empty-string row.
+    client = mock.Mock()
+    client.command.return_value = mock.Mock()  # stand-in for QuerySummary
+
+    pool = _make_pool(client)
+    result = pool.execute("EXPLAIN AST SELECT 1", with_column_types=True)
+
+    assert result.results == []
+    assert result.meta == [("explain", "String")]
+
+
+def test_explain_error_wrapped_and_preserves_code() -> None:
+    # Errors from the command() path must be wrapped in a snuba ClickhouseError
+    # with the server code preserved -- the system-query validator relies on the
+    # code (e.g. UNKNOWN_TABLE) to turn a failed EXPLAIN into a clean rejection.
+    from clickhouse_connect.driver.exceptions import DatabaseError
+
+    UNKNOWN_TABLE = 60
+    client = mock.Mock()
+    client.command.side_effect = DatabaseError("no such table", code=UNKNOWN_TABLE)
+
+    pool = _make_pool(client)
+    try:
+        pool.execute("EXPLAIN AST SELECT * FROM nope")
+        raise AssertionError("expected a ClickhouseError to be raised")
+    except ClickhouseError as error:
+        assert error.code == UNKNOWN_TABLE
