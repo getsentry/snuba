@@ -55,7 +55,7 @@ class OffPeakProcessingStrategy(ProcessingStrategy[KafkaPayload]):
             return True
 
         start = get_int_option("lw_deletions_offpeak_start", 0)
-        end = get_int_option("lw_deletions_offpeak_end", 24) or 24
+        end = get_int_option("lw_deletions_offpeak_end", 24)
         current_hour = datetime.now(UTC).hour
 
         if start == end:
