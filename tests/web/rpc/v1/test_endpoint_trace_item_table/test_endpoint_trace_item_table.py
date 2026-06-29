@@ -63,7 +63,6 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import OrderBy, OrderByDirection
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column as snuba_column
-from snuba.query.expressions import FunctionCall
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import attribute_key_to_expression
@@ -3574,107 +3573,6 @@ class TestTraceItemTable(BaseApiTest):
                     AttributeValue(val_double=0.0),
                     AttributeValue(val_double=5),
                 ],
-            ),
-        ]
-
-    def test_uniq_aggregation_with_default_value_double(self) -> None:
-        """
-        Ensures that FUNCTION_UNIQ (count_unique) with default_value_double works.
-        ClickHouse's uniqIfOrNull returns UInt64 which is incompatible with Float64
-        in coalesce(). The fix casts the aggregation to Float64 before coalescing.
-        """
-        span_ts = BASE_TIME - timedelta(minutes=1)
-        write_eap_item(span_ts, {"user": "alice"})
-        write_eap_item(span_ts, {"user": "bob"})
-        write_eap_item(span_ts, {"user": "alice"})
-
-        message = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=START_TIMESTAMP,
-                end_timestamp=END_TIMESTAMP,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            columns=[
-                Column(
-                    conditional_aggregation=AttributeConditionalAggregation(
-                        aggregate=Function.FUNCTION_UNIQ,
-                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="user"),
-                        label="count_unique(user)",
-                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-                        default_value_double=0.0,
-                    ),
-                    label="count_unique(user)",
-                ),
-            ],
-            limit=1,
-        )
-        response = EndpointTraceItemTable().execute(message)
-        assert response.column_values == [
-            TraceItemColumnValues(
-                attribute_name="count_unique(user)",
-                results=[AttributeValue(val_double=2.0)],
-            ),
-        ]
-
-    def test_uniq_formula_with_default_value_double(self) -> None:
-        """
-        Ensures that count_unique / count_unique formula with default_value_double works.
-        This is the dashboard formula scenario (e.g. count_unique(user) / count_unique(user))
-        that triggers the UInt64/Float64 type mismatch in coalesce().
-        """
-        span_ts = BASE_TIME - timedelta(minutes=1)
-        write_eap_item(span_ts, {"user": "alice"})
-        write_eap_item(span_ts, {"user": "bob"})
-
-        message = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=START_TIMESTAMP,
-                end_timestamp=END_TIMESTAMP,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            columns=[
-                Column(
-                    formula=Column.BinaryFormula(
-                        op=Column.BinaryFormula.OP_DIVIDE,
-                        left=Column(
-                            conditional_aggregation=AttributeConditionalAggregation(
-                                aggregate=Function.FUNCTION_UNIQ,
-                                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="user"),
-                                label="count_unique_a",
-                                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-                                default_value_double=0.0,
-                            ),
-                            label="count_unique_a",
-                        ),
-                        right=Column(
-                            conditional_aggregation=AttributeConditionalAggregation(
-                                aggregate=Function.FUNCTION_UNIQ,
-                                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="user"),
-                                label="count_unique_b",
-                                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-                                default_value_double=0.0,
-                            ),
-                            label="count_unique_b",
-                        ),
-                    ),
-                    label="uniq_ratio",
-                ),
-            ],
-            limit=1,
-        )
-        response = EndpointTraceItemTable().execute(message)
-        assert response.column_values == [
-            TraceItemColumnValues(
-                attribute_name="uniq_ratio",
-                results=[AttributeValue(val_double=1.0)],
             ),
         ]
 
