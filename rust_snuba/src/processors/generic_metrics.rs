@@ -355,15 +355,16 @@ where
     T: Parse + Serialize,
 {
     let payload_bytes = payload.payload().context("Expected payload")?;
+    let payload_str = str::from_utf8(payload_bytes)?;
     let killswitch_config = get_str_config("generic_metrics_use_case_killswitch");
-    let use_case: MessageUseCase = serde_json::from_slice(payload_bytes)?;
+    let use_case: MessageUseCase = serde_json::from_str(payload_str)?;
 
     if should_use_killswitch(killswitch_config, &use_case) {
         counter!("generic_metrics.messages.killswitched_use_case", 1, "use_case_id" => use_case.use_case_id.as_str());
         return Ok(InsertBatch::skip());
     }
 
-    let msg: FromGenericMetricsMessage = serde_json::from_slice(payload_bytes)?;
+    let msg: FromGenericMetricsMessage = serde_json::from_str(payload_str)?;
     let use_case_id = msg.use_case_id.clone();
     let sentry_received_timestamp =
         DateTime::from_timestamp(msg.sentry_received_timestamp as i64, 0);
