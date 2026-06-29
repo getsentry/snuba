@@ -5,6 +5,7 @@ use serde::{
     de::value::{MapAccessDeserializer, SeqAccessDeserializer},
     Deserialize, Deserializer, Serialize,
 };
+use smallvec::{smallvec, SmallVec};
 use std::{collections::BTreeMap, marker::PhantomData, vec};
 
 use crate::{
@@ -239,7 +240,7 @@ struct CommonMetricFields {
     metric_type: String,
     materialization_version: u8,
     timeseries_id: u32,
-    granularities: Vec<u8>,
+    granularities: SmallVec<[u8; 4]>,
     #[serde(skip_serializing_if = "Option::is_none")]
     sampling_weight: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -296,7 +297,7 @@ impl Parse for CountersRawRow {
 
         timer!("generic_metrics.messages.tags_len", tag_keys.len() as u64, "metric_type" => "counter");
 
-        let mut granularities = vec![
+        let mut granularities: SmallVec<[u8; 4]> = smallvec![
             GRANULARITY_ONE_MINUTE,
             GRANULARITY_ONE_HOUR,
             GRANULARITY_ONE_DAY,
@@ -355,7 +356,7 @@ where
     T: Parse + Serialize,
 {
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let killswitch_config = get_str_config("generic_metrics_use_case_killswitch");
+    let killswitch_config = Ok(None);
     let use_case: MessageUseCase = serde_json::from_slice(payload_bytes)?;
 
     if should_use_killswitch(killswitch_config, &use_case) {
@@ -474,7 +475,7 @@ impl Parse for SetsRawRow {
 
         timer!("generic_metrics.messages.tags_len", tag_keys.len() as u64, "metric_type" => "set");
 
-        let mut granularities = vec![
+        let mut granularities: SmallVec<[u8; 4]> = smallvec![
             GRANULARITY_ONE_MINUTE,
             GRANULARITY_ONE_HOUR,
             GRANULARITY_ONE_DAY,
@@ -562,7 +563,7 @@ impl Parse for DistributionsRawRow {
 
         timer!("generic_metrics.messages.tags_len", tag_keys.len() as u64, "metric_type" => "distribution");
 
-        let mut granularities = vec![
+        let mut granularities: SmallVec<[u8; 4]> = smallvec![
             GRANULARITY_ONE_MINUTE,
             GRANULARITY_ONE_HOUR,
             GRANULARITY_ONE_DAY,
@@ -676,7 +677,7 @@ impl Parse for GaugesRawRow {
 
         timer!("generic_metrics.messages.tags_len", tag_keys.len() as u64, "metric_type" => "gauge");
 
-        let mut granularities = vec![
+        let mut granularities: SmallVec<[u8; 4]> = smallvec![
             GRANULARITY_ONE_MINUTE,
             GRANULARITY_ONE_HOUR,
             GRANULARITY_ONE_DAY,
@@ -1065,7 +1066,7 @@ mod tests {
                 metric_type: "distribution".to_string(),
                 materialization_version: 4,
                 timeseries_id: 1436359714,
-                granularities: vec![
+                granularities: smallvec![
                     GRANULARITY_ONE_MINUTE,
                     GRANULARITY_ONE_HOUR,
                     GRANULARITY_ONE_DAY,
@@ -1123,7 +1124,7 @@ mod tests {
                 metric_type: "distribution".to_string(),
                 materialization_version: 4,
                 timeseries_id: 1436359714,
-                granularities: vec![
+                granularities: smallvec![
                     GRANULARITY_ONE_MINUTE,
                     GRANULARITY_ONE_HOUR,
                     GRANULARITY_ONE_DAY,
@@ -1181,7 +1182,7 @@ mod tests {
                 metric_type: "distribution".to_string(),
                 materialization_version: 4,
                 timeseries_id: 1436359714,
-                granularities: vec![
+                granularities: smallvec![
                     GRANULARITY_ONE_MINUTE,
                     GRANULARITY_ONE_HOUR,
                     GRANULARITY_ONE_DAY,
@@ -1274,7 +1275,7 @@ mod tests {
                 metric_type: "set".to_string(),
                 materialization_version: 2,
                 timeseries_id: 1436359714,
-                granularities: vec![
+                granularities: smallvec![
                     GRANULARITY_ONE_MINUTE,
                     GRANULARITY_ONE_HOUR,
                     GRANULARITY_ONE_DAY,
@@ -1330,7 +1331,7 @@ mod tests {
                 metric_type: "set".to_string(),
                 materialization_version: 2,
                 timeseries_id: 1436359714,
-                granularities: vec![
+                granularities: smallvec![
                     GRANULARITY_ONE_MINUTE,
                     GRANULARITY_ONE_HOUR,
                     GRANULARITY_ONE_DAY,
@@ -1488,7 +1489,7 @@ mod tests {
                 metric_type: "counter".to_string(),
                 materialization_version: 3,
                 timeseries_id: 1979522105,
-                granularities: vec![
+                granularities: smallvec![
                     GRANULARITY_ONE_MINUTE,
                     GRANULARITY_ONE_HOUR,
                     GRANULARITY_ONE_DAY,
@@ -1544,7 +1545,7 @@ mod tests {
                 metric_type: "counter".to_string(),
                 materialization_version: 3,
                 timeseries_id: 1979522105,
-                granularities: vec![
+                granularities: smallvec![
                     GRANULARITY_ONE_MINUTE,
                     GRANULARITY_ONE_HOUR,
                     GRANULARITY_ONE_DAY,
@@ -1615,7 +1616,7 @@ mod tests {
                 metric_type: "set".to_string(),
                 materialization_version: 2,
                 timeseries_id: 828906429,
-                granularities: vec![
+                granularities: smallvec![
                     GRANULARITY_ONE_MINUTE,
                     GRANULARITY_ONE_HOUR,
                     GRANULARITY_ONE_DAY,
@@ -1686,7 +1687,7 @@ mod tests {
                 metric_type: "distribution".to_string(),
                 materialization_version: 4,
                 timeseries_id: 1436359714,
-                granularities: vec![
+                granularities: smallvec![
                     GRANULARITY_ONE_MINUTE,
                     GRANULARITY_ONE_HOUR,
                     GRANULARITY_ONE_DAY,
@@ -1744,7 +1745,7 @@ mod tests {
                 metric_type: "distribution".to_string(),
                 materialization_version: 4,
                 timeseries_id: 1436359714,
-                granularities: vec![
+                granularities: smallvec![
                     GRANULARITY_ONE_MINUTE,
                     GRANULARITY_ONE_HOUR,
                     GRANULARITY_ONE_DAY,
@@ -1802,7 +1803,7 @@ mod tests {
                 metric_type: "distribution".to_string(),
                 materialization_version: 4,
                 timeseries_id: 1436359714,
-                granularities: vec![
+                granularities: smallvec![
                     GRANULARITY_ONE_MINUTE,
                     GRANULARITY_ONE_HOUR,
                     GRANULARITY_ONE_DAY,
@@ -1860,7 +1861,7 @@ mod tests {
                 metric_type: "distribution".to_string(),
                 materialization_version: 4,
                 timeseries_id: 1436359714,
-                granularities: vec![
+                granularities: smallvec![
                     GRANULARITY_ONE_MINUTE,
                     GRANULARITY_ONE_HOUR,
                     GRANULARITY_ONE_DAY,
@@ -1933,7 +1934,7 @@ mod tests {
                 metric_type: "gauge".to_string(),
                 materialization_version: 3,
                 timeseries_id: 569776957,
-                granularities: vec![
+                granularities: smallvec![
                     GRANULARITY_ONE_MINUTE,
                     GRANULARITY_ONE_HOUR,
                     GRANULARITY_ONE_DAY,
@@ -1993,7 +1994,7 @@ mod tests {
                 metric_type: "gauge".to_string(),
                 materialization_version: 3,
                 timeseries_id: 569776957,
-                granularities: vec![
+                granularities: smallvec![
                     GRANULARITY_ONE_MINUTE,
                     GRANULARITY_ONE_HOUR,
                     GRANULARITY_ONE_DAY,
@@ -2053,7 +2054,7 @@ mod tests {
                 metric_type: "gauge".to_string(),
                 materialization_version: 3,
                 timeseries_id: 569776957,
-                granularities: vec![
+                granularities: smallvec![
                     GRANULARITY_ONE_MINUTE,
                     GRANULARITY_ONE_HOUR,
                     GRANULARITY_ONE_DAY,
@@ -2129,7 +2130,7 @@ mod tests {
                 metric_type: "set".to_string(),
                 materialization_version: 2,
                 timeseries_id: 828906429,
-                granularities: vec![
+                granularities: smallvec![
                     GRANULARITY_ONE_MINUTE,
                     GRANULARITY_ONE_HOUR,
                     GRANULARITY_ONE_DAY,
