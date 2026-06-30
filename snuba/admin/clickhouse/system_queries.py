@@ -25,6 +25,17 @@ class UnauthorizedForSudo(SerializableException):
     pass
 
 
+def _client_settings_for_storage(storage_name: str) -> ClickhouseClientSettings:
+    if storage_name == "querylog":
+        # querylog uses the QUERYLOG profile rather than QUERY purely for its
+        # timeout: both send empty ClickHouse settings, but QUERY caps reads at
+        # 25s (headroom under the frontend request budget) while QUERYLOG is
+        # unbounded. querylog admin queries scan the large system.query_log and
+        # can legitimately run longer than that cap, so they must not inherit it.
+        return ClickhouseClientSettings.QUERYLOG
+    return ClickhouseClientSettings.QUERY
+
+
 def _run_sql_query_on_host(
     clickhouse_host: str,
     clickhouse_port: int,
@@ -36,14 +47,7 @@ def _run_sql_query_on_host(
     """
     Run the SQL query. It should be validated before getting to this point
     """
-    if storage_name == "querylog":
-        # querylog readonly user profile has readonly=2 set, but if you try
-        # and set readonly=2 as part of the request this will error since
-        # clickhouse doesn't let you set readonly setting if readonly=2 in
-        # the current settings https://github.com/ClickHouse/ClickHouse/blob/20.7/src/Access/SettingsConstraints.cpp#L243-L249
-        settings = ClickhouseClientSettings.QUERYLOG
-    else:
-        settings = ClickhouseClientSettings.QUERY
+    settings = _client_settings_for_storage(storage_name)
 
     if clusterless_mode:
         # Sudo clusterless queries (SYSTEM, ALTER, DROP, etc.) require the full
@@ -66,8 +70,31 @@ def _run_sql_query_on_host(
         if not sudo
         else get_sudo_node_connection(clickhouse_host, clickhouse_port, storage_name, settings)
     )
-    query_result = connection.execute(query=sql, with_column_types=True)
-    return query_result
+    return connection.execute(query=sql, with_column_types=True)
+
+
+def _run_explain_on_host(
+    clickhouse_host: str,
+    clickhouse_port: int,
+    storage_name: str,
+    sql: str,
+    clusterless_mode: bool,
+) -> ClickhouseResult:
+    """
+    Run an EXPLAIN statement used to validate a system query (the EXPLAIN AST /
+    QUERY TREE queries this module issues). Validation explains are always
+    read-only, and they go through the pool's ``execute_explain`` rather than
+    ``execute`` so they decode correctly on the clickhouse-connect (HTTP) driver
+    as well as the native one — over HTTP an EXPLAIN cannot be read back through
+    the normal query path.
+    """
+    settings = _client_settings_for_storage(storage_name)
+    connection = (
+        get_ro_clusterless_node_connection(clickhouse_host, clickhouse_port, storage_name, settings)
+        if clusterless_mode
+        else get_ro_node_connection(clickhouse_host, clickhouse_port, storage_name, settings)
+    )
+    return connection.execute_explain(sql)
 
 
 DESCRIBE_QUERY_RE = re.compile(
@@ -183,12 +210,11 @@ def is_query_using_only_system_tables(
     sql_query = sql_query.strip().rstrip(";") if sql_query.endswith(";") else sql_query
     settings_clause = "" if sudo_mode else " SETTINGS allow_experimental_analyzer = 1"
     explain_query_tree_query = f"EXPLAIN QUERY TREE {sql_query}{settings_clause}"
-    explain_query_tree_result = _run_sql_query_on_host(
+    explain_query_tree_result = _run_explain_on_host(
         clickhouse_host,
         clickhouse_port,
         storage_name,
         explain_query_tree_query,
-        False,
         clusterless_mode,
     )
 
@@ -224,8 +250,12 @@ def is_valid_system_query(
     """
     explain_ast_query = f"EXPLAIN AST {sql_query}"
     disallowed_ast_nodes = ["AlterQuery", "AlterCommand", "DropQuery", "InsertQuery"]
-    explain_ast_result = _run_sql_query_on_host(
-        clickhouse_host, clickhouse_port, storage_name, explain_ast_query, False, clusterless_mode
+    explain_ast_result = _run_explain_on_host(
+        clickhouse_host,
+        clickhouse_port,
+        storage_name,
+        explain_ast_query,
+        clusterless_mode,
     )
 
     for node in disallowed_ast_nodes:

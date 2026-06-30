@@ -342,3 +342,122 @@ def test_connect_type_names_drive_reader_transforms() -> None:
     assert row["dt_tz"] == "2023-01-02T03:04:05+00:00"
     assert row["uid"] == "00000000-0000-0000-0000-000000000001"
     assert row["nuid"] == "00000000-0000-0000-0000-000000000001"
+
+
+def test_execute_explain_uses_command_and_returns_text_rows() -> None:
+    # execute_explain serves EXPLAIN via command() -- which sends the statement
+    # verbatim, no "FORMAT Native" appended -- not the Native query() path.
+    # query() would append "FORMAT Native", the inner query swallows it, and the
+    # EXPLAIN output returns as text that the Native reader misparses (the
+    # snuba-admin "Unrecognized ClickHouse type base: essionList ..." failure, a
+    # fragment of the EXPLAIN AST dump read as a column type). command() returns
+    # the decoded text, exposed as one single-column row per line.
+    client = mock.Mock()
+    # command() strips the trailing newline and (no tabs) returns the whole dump
+    # as a single string.
+    client.command.return_value = (
+        "SelectWithUnionQuery (children 1)\n"
+        " ExpressionList (children 1)\n"
+        "  Identifier query\n"
+        " TablesInSelectQuery (children 1)"
+    )
+
+    pool = _make_pool(client)
+    result = pool.execute_explain("EXPLAIN AST SELECT query FROM system.clusters")
+
+    # Used the text command() path, never the Native query() path.
+    client.command.assert_called_once()
+    client.query.assert_not_called()
+
+    # One single-column row per explain line, indentation preserved -- the shape
+    # the native driver returns for the same EXPLAIN.
+    assert result.results == [
+        ("SelectWithUnionQuery (children 1)",),
+        (" ExpressionList (children 1)",),
+        ("  Identifier query",),
+        (" TablesInSelectQuery (children 1)",),
+    ]
+    assert result.meta == [("explain", "String")]
+
+
+def test_execute_does_not_route_explain_to_command() -> None:
+    # The EXPLAIN handling lives behind the dedicated execute_explain() entry
+    # point; the generic execute() does not sniff query text. Even an EXPLAIN
+    # passed to execute() goes through the Native query() path -- callers that
+    # need EXPLAIN over HTTP must use execute_explain instead.
+    client = mock.Mock()
+    client.query.return_value = FakeQueryResult(
+        result_set=[[1]],
+        column_names=("x",),
+        column_types=(FakeColumnType("UInt8"),),
+    )
+
+    pool = _make_pool(client)
+    pool.execute("EXPLAIN AST SELECT 1", with_column_types=True)
+
+    client.query.assert_called_once()
+    client.command.assert_not_called()
+
+
+def test_execute_explain_empty_output_returns_no_rows() -> None:
+    # An empty response body makes command() return a QuerySummary (here stubbed
+    # by a bare Mock, which is neither str/int/list): that must yield zero rows,
+    # not a single empty-string row.
+    client = mock.Mock()
+    client.command.return_value = mock.Mock()  # stand-in for QuerySummary
+
+    pool = _make_pool(client)
+    result = pool.execute_explain("EXPLAIN AST SELECT 1")
+
+    assert result.results == []
+    assert result.meta == [("explain", "String")]
+
+
+def test_execute_explain_error_wrapped_and_preserves_code() -> None:
+    # Errors from the command() path must be wrapped in a snuba ClickhouseError
+    # with the server code preserved -- the system-query validator relies on the
+    # code (e.g. UNKNOWN_TABLE) to turn a failed EXPLAIN into a clean rejection.
+    from clickhouse_connect.driver.exceptions import DatabaseError
+
+    UNKNOWN_TABLE = 60
+    client = mock.Mock()
+    client.command.side_effect = DatabaseError("no such table", code=UNKNOWN_TABLE)
+
+    pool = _make_pool(client)
+    try:
+        pool.execute_explain("EXPLAIN AST SELECT * FROM nope")
+        raise AssertionError("expected a ClickhouseError to be raised")
+    except ClickhouseError as error:
+        assert error.code == UNKNOWN_TABLE
+
+
+def test_execute_explain_wraps_client_init_errors() -> None:
+    # _get_client() opens the connection on first use and can raise on an
+    # unreachable host. Like the normal execute() path, execute_explain must run
+    # it inside the error-translation context, so the failure surfaces as a snuba
+    # ClickhouseError rather than a raw clickhouse-connect error -- the
+    # system-query validator's error handling relies on that contract.
+    from clickhouse_connect.driver.exceptions import OperationalError
+
+    pool = _make_pool(mock.Mock())
+    pool._get_client = mock.Mock(  # type: ignore[method-assign]
+        side_effect=OperationalError("connection refused")
+    )
+
+    with pytest.raises(ClickhouseError):
+        pool.execute_explain("EXPLAIN AST SELECT 1")
+
+
+def test_native_pool_execute_explain_delegates_to_execute() -> None:
+    # The ClickhousePool default (used by the native driver) runs EXPLAIN through
+    # the normal execute() path -- the native protocol decodes it fine, so only
+    # the connect pool overrides execute_explain.
+    from snuba.clickhouse.native import ClickhouseNativePool, ClickhouseResult
+
+    pool = ClickhouseNativePool("host", 9000, "user", "pw", "db")
+    sentinel = ClickhouseResult(results=[("ExpressionList (children 1)",)])
+    with mock.patch.object(pool, "execute", return_value=sentinel) as execute:
+        out = pool.execute_explain("EXPLAIN AST SELECT 1")
+
+    execute.assert_called_once_with("EXPLAIN AST SELECT 1", with_column_types=True)
+    assert out is sentinel
