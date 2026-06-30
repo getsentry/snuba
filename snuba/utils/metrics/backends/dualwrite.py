@@ -23,9 +23,9 @@ class SentryDatadogMetricsBackend(MetricsBackend):
         self.sentry = sentry
 
     def _use_sentry(self) -> bool:
-        from snuba.state.sentry_options import get_bool_option
+        from snuba.state.sentry_options import get_option
 
-        if get_bool_option("use_sentry_metrics", False):
+        if get_option("use_sentry_metrics", False):
             return bool(random.random() < settings.DDM_METRICS_SAMPLE_RATE)
         return False
 

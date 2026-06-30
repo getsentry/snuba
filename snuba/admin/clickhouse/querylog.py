@@ -1,3 +1,5 @@
+from typing import cast
+
 from snuba.admin.audit_log.query import audit_log
 from snuba.admin.clickhouse.common import (
     get_ro_query_node_connection,
@@ -8,7 +10,7 @@ from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.state.sentry_options import get_int_option
+from snuba.state.sentry_options import get_option
 
 _MAX_CH_THREADS = 4
 
@@ -35,7 +37,7 @@ def describe_querylog_schema() -> ClickhouseResult:
 
 
 def _get_clickhouse_threads() -> int:
-    config_threads = get_int_option("admin.querylog_threads", _MAX_CH_THREADS)
+    config_threads = cast(int, get_option("admin.querylog_threads", _MAX_CH_THREADS))
     return min(config_threads, _MAX_CH_THREADS)
 
 

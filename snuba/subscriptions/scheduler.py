@@ -11,7 +11,7 @@ from snuba.datasets.slicing import (
     map_logical_partition_to_slice,
     map_org_id_to_logical_partition,
 )
-from snuba.state.sentry_options import get_str_option
+from snuba.state.sentry_options import get_option
 from snuba.subscriptions.data import (
     PartitionId,
     ScheduledSubscriptionTask,
@@ -181,7 +181,7 @@ class TaskBuilderModeState:
 
     def get_current_mode(self, subscription: Subscription, timestamp: int) -> TaskBuilderMode:
         general_mode = TaskBuilderMode(
-            get_str_option("subscription_primary_task_builder", TaskBuilderMode.JITTERED.value)
+            get_option("subscription_primary_task_builder", TaskBuilderMode.JITTERED.value)
         )
 
         if general_mode == TaskBuilderMode.IMMEDIATE or general_mode == TaskBuilderMode.JITTERED:
@@ -325,7 +325,7 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
         This function is called for every tick.
         """
         general_mode = TaskBuilderMode(
-            get_str_option("subscription_primary_task_builder", TaskBuilderMode.JITTERED.value)
+            get_option("subscription_primary_task_builder", TaskBuilderMode.JITTERED.value)
         )
         if general_mode == TaskBuilderMode.JITTERED:
             self.__builder: TaskBuilder = self.__jittered_builder

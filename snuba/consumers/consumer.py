@@ -32,7 +32,7 @@ from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import TableWriter
 from snuba.processor import InsertBatch, MessageProcessor, ReplacementBatch
-from snuba.state.sentry_options import get_mapped_float_option
+from snuba.state.sentry_options import get_mapped_option
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.topics import Topic as SnubaTopic
@@ -476,7 +476,11 @@ def process_message(
     )
 
     validate_sample_rate = (
-        get_mapped_float_option("validate_schema_sample_rate", snuba_logical_topic.name, 1.0) or 0.0
+        cast(
+            float,
+            get_mapped_option("validate_schema_sample_rate", snuba_logical_topic.name, 1.0),
+        )
+        or 0.0
     )
 
     assert isinstance(message.value, BrokerValue)
