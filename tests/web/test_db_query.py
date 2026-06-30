@@ -282,6 +282,52 @@ def test_empty_result_meta_synthesized_from_query() -> None:
     assert stats["result_cols"] == 1
 
 
+def test_empty_result_meta_falls_back_to_expression_alias() -> None:
+    # SelectedExpression.name is nullable, but the actual result column name is
+    # the expression's alias (what the formatter emits and ClickHouse echoes
+    # back). When name is None, synthesis must fall back to the alias rather than
+    # dropping the column -- otherwise meta would be missing columns and
+    # downstream column-count/name validation would fail.
+    from snuba.query import SelectedExpression
+    from snuba.query.expressions import Column as ColumnExpr
+    from snuba.reader import Reader, Result
+
+    query, _storage, _attribution_info = _build_test_query("count(distinct(project_id))")
+    query.set_ast_selected_columns(
+        [
+            SelectedExpression(
+                name=None,
+                expression=ColumnExpr(
+                    alias="aliased_col", table_name=None, column_name="project_id"
+                ),
+            )
+        ]
+    )
+
+    class _EmptyMetaReader(Reader):
+        def __init__(self) -> None:
+            super().__init__(cache_partition_id=None, query_settings_prefix=None)
+
+        def execute(self, *args: Any, **kwargs: Any) -> Result:
+            return {"data": [], "meta": [], "profile": None, "trace_output": ""}
+
+    stats: dict[str, Any] = {}
+    result = execute_query(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        formatted_query=format_query(query),
+        reader=_EmptyMetaReader(),
+        timer=Timer("test"),
+        stats=stats,
+        clickhouse_query_settings={},
+        robust=False,
+    )
+
+    # Recovered from the expression alias even though name is None.
+    assert result["meta"] == [{"name": "aliased_col", "type": ""}]
+    assert stats["result_cols"] == 1
+
+
 @pytest.mark.events_db
 @pytest.mark.redis_db
 def test_db_record_bytes_scanned() -> None:
