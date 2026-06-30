@@ -48,11 +48,7 @@ from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
 from snuba.query.allocation_policies.utils import get_max_bytes_to_read
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import record_query
-from snuba.state.sentry_options import (
-    get_bool_option,
-    get_int_option,
-    get_mapped_int_option,
-)
+from snuba.state.sentry_options import get_mapped_option, get_option
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import import_submodules_in_directory
@@ -316,7 +312,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         return cast(list[Configuration], self._default_config_definitions)
 
     def _get_default_routing_decision_tier(self) -> Tier:
-        tier_int = get_int_option("default_tier", 1)
+        tier_int = get_option("default_tier", 1)
 
         if tier_int == 512:
             return Tier.TIER_512
@@ -509,7 +505,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
 
                 routing_context.cluster_load_info = (
                     get_cluster_loadinfo()
-                    if get_bool_option("storage_routing.enable_get_cluster_loadinfo", False)
+                    if get_option("storage_routing.enable_get_cluster_loadinfo", False)
                     else None
                 )
 
@@ -622,18 +618,19 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         # default, then the constant. The dict is keyed by routing-strategy class
         # name (or DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX for the global value).
         default = 1000
-        return (
-            get_mapped_int_option(
+        return cast(
+            int,
+            get_mapped_option(
                 "storage_routing_sampled_too_low_threshold",
                 self.class_name(),
-                get_mapped_int_option(
+                get_mapped_option(
                     "storage_routing_sampled_too_low_threshold",
                     DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX,
                     default,
                 )
                 or default,
             )
-            or default
+            or default,
         )
 
     def _get_time_budget_ms(self) -> int:
@@ -642,18 +639,19 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         time budget overridden or can default to a global one set in runtime config
         """
         default = 8000
-        return (
-            get_mapped_int_option(
+        return cast(
+            int,
+            get_mapped_option(
                 "storage_routing_time_budget_ms",
                 self.class_name(),
-                get_mapped_int_option(
+                get_mapped_option(
                     "storage_routing_time_budget_ms",
                     DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX,
                     default,
                 )
                 or default,
             )
-            or default
+            or default,
         )
 
     def _emit_routing_mistake(self, routing_decision: RoutingDecision) -> None:

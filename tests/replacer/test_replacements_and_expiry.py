@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from typing import cast
 from unittest import mock
 
 import pytest
@@ -9,13 +10,13 @@ from snuba.replacers.replacements_and_expiry import (
     get_config_auto_replacements_bypass_projects,
     set_config_auto_replacements_bypass_projects,
 )
-from snuba.state.sentry_options import get_int_option
+from snuba.state.sentry_options import get_option
 
 
 @freeze_time("2024-5-13 09:00:00")
 class TestState:
     start_test_time = datetime.now()
-    expiry_window_minutes = get_int_option(REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY, 5)
+    expiry_window_minutes = cast(int, get_option(REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY, 5))
     proj1_add_time = start_test_time
     proj2_add_time = start_test_time + timedelta(minutes=expiry_window_minutes // 2)
     proj1_expiry = proj1_add_time + timedelta(minutes=expiry_window_minutes)
@@ -70,7 +71,7 @@ class TestState:
 
     @pytest.mark.redis_db
     @mock.patch(
-        "snuba.replacers.replacements_and_expiry.get_int_option",
+        "snuba.replacers.replacements_and_expiry.get_option",
     )
     def test_expiry_window_changes(self, mock: mock.MagicMock) -> None:
         mock.side_effect = [5, 10]

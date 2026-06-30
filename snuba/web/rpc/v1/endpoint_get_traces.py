@@ -39,7 +39,7 @@ from snuba.query.expressions import DangerousRawSQL, Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.state.sentry_options import get_bool_option
+from snuba.state.sentry_options import get_option
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
@@ -507,7 +507,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         _validate_order_by(in_msg)
 
         # Feature flag: Use cross-item query path for all queries (single-item and cross-item)
-        use_cross_item_path = self._is_cross_event_query(in_msg.filters) or get_bool_option(
+        use_cross_item_path = self._is_cross_event_query(in_msg.filters) or get_option(
             "use_cross_item_path_for_single_item_queries", False
         )
 
