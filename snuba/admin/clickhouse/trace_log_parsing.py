@@ -219,6 +219,13 @@ def summarize_trace_output(raw_trace_logs: str) -> TracingSummary:
     parsed = format_log_to_dict(raw_trace_logs)
 
     summary = TracingSummary({})
+    if not parsed:
+        # No parseable trace lines. This is the normal case for the
+        # clickhouse-connect (HTTP) driver, which does not surface the server's
+        # send_logs_level output, so trace_output is always empty. Return an
+        # empty summary instead of indexing parsed[0], which used to raise
+        # "list index out of range" and 500 the tracing tool.
+        return summary
     query_node = parsed[0]["node_name"]
     summary.query_summaries[query_node] = QuerySummary(query_node, True, parsed[0]["query_id"])
     for line in parsed:
