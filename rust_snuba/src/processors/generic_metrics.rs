@@ -339,12 +339,20 @@ impl Parse for CountersRawRow {
     }
 }
 
-fn should_use_killswitch(config: Option<String>, use_case: &MessageUseCase) -> bool {
-    if let Some(killswitch) = config {
-        return killswitch.contains(use_case.use_case_id.as_str());
+#[inline]
+fn should_use_killswitch(
+    killswitch_config: Option<String>,
+    payload_bytes: &[u8],
+) -> anyhow::Result<bool> {
+    if let Some(config) = killswitch_config {
+        let use_case = serde_json::from_slice::<MessageUseCase>(payload_bytes)?;
+        if config.contains(&use_case.use_case_id) {
+            counter!("generic_metrics.messages.killswitched_use_case", 1, "use_case_id" => &use_case.use_case_id);
+            return Ok(true);
+        }
     }
 
-    false
+    Ok(false)
 }
 
 fn process_message<T>(
@@ -355,14 +363,12 @@ where
     T: Parse + Serialize,
 {
     let payload_bytes = payload.payload().context("Expected payload")?;
+
     let killswitch_config = options("snuba")
         .ok()
         .and_then(|o| o.get("generic_metrics_use_case_killswitch").ok())
         .and_then(|v| v.as_str().map(String::from));
-    let use_case: MessageUseCase = serde_json::from_slice(payload_bytes)?;
-
-    if should_use_killswitch(killswitch_config, &use_case) {
-        counter!("generic_metrics.messages.killswitched_use_case", 1, "use_case_id" => use_case.use_case_id.as_str());
+    if should_use_killswitch(killswitch_config, payload_bytes)? {
         return Ok(InsertBatch::skip());
     }
 
@@ -1362,61 +1368,49 @@ mod tests {
     #[test]
     fn test_shouldnt_killswitch() {
         let fake_config = Some("[custom]".to_string());
-        let use_case = MessageUseCase {
-            use_case_id: "transactions".to_string(),
-        };
+        let payload = br#"{"use_case_id":"transactions"}"#;
 
-        assert!(!should_use_killswitch(fake_config, &use_case));
+        assert!(!should_use_killswitch(fake_config, payload).unwrap());
     }
 
     #[test]
     fn test_should_killswitch() {
-        let use_case = MessageUseCase {
-            use_case_id: "transactions".to_string(),
-        };
+        let payload = br#"{"use_case_id":"transactions"}"#;
         let fake_config = Some("[transactions]".to_string());
 
-        assert!(should_use_killswitch(fake_config, &use_case));
+        assert!(should_use_killswitch(fake_config, payload).unwrap());
     }
 
     #[test]
     fn test_should_killswitch_again() {
-        let use_case = MessageUseCase {
-            use_case_id: "transactions".to_string(),
-        };
+        let payload = br#"{"use_case_id":"transactions"}"#;
         let fake_config = Some("[transactions, custom]".to_string());
 
-        assert!(should_use_killswitch(fake_config, &use_case));
+        assert!(should_use_killswitch(fake_config, payload).unwrap());
     }
 
     #[test]
     fn test_shouldnt_killswitch_again() {
-        let use_case = MessageUseCase {
-            use_case_id: "transactions".to_string(),
-        };
+        let payload = br#"{"use_case_id":"transactions"}"#;
         let fake_config = Some("[]".to_string());
 
-        assert!(!should_use_killswitch(fake_config, &use_case));
+        assert!(!should_use_killswitch(fake_config, payload).unwrap());
     }
 
     #[test]
     fn test_shouldnt_killswitch_empty() {
-        let use_case = MessageUseCase {
-            use_case_id: "transactions".to_string(),
-        };
+        let payload = br#"{"use_case_id":"transactions"}"#;
         let fake_config = Some("".to_string());
 
-        assert!(!should_use_killswitch(fake_config, &use_case));
+        assert!(!should_use_killswitch(fake_config, payload).unwrap());
     }
 
     #[test]
     fn test_shouldnt_killswitch_no_config() {
-        let use_case = MessageUseCase {
-            use_case_id: "transactions".to_string(),
-        };
+        let payload = br#"{"use_case_id":"transactions"}"#;
         let fake_config: Option<String> = None;
 
-        assert!(!should_use_killswitch(fake_config, &use_case));
+        assert!(!should_use_killswitch(fake_config, payload).unwrap());
     }
 
     #[test]
