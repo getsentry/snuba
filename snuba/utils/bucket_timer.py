@@ -3,9 +3,10 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import MutableMapping
 from datetime import datetime, timedelta
+from typing import cast
 
 from snuba import environment
-from snuba.state.sentry_options import get_bool_option, get_float_option, get_int_option
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "bucket_timer")
@@ -36,8 +37,8 @@ class Counter:
         self.consumer_group: str = consumer_group
         self.buckets: Buckets = {}
 
-        percentage = get_float_option("project_quota_time_percentage", 1.0)
-        counter_window_size_minutes = get_int_option("counter_window_size_minutes", 10)
+        percentage = cast(float, get_option("project_quota_time_percentage", 1.0))
+        counter_window_size_minutes = cast(int, get_option("counter_window_size_minutes", 10))
         self.counter_window_size = timedelta(minutes=counter_window_size_minutes)
         self.limit = self.counter_window_size * percentage
 
@@ -88,7 +89,7 @@ class Counter:
         for project_id, total_processing_time in project_groups.items():
             if total_processing_time > self.limit and (
                 len(project_groups) > 1
-                or get_bool_option("allows_skipping_single_project_replacements", False)
+                or get_option("allows_skipping_single_project_replacements", False)
             ):
                 projects_exceeding_time_limit.append(project_id)
 

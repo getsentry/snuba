@@ -17,7 +17,7 @@ from redis.exceptions import TimeoutError as RedisTimeoutError
 from snuba import environment, state
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state import get_configs, set_config
-from snuba.state.sentry_options import get_int_option
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.serializable_exception import SerializableException
 
@@ -349,13 +349,13 @@ def rate_limit(
 
     """
     # bool (0/1) flag to disable rate limits altogether
-    bypass_rate_limit = get_int_option("bypass_rate_limit", 0)
+    bypass_rate_limit = get_option("bypass_rate_limit", 0)
     # number of seconds the timestamps are kept
-    rate_history_s = get_int_option("rate_history_sec", 3600)
+    rate_history_s = cast(int, get_option("rate_history_sec", 3600))
     # number of shards that each redis set is supposed to have. increasing this
     # value multiplies the number of redis keys by that factor, and (on average)
     # reduces the size of each redis set
-    rate_limit_shard_factor = get_int_option("rate_limit_shard_factor", 1)
+    rate_limit_shard_factor = cast(int, get_option("rate_limit_shard_factor", 1))
     assert rate_limit_shard_factor > 0
 
     if bypass_rate_limit == 1:
