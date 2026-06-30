@@ -3,7 +3,7 @@ import uuid
 from collections.abc import Iterable
 from datetime import datetime
 from operator import attrgetter
-from typing import Any, NamedTuple, Optional
+from typing import Any, NamedTuple, Optional, cast
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -45,7 +45,7 @@ from snuba.settings import (
     ENABLE_TRACE_PAGINATION_DEFAULT,
     ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS,
 )
-from snuba.state.sentry_options import get_bool_option, get_float_option
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.util import with_span
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
@@ -326,7 +326,7 @@ def _build_query(
             expression=column("item_id"),
         ),
     ]
-    if get_bool_option("enable_trace_pagination", bool(ENABLE_TRACE_PAGINATION_DEFAULT)):
+    if get_option("enable_trace_pagination", bool(ENABLE_TRACE_PAGINATION_DEFAULT)):
         order_by = new_order_by
     else:
         order_by = old_order_by
@@ -365,12 +365,13 @@ def _build_query(
 
 
 def _get_apply_final_rollout_percentage() -> float:
-    return (
-        get_float_option(
+    return cast(
+        float,
+        get_option(
             APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
             0.0,
         )
-        or 0.0
+        or 0.0,
     )
 
 
@@ -634,7 +635,7 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
             "eap_trace_request_without_limit", 1, tags={"referrer": in_msg.meta.referrer}
         )
 
-        enable_pagination = get_bool_option(
+        enable_pagination = get_option(
             "enable_trace_pagination", bool(ENABLE_TRACE_PAGINATION_DEFAULT)
         )
         if enable_pagination:

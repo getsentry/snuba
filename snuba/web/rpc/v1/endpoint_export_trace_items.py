@@ -32,7 +32,7 @@ from snuba.query.dsl import column, literal
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.state.sentry_options import get_int_option
+from snuba.state.sentry_options import get_option
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
@@ -525,9 +525,10 @@ class EndpointExportTraceItems(RPCEndpoint[ExportTraceItemsRequest, ExportTraceI
         return ExportTraceItemsResponse
 
     def _execute(self, in_msg: ExportTraceItemsRequest) -> ExportTraceItemsResponse:
-        default_page_size = (
-            get_int_option("export_trace_items_default_page_size", _DEFAULT_PAGE_SIZE)
-            or _DEFAULT_PAGE_SIZE
+        default_page_size = cast(
+            int,
+            get_option("export_trace_items_default_page_size", _DEFAULT_PAGE_SIZE)
+            or _DEFAULT_PAGE_SIZE,
         )
         if in_msg.limit > 0:
             limit = min(in_msg.limit, default_page_size)

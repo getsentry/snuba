@@ -3,9 +3,9 @@ from __future__ import annotations
 import time
 from enum import Enum
 from threading import Lock
-from typing import Any
+from typing import Any, cast
 
-from snuba.state.sentry_options import get_mapped_float_option
+from snuba.state.sentry_options import get_mapped_option
 
 # sentry-options dict option whose keys are rate-limit bucket names and whose
 # values are the per-bucket max operations-per-second. Migrated from the
@@ -42,7 +42,7 @@ class RateLimiter:
 
     def __enter__(self) -> tuple[RateLimitResult, int]:
         limit = (
-            get_mapped_float_option(RATE_LIMIT_PER_SEC_OPTION, self.__bucket, 0.0)
+            cast(float, get_mapped_option(RATE_LIMIT_PER_SEC_OPTION, self.__bucket, 0.0))
             if not self.__max_rate_per_sec
             else self.__max_rate_per_sec
         )

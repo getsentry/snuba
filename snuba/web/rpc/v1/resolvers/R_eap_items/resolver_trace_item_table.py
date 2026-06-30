@@ -56,7 +56,7 @@ from snuba.query.expressions import (
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.state.sentry_options import get_bool_option
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
@@ -790,7 +790,7 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
             routing_decision.strategy.merge_clickhouse_settings(routing_decision, query_settings)
             # When trace_filters are present and the feature is enabled, don't use sampling on the outer query
             # The inner query (getting trace IDs) will use sampling
-            cross_item_queries_no_sample_outer = get_bool_option(
+            cross_item_queries_no_sample_outer = get_option(
                 "cross_item_queries_no_sample_outer", True
             )
             if not (in_msg.trace_filters and cross_item_queries_no_sample_outer):
