@@ -294,7 +294,9 @@ class ClickhouseConnectPool(ClickhousePool):
         # in snuba.web.db_query, which synthesizes the column metadata from the
         # query itself instead of paying for a second scan here.
         if _WITH_TOTALS_RE.search(query) is not None:
-            recovered_meta, totals = self._recover_meta_and_totals(client, query, params, settings)
+            recovered_meta, totals = self._recover_meta_and_totals(
+                client, query, params, settings, query_id
+            )
             # An empty WITH TOTALS result has no Native header either, so fall
             # back to the JSON meta we just fetched (it carries the real types).
             if not meta:
@@ -321,6 +323,7 @@ class ClickhouseConnectPool(ClickhousePool):
         query: str,
         params: Params,
         settings: Mapping[str, Any] | None,
+        query_id: str | None,
     ) -> tuple[list[tuple[str, str]], Mapping[str, Any] | None]:
         """
         Re-run a ``WITH TOTALS`` ``query`` with ``FORMAT JSON`` and return
@@ -333,11 +336,23 @@ class ClickhouseConnectPool(ClickhousePool):
         response carries no totals block. The JSON output format is the only one
         clickhouse-connect can read that exposes the totals the Native/HTTP path
         omits.
+
+        ``settings`` is the primary query's settings, which already carries every
+        functional runtime setting (timeouts, max_threads, readonly, ...); the
+        recovery query inherits all of them. ``query_id`` is the primary query's
+        id, used to derive a distinct-but-correlated id for this recovery query.
         """
         json_settings: dict[str, Any] = dict(settings) if settings else {}
         # UInt64/Int64 are emitted as quoted strings in JSON by default; turn that
         # off so numeric values come back as numbers, matching the native driver.
         json_settings["output_format_json_quote_64bit_integers"] = 0
+        # Tag the recovery query with an id derived from the primary one's so the
+        # two are correlatable in ClickHouse's query_log without sharing an id
+        # (which would make them indistinguishable). send_logs_level is
+        # intentionally not propagated: the HTTP path cannot surface trace output
+        # regardless (see _build_query_settings), so it would be pure overhead.
+        if query_id is not None:
+            json_settings["query_id"] = f"{query_id}_totals"
         raw = client.raw_query(
             query,
             parameters=params if params else None,

@@ -301,6 +301,39 @@ def test_with_totals_refetched_via_json_over_http() -> None:
     assert kwargs["settings"]["output_format_json_quote_64bit_integers"] == 0
 
 
+def test_totals_refetch_uses_correlated_query_id_and_inherits_settings() -> None:
+    # The WITH TOTALS recovery query carries an id derived from the primary
+    # query's id -- so the two correlate in ClickHouse's query_log -- without
+    # reusing it (which would make them indistinguishable). Every other runtime
+    # setting is inherited from the primary query.
+    client = mock.Mock()
+    client.query.return_value = FakeQueryResult(
+        result_set=[[1, 10]],
+        column_names=("g", "s"),
+        column_types=(FakeColumnType("UInt64"), FakeColumnType("UInt64")),
+    )
+    client.raw_query.return_value = json.dumps(
+        {
+            "meta": [{"name": "g", "type": "UInt64"}, {"name": "s", "type": "UInt64"}],
+            "data": [{"g": 1, "s": 10}],
+            "totals": {"g": 0, "s": 10},
+        }
+    ).encode()
+
+    pool = _make_pool(client)
+    pool.execute(
+        "SELECT g, sum(v) AS s FROM t GROUP BY g WITH TOTALS",
+        with_column_types=True,
+        query_id="abc-123",
+        settings={"max_execution_time": 30},
+    )
+
+    _, kwargs = client.raw_query.call_args
+    # Correlated but distinct id, and the primary query's functional settings.
+    assert kwargs["settings"]["query_id"] == "abc-123_totals"
+    assert kwargs["settings"]["max_execution_time"] == 30
+
+
 def test_empty_non_totals_result_does_not_refetch() -> None:
     # An empty, non-WITH-TOTALS result comes back from the Native/HTTP path with
     # no column header (ClickHouse emits a zero-byte Native body for zero rows),
