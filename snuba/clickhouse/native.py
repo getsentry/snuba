@@ -118,6 +118,22 @@ class ClickhousePool(ABC):
     ) -> ClickhouseResult:
         raise NotImplementedError
 
+    def execute_explain(self, query: str) -> ClickhouseResult:
+        """
+        Run an EXPLAIN statement and return its single ``explain`` text column,
+        one row per line.
+
+        EXPLAIN gets its own entry point because the drivers surface it
+        differently. The native protocol decodes an EXPLAIN response correctly
+        through :meth:`execute`, so the default implementation just delegates to
+        it. The clickhouse-connect (HTTP) pool cannot — its Native result reader
+        chokes on the EXPLAIN response — so it overrides this method (see
+        ``ClickhouseConnectPool.execute_explain``). Callers that issue EXPLAIN
+        (snuba-admin system-query validation) must use this method rather than
+        ``execute`` so they work on either driver.
+        """
+        return self.execute(query, with_column_types=True)
+
     @abstractmethod
     def close(self) -> None:
         raise NotImplementedError
