@@ -1369,14 +1369,14 @@ mod tests {
     #[test]
     fn test_shouldnt_killswitch() {
         let fake_config = Some("[custom]".to_string());
-        let payload = br#"{"use_case_id":"transactions"}"#;
+        let payload = r#"{"use_case_id":"transactions"}"#;
 
         assert!(!should_use_killswitch(fake_config, payload).unwrap());
     }
 
     #[test]
     fn test_should_killswitch() {
-        let payload = br#"{"use_case_id":"transactions"}"#;
+        let payload = r#"{"use_case_id":"transactions"}"#;
         let fake_config = Some("[transactions]".to_string());
 
         assert!(should_use_killswitch(fake_config, payload).unwrap());
@@ -1384,7 +1384,7 @@ mod tests {
 
     #[test]
     fn test_should_killswitch_again() {
-        let payload = br#"{"use_case_id":"transactions"}"#;
+        let payload = r#"{"use_case_id":"transactions"}"#;
         let fake_config = Some("[transactions, custom]".to_string());
 
         assert!(should_use_killswitch(fake_config, payload).unwrap());
@@ -1392,7 +1392,7 @@ mod tests {
 
     #[test]
     fn test_shouldnt_killswitch_again() {
-        let payload = br#"{"use_case_id":"transactions"}"#;
+        let payload = r#"{"use_case_id":"transactions"}"#;
         let fake_config = Some("[]".to_string());
 
         assert!(!should_use_killswitch(fake_config, payload).unwrap());
@@ -1400,7 +1400,7 @@ mod tests {
 
     #[test]
     fn test_shouldnt_killswitch_empty() {
-        let payload = br#"{"use_case_id":"transactions"}"#;
+        let payload = r#"{"use_case_id":"transactions"}"#;
         let fake_config = Some("".to_string());
 
         assert!(!should_use_killswitch(fake_config, payload).unwrap());
@@ -1408,7 +1408,7 @@ mod tests {
 
     #[test]
     fn test_shouldnt_killswitch_no_config() {
-        let payload = br#"{"use_case_id":"transactions"}"#;
+        let payload = r#"{"use_case_id":"transactions"}"#;
         let fake_config: Option<String> = None;
 
         assert!(!should_use_killswitch(fake_config, payload).unwrap());
