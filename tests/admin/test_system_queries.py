@@ -342,6 +342,131 @@ def test_clusterless_rejects_unvalidated_host(
 
 
 @pytest.mark.parametrize(
+    "helper_name",
+    [
+        "get_ro_node_connection",
+        "get_sudo_node_connection",
+        "get_clusterless_node_connection",
+        "get_ro_clusterless_node_connection",
+    ],
+)
+def test_by_host_connection_uses_default_http_port(helper_name: str) -> None:
+    """
+    These helpers connect to a *specific individual* node by hostname (not the
+    cluster's query endpoint — see test_query_node_connection_uses_cluster_http_port).
+    The cluster's configured http_port belongs to the query endpoint (which may
+    sit behind a proxy/load balancer), not to an individual node, so a by-host
+    HTTP connection must target the node's own ClickHouse HTTP listener — the
+    well-known default port — rather than cluster.get_http_port().
+
+    Regression: the clickhouse-connect (HTTP) driver path passed
+    cluster.get_http_port(), which would send admin by-host traffic to the
+    wrong port. The native driver is unaffected (it uses the native port), but
+    the node we build must carry the default HTTP port for the HTTP driver.
+    """
+    from snuba.admin.clickhouse import common
+    from snuba.clusters.cluster import (
+        DEFAULT_CLICKHOUSE_HTTP_PORT,
+        ClickhouseCluster,
+        connection_cache,
+    )
+
+    helper = getattr(common, helper_name)
+
+    # A port that is deliberately not the well-known default, so the assertions
+    # below distinguish "used the default" from "used the cluster's port" even
+    # if the test cluster happens to be configured with the default port.
+    sentinel_cluster_http_port = 65432
+
+    # Snapshot and restore the module-level connection cache around the call.
+    # The cache key is built from str(StorageKey), which falls back to its repr
+    # ("StorageKey.ERRORS-..."), so matching on a literal prefix is brittle;
+    # snapshot/restore is independent of the key format. Clearing it first also
+    # guarantees the helper builds a fresh node instead of returning a cached
+    # entry, so connection_cache.get_node_connection is actually invoked.
+    saved_connections = dict(common.NODE_CONNECTIONS)
+    common.NODE_CONNECTIONS.clear()
+    try:
+        with (
+            patch.object(common, "_validate_node"),  # treat the host as valid
+            patch.object(
+                ClickhouseCluster,
+                "get_http_port",
+                return_value=sentinel_cluster_http_port,
+            ),
+            patch.object(connection_cache, "get_node_connection") as mock_pool,
+        ):
+            helper(
+                "specific-node.example.com",
+                9000,
+                "errors",
+                ClickhouseClientSettings.QUERY,
+            )
+
+        assert mock_pool.called, "expected a pool to be acquired for a valid host"
+        node = mock_pool.call_args.args[1]
+        assert node.http_port == DEFAULT_CLICKHOUSE_HTTP_PORT
+        assert node.http_port != sentinel_cluster_http_port, (
+            "by-host connections must not use the cluster's configured http_port"
+        )
+    finally:
+        # Restore the cache exactly, so this test never leaks a mocked
+        # connection into others (regardless of the cache key format).
+        common.NODE_CONNECTIONS.clear()
+        common.NODE_CONNECTIONS.update(saved_connections)
+
+
+def test_query_node_connection_uses_cluster_http_port() -> None:
+    """
+    Counterpart to test_by_host_connection_uses_default_http_port: the
+    query-node helper (get_ro_query_node_connection — used by the tracing,
+    querylog and cardinality tools) connects to the cluster's *configured query
+    endpoint*, the same host the normal read path reaches on
+    cluster.get_http_port(). That endpoint may be a load balancer on a
+    non-default HTTP port, so this path must keep using cluster.get_http_port()
+    rather than the by-host default — otherwise the HTTP driver would send those
+    tools to the wrong port.
+    """
+    from snuba.admin.clickhouse import common
+    from snuba.clusters.cluster import ClickhouseCluster, connection_cache
+
+    # A port that is deliberately not the well-known default, so the assertion
+    # below proves the query-node path uses the cluster's configured port and
+    # not the by-host default.
+    sentinel_cluster_http_port = 65432
+
+    # get_ro_query_node_connection caches in CLUSTER_CONNECTIONS, and the
+    # underlying get_ro_node_connection caches in NODE_CONNECTIONS; snapshot and
+    # restore both so the call is exercised and nothing leaks.
+    saved_node = dict(common.NODE_CONNECTIONS)
+    saved_cluster = dict(common.CLUSTER_CONNECTIONS)
+    common.NODE_CONNECTIONS.clear()
+    common.CLUSTER_CONNECTIONS.clear()
+    try:
+        with (
+            patch.object(common, "_validate_node"),  # treat the host as valid
+            patch.object(
+                ClickhouseCluster,
+                "get_http_port",
+                return_value=sentinel_cluster_http_port,
+            ),
+            patch.object(connection_cache, "get_node_connection") as mock_pool,
+        ):
+            common.get_ro_query_node_connection("errors", ClickhouseClientSettings.QUERY)
+
+        assert mock_pool.called, "expected a pool to be acquired for the query node"
+        node = mock_pool.call_args.args[1]
+        assert node.http_port == sentinel_cluster_http_port, (
+            "the query-node connection must use the cluster's configured http_port"
+        )
+    finally:
+        common.NODE_CONNECTIONS.clear()
+        common.NODE_CONNECTIONS.update(saved_node)
+        common.CLUSTER_CONNECTIONS.clear()
+        common.CLUSTER_CONNECTIONS.update(saved_cluster)
+
+
+@pytest.mark.parametrize(
     "sql_query, sudo_mode",
     [
         ("SELECT * FROM system.clusters;", True),
@@ -356,7 +481,7 @@ def test_sudo_mode_skips_experimental_analyzer(sql_query: str, sudo_mode: bool) 
     """
     from unittest.mock import patch
 
-    with patch("snuba.admin.clickhouse.system_queries._run_sql_query_on_host") as mock_run:
+    with patch("snuba.admin.clickhouse.system_queries._run_explain_on_host") as mock_run:
         # Mock the response to simulate successful validation
         mock_result = type("MockResult", (), {"results": []})()
         mock_run.return_value = mock_result
@@ -377,7 +502,7 @@ def test_sudo_mode_skips_experimental_analyzer(sql_query: str, sudo_mode: bool) 
         assert len(calls) > 0, "Expected EXPLAIN QUERY TREE to be called"
 
         # Get the explain query from the call - it's the 4th positional argument (index 3)
-        # call signature: _run_sql_query_on_host(host, port, storage, sql, sudo, clusterless)
+        # call signature: _run_explain_on_host(host, port, storage, sql, clusterless)
         explain_query = calls[0][0][3]  # Fourth argument is the SQL query
 
         if sudo_mode:
