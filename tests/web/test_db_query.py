@@ -39,6 +39,7 @@ from snuba.web.db_query import (
     _apply_allocation_policies_quota,
     _get_query_settings_from_config,
     db_query,
+    execute_query,
 )
 
 test_data = [
@@ -242,6 +243,43 @@ def _build_test_query(
             parent_api=None,
         ),
     )
+
+
+def test_empty_result_meta_synthesized_from_query() -> None:
+    # The clickhouse-connect (HTTP) reader returns no column metadata for a
+    # zero-row result (ClickHouse emits a zero-byte Native body), leaving
+    # result["meta"] empty. execute_query synthesizes the columns from the query
+    # itself -- avoiding a second scan -- so callers that validate the returned
+    # columns (e.g. Sentry, which otherwise fails with "got set()") still see
+    # them. The native driver reports columns directly, so this is a no-op there.
+    from snuba.reader import Reader, Result
+
+    query, _storage, _attribution_info = _build_test_query("count(distinct(project_id))")
+
+    class _EmptyMetaReader(Reader):
+        def __init__(self) -> None:
+            super().__init__(cache_partition_id=None, query_settings_prefix=None)
+
+        def execute(self, *args: Any, **kwargs: Any) -> Result:
+            # Mirror what the connect pool returns for an empty result set.
+            return {"data": [], "meta": [], "profile": None, "trace_output": ""}
+
+    stats: dict[str, Any] = {}
+    result = execute_query(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        formatted_query=format_query(query),
+        reader=_EmptyMetaReader(),
+        timer=Timer("test"),
+        stats=stats,
+        clickhouse_query_settings={},
+        robust=False,
+    )
+
+    assert result["data"] == []
+    # The single selected column ("some_alias") is recovered from the query.
+    assert result["meta"] == [{"name": "some_alias", "type": ""}]
+    assert stats["result_cols"] == 1
 
 
 @pytest.mark.events_db

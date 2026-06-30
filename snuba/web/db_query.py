@@ -48,7 +48,7 @@ from snuba.querylog.query_metadata import (
     get_query_status_from_error_codes,
     get_request_status,
 )
-from snuba.reader import Reader, Result
+from snuba.reader import Column, Reader, Result
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state.cache.abstract import Cache, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import (
@@ -184,6 +184,21 @@ def execute_query(
         with_totals=clickhouse_query.has_totals(),
         robust=robust,
     )
+
+    # The clickhouse-connect (HTTP) reader returns no column metadata for an
+    # empty result set: ClickHouse emits a zero-byte Native body for a query
+    # that matches no rows, so there is no header to read (the native driver
+    # always reports the columns). Rather than issue a second query to recover
+    # them, synthesize the column names from the query we just ran -- they are
+    # the selected-column aliases, which is exactly how the result columns are
+    # named. Types are left blank: an empty result has no values to coerce, and
+    # consumers of an empty result rely only on the column names.
+    if not result["meta"]:
+        synthesized_meta: list[Column] = []
+        for selected in clickhouse_query.get_selected_columns():
+            if selected.name is not None:
+                synthesized_meta.append({"name": selected.name, "type": ""})
+        result["meta"] = synthesized_meta
 
     timer.mark("execute")
     stats.update(

@@ -279,32 +279,24 @@ class ClickhouseConnectPool(ClickhousePool):
             )
         ]
 
-        # clickhouse-connect's Native/HTTP path diverges from the native (TCP)
-        # driver in two ways the driver-agnostic ClickhouseReader relies on. Both
-        # only surface against a real server (mocked-client unit tests miss them),
-        # and both are recoverable from the JSON output format:
+        # A ``GROUP BY ... WITH TOTALS`` query never carries the totals row over
+        # clickhouse-connect's Native/HTTP path: ClickHouse does not serialize
+        # totals into the Native HTTP output (they only travel over the native
+        # TCP protocol), so ``client.query()`` returns just the grouped rows. The
+        # driver-agnostic ClickhouseReader, like the native driver, expects the
+        # totals as the trailing result row. The totals are available from the
+        # JSON output format, so for a WITH TOTALS query we re-run it once with
+        # FORMAT JSON, type-coerce the totals row, and append it.
         #
-        #   * A query that matches no rows comes back with no column header at all
-        #     — ClickHouse emits a zero-byte Native body for an empty result — so
-        #     ``meta`` is empty. The native driver always reports the columns even
-        #     for an empty result, and Snuba callers reject a ``"meta": []``
-        #     response (e.g. Sentry asserts the returned columns match the query).
-        #
-        #   * A ``GROUP BY ... WITH TOTALS`` query never carries the totals row:
-        #     ClickHouse does not serialize totals into the Native HTTP output
-        #     (they only travel over the native TCP protocol), so clickhouse-
-        #     connect returns only the grouped rows. The reader expects the totals
-        #     as the trailing result row, exactly as the native driver appends it.
-        #
-        # When either applies, re-run the query once with FORMAT JSON to recover
-        # the column metadata and/or the totals row. This costs a second scan,
-        # but only for empty results and WITH TOTALS queries; the common
-        # (non-empty, no-totals) read path is untouched.
-        wants_totals = _WITH_TOTALS_RE.search(query) is not None
-        if not meta or wants_totals:
-            recovered_meta, totals = self._recover_meta_and_totals(
-                client, query, params, settings, wants_totals
-            )
+        # The other HTTP/native divergence -- an empty result set coming back
+        # with no column header at all (ClickHouse emits a zero-byte Native body
+        # for zero rows), which leaves ``meta`` empty -- is handled one layer up
+        # in snuba.web.db_query, which synthesizes the column metadata from the
+        # query itself instead of paying for a second scan here.
+        if _WITH_TOTALS_RE.search(query) is not None:
+            recovered_meta, totals = self._recover_meta_and_totals(client, query, params, settings)
+            # An empty WITH TOTALS result has no Native header either, so fall
+            # back to the JSON meta we just fetched (it carries the real types).
             if not meta:
                 meta = recovered_meta
             if totals is not None:
@@ -329,19 +321,18 @@ class ClickhouseConnectPool(ClickhousePool):
         query: str,
         params: Params,
         settings: Mapping[str, Any] | None,
-        want_totals: bool,
     ) -> tuple[list[tuple[str, str]], Mapping[str, Any] | None]:
         """
-        Re-run ``query`` with ``FORMAT JSON`` and return ``(meta, totals)``.
+        Re-run a ``WITH TOTALS`` ``query`` with ``FORMAT JSON`` and return
+        ``(meta, totals)``.
 
-        ``meta`` is the list of ``(name, type)`` column tuples (always present in
-        the JSON response, even for an empty result). ``totals`` is the raw totals
-        mapping (column name -> value) when ``want_totals`` and the response
-        carries a ``WITH TOTALS`` block, otherwise ``None``.
-
-        The JSON output format is the only one clickhouse-connect can read that
-        exposes both pieces; the Native/HTTP path the main query uses drops them.
-        Used by :meth:`_execute_once` to backfill what that path loses.
+        ``meta`` is the list of ``(name, type)`` column tuples (present in the
+        JSON response even when the result is empty); it backfills the column
+        metadata when the totals query itself matched zero rows. ``totals`` is
+        the raw totals mapping (column name -> value), or ``None`` if the
+        response carries no totals block. The JSON output format is the only one
+        clickhouse-connect can read that exposes the totals the Native/HTTP path
+        omits.
         """
         json_settings: dict[str, Any] = dict(settings) if settings else {}
         # UInt64/Int64 are emitted as quoted strings in JSON by default; turn that
@@ -355,7 +346,7 @@ class ClickhouseConnectPool(ClickhousePool):
         )
         payload = json.loads(raw)
         meta = [(column["name"], column["type"]) for column in payload.get("meta", [])]
-        totals = payload.get("totals") if want_totals else None
+        totals = payload.get("totals")
         return meta, totals
 
     @contextmanager

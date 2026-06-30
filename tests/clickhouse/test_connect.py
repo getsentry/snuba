@@ -301,23 +301,15 @@ def test_with_totals_refetched_via_json_over_http() -> None:
     assert kwargs["settings"]["output_format_json_quote_64bit_integers"] == 0
 
 
-def test_empty_result_recovers_column_meta_via_json() -> None:
-    # A query that matches no rows comes back from the Native/HTTP path with no
-    # column header at all (ClickHouse emits a zero-byte Native body for an empty
-    # result), so column_names/meta are empty. The pool recovers the column
-    # metadata from a FORMAT JSON query. Without this Snuba returns "meta": [],
-    # and Sentry's column validation fails with "expected (...), got set()".
+def test_empty_non_totals_result_does_not_refetch() -> None:
+    # An empty, non-WITH-TOTALS result comes back from the Native/HTTP path with
+    # no column header (ClickHouse emits a zero-byte Native body for zero rows),
+    # so meta is empty. The driver does NOT pay for a second query to recover it:
+    # the column metadata for an empty result is synthesized one layer up, in
+    # snuba.web.db_query, from the query's own columns (see
+    # test_db_query.test_empty_result_meta_synthesized_from_query).
     client = mock.Mock()
     client.query.return_value = FakeQueryResult(result_set=[], column_names=(), column_types=())
-    client.raw_query.return_value = json.dumps(
-        {
-            "meta": [
-                {"name": "flags_key", "type": "String"},
-                {"name": "count", "type": "UInt64"},
-            ],
-            "data": [],
-        }
-    ).encode()
 
     pool = _make_pool(client)
     result = pool.execute(
@@ -326,12 +318,38 @@ def test_empty_result_recovers_column_meta_via_json() -> None:
     )
 
     assert result.results == []
-    assert result.meta == [("flags_key", "String"), ("count", "UInt64")]
+    assert result.meta == []
+    client.raw_query.assert_not_called()
+
+
+def test_empty_with_totals_recovers_meta_and_totals_via_json() -> None:
+    # A WITH TOTALS query that matches zero rows loses both its column header and
+    # its totals row over the Native/HTTP path. The JSON re-fetch (which only
+    # fires for WITH TOTALS) recovers the column metadata and the totals row.
+    client = mock.Mock()
+    client.query.return_value = FakeQueryResult(result_set=[], column_names=(), column_types=())
+    client.raw_query.return_value = json.dumps(
+        {
+            "meta": [{"name": "g", "type": "UInt64"}, {"name": "s", "type": "UInt64"}],
+            "data": [],
+            "totals": {"g": 0, "s": 0},
+        }
+    ).encode()
+
+    pool = _make_pool(client)
+    # The trailing totals row is appended to results; the reader pops it off.
+    result = pool.execute(
+        "SELECT g, sum(v) AS s FROM t WHERE g = 999 GROUP BY g WITH TOTALS",
+        with_column_types=True,
+    )
+
+    assert result.meta == [("g", "UInt64"), ("s", "UInt64")]
+    assert result.results == [(0, 0)]
 
 
 def test_non_empty_non_totals_query_does_not_refetch() -> None:
-    # The common read path (rows present, no WITH TOTALS) must not pay for the
-    # second JSON scan -- only empty results and WITH TOTALS queries do.
+    # The common read path (rows present, no WITH TOTALS) must not pay for a
+    # second JSON scan -- only WITH TOTALS queries do.
     client = mock.Mock()
     client.query.return_value = FakeQueryResult(
         result_set=[[1, 2]],
@@ -630,13 +648,18 @@ def test_connect_driver_matches_native_for_totals_and_empty_results() -> None:
         assert http["totals"]["s"] == 40  # sum(v) over all rows
         assert {c["name"] for c in http["meta"]} == {"g", "ts", "s"}
 
-        # 2) A query matching zero rows must still report its columns. Over the
-        #    HTTP driver this used to return "meta": [] -> Sentry "got set()".
+        # 2) A query matching zero rows: the native driver still reports its
+        #    columns, while the connect driver returns empty meta at the reader
+        #    level (ClickHouse sends a zero-byte Native body for zero rows). The
+        #    column metadata for this case is synthesized one layer up, in
+        #    db_query, from the query's own columns -- see
+        #    test_db_query.test_empty_result_meta_synthesized_from_query -- so no
+        #    second scan is paid here. This pins the driver-level divergence.
         empty_sql = f"SELECT g, sum(v) AS s FROM {table} WHERE g = 999 GROUP BY g"
         native_empty = run(native_pool, empty_sql, False)
         http_empty = run(connect_pool, empty_sql, False)
         assert http_empty["data"] == []
-        assert {c["name"] for c in http_empty["meta"]} == {"g", "s"}
+        assert http_empty["meta"] == []
         assert {c["name"] for c in native_empty["meta"]} == {"g", "s"}
 
         # 3) WITH TOTALS matching zero rows still yields a totals row. Over the
