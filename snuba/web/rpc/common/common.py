@@ -2,7 +2,7 @@ import json
 import math
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime, timedelta
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
@@ -51,7 +51,7 @@ from snuba.query.expressions import (
     Lambda,
     SubscriptableReference,
 )
-from snuba.state.sentry_options import get_bool_option, get_int_option
+from snuba.state.sentry_options import get_option
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
@@ -298,9 +298,12 @@ def use_sampling_factor(meta: RequestMeta) -> bool:
     """
     Since we started writing the sampling factor on a specific date, we should only use it on queries that start after that date.
     """
-    use_sampling_factor_timestamp_seconds = get_int_option(
-        "use_sampling_factor_timestamp_seconds",
-        settings.USE_SAMPLING_FACTOR_TIMESTAMP_SECONDS,
+    use_sampling_factor_timestamp_seconds = cast(
+        int,
+        get_option(
+            "use_sampling_factor_timestamp_seconds",
+            settings.USE_SAMPLING_FACTOR_TIMESTAMP_SECONDS,
+        ),
     )
     if use_sampling_factor_timestamp_seconds == 0:
         return False
@@ -316,9 +319,12 @@ def use_array_map_columns(meta: RequestMeta) -> bool:
     only exists in the legacy ``attributes_array`` JSON column. A config value of 0
     disables the typed-column read path entirely.
     """
-    use_array_map_columns_timestamp_seconds = get_int_option(
-        "use_array_map_columns_timestamp_seconds",
-        settings.USE_ARRAY_MAP_COLUMNS_TIMESTAMP_SECONDS,
+    use_array_map_columns_timestamp_seconds = cast(
+        int,
+        get_option(
+            "use_array_map_columns_timestamp_seconds",
+            settings.USE_ARRAY_MAP_COLUMNS_TIMESTAMP_SECONDS,
+        ),
     )
     if use_array_map_columns_timestamp_seconds == 0:
         return False
@@ -1288,7 +1294,7 @@ def trace_item_filters_to_expression(
         )
 
     if item_filter.HasField("any_attribute_filter"):
-        if not get_bool_option("enable_any_attribute_filter", True):
+        if not get_option("enable_any_attribute_filter", True):
             return literal(True)
         return _any_attribute_filter_to_expression(
             item_filter.any_attribute_filter, membership_as_has=membership_as_has

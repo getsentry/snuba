@@ -7,7 +7,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
-from snuba.state.sentry_options import get_bool_option
+from snuba.state.sentry_options import get_option
 
 
 class EAPItemsStorageSelector(QueryStorageSelector):
@@ -22,8 +22,7 @@ class EAPItemsStorageSelector(QueryStorageSelector):
         tier = query_settings.get_sampling_tier()
 
         use_readonly_storage = (
-            get_bool_option("enable_eap_readonly_table", False)
-            and not query_settings.get_consistent()
+            get_option("enable_eap_readonly_table", False) and not query_settings.get_consistent()
         )
 
         if tier == Tier.TIER_1 or tier == Tier.TIER_NO_TIER:
