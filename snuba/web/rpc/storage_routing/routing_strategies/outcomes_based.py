@@ -24,7 +24,7 @@ from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array
 from snuba.query.logical import Query
 from snuba.query.query_settings import OutcomesQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.state.sentry_options import get_bool_option, get_mapped_int_option
+from snuba.state.sentry_options import get_mapped_option, get_option
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     timestamp_in_range_condition,
@@ -207,24 +207,26 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             return cast(int, per_org_override)
 
         default = 1_000_000_000
-        return (
-            get_mapped_int_option(
+        return cast(
+            int,
+            get_mapped_option(
                 "storage_routing_max_items_before_downsampling",
                 self.class_name(),
                 default,
             )
-            or default
+            or default,
         )
 
     def _get_min_timerange_to_query_outcomes(self) -> int:
         default = 3600 * 4
-        return (
-            get_mapped_int_option(
+        return cast(
+            int,
+            get_mapped_option(
                 "storage_routing_min_timerange_to_query_outcomes",
                 self.class_name(),
                 default,
             )
-            or default
+            or default,
         )
 
     def _update_routing_decision(
@@ -240,7 +242,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         older_than_thirty_days = thirty_one_days_ago_ts > in_msg_meta.start_timestamp.seconds
 
         if (
-            get_bool_option("enable_long_term_retention_downsampling", False)
+            get_option("enable_long_term_retention_downsampling", False)
             and older_than_thirty_days
             and in_msg_meta.trace_item_type not in ITEM_TYPE_FULL_RETENTION
         ):
