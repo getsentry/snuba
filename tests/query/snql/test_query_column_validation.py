@@ -3,8 +3,8 @@ from collections.abc import Generator
 from typing import Any
 
 import pytest
+from sentry_options.testing import override_options
 
-from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
@@ -385,19 +385,17 @@ time_validation_tests = [
 
 @pytest.fixture(autouse=True)
 def set_configs(redis_db: None) -> Generator[None]:
-    old_max = state.get_config("max_days")
-    old_align = state.get_config("date_align_seconds")
-    state.set_config("max_days", 5)
-    state.set_config("date_align_seconds", 3600)
-    yield
-    state.set_config("max_days", old_max)
-    state.set_config("date_align_seconds", old_align)
+    with override_options("snuba", {"max_days": 5, "date_align_seconds": 3600}):
+        yield
 
 
 @pytest.mark.parametrize("query_body, expected_query", time_validation_tests)
 @pytest.mark.redis_db
 def test_entity_column_validation(
-    query_body: str, expected_query: LogicalQuery, set_configs: Any, monkeypatch
+    query_body: str,
+    expected_query: LogicalQuery,
+    set_configs: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     events = get_dataset("events")
 

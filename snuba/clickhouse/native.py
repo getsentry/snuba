@@ -22,10 +22,11 @@ from clickhouse_driver import Client, errors
 from dateutil.tz import tz
 from sentry_sdk.integrations.logging import ignore_logger
 
-from snuba import environment, settings, state
+from snuba import environment, settings
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.reader import Reader, Result, build_result_transformer
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.gauge import ThreadSafeGauge
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
@@ -303,8 +304,8 @@ class ClickhouseNativePool(ClickhousePool):
                         if attempts_remaining <= 0:
                             raise ClickhouseError(e.message, code=e.code) from e
 
-                        sleep_interval_seconds = state.get_config(
-                            "simultaneous_queries_sleep_seconds", None
+                        sleep_interval_seconds = cast(
+                            int, get_option("simultaneous_queries_sleep_seconds", 0)
                         )
                         if not sleep_interval_seconds:
                             raise ClickhouseError(e.message, code=e.code) from e
@@ -383,11 +384,11 @@ class ClickhouseNativePool(ClickhousePool):
                     attempts_remaining -= 1
                     if attempts_remaining <= 0:
                         raise e
-                    sleep_interval_seconds = state.get_config(
-                        "simultaneous_queries_sleep_seconds", 1
+                    # Linear backoff. Adds one second at each iteration. Falls
+                    # back to a 1-second base when the option is unset (0).
+                    sleep_interval_seconds = (
+                        cast(int, get_option("simultaneous_queries_sleep_seconds", 0)) or 1
                     )
-                    assert sleep_interval_seconds is not None
-                    # Linear backoff. Adds one second at each iteration.
                     time.sleep(
                         float((total_attempts - attempts_remaining) * sleep_interval_seconds)
                     )
