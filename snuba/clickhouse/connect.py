@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from threading import Lock
 from typing import Any
 
@@ -247,6 +248,35 @@ class ClickhouseConnectPool(ClickhousePool):
             trace_output="",
         )
 
+    @contextmanager
+    def _translate_clickhouse_errors(self) -> Iterator[None]:
+        # Map clickhouse-connect's transport/server errors onto snuba's
+        # ClickhouseError (preserving the server error code), mirroring how the
+        # native pool wraps the clickhouse_driver error family. Shared by
+        # execute() and execute_explain() so both surface failures identically.
+        try:
+            yield
+        except OperationalError as e:
+            # Connection/transport level failures. Mirrors the native pool's
+            # handling of NetworkError/SocketTimeoutError by emitting the
+            # connection_error metric before surfacing the error.
+            metrics.increment(
+                "connection_error",
+                tags={
+                    "host": self.host,
+                    "port": str(self.port),
+                    "user": self.user,
+                    "database": self.database,
+                },
+            )
+            raise ClickhouseError(str(e), code=getattr(e, "code", None) or -1) from e
+        except ClickHouseError as e:
+            # ClickHouseError is the base class for every clickhouse-connect
+            # error (DatabaseError, ProgrammingError, DataError, ...). The native
+            # pool likewise wraps the whole clickhouse_driver errors.Error family
+            # into ClickhouseError, preserving the server error code when present.
+            raise ClickhouseError(str(e), code=getattr(e, "code", None) or -1) from e
+
     def execute(
         self,
         query: str,
@@ -273,7 +303,7 @@ class ClickhouseConnectPool(ClickhousePool):
         The ``retryable`` argument is accepted for interface parity with the
         native pool but has no effect here.
         """
-        try:
+        with self._translate_clickhouse_errors():
             return self._execute_once(
                 query,
                 params,
@@ -283,27 +313,6 @@ class ClickhouseConnectPool(ClickhousePool):
                 columnar,
                 capture_trace,
             )
-        except OperationalError as e:
-            # Connection/transport level failures. Mirrors the native pool's
-            # handling of NetworkError/SocketTimeoutError by emitting the
-            # connection_error metric before surfacing the error.
-            metrics.increment(
-                "connection_error",
-                tags={
-                    "host": self.host,
-                    "port": str(self.port),
-                    "user": self.user,
-                    "database": self.database,
-                },
-            )
-            raise ClickhouseError(str(e), code=getattr(e, "code", None) or -1) from e
-        except ClickHouseError as e:
-            # ClickHouseError is the base class for every clickhouse-connect
-            # error (DatabaseError, ProgrammingError, DataError, ...). The
-            # native pool likewise wraps the whole clickhouse_driver errors.Error
-            # family into ClickhouseError, preserving the server error code when
-            # there is one.
-            raise ClickhouseError(str(e), code=getattr(e, "code", None) or -1) from e
 
     def execute_robust(
         self,
@@ -331,6 +340,59 @@ class ClickhouseConnectPool(ClickhousePool):
             columnar=columnar,
             capture_trace=capture_trace,
             retryable=retryable,
+        )
+
+    def execute_explain(self, query: str) -> ClickhouseResult:
+        """
+        Run an EXPLAIN statement over HTTP and return its single ``explain`` text
+        column, one row per line. Overrides :meth:`ClickhousePool.execute_explain`.
+
+        EXPLAIN needs its own path on this driver. ``query()`` appends
+        ``FORMAT Native`` and decodes the response with its binary Native reader;
+        for an EXPLAIN that trailing format is consumed by the *inner* query being
+        explained, so the EXPLAIN's own output comes back as text and the Native
+        reader misfires — the cryptic ``Unrecognized ClickHouse type ...`` error
+        (a fragment of the explain dump read as a column type). ``command()``
+        instead sends the statement verbatim — no FORMAT appended — and returns
+        the decoded text, which we split into one single-column row per line, the
+        same shape the native driver returns for the same EXPLAIN.
+
+        This serves the single-column explain output of EXPLAIN AST / QUERY TREE /
+        SYNTAX / PLAN / PIPELINE (the kinds admin system-query validation issues);
+        the multi-column EXPLAIN ESTIMATE is not used on this path.
+        """
+        with self._translate_clickhouse_errors():
+            client = self._get_client()
+            with sentry_sdk.start_span(description=query, op="db.clickhouse") as span:
+                span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
+                output = client.command(query)
+            return self._explain_result(output)
+
+    @staticmethod
+    def _explain_result(output: object) -> ClickhouseResult:
+        # command() returns the decoded body: a str for our single-column,
+        # tab-free explain output (it has already stripped the trailing newline).
+        # Normalize the other documented return shapes defensively before
+        # splitting into one row per line.
+        if isinstance(output, str):
+            text = output
+        elif isinstance(output, int):
+            text = str(output)
+        elif isinstance(output, (list, tuple)):
+            # command() only returns a sequence when the body contained tab
+            # characters; explain output is space-indented and tab-free, so this
+            # is defensive. Re-join so the per-line split preserves the layout.
+            text = "\t".join(str(part) for part in output)
+        else:
+            # QuerySummary (empty body) or anything unexpected -> no rows.
+            text = ""
+
+        results: list[tuple[str, ...]] = [(line,) for line in text.split("\n")] if text else []
+        profile = ClickhouseProfile(
+            bytes=0, progress_bytes=0, blocks=0, rows=len(results), elapsed=0.0
+        )
+        return ClickhouseResult(
+            results=results, meta=[("explain", "String")], profile=profile, trace_output=""
         )
 
     def close(self) -> None:
