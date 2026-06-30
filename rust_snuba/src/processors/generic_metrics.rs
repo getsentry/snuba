@@ -1,6 +1,7 @@
 use adler::Adler32;
-use anyhow::{anyhow, Context, Error};
+use anyhow::{anyhow, Context};
 use chrono::DateTime;
+use sentry_options::options;
 use serde::{
     de::value::{MapAccessDeserializer, SeqAccessDeserializer},
     Deserialize, Deserializer, Serialize,
@@ -8,7 +9,6 @@ use serde::{
 use std::{collections::BTreeMap, marker::PhantomData, vec};
 
 use crate::{
-    runtime_config::get_str_config,
     types::{CogsData, InsertBatch, RowData},
     KafkaMessageMetadata, ProcessorConfig,
 };
@@ -339,8 +339,8 @@ impl Parse for CountersRawRow {
     }
 }
 
-fn should_use_killswitch(config: Result<Option<String>, Error>, use_case: &MessageUseCase) -> bool {
-    if let Some(killswitch) = config.ok().flatten() {
+fn should_use_killswitch(config: Option<String>, use_case: &MessageUseCase) -> bool {
+    if let Some(killswitch) = config {
         return killswitch.contains(use_case.use_case_id.as_str());
     }
 
@@ -355,7 +355,10 @@ where
     T: Parse + Serialize,
 {
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let killswitch_config = get_str_config("generic_metrics_use_case_killswitch");
+    let killswitch_config = options("snuba")
+        .ok()
+        .and_then(|o| o.get("generic_metrics_use_case_killswitch").ok())
+        .and_then(|v| v.as_str().map(String::from));
     let use_case: MessageUseCase = serde_json::from_slice(payload_bytes)?;
 
     if should_use_killswitch(killswitch_config, &use_case) {
@@ -1358,7 +1361,7 @@ mod tests {
 
     #[test]
     fn test_shouldnt_killswitch() {
-        let fake_config = Ok(Some("[custom]".to_string()));
+        let fake_config = Some("[custom]".to_string());
         let use_case = MessageUseCase {
             use_case_id: "transactions".to_string(),
         };
@@ -1371,7 +1374,7 @@ mod tests {
         let use_case = MessageUseCase {
             use_case_id: "transactions".to_string(),
         };
-        let fake_config = Ok(Some("[transactions]".to_string()));
+        let fake_config = Some("[transactions]".to_string());
 
         assert!(should_use_killswitch(fake_config, &use_case));
     }
@@ -1381,7 +1384,7 @@ mod tests {
         let use_case = MessageUseCase {
             use_case_id: "transactions".to_string(),
         };
-        let fake_config = Ok(Some("[transactions, custom]".to_string()));
+        let fake_config = Some("[transactions, custom]".to_string());
 
         assert!(should_use_killswitch(fake_config, &use_case));
     }
@@ -1391,7 +1394,7 @@ mod tests {
         let use_case = MessageUseCase {
             use_case_id: "transactions".to_string(),
         };
-        let fake_config = Ok(Some("[]".to_string()));
+        let fake_config = Some("[]".to_string());
 
         assert!(!should_use_killswitch(fake_config, &use_case));
     }
@@ -1401,7 +1404,7 @@ mod tests {
         let use_case = MessageUseCase {
             use_case_id: "transactions".to_string(),
         };
-        let fake_config = Ok(Some("".to_string()));
+        let fake_config = Some("".to_string());
 
         assert!(!should_use_killswitch(fake_config, &use_case));
     }
@@ -1411,7 +1414,7 @@ mod tests {
         let use_case = MessageUseCase {
             use_case_id: "transactions".to_string(),
         };
-        let fake_config = Ok(None);
+        let fake_config: Option<String> = None;
 
         assert!(!should_use_killswitch(fake_config, &use_case));
     }
