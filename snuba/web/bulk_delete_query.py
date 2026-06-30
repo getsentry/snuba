@@ -2,7 +2,7 @@ import logging
 import time
 from collections.abc import Mapping, MutableMapping, Sequence
 from threading import Thread
-from typing import Any, TypedDict
+from typing import Any, TypedDict, cast
 
 import rapidjson
 from confluent_kafka import KafkaError, Producer
@@ -26,7 +26,7 @@ from snuba.query.dsl import literal
 from snuba.query.exceptions import InvalidQueryException, NoRowsToDeleteException
 from snuba.query.expressions import Expression
 from snuba.reader import Result
-from snuba.state.sentry_options import get_bool_option, get_mapped_str_option
+from snuba.state.sentry_options import get_mapped_option, get_option
 from snuba.utils.metrics.util import with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.schemas import ColumnValidator, InvalidColumnType
@@ -229,7 +229,7 @@ def delete_from_storage(
     if attribute_conditions:
         _validate_attribute_conditions(attribute_conditions, delete_settings)
 
-        if not get_bool_option("permit_delete_by_attribute", False):
+        if not get_option("permit_delete_by_attribute", False):
             metrics.increment("delete_query.delete_ignored")
             return {}
 
@@ -374,5 +374,5 @@ def construct_or_conditions(
 
 
 def should_use_killswitch(storage_name: str, project_id: str) -> bool:
-    killswitch_config = get_mapped_str_option("lw_deletes_killswitch", storage_name, "")
+    killswitch_config = cast(str, get_mapped_option("lw_deletes_killswitch", storage_name, ""))
     return project_id in killswitch_config if killswitch_config else False

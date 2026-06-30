@@ -26,7 +26,7 @@ from snuba.query.matchers import Any, AnyOptionalString, FunctionCall, Literal, 
 from snuba.query.matchers import Column as ColumnMatcher
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
-from snuba.state.sentry_options import get_bool_option
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "processors.tags_hash_map")
@@ -363,7 +363,7 @@ class MappingOptimizer(ClickhouseQueryProcessor):
         return clause, cond_class
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
-        if not get_bool_option(self.__killswitch, True):
+        if not get_option(self.__killswitch, True):
             return
         condition, cond_class = self.__get_reduced_and_classified_query_clause(
             query.get_condition(), query

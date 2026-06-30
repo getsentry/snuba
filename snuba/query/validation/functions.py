@@ -5,7 +5,7 @@ from snuba.query.data_source import DataSource
 from snuba.query.expressions import Expression
 from snuba.query.functions import is_valid_global_function
 from snuba.query.validation import FunctionCallValidator, InvalidFunctionCall
-from snuba.state.sentry_options import get_bool_option
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "validation.functions")
@@ -23,6 +23,6 @@ class AllowedFunctionValidator(FunctionCallValidator):
         if is_valid_global_function(func_name):
             return
 
-        if get_bool_option("function-validator.enabled", False):
+        if get_option("function-validator.enabled", False):
             raise InvalidFunctionCall(f"Invalid function name: {func_name}")
         metrics.increment("invalid_funcs", tags={"func_name": func_name})

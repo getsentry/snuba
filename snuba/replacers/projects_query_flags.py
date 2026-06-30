@@ -5,7 +5,7 @@ import time
 from collections.abc import Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 import sentry_sdk
 from redis.cluster import ClusterPipeline as StrictClusterPipeline
@@ -14,7 +14,7 @@ from snuba import settings
 from snuba.processor import ReplacementType
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.replacers.replacer_processor import ReplacerState
-from snuba.state.sentry_options import get_int_option
+from snuba.state.sentry_options import get_option
 
 redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 
@@ -83,8 +83,9 @@ class ProjectsQueryFlags:
             # the redis key size limit is defined as 2 times the clickhouse query size
             # limit. there is an explicit check in the query processor for the same
             # limit
-            max_group_ids_exclude = get_int_option(
-                "max_group_ids_exclude", settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE
+            max_group_ids_exclude = cast(
+                int,
+                get_option("max_group_ids_exclude", settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE),
             )
 
             group_id_data: MutableMapping[str | bytes, bytes | float | int | str] = {}

@@ -100,7 +100,7 @@ from snuba.query.snql.expression_visitor import (
 )
 from snuba.query.snql.joins import RelationshipTuple, build_join_clause
 from snuba.state import explain_meta
-from snuba.state.sentry_options import get_int_option
+from snuba.state.sentry_options import get_option
 from snuba.util import parse_datetime
 from snuba.utils.metrics.timer import Timer
 
@@ -1244,8 +1244,8 @@ def _replace_time_condition(
     # max_days defaults to 0 in the schema, which we treat as "no limit" (None)
     # to preserve the prior runtime-config behavior where an unset value meant
     # no clamping of the query time range.
-    date_align = get_int_option("date_align_seconds", 1)
-    max_days = get_int_option("max_days", 0) or None
+    date_align = cast(int, get_option("date_align_seconds", 1))
+    max_days = cast(int, get_option("max_days", 0)) or None
 
     if isinstance(query, LogicalQuery):
         new_top_level = _align_max_days_date_align(

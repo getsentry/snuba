@@ -1,6 +1,7 @@
 from dataclasses import dataclass
+from typing import cast
 
-from snuba.state.sentry_options import get_int_option
+from snuba.state.sentry_options import get_option
 
 _OPTIMIZE_PARALLEL_THREADS_KEY = "optimize_parallel_threads"
 
@@ -22,4 +23,4 @@ def get_num_threads(default_parallel_threads: int) -> int:
     # A 0 (the schema default) means "unset": fall back to the value passed via
     # the optimize command's --parallel flag, preserving the prior runtime-config
     # behavior where the option was only an override.
-    return get_int_option(_OPTIMIZE_PARALLEL_THREADS_KEY, 0) or default_parallel_threads
+    return cast(int, get_option(_OPTIMIZE_PARALLEL_THREADS_KEY, 0)) or default_parallel_threads
