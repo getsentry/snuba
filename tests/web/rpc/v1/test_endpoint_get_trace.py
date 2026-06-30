@@ -32,7 +32,7 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, TraceItem
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.settings import ENABLE_TRACE_PAGINATION_DEFAULT
-from snuba.state.sentry_options import get_bool_option
+from snuba.state.sentry_options import get_option
 from snuba.web.rpc.v1.endpoint_get_trace import (
     APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
     EndpointGetTrace,
@@ -229,7 +229,7 @@ class TestGetTrace(BaseApiTest):
             ],
             page_token=(
                 PageToken(end_pagination=True)
-                if get_bool_option("enable_trace_pagination", bool(ENABLE_TRACE_PAGINATION_DEFAULT))
+                if get_option("enable_trace_pagination", bool(ENABLE_TRACE_PAGINATION_DEFAULT))
                 else None
             ),
         )
@@ -324,7 +324,7 @@ class TestGetTrace(BaseApiTest):
             ],
             page_token=(
                 PageToken(end_pagination=True)
-                if get_bool_option("enable_trace_pagination", bool(ENABLE_TRACE_PAGINATION_DEFAULT))
+                if get_option("enable_trace_pagination", bool(ENABLE_TRACE_PAGINATION_DEFAULT))
                 else None
             ),
         )
@@ -436,7 +436,7 @@ class TestGetTrace(BaseApiTest):
             ],
             page_token=(
                 PageToken(end_pagination=True)
-                if get_bool_option("enable_trace_pagination", bool(ENABLE_TRACE_PAGINATION_DEFAULT))
+                if get_option("enable_trace_pagination", bool(ENABLE_TRACE_PAGINATION_DEFAULT))
                 else None
             ),
         )
