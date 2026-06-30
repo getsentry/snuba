@@ -23,7 +23,7 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 
-from snuba import environment, settings, state
+from snuba import environment, settings
 from snuba.configs.configuration import (
     ConfigurableComponent,
     ConfigurableComponentData,
@@ -48,6 +48,7 @@ from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
 from snuba.query.allocation_policies.utils import get_max_bytes_to_read
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import record_query
+from snuba.state.sentry_options import get_mapped_option, get_option
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import import_submodules_in_directory
@@ -311,7 +312,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         return cast(list[Configuration], self._default_config_definitions)
 
     def _get_default_routing_decision_tier(self) -> Tier:
-        tier_int = state.get_int_config("default_tier", 1)
+        tier_int = get_option("default_tier", 1)
 
         if tier_int == 512:
             return Tier.TIER_512
@@ -504,7 +505,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
 
                 routing_context.cluster_load_info = (
                     get_cluster_loadinfo()
-                    if state.get_config("storage_routing.enable_get_cluster_loadinfo", False)
+                    if get_option("storage_routing.enable_get_cluster_loadinfo", False)
                     else None
                 )
 
@@ -613,17 +614,23 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         pass
 
     def _get_sampled_too_low_threshold(self) -> int:
+        # Per-strategy override, falling back to the global "StorageRouting"
+        # default, then the constant. The dict is keyed by routing-strategy class
+        # name (or DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX for the global value).
         default = 1000
-        return (
-            state.get_int_config(
-                f"{self.class_name()}.sampled_too_low_threshold",
-                state.get_int_config(
-                    f"{DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX}.sampled_too_low_threshold",
+        return cast(
+            int,
+            get_mapped_option(
+                "storage_routing_sampled_too_low_threshold",
+                self.class_name(),
+                get_mapped_option(
+                    "storage_routing_sampled_too_low_threshold",
+                    DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX,
                     default,
                 )
                 or default,
             )
-            or default
+            or default,
         )
 
     def _get_time_budget_ms(self) -> int:
@@ -632,16 +639,19 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         time budget overridden or can default to a global one set in runtime config
         """
         default = 8000
-        return (
-            state.get_int_config(
-                f"{self.class_name()}.time_budget_ms",
-                state.get_int_config(
-                    f"{DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX}.time_budget_ms",
+        return cast(
+            int,
+            get_mapped_option(
+                "storage_routing_time_budget_ms",
+                self.class_name(),
+                get_mapped_option(
+                    "storage_routing_time_budget_ms",
+                    DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX,
                     default,
                 )
                 or default,
             )
-            or default
+            or default,
         )
 
     def _emit_routing_mistake(self, routing_decision: RoutingDecision) -> None:
