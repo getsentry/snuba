@@ -414,7 +414,16 @@ fn lz4_compress(input: &[u8]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sentry_options::init_with_schemas;
+    use sentry_options::testing::override_options;
+    use serde_json::json;
+    use std::sync::Once;
     use tokio::time::Instant;
+
+    static INIT: Once = Once::new();
+    fn init_options() {
+        INIT.call_once(|| init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap());
+    }
 
     fn make_test_config() -> ClickhouseConfig {
         ClickhouseConfig {
@@ -463,6 +472,7 @@ mod tests {
     #[test]
     fn test_url_with_runtime_config_override() {
         crate::testutils::initialize_python();
+        init_options();
         let config = make_test_config();
         let client = ClickhouseClient::new(
             &config,
@@ -478,14 +488,19 @@ mod tests {
         assert!(!url.contains("load_balancing_first_offset"));
 
         // Override to first_or_random with offset
-        crate::runtime_config::patch_str_config_for_test(
-            "clickhouse_load_balancing:writer_v2_lb_test",
-            Some("first_or_random"),
-        );
-        crate::runtime_config::patch_str_config_for_test(
-            "clickhouse_load_balancing_first_offset:writer_v2_lb_test",
-            Some("1"),
-        );
+        let _guard = override_options(&[
+            (
+                "snuba",
+                "clickhouse_load_balancing",
+                json!({ "writer_v2_lb_test": "first_or_random" }),
+            ),
+            (
+                "snuba",
+                "clickhouse_load_balancing_first_offset",
+                json!({ "writer_v2_lb_test": "1" }),
+            ),
+        ])
+        .unwrap();
 
         let url = client.build_url();
         assert!(url.contains("load_balancing=first_or_random"));
@@ -495,6 +510,7 @@ mod tests {
     #[test]
     fn test_url_with_max_insert_block_size() {
         crate::testutils::initialize_python();
+        init_options();
         let config = make_test_config();
         let client = ClickhouseClient::new(
             &config,
@@ -503,20 +519,6 @@ mod tests {
             InsertFormat::JsonEachRow,
             None,
         );
-
-        // Default (key absent): no suffix.
-        let url = client.build_url();
-        assert!(!url.contains("max_insert_block_size"));
-
-        // Per-storage override at or above the ClickHouse default sets the suffix.
-        crate::runtime_config::patch_str_config_for_test(
-            "clickhouse_max_insert_block_size:writer_v2_block_size_test",
-            Some("2000000"),
-        );
-        let url = client.build_url();
-        assert!(url.contains("&max_insert_block_size=2000000"));
-
-        // A different storage isn't affected.
         let other_client = ClickhouseClient::new(
             &config,
             "test_table",
@@ -524,24 +526,48 @@ mod tests {
             InsertFormat::JsonEachRow,
             None,
         );
-        let url = other_client.build_url();
-        assert!(!url.contains("max_insert_block_size"));
+
+        // Default (key absent): no suffix.
+        assert!(!client.build_url().contains("max_insert_block_size"));
+
+        // Per-storage override at or above the ClickHouse default sets the suffix.
+        {
+            let _guard = override_options(&[(
+                "snuba",
+                "clickhouse_max_insert_block_size",
+                json!({ "writer_v2_block_size_test": 2_000_000 }),
+            )])
+            .unwrap();
+            assert!(client
+                .build_url()
+                .contains("&max_insert_block_size=2000000"));
+            // A different storage isn't affected.
+            assert!(!other_client.build_url().contains("max_insert_block_size"));
+        }
 
         // Values below the ClickHouse default (1_048_449) are rejected.
-        crate::runtime_config::patch_str_config_for_test(
-            "clickhouse_max_insert_block_size:writer_v2_block_size_test",
-            Some("1000000"),
-        );
-        let url = client.build_url();
-        assert!(!url.contains("max_insert_block_size"));
+        {
+            let _guard = override_options(&[(
+                "snuba",
+                "clickhouse_max_insert_block_size",
+                json!({ "writer_v2_block_size_test": 1_000_000 }),
+            )])
+            .unwrap();
+            assert!(!client.build_url().contains("max_insert_block_size"));
+        }
 
         // Exactly the default is accepted.
-        crate::runtime_config::patch_str_config_for_test(
-            "clickhouse_max_insert_block_size:writer_v2_block_size_test",
-            Some("1048449"),
-        );
-        let url = client.build_url();
-        assert!(url.contains("&max_insert_block_size=1048449"));
+        {
+            let _guard = override_options(&[(
+                "snuba",
+                "clickhouse_max_insert_block_size",
+                json!({ "writer_v2_block_size_test": 1_048_449 }),
+            )])
+            .unwrap();
+            assert!(client
+                .build_url()
+                .contains("&max_insert_block_size=1048449"));
+        }
     }
 
     /// Walks a buffer of concatenated ClickHouse-native compressed blocks,
