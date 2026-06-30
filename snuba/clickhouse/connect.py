@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
 import logging
+import re
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
+from datetime import date, datetime
 from threading import Lock
 from typing import Any
 
@@ -21,6 +24,7 @@ from snuba.clickhouse.native import (
     ClickhouseResult,
     Params,
 )
+from snuba.reader import unwrap_nullable_type
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger("snuba.clickhouse.connect")
@@ -43,6 +47,39 @@ DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
 # forwards whatever settings it is given to the server, so to preserve parity
 # we tell clickhouse-connect to drop unrecognized settings instead of failing.
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
+
+# Matches the ``WITH TOTALS`` clause the query formatter appends for
+# ``has_totals()`` queries (see snuba.clickhouse.formatter.query). clickhouse-
+# connect's Native/HTTP path never returns the totals row, so the connect pool
+# detects the clause to recover the totals via a secondary JSON query. A false
+# positive (e.g. the literal text inside a string) is harmless: the recovery
+# only appends a row if the JSON response actually carries a ``totals`` block.
+_WITH_TOTALS_RE = re.compile(r"\bWITH\s+TOTALS\b", re.IGNORECASE)
+
+
+def _coerce_json_value(value: Any, ch_type: str) -> Any:
+    """
+    Convert a scalar parsed from ClickHouse's JSON output into the Python type
+    the native result path would have produced. Only ``Date``/``DateTime``
+    columns need this: the JSON format renders them as strings, but the reader's
+    column-type transforms (and the native driver) expect ``date``/``datetime``
+    objects. Numbers already arrive as numbers (we disable 64-bit-int quoting),
+    UUIDs are stringified by the reader regardless, and every other type is
+    returned unchanged.
+
+    This is applied to the recovered ``WITH TOTALS`` row so its values are
+    indistinguishable from the equivalent native-driver row downstream.
+    """
+    if not isinstance(value, str):
+        return value
+    _, inner = unwrap_nullable_type(ch_type)
+    # Order matters: DateTime / DateTime64 must be checked before the bare Date
+    # prefix so they are not misclassified as a date.
+    if inner.startswith("DateTime"):
+        return datetime.fromisoformat(value)
+    if inner.startswith("Date"):
+        return date.fromisoformat(value)
+    return value
 
 
 class ClickhouseConnectPool(ClickhousePool):
@@ -228,25 +265,98 @@ class ClickhouseConnectPool(ClickhousePool):
         # for capturing the server's send_logs_level output (it only parses the
         # X-ClickHouse-Summary header for the profile above). This is a known,
         # accepted limitation of the HTTP path — see _build_query_settings.
-        if with_column_types:
-            meta = [
-                (name, column_type.name)
-                for name, column_type in zip(
-                    query_result.column_names, query_result.column_types, strict=True
-                )
-            ]
+        if not with_column_types:
             return ClickhouseResult(
                 results=results,
-                meta=meta,
                 profile=profile_data,
                 trace_output="",
             )
 
+        meta: list[tuple[str, str]] = [
+            (name, column_type.name)
+            for name, column_type in zip(
+                query_result.column_names, query_result.column_types, strict=True
+            )
+        ]
+
+        # clickhouse-connect's Native/HTTP path diverges from the native (TCP)
+        # driver in two ways the driver-agnostic ClickhouseReader relies on. Both
+        # only surface against a real server (mocked-client unit tests miss them),
+        # and both are recoverable from the JSON output format:
+        #
+        #   * A query that matches no rows comes back with no column header at all
+        #     — ClickHouse emits a zero-byte Native body for an empty result — so
+        #     ``meta`` is empty. The native driver always reports the columns even
+        #     for an empty result, and Snuba callers reject a ``"meta": []``
+        #     response (e.g. Sentry asserts the returned columns match the query).
+        #
+        #   * A ``GROUP BY ... WITH TOTALS`` query never carries the totals row:
+        #     ClickHouse does not serialize totals into the Native HTTP output
+        #     (they only travel over the native TCP protocol), so clickhouse-
+        #     connect returns only the grouped rows. The reader expects the totals
+        #     as the trailing result row, exactly as the native driver appends it.
+        #
+        # When either applies, re-run the query once with FORMAT JSON to recover
+        # the column metadata and/or the totals row. This costs a second scan,
+        # but only for empty results and WITH TOTALS queries; the common
+        # (non-empty, no-totals) read path is untouched.
+        wants_totals = _WITH_TOTALS_RE.search(query) is not None
+        if not meta or wants_totals:
+            recovered_meta, totals = self._recover_meta_and_totals(
+                client, query, params, settings, wants_totals
+            )
+            if not meta:
+                meta = recovered_meta
+            if totals is not None:
+                # Order the totals values to match ``meta`` so the reader, which
+                # indexes rows positionally against ``meta``, lines them up the
+                # same way it does for the native driver's trailing totals row.
+                totals_row = tuple(
+                    _coerce_json_value(totals.get(name), ch_type) for name, ch_type in meta
+                )
+                results = [*results, totals_row]
+
         return ClickhouseResult(
             results=results,
+            meta=meta,
             profile=profile_data,
             trace_output="",
         )
+
+    def _recover_meta_and_totals(
+        self,
+        client: Client,
+        query: str,
+        params: Params,
+        settings: Mapping[str, Any] | None,
+        want_totals: bool,
+    ) -> tuple[list[tuple[str, str]], Mapping[str, Any] | None]:
+        """
+        Re-run ``query`` with ``FORMAT JSON`` and return ``(meta, totals)``.
+
+        ``meta`` is the list of ``(name, type)`` column tuples (always present in
+        the JSON response, even for an empty result). ``totals`` is the raw totals
+        mapping (column name -> value) when ``want_totals`` and the response
+        carries a ``WITH TOTALS`` block, otherwise ``None``.
+
+        The JSON output format is the only one clickhouse-connect can read that
+        exposes both pieces; the Native/HTTP path the main query uses drops them.
+        Used by :meth:`_execute_once` to backfill what that path loses.
+        """
+        json_settings: dict[str, Any] = dict(settings) if settings else {}
+        # UInt64/Int64 are emitted as quoted strings in JSON by default; turn that
+        # off so numeric values come back as numbers, matching the native driver.
+        json_settings["output_format_json_quote_64bit_integers"] = 0
+        raw = client.raw_query(
+            query,
+            parameters=params if params else None,
+            settings=json_settings,
+            fmt="JSON",
+        )
+        payload = json.loads(raw)
+        meta = [(column["name"], column["type"]) for column in payload.get("meta", [])]
+        totals = payload.get("totals") if want_totals else None
+        return meta, totals
 
     @contextmanager
     def _translate_clickhouse_errors(self) -> Iterator[None]:

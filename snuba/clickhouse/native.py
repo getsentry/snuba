@@ -510,7 +510,11 @@ class ClickhouseReader(Reader):
 
         new_result: Result = {}
         if with_totals:
-            assert len(data) > 0
+            # The driver is expected to return the totals as the trailing result
+            # row: the native pool appends it from the protocol, and the
+            # clickhouse-connect pool re-fetches it via JSON (the Native/HTTP
+            # output omits it). An empty result here means that row went missing.
+            assert len(data) > 0, "WITH TOTALS query returned no rows (missing totals row)"
             totals = data.pop(-1)
             new_result = {
                 "data": data,
