@@ -334,6 +334,46 @@ def test_totals_refetch_uses_correlated_query_id_and_inherits_settings() -> None
     assert kwargs["settings"]["max_execution_time"] == 30
 
 
+def test_totals_row_sourced_from_json_payload_columns() -> None:
+    # The totals row is built from the JSON payload's own column list, so its
+    # values are read with keys guaranteed to match the JSON totals dict -- they
+    # can never be silently None'd by a Native-vs-JSON column-name difference.
+    # Column names are format-independent in practice; here the Native names are
+    # deliberately made to differ from the JSON names to prove the totals values
+    # still come through (aligned positionally to the returned meta).
+    from snuba.clickhouse.native import ClickhouseReader
+
+    class FakeFormattedQuery:
+        def get_sql(self) -> str:
+            return "SELECT a, sum(v) AS b FROM t GROUP BY a WITH TOTALS"
+
+    client = mock.Mock()
+    # Native result reports column names ("a", "b").
+    client.query.return_value = FakeQueryResult(
+        result_set=[[1, 10]],
+        column_names=("a", "b"),
+        column_types=(FakeColumnType("UInt64"), FakeColumnType("UInt64")),
+    )
+    # JSON payload uses different names ("x", "y"); the totals must be recovered
+    # from those, not looked up by the Native names (which would yield None).
+    client.raw_query.return_value = json.dumps(
+        {
+            "meta": [{"name": "x", "type": "UInt64"}, {"name": "y", "type": "UInt64"}],
+            "data": [{"x": 1, "y": 10}],
+            "totals": {"x": 0, "y": 10},
+        }
+    ).encode()
+
+    pool = _make_pool(client)
+    reader = ClickhouseReader(cache_partition_id=None, client=pool, query_settings_prefix=None)
+    result = reader.execute(cast(FormattedQuery, FakeFormattedQuery()), with_totals=True)
+
+    # Returned meta keeps the Native names; the totals values come from the JSON
+    # payload, aligned positionally -> b=10, a=0 (never None, None).
+    assert result["data"] == [{"a": 1, "b": 10}]
+    assert result["totals"] == {"a": 0, "b": 10}
+
+
 def test_empty_non_totals_result_does_not_refetch() -> None:
     # An empty, non-WITH-TOTALS result comes back from the Native/HTTP path with
     # no column header (ClickHouse emits a zero-byte Native body for zero rows),

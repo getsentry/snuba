@@ -302,11 +302,17 @@ class ClickhouseConnectPool(ClickhousePool):
             if not meta:
                 meta = recovered_meta
             if totals is not None:
-                # Order the totals values to match ``meta`` so the reader, which
-                # indexes rows positionally against ``meta``, lines them up the
-                # same way it does for the native driver's trailing totals row.
+                # Build the totals row from recovered_meta -- the JSON payload's
+                # own column list -- so the names used to read the ``totals`` dict
+                # are guaranteed to match its keys (both come from that same JSON
+                # response). Keying off the Native ``meta`` instead would risk a
+                # silent ``None`` if the two protocols ever named a column
+                # differently. recovered_meta is in the same column order as
+                # ``meta`` (both follow the SELECT list), so the row still aligns
+                # positionally with the meta the reader indexes against.
                 totals_row = tuple(
-                    _coerce_json_value(totals.get(name), ch_type) for name, ch_type in meta
+                    _coerce_json_value(totals.get(name), ch_type)
+                    for name, ch_type in recovered_meta
                 )
                 results = [*results, totals_row]
 
