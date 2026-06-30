@@ -4,7 +4,7 @@ import random
 import textwrap
 import uuid
 from collections.abc import MutableMapping
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 import sentry_sdk
 
@@ -31,7 +31,7 @@ from snuba.querylog.query_metadata import get_request_status
 from snuba.request import Request
 from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.request.schema import RequestParts, RequestSchema
-from snuba.state.sentry_options import get_mapped_bool_option, get_str_option
+from snuba.state.sentry_options import get_mapped_option, get_option
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
@@ -73,7 +73,7 @@ def parse_mql_query(
 
 
 def _consistent_override(original_setting: bool, referrer: str) -> bool:
-    consistent_config = get_str_option("consistent_override", "")
+    consistent_config = cast(str, get_option("consistent_override", ""))
     if consistent_config:
         referrers_override = consistent_config.split(";")
         for config in referrers_override:
@@ -112,7 +112,7 @@ def build_request(
     with sentry_sdk.start_span(description="build_request", op="validate") as span:
         try:
             dataset_name = get_dataset_name(dataset)
-            if get_mapped_bool_option(
+            if get_mapped_option(
                 "snql_disabled_dataset",
                 dataset_name,
                 dataset_name in settings.SNQL_DISABLED_DATASETS,

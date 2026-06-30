@@ -59,12 +59,7 @@ from snuba.state.cache.redis.backend import (
 )
 from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import RateLimitExceeded
-from snuba.state.sentry_options import (
-    get_bool_option,
-    get_mapped_float_option,
-    get_mapped_str_option,
-    get_option,
-)
+from snuba.state.sentry_options import get_mapped_option, get_option
 from snuba.util import force_bytes
 from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.metrics.timer import Timer
@@ -208,7 +203,7 @@ def get_query_cache_key(formatted_query: FormattedQuery) -> str:
 
 
 def _get_cache_partition(reader: Reader) -> Cache[Result]:
-    enable_cache_partitioning = get_bool_option("enable_cache_partitioning", True)
+    enable_cache_partitioning = get_option("enable_cache_partitioning", True)
     if not enable_cache_partitioning:
         return cache_partitions[DEFAULT_CACHE_PARTITION_ID]
 
@@ -242,7 +237,7 @@ def execute_query_with_query_id(
     robust: bool,
     referrer: str,
 ) -> Result:
-    if get_bool_option("randomize_query_id", False):
+    if get_option("randomize_query_id", False):
         query_id = uuid.uuid4().hex
     else:
         query_id = get_query_cache_key(formatted_query)
@@ -261,7 +256,7 @@ def execute_query_with_query_id(
             referrer,
         )
     except ClickhouseError as e:
-        if e.code != ErrorCodes.QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING or not get_bool_option(
+        if e.code != ErrorCodes.QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING or not get_option(
             "retry_duplicate_query_id", False
         ):
             raise
@@ -298,7 +293,7 @@ def execute_query_with_readthrough_caching(
     query_id: str,
     referrer: str,
 ) -> Result:
-    if referrer in settings.BYPASS_CACHE_REFERRERS and get_bool_option(
+    if referrer in settings.BYPASS_CACHE_REFERRERS and get_option(
         "enable_bypass_cache_referrers", False
     ):
         query_id = f"randomized-{uuid.uuid4().hex}"
@@ -366,7 +361,7 @@ def _query_settings_override(option: str, name: str) -> Mapping[str, Any]:
     strings ({"clickhouse_setting": "value"}), keyed by ``name`` (a query
     prefix or referrer). sentry-options can't express dict-of-dict natively, so
     the second level is a JSON string parsed here."""
-    raw = get_mapped_str_option(option, name, "")
+    raw = get_mapped_option(option, name, "")
     if not raw:
         return {}
     try:
@@ -452,8 +447,8 @@ def _raw_query(
     consistent = query_settings.get_consistent()
     stats["consistent"] = consistent
     if consistent:
-        sample_rate = get_mapped_float_option(
-            "ignore_consistent_queries_sample_rate", dataset_name, 0.0
+        sample_rate = cast(
+            float, get_mapped_option("ignore_consistent_queries_sample_rate", dataset_name, 0.0)
         )
         ignore_consistent = random.random() < sample_rate
         if not ignore_consistent:
