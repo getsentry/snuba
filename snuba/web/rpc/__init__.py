@@ -13,8 +13,9 @@ from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageCon
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 
-from snuba import environment, state
+from snuba import environment
 from snuba.query.allocation_policies import AllocationPolicyViolations
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -55,9 +56,7 @@ def _should_log_rpc_request() -> bool:
     """
     Determine if this RPC request should be logged based on runtime configuration.
     """
-    sample_rate = state.get_float_config("rpc_logging_sample_rate", 0)
-    if sample_rate is None:
-        sample_rate = 0
+    sample_rate = cast(float, get_option("rpc_logging_sample_rate", 0.0))
 
     # If sample rate is 0, never log
     if sample_rate <= 0.0:
@@ -330,7 +329,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 f"RPC request started - endpoint: {self.__class__.__name__}, request_id: {request_id}"
             )
 
-            flush_logs = state.get_float_config("rpc_logging_flush_logs", 0)
+            flush_logs = cast(float, get_option("rpc_logging_flush_logs", 0.0))
             if flush_logs and flush_logs > 0:
                 _flush_logs()
 
@@ -387,7 +386,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             logging.info(
                 f"RPC request finished - endpoint: {self.__class__.__name__}, request_id: {request_id}, status: {status}"
             )
-            flush_logs = state.get_float_config("rpc_logging_flush_logs", 0)
+            flush_logs = cast(float, get_option("rpc_logging_flush_logs", 0.0))
             if flush_logs and flush_logs > 0:
                 _flush_logs()
 

@@ -3,7 +3,7 @@ import uuid
 from collections.abc import Iterable
 from datetime import datetime
 from operator import attrgetter
-from typing import Any, NamedTuple, Optional
+from typing import Any, NamedTuple, Optional, cast
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -24,7 +24,6 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     TraceItemFilter,
 )
 
-from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
@@ -46,6 +45,7 @@ from snuba.settings import (
     ENABLE_TRACE_PAGINATION_DEFAULT,
     ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS,
 )
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.util import with_span
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
@@ -326,7 +326,7 @@ def _build_query(
             expression=column("item_id"),
         ),
     ]
-    if state.get_int_config("enable_trace_pagination", ENABLE_TRACE_PAGINATION_DEFAULT):
+    if get_option("enable_trace_pagination", bool(ENABLE_TRACE_PAGINATION_DEFAULT)):
         order_by = new_order_by
     else:
         order_by = old_order_by
@@ -365,12 +365,13 @@ def _build_query(
 
 
 def _get_apply_final_rollout_percentage() -> float:
-    return (
-        state.get_float_config(
+    return cast(
+        float,
+        get_option(
             APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
             0.0,
         )
-        or 0.0
+        or 0.0,
     )
 
 
@@ -634,8 +635,8 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
             "eap_trace_request_without_limit", 1, tags={"referrer": in_msg.meta.referrer}
         )
 
-        enable_pagination = state.get_int_config(
-            "enable_trace_pagination", ENABLE_TRACE_PAGINATION_DEFAULT
+        enable_pagination = get_option(
+            "enable_trace_pagination", bool(ENABLE_TRACE_PAGINATION_DEFAULT)
         )
         if enable_pagination:
             limit = _get_pagination_limit(in_msg.limit)

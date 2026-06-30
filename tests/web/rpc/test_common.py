@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from google.protobuf import json_format, struct_pb2
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
     TraceItemTableRequest,
@@ -96,9 +97,9 @@ class TestCommon:
                 )
             )
         )
-        snuba_set_config("use_sampling_factor_timestamp_seconds", 10)
-        assert use_sampling_factor(RequestMeta(start_timestamp=Timestamp(seconds=10)))
-        assert not use_sampling_factor(RequestMeta(start_timestamp=Timestamp(seconds=9)))
+        with override_options("snuba", {"use_sampling_factor_timestamp_seconds": 10}):
+            assert use_sampling_factor(RequestMeta(start_timestamp=Timestamp(seconds=10)))
+            assert not use_sampling_factor(RequestMeta(start_timestamp=Timestamp(seconds=9)))
 
     @pytest.mark.redis_db
     def test_use_array_map_columns(self, snuba_set_config: SnubaSetConfig) -> None:
@@ -115,11 +116,11 @@ class TestCommon:
             )
         )
         # A config value of 0 disables the typed-column read path entirely.
-        snuba_set_config("use_array_map_columns_timestamp_seconds", 0)
-        assert not use_array_map_columns(RequestMeta(start_timestamp=Timestamp(seconds=2**31)))
-        snuba_set_config("use_array_map_columns_timestamp_seconds", 10)
-        assert use_array_map_columns(RequestMeta(start_timestamp=Timestamp(seconds=10)))
-        assert not use_array_map_columns(RequestMeta(start_timestamp=Timestamp(seconds=9)))
+        with override_options("snuba", {"use_array_map_columns_timestamp_seconds": 0}):
+            assert not use_array_map_columns(RequestMeta(start_timestamp=Timestamp(seconds=2**31)))
+        with override_options("snuba", {"use_array_map_columns_timestamp_seconds": 10}):
+            assert use_array_map_columns(RequestMeta(start_timestamp=Timestamp(seconds=10)))
+            assert not use_array_map_columns(RequestMeta(start_timestamp=Timestamp(seconds=9)))
 
 
 class TestTraceItemFiltersArrayLike:
@@ -1306,3 +1307,31 @@ class TestEmptyVsAbsentComparison:
     def test_not_like_wildcard_matches_only_absent(self) -> None:
         # Present rows all `like '%'`, so only the absent key survives NOT LIKE.
         assert self._execute(ComparisonFilter.OP_NOT_LIKE, value="%") == ["green"]
+
+
+class TestAnyAttributeFilterOption:
+    """The `enable_any_attribute_filter` sentry-option gates whether
+    any_attribute_filter is translated into a predicate or treated as
+    always-true. It replaces the former `enable_any_attribute_filter`
+    runtime config."""
+
+    @staticmethod
+    def _filter() -> TraceItemFilter:
+        return TraceItemFilter(
+            any_attribute_filter=AnyAttributeFilter(
+                op=AnyAttributeFilter.OP_EQUALS,
+                value=AttributeValue(val_str="foo"),
+            )
+        )
+
+    def test_enabled_by_default_translates_filter(self) -> None:
+        # Schema default is true: the filter is translated, not short-circuited.
+        result = trace_item_filters_to_expression(self._filter(), attribute_key_to_expression)
+        assert isinstance(result, FunctionCall)
+        assert result.function_name == "arrayExists"
+
+    def test_disabled_returns_always_true(self) -> None:
+        with override_options("snuba", {"enable_any_attribute_filter": False}):
+            result = trace_item_filters_to_expression(self._filter(), attribute_key_to_expression)
+        assert isinstance(result, Literal)
+        assert result.value is True

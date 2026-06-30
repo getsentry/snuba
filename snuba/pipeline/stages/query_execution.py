@@ -6,11 +6,11 @@ from collections import defaultdict
 from collections.abc import MutableMapping
 from dataclasses import replace
 from math import floor
-from typing import Any
+from typing import Any, cast
 
 import sentry_sdk
 
-from snuba import environment, state
+from snuba import environment
 from snuba import settings as snuba_settings
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.query import format_query
@@ -31,6 +31,7 @@ from snuba.querylog.query_metadata import (
 )
 from snuba.reader import Reader
 from snuba.settings import MAX_QUERY_SIZE_BYTES
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -164,14 +165,14 @@ def _run_and_apply_column_names(
 
 def _max_query_size_bytes() -> int:
     return (
-        state.get_int_config(MAX_QUERY_SIZE_BYTES_CONFIG, MAX_QUERY_SIZE_BYTES)
+        cast(int, get_option(MAX_QUERY_SIZE_BYTES_CONFIG, MAX_QUERY_SIZE_BYTES))
         or MAX_QUERY_SIZE_BYTES
     )
 
 
 def _disable_max_query_size_check_for_clusters() -> set[str]:
     return set(
-        (state.get_str_config(DISABLE_MAX_QUERY_SIZE_CHECK_FOR_CLUSTERS_CONFIG, "") or "").split(
+        (cast(str, get_option(DISABLE_MAX_QUERY_SIZE_CHECK_FOR_CLUSTERS_CONFIG, "")) or "").split(
             ","
         )
     )

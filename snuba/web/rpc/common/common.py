@@ -13,7 +13,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     TraceItemFilter,
 )
 
-from snuba import settings, state
+from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.protos.common import (
     ATTRIBUTES_TO_COALESCE,
@@ -51,6 +51,7 @@ from snuba.query.expressions import (
     Lambda,
     SubscriptableReference,
 )
+from snuba.state.sentry_options import get_option
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
@@ -299,7 +300,7 @@ def use_sampling_factor(meta: RequestMeta) -> bool:
     """
     use_sampling_factor_timestamp_seconds = cast(
         int,
-        state.get_int_config(
+        get_option(
             "use_sampling_factor_timestamp_seconds",
             settings.USE_SAMPLING_FACTOR_TIMESTAMP_SECONDS,
         ),
@@ -320,7 +321,7 @@ def use_array_map_columns(meta: RequestMeta) -> bool:
     """
     use_array_map_columns_timestamp_seconds = cast(
         int,
-        state.get_int_config(
+        get_option(
             "use_array_map_columns_timestamp_seconds",
             settings.USE_ARRAY_MAP_COLUMNS_TIMESTAMP_SECONDS,
         ),
@@ -1293,7 +1294,7 @@ def trace_item_filters_to_expression(
         )
 
     if item_filter.HasField("any_attribute_filter"):
-        if not state.get_int_config("enable_any_attribute_filter", 1):
+        if not get_option("enable_any_attribute_filter", True):
             return literal(True)
         return _any_attribute_filter_to_expression(
             item_filter.any_attribute_filter, membership_as_has=membership_as_has
