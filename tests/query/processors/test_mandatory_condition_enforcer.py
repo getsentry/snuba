@@ -1,6 +1,7 @@
 from datetime import datetime
 
 import pytest
+from sentry_options.testing import override_options
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
@@ -22,7 +23,6 @@ from snuba.query.processors.physical.conditions_enforcer import (
     MandatoryConditionEnforcer,
 )
 from snuba.query.query_settings import HTTPQuerySettings
-from snuba.state import set_config
 
 TABLE = Table("errors", ColumnSet([]), storage_key=StorageKey("errors"))
 
@@ -142,8 +142,8 @@ test_data = [
 
 @pytest.mark.parametrize("query, valid, org_id_enforcer", test_data)
 @pytest.mark.redis_db
+@override_options("snuba", {"mandatory_condition_enforce": True})
 def test_condition_enforcer(query: Query, valid: bool, org_id_enforcer: OrgIdEnforcer) -> None:
-    set_config("mandatory_condition_enforce", 1)
     query_settings = HTTPQuerySettings(consistent=True)
     processor = MandatoryConditionEnforcer([org_id_enforcer, ProjectIdEnforcer()])
     if valid:

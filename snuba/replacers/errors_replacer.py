@@ -47,7 +47,7 @@ from snuba.replacers.replacer_processor import (
     ReplacerProcessor,
     ReplacerState,
 )
-from snuba.state import get_config, get_float_config
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 """
@@ -101,8 +101,9 @@ class Replacement(ReplacementBase):
         raise NotImplementedError()
 
     def should_write_every_node(self) -> bool:
-        write_node_replacement_setting = get_float_config("write_node_replacements_global", 1.0)
-        assert isinstance(write_node_replacement_setting, float)
+        write_node_replacement_setting = cast(
+            float, get_option("write_node_replacements_global", 1.0)
+        )
         return random.random() < write_node_replacement_setting
 
 
@@ -180,7 +181,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             raise InvalidMessageType(f"Invalid message type: {type_}")
 
         if processed is not None:
-            manual_bypass_projects = get_config("replacements_bypass_projects", "[]")
+            manual_bypass_projects = cast(str, get_option("replacements_bypass_projects", "[]"))
             auto_bypass_projects = list(
                 get_config_auto_replacements_bypass_projects(datetime.now()).keys()
             )
