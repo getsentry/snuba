@@ -26,6 +26,123 @@
       "type": "integer",
       "default": 120,
       "description": "BLQ hysteresis in seconds. Once routing stale, keep routing messages at least (stale_threshold - static_friction) old. Set to 0 to disable friction."
+    },
+    "eap_items_drop_invalid_timestamps": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the eap-items consumer skips messages whose event timestamp is more than one week in the future or more than thirty days in the past."
+    },
+    "experimental_healthcheck": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the consumer healthcheck strategy treats commit requests (progress) as healthy and touches the healthcheck file accordingly."
+    },
+    "generic_metrics_use_case_killswitch": {
+      "type": "string",
+      "default": "",
+      "description": "Substring-matched list of generic-metrics use case ids to drop in the consumer; a message is skipped when its use_case_id appears in this string."
+    },
+    "clickhouse_load_balancing": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Dict mapping storage name to the ClickHouse load_balancing mode (e.g. \"in_order\", \"first_or_random\") used by that storage's consumer writer. Storages with no entry default to \"in_order\". Migrated from per-storage runtime config clickhouse_load_balancing:<storage>."
+    },
+    "clickhouse_load_balancing_first_offset": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Dict mapping storage name to the first_offset used with the first_or_random load_balancing mode. Storages with no entry have no first_offset. Migrated from per-storage runtime config clickhouse_load_balancing_first_offset:<storage>."
+    },
+    "clickhouse_max_insert_block_size": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "default": {},
+      "description": "Dict mapping storage name to a max_insert_block_size override for that storage's INSERTs. Values below ClickHouse's default (1048449) are ignored. Storages with no entry use the server default. Migrated from per-storage runtime config clickhouse_max_insert_block_size:<storage>."
+    },
+    "eap_items_dlq_grace_period_min": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "default": {},
+      "description": "Dict mapping storage name to a grace period in minutes; eap-items messages from before the current partition older than this are routed to the DLQ. Storages with no entry have no grace-period dropping. Migrated from per-storage runtime config eap_items_dlq_grace_period_min:<storage>."
+    },
+    "quantized_rebalance_consumer_group_delay_secs": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "default": {},
+      "description": "Dict mapping consumer group name to a quantized rebalance delay in seconds. Consumer groups with no entry use no delay. Migrated from per-group runtime config quantized_rebalance_consumer_group_delay_secs__<consumer_group>."
+    },
+    "enable_any_attribute_filter": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable translating any_attribute_filter trace-item filters into ClickHouse predicates. When false, an any_attribute_filter is treated as always-true (no filtering applied)."
+    },
+    "aggregation_deprecation_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable the deprecation check that rejects deprecated aggregation expressions in EAP time-series requests. When false, the check is skipped."
+    },
+    "default_tier": {
+      "type": "integer",
+      "default": 1,
+      "description": "Default storage routing tier for EAP queries when no other tier is selected. Maps to a Tier enum value (e.g. 1, 8, 64, 512)."
+    },
+    "export_trace_items_default_page_size": {
+      "type": "integer",
+      "default": 10000,
+      "description": "Default page size used by the ExportTraceItems RPC when the request does not specify one."
+    },
+    "rpc_logging_sample_rate": {
+      "type": "number",
+      "default": 0.0,
+      "description": "Sample rate (0.0-1.0) for logging RPC requests. 0 disables RPC request logging."
+    },
+    "ExecutionStage.disable_max_query_size_check_for_clusters": {
+      "type": "string",
+      "default": "",
+      "description": "Comma-separated list of ClickHouse cluster names for which the max-query-size check is disabled. Empty means the check applies to all clusters."
+    },
+    "lw_deletes_split_by_partition": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "default": {},
+      "description": "Dict mapping storage name to a flag; a non-zero value enables splitting that storage's lightweight deletes by partition. Storages with no entry are not split. Migrated from per-storage runtime config lw_deletes_split_by_partition_<storage>."
+    },
+    "lw_deletes_killswitch": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Dict mapping storage name to a string of project ids; a lightweight delete is dropped when its project id appears in that storage's entry. Storages with no entry are not killswitched. Migrated from per-storage runtime config lw_deletes_killswitch_<storage>."
+    },
+    "validate_schema_sample_rate": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number"
+      },
+      "default": {},
+      "description": "Dict mapping snuba logical topic name to a [0,1] sample rate for JSON-schema validation of consumed messages. Topics with no entry default to 1.0 (always validate). Migrated from per-topic runtime config validate_schema_<topic>."
+    },
+    "snql_disabled_dataset": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "boolean"
+      },
+      "default": {},
+      "description": "Dict mapping dataset name to a flag; when true, SnQL queries against that dataset are rejected. Datasets with no entry default to membership in settings.SNQL_DISABLED_DATASETS. Migrated from per-dataset runtime config snql_disabled_dataset__<dataset>."
     }
   }
 }
