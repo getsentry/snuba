@@ -3,8 +3,8 @@ kind: writable_storage
 name: llm_proxy_cost_raw
 storage:
   key: llm_proxy_cost_raw
-  set_key: llm_proxy_cost
-readiness_state: limited
+  set_key: outcomes
+readiness_state: complete
 schema:
   columns:
     [

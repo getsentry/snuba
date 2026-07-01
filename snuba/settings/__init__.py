@@ -134,7 +134,6 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "group_attributes",
             "generic_metrics_gauges",
             "profile_chunks",
-            "llm_proxy_cost",
         },
         "single_node": True,
         "cluster_name": "test_cluster",

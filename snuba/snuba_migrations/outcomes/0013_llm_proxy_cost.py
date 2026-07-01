@@ -6,7 +6,7 @@ from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget, SqlOperation
 
-storage_set = StorageSetKey.LLM_PROXY_COST
+storage_set = StorageSetKey.OUTCOMES
 table_prefix = "llm_proxy_cost_raw"
 local_table_name = f"{table_prefix}_local"
 dist_table_name = f"{table_prefix}_dist"

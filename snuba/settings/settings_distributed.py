@@ -35,7 +35,6 @@ CLUSTERS = [
             "group_attributes",
             "generic_metrics_gauges",
             "profile_chunks",
-            "llm_proxy_cost",
         },
         "single_node": False,
         "cluster_name": "cluster_one_sh",
