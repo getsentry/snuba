@@ -1,0 +1,6 @@
+version: v1
+kind: dataset
+name: llm_proxy_cost_raw
+
+entities:
+  - llm_proxy_cost_raw

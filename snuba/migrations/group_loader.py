@@ -123,6 +123,11 @@ class OutcomesLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.outcomes")
 
 
+class LlmProxyCostLoader(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("snuba.snuba_migrations.llm_proxy_cost")
+
+
 class ReplaysLoader(DirectoryLoader):
     def __init__(self) -> None:
         super().__init__("snuba.snuba_migrations.replays")

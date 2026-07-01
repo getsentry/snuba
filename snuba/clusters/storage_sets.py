@@ -21,6 +21,7 @@ _HARDCODED_STORAGE_SET_KEYS = {
     "EVENTS_ANALYTICS_PLATFORM_RO": "events_analytics_platform_ro",
     "GROUP_ATTRIBUTES": "group_attributes",
     "PROFILE_CHUNKS": "profile_chunks",
+    "LLM_PROXY_COST": "llm_proxy_cost",
 }
 
 

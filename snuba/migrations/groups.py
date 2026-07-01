@@ -11,6 +11,7 @@ from snuba.migrations.group_loader import (
     GenericMetricsLoader,
     GroupAttributesLoader,
     GroupLoader,
+    LlmProxyCostLoader,
     MetricsLoader,
     OutcomesLoader,
     ProfileChunksLoader,
@@ -43,6 +44,7 @@ class MigrationGroup(Enum):
     EVENTS_ANALYTICS_PLATFORM = "events_analytics_platform"
     GROUP_ATTRIBUTES = "group_attributes"
     PROFILE_CHUNKS = "profile_chunks"
+    LLM_PROXY_COST = "llm_proxy_cost"
     CDC = "cdc"
 
 
@@ -60,6 +62,7 @@ OPTIONAL_GROUPS = {
     MigrationGroup.SEARCH_ISSUES,
     MigrationGroup.GROUP_ATTRIBUTES,
     MigrationGroup.PROFILE_CHUNKS,
+    MigrationGroup.LLM_PROXY_COST,
 }
 
 
@@ -178,6 +181,11 @@ _REGISTERED_MIGRATION_GROUPS: dict[MigrationGroup, _MigrationGroup] = {
         loader=ProfileChunksLoader(),
         storage_sets_keys={StorageSetKey.PROFILE_CHUNKS},
         readiness_state=ReadinessState.COMPLETE,
+    ),
+    MigrationGroup.LLM_PROXY_COST: _MigrationGroup(
+        loader=LlmProxyCostLoader(),
+        storage_sets_keys={StorageSetKey.LLM_PROXY_COST},
+        readiness_state=ReadinessState.LIMITED,
     ),
 }
 
