@@ -58,81 +58,48 @@ clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
 _WITH_TOTALS_RE = re.compile(r"\bWITH\s+TOTALS\b", re.IGNORECASE)
 
 
-def _split_type_args(type_args: str) -> list[str]:
-    """
-    Split the argument list of a parametric ClickHouse type (``Tuple(...)`` /
-    ``Map(...)``) on top-level commas, keeping nested parametric types intact
-    (e.g. ``UInt64, Array(String)`` -> ``["UInt64", "Array(String)"]``).
-    """
-    parts: list[str] = []
-    depth = 0
-    current = ""
-    for char in type_args:
-        if char in "([":
-            depth += 1
-            current += char
-        elif char in ")]":
-            depth -= 1
-            current += char
-        elif char == "," and depth == 0:
-            parts.append(current.strip())
-            current = ""
-        else:
-            current += char
-    if current.strip():
-        parts.append(current.strip())
-    return parts
-
-
 def _decode_json_value(value: Any, ch_type: str) -> Any:
     """
-    Decode a value from ClickHouse's JSONCompact output into the same Python type
-    the native (clickhouse-connect Native) result path yields, recursing through
-    the composite types. This lets the JSONCompact totals path (see
-    :meth:`ClickhouseConnectPool._execute_with_totals`) feed the reader values
-    that are indistinguishable from the native driver's.
+    Decode a value from ClickHouse's JSONCompact output into the Python type the
+    reader expects for the totals row (see
+    :meth:`ClickhouseConnectPool._execute_with_totals`).
 
-    Relies on the totals query running with ``output_format_json_quote_64bit_integers=0``
-    (64-bit ints as JSON numbers, not strings) and ``output_format_json_quote_denormals=1``
-    (``inf``/``nan`` as strings, not ``null``) so numeric values round-trip
-    exactly; see the settings applied in ``_execute_with_totals``.
+    Almost everything JSONCompact returns is already the right Python type and
+    passes through untouched -- numbers, strings, booleans, arrays, maps. Only a
+    few conversions are actually required:
+
+      * ``Date`` / ``DateTime`` -> ``date`` / ``datetime`` objects. The reader's
+        column-type transforms operate on objects (and re-emit Snuba's canonical
+        ISO string), so a raw JSON string would crash them / change the format.
+      * wide integers (``Int128/256``, ``UInt128/256``) -> ``int`` -- JSON
+        renders those as strings.
+      * ``Float`` -> ``float`` -- so ``inf``/``nan`` (emitted as strings, see the
+        settings in ``_execute_with_totals``) round-trip instead of staying str.
+      * ``Decimal`` -> ``Decimal`` -- to match the native driver's type.
+
+    ``Nullable`` / ``LowCardinality`` are unwrapped, and ``Array`` recurses, only
+    to reach one of the above. Every other type (``String``, ``UUID``, ``Bool``,
+    ``Tuple``, ``Map``, ...) is returned as-is: JSON already yields a value that
+    serializes identically to the native driver's.
     """
-    ch_type = ch_type.strip()
-    if ch_type.startswith("LowCardinality("):
-        return _decode_json_value(value, ch_type[len("LowCardinality(") : -1])
-    if ch_type.startswith("Nullable("):
-        if value is None:
-            return None
-        return _decode_json_value(value, ch_type[len("Nullable(") : -1])
     if value is None:
         return None
-    if ch_type.startswith("Array("):
-        inner = ch_type[len("Array(") : -1]
-        return [_decode_json_value(item, inner) for item in value]
-    if ch_type.startswith("Tuple("):
-        inner_types = _split_type_args(ch_type[len("Tuple(") : -1])
-        return tuple(
-            _decode_json_value(item, inner_types[index]) for index, item in enumerate(value)
-        )
-    if ch_type.startswith("Map("):
-        key_type, value_type = _split_type_args(ch_type[len("Map(") : -1])
-        return {
-            _decode_json_value(key, key_type): _decode_json_value(val, value_type)
-            for key, val in value.items()
-        }
+    inner = ch_type.strip()
+    while inner.startswith(("Nullable(", "LowCardinality(")):
+        inner = inner[inner.index("(") + 1 : -1]
+    if inner.startswith("Array("):
+        return [_decode_json_value(item, inner[len("Array(") : -1]) for item in value]
     # DateTime must be checked before the bare Date prefix.
-    if ch_type.startswith("DateTime"):  # DateTime, DateTime64, DateTime('UTC')
+    if inner.startswith("DateTime"):  # DateTime, DateTime64, DateTime('UTC')
         return datetime.fromisoformat(value) if isinstance(value, str) else value
-    if ch_type.startswith("Date"):  # Date, Date32
+    if inner.startswith("Date"):  # Date, Date32
         return date.fromisoformat(value) if isinstance(value, str) else value
-    if ch_type.startswith(("Int", "UInt")):  # incl. 128/256, which arrive as JSON strings
+    if inner.startswith(("Int", "UInt")):  # incl. 128/256, which arrive as JSON strings
         return int(value)
-    if ch_type.startswith(("Float", "BFloat")):
+    if inner.startswith(("Float", "BFloat")):
         return float(value)
-    if ch_type.startswith("Decimal"):
+    if inner.startswith("Decimal"):
         return Decimal(str(value))
-    # String / FixedString / UUID / Enum* / Bool / IPv4 / IPv6: JSON already
-    # yields the right Python type (or a str the reader's transforms accept).
     return value
 
 
