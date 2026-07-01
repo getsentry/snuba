@@ -196,14 +196,16 @@ def execute_query(
     if not result["meta"]:
         synthesized_meta: list[Column] = []
         for index, selected in enumerate(clickhouse_query.get_selected_columns()):
-            # The result column name is the expression's alias -- that is what the
-            # formatter emits as ``... AS <alias>`` and what ClickHouse echoes
-            # back. SelectedExpression.name mirrors it but is nullable, so fall
-            # back to the expression alias, and finally to the same
-            # ``_invalid_alias_{index}`` placeholder Query.get_columns() uses --
-            # so a column is never dropped, keeping meta aligned one-to-one with
-            # the result columns.
-            name = selected.name or selected.expression.alias or f"_invalid_alias_{index}"
+            # The result column name is the expression's SQL alias: that is what
+            # the formatter emits as ``... AS <alias>`` and what ClickHouse echoes
+            # back in the column header (i.e. exactly what the native driver
+            # reports, which this synthesis must match). SelectedExpression.name is
+            # Snuba's logical name -- it usually equals the alias but can differ
+            # (e.g. MQL rollup: name ``time`` vs alias ``events.time``), so it is
+            # only a fallback. Finally fall back to the same
+            # ``_invalid_alias_{index}`` placeholder Query.get_columns() uses, so a
+            # column is never dropped and meta stays aligned with the result.
+            name = selected.expression.alias or selected.name or f"_invalid_alias_{index}"
             synthesized_meta.append({"name": name, "type": ""})
         result["meta"] = synthesized_meta
 

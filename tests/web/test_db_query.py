@@ -370,6 +370,48 @@ def test_empty_result_meta_placeholder_when_name_and_alias_missing() -> None:
     assert stats["result_cols"] == 1
 
 
+def test_empty_result_meta_prefers_alias_over_name() -> None:
+    # ClickHouse echoes the formatted SQL alias as the result column name, not
+    # SelectedExpression.name. When they differ (e.g. MQL rollup: name "time" vs
+    # alias "events.time"), synthesis must use the alias so the meta matches the
+    # actual result columns and passes downstream column validation.
+    from snuba.query import SelectedExpression
+    from snuba.query.expressions import Column as ColumnExpr
+    from snuba.reader import Reader, Result
+
+    query, _storage, _attribution_info = _build_test_query("count(distinct(project_id))")
+    query.set_ast_selected_columns(
+        [
+            SelectedExpression(
+                name="time",
+                expression=ColumnExpr(alias="events.time", table_name="events", column_name="time"),
+            )
+        ]
+    )
+
+    class _EmptyMetaReader(Reader):
+        def __init__(self) -> None:
+            super().__init__(cache_partition_id=None, query_settings_prefix=None)
+
+        def execute(self, *args: Any, **kwargs: Any) -> Result:
+            return {"data": [], "meta": [], "profile": None, "trace_output": ""}
+
+    stats: dict[str, Any] = {}
+    result = execute_query(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        formatted_query=format_query(query),
+        reader=_EmptyMetaReader(),
+        timer=Timer("test"),
+        stats=stats,
+        clickhouse_query_settings={},
+        robust=False,
+    )
+
+    # Alias wins over the differing name -- matches what ClickHouse would return.
+    assert result["meta"] == [{"name": "events.time", "type": ""}]
+
+
 @pytest.mark.events_db
 @pytest.mark.redis_db
 def test_db_record_bytes_scanned() -> None:
