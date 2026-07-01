@@ -195,15 +195,16 @@ def execute_query(
     # consumers of an empty result rely only on the column names.
     if not result["meta"]:
         synthesized_meta: list[Column] = []
-        for selected in clickhouse_query.get_selected_columns():
+        for index, selected in enumerate(clickhouse_query.get_selected_columns()):
             # The result column name is the expression's alias -- that is what the
             # formatter emits as ``... AS <alias>`` and what ClickHouse echoes
             # back. SelectedExpression.name mirrors it but is nullable, so fall
-            # back to the expression alias rather than dropping a column (which
-            # would desync meta from the actual result columns).
-            name = selected.name or selected.expression.alias
-            if name is not None:
-                synthesized_meta.append({"name": name, "type": ""})
+            # back to the expression alias, and finally to the same
+            # ``_invalid_alias_{index}`` placeholder Query.get_columns() uses --
+            # so a column is never dropped, keeping meta aligned one-to-one with
+            # the result columns.
+            name = selected.name or selected.expression.alias or f"_invalid_alias_{index}"
+            synthesized_meta.append({"name": name, "type": ""})
         result["meta"] = synthesized_meta
 
     timer.mark("execute")
