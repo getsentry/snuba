@@ -248,14 +248,14 @@ def test_clickhouse_reader_wraps_connect_pool() -> None:
     assert isinstance(reader, ClickhouseReader)
 
 
-def test_with_totals_refetched_via_json_over_http() -> None:
-    # clickhouse-connect's Native/HTTP path never returns the WITH TOTALS row:
-    # ClickHouse does not serialize totals into the Native HTTP output, so
-    # client.query() yields only the grouped rows. The connect pool therefore
-    # re-fetches the totals with a FORMAT JSON query and appends them as the
-    # trailing result row -- the contract the driver-agnostic ClickhouseReader
-    # expects, the same one the native driver satisfies by appending the totals
-    # row it receives over the native protocol.
+def test_with_totals_via_single_jsoncompact_request() -> None:
+    # clickhouse-connect's Native/HTTP path never returns the WITH TOTALS row
+    # (ClickHouse omits totals from the Native HTTP output). The connect pool runs
+    # WITH TOTALS queries through a single FORMAT JSONCompact request -- which
+    # returns data + meta + totals together -- and appends the totals as the
+    # trailing result row, the contract the driver-agnostic ClickhouseReader
+    # expects (the same one the native driver satisfies). The Native query() path
+    # is not used for these queries, so there is no second scan.
     from snuba.clickhouse.native import ClickhouseReader
 
     class FakeFormattedQuery:
@@ -263,24 +263,15 @@ def test_with_totals_refetched_via_json_over_http() -> None:
             return "SELECT project_id, count() FROM t GROUP BY project_id WITH TOTALS"
 
     client = mock.Mock()
-    # The Native path returns only the grouped rows -- no totals row.
-    client.query.return_value = FakeQueryResult(
-        result_set=[[1, 10], [2, 20]],
-        column_names=("project_id", "count()"),
-        column_types=(FakeColumnType("UInt64"), FakeColumnType("UInt64")),
-    )
-    # The JSON re-fetch is the only place the totals are available.
+    # JSONCompact returns each row (and the totals row) as a positional array.
     client.raw_query.return_value = json.dumps(
         {
             "meta": [
                 {"name": "project_id", "type": "UInt64"},
                 {"name": "count()", "type": "UInt64"},
             ],
-            "data": [
-                {"project_id": 1, "count()": 10},
-                {"project_id": 2, "count()": 20},
-            ],
-            "totals": {"project_id": 0, "count()": 30},
+            "data": [[1, 10], [2, 20]],
+            "totals": [0, 30],
         }
     ).encode()
 
@@ -289,34 +280,30 @@ def test_with_totals_refetched_via_json_over_http() -> None:
 
     result = reader.execute(cast(FormattedQuery, FakeFormattedQuery()), with_totals=True)
 
-    # The re-fetched totals row is split out as totals; only the real rows remain.
+    # The trailing totals row is split out as totals; only the real rows remain.
     assert result["data"] == [
         {"project_id": 1, "count()": 10},
         {"project_id": 2, "count()": 20},
     ]
     assert result["totals"] == {"project_id": 0, "count()": 30}
-    # Totals come from the JSON output format, not the Native query path.
+    # Single request via JSONCompact; the Native query() path is never used.
+    client.query.assert_not_called()
     _, kwargs = client.raw_query.call_args
-    assert kwargs["fmt"] == "JSON"
+    assert kwargs["fmt"] == "JSONCompact"
     assert kwargs["settings"]["output_format_json_quote_64bit_integers"] == 0
+    assert kwargs["settings"]["output_format_json_quote_denormals"] == 1
 
 
-def test_totals_refetch_uses_correlated_query_id_and_inherits_settings() -> None:
-    # The WITH TOTALS recovery query carries an id derived from the primary
-    # query's id -- so the two correlate in ClickHouse's query_log -- without
-    # reusing it (which would make them indistinguishable). Every other runtime
-    # setting is inherited from the primary query.
+def test_totals_jsoncompact_uses_original_query_id_and_inherits_settings() -> None:
+    # The single JSONCompact request carries the query's own id -- there is only
+    # one query, so no derived id is needed -- and inherits every functional
+    # runtime setting from the query.
     client = mock.Mock()
-    client.query.return_value = FakeQueryResult(
-        result_set=[[1, 10]],
-        column_names=("g", "s"),
-        column_types=(FakeColumnType("UInt64"), FakeColumnType("UInt64")),
-    )
     client.raw_query.return_value = json.dumps(
         {
             "meta": [{"name": "g", "type": "UInt64"}, {"name": "s", "type": "UInt64"}],
-            "data": [{"g": 1, "s": 10}],
-            "totals": {"g": 0, "s": 10},
+            "data": [[1, 10]],
+            "totals": [0, 10],
         }
     ).encode()
 
@@ -329,38 +316,35 @@ def test_totals_refetch_uses_correlated_query_id_and_inherits_settings() -> None
     )
 
     _, kwargs = client.raw_query.call_args
-    # Correlated but distinct id, and the primary query's functional settings.
-    assert kwargs["settings"]["query_id"] == "abc-123_totals"
+    assert kwargs["fmt"] == "JSONCompact"
+    assert kwargs["settings"]["query_id"] == "abc-123"
     assert kwargs["settings"]["max_execution_time"] == 30
 
 
-def test_totals_row_sourced_from_json_payload_columns() -> None:
-    # The totals row is built from the JSON payload's own column list, so its
-    # values are read with keys guaranteed to match the JSON totals dict -- they
-    # can never be silently None'd by a Native-vs-JSON column-name difference.
-    # Column names are format-independent in practice; here the Native names are
-    # deliberately made to differ from the JSON names to prove the totals values
-    # still come through (aligned positionally to the returned meta).
+def test_totals_jsoncompact_decodes_value_types() -> None:
+    # Values from JSONCompact are decoded into the same Python types the native
+    # driver yields, so the reader's transforms and downstream serialization
+    # behave identically for both drivers. Covers the tricky cases: DateTime
+    # (string -> datetime, so the reader's transform can ISO-format it rather than
+    # crash on a str), Array (recursed), and Nullable (null -> None / value).
     from snuba.clickhouse.native import ClickhouseReader
 
     class FakeFormattedQuery:
         def get_sql(self) -> str:
-            return "SELECT a, sum(v) AS b FROM t GROUP BY a WITH TOTALS"
+            return "SELECT g, ts, cnt, arr, opt FROM t GROUP BY g WITH TOTALS"
 
     client = mock.Mock()
-    # Native result reports column names ("a", "b").
-    client.query.return_value = FakeQueryResult(
-        result_set=[[1, 10]],
-        column_names=("a", "b"),
-        column_types=(FakeColumnType("UInt64"), FakeColumnType("UInt64")),
-    )
-    # JSON payload uses different names ("x", "y"); the totals must be recovered
-    # from those, not looked up by the Native names (which would yield None).
     client.raw_query.return_value = json.dumps(
         {
-            "meta": [{"name": "x", "type": "UInt64"}, {"name": "y", "type": "UInt64"}],
-            "data": [{"x": 1, "y": 10}],
-            "totals": {"x": 0, "y": 10},
+            "meta": [
+                {"name": "g", "type": "UInt64"},
+                {"name": "ts", "type": "DateTime"},
+                {"name": "cnt", "type": "UInt64"},
+                {"name": "arr", "type": "Array(UInt64)"},
+                {"name": "opt", "type": "Nullable(UInt64)"},
+            ],
+            "data": [[1, "2023-01-02 03:04:05", 10, [1, 2], None]],
+            "totals": [0, "1970-01-01 00:00:00", 10, [1, 2], 5],
         }
     ).encode()
 
@@ -368,10 +352,15 @@ def test_totals_row_sourced_from_json_payload_columns() -> None:
     reader = ClickhouseReader(cache_partition_id=None, client=pool, query_settings_prefix=None)
     result = reader.execute(cast(FormattedQuery, FakeFormattedQuery()), with_totals=True)
 
-    # Returned meta keeps the Native names; the totals values come from the JSON
-    # payload, aligned positionally -> b=10, a=0 (never None, None).
-    assert result["data"] == [{"a": 1, "b": 10}]
-    assert result["totals"] == {"a": 0, "b": 10}
+    row = result["data"][0]
+    # DateTime string -> datetime -> ISO string via the reader's transform.
+    assert row["ts"] == "2023-01-02T03:04:05+00:00"
+    assert row["arr"] == [1, 2]
+    assert row["opt"] is None
+    totals = result["totals"]
+    assert totals["ts"] == "1970-01-01T00:00:00+00:00"
+    assert totals["cnt"] == 10
+    assert totals["opt"] == 5
 
 
 def test_empty_non_totals_result_does_not_refetch() -> None:
@@ -395,17 +384,17 @@ def test_empty_non_totals_result_does_not_refetch() -> None:
     client.raw_query.assert_not_called()
 
 
-def test_empty_with_totals_recovers_meta_and_totals_via_json() -> None:
+def test_empty_with_totals_returns_meta_and_totals_via_jsoncompact() -> None:
     # A WITH TOTALS query that matches zero rows loses both its column header and
-    # its totals row over the Native/HTTP path. The JSON re-fetch (which only
-    # fires for WITH TOTALS) recovers the column metadata and the totals row.
+    # its totals row over the Native/HTTP path. The single JSONCompact request
+    # still carries the column metadata and the totals row, so the connect pool
+    # returns them (and never touches the Native query() path).
     client = mock.Mock()
-    client.query.return_value = FakeQueryResult(result_set=[], column_names=(), column_types=())
     client.raw_query.return_value = json.dumps(
         {
             "meta": [{"name": "g", "type": "UInt64"}, {"name": "s", "type": "UInt64"}],
             "data": [],
-            "totals": {"g": 0, "s": 0},
+            "totals": [0, 0],
         }
     ).encode()
 
@@ -418,6 +407,7 @@ def test_empty_with_totals_recovers_meta_and_totals_via_json() -> None:
 
     assert result.meta == [("g", "UInt64"), ("s", "UInt64")]
     assert result.results == [(0, 0)]
+    client.query.assert_not_called()
 
 
 def test_non_empty_non_totals_query_does_not_refetch() -> None:
@@ -435,44 +425,6 @@ def test_non_empty_non_totals_query_does_not_refetch() -> None:
 
     assert result.meta == [("a", "UInt8"), ("b", "UInt8")]
     client.raw_query.assert_not_called()
-
-
-def test_recovered_totals_datetime_is_typed_like_native() -> None:
-    # The totals row recovered from JSON has Date/DateTime values as strings; the
-    # pool coerces them to date/datetime objects so they are indistinguishable
-    # from the native driver's values and survive the reader's type transforms
-    # (which would otherwise crash calling datetime methods on a str).
-    from snuba.clickhouse.native import ClickhouseReader
-
-    class FakeFormattedQuery:
-        def get_sql(self) -> str:
-            return "SELECT ts, count() FROM t GROUP BY ts WITH TOTALS"
-
-    client = mock.Mock()
-    client.query.return_value = FakeQueryResult(
-        result_set=[[datetime(2023, 1, 2, 3, 4, 5), 10]],
-        column_names=("ts", "count()"),
-        column_types=(FakeColumnType("DateTime"), FakeColumnType("UInt64")),
-    )
-    client.raw_query.return_value = json.dumps(
-        {
-            "meta": [
-                {"name": "ts", "type": "DateTime"},
-                {"name": "count()", "type": "UInt64"},
-            ],
-            "data": [{"ts": "2023-01-02 03:04:05", "count()": 10}],
-            "totals": {"ts": "1970-01-01 00:00:00", "count()": 10},
-        }
-    ).encode()
-
-    pool = _make_pool(client)
-    reader = ClickhouseReader(cache_partition_id=None, client=pool, query_settings_prefix=None)
-    result = reader.execute(cast(FormattedQuery, FakeFormattedQuery()), with_totals=True)
-
-    # The DateTime totals value (a JSON string) is coerced to a datetime, then
-    # transformed to an ISO string -- exactly like the data row.
-    assert result["data"][0]["ts"] == "2023-01-02T03:04:05+00:00"
-    assert result["totals"]["ts"] == "1970-01-01T00:00:00+00:00"
 
 
 def test_connect_type_names_drive_reader_transforms() -> None:
