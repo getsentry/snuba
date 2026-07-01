@@ -57,6 +57,11 @@ clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
 # takes the JSONCompact path, which returns the same rows without a totals block.
 _WITH_TOTALS_RE = re.compile(r"\bWITH\s+TOTALS\b", re.IGNORECASE)
 
+# Exact ClickHouse fixed-width integer type names. Matched precisely (not via a
+# ``startswith("Int")`` prefix) so ``Interval*`` types -- which also start with
+# "Int" -- are not mistaken for integers and forced through ``int()``.
+_INT_TYPE_RE = re.compile(r"^U?Int(?:8|16|32|64|128|256)$")
+
 
 def _decode_json_value(value: Any, ch_type: str) -> Any:
     """
@@ -94,7 +99,7 @@ def _decode_json_value(value: Any, ch_type: str) -> Any:
         return datetime.fromisoformat(value) if isinstance(value, str) else value
     if inner.startswith("Date"):  # Date, Date32
         return date.fromisoformat(value) if isinstance(value, str) else value
-    if inner.startswith(("Int", "UInt")):  # incl. 128/256, which arrive as JSON strings
+    if _INT_TYPE_RE.match(inner):  # incl. Int/UInt 128/256, which arrive as JSON strings
         return int(value)
     if inner.startswith(("Float", "BFloat")):
         return float(value)

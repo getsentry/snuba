@@ -363,6 +363,23 @@ def test_totals_jsoncompact_decodes_value_types() -> None:
     assert totals["opt"] == 5
 
 
+def test_decode_json_value_matches_ints_but_not_intervals() -> None:
+    # The integer branch matches Int/UInt fixed-width types exactly (wide ones
+    # arrive as JSON strings), but must NOT match Interval* types -- which also
+    # start with "Int" -- or they'd be forced through int() and could raise.
+    from snuba.clickhouse.connect import _decode_json_value
+
+    # Fixed-width ints (incl. wide ones sent as strings) become int.
+    assert _decode_json_value(5, "UInt64") == 5
+    assert (
+        _decode_json_value("170141183460469231731687303715884105727", "Int128")
+        == 170141183460469231731687303715884105727
+    )
+    # Interval* passes through untouched (never int()'d), whatever ClickHouse emits.
+    assert _decode_json_value(7, "IntervalDay") == 7
+    assert _decode_json_value("P7D", "IntervalDay") == "P7D"
+
+
 def test_empty_non_totals_result_does_not_refetch() -> None:
     # An empty, non-WITH-TOTALS result comes back from the Native/HTTP path with
     # no column header (ClickHouse emits a zero-byte Native body for zero rows),
