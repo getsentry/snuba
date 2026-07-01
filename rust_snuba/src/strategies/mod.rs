@@ -3,6 +3,7 @@ pub mod accountant;
 pub mod blq_router;
 pub mod clickhouse;
 pub mod commit_log;
+pub mod dlq_stale_messages;
 pub mod healthcheck;
 pub mod join_timeout;
 pub mod noop;

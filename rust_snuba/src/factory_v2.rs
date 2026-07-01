@@ -28,6 +28,7 @@ use crate::strategies::accountant::RecordCogs;
 use crate::strategies::blq_router::BLQRouter;
 use crate::strategies::clickhouse::writer_v2::{ClickhouseWriterStep, InsertFormat};
 use crate::strategies::commit_log::ProduceCommitLog;
+use crate::strategies::dlq_stale_messages::DlqStaleMessages;
 use crate::strategies::healthcheck::HealthCheck as SnubaHealthCheck;
 use crate::strategies::join_timeout::SetJoinTimeout;
 use crate::strategies::processor::{
@@ -309,6 +310,16 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                 tracing::info!("Not using a backlog-queue",);
                 Box::new(next_step)
             };
+
+        // Dead-letter messages older than a per-storage threshold. This is a
+        // no-op unless `consumer.dlq_stale_threshold_seconds` has a positive
+        // entry for this storage in sentry-options, so it's always safe to
+        // include. Placed ahead of everything else so stale messages are
+        // dropped before any processing work.
+        let next_step: Box<dyn ProcessingStrategy<KafkaPayload>> = Box::new(DlqStaleMessages::new(
+            next_step,
+            self.storage_config.name.clone(),
+        ));
 
         if let Some(path) = &self.health_check_file {
             {
