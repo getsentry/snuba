@@ -76,4 +76,5 @@ def test_all_names() -> None:
         "replays",
         "search_issues",
         "group_attributes",
+        "llm_proxy_cost_raw",
     }
