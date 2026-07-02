@@ -18,6 +18,7 @@ from snuba.configs.configuration import (
     logger,
 )
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.state import get_config as get_runtime_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import import_submodules_in_directory
 from snuba.utils.serializable_exception import JsonSerializable, SerializableException
@@ -25,6 +26,13 @@ from snuba.web import QueryResult
 
 CAPMAN_PREFIX = "capman"
 CAPMAN_HASH = "capman"
+
+# Global runtime config (visible in the runtime config admin UI, NOT Capacity
+# Management) holding a comma-separated list of organization ids that are exempt
+# from ALL allocation policies (rate limits), e.g. "1,42,1337". It is global
+# rather than per-policy because it is meant to exempt an org from every policy
+# at once. See AllocationPolicy.is_rate_limit_bypassed.
+ORG_RATE_LIMIT_BYPASS_CONFIG = "organization_rate_limit_bypass_allowlist"
 
 IS_ACTIVE = "is_active"
 IS_ENFORCED = "is_enforced"
@@ -424,6 +432,27 @@ class AllocationPolicy(ConfigurableComponent, ABC):
     def is_cross_org_query(self, tenant_ids: dict[str, str | int]) -> bool:
         return bool(tenant_ids.get("cross_org_query", False))
 
+    def is_rate_limit_bypassed(self, tenant_ids: dict[str, str | int]) -> bool:
+        """Returns True if the query's organization is in the global rate limit
+        bypass allowlist. Orgs in this allowlist skip ALL allocation policies
+        entirely, in the same way an inactive policy is skipped.
+
+        The allowlist is a single global runtime config shared across every
+        policy (see ORG_RATE_LIMIT_BYPASS_CONFIG), since it is meant to exempt an
+        org from all rate limits at once. It is stored as a comma-separated list
+        of organization ids, e.g. "1,42,1337".
+        """
+        org_id = tenant_ids.get("organization_id")
+        if org_id is None:
+            return False
+        allowlist = get_runtime_config(ORG_RATE_LIMIT_BYPASS_CONFIG, "")
+        if not allowlist:
+            return False
+        bypassed_orgs = {
+            part.strip() for part in str(allowlist).split(",") if part.strip()
+        }
+        return str(org_id) in bypassed_orgs
+
     @classmethod
     def from_kwargs(cls, **kwargs: str) -> AllocationPolicy:
         required_tenant_types = kwargs.pop("required_tenant_types", None)
@@ -457,7 +486,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
             for t, tid in tenant_ids.items():
                 span.set_data(f"tenant_ids.{t}", str(tid))
             try:
-                if not self.is_active:
+                if not self.is_active or self.is_rate_limit_bypassed(tenant_ids):
                     allowance = QuotaAllowance(
                         can_run=True,
                         max_threads=self.max_threads,
@@ -547,7 +576,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         result_or_error: QueryResultOrError,
     ) -> None:
         try:
-            if not self.is_active:
+            if not self.is_active or self.is_rate_limit_bypassed(tenant_ids):
                 return None
             return self._update_quota_balance(tenant_ids, query_id, result_or_error)
         except InvalidTenantsForAllocationPolicy:
