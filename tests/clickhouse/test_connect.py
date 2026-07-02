@@ -375,6 +375,12 @@ def test_coerce_temporal_only_touches_date_and_datetime() -> None:
         2023, 1, 2, 3, 4, 5
     )
     assert _coerce_temporal("2023-01-02", "Date") == date(2023, 1, 2)
+    # Parametrized precision variants reduce to the same base type (the match is on
+    # the base name, not a prefix), so DateTime64/Date32 are handled too.
+    assert _coerce_temporal("2023-01-02 03:04:05.123456789", "DateTime64(9)") == datetime(
+        2023, 1, 2, 3, 4, 5, 123456
+    )
+    assert _coerce_temporal("2023-01-02", "Date32") == date(2023, 1, 2)
     # Nullable is unwrapped, mirroring the reader's own transform.
     assert _coerce_temporal("2023-01-02 03:04:05", "Nullable(DateTime)") == datetime(
         2023, 1, 2, 3, 4, 5

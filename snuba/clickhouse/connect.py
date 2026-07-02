@@ -71,12 +71,16 @@ def _coerce_temporal(value: Any, ch_type: str) -> Any:
     if not isinstance(value, str):
         return value
     _, inner = unwrap_nullable_type(ch_type)
-    # DateTime must be checked before the bare Date prefix.
-    if inner.startswith("DateTime"):  # DateTime, DateTime64, DateTime('UTC')
-        return datetime.fromisoformat(value)
-    if inner.startswith("Date"):  # Date, Date32
-        return date.fromisoformat(value)
-    return value
+    # Match on the base type name -- parameters stripped, so DateTime64(9) and
+    # DateTime('UTC') reduce to DateTime64 / DateTime -- so the exact type drives
+    # the conversion rather than a brittle prefix.
+    match inner.split("(", 1)[0]:
+        case "DateTime" | "DateTime64":
+            return datetime.fromisoformat(value)
+        case "Date" | "Date32":
+            return date.fromisoformat(value)
+        case _:
+            return value
 
 
 class ClickhouseConnectPool(ClickhousePool):
@@ -343,7 +347,7 @@ class ClickhouseConnectPool(ClickhousePool):
                 for row in payload.get("data", [])
             ]
             totals = payload.get("totals")
-            if totals is not None:
+            if totals:
                 results.append(
                     tuple(
                         _coerce_temporal(value, column_types[index])
@@ -365,9 +369,8 @@ class ClickhouseConnectPool(ClickhousePool):
         statistics = payload.get("statistics") or {}
 
         def _int(key: str) -> int:
-            value = statistics.get(key)
             try:
-                return int(value) if value is not None else 0
+                return int(statistics.get(key) or 0)
             except (TypeError, ValueError):
                 return 0
 

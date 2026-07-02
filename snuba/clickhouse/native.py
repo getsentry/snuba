@@ -595,7 +595,7 @@ class ClickhouseReader(Reader):
                 robust=robust,
             )
         else:
-            execute_func = self.__client.execute_robust if robust is True else self.__client.execute
+            execute_func = self.__client.execute_robust if robust else self.__client.execute
             result = execute_func(
                 query.get_sql(),
                 with_column_types=True,
