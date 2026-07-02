@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from collections.abc import Mapping
 from random import random
-from typing import Any, cast
+from typing import Any
 from uuid import UUID
 
 import sentry_sdk
