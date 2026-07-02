@@ -1,3 +1,6 @@
+import json
+import uuid
+from datetime import date, datetime
 from typing import Any, cast
 from unittest import mock
 
@@ -245,13 +248,14 @@ def test_clickhouse_reader_wraps_connect_pool() -> None:
     assert isinstance(reader, ClickhouseReader)
 
 
-def test_with_totals_handled_over_http() -> None:
-    # WITH TOTALS works on the HTTP driver through clickhouse-connect's own
-    # parsing: its Native-format reader concatenates every response block,
-    # including the trailing totals block, into result_set, so the totals row
-    # arrives last — exactly what the driver-agnostic ClickhouseReader expects
-    # when it pops the last row as "totals". No native-driver-specific handling
-    # is involved.
+def test_with_totals_via_single_jsoncompact_request() -> None:
+    # clickhouse-connect's Native/HTTP path never returns the WITH TOTALS row
+    # (ClickHouse omits totals from the Native HTTP output). The connect pool runs
+    # WITH TOTALS queries through a single FORMAT JSONCompact request -- which
+    # returns data + meta + totals together -- and appends the totals as the
+    # trailing result row, the contract the driver-agnostic ClickhouseReader
+    # expects (the same one the native driver satisfies). The Native query() path
+    # is not used for these queries, so there is no second scan.
     from snuba.clickhouse.native import ClickhouseReader
 
     class FakeFormattedQuery:
@@ -259,25 +263,193 @@ def test_with_totals_handled_over_http() -> None:
             return "SELECT project_id, count() FROM t GROUP BY project_id WITH TOTALS"
 
     client = mock.Mock()
-    # Two data rows followed by the totals row, the way clickhouse-connect
-    # surfaces a WITH TOTALS response over HTTP.
-    client.query.return_value = FakeQueryResult(
-        result_set=[[1, 10], [2, 20], [0, 30]],
-        column_names=("project_id", "count()"),
-        column_types=(FakeColumnType("UInt64"), FakeColumnType("UInt64")),
-    )
+    # JSONCompact returns each row (and the totals row) as a positional array.
+    client.raw_query.return_value = json.dumps(
+        {
+            "meta": [
+                {"name": "project_id", "type": "UInt64"},
+                {"name": "count()", "type": "UInt64"},
+            ],
+            "data": [[1, 10], [2, 20]],
+            "totals": [0, 30],
+        }
+    ).encode()
 
     pool = _make_pool(client)
     reader = ClickhouseReader(cache_partition_id=None, client=pool, query_settings_prefix=None)
 
     result = reader.execute(cast(FormattedQuery, FakeFormattedQuery()), with_totals=True)
 
-    # The trailing row is split out as totals; only the real rows remain in data.
+    # The trailing totals row is split out as totals; only the real rows remain.
     assert result["data"] == [
         {"project_id": 1, "count()": 10},
         {"project_id": 2, "count()": 20},
     ]
     assert result["totals"] == {"project_id": 0, "count()": 30}
+    # Single request via JSONCompact; the Native query() path is never used.
+    client.query.assert_not_called()
+    _, kwargs = client.raw_query.call_args
+    assert kwargs["fmt"] == "JSONCompact"
+    assert kwargs["settings"]["output_format_json_quote_64bit_integers"] == 0
+
+
+def test_totals_jsoncompact_uses_original_query_id_and_inherits_settings() -> None:
+    # The single JSONCompact request carries the query's own id -- there is only
+    # one query, so no derived id is needed -- and inherits every functional
+    # runtime setting from the query.
+    client = mock.Mock()
+    client.raw_query.return_value = json.dumps(
+        {
+            "meta": [{"name": "g", "type": "UInt64"}, {"name": "s", "type": "UInt64"}],
+            "data": [[1, 10]],
+            "totals": [0, 10],
+        }
+    ).encode()
+
+    pool = _make_pool(client)
+    pool.execute_with_totals(
+        "SELECT g, sum(v) AS s FROM t GROUP BY g WITH TOTALS",
+        query_id="abc-123",
+        settings={"max_execution_time": 30},
+    )
+
+    _, kwargs = client.raw_query.call_args
+    assert kwargs["fmt"] == "JSONCompact"
+    assert kwargs["settings"]["query_id"] == "abc-123"
+    assert kwargs["settings"]["max_execution_time"] == 30
+
+
+def test_totals_jsoncompact_decodes_value_types() -> None:
+    # Values from JSONCompact are decoded into the same Python types the native
+    # driver yields, so the reader's transforms and downstream serialization
+    # behave identically for both drivers. Covers the tricky cases: DateTime
+    # (string -> datetime, so the reader's transform can ISO-format it rather than
+    # crash on a str), Array (passed through), and Nullable (null -> None / value).
+    from snuba.clickhouse.native import ClickhouseReader
+
+    class FakeFormattedQuery:
+        def get_sql(self) -> str:
+            return "SELECT g, ts, cnt, arr, opt FROM t GROUP BY g WITH TOTALS"
+
+    client = mock.Mock()
+    client.raw_query.return_value = json.dumps(
+        {
+            "meta": [
+                {"name": "g", "type": "UInt64"},
+                {"name": "ts", "type": "DateTime"},
+                {"name": "cnt", "type": "UInt64"},
+                {"name": "arr", "type": "Array(UInt64)"},
+                {"name": "opt", "type": "Nullable(UInt64)"},
+            ],
+            "data": [[1, "2023-01-02 03:04:05", 10, [1, 2], None]],
+            "totals": [0, "1970-01-01 00:00:00", 10, [1, 2], 5],
+        }
+    ).encode()
+
+    pool = _make_pool(client)
+    reader = ClickhouseReader(cache_partition_id=None, client=pool, query_settings_prefix=None)
+    result = reader.execute(cast(FormattedQuery, FakeFormattedQuery()), with_totals=True)
+
+    row = result["data"][0]
+    # DateTime string -> datetime -> ISO string via the reader's transform.
+    assert row["ts"] == "2023-01-02T03:04:05+00:00"
+    assert row["arr"] == [1, 2]
+    assert row["opt"] is None
+    totals = result["totals"]
+    assert totals["ts"] == "1970-01-01T00:00:00+00:00"
+    assert totals["cnt"] == 10
+    assert totals["opt"] == 5
+
+
+def test_coerce_temporal_only_touches_date_and_datetime() -> None:
+    # _coerce_temporal is the single value conversion the JSONCompact totals path
+    # applies: Date/DateTime strings become date/datetime objects (so the reader's
+    # column transforms can ISO-format them instead of crashing on a str -- those
+    # are the only types whose transforms would crash), and it unwraps Nullable so
+    # Nullable(DateTime) is handled too. Every other type -- including the ints and
+    # floats json.loads returns -- must pass through untouched.
+    from snuba.clickhouse.connect import _coerce_temporal
+
+    assert _coerce_temporal("2023-01-02 03:04:05", "DateTime") == datetime(2023, 1, 2, 3, 4, 5)
+    assert _coerce_temporal("2023-01-02 03:04:05", "DateTime('UTC')") == datetime(
+        2023, 1, 2, 3, 4, 5
+    )
+    assert _coerce_temporal("2023-01-02", "Date") == date(2023, 1, 2)
+    # Nullable is unwrapped, mirroring the reader's own transform.
+    assert _coerce_temporal("2023-01-02 03:04:05", "Nullable(DateTime)") == datetime(
+        2023, 1, 2, 3, 4, 5
+    )
+    # Non-temporal values (and None) are returned verbatim, whatever the type. A
+    # whole-number Float that JSON emitted as an int stays an int here (the
+    # accepted, numerically-identical 5-vs-5.0 divergence).
+    assert _coerce_temporal(5, "UInt64") == 5
+    assert _coerce_temporal(1.5, "Float64") == 1.5
+    assert _coerce_temporal(None, "Nullable(DateTime)") is None
+    # A non-string under a Date/DateTime type is left alone (defensive).
+    assert _coerce_temporal(0, "DateTime") == 0
+
+
+def test_empty_non_totals_result_does_not_refetch() -> None:
+    # An empty, non-WITH-TOTALS result comes back from the Native/HTTP path with
+    # no column header (ClickHouse emits a zero-byte Native body for zero rows),
+    # so meta is empty. The driver does NOT pay for a second query to recover it:
+    # the column metadata for an empty result is synthesized one layer up, in
+    # snuba.web.db_query, from the query's own columns (see
+    # test_db_query.test_empty_result_meta_synthesized_from_query).
+    client = mock.Mock()
+    client.query.return_value = FakeQueryResult(result_set=[], column_names=(), column_types=())
+
+    pool = _make_pool(client)
+    result = pool.execute(
+        "SELECT flags_key, count() AS count FROM t GROUP BY flags_key",
+        with_column_types=True,
+    )
+
+    assert result.results == []
+    assert result.meta == []
+    client.raw_query.assert_not_called()
+
+
+def test_empty_with_totals_returns_meta_and_totals_via_jsoncompact() -> None:
+    # A WITH TOTALS query that matches zero rows loses both its column header and
+    # its totals row over the Native/HTTP path. The single JSONCompact request
+    # still carries the column metadata and the totals row, so the connect pool
+    # returns them (and never touches the Native query() path).
+    client = mock.Mock()
+    client.raw_query.return_value = json.dumps(
+        {
+            "meta": [{"name": "g", "type": "UInt64"}, {"name": "s", "type": "UInt64"}],
+            "data": [],
+            "totals": [0, 0],
+        }
+    ).encode()
+
+    pool = _make_pool(client)
+    # The trailing totals row is appended to results; the reader pops it off.
+    result = pool.execute_with_totals(
+        "SELECT g, sum(v) AS s FROM t WHERE g = 999 GROUP BY g WITH TOTALS",
+    )
+
+    assert result.meta == [("g", "UInt64"), ("s", "UInt64")]
+    assert result.results == [(0, 0)]
+    client.query.assert_not_called()
+
+
+def test_non_empty_non_totals_query_does_not_refetch() -> None:
+    # The common read path (rows present, no WITH TOTALS) must not pay for a
+    # second JSON scan -- only WITH TOTALS queries do.
+    client = mock.Mock()
+    client.query.return_value = FakeQueryResult(
+        result_set=[[1, 2]],
+        column_names=("a", "b"),
+        column_types=(FakeColumnType("UInt8"), FakeColumnType("UInt8")),
+    )
+
+    pool = _make_pool(client)
+    result = pool.execute("SELECT a, b FROM t", with_column_types=True)
+
+    assert result.meta == [("a", "UInt8"), ("b", "UInt8")]
+    client.raw_query.assert_not_called()
 
 
 def test_connect_type_names_drive_reader_transforms() -> None:
@@ -461,3 +633,182 @@ def test_native_pool_execute_explain_delegates_to_execute() -> None:
 
     execute.assert_called_once_with("EXPLAIN AST SELECT 1", with_column_types=True)
     assert out is sentinel
+
+
+def test_native_pool_execute_with_totals_delegates_to_execute() -> None:
+    # The ClickhousePool default (used by the native driver) runs WITH TOTALS
+    # through the normal execute() path: the native protocol streams the totals
+    # back as the trailing result row, so a plain execute() already yields the
+    # shape the reader expects. Only the connect pool overrides this.
+    from snuba.clickhouse.native import ClickhouseNativePool, ClickhouseResult
+
+    pool = ClickhouseNativePool("host", 9000, "user", "pw", "db")
+    sentinel = ClickhouseResult(results=[(1, 10), (0, 10)])
+    with mock.patch.object(pool, "execute", return_value=sentinel) as execute:
+        out = pool.execute_with_totals(
+            "SELECT g, sum(v) FROM t GROUP BY g WITH TOTALS",
+            query_id="qid",
+            settings={"max_threads": 4},
+        )
+
+    execute.assert_called_once_with(
+        "SELECT g, sum(v) FROM t GROUP BY g WITH TOTALS",
+        params=None,
+        with_column_types=True,
+        query_id="qid",
+        settings={"max_threads": 4},
+        capture_trace=False,
+    )
+    assert out is sentinel
+
+
+def test_native_pool_execute_with_totals_robust_uses_execute_robust() -> None:
+    # robust=True must route through execute_robust (the retrying path), matching
+    # how the reader forwards robust for WITH TOTALS queries.
+    from snuba.clickhouse.native import ClickhouseNativePool, ClickhouseResult
+
+    pool = ClickhouseNativePool("host", 9000, "user", "pw", "db")
+    sentinel = ClickhouseResult(results=[(1, 10), (0, 10)])
+    with mock.patch.object(pool, "execute_robust", return_value=sentinel) as execute_robust:
+        out = pool.execute_with_totals(
+            "SELECT g, sum(v) FROM t GROUP BY g WITH TOTALS", robust=True
+        )
+
+    execute_robust.assert_called_once()
+    assert out is sentinel
+
+
+def test_reader_routes_with_totals_through_execute_with_totals() -> None:
+    # The reader sends WITH TOTALS queries through the pool's execute_with_totals
+    # entry point (not plain execute), forwarding robust, so each driver can
+    # handle totals its own way. This pins the driver-agnostic wiring both pools
+    # rely on.
+    from snuba.clickhouse.native import ClickhouseReader, ClickhouseResult
+
+    class FakeFormattedQuery:
+        def get_sql(self) -> str:
+            return "SELECT g, sum(v) AS s FROM t GROUP BY g WITH TOTALS"
+
+    pool = mock.Mock()
+    pool.execute_with_totals.return_value = ClickhouseResult(
+        results=[(1, 10), (0, 10)],
+        meta=[("g", "UInt64"), ("s", "UInt64")],
+    )
+
+    reader = ClickhouseReader(cache_partition_id=None, client=pool, query_settings_prefix=None)
+    result = reader.execute(
+        cast(FormattedQuery, FakeFormattedQuery()), with_totals=True, robust=True
+    )
+
+    pool.execute_with_totals.assert_called_once()
+    _, kwargs = pool.execute_with_totals.call_args
+    assert kwargs["robust"] is True
+    # The non-totals path (plain execute / execute_robust) is not taken.
+    pool.execute.assert_not_called()
+    pool.execute_robust.assert_not_called()
+    # The trailing totals row is split out; only the real rows remain as data.
+    assert result["data"] == [{"g": 1, "s": 10}]
+    assert result["totals"] == {"g": 0, "s": 10}
+
+
+@pytest.mark.clickhouse_db
+def test_connect_driver_matches_native_for_totals_and_empty_results() -> None:
+    # End-to-end against a real ClickHouse: the clickhouse-connect (HTTP) pool
+    # must produce the same ClickhouseReader output as the native pool for the
+    # two query shapes that broke when the HTTP driver was first enabled --
+    # GROUP BY ... WITH TOTALS, and queries that match zero rows. Mocked unit
+    # tests cannot catch these regressions because they hinge on how a real
+    # server serializes the Native/HTTP response (an empty body for zero rows,
+    # and no totals block at all).
+    from snuba import settings
+    from snuba.clickhouse.native import ClickhouseNativePool, ClickhouseReader
+
+    conf = settings.CLUSTERS[0]
+    native_pool = ClickhouseNativePool(
+        conf["host"], conf["port"], conf["user"], conf["password"], conf["database"]
+    )
+    connect_pool = ClickhouseConnectPool(
+        conf["host"],
+        conf["user"],
+        conf["password"],
+        conf["database"],
+        http_port=conf["http_port"],
+    )
+
+    # Unique table name so parallel (xdist) workers don't collide.
+    table = f"test_connect_totals_parity_{uuid.uuid4().hex[:8]}"
+
+    class FakeFormattedQuery:
+        def __init__(self, sql: str) -> None:
+            self._sql = sql
+
+        def get_sql(self) -> str:
+            return self._sql
+
+    def run(pool: Any, sql: str, with_totals: bool) -> Any:
+        reader = ClickhouseReader(cache_partition_id=None, client=pool, query_settings_prefix=None)
+        return reader.execute(
+            cast(FormattedQuery, FakeFormattedQuery(sql)), with_totals=with_totals
+        )
+
+    try:
+        native_pool.execute(f"DROP TABLE IF EXISTS {table}")
+        native_pool.execute(
+            f"CREATE TABLE {table} (g UInt64, ts DateTime, v UInt64) ENGINE = Memory"
+        )
+        native_pool.execute(
+            f"INSERT INTO {table} (g, ts, v) VALUES",
+            [
+                [1, datetime(2023, 1, 2, 3, 4, 5), 10],
+                [2, datetime(2023, 1, 3, 0, 0, 0), 30],
+            ],
+        )
+
+        # 1) WITH TOTALS over a DateTime group: data and totals (including the
+        #    coerced totals datetime) must match the native driver exactly.
+        totals_sql = f"SELECT g, ts, sum(v) AS s FROM {table} GROUP BY g, ts WITH TOTALS ORDER BY g"
+        native = run(native_pool, totals_sql, True)
+        http = run(connect_pool, totals_sql, True)
+        assert http["data"] == native["data"]
+        assert http["totals"] == native["totals"]
+        assert http["totals"]["s"] == 40  # sum(v) over all rows
+        assert {c["name"] for c in http["meta"]} == {"g", "ts", "s"}
+
+        # 2) A query matching zero rows: the native driver still reports its
+        #    columns, while the connect driver returns empty meta at the reader
+        #    level (ClickHouse sends a zero-byte Native body for zero rows). The
+        #    column metadata for this case is synthesized one layer up, in
+        #    db_query, from the query's own columns -- see
+        #    test_db_query.test_empty_result_meta_synthesized_from_query -- so no
+        #    second scan is paid here. This pins the driver-level divergence.
+        empty_sql = f"SELECT g, sum(v) AS s FROM {table} WHERE g = 999 GROUP BY g"
+        native_empty = run(native_pool, empty_sql, False)
+        http_empty = run(connect_pool, empty_sql, False)
+        assert http_empty["data"] == []
+        assert http_empty["meta"] == []
+        assert {c["name"] for c in native_empty["meta"]} == {"g", "s"}
+
+        # 3) WITH TOTALS matching zero rows still yields a totals row on BOTH
+        #    drivers. Over the HTTP driver this used to leave the reader with no
+        #    rows, firing the totals assertion -> "SnubaError (No error message)".
+        #    The native driver streams the totals block over the TCP protocol even
+        #    when no data rows match, so the reader's `assert len(data) > 0` holds
+        #    there too -- asserting the native side pins that behavior, so a
+        #    clickhouse-driver change that dropped the empty totals block would
+        #    fail here rather than in production.
+        empty_totals_sql = (
+            f"SELECT g, sum(v) AS s FROM {table} WHERE g = 999 GROUP BY g WITH TOTALS"
+        )
+        native_empty_totals = run(native_pool, empty_totals_sql, True)
+        http_empty_totals = run(connect_pool, empty_totals_sql, True)
+        assert native_empty_totals["data"] == []
+        assert native_empty_totals["totals"]["s"] == 0
+        assert http_empty_totals["data"] == []
+        assert http_empty_totals["totals"] == native_empty_totals["totals"]
+        assert {c["name"] for c in http_empty_totals["meta"]} == {"g", "s"}
+    finally:
+        try:
+            native_pool.execute(f"DROP TABLE IF EXISTS {table}")
+        finally:
+            native_pool.close()
+            connect_pool.close()

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
+from datetime import date, datetime
 from threading import Lock
 from typing import Any
 
@@ -21,6 +23,7 @@ from snuba.clickhouse.native import (
     ClickhouseResult,
     Params,
 )
+from snuba.reader import unwrap_nullable_type
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger("snuba.clickhouse.connect")
@@ -43,6 +46,37 @@ DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
 # forwards whatever settings it is given to the server, so to preserve parity
 # we tell clickhouse-connect to drop unrecognized settings instead of failing.
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
+
+
+def _coerce_temporal(value: Any, ch_type: str) -> Any:
+    """
+    Convert a ``Date`` / ``DateTime`` value from ClickHouse's JSONCompact output
+    (a string) into a ``date`` / ``datetime`` object.
+
+    This is the only value conversion the JSONCompact totals path needs. The
+    reader's column-type transforms call ``date``/``datetime`` methods on these
+    values (re-emitting Snuba's canonical ISO string), so a raw JSON string would
+    crash them and change the output format -- Date/DateTime are the only types
+    that do. ``Nullable`` is unwrapped so ``Nullable(DateTime)`` is handled too,
+    mirroring the reader's own transform.
+
+    Every other type is left as ``json.loads`` decoded it. That is byte-identical
+    to the native driver once serialized (numbers, strings, bools, arrays, maps,
+    and -- via ``default=str`` -- UUID / IPv4 / IPv6 / Enum), with two harmless
+    exceptions: a whole-number ``Float`` total serializes as ``5`` rather than
+    ``5.0`` (numerically identical to any JSON consumer), and a ``Decimal``
+    decodes as a JSON number rather than the native driver's string. Totals are
+    dominated by integer counts, so this is not worth type-directed coercion.
+    """
+    if not isinstance(value, str):
+        return value
+    _, inner = unwrap_nullable_type(ch_type)
+    # DateTime must be checked before the bare Date prefix.
+    if inner.startswith("DateTime"):  # DateTime, DateTime64, DateTime('UTC')
+        return datetime.fromisoformat(value)
+    if inner.startswith("Date"):  # Date, Date32
+        return date.fromisoformat(value)
+    return value
 
 
 class ClickhouseConnectPool(ClickhousePool):
@@ -228,24 +262,127 @@ class ClickhouseConnectPool(ClickhousePool):
         # for capturing the server's send_logs_level output (it only parses the
         # X-ClickHouse-Summary header for the profile above). This is a known,
         # accepted limitation of the HTTP path — see _build_query_settings.
-        if with_column_types:
-            meta = [
-                (name, column_type.name)
-                for name, column_type in zip(
-                    query_result.column_names, query_result.column_types, strict=True
-                )
-            ]
+        if not with_column_types:
             return ClickhouseResult(
                 results=results,
-                meta=meta,
                 profile=profile_data,
                 trace_output="",
             )
 
+        meta: list[tuple[str, str]] = [
+            (name, column_type.name)
+            for name, column_type in zip(
+                query_result.column_names, query_result.column_types, strict=True
+            )
+        ]
+
         return ClickhouseResult(
             results=results,
+            meta=meta,
             profile=profile_data,
             trace_output="",
+        )
+
+    def execute_with_totals(
+        self,
+        query: str,
+        params: Params = None,
+        query_id: str | None = None,
+        settings: Mapping[str, Any] | None = None,
+        capture_trace: bool = False,
+        robust: bool = False,
+    ) -> ClickhouseResult:
+        """
+        Override of :meth:`ClickhousePool.execute_with_totals` for the HTTP driver.
+
+        clickhouse-connect's Native/HTTP output omits the ``WITH TOTALS`` row
+        entirely (totals only travel over the native TCP protocol), so the default
+        implementation -- which relies on that trailing row -- does not work here.
+        Instead, run the query once with ``FORMAT JSONCompact``, which returns the
+        data rows, the column metadata, and the totals row together, and append
+        the totals as the trailing result row (the shape the reader expects). Only
+        ``Date``/``DateTime`` values need coercing back to objects (see
+        :func:`_coerce_temporal`); ``json.loads`` yields every other type in a form
+        that serializes identically to the native driver.
+
+        One request, one scan. ``settings`` (timeouts, max_threads, readonly, ...)
+        are inherited; ``query_id`` is used as-is. ``capture_trace`` and ``robust``
+        are accepted for interface parity: the HTTP path cannot surface trace
+        output, and clickhouse-connect handles its own retries.
+        """
+        with self._translate_clickhouse_errors():
+            client = self._get_client()
+            json_settings: dict[str, Any] = dict(settings) if settings else {}
+            # 64-bit ints as JSON numbers (not quoted strings) so they round-trip
+            # to the same Python ints the native driver yields.
+            json_settings["output_format_json_quote_64bit_integers"] = 0
+            if query_id is not None:
+                json_settings["query_id"] = query_id
+
+            with sentry_sdk.start_span(description=query, op="db.clickhouse") as span:
+                span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
+                span.set_data("query_id", query_id)
+                raw = client.raw_query(
+                    query,
+                    parameters=params if params else None,
+                    settings=json_settings,
+                    fmt="JSONCompact",
+                )
+
+            payload = json.loads(raw)
+            meta = [(column["name"], column["type"]) for column in payload.get("meta", [])]
+            column_types = [ch_type for _, ch_type in meta]
+
+            # JSONCompact returns each data row and the totals row as a positional
+            # array aligned to ``meta``, so values line up with the reader's
+            # positional indexing without any name-based lookup.
+            results: list[tuple[Any, ...]] = [
+                tuple(
+                    _coerce_temporal(value, column_types[index]) for index, value in enumerate(row)
+                )
+                for row in payload.get("data", [])
+            ]
+            totals = payload.get("totals")
+            if totals is not None:
+                results.append(
+                    tuple(
+                        _coerce_temporal(value, column_types[index])
+                        for index, value in enumerate(totals)
+                    )
+                )
+
+            return ClickhouseResult(
+                results=results,
+                meta=meta,
+                profile=self._profile_from_statistics(payload),
+                trace_output="",
+            )
+
+    @staticmethod
+    def _profile_from_statistics(payload: Mapping[str, Any]) -> ClickhouseProfile:
+        # The JSON output formats include a ``statistics`` object carrying the same
+        # read counters the Native path reads from the X-ClickHouse-Summary header.
+        statistics = payload.get("statistics") or {}
+
+        def _int(key: str) -> int:
+            value = statistics.get(key)
+            try:
+                return int(value) if value is not None else 0
+            except (TypeError, ValueError):
+                return 0
+
+        try:
+            elapsed = float(statistics.get("elapsed") or 0.0)
+        except (TypeError, ValueError):
+            elapsed = 0.0
+
+        read_bytes = _int("bytes_read")
+        return ClickhouseProfile(
+            blocks=0,
+            bytes=read_bytes,
+            elapsed=elapsed,
+            progress_bytes=read_bytes,
+            rows=_int("rows_read"),
         )
 
     @contextmanager
