@@ -18,6 +18,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
 from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
 from tests.base import BaseApiTest
+from tests.conftest import SnubaSetConfig
 from tests.web.rpc.v1.test_utils import (
     comparison_filter,
     create_cross_item_test_data,
@@ -164,3 +165,14 @@ class TestTimeSeriesCrossItemQueries(BaseApiTest):
         response = EndpointTimeSeries().execute(message)
 
         assert len(response.result_timeseries) == 0
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
+class TestTimeSeriesCrossItemQueriesLocalJoin(TestTimeSeriesCrossItemQueries):
+    """Re-run the cross-item TimeSeries tests with the local-join optimization enabled
+    (raw trace_id join + distributed_product_mode='local'). See EAP-377."""
+
+    @pytest.fixture(autouse=True)
+    def enable_local_join(self, snuba_set_config: SnubaSetConfig) -> None:
+        snuba_set_config("use_local_join_for_cross_item_queries", 1)
