@@ -1,5 +1,4 @@
 import uuid
-from typing import cast
 
 from google.protobuf.json_format import MessageToDict
 from proto import Message  # type: ignore[import-untyped]
@@ -157,7 +156,7 @@ def get_trace_ids_sql_for_cross_item_query(
                 expression=f.max(column("timestamp")),
             ),
         ],
-        limit=limit or cast(int, get_option("trace_ids_cross_item_query_limit", _TRACE_LIMIT)),
+        limit=limit or get_option("trace_ids_cross_item_query_limit", _TRACE_LIMIT),
     )
 
     treeify_or_and_conditions(query)

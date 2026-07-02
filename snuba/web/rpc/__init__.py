@@ -56,7 +56,7 @@ def _should_log_rpc_request() -> bool:
     """
     Determine if this RPC request should be logged based on runtime configuration.
     """
-    sample_rate = cast(float, get_option("rpc_logging_sample_rate", 0.0))
+    sample_rate = get_option("rpc_logging_sample_rate", 0.0)
 
     # If sample rate is 0, never log
     if sample_rate <= 0.0:
@@ -329,7 +329,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 f"RPC request started - endpoint: {self.__class__.__name__}, request_id: {request_id}"
             )
 
-            flush_logs = cast(float, get_option("rpc_logging_flush_logs", 0.0))
+            flush_logs = get_option("rpc_logging_flush_logs", 0.0)
             if flush_logs and flush_logs > 0:
                 _flush_logs()
 
@@ -386,7 +386,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             logging.info(
                 f"RPC request finished - endpoint: {self.__class__.__name__}, request_id: {request_id}, status: {status}"
             )
-            flush_logs = cast(float, get_option("rpc_logging_flush_logs", 0.0))
+            flush_logs = get_option("rpc_logging_flush_logs", 0.0)
             if flush_logs and flush_logs > 0:
                 _flush_logs()
 

@@ -3,6 +3,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
 from typing import Any, TypedDict, TypeVar, cast, final
 
+from sentry_options import OptionValue
+
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.state import delete_config as delete_runtime_config
 from snuba.state import get_all_configs as get_all_runtime_configs
@@ -441,7 +443,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
             else self.config_definitions()[config_key]
         )
         full_key = self.__build_runtime_config_key(config_key, params)
-        overrides = get_option(CONFIGURABLE_COMPONENT_OVERRIDES_KEY, {})
+        overrides: OptionValue = get_option(CONFIGURABLE_COMPONENT_OVERRIDES_KEY, {})
         if isinstance(overrides, dict) and full_key in overrides:
             return self.__coerce_override(overrides[full_key], config_definition)
         return get_runtime_config(

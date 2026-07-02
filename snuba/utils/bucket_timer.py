@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import MutableMapping
 from datetime import datetime, timedelta
-from typing import cast
 
 from snuba import environment
 from snuba.state.sentry_options import get_option
@@ -37,8 +36,8 @@ class Counter:
         self.consumer_group: str = consumer_group
         self.buckets: Buckets = {}
 
-        percentage = cast(float, get_option("project_quota_time_percentage", 1.0))
-        counter_window_size_minutes = cast(int, get_option("counter_window_size_minutes", 10))
+        percentage = get_option("project_quota_time_percentage", 1.0)
+        counter_window_size_minutes = get_option("counter_window_size_minutes", 10)
         self.counter_window_size = timedelta(minutes=counter_window_size_minutes)
         self.limit = self.counter_window_size * percentage
 
