@@ -595,9 +595,7 @@ def test_org_rate_limit_bypass_no_org_id() -> None:
     )
     set_config(ORG_RATE_LIMIT_BYPASS_CONFIG, "123")
     # tenant_ids without an organization_id should never be bypassed.
-    assert not reject_policy.get_quota_allowance(
-        {"referrer": "some_referrer"}, "deadbeef"
-    ).can_run
+    assert not reject_policy.get_quota_allowance({"referrer": "some_referrer"}, "deadbeef").can_run
 
 
 @pytest.mark.redis_db

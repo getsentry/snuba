@@ -448,9 +448,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         allowlist = get_runtime_config(ORG_RATE_LIMIT_BYPASS_CONFIG, "")
         if not allowlist:
             return False
-        bypassed_orgs = {
-            part.strip() for part in str(allowlist).split(",") if part.strip()
-        }
+        bypassed_orgs = {part.strip() for part in str(allowlist).split(",") if part.strip()}
         return str(org_id) in bypassed_orgs
 
     @classmethod
