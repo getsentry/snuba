@@ -2,7 +2,7 @@ import json
 import math
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime, timedelta
-from typing import Any, TypeVar, cast
+from typing import Any, TypeVar
 
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
@@ -298,12 +298,9 @@ def use_sampling_factor(meta: RequestMeta) -> bool:
     """
     Since we started writing the sampling factor on a specific date, we should only use it on queries that start after that date.
     """
-    use_sampling_factor_timestamp_seconds = cast(
-        int,
-        get_option(
-            "use_sampling_factor_timestamp_seconds",
-            settings.USE_SAMPLING_FACTOR_TIMESTAMP_SECONDS,
-        ),
+    use_sampling_factor_timestamp_seconds = get_option(
+        "use_sampling_factor_timestamp_seconds",
+        settings.USE_SAMPLING_FACTOR_TIMESTAMP_SECONDS,
     )
     if use_sampling_factor_timestamp_seconds == 0:
         return False
@@ -319,12 +316,9 @@ def use_array_map_columns(meta: RequestMeta) -> bool:
     only exists in the legacy ``attributes_array`` JSON column. A config value of 0
     disables the typed-column read path entirely.
     """
-    use_array_map_columns_timestamp_seconds = cast(
-        int,
-        get_option(
-            "use_array_map_columns_timestamp_seconds",
-            settings.USE_ARRAY_MAP_COLUMNS_TIMESTAMP_SECONDS,
-        ),
+    use_array_map_columns_timestamp_seconds = get_option(
+        "use_array_map_columns_timestamp_seconds",
+        settings.USE_ARRAY_MAP_COLUMNS_TIMESTAMP_SECONDS,
     )
     if use_array_map_columns_timestamp_seconds == 0:
         return False
