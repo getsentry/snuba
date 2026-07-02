@@ -572,16 +572,15 @@ wheels = [
 
 [[package]]
 name = "msgpack"
-version = "1.1.0"
+version = "1.2.1"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/msgpack-1.1.0-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:0f92a83b84e7c0749e3f12821949d79485971f087604178026085f60ce109330" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/msgpack-1.1.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:4a1964df7b81285d00a84da4e70cb1383f2e665e0f1f2a7027e683956d04b734" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/msgpack-1.1.0-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:59caf6a4ed0d164055ccff8fe31eddc0ebc07cf7326a2aaa0dbf7a4001cd823e" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/msgpack-1.1.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:0907e1a7119b337971a689153665764adc34e89175f9a34793307d9def08e6ca" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/msgpack-1.1.0-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:468123312019df9b62826aed9445d3cc3ab2f0ff268dd5ad1ea4d3ff2b053fdd" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/msgpack-1.1.0-cp314-cp314-manylinux_2_17_aarch64.manylinux2014_aarch64.manylinux_2_31_aarch64.whl", hash = "sha256:3cf4b52691272498b85f6b1e2bede14f99d1941f7b975d2995aea071baa81543" },
-    { url = "https://pypi.devinfra.sentry.io/wheels/msgpack-1.1.0-cp314-cp314-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_31_x86_64.whl", hash = "sha256:083ba2518f408300fbf2466d3ca8ce0fb34f5d08f5a0f1129f424653317f6f9f" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/msgpack-1.2.1-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:491cc39455ca765fad51fb451bf2915eb2cf41192ab5801ce8d67c1d614fe056" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/msgpack-1.2.1-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:f310233ef7fb9c14e201c93639fe5f5260b005f56f0b29048e999c30935596cc" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/msgpack-1.2.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:787c9bebb5833e8f6fc8abca3c0597683d8d87f56a8842b6b89c75a5f3176e2d" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/msgpack-1.2.1-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:810b916696c86ef0deb3b74588480224df4c1b071136c34183e4a2a4284d7ac7" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/msgpack-1.2.1-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:ca0dacff965c47afdc3749a8469d7302a8f801d6a28758d55120d75e66ce6889" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/msgpack-1.2.1-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:0e2bf9280bceb5efca998435904b5d3e9fdbcc11d90dc9df30aec7973252b720" },
 ]
 
 [[package]]
@@ -748,10 +747,10 @@ wheels = [
 
 [[package]]
 name = "pyjwt"
-version = "2.12.1"
+version = "2.13.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/pyjwt-2.12.1-py3-none-any.whl", hash = "sha256:28ca37c070cad8ba8cd9790cd940535d40274d22f80ab87f3ac6a713e6e8454c" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/pyjwt-2.13.0-py3-none-any.whl", hash = "sha256:66adcc2aff09b3f1bbd95fc1e1577df8ac8723c978552fd43304c8a290ac5728" },
 ]
 
 [package.optional-dependencies]
@@ -976,10 +975,10 @@ wheels = [
 
 [[package]]
 name = "sentry-conventions"
-version = "0.13.0"
+version = "0.15.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_conventions-0.13.0-py3-none-any.whl", hash = "sha256:9a58f74b3ef6f11f2b71408775107d9c0b395dc583ae8949bb9f5717a9c3d005" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sentry_conventions-0.15.0-py3-none-any.whl", hash = "sha256:5093672df2e934732c6001f3f00e777174a6820abbae6381a78aa6588c92a4bf" },
 ]
 
 [[package]]
@@ -1232,7 +1231,7 @@ requires-dist = [
     { name = "redis", specifier = ">=4.5.4" },
     { name = "rust-snuba", editable = "rust_snuba" },
     { name = "sentry-arroyo", specifier = ">=2.39.2" },
-    { name = "sentry-conventions", specifier = ">=0.13.0" },
+    { name = "sentry-conventions", specifier = ">=0.15.0" },
     { name = "sentry-kafka-schemas", specifier = ">=2.1.36" },
     { name = "sentry-options", specifier = ">=1.1.1" },
     { name = "sentry-protos", specifier = ">=0.34.0" },
