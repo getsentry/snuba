@@ -519,16 +519,19 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         )
 
     def __get_cluster_nodes(self, cluster_name: str) -> Sequence[ClickhouseNode]:
-        # system.clusters only reports the native port; every node in the
-        # cluster shares the cluster's configured HTTP port, so stamp it on each
-        # discovered node so it is self-describing for the HTTP driver.
+        # system.clusters only reports the native port. The cluster's configured
+        # HTTP port is an Envoy intercept port that only fronts the cluster
+        # endpoint (the query node); individual nodes discovered here are
+        # addressed directly, bypassing Envoy, and serve HTTP on the well-known
+        # default port. Stamp that on each node so the HTTP driver connects to a
+        # port the node actually listens on.
         return [
             ClickhouseNode(
                 host_name=host[0],
                 native_port=host[1],
                 shard=host[2],
                 replica=host[3],
-                http_port=self.__http_port,
+                http_port=DEFAULT_CLICKHOUSE_HTTP_PORT,
             )
             for host in self.get_query_connection(ClickhouseClientSettings.INTERNAL)
             .execute(
