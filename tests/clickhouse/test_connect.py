@@ -788,15 +788,23 @@ def test_connect_driver_matches_native_for_totals_and_empty_results() -> None:
         assert http_empty["meta"] == []
         assert {c["name"] for c in native_empty["meta"]} == {"g", "s"}
 
-        # 3) WITH TOTALS matching zero rows still yields a totals row. Over the
-        #    HTTP driver this used to leave the reader with no rows, firing the
-        #    totals assertion -> "SnubaError (No error message)".
+        # 3) WITH TOTALS matching zero rows still yields a totals row on BOTH
+        #    drivers. Over the HTTP driver this used to leave the reader with no
+        #    rows, firing the totals assertion -> "SnubaError (No error message)".
+        #    The native driver streams the totals block over the TCP protocol even
+        #    when no data rows match, so the reader's `assert len(data) > 0` holds
+        #    there too -- asserting the native side pins that behavior, so a
+        #    clickhouse-driver change that dropped the empty totals block would
+        #    fail here rather than in production.
         empty_totals_sql = (
             f"SELECT g, sum(v) AS s FROM {table} WHERE g = 999 GROUP BY g WITH TOTALS"
         )
+        native_empty_totals = run(native_pool, empty_totals_sql, True)
         http_empty_totals = run(connect_pool, empty_totals_sql, True)
+        assert native_empty_totals["data"] == []
+        assert native_empty_totals["totals"]["s"] == 0
         assert http_empty_totals["data"] == []
-        assert http_empty_totals["totals"]["s"] == 0
+        assert http_empty_totals["totals"] == native_empty_totals["totals"]
         assert {c["name"] for c in http_empty_totals["meta"]} == {"g", "s"}
     finally:
         try:
