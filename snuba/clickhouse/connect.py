@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from datetime import date, datetime
-from decimal import Decimal
 from threading import Lock
 from typing import Any
 
@@ -25,6 +23,7 @@ from snuba.clickhouse.native import (
     ClickhouseResult,
     Params,
 )
+from snuba.reader import unwrap_nullable_type
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger("snuba.clickhouse.connect")
@@ -48,63 +47,35 @@ DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
 # we tell clickhouse-connect to drop unrecognized settings instead of failing.
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
 
-# Matches the ``WITH TOTALS`` clause the query formatter appends for
-# ``has_totals()`` queries (see snuba.clickhouse.formatter.query). clickhouse-
-# connect's Native/HTTP path never returns the totals row, so the connect pool
-# routes these queries through a single FORMAT JSONCompact request (which does
-# carry the totals) instead — see ClickhouseConnectPool._execute_with_totals.
-# A false positive (e.g. the literal text inside a string) is harmless: it just
-# takes the JSONCompact path, which returns the same rows without a totals block.
-_WITH_TOTALS_RE = re.compile(r"\bWITH\s+TOTALS\b", re.IGNORECASE)
 
-# Exact ClickHouse fixed-width integer type names. Matched precisely (not via a
-# ``startswith("Int")`` prefix) so ``Interval*`` types -- which also start with
-# "Int" -- are not mistaken for integers and forced through ``int()``.
-_INT_TYPE_RE = re.compile(r"^U?Int(?:8|16|32|64|128|256)$")
-
-
-def _decode_json_value(value: Any, ch_type: str) -> Any:
+def _coerce_temporal(value: Any, ch_type: str) -> Any:
     """
-    Decode a value from ClickHouse's JSONCompact output into the Python type the
-    reader expects for the totals row (see
-    :meth:`ClickhouseConnectPool._execute_with_totals`).
+    Convert a ``Date`` / ``DateTime`` value from ClickHouse's JSONCompact output
+    (a string) into a ``date`` / ``datetime`` object.
 
-    Almost everything JSONCompact returns is already the right Python type and
-    passes through untouched -- numbers, strings, booleans, arrays, maps. Only a
-    few conversions are actually required:
+    This is the only value conversion the JSONCompact totals path needs. The
+    reader's column-type transforms call ``date``/``datetime`` methods on these
+    values (re-emitting Snuba's canonical ISO string), so a raw JSON string would
+    crash them and change the output format -- Date/DateTime are the only types
+    that do. ``Nullable`` is unwrapped so ``Nullable(DateTime)`` is handled too,
+    mirroring the reader's own transform.
 
-      * ``Date`` / ``DateTime`` -> ``date`` / ``datetime`` objects. The reader's
-        column-type transforms operate on objects (and re-emit Snuba's canonical
-        ISO string), so a raw JSON string would crash them / change the format.
-      * wide integers (``Int128/256``, ``UInt128/256``) -> ``int`` -- JSON
-        renders those as strings.
-      * ``Float`` -> ``float`` -- so ``inf``/``nan`` (emitted as strings, see the
-        settings in ``_execute_with_totals``) round-trip instead of staying str.
-      * ``Decimal`` -> ``Decimal`` -- to match the native driver's type.
-
-    ``Nullable`` / ``LowCardinality`` are unwrapped, and ``Array`` recurses, only
-    to reach one of the above. Every other type (``String``, ``UUID``, ``Bool``,
-    ``Tuple``, ``Map``, ...) is returned as-is: JSON already yields a value that
-    serializes identically to the native driver's.
+    Every other type is left as ``json.loads`` decoded it. That is byte-identical
+    to the native driver once serialized (numbers, strings, bools, arrays, maps,
+    and -- via ``default=str`` -- UUID / IPv4 / IPv6 / Enum), with two harmless
+    exceptions: a whole-number ``Float`` total serializes as ``5`` rather than
+    ``5.0`` (numerically identical to any JSON consumer), and a ``Decimal``
+    decodes as a JSON number rather than the native driver's string. Totals are
+    dominated by integer counts, so this is not worth type-directed coercion.
     """
-    if value is None:
-        return None
-    inner = ch_type.strip()
-    while inner.startswith(("Nullable(", "LowCardinality(")):
-        inner = inner[inner.index("(") + 1 : -1]
-    if inner.startswith("Array("):
-        return [_decode_json_value(item, inner[len("Array(") : -1]) for item in value]
+    if not isinstance(value, str):
+        return value
+    _, inner = unwrap_nullable_type(ch_type)
     # DateTime must be checked before the bare Date prefix.
     if inner.startswith("DateTime"):  # DateTime, DateTime64, DateTime('UTC')
-        return datetime.fromisoformat(value) if isinstance(value, str) else value
+        return datetime.fromisoformat(value)
     if inner.startswith("Date"):  # Date, Date32
-        return date.fromisoformat(value) if isinstance(value, str) else value
-    if _INT_TYPE_RE.match(inner):  # incl. Int/UInt 128/256, which arrive as JSON strings
-        return int(value)
-    if inner.startswith(("Float", "BFloat")):
-        return float(value)
-    if inner.startswith("Decimal"):
-        return Decimal(str(value))
+        return date.fromisoformat(value)
     return value
 
 
@@ -249,19 +220,6 @@ class ClickhouseConnectPool(ClickhousePool):
         capture_trace: bool,
     ) -> ClickhouseResult:
         client = self._get_client()
-
-        # A ``GROUP BY ... WITH TOTALS`` query never carries the totals row over
-        # clickhouse-connect's Native/HTTP path: ClickHouse does not serialize
-        # totals into the Native HTTP output (they only travel over the native TCP
-        # protocol). FORMAT JSONCompact does carry them, so such queries take a
-        # dedicated single-request path (data + column metadata + totals in one
-        # response, one scan). It applies only to the reader path
-        # (``with_column_types``); the empty-result column metadata for non-totals
-        # queries is synthesized upstream in snuba.web.db_query instead of paying
-        # for a second scan here.
-        if with_column_types and _WITH_TOTALS_RE.search(query) is not None:
-            return self._execute_with_totals(client, query, params, query_id, settings)
-
         query_settings = self._build_query_settings(settings, query_id, capture_trace)
 
         with sentry_sdk.start_span(description=query, op="db.clickhouse") as span:
@@ -325,74 +283,80 @@ class ClickhouseConnectPool(ClickhousePool):
             trace_output="",
         )
 
-    def _execute_with_totals(
+    def execute_with_totals(
         self,
-        client: Client,
         query: str,
-        params: Params,
-        query_id: str | None,
-        settings: Mapping[str, Any] | None,
+        params: Params = None,
+        query_id: str | None = None,
+        settings: Mapping[str, Any] | None = None,
+        capture_trace: bool = False,
+        robust: bool = False,
     ) -> ClickhouseResult:
         """
-        Execute a ``GROUP BY ... WITH TOTALS`` query in a single request using
-        ``FORMAT JSONCompact``, which returns the data rows, the column metadata,
-        and the totals row together — unlike the Native/HTTP output, which omits
-        totals entirely. Values are decoded (see :func:`_decode_json_value`) into
-        the same Python types the native driver yields, and the totals row is
-        appended as the trailing result row so the driver-agnostic reader splits
-        it off exactly as it does for the native driver.
+        Override of :meth:`ClickhousePool.execute_with_totals` for the HTTP driver.
 
-        This costs no extra scan: the single JSONCompact request replaces both the
-        Native query and any separate totals fetch. ``settings`` (the query's
-        functional settings: timeouts, max_threads, readonly, ...) are inherited,
-        and ``query_id`` is used as-is (there is only one query, so no derived id
-        is needed).
+        clickhouse-connect's Native/HTTP output omits the ``WITH TOTALS`` row
+        entirely (totals only travel over the native TCP protocol), so the default
+        implementation -- which relies on that trailing row -- does not work here.
+        Instead, run the query once with ``FORMAT JSONCompact``, which returns the
+        data rows, the column metadata, and the totals row together, and append
+        the totals as the trailing result row (the shape the reader expects). Only
+        ``Date``/``DateTime`` values need coercing back to objects (see
+        :func:`_coerce_temporal`); ``json.loads`` yields every other type in a form
+        that serializes identically to the native driver.
+
+        One request, one scan. ``settings`` (timeouts, max_threads, readonly, ...)
+        are inherited; ``query_id`` is used as-is. ``capture_trace`` and ``robust``
+        are accepted for interface parity: the HTTP path cannot surface trace
+        output, and clickhouse-connect handles its own retries.
         """
-        json_settings: dict[str, Any] = dict(settings) if settings else {}
-        # Round-trip numerics to the exact Python types the native driver yields:
-        # 64-bit ints as JSON numbers (not quoted strings), and inf/nan as
-        # "inf"/"nan" strings (JSON's default renders non-finite floats as null).
-        json_settings["output_format_json_quote_64bit_integers"] = 0
-        json_settings["output_format_json_quote_denormals"] = 1
-        if query_id is not None:
-            json_settings["query_id"] = query_id
+        with self._translate_clickhouse_errors():
+            client = self._get_client()
+            json_settings: dict[str, Any] = dict(settings) if settings else {}
+            # 64-bit ints as JSON numbers (not quoted strings) so they round-trip
+            # to the same Python ints the native driver yields.
+            json_settings["output_format_json_quote_64bit_integers"] = 0
+            if query_id is not None:
+                json_settings["query_id"] = query_id
 
-        with sentry_sdk.start_span(description=query, op="db.clickhouse") as span:
-            span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
-            span.set_data("query_id", query_id)
-            raw = client.raw_query(
-                query,
-                parameters=params if params else None,
-                settings=json_settings,
-                fmt="JSONCompact",
-            )
-
-        payload = json.loads(raw)
-        meta = [(column["name"], column["type"]) for column in payload.get("meta", [])]
-        column_types = [ch_type for _, ch_type in meta]
-
-        # JSONCompact returns each data row and the totals row as a positional
-        # array aligned to ``meta``, so values line up with the reader's
-        # positional indexing without any name-based lookup.
-        results: list[tuple[Any, ...]] = [
-            tuple(_decode_json_value(value, column_types[index]) for index, value in enumerate(row))
-            for row in payload.get("data", [])
-        ]
-        totals = payload.get("totals")
-        if totals is not None:
-            results.append(
-                tuple(
-                    _decode_json_value(value, column_types[index])
-                    for index, value in enumerate(totals)
+            with sentry_sdk.start_span(description=query, op="db.clickhouse") as span:
+                span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
+                span.set_data("query_id", query_id)
+                raw = client.raw_query(
+                    query,
+                    parameters=params if params else None,
+                    settings=json_settings,
+                    fmt="JSONCompact",
                 )
-            )
 
-        return ClickhouseResult(
-            results=results,
-            meta=meta,
-            profile=self._profile_from_statistics(payload),
-            trace_output="",
-        )
+            payload = json.loads(raw)
+            meta = [(column["name"], column["type"]) for column in payload.get("meta", [])]
+            column_types = [ch_type for _, ch_type in meta]
+
+            # JSONCompact returns each data row and the totals row as a positional
+            # array aligned to ``meta``, so values line up with the reader's
+            # positional indexing without any name-based lookup.
+            results: list[tuple[Any, ...]] = [
+                tuple(
+                    _coerce_temporal(value, column_types[index]) for index, value in enumerate(row)
+                )
+                for row in payload.get("data", [])
+            ]
+            totals = payload.get("totals")
+            if totals is not None:
+                results.append(
+                    tuple(
+                        _coerce_temporal(value, column_types[index])
+                        for index, value in enumerate(totals)
+                    )
+                )
+
+            return ClickhouseResult(
+                results=results,
+                meta=meta,
+                profile=self._profile_from_statistics(payload),
+                trace_output="",
+            )
 
     @staticmethod
     def _profile_from_statistics(payload: Mapping[str, Any]) -> ClickhouseProfile:

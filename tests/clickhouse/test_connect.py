@@ -1,6 +1,6 @@
 import json
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, cast
 from unittest import mock
 
@@ -291,7 +291,6 @@ def test_with_totals_via_single_jsoncompact_request() -> None:
     _, kwargs = client.raw_query.call_args
     assert kwargs["fmt"] == "JSONCompact"
     assert kwargs["settings"]["output_format_json_quote_64bit_integers"] == 0
-    assert kwargs["settings"]["output_format_json_quote_denormals"] == 1
 
 
 def test_totals_jsoncompact_uses_original_query_id_and_inherits_settings() -> None:
@@ -308,9 +307,8 @@ def test_totals_jsoncompact_uses_original_query_id_and_inherits_settings() -> No
     ).encode()
 
     pool = _make_pool(client)
-    pool.execute(
+    pool.execute_with_totals(
         "SELECT g, sum(v) AS s FROM t GROUP BY g WITH TOTALS",
-        with_column_types=True,
         query_id="abc-123",
         settings={"max_execution_time": 30},
     )
@@ -326,7 +324,7 @@ def test_totals_jsoncompact_decodes_value_types() -> None:
     # driver yields, so the reader's transforms and downstream serialization
     # behave identically for both drivers. Covers the tricky cases: DateTime
     # (string -> datetime, so the reader's transform can ISO-format it rather than
-    # crash on a str), Array (recursed), and Nullable (null -> None / value).
+    # crash on a str), Array (passed through), and Nullable (null -> None / value).
     from snuba.clickhouse.native import ClickhouseReader
 
     class FakeFormattedQuery:
@@ -363,21 +361,32 @@ def test_totals_jsoncompact_decodes_value_types() -> None:
     assert totals["opt"] == 5
 
 
-def test_decode_json_value_matches_ints_but_not_intervals() -> None:
-    # The integer branch matches Int/UInt fixed-width types exactly (wide ones
-    # arrive as JSON strings), but must NOT match Interval* types -- which also
-    # start with "Int" -- or they'd be forced through int() and could raise.
-    from snuba.clickhouse.connect import _decode_json_value
+def test_coerce_temporal_only_touches_date_and_datetime() -> None:
+    # _coerce_temporal is the single value conversion the JSONCompact totals path
+    # applies: Date/DateTime strings become date/datetime objects (so the reader's
+    # column transforms can ISO-format them instead of crashing on a str -- those
+    # are the only types whose transforms would crash), and it unwraps Nullable so
+    # Nullable(DateTime) is handled too. Every other type -- including the ints and
+    # floats json.loads returns -- must pass through untouched.
+    from snuba.clickhouse.connect import _coerce_temporal
 
-    # Fixed-width ints (incl. wide ones sent as strings) become int.
-    assert _decode_json_value(5, "UInt64") == 5
-    assert (
-        _decode_json_value("170141183460469231731687303715884105727", "Int128")
-        == 170141183460469231731687303715884105727
+    assert _coerce_temporal("2023-01-02 03:04:05", "DateTime") == datetime(2023, 1, 2, 3, 4, 5)
+    assert _coerce_temporal("2023-01-02 03:04:05", "DateTime('UTC')") == datetime(
+        2023, 1, 2, 3, 4, 5
     )
-    # Interval* passes through untouched (never int()'d), whatever ClickHouse emits.
-    assert _decode_json_value(7, "IntervalDay") == 7
-    assert _decode_json_value("P7D", "IntervalDay") == "P7D"
+    assert _coerce_temporal("2023-01-02", "Date") == date(2023, 1, 2)
+    # Nullable is unwrapped, mirroring the reader's own transform.
+    assert _coerce_temporal("2023-01-02 03:04:05", "Nullable(DateTime)") == datetime(
+        2023, 1, 2, 3, 4, 5
+    )
+    # Non-temporal values (and None) are returned verbatim, whatever the type. A
+    # whole-number Float that JSON emitted as an int stays an int here (the
+    # accepted, numerically-identical 5-vs-5.0 divergence).
+    assert _coerce_temporal(5, "UInt64") == 5
+    assert _coerce_temporal(1.5, "Float64") == 1.5
+    assert _coerce_temporal(None, "Nullable(DateTime)") is None
+    # A non-string under a Date/DateTime type is left alone (defensive).
+    assert _coerce_temporal(0, "DateTime") == 0
 
 
 def test_empty_non_totals_result_does_not_refetch() -> None:
@@ -417,9 +426,8 @@ def test_empty_with_totals_returns_meta_and_totals_via_jsoncompact() -> None:
 
     pool = _make_pool(client)
     # The trailing totals row is appended to results; the reader pops it off.
-    result = pool.execute(
+    result = pool.execute_with_totals(
         "SELECT g, sum(v) AS s FROM t WHERE g = 999 GROUP BY g WITH TOTALS",
-        with_column_types=True,
     )
 
     assert result.meta == [("g", "UInt64"), ("s", "UInt64")]
@@ -625,6 +633,82 @@ def test_native_pool_execute_explain_delegates_to_execute() -> None:
 
     execute.assert_called_once_with("EXPLAIN AST SELECT 1", with_column_types=True)
     assert out is sentinel
+
+
+def test_native_pool_execute_with_totals_delegates_to_execute() -> None:
+    # The ClickhousePool default (used by the native driver) runs WITH TOTALS
+    # through the normal execute() path: the native protocol streams the totals
+    # back as the trailing result row, so a plain execute() already yields the
+    # shape the reader expects. Only the connect pool overrides this.
+    from snuba.clickhouse.native import ClickhouseNativePool, ClickhouseResult
+
+    pool = ClickhouseNativePool("host", 9000, "user", "pw", "db")
+    sentinel = ClickhouseResult(results=[(1, 10), (0, 10)])
+    with mock.patch.object(pool, "execute", return_value=sentinel) as execute:
+        out = pool.execute_with_totals(
+            "SELECT g, sum(v) FROM t GROUP BY g WITH TOTALS",
+            query_id="qid",
+            settings={"max_threads": 4},
+        )
+
+    execute.assert_called_once_with(
+        "SELECT g, sum(v) FROM t GROUP BY g WITH TOTALS",
+        params=None,
+        with_column_types=True,
+        query_id="qid",
+        settings={"max_threads": 4},
+        capture_trace=False,
+    )
+    assert out is sentinel
+
+
+def test_native_pool_execute_with_totals_robust_uses_execute_robust() -> None:
+    # robust=True must route through execute_robust (the retrying path), matching
+    # how the reader forwards robust for WITH TOTALS queries.
+    from snuba.clickhouse.native import ClickhouseNativePool, ClickhouseResult
+
+    pool = ClickhouseNativePool("host", 9000, "user", "pw", "db")
+    sentinel = ClickhouseResult(results=[(1, 10), (0, 10)])
+    with mock.patch.object(pool, "execute_robust", return_value=sentinel) as execute_robust:
+        out = pool.execute_with_totals(
+            "SELECT g, sum(v) FROM t GROUP BY g WITH TOTALS", robust=True
+        )
+
+    execute_robust.assert_called_once()
+    assert out is sentinel
+
+
+def test_reader_routes_with_totals_through_execute_with_totals() -> None:
+    # The reader sends WITH TOTALS queries through the pool's execute_with_totals
+    # entry point (not plain execute), forwarding robust, so each driver can
+    # handle totals its own way. This pins the driver-agnostic wiring both pools
+    # rely on.
+    from snuba.clickhouse.native import ClickhouseReader, ClickhouseResult
+
+    class FakeFormattedQuery:
+        def get_sql(self) -> str:
+            return "SELECT g, sum(v) AS s FROM t GROUP BY g WITH TOTALS"
+
+    pool = mock.Mock()
+    pool.execute_with_totals.return_value = ClickhouseResult(
+        results=[(1, 10), (0, 10)],
+        meta=[("g", "UInt64"), ("s", "UInt64")],
+    )
+
+    reader = ClickhouseReader(cache_partition_id=None, client=pool, query_settings_prefix=None)
+    result = reader.execute(
+        cast(FormattedQuery, FakeFormattedQuery()), with_totals=True, robust=True
+    )
+
+    pool.execute_with_totals.assert_called_once()
+    _, kwargs = pool.execute_with_totals.call_args
+    assert kwargs["robust"] is True
+    # The non-totals path (plain execute / execute_robust) is not taken.
+    pool.execute.assert_not_called()
+    pool.execute_robust.assert_not_called()
+    # The trailing totals row is split out; only the real rows remain as data.
+    assert result["data"] == [{"g": 1, "s": 10}]
+    assert result["totals"] == {"g": 0, "s": 10}
 
 
 @pytest.mark.clickhouse_db
