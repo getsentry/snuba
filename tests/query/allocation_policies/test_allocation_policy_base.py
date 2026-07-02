@@ -12,6 +12,7 @@ from snuba.query.allocation_policies import (
     MAX_THRESHOLD,
     NO_SUGGESTION,
     NO_UNITS,
+    ORG_RATE_LIMIT_BYPASS_CONFIG,
     AllocationPolicy,
     AllocationPolicyConfig,
     InvalidTenantsForAllocationPolicy,
@@ -522,6 +523,94 @@ def test_is_not_enforced() -> None:
     assert throttled_metrics[0].tags["policy_class"] == "ThrottleEverythingAllocationPolicy"
     assert throttled_metrics[0].tags["is_enforced"] == "True"
     assert throttled_metrics[1].tags["is_enforced"] == "False"
+
+
+@pytest.mark.redis_db
+def test_org_rate_limit_bypass_allowlist() -> None:
+    MAX_THREADS = 100
+    reject_policy = RejectingEverythingAllocationPolicy(
+        StorageKey("some_storage"),
+        [],
+        {"is_active": 1, "is_enforced": 1, "max_threads": MAX_THREADS},
+    )
+    allowlisted_tenant: dict[str, int | str] = {
+        "organization_id": 123,
+        "referrer": "some_referrer",
+    }
+    other_tenant: dict[str, int | str] = {
+        "organization_id": 999,
+        "referrer": "some_referrer",
+    }
+
+    # By default the org is rejected by the (enforced) policy.
+    assert not reject_policy.get_quota_allowance(allowlisted_tenant, "deadbeef").can_run
+
+    # Add the org to the global bypass allowlist.
+    set_config(ORG_RATE_LIMIT_BYPASS_CONFIG, "123,456")
+
+    # Allowlisted org bypasses the policy entirely (passes through with full threads).
+    allowance = reject_policy.get_quota_allowance(allowlisted_tenant, "deadbeef")
+    assert allowance.can_run
+    assert allowance.max_threads == MAX_THREADS
+
+    # An org not in the allowlist is still rejected.
+    assert not reject_policy.get_quota_allowance(other_tenant, "deadbeef").can_run
+
+
+@pytest.mark.redis_db
+def test_org_rate_limit_bypass_skips_update_quota_balance() -> None:
+    # BadlyWrittenAllocationPolicy raises in both _get_quota_allowance and
+    # _update_quota_balance, so a successful call proves those private methods
+    # were never invoked (i.e. the org bypassed the policy).
+    policy = BadlyWrittenAllocationPolicy(
+        StorageKey("some_storage"),
+        [],
+        {"is_active": 1, "is_enforced": 1},
+    )
+    tenant_ids: dict[str, int | str] = {
+        "organization_id": 123,
+        "referrer": "some_referrer",
+    }
+    result_or_error = QueryResultOrError(
+        query_result=QueryResult(
+            result={"profile": {"bytes": 420}},
+            extra={"stats": {}, "sql": "", "experiments": {}},
+        ),
+        error=None,
+    )
+
+    set_config(ORG_RATE_LIMIT_BYPASS_CONFIG, "123")
+
+    # Neither the buggy _get_quota_allowance nor _update_quota_balance is reached.
+    assert policy.get_quota_allowance(tenant_ids, "deadbeef").can_run
+    policy.update_quota_balance(tenant_ids, "deadbeef", result_or_error)
+
+
+@pytest.mark.redis_db
+def test_org_rate_limit_bypass_no_org_id() -> None:
+    reject_policy = RejectingEverythingAllocationPolicy(
+        StorageKey("some_storage"),
+        [],
+        {"is_active": 1, "is_enforced": 1},
+    )
+    set_config(ORG_RATE_LIMIT_BYPASS_CONFIG, "123")
+    # tenant_ids without an organization_id should never be bypassed.
+    assert not reject_policy.get_quota_allowance({"referrer": "some_referrer"}, "deadbeef").can_run
+
+
+@pytest.mark.redis_db
+def test_org_rate_limit_bypass_zero_org_id() -> None:
+    # A lone org id of 0 is coerced to the integer 0 by runtime config; make
+    # sure it is still honored (i.e. not treated as an unset allowlist).
+    reject_policy = RejectingEverythingAllocationPolicy(
+        StorageKey("some_storage"),
+        [],
+        {"is_active": 1, "is_enforced": 1},
+    )
+    set_config(ORG_RATE_LIMIT_BYPASS_CONFIG, "0")
+    assert reject_policy.get_quota_allowance(
+        {"organization_id": 0, "referrer": "some_referrer"}, "deadbeef"
+    ).can_run
 
 
 @pytest.mark.redis_db
