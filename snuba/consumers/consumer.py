@@ -476,12 +476,8 @@ def process_message(
     )
 
     validate_sample_rate = (
-        cast(
-            float,
-            get_mapped_option("validate_schema_sample_rate", snuba_logical_topic.name, 1.0),
-        )
-        or 0.0
-    )
+        get_mapped_option("validate_schema_sample_rate", snuba_logical_topic.name, 1.0)
+    ) or 0.0
 
     assert isinstance(message.value, BrokerValue)
     try:

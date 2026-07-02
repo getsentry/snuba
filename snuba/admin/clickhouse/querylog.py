@@ -1,5 +1,3 @@
-from typing import cast
-
 from snuba.admin.audit_log.query import audit_log
 from snuba.admin.clickhouse.common import (
     get_ro_query_node_connection,
@@ -37,7 +35,7 @@ def describe_querylog_schema() -> ClickhouseResult:
 
 
 def _get_clickhouse_threads() -> int:
-    config_threads = cast(int, get_option("admin.querylog_threads", _MAX_CH_THREADS))
+    config_threads = get_option("admin.querylog_threads", _MAX_CH_THREADS)
     return min(config_threads, _MAX_CH_THREADS)
 
 

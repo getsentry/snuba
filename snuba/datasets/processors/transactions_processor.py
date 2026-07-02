@@ -5,7 +5,7 @@ import numbers
 import uuid
 from collections.abc import Mapping, MutableMapping
 from datetime import datetime
-from typing import Any, cast
+from typing import Any
 
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
@@ -344,7 +344,7 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         data = event_dict["data"]
         trace_context = data["contexts"]["trace"]
 
-        max_spans_per_transaction = cast(int, get_option("max_spans_per_transaction", 2000))
+        max_spans_per_transaction = get_option("max_spans_per_transaction", 2000)
 
         num_processed = 0
         processed_spans = []

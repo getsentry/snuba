@@ -2,7 +2,6 @@ import logging
 import socket
 import threading
 import time
-from typing import cast
 
 import sentry_sdk
 from sentry_sdk.tracing import NoOpSpan, Transaction
@@ -22,7 +21,7 @@ def _profiler_main() -> None:
     own_hostname = socket.gethostname()
 
     while True:
-        queried_hostnames = cast(str, get_option("ondemand_profiler_hostnames", "")).split(",")
+        queried_hostnames = (get_option("ondemand_profiler_hostnames", "")).split(",")
 
         if own_hostname in queried_hostnames and current_transaction is None:
             # Log an error to Sentry on purpose, if the pod slows down it

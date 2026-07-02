@@ -8,7 +8,6 @@ from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import datetime
-from typing import cast
 
 from arroyo import Message, Partition, Topic
 from arroyo.backends.abstract import Producer
@@ -325,7 +324,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         # If there are max_concurrent_queries + 10 pending futures in the queue,
         # we will start raising MessageRejected to slow down the consumer as
         # it means our executor cannot keep up
-        queue_size_factor = cast(int, get_option("executor_queue_size_factor", 10))
+        queue_size_factor = get_option("executor_queue_size_factor", 10)
         max_queue_size = self.__max_concurrent_queries * queue_size_factor
 
         # Tell the consumer to pause until we have removed some futures from
