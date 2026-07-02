@@ -8,7 +8,6 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
     TraceItemFilterWithType,
 )
 
-from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
@@ -22,6 +21,7 @@ from snuba.query.dsl import and_cond, column, or_cond
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryResult
 from snuba.web.query import run_query
@@ -156,7 +156,7 @@ def get_trace_ids_sql_for_cross_item_query(
                 expression=f.max(column("timestamp")),
             ),
         ],
-        limit=limit or state.get_config("trace_ids_cross_item_query_limit", _TRACE_LIMIT),
+        limit=limit or get_option("trace_ids_cross_item_query_limit", _TRACE_LIMIT),
     )
 
     treeify_or_and_conditions(query)
