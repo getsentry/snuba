@@ -2,7 +2,7 @@ import logging
 import time
 from collections.abc import Mapping, MutableMapping, Sequence
 from threading import Thread
-from typing import Any, TypedDict, cast
+from typing import Any, TypedDict
 
 import rapidjson
 from confluent_kafka import KafkaError, Producer
@@ -374,5 +374,5 @@ def construct_or_conditions(
 
 
 def should_use_killswitch(storage_name: str, project_id: str) -> bool:
-    killswitch_config = cast(str, get_mapped_option("lw_deletes_killswitch", storage_name, ""))
+    killswitch_config = get_mapped_option("lw_deletes_killswitch", storage_name, "")
     return project_id in killswitch_config if killswitch_config else False

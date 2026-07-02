@@ -307,7 +307,7 @@ class HTTPBatchWriter(BatchWriter[bytes]):
         self.__statement = statement
         self.__buffer_size = buffer_size
         self.__chunk_size = chunk_size
-        self.__debug_buffer_size_bytes = cast(int, get_option("debug_buffer_size_bytes", 0))
+        self.__debug_buffer_size_bytes = get_option("debug_buffer_size_bytes", 0)
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__}: {self.__statement.get_qualified_table()} on {self.__pool.host}:{self.__pool.port}>"
@@ -343,8 +343,8 @@ class HTTPBatchWriter(BatchWriter[bytes]):
         # settings.BATCH_JOIN_TIMEOUT, preserving the prior runtime-config
         # behavior where the option was only an override.
         batch_join_timeout = (
-            cast(float, get_option("http_batch_join_timeout", 0)) or settings.BATCH_JOIN_TIMEOUT
-        )
+            get_option("http_batch_join_timeout", 0)
+        ) or settings.BATCH_JOIN_TIMEOUT
         # IMPORTANT: Please read the docstring of this method if you ever decide to remove the
         # timeout argument from the join method.
         batch.join(timeout=batch_join_timeout)

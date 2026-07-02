@@ -4,7 +4,7 @@ import logging
 import time
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta
-from typing import TypeVar, cast
+from typing import TypeVar
 
 import rapidjson
 from arroyo.backends.kafka import KafkaPayload
@@ -85,7 +85,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         if self.__storage.get_storage_key() != StorageKey.EAP_ITEMS:
             return conditions
 
-        str_config = cast(str, get_option("org_ids_delete_allowlist", ""))
+        str_config = get_option("org_ids_delete_allowlist", "")
         if not str_config:
             return conditions  # allowlist not set → allow all
 
@@ -201,7 +201,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         query_settings = HTTPQuerySettings()
         # starting in 24.4 the default is 2; -1 (the schema default) means
         # "unset", leaving ClickHouse's own default in place.
-        lw_sync = cast(int, get_option("lightweight_deletes_sync", -1))
+        lw_sync = get_option("lightweight_deletes_sync", -1)
         if lw_sync >= 0:
             query_settings.push_clickhouse_setting("lightweight_deletes_sync", lw_sync)
 
@@ -333,9 +333,8 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         start = time.time()
         parts_mutating = _num_parts_currently_mutating(self.__storage.get_cluster())
         self.__last_ongoing_mutations_check = time.time()
-        max_parts_mutating = cast(
-            int,
-            get_option("max_parts_mutating_for_delete", settings.MAX_PARTS_MUTATING_FOR_DELETE),
+        max_parts_mutating = get_option(
+            "max_parts_mutating_for_delete", settings.MAX_PARTS_MUTATING_FOR_DELETE
         )
         self.__metrics.timing("ongoing_mutations_query_ms", (time.time() - start) * 1000)
         if parts_mutating > max_parts_mutating:

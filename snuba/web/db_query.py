@@ -14,6 +14,7 @@ import rapidjson
 import sentry_sdk
 from clickhouse_driver.errors import ErrorCodes
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
+from sentry_options import OptionValue
 from sentry_sdk.api import configure_scope
 
 from snuba import environment, settings
@@ -352,7 +353,7 @@ def execute_query_with_readthrough_caching(
 
 def _query_settings_dict(option: str) -> Mapping[str, Any]:
     """A dict-typed sentry-option of {clickhouse_setting: value}."""
-    value = get_option(option, {})
+    value: OptionValue = get_option(option, {})
     return value if isinstance(value, dict) else {}
 
 
@@ -447,9 +448,7 @@ def _raw_query(
     consistent = query_settings.get_consistent()
     stats["consistent"] = consistent
     if consistent:
-        sample_rate = cast(
-            float, get_mapped_option("ignore_consistent_queries_sample_rate", dataset_name, 0.0)
-        )
+        sample_rate = get_mapped_option("ignore_consistent_queries_sample_rate", dataset_name, 0.0)
         ignore_consistent = random.random() < sample_rate
         if not ignore_consistent:
             clickhouse_query_settings["load_balancing"] = "in_order"
