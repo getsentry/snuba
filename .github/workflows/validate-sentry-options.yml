@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'sentry-options/schemas/**'
+      - 'uv.lock'
       - '.github/workflows/validate-sentry-options.yml'
   merge_group:
 
