@@ -1,7 +1,7 @@
 import typing
 import uuid
 from collections.abc import Mapping, Sequence
-from typing import Any, cast
+from typing import Any
 
 from snuba import settings
 from snuba.attribution import get_app_id
@@ -98,9 +98,8 @@ def delete_from_storage(
 
     # fail if too many mutations ongoing
     ongoing_mutations = _num_ongoing_mutations(storage.get_cluster(), delete_settings.tables)
-    max_ongoing_mutations = cast(
-        int,
-        get_option("MAX_ONGOING_MUTATIONS_FOR_DELETE", settings.MAX_ONGOING_MUTATIONS_FOR_DELETE),
+    max_ongoing_mutations = get_option(
+        "MAX_ONGOING_MUTATIONS_FOR_DELETE", settings.MAX_ONGOING_MUTATIONS_FOR_DELETE
     )
     assert max_ongoing_mutations
     if ongoing_mutations > max_ongoing_mutations:
@@ -225,7 +224,7 @@ WHERE metric = 'PartMutation'
 
 
 def deletes_are_enabled() -> bool:
-    return cast(bool, get_option("storage_deletes_enabled", True))
+    return get_option("storage_deletes_enabled", True)
 
 
 def _get_rows_to_delete(storage_key: StorageKey, select_query_to_count_rows: Query) -> int:

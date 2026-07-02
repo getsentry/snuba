@@ -5,7 +5,7 @@ import time
 from collections.abc import Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, cast
+from typing import Any
 
 import sentry_sdk
 from redis.cluster import ClusterPipeline as StrictClusterPipeline
@@ -83,9 +83,8 @@ class ProjectsQueryFlags:
             # the redis key size limit is defined as 2 times the clickhouse query size
             # limit. there is an explicit check in the query processor for the same
             # limit
-            max_group_ids_exclude = cast(
-                int,
-                get_option("max_group_ids_exclude", settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE),
+            max_group_ids_exclude = get_option(
+                "max_group_ids_exclude", settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE
             )
 
             group_id_data: MutableMapping[str | bytes, bytes | float | int | str] = {}

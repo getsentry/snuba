@@ -1,6 +1,5 @@
 import time
 from datetime import UTC, datetime
-from typing import cast
 
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies import ProcessingStrategy
@@ -55,8 +54,8 @@ class OffPeakProcessingStrategy(ProcessingStrategy[KafkaPayload]):
             self.__cached_at = now
             return True
 
-        start = cast(int, get_option("lw_deletions_offpeak_start", 0))
-        end = cast(int, get_option("lw_deletions_offpeak_end", 24))
+        start = get_option("lw_deletions_offpeak_start", 0)
+        end = get_option("lw_deletions_offpeak_end", 24)
         current_hour = datetime.now(UTC).hour
 
         if start == end:

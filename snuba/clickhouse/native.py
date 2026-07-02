@@ -304,9 +304,7 @@ class ClickhouseNativePool(ClickhousePool):
                         if attempts_remaining <= 0:
                             raise ClickhouseError(e.message, code=e.code) from e
 
-                        sleep_interval_seconds = cast(
-                            int, get_option("simultaneous_queries_sleep_seconds", 0)
-                        )
+                        sleep_interval_seconds = get_option("simultaneous_queries_sleep_seconds", 0)
                         if not sleep_interval_seconds:
                             raise ClickhouseError(e.message, code=e.code) from e
 
@@ -387,8 +385,8 @@ class ClickhouseNativePool(ClickhousePool):
                     # Linear backoff. Adds one second at each iteration. Falls
                     # back to a 1-second base when the option is unset (0).
                     sleep_interval_seconds = (
-                        cast(int, get_option("simultaneous_queries_sleep_seconds", 0)) or 1
-                    )
+                        get_option("simultaneous_queries_sleep_seconds", 0)
+                    ) or 1
                     time.sleep(
                         float((total_attempts - attempts_remaining) * sleep_interval_seconds)
                     )

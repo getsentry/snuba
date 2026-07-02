@@ -11,7 +11,6 @@ from functools import partial
 from typing import (
     Any,
     TypeVar,
-    cast,
 )
 
 import simplejson as json
@@ -523,7 +522,7 @@ class ReplacerWorker:
         temporarily, then cleared once relevant consumers restart.
         """
         # expected format is "[consumer_group1,consumer_group2,..]"
-        consumer_groups = cast(str, get_option(RESET_CHECK_CONFIG, "[]"))[1:-1].split(",")
+        consumer_groups = (get_option(RESET_CHECK_CONFIG, "[]"))[1:-1].split(",")
         if self.__consumer_group in consumer_groups:
             self.__last_offset_processed_per_partition[key] = -1
             redis_client.delete(key)

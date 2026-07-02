@@ -1244,8 +1244,8 @@ def _replace_time_condition(
     # max_days defaults to 0 in the schema, which we treat as "no limit" (None)
     # to preserve the prior runtime-config behavior where an unset value meant
     # no clamping of the query time range.
-    date_align = cast(int, get_option("date_align_seconds", 1))
-    max_days = cast(int, get_option("max_days", 0)) or None
+    date_align = get_option("date_align_seconds", 1)
+    max_days = (get_option("max_days", 0)) or None
 
     if isinstance(query, LogicalQuery):
         new_top_level = _align_max_days_date_align(

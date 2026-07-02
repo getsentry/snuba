@@ -1,5 +1,5 @@
 from collections.abc import MutableMapping
-from typing import Any, cast
+from typing import Any
 
 from snuba.clickhouse.query import Query
 from snuba.query.processors.physical import ClickhouseQueryProcessor
@@ -40,7 +40,7 @@ class ClickhouseSettingsOverride(ClickhouseQueryProcessor):
             new_settings.update(self.__settings)
             new_settings.update(query_settings.get_clickhouse_settings())
 
-        ignored_settings = cast(str, get_option("ignore_clickhouse_settings_override", ""))
+        ignored_settings = get_option("ignore_clickhouse_settings_override", "")
         if ignored_settings:
             new_settings = {
                 setting: value

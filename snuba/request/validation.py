@@ -4,7 +4,7 @@ import random
 import textwrap
 import uuid
 from collections.abc import MutableMapping
-from typing import Any, Protocol, cast
+from typing import Any, Protocol
 
 import sentry_sdk
 
@@ -73,7 +73,7 @@ def parse_mql_query(
 
 
 def _consistent_override(original_setting: bool, referrer: str) -> bool:
-    consistent_config = cast(str, get_option("consistent_override", ""))
+    consistent_config = get_option("consistent_override", "")
     if consistent_config:
         referrers_override = consistent_config.split(";")
         for config in referrers_override:

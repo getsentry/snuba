@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import cast
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
@@ -42,8 +41,8 @@ def _should_use_mega_cluster(storage_set: StorageSetKey, logical_partition: int)
     to a new slice. In such cases, the old data resides in some different
     slice than what the new mapping says.
     """
-    slicing_read_override_config = cast(
-        str, get_mapped_option(MEGA_CLUSTER_RUNTIME_CONFIG_PREFIX, storage_set.value, "")
+    slicing_read_override_config = get_mapped_option(
+        MEGA_CLUSTER_RUNTIME_CONFIG_PREFIX, storage_set.value, ""
     )
 
     if not slicing_read_override_config:

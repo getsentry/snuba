@@ -144,7 +144,7 @@ def _record_cogs(
     cluster_name = query_metadata.query_list[0].stats.get("cluster_name", "")
 
     if cluster_name.startswith("snuba-events-analytics-platform"):
-        if random() < cast(float, get_option("snuba_api_cogs_probability", 0.0)):
+        if random() < (get_option("snuba_api_cogs_probability", 0.0)):
             record_cogs(
                 resource_id="eap_clickhouse",
                 app_feature=_get_eap_app_feature(request),
@@ -179,7 +179,7 @@ def _record_cogs(
         .replace("_0", "")
     )
 
-    if random() < cast(float, get_option("snuba_api_cogs_probability", 0.0)):
+    if random() < (get_option("snuba_api_cogs_probability", 0.0)):
         record_cogs(
             resource_id=f"{cluster_name}",
             app_feature=app_feature,
