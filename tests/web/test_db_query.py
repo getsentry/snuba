@@ -328,11 +328,10 @@ def test_empty_result_meta_falls_back_to_expression_alias() -> None:
     assert stats["result_cols"] == 1
 
 
-def test_empty_result_meta_placeholder_when_name_and_alias_missing() -> None:
-    # If a selected column has neither a name nor an expression alias, synthesis
-    # must still emit a column (never silently drop one, which would desync meta
-    # from the result), using the same `_invalid_alias_{index}` placeholder that
-    # Query.get_columns() falls back to.
+def test_empty_result_meta_uses_column_name_for_bare_column() -> None:
+    # A bare column with neither a SelectedExpression.name nor an alias is echoed
+    # by ClickHouse under its own column name (SELECT project_id -> "project_id"),
+    # so synthesis uses the column name rather than a placeholder.
     from snuba.query import SelectedExpression
     from snuba.query.expressions import Column as ColumnExpr
     from snuba.reader import Reader, Result
@@ -354,20 +353,50 @@ def test_empty_result_meta_placeholder_when_name_and_alias_missing() -> None:
         def execute(self, *args: Any, **kwargs: Any) -> Result:
             return {"data": [], "meta": [], "profile": None, "trace_output": ""}
 
-    stats: dict[str, Any] = {}
     result = execute_query(
         clickhouse_query=query,
         query_settings=HTTPQuerySettings(),
         formatted_query=format_query(query),
         reader=_EmptyMetaReader(),
         timer=Timer("test"),
-        stats=stats,
+        stats={},
         clickhouse_query_settings={},
         robust=False,
     )
+    assert result["meta"] == [{"name": "project_id", "type": ""}]
 
+
+def test_empty_result_meta_placeholder_for_unnamed_non_column() -> None:
+    # A non-column expression with no name and no alias has nothing to derive a
+    # name from, so synthesis must still emit a column (never silently drop one)
+    # using the same `_invalid_alias_{index}` placeholder Query.get_columns() uses.
+    from snuba.query import SelectedExpression
+    from snuba.query.expressions import FunctionCall
+    from snuba.reader import Reader, Result
+
+    query, _storage, _attribution_info = _build_test_query("count(distinct(project_id))")
+    query.set_ast_selected_columns(
+        [SelectedExpression(name=None, expression=FunctionCall(None, "now", ()))]
+    )
+
+    class _EmptyMetaReader(Reader):
+        def __init__(self) -> None:
+            super().__init__(cache_partition_id=None, query_settings_prefix=None)
+
+        def execute(self, *args: Any, **kwargs: Any) -> Result:
+            return {"data": [], "meta": [], "profile": None, "trace_output": ""}
+
+    result = execute_query(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        formatted_query=format_query(query),
+        reader=_EmptyMetaReader(),
+        timer=Timer("test"),
+        stats={},
+        clickhouse_query_settings={},
+        robust=False,
+    )
     assert result["meta"] == [{"name": "_invalid_alias_0", "type": ""}]
-    assert stats["result_cols"] == 1
 
 
 def test_empty_result_meta_prefers_alias_over_name() -> None:

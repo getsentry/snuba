@@ -202,10 +202,17 @@ def execute_query(
             # reports, which this synthesis must match). SelectedExpression.name is
             # Snuba's logical name -- it usually equals the alias but can differ
             # (e.g. MQL rollup: name ``time`` vs alias ``events.time``), so it is
-            # only a fallback. Finally fall back to the same
-            # ``_invalid_alias_{index}`` placeholder Query.get_columns() uses, so a
-            # column is never dropped and meta stays aligned with the result.
-            name = selected.expression.alias or selected.name or f"_invalid_alias_{index}"
+            # only a fallback. If neither is set, a bare column is echoed by its
+            # own name (``SELECT project_id`` -> column ``project_id``), so use
+            # that. Finally fall back to the same ``_invalid_alias_{index}``
+            # placeholder Query.get_columns() uses, so a column is never dropped
+            # and meta stays aligned with the result.
+            name = (
+                selected.expression.alias
+                or selected.name
+                or getattr(selected.expression, "column_name", None)
+                or f"_invalid_alias_{index}"
+            )
             synthesized_meta.append({"name": name, "type": ""})
         result["meta"] = synthesized_meta
 
