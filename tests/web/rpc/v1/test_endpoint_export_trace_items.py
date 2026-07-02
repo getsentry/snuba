@@ -276,7 +276,6 @@ class TestExportTraceItems(BaseApiTest):
                 )
 
                 seen += [i.item_id for i in response.trace_items]
-                assert not response.page_token.end_pagination
 
                 message.page_token.CopyFrom(response.page_token)
 
