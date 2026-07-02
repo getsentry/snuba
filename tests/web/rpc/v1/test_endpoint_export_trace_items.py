@@ -9,7 +9,15 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_trace_items_pb2 import ExportTraceItemsRequest
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
-from sentry_protos.snuba.v1.trace_item_pb2 import TraceItem
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    AttributeKey,
+    AttributeValue,
+)
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
+    ComparisonFilter,
+    TraceItemFilter,
+)
+from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, TraceItem
 
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -113,6 +121,32 @@ class TestExportTraceItems(BaseApiTest):
 
         assert response.trace_items == []
 
+    def test_export_single_item(self) -> None:
+        item_id = uuid.uuid4().int.to_bytes(16, byteorder="little", signed=False)
+        write_raw_unprocessed_events(
+            get_writable_storage(StorageKey("eap_items")),
+            [gen_item_message(start_timestamp=BASE_TIME, item_id=item_id)],
+        )
+
+        message = ExportTraceItemsRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int((BASE_TIME + timedelta(seconds=1)).timestamp())
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                request_id=_REQUEST_ID,
+            ),
+        )
+        response = EndpointExportTraceItems().execute(message)
+
+        actual = response.trace_items[0].item_id
+        assert actual == item_id[::-1]
+
     def test_with_pagination(self, setup_teardown: Any) -> None:
         message = ExportTraceItemsRequest(
             meta=RequestMeta(
@@ -141,6 +175,115 @@ class TestExportTraceItems(BaseApiTest):
         _assert_attributes_keys(items)
 
         assert len(items) == _SPAN_COUNT + _LOG_COUNT
+
+    def test_with_filter(self, setup_teardown: Any) -> None:
+        filter_color = "red"
+        items = [
+            gen_item_message(
+                start_timestamp=BASE_TIME,
+                attributes={"color": AnyValue(string_value=color)},
+            )
+            for color in [
+                filter_color,
+                *[str(s) for s in range(10)],
+                filter_color,
+                filter_color + "not",
+            ]
+        ]
+        write_raw_unprocessed_events(get_writable_storage(StorageKey("eap_items")), items)
+
+        message = ExportTraceItemsRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int((BASE_TIME + timedelta(seconds=1)).timestamp())
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                request_id=_REQUEST_ID,
+            ),
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING,
+                        name="color",
+                    ),
+                    op=ComparisonFilter.OP_EQUALS,
+                    value=AttributeValue(val_str=filter_color),
+                ),
+            ),
+        )
+        response = EndpointExportTraceItems().execute(message)
+
+        assert len(response.trace_items) == 2
+        assert all(i.attributes["color"].string_value == filter_color for i in response.trace_items)
+
+    def test_pagination_stable_through_filter(self, eap: Any) -> None:
+        total = 20
+        limit = 5
+
+        item_ids: dict[str, list[bytes]] = {"red": [], "blue": []}
+        items: list[bytes] = []
+        for i in range(total):
+            item_id = uuid.uuid4().int.to_bytes(16, byteorder="little")
+            color = list(item_ids.keys())[i % 2]
+            # endianness for item_id doesn't get un-reversed on an export like
+            # it does for get_trace, reversing it here for easier validation later
+            item_ids[color].append(item_id[::-1])
+            items.append(
+                gen_item_message(
+                    start_timestamp=BASE_TIME + timedelta(seconds=i),
+                    item_id=item_id,
+                    project_id=i % 3 + 1,
+                    attributes={"color": AnyValue(string_value=color)},
+                )
+            )
+        write_raw_unprocessed_events(get_writable_storage(StorageKey("eap_items")), items)
+
+        seen_by_query: list[list[bytes]] = []
+        for i in range(2):
+            message = ExportTraceItemsRequest(
+                meta=RequestMeta(
+                    project_ids=[1, 2, 3],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                    end_timestamp=Timestamp(
+                        seconds=int((BASE_TIME + timedelta(seconds=total)).timestamp())
+                    ),
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                ),
+                filter=TraceItemFilter(
+                    comparison_filter=ComparisonFilter(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color"),
+                        op=ComparisonFilter.OP_EQUALS,
+                        value=AttributeValue(val_str="red"),
+                    ),
+                ),
+                limit=limit,
+            )
+
+            seen: list[bytes] = []
+            response = EndpointExportTraceItems().execute(message)  # readibility hack
+            while not response.page_token.end_pagination:
+                response = EndpointExportTraceItems().execute(message)
+                assert all(
+                    i.attributes["color"].string_value == "red" for i in response.trace_items
+                )
+
+                seen += [i.item_id for i in response.trace_items]
+                assert not response.page_token.end_pagination
+
+                message.page_token.CopyFrom(response.page_token)
+
+            assert set(seen) == set(item_ids["red"])
+            seen_by_query.append(seen)
+
+        assert all(s == seen_by_query[0] for s in seen_by_query)
 
     def test_pagination_with_128_bit_item_id(self, eap: Any, redis_db: Any) -> None:
         num_items = 120
