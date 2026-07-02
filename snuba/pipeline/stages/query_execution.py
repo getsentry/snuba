@@ -6,7 +6,7 @@ from collections import defaultdict
 from collections.abc import MutableMapping
 from dataclasses import replace
 from math import floor
-from typing import Any, cast
+from typing import Any
 
 import sentry_sdk
 
@@ -164,18 +164,11 @@ def _run_and_apply_column_names(
 
 
 def _max_query_size_bytes() -> int:
-    return (
-        cast(int, get_option(MAX_QUERY_SIZE_BYTES_CONFIG, MAX_QUERY_SIZE_BYTES))
-        or MAX_QUERY_SIZE_BYTES
-    )
+    return get_option(MAX_QUERY_SIZE_BYTES_CONFIG, MAX_QUERY_SIZE_BYTES) or MAX_QUERY_SIZE_BYTES
 
 
 def _disable_max_query_size_check_for_clusters() -> set[str]:
-    return set(
-        (cast(str, get_option(DISABLE_MAX_QUERY_SIZE_CHECK_FOR_CLUSTERS_CONFIG, "")) or "").split(
-            ","
-        )
-    )
+    return set((get_option(DISABLE_MAX_QUERY_SIZE_CHECK_FOR_CLUSTERS_CONFIG, "") or "").split(","))
 
 
 def _format_storage_query_and_run(

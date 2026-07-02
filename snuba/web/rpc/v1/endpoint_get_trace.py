@@ -3,7 +3,7 @@ import uuid
 from collections.abc import Iterable
 from datetime import datetime
 from operator import attrgetter
-from typing import Any, NamedTuple, Optional, cast
+from typing import Any, NamedTuple, Optional
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -365,13 +365,12 @@ def _build_query(
 
 
 def _get_apply_final_rollout_percentage() -> float:
-    return cast(
-        float,
+    return (
         get_option(
             APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
             0.0,
         )
-        or 0.0,
+        or 0.0
     )
 
 

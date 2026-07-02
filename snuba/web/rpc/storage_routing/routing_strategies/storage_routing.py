@@ -618,8 +618,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         # default, then the constant. The dict is keyed by routing-strategy class
         # name (or DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX for the global value).
         default = 1000
-        return cast(
-            int,
+        return (
             get_mapped_option(
                 "storage_routing_sampled_too_low_threshold",
                 self.class_name(),
@@ -630,7 +629,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 )
                 or default,
             )
-            or default,
+            or default
         )
 
     def _get_time_budget_ms(self) -> int:
@@ -639,8 +638,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         time budget overridden or can default to a global one set in runtime config
         """
         default = 8000
-        return cast(
-            int,
+        return (
             get_mapped_option(
                 "storage_routing_time_budget_ms",
                 self.class_name(),
@@ -651,7 +649,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 )
                 or default,
             )
-            or default,
+            or default
         )
 
     def _emit_routing_mistake(self, routing_decision: RoutingDecision) -> None:
