@@ -1,6 +1,6 @@
 use crate::types::BytesInsertBatch;
 use pyo3::prelude::*;
-use pyo3::types::PyAnyMethods;
+use pyo3::types::{PyAnyMethods, PyDict};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::backends::Producer;
 use sentry_arroyo::backends::ProducerError;
@@ -25,10 +25,15 @@ pub fn initialize_python() {
 
         // monkeypatch signal handlers in Python to noop, because otherwise python multiprocessing
         // strategies cannot be tested
+        let signal = PyModule::import(py, "signal")?;
         let noop_fn = py
-            .eval(&CString::new("lambda *a, **kw: None").unwrap(), None, None)
+            .eval_bound::<pyo3::Bound<'_, PyAny>>(
+                &CString::new("lambda *a, **kw: None").unwrap(),
+                None,
+                None,
+            )
             .unwrap();
-        PyModule::import(py, "signal")?.setattr("signal", noop_fn)?;
+        signal.setattr("signal", noop_fn)?;
         Ok(())
     })
     .unwrap();
