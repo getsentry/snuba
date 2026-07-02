@@ -442,6 +442,8 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         org from all rate limits at once. It is stored as a comma-separated list
         of organization ids, e.g. "1,42,1337".
         """
+        if not tenant_ids:
+            return False
         org_id = tenant_ids.get("organization_id")
         if org_id is None:
             return False
