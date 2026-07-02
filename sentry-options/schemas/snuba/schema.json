@@ -27,6 +27,14 @@
       "default": 120,
       "description": "BLQ hysteresis in seconds. Once routing stale, keep routing messages at least (stale_threshold - static_friction) old. Set to 0 to disable friction."
     },
+    "consumer.dlq_stale_threshold_seconds": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "default": {},
+      "description": "Dict mapping storage name to a staleness threshold in seconds. A consumer dead-letters any message whose Kafka timestamp is older than its storage's threshold (routing the original payload to that storage's configured DLQ topic). Storages with no entry, or a non-positive value, are unaffected."
+    },
     "eap_items_drop_invalid_timestamps": {
       "type": "boolean",
       "default": false,
