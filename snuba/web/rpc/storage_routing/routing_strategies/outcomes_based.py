@@ -207,26 +207,24 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             return cast(int, per_org_override)
 
         default = 1_000_000_000
-        return cast(
-            int,
+        return (
             get_mapped_option(
                 "storage_routing_max_items_before_downsampling",
                 self.class_name(),
                 default,
             )
-            or default,
+            or default
         )
 
     def _get_min_timerange_to_query_outcomes(self) -> int:
         default = 3600 * 4
-        return cast(
-            int,
+        return (
             get_mapped_option(
                 "storage_routing_min_timerange_to_query_outcomes",
                 self.class_name(),
                 default,
             )
-            or default,
+            or default
         )
 
     def _update_routing_decision(
