@@ -525,10 +525,9 @@ class EndpointExportTraceItems(RPCEndpoint[ExportTraceItemsRequest, ExportTraceI
         return ExportTraceItemsResponse
 
     def _execute(self, in_msg: ExportTraceItemsRequest) -> ExportTraceItemsResponse:
-        default_page_size = cast(
-            int,
+        default_page_size = (
             get_option("export_trace_items_default_page_size", _DEFAULT_PAGE_SIZE)
-            or _DEFAULT_PAGE_SIZE,
+            or _DEFAULT_PAGE_SIZE
         )
         if in_msg.limit > 0:
             limit = min(in_msg.limit, default_page_size)
