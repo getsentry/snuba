@@ -599,6 +599,21 @@ def test_org_rate_limit_bypass_no_org_id() -> None:
 
 
 @pytest.mark.redis_db
+def test_org_rate_limit_bypass_zero_org_id() -> None:
+    # A lone org id of 0 is coerced to the integer 0 by runtime config; make
+    # sure it is still honored (i.e. not treated as an unset allowlist).
+    reject_policy = RejectingEverythingAllocationPolicy(
+        StorageKey("some_storage"),
+        [],
+        {"is_active": 1, "is_enforced": 1},
+    )
+    set_config(ORG_RATE_LIMIT_BYPASS_CONFIG, "0")
+    assert reject_policy.get_quota_allowance(
+        {"organization_id": 0, "referrer": "some_referrer"}, "deadbeef"
+    ).can_run
+
+
+@pytest.mark.redis_db
 def test_configs_with_delimiter_values() -> None:
     # test that configs with dots can be stored and read
     policy = SomeParametrizedConfigPolicy(StorageKey("something"), [], {})

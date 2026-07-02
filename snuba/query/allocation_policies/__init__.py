@@ -445,8 +445,11 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         org_id = tenant_ids.get("organization_id")
         if org_id is None:
             return False
-        allowlist = get_runtime_config(ORG_RATE_LIMIT_BYPASS_CONFIG, "")
-        if not allowlist:
+        # Use `is None` rather than a falsy check: runtime config coerces types,
+        # so a lone org id of `0` would be stored as the integer 0 and a `not
+        # allowlist` check would wrongly treat it as unset.
+        allowlist = get_runtime_config(ORG_RATE_LIMIT_BYPASS_CONFIG)
+        if allowlist is None:
             return False
         bypassed_orgs = {part.strip() for part in str(allowlist).split(",") if part.strip()}
         return str(org_id) in bypassed_orgs
