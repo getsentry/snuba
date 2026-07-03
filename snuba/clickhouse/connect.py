@@ -4,7 +4,7 @@ import json
 import logging
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import datetime
 from threading import Lock
 from typing import Any
 
@@ -50,23 +50,18 @@ clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
 
 def _coerce_temporal(value: Any, ch_type: str) -> Any:
     """
-    Parse a ``Date``/``DateTime`` string from JSONCompact into a ``date``/``datetime``.
-    The reader's transforms call date/datetime methods on these and would crash on a
-    raw string; every other type already matches the native driver once serialized.
-    ``Nullable`` is unwrapped so ``Nullable(DateTime)`` is handled.
+    Parse a ``Date``/``DateTime`` string from JSONCompact into the ``date``/``datetime``
+    object the reader's transforms expect -- they call date/datetime methods on it and
+    would crash on a raw string. Other types (and non-strings) pass through unchanged.
     """
     if not isinstance(value, str):
         return value
     _, inner = unwrap_nullable_type(ch_type)
-    # Match the base type name (params stripped) so DateTime64(9)/DateTime('UTC')
-    # reduce to DateTime64/DateTime.
-    match inner.split("(", 1)[0]:
-        case "DateTime" | "DateTime64":
-            return datetime.fromisoformat(value)
-        case "Date" | "Date32":
-            return date.fromisoformat(value)
-        case _:
-            return value
+    if not inner.startswith("Date"):  # Date, Date32, DateTime, DateTime64
+        return value
+    parsed = datetime.fromisoformat(value)
+    # DateTime/DateTime64 keep the time; Date/Date32 want a bare date.
+    return parsed if inner.startswith("DateTime") else parsed.date()
 
 
 class ClickhouseConnectPool(ClickhousePool):
@@ -388,6 +383,10 @@ class ClickhouseConnectPool(ClickhousePool):
             # pool likewise wraps the whole clickhouse_driver errors.Error family
             # into ClickhouseError, preserving the server error code when present.
             raise ClickhouseError(str(e), code=getattr(e, "code", None) or -1) from e
+        except json.JSONDecodeError as e:
+            # A malformed body on the JSONCompact totals path (truncation, a proxy
+            # error page) surfaces as ClickhouseError, like the native driver does.
+            raise ClickhouseError(f"invalid JSON response: {e}", code=-1) from e
 
     def execute(
         self,

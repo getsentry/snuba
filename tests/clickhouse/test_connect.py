@@ -132,6 +132,17 @@ def test_generic_clickhouse_error_wrapped() -> None:
     assert client.query.call_count == 1
 
 
+def test_totals_malformed_json_wrapped() -> None:
+    # A non-JSON totals response (truncation, a proxy error page) surfaces as a
+    # ClickhouseError rather than leaking a raw JSONDecodeError.
+    client = mock.Mock()
+    client.raw_query.return_value = b"<html>502 Bad Gateway</html>"
+
+    pool = _make_pool(client)
+    with pytest.raises(ClickhouseError):
+        pool.execute_with_totals("SELECT g, sum(v) FROM t GROUP BY g WITH TOTALS")
+
+
 def test_timeouts_are_passed_through() -> None:
     import clickhouse_connect
 
