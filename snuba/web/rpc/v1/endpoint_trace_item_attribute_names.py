@@ -1,5 +1,7 @@
 import re
 import uuid
+from collections.abc import Mapping
+from typing import Any
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
@@ -474,7 +476,7 @@ def convert_co_occurring_results_to_attributes(
     # tuple by default, or the semver key of the name under SORT_NATURAL.
     natural = _order_by_natural(request)
 
-    def _name_key(row: dict) -> object:
+    def _name_key(row: Mapping[str, Any]) -> Any:
         attr_key = row.get("attr_key", ("TYPE_STRING", ""))
         attr_type, attr_name = attr_key[0], attr_key[1]
         if natural:
