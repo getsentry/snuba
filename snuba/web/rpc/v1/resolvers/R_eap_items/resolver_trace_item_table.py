@@ -60,7 +60,6 @@ from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
-    SEMVER_SORT_ATTRIBUTES,
     add_existence_check_to_subscriptable_references,
     attribute_key_to_expression,
     base_conditions_and,
@@ -278,7 +277,7 @@ def aggregation_filter_to_expression(
             raise BadSnubaRPCRequestException(f"Unsupported aggregation filter type: {default}")
 
 
-def _groupby_order_by_expression(attr_key: AttributeKey, for_order_by: bool = False) -> Expression:
+def _groupby_order_by_expression(attr_key: AttributeKey) -> Expression:
     """
     Maps an attribute key used in GROUP BY / ORDER BY to its expression.
 
@@ -288,16 +287,13 @@ def _groupby_order_by_expression(attr_key: AttributeKey, for_order_by: bool = Fa
     rejected upstream (see _validate_select_and_groupby / _validate_order_by), so they
     never reach here.
 
-    For `SEMVER_SORT_ATTRIBUTES` (e.g. `sentry.release`), the ORDER BY uses
-    a semver tuple key while GROUP BY keeps the raw expression.  ClickHouse
-    accepts ORDER BY on a function of a GROUP BY key, so the two can differ here.
+    The SORT_NATURAL (semver) ordering is applied by `_convert_order_by`, not here, so
+    GROUP BY keeps the raw expression while ORDER BY can wrap it in the semver key.
+    ClickHouse accepts ORDER BY on a function of a GROUP BY key, so the two can differ.
     """
     if attr_key.name == "sentry.timestamp":
         return snuba_column("timestamp")
-    base = attribute_key_to_expression(attr_key)
-    if for_order_by and attr_key.name in SEMVER_SORT_ATTRIBUTES:
-        return semver_sort_key(base)
-    return base
+    return attribute_key_to_expression(attr_key)
 
 
 def _convert_order_by(
@@ -348,12 +344,20 @@ def _convert_order_by(
             # no-groupby branch above already expands to the full table sort key; this
             # covers `sentry.timestamp` ordering anywhere else.) GROUP BY uses the same
             # expression so an aggregation query that orders by `sentry.timestamp` stays
-            # valid.  For `SEMVER_SORT_ATTRIBUTES`, `for_order_by=True` selects the semver
-            # tuple key here while GROUP BY keeps the raw expression.
+            # valid.
+            expression = _groupby_order_by_expression(x.column.key)
+            # SORT_NATURAL requests semver-aware ordering (client-driven, no hardcoded
+            # attribute list).  It only applies to string columns; numeric/timestamp
+            # columns already sort numerically, so leave them untouched.
+            if (
+                x.sort == TraceItemTableRequest.OrderBy.SORT_NATURAL
+                and x.column.key.type == AttributeKey.TYPE_STRING
+            ):
+                expression = semver_sort_key(expression)
             res.append(
                 OrderBy(
                     direction=direction,
-                    expression=_groupby_order_by_expression(x.column.key, for_order_by=True),
+                    expression=expression,
                 )
             )
         elif x.column.HasField("conditional_aggregation"):

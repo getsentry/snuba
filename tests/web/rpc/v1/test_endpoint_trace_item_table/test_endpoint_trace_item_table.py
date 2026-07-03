@@ -4511,9 +4511,10 @@ def test_order_by_bug() -> None:
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 class TestSemverSorting:
-    """ORDER BY sentry.release uses the tuple(arrayResize(…), is_stable) key so
-    versions sort numerically (1.2.9 before 1.2.10) with pre-releases before
-    their corresponding stable release.
+    """ORDER BY with the SORT_NATURAL option applies the semver key so versions
+    sort numerically (1.2.9 before 1.2.10) with pre-releases before their
+    corresponding stable release. Without SORT_NATURAL the ordering stays
+    lexicographic (there is no hardcoded per-attribute behavior).
     """
 
     _RELEASES = [
@@ -4539,7 +4540,12 @@ class TestSemverSorting:
                 raw_attributes={"sentry.release": release, "semver_test_marker": "1"},
             )
 
-    def _query_releases(self, descending: bool = False) -> list[str]:
+    def _query_releases(self, descending: bool = False, natural: bool = True) -> list[str]:
+        sort = (
+            TraceItemTableRequest.OrderBy.SORT_NATURAL
+            if natural
+            else TraceItemTableRequest.OrderBy.SORT_UNSPECIFIED
+        )
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1],
@@ -4564,6 +4570,7 @@ class TestSemverSorting:
                         key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.release")
                     ),
                     descending=descending,
+                    sort=sort,
                 )
             ],
             limit=len(self._RELEASES) + 10,
@@ -4575,6 +4582,14 @@ class TestSemverSorting:
         releases = self._query_releases()
         assert releases.index("1.2.9") < releases.index("1.2.10"), (
             "1.2.9 must sort before 1.2.10 (numeric, not lexicographic)"
+        )
+
+    def test_default_sort_is_lexicographic(self) -> None:
+        # Without SORT_NATURAL there is no semver behavior (no hardcoded
+        # attributes), so plain lexicographic order applies: "1.2.10" < "1.2.9".
+        releases = self._query_releases(natural=False)
+        assert releases.index("1.2.10") < releases.index("1.2.9"), (
+            "without SORT_NATURAL, ordering is lexicographic"
         )
 
     def test_prerelease_before_stable(self) -> None:

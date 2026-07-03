@@ -92,52 +92,13 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
 
 _SEMVER_COMPONENT_COUNT = 4  # major.minor.patch.build
 
-SEMVER_SORT_ATTRIBUTES: frozenset[str] = frozenset({"sentry.release"})
-
-# Zero-pad width for digit runs in natural_sort_key.  Numbers with more digits
-# than this still order correctly (see natural_sort_key), this is just the
-# minimum alignment width.
-_NATURAL_SORT_DIGIT_WIDTH = 20
-
-
-def natural_sort_key(expr: Expression, alias: str | None = None) -> Expression:
-    """Return a String sort key giving natural ordering for ``SORT_NATURAL``.
-
-    Natural order compares embedded digit runs numerically, so ``"item2"`` sorts
-    before ``"item10"`` (plain lexicographic gives the reverse).  Upstream
-    ClickHouse gained ``naturalSortKey()`` only in v26.3, which is unavailable on
-    Altinity 25.3/25.8, so the key is built from primitives: tokenize into
-    maximal digit / non-digit runs, left-pad each digit run with zeros so a
-    lexicographic comparison of the rebuilt string matches natural order.
-    """
-    tok = Argument(None, "t")
-    non_null = f.ifNull(expr, literal(""))
-    # ``[0-9]+|[^0-9]+`` matches every character exactly once, so extractAll
-    # yields the runs in order with nothing dropped (unlike splitByRegexp, which
-    # discards the separators).
-    tokens = f.extractAll(non_null, literal("[0-9]+|[^0-9]+"))
-    # Pad to at least _NATURAL_SORT_DIGIT_WIDTH but never below the token's own
-    # length, so longer numbers are never truncated and still sort after shorter
-    # ones (a bigger magnitude keeps a longer, hence lexicographically greater,
-    # zero-padded form).
-    padded_digits = f.leftPad(
-        tok,
-        f.greatest(f.length(tok), literal(_NATURAL_SORT_DIGIT_WIDTH)),
-        literal("0"),
-    )
-    padded = f.arrayMap(
-        Lambda(
-            None,
-            ("t",),
-            FunctionCall(None, "if", (f.match(tok, literal("^[0-9]")), padded_digits, tok)),
-        ),
-        tokens,
-    )
-    return FunctionCall(alias, "arrayStringConcat", (padded, literal("")))
-
 
 def semver_sort_key(expr: Expression, alias: str | None = None) -> Expression:
     """Return a Tuple(Array(UInt32), UInt8, String) sort key for semantic-version ORDER BY.
+
+    This is the sort applied for the ``SORT_NATURAL`` OrderBy option: callers opt
+    in per request (there is no hardcoded attribute list), and the key is applied
+    to whatever column they order by.
 
     Strips a leading 'package@' prefix, isolates the release part (before '-'),
     maps each dot-component to UInt32, pads to 4 elements so "1.2" == "1.2.0",

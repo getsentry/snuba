@@ -54,7 +54,6 @@ from snuba.web.rpc.common.common import (
     _any_attribute_filter_to_expression,
     attribute_key_to_expression,
     dedupe_and_conditions,
-    natural_sort_key,
     next_monday,
     prev_monday,
     semver_sort_key,
@@ -1341,40 +1340,6 @@ class TestSemverSortKey:
         from snuba.query.dsl import column as snuba_column
 
         expr = semver_sort_key(snuba_column("release"))
-        assert expr.alias is None
-
-
-class TestNaturalSortKey:
-    def test_expression_structure(self) -> None:
-        from snuba.query.dsl import column as snuba_column
-
-        expr = natural_sort_key(snuba_column("attr_value"))
-        # arrayStringConcat(arrayMap(...), '')
-        assert isinstance(expr, FunctionCall)
-        assert expr.function_name == "arrayStringConcat"
-        assert len(expr.parameters) == 2
-        array_map_expr, sep_expr = expr.parameters
-        assert isinstance(array_map_expr, FunctionCall)
-        assert array_map_expr.function_name == "arrayMap"
-        assert isinstance(sep_expr, Literal)
-        assert sep_expr.value == ""
-        # The mapped array is extractAll(ifNull(expr, ''), '[0-9]+|[^0-9]+').
-        lam, tokens_expr = array_map_expr.parameters
-        assert isinstance(lam, Lambda)
-        assert isinstance(tokens_expr, FunctionCall)
-        assert tokens_expr.function_name == "extractAll"
-
-    def test_alias_is_forwarded(self) -> None:
-        from snuba.query.dsl import column as snuba_column
-
-        expr = natural_sort_key(snuba_column("attr_value"), alias="natural_key")
-        assert isinstance(expr, FunctionCall)
-        assert expr.alias == "natural_key"
-
-    def test_no_alias_by_default(self) -> None:
-        from snuba.query.dsl import column as snuba_column
-
-        expr = natural_sort_key(snuba_column("attr_value"))
         assert expr.alias is None
 
 
