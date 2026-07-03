@@ -1,6 +1,6 @@
 use crate::types::BytesInsertBatch;
 use pyo3::prelude::*;
-use pyo3::types::{PyAnyMethods, PyDict};
+use pyo3::types::PyDict;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::backends::Producer;
 use sentry_arroyo::backends::ProducerError;
@@ -27,7 +27,7 @@ pub fn initialize_python() {
         // strategies cannot be tested
         let signal = PyModule::import(py, "signal")?;
         let noop_fn = py
-            .eval_bound::<pyo3::Bound<'_, PyAny>>(
+            .eval::<pyo3::Bound<'_, PyAny>>(
                 &CString::new("lambda *a, **kw: None").unwrap(),
                 None,
                 None,
