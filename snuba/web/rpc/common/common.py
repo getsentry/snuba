@@ -167,7 +167,13 @@ def semver_sort_key(expr: Expression, alias: str | None = None) -> Expression:
         ),
         literal(_SEMVER_COMPONENT_COUNT),
     )
-    is_stable = f.equals(f.position(version_no_prefix, literal("-")), literal(0))
+    # A release is "stable" only when the version is a plain dotted-numeric
+    # string ("1.2.3", "1.2").  Anything else is a prerelease and sorts before
+    # the matching stable release: SemVer prereleases ("1.2.3-beta.1") as well as
+    # PEP 440 dot-style dev/pre builds ("24.7.0.dev0+<sha>", the common form on
+    # sentry.release) — the latter has no '-', so a bare '-' check would wrongly
+    # tag it stable and sort the dev build after its GA release.
+    is_stable = f.match(version_no_prefix, literal(r"^[0-9]+(\.[0-9]+)*$"))
     return FunctionCall(alias, "tuple", (numeric_key, is_stable, non_null))
 
 

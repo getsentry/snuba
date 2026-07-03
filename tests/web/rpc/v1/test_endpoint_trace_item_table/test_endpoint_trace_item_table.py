@@ -4525,6 +4525,10 @@ class TestSemverSorting:
         "my-pkg@2.0.0",
         "1.2",
         "1.2.0",
+        # PEP 440 dot-style dev build (Sentry's own sentry.release format) and
+        # its GA release, to verify the dev build sorts before GA.
+        "24.7.0.dev0+abc123",
+        "24.7.0",
     ]
 
     @pytest.fixture(autouse=True)
@@ -4577,6 +4581,12 @@ class TestSemverSorting:
         releases = self._query_releases()
         assert releases.index("1.2.3-beta.1") < releases.index("1.2.3"), (
             "prerelease 1.2.3-beta.1 must sort before stable 1.2.3"
+        )
+
+    def test_dot_dev_prerelease_before_stable(self) -> None:
+        releases = self._query_releases()
+        assert releases.index("24.7.0.dev0+abc123") < releases.index("24.7.0"), (
+            "PEP 440 dot-style dev build must sort before its GA release"
         )
 
     def test_prerelease_of_newer_after_older_stable(self) -> None:
