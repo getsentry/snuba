@@ -143,18 +143,11 @@ class ClickhousePool(ABC):
         robust: bool = False,
     ) -> ClickhouseResult:
         """
-        Run a ``WITH TOTALS`` query and return a result whose trailing row is the
-        totals row (the shape :class:`ClickhouseReader` expects).
-
-        This gets its own entry point because the drivers surface totals
-        differently. The native protocol streams the totals block back as the
-        trailing result row, so a plain :meth:`execute` already produces the right
-        shape and the default implementation just delegates to it. The
-        clickhouse-connect (HTTP) pool cannot — its Native/HTTP output drops the
-        totals block entirely — so it overrides this method to refetch them via
-        ``FORMAT JSONCompact`` (see ``ClickhouseConnectPool.execute_with_totals``).
-        Callers that issue ``WITH TOTALS`` must use this method rather than
-        ``execute`` so they work on either driver.
+        Run a ``WITH TOTALS`` query, returning the totals as the trailing result row
+        (the shape :class:`ClickhouseReader` expects). The native protocol already
+        streams it there, so this default just delegates to :meth:`execute`; the
+        clickhouse-connect pool overrides it (its output drops the totals block).
+        Callers must use this rather than ``execute`` so both drivers work.
         """
         execute = self.execute_robust if robust else self.execute
         return execute(
@@ -543,10 +536,8 @@ class ClickhouseReader(Reader):
 
         new_result: Result = {}
         if with_totals:
-            # The driver is expected to return the totals as the trailing result
-            # row: the native pool appends it from the protocol, and the
-            # clickhouse-connect pool re-fetches it via JSON (the Native/HTTP
-            # output omits it). An empty result here means that row went missing.
+            # Both pools return the totals as the trailing row (see
+            # ClickhousePool.execute_with_totals); an empty result means it went missing.
             assert len(data) > 0, "WITH TOTALS query returned no rows (missing totals row)"
             totals = data.pop(-1)
             new_result = {
@@ -584,9 +575,8 @@ class ClickhouseReader(Reader):
             query_id = settings.pop("query_id")
 
         if with_totals:
-            # Totals travel differently on each driver (a trailing protocol row on
-            # native, a dropped block that must be refetched over HTTP), so route
-            # through the dedicated entry point that both pools implement.
+            # Totals travel differently per driver, so route through the entry
+            # point both pools implement (see ClickhousePool.execute_with_totals).
             result = self.__client.execute_with_totals(
                 query.get_sql(),
                 query_id=query_id,

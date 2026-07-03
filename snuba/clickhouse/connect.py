@@ -50,30 +50,16 @@ clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
 
 def _coerce_temporal(value: Any, ch_type: str) -> Any:
     """
-    Convert a ``Date`` / ``DateTime`` value from ClickHouse's JSONCompact output
-    (a string) into a ``date`` / ``datetime`` object.
-
-    This is the only value conversion the JSONCompact totals path needs. The
-    reader's column-type transforms call ``date``/``datetime`` methods on these
-    values (re-emitting Snuba's canonical ISO string), so a raw JSON string would
-    crash them and change the output format -- Date/DateTime are the only types
-    that do. ``Nullable`` is unwrapped so ``Nullable(DateTime)`` is handled too,
-    mirroring the reader's own transform.
-
-    Every other type is left as ``json.loads`` decoded it. That is byte-identical
-    to the native driver once serialized (numbers, strings, bools, arrays, maps,
-    and -- via ``default=str`` -- UUID / IPv4 / IPv6 / Enum), with two harmless
-    exceptions: a whole-number ``Float`` total serializes as ``5`` rather than
-    ``5.0`` (numerically identical to any JSON consumer), and a ``Decimal``
-    decodes as a JSON number rather than the native driver's string. Totals are
-    dominated by integer counts, so this is not worth type-directed coercion.
+    Parse a ``Date``/``DateTime`` string from JSONCompact into a ``date``/``datetime``.
+    The reader's transforms call date/datetime methods on these and would crash on a
+    raw string; every other type already matches the native driver once serialized.
+    ``Nullable`` is unwrapped so ``Nullable(DateTime)`` is handled.
     """
     if not isinstance(value, str):
         return value
     _, inner = unwrap_nullable_type(ch_type)
-    # Match on the base type name -- parameters stripped, so DateTime64(9) and
-    # DateTime('UTC') reduce to DateTime64 / DateTime -- so the exact type drives
-    # the conversion rather than a brittle prefix.
+    # Match the base type name (params stripped) so DateTime64(9)/DateTime('UTC')
+    # reduce to DateTime64/DateTime.
     match inner.split("(", 1)[0]:
         case "DateTime" | "DateTime64":
             return datetime.fromisoformat(value)
@@ -297,28 +283,16 @@ class ClickhouseConnectPool(ClickhousePool):
         robust: bool = False,
     ) -> ClickhouseResult:
         """
-        Override of :meth:`ClickhousePool.execute_with_totals` for the HTTP driver.
-
-        clickhouse-connect's Native/HTTP output omits the ``WITH TOTALS`` row
-        entirely (totals only travel over the native TCP protocol), so the default
-        implementation -- which relies on that trailing row -- does not work here.
-        Instead, run the query once with ``FORMAT JSONCompact``, which returns the
-        data rows, the column metadata, and the totals row together, and append
-        the totals as the trailing result row (the shape the reader expects). Only
-        ``Date``/``DateTime`` values need coercing back to objects (see
-        :func:`_coerce_temporal`); ``json.loads`` yields every other type in a form
-        that serializes identically to the native driver.
-
-        One request, one scan. ``settings`` (timeouts, max_threads, readonly, ...)
-        are inherited; ``query_id`` is used as-is. ``capture_trace`` and ``robust``
-        are accepted for interface parity: the HTTP path cannot surface trace
-        output, and clickhouse-connect handles its own retries.
+        HTTP override of :meth:`ClickhousePool.execute_with_totals`. clickhouse-connect's
+        Native/HTTP output drops the ``WITH TOTALS`` row, so run the query once with
+        ``FORMAT JSONCompact`` (data + meta + totals together) and append the totals as
+        the trailing result row, the shape the reader expects. ``capture_trace``/``robust``
+        are accepted for interface parity but unused on this path.
         """
         with self._translate_clickhouse_errors():
             client = self._get_client()
             json_settings: dict[str, Any] = dict(settings) if settings else {}
-            # 64-bit ints as JSON numbers (not quoted strings) so they round-trip
-            # to the same Python ints the native driver yields.
+            # 64-bit ints as JSON numbers, matching the native driver's Python ints.
             json_settings["output_format_json_quote_64bit_integers"] = 0
             if query_id is not None:
                 json_settings["query_id"] = query_id
@@ -337,9 +311,7 @@ class ClickhouseConnectPool(ClickhousePool):
             meta = [(column["name"], column["type"]) for column in payload.get("meta", [])]
             column_types = [ch_type for _, ch_type in meta]
 
-            # JSONCompact returns each data row and the totals row as a positional
-            # array aligned to ``meta``, so values line up with the reader's
-            # positional indexing without any name-based lookup.
+            # Each data row and the totals row is a positional array aligned to meta.
             results: list[tuple[Any, ...]] = [
                 tuple(
                     _coerce_temporal(value, column_types[index]) for index, value in enumerate(row)
@@ -364,8 +336,8 @@ class ClickhouseConnectPool(ClickhousePool):
 
     @staticmethod
     def _profile_from_statistics(payload: Mapping[str, Any]) -> ClickhouseProfile:
-        # The JSON output formats include a ``statistics`` object carrying the same
-        # read counters the Native path reads from the X-ClickHouse-Summary header.
+        # JSON's ``statistics`` object carries the same read counters as the Native
+        # path's X-ClickHouse-Summary header.
         statistics = payload.get("statistics") or {}
 
         def _int(key: str) -> int:

@@ -185,28 +185,18 @@ def execute_query(
         robust=robust,
     )
 
-    # The clickhouse-connect (HTTP) reader returns no column metadata for an
-    # empty result set: ClickHouse emits a zero-byte Native body for a query
-    # that matches no rows, so there is no header to read (the native driver
-    # always reports the columns). Rather than issue a second query to recover
-    # them, synthesize the column names from the query we just ran -- they are
-    # the selected-column aliases, which is exactly how the result columns are
-    # named. Types are left blank: an empty result has no values to coerce, and
-    # consumers of an empty result rely only on the column names.
+    # The clickhouse-connect (HTTP) reader returns empty meta for a zero-row result
+    # (ClickHouse sends a zero-byte Native body, so there's no column header; the
+    # native driver always reports columns). Synthesize the names from the query we
+    # just ran instead of paying for a second scan; types are left blank (an empty
+    # result has no values to coerce).
     if not result["meta"]:
         synthesized_meta: list[Column] = []
         for index, selected in enumerate(clickhouse_query.get_selected_columns()):
-            # The result column name is the expression's SQL alias: that is what
-            # the formatter emits as ``... AS <alias>`` and what ClickHouse echoes
-            # back in the column header (i.e. exactly what the native driver
-            # reports, which this synthesis must match). SelectedExpression.name is
-            # Snuba's logical name -- it usually equals the alias but can differ
-            # (e.g. MQL rollup: name ``time`` vs alias ``events.time``), so it is
-            # only a fallback. If neither is set, a bare column is echoed by its
-            # own name (``SELECT project_id`` -> column ``project_id``), so use
-            # that. Finally fall back to the same ``_invalid_alias_{index}``
-            # placeholder Query.get_columns() uses, so a column is never dropped
-            # and meta stays aligned with the result.
+            # ClickHouse names the column by its SQL alias (matching the native
+            # driver), so prefer that; fall back to the logical name (can differ,
+            # e.g. MQL ``time`` vs ``events.time``), then a bare column's own name,
+            # then the ``_invalid_alias_{index}`` placeholder Query.get_columns() uses.
             name = (
                 selected.expression.alias
                 or selected.name

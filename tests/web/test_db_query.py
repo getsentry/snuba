@@ -246,12 +246,9 @@ def _build_test_query(
 
 
 def test_empty_result_meta_synthesized_from_query() -> None:
-    # The clickhouse-connect (HTTP) reader returns no column metadata for a
-    # zero-row result (ClickHouse emits a zero-byte Native body), leaving
-    # result["meta"] empty. execute_query synthesizes the columns from the query
-    # itself -- avoiding a second scan -- so callers that validate the returned
-    # columns (e.g. Sentry, which otherwise fails with "got set()") still see
-    # them. The native driver reports columns directly, so this is a no-op there.
+    # The connect (HTTP) reader returns empty meta for a zero-row result; execute_query
+    # synthesizes the columns from the query (no second scan) so callers that validate
+    # columns (Sentry, else "got set()") still see them. No-op on the native driver.
     from snuba.reader import Reader, Result
 
     query, _storage, _attribution_info = _build_test_query("count(distinct(project_id))")
@@ -283,11 +280,8 @@ def test_empty_result_meta_synthesized_from_query() -> None:
 
 
 def test_empty_result_meta_falls_back_to_expression_alias() -> None:
-    # SelectedExpression.name is nullable, but the actual result column name is
-    # the expression's alias (what the formatter emits and ClickHouse echoes
-    # back). When name is None, synthesis must fall back to the alias rather than
-    # dropping the column -- otherwise meta would be missing columns and
-    # downstream column-count/name validation would fail.
+    # SelectedExpression.name is nullable; the result column name is the expression's
+    # alias. When name is None, synthesis falls back to the alias, not dropping the column.
     from snuba.query import SelectedExpression
     from snuba.query.expressions import Column as ColumnExpr
     from snuba.reader import Reader, Result
@@ -329,9 +323,8 @@ def test_empty_result_meta_falls_back_to_expression_alias() -> None:
 
 
 def test_empty_result_meta_uses_column_name_for_bare_column() -> None:
-    # A bare column with neither a SelectedExpression.name nor an alias is echoed
-    # by ClickHouse under its own column name (SELECT project_id -> "project_id"),
-    # so synthesis uses the column name rather than a placeholder.
+    # A bare column with no name/alias is echoed under its own column name
+    # (SELECT project_id -> "project_id"), so synthesis uses that, not a placeholder.
     from snuba.query import SelectedExpression
     from snuba.query.expressions import Column as ColumnExpr
     from snuba.reader import Reader, Result
@@ -367,9 +360,8 @@ def test_empty_result_meta_uses_column_name_for_bare_column() -> None:
 
 
 def test_empty_result_meta_placeholder_for_unnamed_non_column() -> None:
-    # A non-column expression with no name and no alias has nothing to derive a
-    # name from, so synthesis must still emit a column (never silently drop one)
-    # using the same `_invalid_alias_{index}` placeholder Query.get_columns() uses.
+    # A non-column expression with no name/alias still emits a column (never dropped),
+    # using the `_invalid_alias_{index}` placeholder Query.get_columns() uses.
     from snuba.query import SelectedExpression
     from snuba.query.expressions import FunctionCall
     from snuba.reader import Reader, Result
@@ -400,10 +392,8 @@ def test_empty_result_meta_placeholder_for_unnamed_non_column() -> None:
 
 
 def test_empty_result_meta_prefers_alias_over_name() -> None:
-    # ClickHouse echoes the formatted SQL alias as the result column name, not
-    # SelectedExpression.name. When they differ (e.g. MQL rollup: name "time" vs
-    # alias "events.time"), synthesis must use the alias so the meta matches the
-    # actual result columns and passes downstream column validation.
+    # ClickHouse names the column by the SQL alias, not SelectedExpression.name. When
+    # they differ (MQL: name "time" vs alias "events.time"), synthesis uses the alias.
     from snuba.query import SelectedExpression
     from snuba.query.expressions import Column as ColumnExpr
     from snuba.reader import Reader, Result
