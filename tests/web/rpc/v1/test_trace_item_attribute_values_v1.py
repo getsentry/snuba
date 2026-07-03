@@ -119,21 +119,6 @@ def setup_teardown(eap: None, redis_db: None) -> Generator[list[bytes]]:
                 "sentry.transaction": AnyValue(string_value="*foo"),
             },
         ),
-        # Distinct version-like values (one occurrence each) used to exercise
-        # natural vs lexicographic ordering. Lexicographically "1.2.10" < "1.2.2"
-        # < "1.2.9"; naturally "1.2.2" < "1.2.9" < "1.2.10".
-        gen_item_message(
-            start_timestamp=start_timestamp,
-            attributes={"natural_ver": AnyValue(string_value="1.2.9")},
-        ),
-        gen_item_message(
-            start_timestamp=start_timestamp,
-            attributes={"natural_ver": AnyValue(string_value="1.2.10")},
-        ),
-        gen_item_message(
-            start_timestamp=start_timestamp,
-            attributes={"natural_ver": AnyValue(string_value="1.2.2")},
-        ),
     ]
     write_raw_unprocessed_events(items_storage, messages)
     yield messages
@@ -163,8 +148,26 @@ class TestTraceItemAttributes(BaseApiTest):
         assert response.values == ["derpderp", "blah", "durp", "herp", "herpderp"]
         assert response.counts == [2, 1, 1, 1, 1]
 
+    def _write_version_values(self) -> None:
+        # Distinct version-like values (one occurrence each). Lexicographically
+        # "1.2.10" < "1.2.2" < "1.2.9"; naturally "1.2.2" < "1.2.9" < "1.2.10".
+        # Written per-test (not in the shared fixture) so the extra items don't
+        # perturb the count-based assertions in other tests.
+        items_storage = get_writable_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,
+            [
+                gen_item_message(
+                    start_timestamp=BASE_TIME,
+                    attributes={"natural_ver": AnyValue(string_value=v)},
+                )
+                for v in ("1.2.9", "1.2.10", "1.2.2")
+            ],
+        )
+
     def test_natural_sort(self, setup_teardown: Any) -> None:
         # SORT_NATURAL orders embedded digit runs numerically.
+        self._write_version_values()
         message = TraceItemAttributeValuesRequest(
             meta=COMMON_META,
             limit=10,
@@ -180,6 +183,7 @@ class TestTraceItemAttributes(BaseApiTest):
     def test_default_sort_is_lexicographic(self, setup_teardown: Any) -> None:
         # Unset sort keeps the historical lexicographic ordering, where "1.2.10"
         # sorts before "1.2.2" and "1.2.9".
+        self._write_version_values()
         message = TraceItemAttributeValuesRequest(
             meta=COMMON_META,
             limit=10,
