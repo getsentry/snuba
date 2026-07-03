@@ -220,8 +220,7 @@ class FlexibleTimeWindowPageWithFilters:
                         # semver key and the page boundary matches the ORDER BY. Mirror
                         # the resolver's guard: only string columns get the semver key.
                         is_natural = (
-                            order_by_clause.sort
-                            == TraceItemTableRequest.OrderBy.SORT_NATURAL
+                            order_by_clause.sort == TraceItemTableRequest.OrderBy.SORT_NATURAL
                             and selected_key is not None
                             and selected_key.type == AttributeKey.TYPE_STRING
                         )
