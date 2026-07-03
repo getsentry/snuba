@@ -30,6 +30,7 @@ from snuba.web.rpc.common.common import (
     add_existence_check_to_subscriptable_references,
     attribute_key_to_expression,
     base_conditions_and,
+    natural_sort_key,
     treeify_or_and_conditions,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -136,6 +137,17 @@ def _build_query(
     )
     treeify_or_and_conditions(inner_query)
     add_existence_check_to_subscriptable_references(inner_query)
+    # The value column normally orders lexicographically. When the caller opts
+    # into SORT_NATURAL (sentry-protos#334), order it by a natural-sort key so
+    # embedded digit runs compare numerically (e.g. "1.2.9" before "1.2.10").
+    # count() stays the primary ordering so the most common values still come
+    # first; the natural key only changes the tiebreak among equally frequent
+    # values. An unset/SORT_DEFAULT sort keeps the historical lexicographic order.
+    if request.order_by.sort == TraceItemAttributeValuesRequest.OrderBy.SORT_NATURAL:
+        value_order_expression: Expression = natural_sort_key(column("attr_value"))
+    else:
+        value_order_expression = column("attr_value")
+
     res = CompositeQuery(
         from_clause=inner_query,
         selected_columns=[
@@ -154,7 +166,7 @@ def _build_query(
         ],
         order_by=[
             OrderBy(direction=OrderByDirection.DESC, expression=column("count()")),
-            OrderBy(direction=OrderByDirection.ASC, expression=column("attr_value")),
+            OrderBy(direction=OrderByDirection.ASC, expression=value_order_expression),
         ],
         groupby=[column("attr_value")],
         limit=request.limit,

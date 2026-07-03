@@ -119,6 +119,21 @@ def setup_teardown(eap: None, redis_db: None) -> Generator[list[bytes]]:
                 "sentry.transaction": AnyValue(string_value="*foo"),
             },
         ),
+        # Distinct version-like values (one occurrence each) used to exercise
+        # natural vs lexicographic ordering. Lexicographically "1.2.10" < "1.2.2"
+        # < "1.2.9"; naturally "1.2.2" < "1.2.9" < "1.2.10".
+        gen_item_message(
+            start_timestamp=start_timestamp,
+            attributes={"natural_ver": AnyValue(string_value="1.2.9")},
+        ),
+        gen_item_message(
+            start_timestamp=start_timestamp,
+            attributes={"natural_ver": AnyValue(string_value="1.2.10")},
+        ),
+        gen_item_message(
+            start_timestamp=start_timestamp,
+            attributes={"natural_ver": AnyValue(string_value="1.2.2")},
+        ),
     ]
     write_raw_unprocessed_events(items_storage, messages)
     yield messages
@@ -147,6 +162,31 @@ class TestTraceItemAttributes(BaseApiTest):
         response = AttributeValuesRequest().execute(message)
         assert response.values == ["derpderp", "blah", "durp", "herp", "herpderp"]
         assert response.counts == [2, 1, 1, 1, 1]
+
+    def test_natural_sort(self, setup_teardown: Any) -> None:
+        # SORT_NATURAL orders embedded digit runs numerically.
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=10,
+            key=AttributeKey(name="natural_ver", type=AttributeKey.TYPE_STRING),
+            order_by=TraceItemAttributeValuesRequest.OrderBy(
+                column=TraceItemAttributeValuesRequest.OrderBy.COLUMN_VALUE,
+                sort=TraceItemAttributeValuesRequest.OrderBy.SORT_NATURAL,
+            ),
+        )
+        response = AttributeValuesRequest().execute(message)
+        assert response.values == ["1.2.2", "1.2.9", "1.2.10"]
+
+    def test_default_sort_is_lexicographic(self, setup_teardown: Any) -> None:
+        # Unset sort keeps the historical lexicographic ordering, where "1.2.10"
+        # sorts before "1.2.2" and "1.2.9".
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=10,
+            key=AttributeKey(name="natural_ver", type=AttributeKey.TYPE_STRING),
+        )
+        response = AttributeValuesRequest().execute(message)
+        assert response.values == ["1.2.10", "1.2.2", "1.2.9"]
 
     def test_with_value_substring_match(self, setup_teardown: Any) -> None:
         message = TraceItemAttributeValuesRequest(
