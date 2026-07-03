@@ -192,6 +192,41 @@ class TestTraceItemAttributes(BaseApiTest):
         response = AttributeValuesRequest().execute(message)
         assert response.values == ["1.2.10", "1.2.2", "1.2.9"]
 
+    def test_release_sort_is_semver_aware(self, setup_teardown: Any) -> None:
+        # sentry.release is a release attribute, so SORT_NATURAL uses the
+        # semver-aware key: prerelease sorts before its stable release and the
+        # "pkg@" prefix is stripped. (A general natural sort would instead put
+        # "1.2.3" before "1.2.3-beta.1" and treat "my-pkg@2.0.0" as an "m" string.)
+        items_storage = get_writable_storage(StorageKey("eap_items"))
+        releases = ["1.2.3-beta.1", "1.2.3", "1.2.9", "1.2.10", "my-pkg@2.0.0"]
+        write_raw_unprocessed_events(
+            items_storage,
+            [
+                gen_item_message(
+                    start_timestamp=BASE_TIME,
+                    attributes={"sentry.release": AnyValue(string_value=r)},
+                )
+                for r in releases
+            ],
+        )
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=10,
+            key=AttributeKey(name="sentry.release", type=AttributeKey.TYPE_STRING),
+            order_by=TraceItemAttributeValuesRequest.OrderBy(
+                column=TraceItemAttributeValuesRequest.OrderBy.COLUMN_VALUE,
+                sort=TraceItemAttributeValuesRequest.OrderBy.SORT_NATURAL,
+            ),
+        )
+        response = AttributeValuesRequest().execute(message)
+        assert response.values == [
+            "1.2.3-beta.1",
+            "1.2.3",
+            "1.2.9",
+            "1.2.10",
+            "my-pkg@2.0.0",
+        ]
+
     def test_with_value_substring_match(self, setup_teardown: Any) -> None:
         message = TraceItemAttributeValuesRequest(
             meta=COMMON_META,

@@ -27,10 +27,12 @@ from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
+    SEMVER_SORT_ATTRIBUTES,
     add_existence_check_to_subscriptable_references,
     attribute_key_to_expression,
     base_conditions_and,
     natural_sort_key,
+    semver_sort_key,
     treeify_or_and_conditions,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -138,13 +140,18 @@ def _build_query(
     treeify_or_and_conditions(inner_query)
     add_existence_check_to_subscriptable_references(inner_query)
     # The value column normally orders lexicographically. When the caller opts
-    # into SORT_NATURAL (sentry-protos#334), order it by a natural-sort key so
-    # embedded digit runs compare numerically (e.g. "1.2.9" before "1.2.10").
-    # count() stays the primary ordering so the most common values still come
-    # first; the natural key only changes the tiebreak among equally frequent
-    # values. An unset/SORT_DEFAULT sort keeps the historical lexicographic order.
+    # into SORT_NATURAL (sentry-protos#334), order it so embedded digit runs
+    # compare numerically (e.g. "1.2.9" before "1.2.10"). Release attributes use
+    # the release-aware semver key (prerelease before stable, "pkg@" prefix
+    # stripped); every other attribute uses the general natural-sort key. count()
+    # stays the primary ordering so the most common values still come first; the
+    # sort key only changes the tiebreak among equally frequent values. An
+    # unset/SORT_DEFAULT sort keeps the historical lexicographic order.
     if request.order_by.sort == TraceItemAttributeValuesRequest.OrderBy.SORT_NATURAL:
-        value_order_expression: Expression = natural_sort_key(column("attr_value"))
+        if request.key.name in SEMVER_SORT_ATTRIBUTES:
+            value_order_expression: Expression = semver_sort_key(column("attr_value"))
+        else:
+            value_order_expression = natural_sort_key(column("attr_value"))
     else:
         value_order_expression = column("attr_value")
 
