@@ -481,7 +481,7 @@ def test_sudo_mode_skips_experimental_analyzer(sql_query: str, sudo_mode: bool) 
     """
     from unittest.mock import patch
 
-    with patch("snuba.admin.clickhouse.system_queries._run_sql_query_on_host") as mock_run:
+    with patch("snuba.admin.clickhouse.system_queries._run_explain_on_host") as mock_run:
         # Mock the response to simulate successful validation
         mock_result = type("MockResult", (), {"results": []})()
         mock_run.return_value = mock_result
@@ -502,7 +502,7 @@ def test_sudo_mode_skips_experimental_analyzer(sql_query: str, sudo_mode: bool) 
         assert len(calls) > 0, "Expected EXPLAIN QUERY TREE to be called"
 
         # Get the explain query from the call - it's the 4th positional argument (index 3)
-        # call signature: _run_sql_query_on_host(host, port, storage, sql, sudo, clusterless)
+        # call signature: _run_explain_on_host(host, port, storage, sql, clusterless)
         explain_query = calls[0][0][3]  # Fourth argument is the SQL query
 
         if sudo_mode:

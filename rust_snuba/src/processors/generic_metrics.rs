@@ -1,6 +1,7 @@
 use adler::Adler32;
-use anyhow::{anyhow, Context, Error};
+use anyhow::{anyhow, Context};
 use chrono::DateTime;
+use sentry_options::options;
 use serde::{
     de::value::{MapAccessDeserializer, SeqAccessDeserializer},
     Deserialize, Deserializer, Serialize,
@@ -8,7 +9,6 @@ use serde::{
 use std::{collections::BTreeMap, marker::PhantomData, vec};
 
 use crate::{
-    runtime_config::get_str_config,
     types::{CogsData, InsertBatch, RowData},
     KafkaMessageMetadata, ProcessorConfig,
 };
@@ -339,12 +339,20 @@ impl Parse for CountersRawRow {
     }
 }
 
-fn should_use_killswitch(config: Result<Option<String>, Error>, use_case: &MessageUseCase) -> bool {
-    if let Some(killswitch) = config.ok().flatten() {
-        return killswitch.contains(use_case.use_case_id.as_str());
+#[inline]
+fn should_use_killswitch(
+    killswitch_config: Option<String>,
+    payload_str: &str,
+) -> anyhow::Result<bool> {
+    if let Some(config) = killswitch_config {
+        let use_case = serde_json::from_str::<MessageUseCase>(payload_str)?;
+        if config.contains(&use_case.use_case_id) {
+            counter!("generic_metrics.messages.killswitched_use_case", 1, "use_case_id" => &use_case.use_case_id);
+            return Ok(true);
+        }
     }
 
-    false
+    Ok(false)
 }
 
 fn process_message<T>(
@@ -355,15 +363,17 @@ where
     T: Parse + Serialize,
 {
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let killswitch_config = get_str_config("generic_metrics_use_case_killswitch");
-    let use_case: MessageUseCase = serde_json::from_slice(payload_bytes)?;
+    let payload_str = str::from_utf8(payload_bytes)?;
 
-    if should_use_killswitch(killswitch_config, &use_case) {
-        counter!("generic_metrics.messages.killswitched_use_case", 1, "use_case_id" => use_case.use_case_id.as_str());
+    let killswitch_config = options("snuba")
+        .ok()
+        .and_then(|o| o.get("generic_metrics_use_case_killswitch").ok())
+        .and_then(|v| v.as_str().map(String::from));
+    if should_use_killswitch(killswitch_config, payload_str)? {
         return Ok(InsertBatch::skip());
     }
 
-    let msg: FromGenericMetricsMessage = serde_json::from_slice(payload_bytes)?;
+    let msg: FromGenericMetricsMessage = serde_json::from_str(payload_str)?;
     let use_case_id = msg.use_case_id.clone();
     let sentry_received_timestamp =
         DateTime::from_timestamp(msg.sentry_received_timestamp as i64, 0);
@@ -1358,62 +1368,50 @@ mod tests {
 
     #[test]
     fn test_shouldnt_killswitch() {
-        let fake_config = Ok(Some("[custom]".to_string()));
-        let use_case = MessageUseCase {
-            use_case_id: "transactions".to_string(),
-        };
+        let fake_config = Some("[custom]".to_string());
+        let payload = r#"{"use_case_id":"transactions"}"#;
 
-        assert!(!should_use_killswitch(fake_config, &use_case));
+        assert!(!should_use_killswitch(fake_config, payload).unwrap());
     }
 
     #[test]
     fn test_should_killswitch() {
-        let use_case = MessageUseCase {
-            use_case_id: "transactions".to_string(),
-        };
-        let fake_config = Ok(Some("[transactions]".to_string()));
+        let payload = r#"{"use_case_id":"transactions"}"#;
+        let fake_config = Some("[transactions]".to_string());
 
-        assert!(should_use_killswitch(fake_config, &use_case));
+        assert!(should_use_killswitch(fake_config, payload).unwrap());
     }
 
     #[test]
     fn test_should_killswitch_again() {
-        let use_case = MessageUseCase {
-            use_case_id: "transactions".to_string(),
-        };
-        let fake_config = Ok(Some("[transactions, custom]".to_string()));
+        let payload = r#"{"use_case_id":"transactions"}"#;
+        let fake_config = Some("[transactions, custom]".to_string());
 
-        assert!(should_use_killswitch(fake_config, &use_case));
+        assert!(should_use_killswitch(fake_config, payload).unwrap());
     }
 
     #[test]
     fn test_shouldnt_killswitch_again() {
-        let use_case = MessageUseCase {
-            use_case_id: "transactions".to_string(),
-        };
-        let fake_config = Ok(Some("[]".to_string()));
+        let payload = r#"{"use_case_id":"transactions"}"#;
+        let fake_config = Some("[]".to_string());
 
-        assert!(!should_use_killswitch(fake_config, &use_case));
+        assert!(!should_use_killswitch(fake_config, payload).unwrap());
     }
 
     #[test]
     fn test_shouldnt_killswitch_empty() {
-        let use_case = MessageUseCase {
-            use_case_id: "transactions".to_string(),
-        };
-        let fake_config = Ok(Some("".to_string()));
+        let payload = r#"{"use_case_id":"transactions"}"#;
+        let fake_config = Some("".to_string());
 
-        assert!(!should_use_killswitch(fake_config, &use_case));
+        assert!(!should_use_killswitch(fake_config, payload).unwrap());
     }
 
     #[test]
     fn test_shouldnt_killswitch_no_config() {
-        let use_case = MessageUseCase {
-            use_case_id: "transactions".to_string(),
-        };
-        let fake_config = Ok(None);
+        let payload = r#"{"use_case_id":"transactions"}"#;
+        let fake_config: Option<String> = None;
 
-        assert!(!should_use_killswitch(fake_config, &use_case));
+        assert!(!should_use_killswitch(fake_config, payload).unwrap());
     }
 
     #[test]
