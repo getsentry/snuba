@@ -219,7 +219,11 @@ class TestTraceItemAttributes(BaseApiTest):
             ),
         )
         response = AttributeValuesRequest().execute(message)
-        assert response.values == [
+        # gen_item_message stamps a default sentry.release on every fixture item,
+        # so other release values may appear; assert only the relative order of
+        # the releases we wrote, which must follow semver ordering.
+        ordered = [v for v in response.values if v in set(releases)]
+        assert ordered == [
             "1.2.3-beta.1",
             "1.2.3",
             "1.2.9",
