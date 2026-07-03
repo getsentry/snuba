@@ -1322,8 +1322,10 @@ class TestSemverSortKey:
         numeric_key_expr, is_stable_expr, raw_str_expr = expr.parameters
         assert isinstance(numeric_key_expr, FunctionCall)
         assert numeric_key_expr.function_name == "arrayResize"
+        # Stability flag: match(version, '^[0-9]+(\\.[0-9]+)*$') — 1 for a plain
+        # dotted-numeric (stable) version, 0 for any prerelease form.
         assert isinstance(is_stable_expr, FunctionCall)
-        assert is_stable_expr.function_name == "equals"
+        assert is_stable_expr.function_name == "match"
         # Third element is the raw (non-null) string tiebreaker: ifNull(expr, '').
         assert isinstance(raw_str_expr, FunctionCall)
         assert raw_str_expr.function_name == "ifNull"
