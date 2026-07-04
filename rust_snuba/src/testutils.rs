@@ -27,7 +27,7 @@ pub fn initialize_python() {
         // strategies cannot be tested
         let signal = PyModule::import(py, "signal")?;
         let noop_fn = py
-            .eval_bound(
+            .eval(
                 &CString::new("lambda *a, **kw: None").unwrap(),
                 None,
                 None,
