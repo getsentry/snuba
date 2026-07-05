@@ -8,7 +8,6 @@ use sentry_arroyo::processing::strategies::{
     CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
 use sentry_arroyo::types::{Message, TopicOrPartition};
-use std::ffi::CString;
 use std::str;
 use std::sync::{Arc, Mutex};
 
@@ -28,8 +27,8 @@ pub fn initialize_python() {
         // strategies cannot be tested
         let signal = PyModule::import(py, "signal")?;
         let noop_fn = py
-            .eval(
-                &CString::new("lambda *a, **kw: None").unwrap(),
+            .eval_bound(
+                pyo3::ffi::c_str!("lambda *a, **kw: None"),
                 None,
                 None,
             )
