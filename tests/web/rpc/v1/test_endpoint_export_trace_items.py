@@ -91,6 +91,13 @@ def _assert_attributes_keys(trace_items: list[TraceItem]) -> None:
         assert actual_keys == expected_keys
 
 
+def _assert_order_by(sql: str) -> None:
+    assert (
+        "ORDER BY organization_id ASC, project_id ASC, item_type ASC, timestamp ASC, trace_id ASC, item_id ASC"
+        in sql
+    )
+
+
 @pytest.fixture(autouse=False)
 def setup_teardown(eap: None, redis_db: None) -> None:
     items_storage = get_writable_storage(StorageKey("eap_items"))
@@ -221,7 +228,24 @@ class TestExportTraceItems(BaseApiTest):
         assert len(response.trace_items) == 2
         assert all(i.attributes["color"].string_value == filter_color for i in response.trace_items)
 
-    def test_pagination_stable_through_filter(self, eap: Any) -> None:
+    def test_pagination_stable_through_filter(self, eap: Any, monkeypatch: Any) -> None:
+        # Capture the SQL of every page so we can also assert at the SQL level that
+        # keyset pagination stays anchored to the same total ordering as the ORDER BY.
+        captured: dict[str, Any] = {}
+
+        def _capture(
+            dataset: Any,
+            request: Any,
+            timer: Any,
+            robust: bool = False,
+            concurrent_queries_gauge: Any | None = None,
+        ) -> QueryResult:
+            qr = run_query(dataset, request, timer, robust, concurrent_queries_gauge)
+            captured["query_result"] = qr
+            return qr
+
+        monkeypatch.setattr("snuba.web.rpc.v1.endpoint_export_trace_items.run_query", _capture)
+
         total = 20
         limit = 5
 
@@ -274,6 +298,7 @@ class TestExportTraceItems(BaseApiTest):
                 assert all(
                     i.attributes["color"].string_value == "red" for i in response.trace_items
                 )
+                _assert_order_by(captured["query_result"].extra["sql"])
 
                 seen += [i.item_id for i in response.trace_items]
 
@@ -362,11 +387,7 @@ class TestExportTraceItems(BaseApiTest):
 
         EndpointExportTraceItems().execute(message)
 
-        qr = captured["query_result"]
-        assert (
-            "ORDER BY organization_id ASC, project_id ASC, item_type ASC, timestamp ASC, trace_id ASC, item_id ASC"
-            in qr.extra["sql"]
-        )
+        _assert_order_by(captured["query_result"].extra["sql"])
 
     def test_pagination_with_real_flex_window(
         self, eap: Any, redis_db: Any, monkeypatch: Any
