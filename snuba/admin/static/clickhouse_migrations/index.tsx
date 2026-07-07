@@ -112,7 +112,6 @@ function ClickhouseMigrations(props: { api: Client }) {
     props.api
       .runMigration(req as RunMigrationRequest)
       .then((res) => {
-        console.log(res);
         if (action == Action.Run && dry_run) {
           selectForwards(res.stdout)
         }
@@ -134,14 +133,12 @@ function ClickhouseMigrations(props: { api: Client }) {
   }
 
   function executeDryRun(action: Action) {
-    console.log("executing dry run !", migrationId, action);
     setHeader(()=> dry_run_header)
     executeRun(action, true, false)
     setShowAction(()=> true)
   }
 
   function executeRealRun(action: Action, force: boolean) {
-    console.log("executing real run !", migrationId, action, force);
     clearBtnState()
     setHeader(()=> real_run_header)
     executeRun(action, false, force, (stdout: string, err?: string) => {

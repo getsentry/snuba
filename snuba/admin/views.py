@@ -140,7 +140,6 @@ def set_logging_context() -> None:
 
 @application.before_request
 def authorize() -> None:
-    logger.debug("authorize.entered")
     if request.endpoint != "health":
         user = authorize_request()
         logger.info("authorize.finished", user=user)
