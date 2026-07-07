@@ -246,7 +246,7 @@ class TestExportTraceItems(BaseApiTest):
 
         monkeypatch.setattr("snuba.web.rpc.v1.endpoint_export_trace_items.run_query", _capture)
 
-        total = 20
+        total = 23
         limit = 5
 
         item_ids: dict[str, list[bytes]] = {"red": [], "blue": []}
