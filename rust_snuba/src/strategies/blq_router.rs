@@ -60,7 +60,7 @@ pub struct BLQRouter<Next, ProduceStrategy> {
     state: State,
     producer: ProduceStrategy,
     // The storage this consumer writes to. Used to look up the per-storage
-    // `consumer.blq_enabled` flag.
+    // `consumer.blq_enabled_by_storage` flag.
     storage_name: String,
 
     // We have to keep this around ourself bc strategies::produce::Produce didn't define their lifetimes well
@@ -78,7 +78,8 @@ where
     /// (`consumer.blq_stale_threshold_seconds`, `consumer.blq_static_friction_seconds`)
     /// so they can be tuned without a restart.
     ///
-    /// `storage_name` is used to look up the per-storage `consumer.blq_enabled` flag.
+    /// `storage_name` is used to look up the per-storage
+    /// `consumer.blq_enabled_by_storage` flag.
     pub fn new(
         next_step: Next,
         blq_producer_config: KafkaConfig,
@@ -104,13 +105,13 @@ where
     ProduceStrategy: ProcessingStrategy<KafkaPayload> + 'static,
 {
     /// Whether the backlog queue is enabled for this consumer's storage.
-    /// `consumer.blq_enabled` is a dict mapping storage name to a bool; storages
-    /// with no entry default to disabled. Read per-message so it can be toggled
-    /// without a restart.
+    /// `consumer.blq_enabled_by_storage` is a dict mapping storage name to a
+    /// bool; storages with no entry default to disabled. Read per-message so it
+    /// can be toggled without a restart.
     fn is_enabled(&self) -> bool {
         options("snuba")
             .ok()
-            .and_then(|o| o.get("consumer.blq_enabled").ok())
+            .and_then(|o| o.get("consumer.blq_enabled_by_storage").ok())
             .and_then(|v| v.get(self.storage_name.as_str()).and_then(|b| b.as_bool()))
             .unwrap_or(false)
     }
@@ -331,7 +332,7 @@ mod tests {
         let _guard = override_options(&[
             (
                 "snuba",
-                "consumer.blq_enabled",
+                "consumer.blq_enabled_by_storage",
                 json!({ "test_storage": true }),
             ),
             ("snuba", "consumer.blq_stale_threshold_seconds", json!(10)),
@@ -384,7 +385,7 @@ mod tests {
         let _guard = override_options(&[
             (
                 "snuba",
-                "consumer.blq_enabled",
+                "consumer.blq_enabled_by_storage",
                 json!({ "test_storage": true }),
             ),
             ("snuba", "consumer.blq_stale_threshold_seconds", json!(10)),
@@ -449,7 +450,7 @@ mod tests {
         let _guard = override_options(&[
             (
                 "snuba",
-                "consumer.blq_enabled",
+                "consumer.blq_enabled_by_storage",
                 json!({ "test_storage": false, "other_storage": true }),
             ),
             ("snuba", "consumer.blq_stale_threshold_seconds", json!(10)),

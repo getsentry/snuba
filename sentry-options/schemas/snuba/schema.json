@@ -12,7 +12,7 @@
       "default": false,
       "description": "true to emit a tracing log each time a duplicate trace item is detected in the accepted-outcomes aggregator"
     },
-    "consumer.blq_enabled": {
+    "consumer.blq_enabled_by_storage": {
       "type": "object",
       "additionalProperties": { "type": "boolean" },
       "default": {},
