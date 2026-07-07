@@ -25,6 +25,7 @@ from snuba.web.rpc.v1.endpoint_export_trace_items import (
 )
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
+from tests.web.rpc.v1.routing_strategies.common import override_component_config
 from tests.web.rpc.v1.test_utils import _DEFAULT_ATTRIBUTES, BASE_TIME, gen_item_message
 
 _SPAN_COUNT = 120
@@ -255,7 +256,6 @@ class TestExportTraceItems(BaseApiTest):
                 for i in range(total)
             ],
         )
-        OutcomesFlexTimeRoutingStrategy().set_config_value("max_items_to_query", max_items)
 
         # outcomes_hourly buckets by hour, so second-level splits are invisible to routing.
         # Mock the count directly so each sub-range sees the logically correct volume.
@@ -325,22 +325,26 @@ class TestExportTraceItems(BaseApiTest):
         )
         records: list[Any] = []
 
-        while True:
-            response = EndpointExportTraceItems().execute(message)
-            token = response.page_token
-            filter_count = len(token.filter_offset.and_filter.filters)
-            records.append(
-                PageRecord(
-                    window_start=sql_queried_windows[-1][0],
-                    window_end=sql_queried_windows[-1][1],
-                    items_count=len(response.trace_items),
-                    has_cursor=filter_count == len(FlexWindow._fields) + len(KeysetCursor._fields),
-                    end_pagination=token.end_pagination,
+        with override_component_config(
+            OutcomesFlexTimeRoutingStrategy(), "max_items_to_query", max_items
+        ):
+            while True:
+                response = EndpointExportTraceItems().execute(message)
+                token = response.page_token
+                filter_count = len(token.filter_offset.and_filter.filters)
+                records.append(
+                    PageRecord(
+                        window_start=sql_queried_windows[-1][0],
+                        window_end=sql_queried_windows[-1][1],
+                        items_count=len(response.trace_items),
+                        has_cursor=filter_count
+                        == len(FlexWindow._fields) + len(KeysetCursor._fields),
+                        end_pagination=token.end_pagination,
+                    )
                 )
-            )
-            if token.end_pagination:
-                break
-            message.page_token.CopyFrom(token)
+                if token.end_pagination:
+                    break
+                message.page_token.CopyFrom(token)
 
         routed_pages = [r for r in records if r.window_start == routed_start_sec]
         earlier_pages = [r for r in records if r.window_start == start_sec]
