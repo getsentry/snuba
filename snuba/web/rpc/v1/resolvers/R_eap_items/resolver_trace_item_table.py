@@ -39,13 +39,12 @@ from snuba.protos.common import (
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond, if_cond, in_cond, literal, literals_array, or_cond
+from snuba.query.dsl import and_cond, if_cond, literal, literals_array, or_cond
 from snuba.query.dsl import column as snuba_column
 from snuba.query.expressions import (
     Column as ColumnExpr,
 )
 from snuba.query.expressions import (
-    DangerousRawSQL,
     Expression,
     FunctionCall,
     SubscriptableReference,
@@ -90,6 +89,7 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
 )
 from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
     get_trace_ids_sql_for_cross_item_query,
+    trace_id_in_subquery_condition,
 )
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 
@@ -649,9 +649,7 @@ def build_query(
         trace_ids_sql, _ = get_trace_ids_sql_for_cross_item_query(
             request, request.meta, list(request.trace_filters), sampling_tier, timer
         )
-        additional_conditions.append(
-            in_cond(snuba_column("trace_id"), DangerousRawSQL(None, f"({trace_ids_sql})"))
-        )
+        additional_conditions.append(trace_id_in_subquery_condition(trace_ids_sql))
     if time_window is not None:
         additional_conditions.append(
             timestamp_in_range_condition(

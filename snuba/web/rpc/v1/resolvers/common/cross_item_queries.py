@@ -18,6 +18,7 @@ from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column, or_cond
+from snuba.query.expressions import DangerousRawSQL
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -36,6 +37,23 @@ from snuba.web.rpc.common.common import (
 # 50 million trace ids * 16 bytes per id = a limit of 1gigabyte memory usage per cross item query
 # most queries do not hit this number this is just an upper bound
 _TRACE_LIMIT = 50_000_000
+
+
+def trace_id_in_subquery_condition(trace_ids_sql: str) -> DangerousRawSQL:
+    """Build a ``trace_id IN (<subquery>)`` predicate as raw SQL.
+
+    The ``trace_id`` column must stay *bare* for the ``bf_trace_id`` bloom-filter skip
+    index to prune granules. ``UUIDColumnProcessor`` only keeps ``trace_id`` bare for
+    ``=``/``IN`` comparisons against literal values; it does not recognize an
+    ``IN (subquery)`` term, so it would otherwise wrap the column in
+    ``replaceAll(toString(trace_id), '-', '')``, defeating the index. Emitting the whole
+    predicate as ``DangerousRawSQL`` bypasses that rewrite so the column reads bare.
+
+    The subquery built by :func:`get_trace_ids_sql_for_cross_item_query` projects
+    ``trace_id`` as a real ``UUID`` (it is not wrapped in the dash-stripping expression),
+    so the ``IN`` set matches the column type.
+    """
+    return DangerousRawSQL(None, f"trace_id IN ({trace_ids_sql})")
 
 
 def convert_trace_filters_to_trace_item_filter_with_type(
@@ -129,7 +147,12 @@ def get_trace_ids_sql_for_cross_item_query(
         selected_columns=[
             SelectedExpression(
                 name="trace_id",
-                expression=column("trace_id"),
+                # Project (and group by) trace_id bare via DangerousRawSQL so it is not
+                # rewritten to replaceAll(toString(trace_id), '-', '') by
+                # UUIDColumnProcessor. This keeps the subquery output a real UUID, which
+                # is what the outer `trace_id IN (...)` predicate compares against (see
+                # trace_id_in_subquery_condition).
+                expression=DangerousRawSQL(None, "trace_id"),
             )
         ],
         condition=base_conditions_and(
@@ -139,7 +162,7 @@ def get_trace_ids_sql_for_cross_item_query(
         groupby=[
             column("organization_id"),
             column("project_id"),
-            column("trace_id"),
+            DangerousRawSQL(None, "trace_id"),
         ],
         having=trace_item_filters_and_expression,
         order_by=[
