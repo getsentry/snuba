@@ -13,9 +13,10 @@
       "description": "true to emit a tracing log each time a duplicate trace item is detected in the accepted-outcomes aggregator"
     },
     "consumer.blq_enabled": {
-      "type": "boolean",
-      "default": false,
-      "description": "enable backlog queue in snuba consumers"
+      "type": "object",
+      "additionalProperties": { "type": "boolean" },
+      "default": {},
+      "description": "Dict mapping storage name to a flag enabling the backlog queue for that storage's consumer. Storages with no entry default to disabled."
     },
     "consumer.blq_stale_threshold_seconds": {
       "type": "integer",

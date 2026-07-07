@@ -59,6 +59,9 @@ pub struct BLQRouter<Next, ProduceStrategy> {
     next_step: Next,
     state: State,
     producer: ProduceStrategy,
+    // The storage this consumer writes to. Used to look up the per-storage
+    // `consumer.blq_enabled` flag.
+    storage_name: String,
 
     // We have to keep this around ourself bc strategies::produce::Produce didn't define their lifetimes well
     _concurrency: Option<ConcurrencyConfig>,
@@ -74,7 +77,14 @@ where
     /// The stale threshold and static friction are read at runtime from sentry-options
     /// (`consumer.blq_stale_threshold_seconds`, `consumer.blq_static_friction_seconds`)
     /// so they can be tuned without a restart.
-    pub fn new(next_step: Next, blq_producer_config: KafkaConfig, blq_topic: Topic) -> Self {
+    ///
+    /// `storage_name` is used to look up the per-storage `consumer.blq_enabled` flag.
+    pub fn new(
+        next_step: Next,
+        blq_producer_config: KafkaConfig,
+        blq_topic: Topic,
+        storage_name: String,
+    ) -> Self {
         let concurrency = ConcurrencyConfig::new(10);
         let blq_producer = Produce::new(
             CommitOffsets::new(Duration::from_millis(250)),
@@ -82,7 +92,7 @@ where
             &concurrency,
             TopicOrPartition::Topic(blq_topic),
         );
-        let mut router = Self::new_with_strategy(next_step, blq_producer);
+        let mut router = Self::new_with_strategy(next_step, blq_producer, storage_name);
         router._concurrency = Some(concurrency);
         router
     }
@@ -93,11 +103,15 @@ where
     Next: ProcessingStrategy<KafkaPayload> + 'static,
     ProduceStrategy: ProcessingStrategy<KafkaPayload> + 'static,
 {
+    /// Whether the backlog queue is enabled for this consumer's storage.
+    /// `consumer.blq_enabled` is a dict mapping storage name to a bool; storages
+    /// with no entry default to disabled. Read per-message so it can be toggled
+    /// without a restart.
     fn is_enabled(&self) -> bool {
         options("snuba")
             .ok()
             .and_then(|o| o.get("consumer.blq_enabled").ok())
-            .and_then(|v| v.as_bool())
+            .and_then(|v| v.get(self.storage_name.as_str()).and_then(|b| b.as_bool()))
             .unwrap_or(false)
     }
 
@@ -130,11 +144,16 @@ where
         }
     }
 
-    fn new_with_strategy(next_step: Next, blq_producer: ProduceStrategy) -> Self {
+    fn new_with_strategy(
+        next_step: Next,
+        blq_producer: ProduceStrategy,
+        storage_name: String,
+    ) -> Self {
         Self {
             next_step,
             state: State::Idle,
             producer: blq_producer,
+            storage_name,
             _concurrency: None,
         }
     }
@@ -310,12 +329,20 @@ mod tests {
          */
         init_config();
         let _guard = override_options(&[
-            ("snuba", "consumer.blq_enabled", json!(true)),
+            (
+                "snuba",
+                "consumer.blq_enabled",
+                json!({ "test_storage": true }),
+            ),
             ("snuba", "consumer.blq_stale_threshold_seconds", json!(10)),
             ("snuba", "consumer.blq_static_friction_seconds", json!(0)),
         ])
         .unwrap();
-        let mut router = BLQRouter::new_with_strategy(MockStrategy::new(), MockStrategy::new());
+        let mut router = BLQRouter::new_with_strategy(
+            MockStrategy::new(),
+            MockStrategy::new(),
+            "test_storage".to_string(),
+        );
         // consuming messages as normal
         for _ in 0..10 {
             router.submit(make_message(Utc::now())).unwrap();
@@ -355,12 +382,20 @@ mod tests {
          */
         init_config();
         let _guard = override_options(&[
-            ("snuba", "consumer.blq_enabled", json!(true)),
+            (
+                "snuba",
+                "consumer.blq_enabled",
+                json!({ "test_storage": true }),
+            ),
             ("snuba", "consumer.blq_stale_threshold_seconds", json!(10)),
             ("snuba", "consumer.blq_static_friction_seconds", json!(0)),
         ])
         .unwrap();
-        let mut router = BLQRouter::new_with_strategy(MockStrategy::new(), MockStrategy::new());
+        let mut router = BLQRouter::new_with_strategy(
+            MockStrategy::new(),
+            MockStrategy::new(),
+            "test_storage".to_string(),
+        );
         // backlog of 10 stale messages
         for _ in 0..10 {
             router
@@ -386,7 +421,11 @@ mod tests {
         // When the feature flag is not set, stale messages should pass through
         // to next_step instead of being routed to BLQ
         init_config();
-        let mut router = BLQRouter::new_with_strategy(MockStrategy::new(), MockStrategy::new());
+        let mut router = BLQRouter::new_with_strategy(
+            MockStrategy::new(),
+            MockStrategy::new(),
+            "test_storage".to_string(),
+        );
 
         for _ in 0..5 {
             router
@@ -403,15 +442,25 @@ mod tests {
 
     #[test]
     fn test_passthrough_when_flag_disabled() {
-        // When the feature flag is explicitly false, stale messages should pass through
+        // When this storage's flag is false (even though a different storage is
+        // enabled), stale messages should pass through. Validates the flag is
+        // scoped per-storage.
         init_config();
         let _guard = override_options(&[
-            ("snuba", "consumer.blq_enabled", json!(false)),
+            (
+                "snuba",
+                "consumer.blq_enabled",
+                json!({ "test_storage": false, "other_storage": true }),
+            ),
             ("snuba", "consumer.blq_stale_threshold_seconds", json!(10)),
             ("snuba", "consumer.blq_static_friction_seconds", json!(0)),
         ])
         .unwrap();
-        let mut router = BLQRouter::new_with_strategy(MockStrategy::new(), MockStrategy::new());
+        let mut router = BLQRouter::new_with_strategy(
+            MockStrategy::new(),
+            MockStrategy::new(),
+            "test_storage".to_string(),
+        );
 
         for _ in 0..5 {
             router

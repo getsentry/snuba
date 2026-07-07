@@ -304,6 +304,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     next_step,
                     blq_producer_config.clone(),
                     blq_topic,
+                    self.storage_config.name.clone(),
                 ))
             } else {
                 tracing::info!("Not using a backlog-queue",);
