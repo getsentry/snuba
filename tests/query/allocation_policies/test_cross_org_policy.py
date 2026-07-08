@@ -4,7 +4,10 @@ from snuba.configs.configuration import InvalidConfig
 from snuba.query.allocation_policies import QueryResultOrError
 from snuba.query.allocation_policies.cross_org import CrossOrgQueryAllocationPolicy
 from snuba.web import QueryResult
-from tests.configs.component_config import override_component_config
+from tests.configs.component_config import (
+    override_component_config,
+    override_component_configs,
+)
 
 _RESULT_SUCCESS = QueryResultOrError(
     QueryResult(
@@ -123,11 +126,12 @@ class TestCrossOrgQueryAllocationPolicy:
                 query_id="1",
                 result_or_error=_RESULT_SUCCESS,
             )
-        with override_component_config(
-            policy,
-            "referrer_concurrent_override",
-            0,
-            {"referrer": "statistical_detectors"},
+        # Both overrides active together (as the original accumulated Redis state
+        # was): the concurrent override of 0 forces rejection, and max_threads
+        # reports 0 because the query can't run.
+        with override_component_configs(
+            (policy, "referrer_max_threads_override", 2, {"referrer": "statistical_detectors"}),
+            (policy, "referrer_concurrent_override", 0, {"referrer": "statistical_detectors"}),
         ):
             quota_allowance = policy.get_quota_allowance(
                 tenant_ids={"referrer": "statistical_detectors"}, query_id="2"
