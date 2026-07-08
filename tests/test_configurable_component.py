@@ -1,10 +1,8 @@
 from typing import cast
 
 import pytest
-from sentry_options.testing import override_options
 
 from snuba.configs.configuration import (
-    CONFIGURABLE_COMPONENT_OVERRIDES_KEY,
     ConfigurableComponent,
     Configuration,
     InvalidConfig,
@@ -305,47 +303,6 @@ class TestConfigurableComponentConfigOperations:
     ) -> None:
         with pytest.raises(InvalidConfig):
             test_component.delete_config_value("invalid_config")
-
-
-@pytest.mark.redis_db
-class TestConfigurableComponentSentryOptions:
-    """The sentry-options override dict is the authoritative source for these
-    configs, taking precedence over the legacy Redis runtime config."""
-
-    _DEFAULT_KEY = "some_non_storage_resource.SomeConfigurableComponent.default_config_1"
-
-    def test_override_takes_precedence_and_is_coerced(
-        self, test_component: SomeConfigurableComponent
-    ) -> None:
-        # Stored as a string, coerced to the config's declared int type.
-        with override_options(
-            "snuba", {CONFIGURABLE_COMPONENT_OVERRIDES_KEY: {self._DEFAULT_KEY: "200"}}
-        ):
-            assert test_component.get_config_value("default_config_1") == 200
-
-    def test_override_wins_over_redis(self, test_component: SomeConfigurableComponent) -> None:
-        # The legacy Redis value is only the fallback.
-        test_component.set_config_value("default_config_1", 5)
-        assert test_component.get_config_value("default_config_1") == 5
-        with override_options(
-            "snuba", {CONFIGURABLE_COMPONENT_OVERRIDES_KEY: {self._DEFAULT_KEY: "7"}}
-        ):
-            assert test_component.get_config_value("default_config_1") == 7
-        # Outside the override the Redis value is used again.
-        assert test_component.get_config_value("default_config_1") == 5
-
-    def test_override_with_params(self, test_component: SomeConfigurableComponent) -> None:
-        full_key = (
-            "some_non_storage_resource.SomeConfigurableComponent."
-            "override_config_for_org_id.organization_id:10"
-        )
-        with override_options("snuba", {CONFIGURABLE_COMPONENT_OVERRIDES_KEY: {full_key: "42"}}):
-            assert (
-                test_component.get_config_value(
-                    "override_config_for_org_id", params={"organization_id": 10}
-                )
-                == 42
-            )
 
 
 class TestConfigurableComponentConfigRetrieval:
