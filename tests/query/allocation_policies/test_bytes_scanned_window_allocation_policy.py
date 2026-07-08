@@ -133,27 +133,33 @@ def test_killswitch(policy: AllocationPolicy) -> None:
 
 @pytest.mark.redis_db
 def test_enforcement_switch(policy: AllocationPolicy) -> None:
-    with override_component_configs(
-        *_base_config_overrides(policy),
-        (policy, "is_enforced", 0),
-    ):
-        tenant_ids: dict[str, int | str] = {
-            "organization_id": 123,
-            "referrer": "some_referrer",
-        }
+    tenant_ids: dict[str, int | str] = {
+        "organization_id": 123,
+        "referrer": "some_referrer",
+    }
+    # While enforced, exhausting the quota throttles the query. The sliding-window
+    # usage recorded here lives in Redis and persists into the second context.
+    with override_component_configs(*_base_config_overrides(policy)):
         policy.update_quota_balance(
             tenant_ids,
             QUERY_ID,
             QueryResultOrError(
                 query_result=QueryResult(
-                    result={"profile": {"bytes": 20 * ORG_SCAN_LIMIT}},
+                    result={"profile": {"progress_bytes": 20 * ORG_SCAN_LIMIT}},
                     extra={"stats": {}, "sql": "", "experiments": {}},
                 ),
                 error=None,
             ),
         )
         allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-        # policy not enforced
+        assert allowance.max_threads == THROTTLED_THREAD_NUMBER
+
+    # Switching enforcement off lets the (still over-quota) query run unthrottled.
+    with override_component_configs(
+        *_base_config_overrides(policy),
+        (policy, "is_enforced", 0),
+    ):
+        allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
         assert allowance.max_threads == MAX_THREAD_NUMBER
 
 
