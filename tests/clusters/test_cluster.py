@@ -203,6 +203,40 @@ def test_get_local_nodes() -> None:
 
 
 @pytest.mark.clickhouse_db
+def test_discovered_nodes_use_default_http_port() -> None:
+    # The cluster's configured http_port is an Envoy intercept port that only
+    # fronts the cluster endpoint (query node). Nodes discovered via
+    # system.clusters are addressed directly (bypassing Envoy) and must carry
+    # the well-known default HTTP port instead.
+    envoy_http_port = 8158
+    distributed_cluster = cluster.ClickhouseCluster(
+        "host_query",
+        9000,
+        "default",
+        "",
+        "default",
+        envoy_http_port,
+        False,
+        None,
+        False,
+        {"events"},
+        False,
+        cluster_name="clickhouse_hosts",
+        distributed_cluster_name="dist_hosts",
+    )
+
+    with patch.object(ClickhouseNativePool, "execute") as execute:
+        execute.return_value = ClickhouseResult([("host_1", 9000, 1, 1), ("host_2", 9000, 2, 1)])
+        local_nodes = distributed_cluster.get_local_nodes()
+
+    # The cluster endpoint keeps the Envoy intercept port ...
+    assert distributed_cluster.get_http_port() == envoy_http_port
+    # ... but directly-addressed nodes use the default HTTP port.
+    assert len(local_nodes) == 2
+    assert all(node.http_port == cluster.DEFAULT_CLICKHOUSE_HTTP_PORT for node in local_nodes)
+
+
+@pytest.mark.clickhouse_db
 def test_cache_connections() -> None:
     cluster_1 = cluster.ClickhouseCluster(
         "127.0.0.1",

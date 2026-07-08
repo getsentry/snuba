@@ -18,6 +18,7 @@ from google.protobuf.json_format import MessageToDict
 from google.protobuf.message import Message as ProtobufMessage
 from google.protobuf.timestamp_pb2 import Timestamp as TimestampProto
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
+from sentry_options import OptionValue
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
@@ -25,6 +26,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 
 from snuba import environment, settings
 from snuba.configs.configuration import (
+    CONFIGURABLE_COMPONENT_OVERRIDES_KEY,
     ConfigurableComponent,
     ConfigurableComponentData,
     Configuration,
@@ -280,6 +282,29 @@ class StrategyData(ConfigurableComponentData):
 
 
 class BaseRoutingStrategy(ConfigurableComponent, ABC):
+    def get_config_value(
+        self,
+        config_key: str,
+        params: dict[str, Any] | None = None,
+        validate: bool = True,
+    ) -> Any:
+        """Read a routing-strategy config from the ``configurable_component_overrides``
+        sentry-option (values stored as numbers, cast to the config's declared
+        int/float type), or the code default. Unlike the base implementation, the
+        legacy Redis runtime config is not consulted."""
+        if params is None:
+            params = {}
+        config_definition = (
+            self._validate_config_params(config_key, params)
+            if validate
+            else self.config_definitions()[config_key]
+        )
+        full_key = self._build_runtime_config_key(config_key, params)
+        overrides: OptionValue = get_option(CONFIGURABLE_COMPONENT_OVERRIDES_KEY, {})
+        if isinstance(overrides, dict) and full_key in overrides:
+            return config_definition.value_type(overrides[full_key])
+        return config_definition.default
+
     def __init__(self, default_config_overrides: dict[str, Any] | None = None) -> None:
         if default_config_overrides is None:
             default_config_overrides = {}

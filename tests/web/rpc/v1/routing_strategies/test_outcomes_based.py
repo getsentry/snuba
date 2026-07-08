@@ -27,7 +27,10 @@ from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
 )
-from tests.web.rpc.v1.routing_strategies.common import store_outcomes_data
+from tests.web.rpc.v1.routing_strategies.common import (
+    override_component_config,
+    store_outcomes_data,
+)
 
 BASE_TIME = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(
     hours=24
@@ -335,22 +338,25 @@ def test_outcomes_based_routing_downsample(store_outcomes_fixture: Any) -> None:
 def test_outcomes_based_routing_per_org_override(store_outcomes_fixture: Any) -> None:
     # global says no downsampling; per-org override forces TIER_64
     strategy = OutcomesBasedRoutingStrategy()
-    strategy.set_config_value(
-        "max_items_before_downsampling",
-        500_000,
-        params={"organization_id": _ORG_ID},
-    )
 
     request = TraceItemTableRequest(meta=_get_request_meta())
     request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
 
-    with override_options(
-        "snuba",
-        {
-            "storage_routing_max_items_before_downsampling": {
-                "OutcomesBasedRoutingStrategy": 1_000_000_000
-            }
-        },
+    with (
+        override_options(
+            "snuba",
+            {
+                "storage_routing_max_items_before_downsampling": {
+                    "OutcomesBasedRoutingStrategy": 1_000_000_000
+                }
+            },
+        ),
+        override_component_config(
+            strategy,
+            "max_items_before_downsampling",
+            500_000,
+            {"organization_id": _ORG_ID},
+        ),
     ):
         routing_decision = strategy.get_routing_decision(
             RoutingContext(

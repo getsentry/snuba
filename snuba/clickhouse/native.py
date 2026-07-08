@@ -35,6 +35,13 @@ ignore_logger("clickhouse_driver.connection")
 logger = logging.getLogger("snuba.clickhouse")
 trace_logger = logging.getLogger("clickhouse_driver.log")
 trace_logger.setLevel("INFO")
+# The clickhouse-driver forwards the server's ``send_logs_level`` output (the
+# ``<Trace>`` lines emitted by SelectExecutor and friends) through this logger.
+# We only want those lines when a query explicitly captures them via
+# ``capture_logging`` below, which attaches its own handler directly to this
+# logger. Disabling propagation keeps them out of the root logger so they don't
+# flood stdout/GCP logging on every traced query.
+trace_logger.propagate = False
 
 Params = Sequence[Any] | Mapping[str, Any] | None
 
