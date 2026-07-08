@@ -186,7 +186,7 @@ def test_read_query_client_settings_use_25s_timeout() -> None:
     # headroom under the frontend request budget.
 
     settings = ClickhouseClientSettings.QUERY.value
-    assert settings.settings == {"max_execution_time": 25}
+    assert settings.settings == {}
     assert settings.timeout == 25
 
 

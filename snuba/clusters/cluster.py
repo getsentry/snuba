@@ -73,9 +73,7 @@ class ClickhouseClientSettings(Enum):
     )
     DELETE = ClickhouseClientSettingsType({"mutations_sync": 1}, None)
     OPTIMIZE = ClickhouseClientSettingsType({}, settings.OPTIMIZE_QUERY_TIMEOUT)
-    QUERY = ClickhouseClientSettingsType(
-        {"max_execution_time": _DEFAULT_USER_FACING_TIMEOUT}, _DEFAULT_USER_FACING_TIMEOUT
-    )
+    QUERY = ClickhouseClientSettingsType({}, _DEFAULT_USER_FACING_TIMEOUT)
     TRACING = ClickhouseClientSettingsType(
         {"readonly": 2, "max_execution_time": _DEFAULT_USER_FACING_TIMEOUT},
         _DEFAULT_USER_FACING_TIMEOUT,
