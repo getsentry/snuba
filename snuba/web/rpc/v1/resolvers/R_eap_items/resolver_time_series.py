@@ -23,7 +23,6 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     ExtrapolationMode,
 )
 
-from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
@@ -33,11 +32,12 @@ from snuba.downsampled_storage_tiers import Tier
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column, in_cond, literal
-from snuba.query.expressions import DangerousRawSQL, Expression
+from snuba.query.dsl import column, literal
+from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
@@ -68,6 +68,7 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
 )
 from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
     get_trace_ids_sql_for_cross_item_query,
+    trace_id_in_subquery_condition,
 )
 from snuba.web.rpc.v1.resolvers.common.formula_reliability import (
     FormulaReliabilityCalculator,
@@ -383,12 +384,7 @@ def build_query(
         trace_ids_sql, _ = get_trace_ids_sql_for_cross_item_query(
             request, request.meta, list(request.trace_filters), sampling_tier, timer
         )
-        additional_conditions.append(
-            in_cond(
-                column("trace_id"),
-                DangerousRawSQL(None, f"({trace_ids_sql})"),
-            )
-        )
+        additional_conditions.append(trace_id_in_subquery_condition(trace_ids_sql))
 
     res = Query(
         from_clause=entity,
@@ -499,7 +495,7 @@ class ResolverTimeSeriesEAPItems(ResolverTimeSeries):
         assert len(in_msg.aggregations) == 0
 
         # aggregation is deprecated, it gets converted to conditional_aggregation
-        if state.get_int_config("aggregation_deprecation_enabled", 1):
+        if get_option("aggregation_deprecation_enabled", True):
             for expr in in_msg.expressions:
                 if expr.WhichOneof("expression") == "aggregation":
                     raise RuntimeError(
@@ -511,8 +507,8 @@ class ResolverTimeSeriesEAPItems(ResolverTimeSeries):
             routing_decision.strategy.merge_clickhouse_settings(routing_decision, query_settings)
             # When trace_filters are present and the feature is enabled, don't use sampling on the outer query
             # The inner query (getting trace IDs) will use sampling
-            cross_item_queries_no_sample_outer = state.get_int_config(
-                "cross_item_queries_no_sample_outer", 1
+            cross_item_queries_no_sample_outer = get_option(
+                "cross_item_queries_no_sample_outer", True
             )
             if not (in_msg.trace_filters and cross_item_queries_no_sample_outer):
                 query_settings.set_sampling_tier(routing_decision.tier)

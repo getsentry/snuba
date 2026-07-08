@@ -1,7 +1,7 @@
 from collections.abc import Mapping, MutableMapping, Sequence
 from typing import Any
 
-from snuba.clickhouse.native import ClickhousePool, ClickhouseResult, Params
+from snuba.clickhouse.native import ClickhouseNativePool, ClickhouseResult, Params
 from snuba.clusters.cluster import (
     ClickhouseClientSettings,
     ClickhouseCluster,
@@ -14,7 +14,7 @@ class ServerExplodedException(SerializableException):
     pass
 
 
-class FakeClickhousePool(ClickhousePool):
+class FakeClickhousePool(ClickhouseNativePool):
     def __init__(self, host_name: str) -> None:
         self.__queries: list[str] = []
         self.host = host_name
@@ -129,7 +129,7 @@ class FakeClickhouseCluster(ClickhouseCluster):
         self,
         client_settings: ClickhouseClientSettings,
         node: ClickhouseNode,
-    ) -> ClickhousePool:
+    ) -> ClickhouseNativePool:
         settings, timeout = client_settings.value
         cache_key = (node, client_settings)
         if cache_key not in self.__connections:

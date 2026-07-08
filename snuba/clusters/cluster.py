@@ -12,9 +12,13 @@ from typing import (
 
 import structlog
 
-from snuba import settings
+from snuba import settings, state
 from snuba.clickhouse.http import HTTPBatchWriter, InsertStatement, JSONRow
-from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
+from snuba.clickhouse.native import (
+    ClickhouseNativePool,
+    ClickhousePool,
+    ClickhouseReader,
+)
 from snuba.clusters.storage_sets import (
     DEV_STORAGE_SETS,
     StorageSetKey,
@@ -26,6 +30,16 @@ from snuba.utils.serializable_exception import SerializableException
 from snuba.writer import BatchWriter
 
 logger = structlog.get_logger().bind(module=__name__)
+
+# Well-known default ClickHouse HTTP port, used by by-host helpers (e.g. CLI
+# tools) that only know a node's native address and have no cluster config to
+# read an http_port from.
+DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
+# User-facing read queries get a 25s timeout, leaving headroom under a ~30s
+# frontend request budget to still return a response. Migrations, DDL and
+# other long-running operations keep their own (default or longer) timeouts
+# above/below.
+_DEFAULT_USER_FACING_TIMEOUT = 25
 
 
 class ClickhouseClientSettingsType(NamedTuple):
@@ -59,9 +73,18 @@ class ClickhouseClientSettings(Enum):
     )
     DELETE = ClickhouseClientSettingsType({"mutations_sync": 1}, None)
     OPTIMIZE = ClickhouseClientSettingsType({}, settings.OPTIMIZE_QUERY_TIMEOUT)
-    QUERY = ClickhouseClientSettingsType({}, None)
+    QUERY = ClickhouseClientSettingsType({}, _DEFAULT_USER_FACING_TIMEOUT)
+    TRACING = ClickhouseClientSettingsType(
+        {"readonly": 2, "max_execution_time": _DEFAULT_USER_FACING_TIMEOUT},
+        _DEFAULT_USER_FACING_TIMEOUT,
+    )
+    # Internal/maintenance queries that are NOT user-facing reads and must not
+    # inherit QUERY's 25s cap: cluster topology discovery (system.clusters),
+    # storage-routing load lookups, delete-throttling system-table checks, the
+    # span-export job and admin table copies. These can legitimately run long,
+    # so they stay unbounded (their behavior before QUERY got a read timeout).
+    INTERNAL = ClickhouseClientSettingsType({}, None)
     QUERYLOG = ClickhouseClientSettingsType({}, None)
-    TRACING = ClickhouseClientSettingsType({"readonly": 2}, None)
     REPLACE = ClickhouseClientSettingsType(
         {
             # Replacing existing rows requires reconstructing the entire tuple
@@ -97,12 +120,17 @@ class ClickhouseClientSettings(Enum):
 @dataclass(frozen=True)
 class ClickhouseNode:
     host_name: str
-    port: int
+    native_port: int
     shard: int | None = None
     replica: int | None = None
+    # The node's HTTP port, used by the clickhouse-connect (HTTP) driver. It is
+    # optional because nodes built outside a cluster context (e.g. in tests, or
+    # the replacer's load balancer, which never open HTTP connections) do not
+    # need one. Cluster-produced nodes always carry the cluster's HTTP port.
+    http_port: int | None = None
 
     def __str__(self) -> str:
-        return f"{self.host_name}:{self.port}"
+        return f"{self.host_name}:{self.native_port}"
 
 
 class ClickhouseNodeType(Enum):
@@ -160,6 +188,23 @@ class Cluster(ABC, Generic[TWriterOptions]):
 ClickhouseWriterOptions = Mapping[str, Any] | None
 
 
+def use_clickhouse_connect_driver() -> bool:
+    """
+    Whether the read path should use the clickhouse-connect (HTTP) driver
+    instead of the native protocol.
+
+    Controlled by a runtime config flag (defaulting to the
+    ``USE_CLICKHOUSE_CONNECT_DRIVER`` setting) so the migration can be rolled
+    out and rolled back without a deploy.
+    """
+    default = 1 if settings.USE_CLICKHOUSE_CONNECT_DRIVER else 0
+    return bool(state.get_int_config("use_clickhouse_connect_driver", default))
+
+
+# The driver discriminator is part of the cache key so that the native and the
+# HTTP pool for the same node can be cached side by side. The node's HTTP port
+# is part of ``ClickhouseNode`` itself, so it does not need a separate key
+# element.
 CacheKey = tuple[
     ClickhouseNode,
     ClickhouseClientSettings,
@@ -169,6 +214,7 @@ CacheKey = tuple[
     bool,
     str | None,
     bool | None,
+    str,
 ]
 
 
@@ -188,8 +234,26 @@ class ConnectionCache:
         ca_certs: str | None,
         verify: bool | None,
     ) -> ClickhousePool:
+        """
+        Return a cached connection pool for the node, typed as the abstract
+        :class:`ClickhousePool`. The driver is decided here, from the
+        ``use_clickhouse_connect_driver`` runtime config: when it is enabled the
+        clickhouse-connect (HTTP) pool is built (connecting on the node's
+        ``http_port``), otherwise the native one (connecting on the node's
+        ``native_port``). Both variants are cached side by side (the driver is
+        part of the cache key).
+
+        This is the single place pools are instantiated and the single place the
+        driver is selected, so every caller — the cluster query/node connections
+        as well as the admin and CLI by-host helpers — goes through it and gets
+        one shared, runtime-selected pool behind the abstract
+        :class:`ClickhousePool` type. Pool sizing is left to the pools themselves
+        (the connect pool reads the ``clickhouse_connect_pool_size`` runtime
+        config).
+        """
+        use_connect = use_clickhouse_connect_driver()
         with self.__lock:
-            settings, timeout = client_settings.value
+            client_settings_dict, timeout = client_settings.value
             cache_key = (
                 node,
                 client_settings,
@@ -199,20 +263,48 @@ class ConnectionCache:
                 secure,
                 ca_certs,
                 verify,
+                "http" if use_connect else "native",
             )
             if cache_key not in self.__cache:
-                self.__cache[cache_key] = ClickhousePool(
-                    node.host_name,
-                    node.port,
-                    user,
-                    password,
-                    database,
-                    client_settings=settings,
-                    send_receive_timeout=timeout,
-                    secure=secure,
-                    ca_certs=ca_certs,
-                    verify=verify,
-                )
+                pool: ClickhousePool
+                if use_connect:
+                    # Imported here so that the native code path never imports
+                    # clickhouse-connect.
+                    from snuba.clickhouse.connect import ClickhouseConnectPool
+
+                    pool = ClickhouseConnectPool(
+                        host=node.host_name,
+                        # Fall back to the default HTTP port only for nodes that
+                        # were built without one (e.g. by-host helpers that have
+                        # no cluster http_port to draw on).
+                        http_port=(
+                            node.http_port
+                            if node.http_port is not None
+                            else DEFAULT_CLICKHOUSE_HTTP_PORT
+                        ),
+                        user=user,
+                        password=password,
+                        database=database,
+                        client_settings=client_settings_dict,
+                        send_receive_timeout=timeout,
+                        secure=secure,
+                        ca_certs=ca_certs,
+                        verify=verify,
+                    )
+                else:
+                    pool = ClickhouseNativePool(
+                        node.host_name,
+                        node.native_port,
+                        user,
+                        password,
+                        database,
+                        client_settings=client_settings_dict,
+                        send_receive_timeout=timeout,
+                        secure=secure,
+                        ca_certs=ca_certs,
+                        verify=verify,
+                    )
+                self.__cache[cache_key] = pool
 
             return self.__cache[cache_key]
 
@@ -266,7 +358,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         self.__port = port
         self.__max_connections = max_connections or _DEFAULT_MAX_CONNECTIONS
         self.__block_connections = block_connections
-        self.__query_node = ClickhouseNode(host, port)
+        self.__query_node = ClickhouseNode(host, port, http_port=http_port)
         self.__user = user
         self.__password = password
         self.__database = database
@@ -277,11 +369,12 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         self.__single_node = single_node
         self.__cluster_name = cluster_name
         self.__distributed_cluster_name = distributed_cluster_name
-        self.__reader: Reader | None = None
-        self.__deleter: Reader | None = None
         self.__connection_cache = connection_cache
         self.__cache_partition_id = cache_partition_id
         self.__query_settings_prefix = query_settings_prefix
+        # The local node used by the deleter is static cluster topology; cache
+        # it so get_deleter() does not re-run a system.clusters lookup per call.
+        self.__delete_local_node: ClickhouseNode | None = None
 
     def __str__(self) -> str:
         return str(self.__query_node)
@@ -310,8 +403,12 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         Get a Clickhouse connection using the client settings provided. Reuse any
         connection to the same node with the same settings otherwise establish a new
         connection.
-        """
 
+        The driver is selected inside ``ConnectionCache.get_node_connection``
+        from the ``use_clickhouse_connect_driver`` runtime config (HTTP pool
+        when enabled, native otherwise). The choice applies to every caller
+        (reads, migrations, replacer, optimize, ...), not just the read path.
+        """
         return self.__connection_cache.get_node_connection(
             client_settings,
             node,
@@ -324,25 +421,32 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         )
 
     def get_deleter(self) -> Reader:
-        if not self.__deleter:
-            # we need the connection to the storage nodes, not
-            # the distributed nodes
-            local_node = self.get_local_nodes()[0]
-            self.__deleter = NativeDriverReader(
-                cache_partition_id=f"{self.__cache_partition_id}_deletes",
-                client=self.get_node_connection(ClickhouseClientSettings.DELETE, local_node),
-                query_settings_prefix=self.__query_settings_prefix,
-            )
-        return self.__deleter
+        # we need the connection to the storage nodes, not the distributed
+        # nodes. The node lookup is cached (it can run a system.clusters query
+        # on multi-node clusters) while the connection is resolved per call so
+        # the driver can still switch at runtime.
+        if self.__delete_local_node is None:
+            self.__delete_local_node = self.get_local_nodes()[0]
+        return ClickhouseReader(
+            cache_partition_id=f"{self.__cache_partition_id}_deletes",
+            client=self.get_node_connection(
+                ClickhouseClientSettings.DELETE, self.__delete_local_node
+            ),
+            query_settings_prefix=self.__query_settings_prefix,
+        )
 
     def get_reader(self) -> Reader:
-        if not self.__reader:
-            self.__reader = NativeDriverReader(
-                cache_partition_id=self.__cache_partition_id,
-                client=self.get_query_connection(ClickhouseClientSettings.QUERY),
-                query_settings_prefix=self.__query_settings_prefix,
-            )
-        return self.__reader
+        """
+        Return a reader for the query node. The driver-agnostic ClickhouseReader
+        wraps whichever pool (native or HTTP) get_query_connection selects from
+        the ``use_clickhouse_connect_driver`` runtime config, so the driver can
+        be switched at runtime.
+        """
+        return ClickhouseReader(
+            cache_partition_id=self.__cache_partition_id,
+            client=self.get_query_connection(ClickhouseClientSettings.QUERY),
+            query_settings_prefix=self.__query_settings_prefix,
+        )
 
     def get_batch_writer(
         self,
@@ -413,15 +517,27 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
     def get_connection_id(self) -> ConnectionId:
         return ConnectionId(
             hostname=self.__query_node.host_name,
-            tcp_port=self.__query_node.port,
+            tcp_port=self.__query_node.native_port,
             http_port=self.__http_port,
             database_name=self.__database,
         )
 
     def __get_cluster_nodes(self, cluster_name: str) -> Sequence[ClickhouseNode]:
+        # system.clusters only reports the native port. The cluster's configured
+        # HTTP port is an Envoy intercept port that only fronts the cluster
+        # endpoint (the query node); individual nodes discovered here are
+        # addressed directly, bypassing Envoy, and serve HTTP on the well-known
+        # default port. Stamp that on each node so the HTTP driver connects to a
+        # port the node actually listens on.
         return [
-            ClickhouseNode(*host)
-            for host in self.get_query_connection(ClickhouseClientSettings.QUERY)
+            ClickhouseNode(
+                host_name=host[0],
+                native_port=host[1],
+                shard=host[2],
+                replica=host[3],
+                http_port=DEFAULT_CLICKHOUSE_HTTP_PORT,
+            )
+            for host in self.get_query_connection(ClickhouseClientSettings.INTERNAL)
             .execute(
                 "select host_name, port, shard_num, replica_num from system.clusters where cluster=%(cluster_name)s",
                 {"cluster_name": cluster_name},

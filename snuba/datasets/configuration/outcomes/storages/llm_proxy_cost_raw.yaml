@@ -1,0 +1,59 @@
+version: v1
+kind: readable_storage
+name: llm_proxy_cost_raw
+storage:
+  key: llm_proxy_cost_raw
+  set_key: outcomes
+readiness_state: complete
+schema:
+  columns:
+    [
+      { name: org_id, type: UInt, args: { size: 64 } },
+      { name: project_id, type: UInt, args: { size: 64 } },
+      { name: timestamp, type: DateTime },
+      { name: feature, type: String, args: { schema_modifiers: [low_cardinality] } },
+      { name: model, type: String, args: { schema_modifiers: [low_cardinality] } },
+      { name: region, type: String, args: { schema_modifiers: [low_cardinality] } },
+      { name: call_type, type: String, args: { schema_modifiers: [low_cardinality] } },
+      { name: prompt_tokens, type: UInt, args: { size: 32 } },
+      { name: completion_tokens, type: UInt, args: { size: 32 } },
+      { name: cache_read_tokens, type: UInt, args: { size: 32 } },
+      { name: cache_write_tokens, type: UInt, args: { size: 32 } },
+      { name: total_cost_usd, type: Float, args: { size: 64 } },
+      { name: input_cost_usd, type: Float, args: { size: 64 } },
+      { name: output_cost_usd, type: Float, args: { size: 64 } },
+      { name: cache_read_cost_usd, type: Float, args: { size: 64 } },
+      { name: cache_write_cost_usd, type: Float, args: { size: 64 } },
+      { name: litellm_cost_usd, type: Float, args: { size: 64 } },
+      { name: is_long_context, type: UInt, args: { size: 8 } },
+      { name: is_regional, type: UInt, args: { size: 8 } },
+      { name: response_time_ms, type: Float, args: { size: 64 } },
+      { name: litellm_call_id, type: String },
+    ]
+  local_table_name: llm_proxy_cost_raw_local
+  dist_table_name: llm_proxy_cost_raw_dist
+allocation_policies:
+  - name: ConcurrentRateLimitAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+      default_config_overrides:
+        is_enforced: 0
+  - name: BytesScannedWindowAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+      default_config_overrides:
+        is_enforced: 1
+        throttled_thread_number: 1
+        org_limit_bytes_scanned: 100000
+query_processors:
+  - processor: PrewhereProcessor
+    args:
+      prewhere_candidates:
+        - project_id
+        - org_id
+mandatory_condition_checkers:
+  - condition: OrgIdEnforcer

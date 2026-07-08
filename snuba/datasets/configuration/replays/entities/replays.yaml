@@ -52,6 +52,7 @@ schema:
     },
     { name: url, type: String, args: { schema_modifiers: [nullable] } },
     { name: urls, type: Array, args: { inner_type: { type: String } } },
+    { name: segment_names, type: Array, args: { inner_type: { type: String } } },
     {
       name: count_urls,
       type: UInt,

@@ -18,7 +18,6 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import AndFilter, TraceItemFilter
 
-from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
@@ -36,10 +35,11 @@ from snuba.query.dsl import (
     literals_array,
     or_cond,
 )
-from snuba.query.expressions import DangerousRawSQL, Expression
+from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.request import Request as SnubaRequest
+from snuba.state.sentry_options import get_option
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
@@ -57,6 +57,7 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
     convert_trace_filters_to_trace_item_filter_with_type,
     get_trace_ids_sql_for_cross_item_query,
+    trace_id_in_subquery_condition,
 )
 
 _DEFAULT_ROW_LIMIT = 10_000
@@ -507,7 +508,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         _validate_order_by(in_msg)
 
         # Feature flag: Use cross-item query path for all queries (single-item and cross-item)
-        use_cross_item_path = self._is_cross_event_query(in_msg.filters) or state.get_config(
+        use_cross_item_path = self._is_cross_event_query(in_msg.filters) or get_option(
             "use_cross_item_path_for_single_item_queries", False
         )
 
@@ -847,23 +848,19 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             sample=None,
         )
 
-        # Use DangerousRawSQL to embed the subquery instead of materializing trace IDs
+        # Embed the subquery as a bare `trace_id IN (...)` predicate so the bf_trace_id
+        # bloom-filter index is used (UUIDColumnProcessor would otherwise wrap the column
+        # and defeat the index — see trace_id_in_subquery_condition).
         if item_type:
             condition = base_conditions_and(
                 request.meta,
-                in_cond(
-                    column("trace_id"),
-                    DangerousRawSQL(None, f"({trace_ids_sql})"),
-                ),
+                trace_id_in_subquery_condition(trace_ids_sql),
                 f.equals(column("item_type"), item_type),
             )
         else:
             condition = base_conditions_and(
                 request.meta,
-                in_cond(
-                    column("trace_id"),
-                    DangerousRawSQL(None, f"({trace_ids_sql})"),
-                ),
+                trace_id_in_subquery_condition(trace_ids_sql),
             )
 
         query = Query(

@@ -4,6 +4,7 @@ from typing import Any
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.endpoint_trace_item_details_pb2 import (
     TraceItemDetailsRequest,
 )
@@ -16,7 +17,6 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
 
-from snuba import state
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_trace_item_details import (
@@ -269,7 +269,7 @@ class TestTraceItemDetails(BaseApiTest):
                     span_ts,
                     attributes={
                         "gen_ai.response.text": _str_tags_array("gamma", "delta"),
-                        "gen_ai.tool.input": _int_vals_array(1, 3),
+                        "workflow_ids": _int_vals_array(1, 3),
                     },
                 ),
             ],
@@ -328,7 +328,7 @@ class TestTraceItemDetails(BaseApiTest):
         assert tags_attr is not None
         assert tags_attr.value.WhichOneof("value") == "val_array"
         assert [e.val_str for e in tags_attr.value.val_array.values] == ["gamma", "delta"]
-        cols_attr = next((a for a in res.attributes if a.name == "gen_ai.tool.input"), None)
+        cols_attr = next((a for a in res.attributes if a.name == "workflow_ids"), None)
         assert cols_attr is not None
         assert cols_attr.value.WhichOneof("value") == "val_array"
         assert [e.val_int for e in cols_attr.value.val_array.values] == [1, 3]
@@ -397,26 +397,26 @@ class TestTraceItemDetails(BaseApiTest):
 
         # 0 disables the typed-column read path (legacy JSON allowlist); a low value
         # enables it for the (recent) request window.
-        state.set_config(
-            "use_array_map_columns_timestamp_seconds",
-            10 if read_from_typed_columns else 0,
-        )
-        res = EndpointTraceItemDetails().execute(
-            TraceItemDetailsRequest(
-                meta=RequestMeta(
-                    project_ids=[1],
-                    organization_id=1,
-                    cogs_category="something",
-                    referrer="something",
-                    start_timestamp=start,
-                    end_timestamp=end,
-                    request_id=_REQUEST_ID,
-                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                ),
-                item_id=item_id,
-                trace_id=trace_id,
+        with override_options(
+            "snuba",
+            {"use_array_map_columns_timestamp_seconds": 10 if read_from_typed_columns else 0},
+        ):
+            res = EndpointTraceItemDetails().execute(
+                TraceItemDetailsRequest(
+                    meta=RequestMeta(
+                        project_ids=[1],
+                        organization_id=1,
+                        cogs_category="something",
+                        referrer="something",
+                        start_timestamp=start,
+                        end_timestamp=end,
+                        request_id=_REQUEST_ID,
+                        trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    ),
+                    item_id=item_id,
+                    trace_id=trace_id,
+                )
             )
-        )
         by_name = {a.name: a.value for a in res.attributes}
         # Allowlisted array attribute: identical val_array from both read paths.
         assert by_name["gen_ai.response.text"].WhichOneof("value") == "val_array"

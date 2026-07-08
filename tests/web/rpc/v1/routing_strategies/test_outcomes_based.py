@@ -5,6 +5,7 @@ from unittest import mock
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import GetTracesRequest
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
@@ -16,7 +17,6 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
-from snuba import state
 from snuba.downsampled_storage_tiers import Tier
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryResult
@@ -27,7 +27,10 @@ from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
 )
-from tests.web.rpc.v1.routing_strategies.common import store_outcomes_data
+from tests.web.rpc.v1.routing_strategies.common import (
+    override_component_config,
+    store_outcomes_data,
+)
 
 BASE_TIME = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(
     hours=24
@@ -95,15 +98,12 @@ def test_outcomes_based_routing_queries_daily_table() -> None:
 
 @pytest.mark.eap
 @pytest.mark.redis_db
+@override_options("snuba", {"enable_long_term_retention_downsampling": True})
 def test_item_type_full_retention() -> None:
     """
     Certain item types will not use the long term retention downsampling,
     find them in ITEM_TYPE_FULL_RETENTION routing_strategies/common.py
     """
-    state.set_config(
-        "enable_long_term_retention_downsampling",
-        1,
-    )
     strategy = OutcomesBasedRoutingStrategy()
 
     # request that queries last 50 days of data
@@ -130,15 +130,12 @@ def test_item_type_full_retention() -> None:
 
 @pytest.mark.eap
 @pytest.mark.redis_db
+@override_options("snuba", {"enable_long_term_retention_downsampling": True})
 def test_item_type_full_retention_preprod() -> None:
     """
     PREPROD item type should not use long term retention downsampling,
     it should always fetch tier1 for its 90 day retention period.
     """
-    state.set_config(
-        "enable_long_term_retention_downsampling",
-        1,
-    )
     strategy = OutcomesBasedRoutingStrategy()
 
     # request that queries last 50 days of data
@@ -165,11 +162,8 @@ def test_item_type_full_retention_preprod() -> None:
 
 @pytest.mark.eap
 @pytest.mark.redis_db
+@override_options("snuba", {"enable_long_term_retention_downsampling": True})
 def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
-    state.set_config(
-        "enable_long_term_retention_downsampling",
-        1,
-    )
     strategy = OutcomesBasedRoutingStrategy()
     end_time = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
 
@@ -295,85 +289,100 @@ def test_routing_query_is_exempt_from_allocation_policies() -> None:
 @pytest.mark.eap
 @pytest.mark.redis_db
 def test_outcomes_based_routing_downsample(store_outcomes_fixture: Any) -> None:
-    state.set_config("OutcomesBasedRoutingStrategy.max_items_before_downsampling", 5_000_000)
     strategy = OutcomesBasedRoutingStrategy()
 
     request = TraceItemTableRequest(meta=_get_request_meta())
     request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
 
-    routing_decision = strategy.get_routing_decision(
-        RoutingContext(
-            in_msg=request,
-            timer=Timer("test"),
-            query_id=uuid.uuid4().hex,
-        )
-    )
-    assert routing_decision.tier == Tier.TIER_8
-    assert routing_decision.clickhouse_settings == {"max_threads": 10}
-    assert routing_decision.can_run
-    state.set_config("OutcomesBasedRoutingStrategy.max_items_before_downsampling", 500_000)
-    routing_decision = strategy.get_routing_decision(
-        RoutingContext(
-            in_msg=request,
-            timer=Timer("test"),
-            query_id=uuid.uuid4().hex,
-        )
-    )
-    assert routing_decision.tier == Tier.TIER_64
-    assert routing_decision.clickhouse_settings == {"max_threads": 10}
-    assert routing_decision.can_run
+    option = "storage_routing_max_items_before_downsampling"
 
-    state.set_config("OutcomesBasedRoutingStrategy.max_items_before_downsampling", 50_000)
-    routing_decision = strategy.get_routing_decision(
-        RoutingContext(
-            in_msg=request,
-            timer=Timer("test"),
-            query_id=uuid.uuid4().hex,
+    with override_options("snuba", {option: {"OutcomesBasedRoutingStrategy": 5_000_000}}):
+        routing_decision = strategy.get_routing_decision(
+            RoutingContext(
+                in_msg=request,
+                timer=Timer("test"),
+                query_id=uuid.uuid4().hex,
+            )
         )
-    )
-    assert routing_decision.tier == Tier.TIER_512
-    assert routing_decision.clickhouse_settings == {"max_threads": 10}
-    assert routing_decision.can_run
+        assert routing_decision.tier == Tier.TIER_8
+        assert routing_decision.clickhouse_settings == {"max_threads": 10}
+        assert routing_decision.can_run
+
+    with override_options("snuba", {option: {"OutcomesBasedRoutingStrategy": 500_000}}):
+        routing_decision = strategy.get_routing_decision(
+            RoutingContext(
+                in_msg=request,
+                timer=Timer("test"),
+                query_id=uuid.uuid4().hex,
+            )
+        )
+        assert routing_decision.tier == Tier.TIER_64
+        assert routing_decision.clickhouse_settings == {"max_threads": 10}
+        assert routing_decision.can_run
+
+    with override_options("snuba", {option: {"OutcomesBasedRoutingStrategy": 50_000}}):
+        routing_decision = strategy.get_routing_decision(
+            RoutingContext(
+                in_msg=request,
+                timer=Timer("test"),
+                query_id=uuid.uuid4().hex,
+            )
+        )
+        assert routing_decision.tier == Tier.TIER_512
+        assert routing_decision.clickhouse_settings == {"max_threads": 10}
+        assert routing_decision.can_run
 
 
 @pytest.mark.eap
 @pytest.mark.redis_db
 def test_outcomes_based_routing_per_org_override(store_outcomes_fixture: Any) -> None:
     # global says no downsampling; per-org override forces TIER_64
-    state.set_config("OutcomesBasedRoutingStrategy.max_items_before_downsampling", 1_000_000_000)
     strategy = OutcomesBasedRoutingStrategy()
-    strategy.set_config_value(
-        "max_items_before_downsampling",
-        500_000,
-        params={"organization_id": _ORG_ID},
-    )
 
     request = TraceItemTableRequest(meta=_get_request_meta())
     request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
 
-    routing_decision = strategy.get_routing_decision(
-        RoutingContext(
-            in_msg=request,
-            timer=Timer("test"),
-            query_id=uuid.uuid4().hex,
+    with (
+        override_options(
+            "snuba",
+            {
+                "storage_routing_max_items_before_downsampling": {
+                    "OutcomesBasedRoutingStrategy": 1_000_000_000
+                }
+            },
+        ),
+        override_component_config(
+            strategy,
+            "max_items_before_downsampling",
+            500_000,
+            {"organization_id": _ORG_ID},
+        ),
+    ):
+        routing_decision = strategy.get_routing_decision(
+            RoutingContext(
+                in_msg=request,
+                timer=Timer("test"),
+                query_id=uuid.uuid4().hex,
+            )
         )
-    )
-    assert routing_decision.tier == Tier.TIER_64
-    assert routing_decision.can_run
+        assert routing_decision.tier == Tier.TIER_64
+        assert routing_decision.can_run
 
-    # different org with no override falls back to the global config
-    other_org_request = TraceItemTableRequest(meta=_get_request_meta())
-    other_org_request.meta.organization_id = _ORG_ID + 1
-    other_org_request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
-
-    other_routing_decision = strategy.get_routing_decision(
-        RoutingContext(
-            in_msg=other_org_request,
-            timer=Timer("test"),
-            query_id=uuid.uuid4().hex,
+        # different org with no override falls back to the global config
+        other_org_request = TraceItemTableRequest(meta=_get_request_meta())
+        other_org_request.meta.organization_id = _ORG_ID + 1
+        other_org_request.meta.downsampled_storage_config.mode = (
+            DownsampledStorageConfig.MODE_NORMAL
         )
-    )
-    assert other_routing_decision.tier == Tier.TIER_1
+
+        other_routing_decision = strategy.get_routing_decision(
+            RoutingContext(
+                in_msg=other_org_request,
+                timer=Timer("test"),
+                query_id=uuid.uuid4().hex,
+            )
+        )
+        assert other_routing_decision.tier == Tier.TIER_1
 
 
 @pytest.mark.eap
@@ -405,14 +414,17 @@ def test_outcomes_based_routing_defaults_to_tier1_for_unspecified_item_type(
 
     request = TraceItemTableRequest(meta=_get_request_meta())
     request.meta.trace_item_type = TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
-    state.set_config("OutcomesBasedRoutingStrategy.max_items_before_downsampling", 50_000)
-    routing_decision = strategy.get_routing_decision(
-        RoutingContext(
-            in_msg=request,
-            timer=Timer("test"),
-            query_id=uuid.uuid4().hex,
+    with override_options(
+        "snuba",
+        {"storage_routing_max_items_before_downsampling": {"OutcomesBasedRoutingStrategy": 50_000}},
+    ):
+        routing_decision = strategy.get_routing_decision(
+            RoutingContext(
+                in_msg=request,
+                timer=Timer("test"),
+                query_id=uuid.uuid4().hex,
+            )
         )
-    )
     assert routing_decision.tier == Tier.TIER_1
     assert routing_decision.clickhouse_settings == {"max_threads": 10}
     assert routing_decision.can_run

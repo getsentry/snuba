@@ -113,7 +113,7 @@ class ExtractSpanData(Job):
 
     def execute(self, logger: JobLogger) -> None:
         cluster = get_cluster(StorageSetKey.EVENTS_ANALYTICS_PLATFORM)
-        connection = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
+        connection = cluster.get_query_connection(ClickhouseClientSettings.INTERNAL)
 
         query = f"""
         INSERT INTO FUNCTION gcs('{self._gcp_bucket_name}/{self._output_file_path}',

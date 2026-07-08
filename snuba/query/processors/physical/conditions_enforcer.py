@@ -6,7 +6,7 @@ from snuba.query.conditions import get_first_level_and_conditions
 from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
-from snuba.state import get_config
+from snuba.state.sentry_options import get_option
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ class MandatoryConditionEnforcer(ClickhouseQueryProcessor):
             inspect_expression(prewhere)
 
         missing_ids = {checker.get_id() for checker in missing_checkers}
-        if get_config("mandatory_condition_enforce", 0):
+        if get_option("mandatory_condition_enforce", False):
             assert not missing_checkers, (
                 f"Missing mandatory columns in query. Missing {missing_ids}"
             )

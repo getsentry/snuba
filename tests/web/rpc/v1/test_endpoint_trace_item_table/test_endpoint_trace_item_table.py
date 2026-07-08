@@ -9,6 +9,7 @@ import pytest
 from clickhouse_driver.errors import ServerException
 from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
     AttributeConditionalAggregation,
 )
@@ -57,7 +58,6 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
 
-from snuba import state
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import OrderBy, OrderByDirection
@@ -4149,27 +4149,27 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
         )
         # 0 disables the typed-column read path (forces the legacy JSON column); a low
         # value enables it for the (recent) request window.
-        state.set_config(
-            "use_array_map_columns_timestamp_seconds",
-            10 if read_from_typed_columns else 0,
-        )
-        message = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=START_TIMESTAMP,
-                end_timestamp=END_TIMESTAMP,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            columns=[
-                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
-                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags")),
-                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="cols")),
-            ],
-        )
-        response = EndpointTraceItemTable().execute(message)
+        with override_options(
+            "snuba",
+            {"use_array_map_columns_timestamp_seconds": 10 if read_from_typed_columns else 0},
+        ):
+            message = TraceItemTableRequest(
+                meta=RequestMeta(
+                    project_ids=[1, 2, 3],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    start_timestamp=START_TIMESTAMP,
+                    end_timestamp=END_TIMESTAMP,
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                ),
+                columns=[
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags")),
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="cols")),
+                ],
+            )
+            response = EndpointTraceItemTable().execute(message)
         by_name = {cv.attribute_name: cv for cv in response.column_values}
         assert by_name["tags"].results[0].WhichOneof("value") == "val_array"
         assert [e.val_str for e in by_name["tags"].results[0].val_array.values] == ["alpha", "beta"]

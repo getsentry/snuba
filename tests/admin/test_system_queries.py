@@ -304,14 +304,15 @@ def test_clusterless_rejects_unvalidated_host(
     helper_name: str, client_settings: ClickhouseClientSettings
 ) -> None:
     """
-    Regression for EAP-488: the clusterless helpers used to construct a
+    Regression for EAP-488: the clusterless helpers used to acquire a
     ClickhousePool against any attacker-supplied host/port, which leaked the
-    configured ClickHouse user/password in the first hello packet of the
-    native protocol. Both helpers must now call _validate_node before
-    constructing the pool, so an invalid host produces InvalidNodeError and
-    no credentials ever leave the process.
+    configured ClickHouse user/password to the node (the native protocol's
+    first hello packet, or the HTTP auth header). Both helpers must now call
+    _validate_node before acquiring the pool, so an invalid host produces
+    InvalidNodeError and no credentials ever leave the process.
     """
     from snuba.admin.clickhouse import common
+    from snuba.clusters.cluster import connection_cache
 
     helper = getattr(common, helper_name)
 
@@ -321,7 +322,9 @@ def test_clusterless_rejects_unvalidated_host(
             "_validate_node",
             side_effect=InvalidNodeError("host not in cluster"),
         ) as mock_validate,
-        patch.object(common, "ClickhousePool") as mock_pool,
+        # connection_cache is the shared singleton; patching the method on the
+        # object affects the reference bound inside common as well.
+        patch.object(connection_cache, "get_node_connection") as mock_pool,
     ):
         # Clear any cached connection for this storage so the cache lookup
         # can't short-circuit validation.
@@ -331,11 +334,136 @@ def test_clusterless_rejects_unvalidated_host(
         with pytest.raises(InvalidNodeError):
             helper("attacker.example.com", 9009, "errors", client_settings)
 
-        assert mock_validate.called, "_validate_node must run before pool construction"
+        assert mock_validate.called, "_validate_node must run before pool acquisition"
         assert not mock_pool.called, (
-            "ClickhousePool must not be constructed for an unvalidated host — "
+            "A pool must not be acquired for an unvalidated host — "
             "doing so would transmit ClickHouse credentials to the attacker"
         )
+
+
+@pytest.mark.parametrize(
+    "helper_name",
+    [
+        "get_ro_node_connection",
+        "get_sudo_node_connection",
+        "get_clusterless_node_connection",
+        "get_ro_clusterless_node_connection",
+    ],
+)
+def test_by_host_connection_uses_default_http_port(helper_name: str) -> None:
+    """
+    These helpers connect to a *specific individual* node by hostname (not the
+    cluster's query endpoint — see test_query_node_connection_uses_cluster_http_port).
+    The cluster's configured http_port belongs to the query endpoint (which may
+    sit behind a proxy/load balancer), not to an individual node, so a by-host
+    HTTP connection must target the node's own ClickHouse HTTP listener — the
+    well-known default port — rather than cluster.get_http_port().
+
+    Regression: the clickhouse-connect (HTTP) driver path passed
+    cluster.get_http_port(), which would send admin by-host traffic to the
+    wrong port. The native driver is unaffected (it uses the native port), but
+    the node we build must carry the default HTTP port for the HTTP driver.
+    """
+    from snuba.admin.clickhouse import common
+    from snuba.clusters.cluster import (
+        DEFAULT_CLICKHOUSE_HTTP_PORT,
+        ClickhouseCluster,
+        connection_cache,
+    )
+
+    helper = getattr(common, helper_name)
+
+    # A port that is deliberately not the well-known default, so the assertions
+    # below distinguish "used the default" from "used the cluster's port" even
+    # if the test cluster happens to be configured with the default port.
+    sentinel_cluster_http_port = 65432
+
+    # Snapshot and restore the module-level connection cache around the call.
+    # The cache key is built from str(StorageKey), which falls back to its repr
+    # ("StorageKey.ERRORS-..."), so matching on a literal prefix is brittle;
+    # snapshot/restore is independent of the key format. Clearing it first also
+    # guarantees the helper builds a fresh node instead of returning a cached
+    # entry, so connection_cache.get_node_connection is actually invoked.
+    saved_connections = dict(common.NODE_CONNECTIONS)
+    common.NODE_CONNECTIONS.clear()
+    try:
+        with (
+            patch.object(common, "_validate_node"),  # treat the host as valid
+            patch.object(
+                ClickhouseCluster,
+                "get_http_port",
+                return_value=sentinel_cluster_http_port,
+            ),
+            patch.object(connection_cache, "get_node_connection") as mock_pool,
+        ):
+            helper(
+                "specific-node.example.com",
+                9000,
+                "errors",
+                ClickhouseClientSettings.QUERY,
+            )
+
+        assert mock_pool.called, "expected a pool to be acquired for a valid host"
+        node = mock_pool.call_args.args[1]
+        assert node.http_port == DEFAULT_CLICKHOUSE_HTTP_PORT
+        assert node.http_port != sentinel_cluster_http_port, (
+            "by-host connections must not use the cluster's configured http_port"
+        )
+    finally:
+        # Restore the cache exactly, so this test never leaks a mocked
+        # connection into others (regardless of the cache key format).
+        common.NODE_CONNECTIONS.clear()
+        common.NODE_CONNECTIONS.update(saved_connections)
+
+
+def test_query_node_connection_uses_cluster_http_port() -> None:
+    """
+    Counterpart to test_by_host_connection_uses_default_http_port: the
+    query-node helper (get_ro_query_node_connection — used by the tracing,
+    querylog and cardinality tools) connects to the cluster's *configured query
+    endpoint*, the same host the normal read path reaches on
+    cluster.get_http_port(). That endpoint may be a load balancer on a
+    non-default HTTP port, so this path must keep using cluster.get_http_port()
+    rather than the by-host default — otherwise the HTTP driver would send those
+    tools to the wrong port.
+    """
+    from snuba.admin.clickhouse import common
+    from snuba.clusters.cluster import ClickhouseCluster, connection_cache
+
+    # A port that is deliberately not the well-known default, so the assertion
+    # below proves the query-node path uses the cluster's configured port and
+    # not the by-host default.
+    sentinel_cluster_http_port = 65432
+
+    # get_ro_query_node_connection caches in CLUSTER_CONNECTIONS, and the
+    # underlying get_ro_node_connection caches in NODE_CONNECTIONS; snapshot and
+    # restore both so the call is exercised and nothing leaks.
+    saved_node = dict(common.NODE_CONNECTIONS)
+    saved_cluster = dict(common.CLUSTER_CONNECTIONS)
+    common.NODE_CONNECTIONS.clear()
+    common.CLUSTER_CONNECTIONS.clear()
+    try:
+        with (
+            patch.object(common, "_validate_node"),  # treat the host as valid
+            patch.object(
+                ClickhouseCluster,
+                "get_http_port",
+                return_value=sentinel_cluster_http_port,
+            ),
+            patch.object(connection_cache, "get_node_connection") as mock_pool,
+        ):
+            common.get_ro_query_node_connection("errors", ClickhouseClientSettings.QUERY)
+
+        assert mock_pool.called, "expected a pool to be acquired for the query node"
+        node = mock_pool.call_args.args[1]
+        assert node.http_port == sentinel_cluster_http_port, (
+            "the query-node connection must use the cluster's configured http_port"
+        )
+    finally:
+        common.NODE_CONNECTIONS.clear()
+        common.NODE_CONNECTIONS.update(saved_node)
+        common.CLUSTER_CONNECTIONS.clear()
+        common.CLUSTER_CONNECTIONS.update(saved_cluster)
 
 
 @pytest.mark.parametrize(
@@ -353,7 +481,7 @@ def test_sudo_mode_skips_experimental_analyzer(sql_query: str, sudo_mode: bool) 
     """
     from unittest.mock import patch
 
-    with patch("snuba.admin.clickhouse.system_queries._run_sql_query_on_host") as mock_run:
+    with patch("snuba.admin.clickhouse.system_queries._run_explain_on_host") as mock_run:
         # Mock the response to simulate successful validation
         mock_result = type("MockResult", (), {"results": []})()
         mock_run.return_value = mock_result
@@ -374,7 +502,7 @@ def test_sudo_mode_skips_experimental_analyzer(sql_query: str, sudo_mode: bool) 
         assert len(calls) > 0, "Expected EXPLAIN QUERY TREE to be called"
 
         # Get the explain query from the call - it's the 4th positional argument (index 3)
-        # call signature: _run_sql_query_on_host(host, port, storage, sql, sudo, clusterless)
+        # call signature: _run_explain_on_host(host, port, storage, sql, clusterless)
         explain_query = calls[0][0][3]  # Fourth argument is the SQL query
 
         if sudo_mode:
@@ -389,11 +517,24 @@ def test_sudo_mode_skips_experimental_analyzer(sql_query: str, sudo_mode: bool) 
             )
 
 
+# Names that acquire a ClickhousePool (and therefore send credentials to a
+# node): the connection cache accessor and direct construction of either pool
+# implementation. Any of these in admin code must sit behind _validate_node.
+_POOL_ACQUISITION_NAMES = frozenset(
+    {
+        "get_node_connection",
+        "ClickhouseNativePool",
+        "ClickhouseConnectPool",
+    }
+)
+
+
 def _find_clickhouse_pool_calls(tree: ast.AST) -> list[tuple[ast.Call, list[str]]]:
     """
-    Walks an AST and returns every `ClickhousePool(...)` call site, paired
-    with the chain of enclosing function names (outermost first) so the
-    regression guard below can assert *where* construction happens.
+    Walks an AST and returns every pool-acquisition call site (cache accessor
+    or direct pool construction), paired with the chain of enclosing function
+    names (outermost first) so the regression guard below can assert *where*
+    acquisition happens.
     """
     results: list[tuple[ast.Call, list[str]]] = []
 
@@ -420,7 +561,7 @@ def _find_clickhouse_pool_calls(tree: ast.AST) -> list[tuple[ast.Call, list[str]
                 if isinstance(func, ast.Attribute)
                 else None
             )
-            if name == "ClickhousePool":
+            if name in _POOL_ACQUISITION_NAMES:
                 results.append((node, list(self.scope)))
             self.generic_visit(node)
 
@@ -430,19 +571,21 @@ def _find_clickhouse_pool_calls(tree: ast.AST) -> list[tuple[ast.Call, list[str]
 
 def test_no_direct_clickhouse_pool_construction_in_admin() -> None:
     """
-    Defense-in-depth for EAP-488: ClickhousePool ships the configured
-    user/password in the first hello packet of the native protocol, so any
-    admin code path that constructs one against a caller-supplied host
-    leaks credentials to whatever listener answers. `_build_validated_pool`
-    in snuba/admin/clickhouse/common.py is the single chokepoint that runs
-    `_validate_node` first — every other admin module must go through it.
+    Defense-in-depth for EAP-488: a ClickhousePool ships the configured
+    user/password to the node (the native protocol's first hello packet, or
+    the HTTP auth header), so any admin code path that acquires one against a
+    caller-supplied host leaks credentials to whatever listener answers.
+    `_build_validated_pool` in snuba/admin/clickhouse/common.py is the single
+    chokepoint that runs `_validate_node` first — every other admin module
+    must go through it.
 
-    This test enforces that structural invariant by AST-walking every
-    snuba/admin/**/*.py file:
+    "Acquiring" a pool means either constructing one of the pool
+    implementations directly or fetching one from the shared connection cache
+    via `get_node_connection`. This test enforces that structural invariant by
+    AST-walking every snuba/admin/**/*.py file:
 
-    * common.py may only construct ClickhousePool from inside
-      `_build_validated_pool`.
-    * No other admin module may construct ClickhousePool at all.
+    * common.py may only acquire a pool from inside `_build_validated_pool`.
+    * No other admin module may acquire a pool at all.
 
     If this fails, a new caller has likely re-introduced the vulnerability.
     """
@@ -460,13 +603,13 @@ def test_no_direct_clickhouse_pool_construction_in_admin() -> None:
             if py_file == common_path:
                 if scope != ["_build_validated_pool"]:
                     offenders.append(
-                        f"{location} constructs ClickhousePool inside "
+                        f"{location} acquires a ClickhousePool inside "
                         f"{'.'.join(scope) or '<module>'} — must be inside "
                         "_build_validated_pool so _validate_node runs first."
                     )
             else:
                 offenders.append(
-                    f"{location} constructs ClickhousePool directly — call "
+                    f"{location} acquires a ClickhousePool directly — call "
                     "_build_validated_pool (or a helper that wraps it) so "
                     "_validate_node guards the host before credentials are sent."
                 )

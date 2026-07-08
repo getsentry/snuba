@@ -4,7 +4,6 @@ use sentry_arroyo::metrics::{Metric, MetricType, MetricValue, Recorder};
 
 use crate::config::EnvConfig;
 use crate::metrics::global_tags::get_global_tags;
-use crate::runtime_config::get_str_config;
 
 /// A metrics backend that uses `metrics-exporter-dogstatsd` to send metrics
 /// to DogStatsD over UDP or Unix domain sockets. Adapts arroyo's [`Recorder`]
@@ -86,18 +85,36 @@ fn select_transport(env: &EnvConfig, use_uds: bool) -> DogStatsDTransport<'_> {
 /// stable UDP path.
 ///
 /// Returns `None` when neither transport is configured, leaving metrics disabled.
+/// Reads the `use_dogstatsd_uds` rollout flag from the legacy Redis runtime config
+/// (via `snuba.state.get_str_config`). snuba's generic Rust runtime-config reader has
+/// moved to sentry-options, but this toggle stays on the runtime config so it can be
+/// flipped live from snuba-admin without a deploy, and so it reads the same store as the
+/// Python `create_metrics()`. Any failure (config unavailable, Python error) defaults to
+/// `false`, i.e. the stable UDP path.
+fn use_dogstatsd_uds_enabled() -> bool {
+    use pyo3::prelude::{PyModule, Python};
+    use pyo3::types::PyAnyMethods;
+
+    Python::with_gil(|py| -> Option<bool> {
+        let value: Option<String> = PyModule::import(py, "snuba.state")
+            .ok()?
+            .getattr("get_str_config")
+            .ok()?
+            .call1(("use_dogstatsd_uds",))
+            .ok()?
+            .extract()
+            .ok()?;
+        Some(value.as_deref() == Some("1"))
+    })
+    .unwrap_or(false)
+}
+
 pub fn create_dogstatsd_backend(
     env: &EnvConfig,
     prefix: &str,
     tags: &[(&str, String)],
 ) -> Option<DogStatsDBackend> {
-    let use_uds = matches!(
-        get_str_config("use_dogstatsd_uds")
-            .ok()
-            .flatten()
-            .as_deref(),
-        Some("1")
-    );
+    let use_uds = use_dogstatsd_uds_enabled();
 
     match select_transport(env, use_uds) {
         DogStatsDTransport::Uds(socket_path) => {
