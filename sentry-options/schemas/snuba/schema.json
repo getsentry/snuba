@@ -258,6 +258,89 @@
       },
       "default": {},
       "description": "Dict mapping an outcomes-based routing strategy class name to the minimum query time range in seconds for which outcomes are queried. Strategies with no entry use 14400 (4 hours). Migrated from per-strategy runtime config <ClassName>.min_timerange_to_query_outcomes."
+    },
+    "project_quota_time_percentage": {
+      "type": "number",
+      "default": 1.0,
+      "description": "Fraction of the counter window a project may spend on replacements before it is reported as exceeding the time limit."
+    },
+    "counter_window_size_minutes": {
+      "type": "integer",
+      "default": 10,
+      "description": "Size in minutes of the rolling window the replacement bucket timer uses to track per-project processing time."
+    },
+    "allows_skipping_single_project_replacements": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, a single project that exceeds the replacement time limit can be skipped (otherwise only multi-project groups are skipped)."
+    },
+    "mem_rate_limit_per_sec": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number"
+      },
+      "default": {},
+      "description": "Dict mapping in-process rate-limit bucket name to a maximum operations-per-second. Buckets with no entry are unlimited (rate limiter off). Migrated from per-bucket runtime config mem_rate_limit_per_sec_<bucket>."
+    },
+    "bypass_rate_limit": {
+      "type": "integer",
+      "default": 0,
+      "description": "When set to 1, all Redis-backed rate limits are bypassed (no limiting applied). Migrated from runtime config bypass_rate_limit."
+    },
+    "rate_history_sec": {
+      "type": "integer",
+      "default": 3600,
+      "description": "Number of seconds the rate limiter keeps per-request timestamps in its Redis sorted set. Migrated from runtime config rate_history_sec."
+    },
+    "rate_limit_shard_factor": {
+      "type": "integer",
+      "default": 1,
+      "description": "Number of shards each rate-limit Redis set is split into. Increasing it multiplies the number of Redis keys and reduces the size of each set. Migrated from runtime config rate_limit_shard_factor."
+    },
+    "mandatory_condition_enforce": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, queries missing mandatory condition columns raise an assertion; otherwise the omission is only logged."
+    },
+    "skip_final_subscriptions_projects": {
+      "type": "string",
+      "default": "[]",
+      "description": "Bracketed comma-separated list of project ids for which subscription queries skip the FINAL keyword."
+    },
+    "post_replacement_consistency_projects_denylist": {
+      "type": "string",
+      "default": "[]",
+      "description": "Bracketed comma-separated list of project ids that are forced to FINAL after a replacement."
+    },
+    "max_group_ids_exclude": {
+      "type": "integer",
+      "default": 256,
+      "description": "Maximum number of group ids excluded from a query before it falls back to FINAL instead of an exclusion set."
+    },
+    "skip_seen_offsets": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the replacer skips replacement messages whose offset has already been seen."
+    },
+    "consumer_groups_to_reset_offset_check": {
+      "type": "string",
+      "default": "[]",
+      "description": "Bracketed comma-separated list of consumer groups whose replacer offset-seen check should be reset."
+    },
+    "write_node_replacements_global": {
+      "type": "number",
+      "default": 1.0,
+      "description": "Probability [0,1] that a replacement is written to every storage node rather than only the distributed table."
+    },
+    "replacements_bypass_projects": {
+      "type": "string",
+      "default": "[]",
+      "description": "JSON array of project ids for which error replacements are skipped."
+    },
+    "replacements_expiry_window_minutes": {
+      "type": "integer",
+      "default": 5,
+      "description": "Window in minutes for which a project that recently received replacements is kept in the auto-replacements bypass set. Migrated from runtime config replacements_expiry_window_minutes."
     }
   }
 }
