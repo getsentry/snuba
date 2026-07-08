@@ -4,8 +4,8 @@ from datetime import datetime
 from typing import Any
 
 import pytest
+from sentry_options.testing import override_options
 
-from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
@@ -185,8 +185,8 @@ def test_tenant_ids(
 
 
 @pytest.mark.redis_db
+@override_options("snuba", {"snql_disabled_dataset": {"events": True}})
 def test_disabled_dataset() -> None:
-    state.set_config("snql_disabled_dataset__events", True)
     dataset = get_dataset("events")
     schema = RequestSchema.build(HTTPQuerySettings)
 

@@ -2,8 +2,8 @@ from collections.abc import MutableMapping
 from typing import Any
 
 import pytest
+from sentry_options.testing import override_options
 
-from snuba import state
 from snuba.clickhouse.columns import ColumnSet, DateTime, String
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.query import Query
@@ -97,11 +97,11 @@ def test_per_query_settings() -> None:
 
 
 @pytest.mark.redis_db
+@override_options(
+    "snuba",
+    {"ignore_clickhouse_settings_override": "max_execution_time,timeout_overflow_mode"},
+)
 def test_ignore_clickhouse_settings_overrides() -> None:
-    state.set_config(
-        "ignore_clickhouse_settings_override",
-        "max_execution_time,timeout_overflow_mode",
-    )
     query = Query(
         Table(
             "discover",

@@ -9,6 +9,7 @@ import pytest
 import rapidjson
 from confluent_kafka import Consumer
 from confluent_kafka.admin import AdminClient
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba import settings
@@ -17,7 +18,6 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.lw_deletions.types import AttributeConditions
 from snuba.query.exceptions import InvalidQueryException
-from snuba.state import set_config
 from snuba.utils.manage_topics import create_topics
 from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.topics import Topic
@@ -98,12 +98,12 @@ def test_deletes_not_enabled_on_storage() -> None:
 
 
 @pytest.mark.redis_db
+@override_options("snuba", {"storage_deletes_enabled": False})
 def test_deletes_not_enabled_runtime_config() -> None:
     storage = get_writable_storage(StorageKey("search_issues"))
     conditions = {"project_id": [1], "group_id": [1, 2, 3, 4]}
     attr_info = get_attribution_info()
 
-    set_config("storage_deletes_enabled", 0)
     with pytest.raises(DeletesNotEnabledError):
         delete_from_storage(storage, conditions, attr_info)
 
@@ -111,12 +111,12 @@ def test_deletes_not_enabled_runtime_config() -> None:
 @pytest.mark.redis_db
 @patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10)
 @patch("snuba.web.bulk_delete_query.produce_delete_query")
+@override_options("snuba", {"lw_deletes_killswitch": {"search_issues": "[1]"}})
 def test_deletes_killswitch(mock_produce_query: Mock, mock_enforce_rows: Mock) -> None:
     storage = get_writable_storage(StorageKey("search_issues"))
     conditions = {"project_id": [1], "group_id": [1, 2, 3, 4]}
     attr_info = get_attribution_info()
 
-    set_config("lw_deletes_killswitch_search_issues", "[1]")
     delete_from_storage(storage, conditions, attr_info)
     mock_produce_query.assert_not_called()
 
@@ -269,37 +269,31 @@ def test_attribute_conditions_feature_flag_enabled() -> None:
     )
     attr_info = get_attribution_info()
 
-    # Enable the feature flag
-    set_config("permit_delete_by_attribute", 1)
+    # Mock out _enforce_max_rows to avoid needing actual data
+    with (
+        override_options("snuba", {"permit_delete_by_attribute": True}),
+        patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10),
+        patch("snuba.web.bulk_delete_query.produce_delete_query") as mock_produce,
+    ):
+        # Should process normally and produce a message
+        result = delete_from_storage(storage, conditions, attr_info, attribute_conditions)
 
-    try:
-        # Mock out _enforce_max_rows to avoid needing actual data
-        with (
-            patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10),
-            patch("snuba.web.bulk_delete_query.produce_delete_query") as mock_produce,
-        ):
-            # Should process normally and produce a message
-            result = delete_from_storage(storage, conditions, attr_info, attribute_conditions)
+        # Should have produced a message
+        assert mock_produce.call_count == 1
+        # Should return success results
+        assert result != {}
 
-            # Should have produced a message
-            assert mock_produce.call_count == 1
-            # Should return success results
-            assert result != {}
-
-            # Verify the message includes attribute_conditions
-            call_args = mock_produce.call_args[0][0]
-            assert "attribute_conditions" in call_args
-            assert call_args["attribute_conditions"] == {
-                "group_id": {
-                    "attr_key_name": "group_id",
-                    "attr_key_type": AttributeKey.TYPE_INT,
-                    "attr_values": [12345],
-                }
+        # Verify the message includes attribute_conditions
+        call_args = mock_produce.call_args[0][0]
+        assert "attribute_conditions" in call_args
+        assert call_args["attribute_conditions"] == {
+            "group_id": {
+                "attr_key_name": "group_id",
+                "attr_key_type": AttributeKey.TYPE_INT,
+                "attr_values": [12345],
             }
-            assert call_args["attribute_conditions_item_type"] == TRACE_ITEM_TYPE_OCCURRENCE
-    finally:
-        # Clean up: disable the feature flag
-        set_config("permit_delete_by_attribute", 0)
+        }
+        assert call_args["attribute_conditions_item_type"] == TRACE_ITEM_TYPE_OCCURRENCE
 
 
 @pytest.mark.redis_db
@@ -321,8 +315,7 @@ def test_eap_items_counts_each_table_against_its_readonly_replica() -> None:
     )
     attr_info = get_attribution_info()
 
-    set_config("permit_delete_by_attribute", 1)
-    try:
+    with override_options("snuba", {"permit_delete_by_attribute": True}):
         with (
             patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10) as mock_enforce,
             patch("snuba.web.bulk_delete_query.produce_delete_query"),
@@ -344,8 +337,6 @@ def test_eap_items_counts_each_table_against_its_readonly_replica() -> None:
             "eap_items_downsample_64_ro",
             "eap_items_downsample_512_ro",
         }
-    finally:
-        set_config("permit_delete_by_attribute", 0)
 
 
 def test_count_storage_key_mapping_without_readonly_storage_set() -> None:
