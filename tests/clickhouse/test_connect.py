@@ -6,6 +6,7 @@ import pytest
 from snuba.clickhouse.connect import ClickhouseConnectPool
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
+from snuba.clusters.cluster import ClickhouseClientSettings
 
 # Error code returned by ClickHouse when the maximum number of simultaneous
 # queries has been exceeded.
@@ -183,9 +184,19 @@ def test_send_receive_timeout_unbounded_when_profile_has_none() -> None:
 def test_read_query_client_settings_use_25s_timeout() -> None:
     # Read queries (the QUERY profile) get a 25s timeout on both drivers, leaving
     # headroom under the frontend request budget.
-    from snuba.clusters.cluster import ClickhouseClientSettings
 
-    assert ClickhouseClientSettings.QUERY.value.timeout == 25
+    settings = ClickhouseClientSettings.QUERY.value
+    assert settings.settings == {"max_execution_time": 25}
+    assert settings.timeout == 25
+
+
+def test_tracing_client_settings_use_25s_timeout() -> None:
+    # Tracing queries (the TRACING profile) get a 25s timeout on both drivers, leaving
+    # headroom under the frontend request budget.
+
+    settings = ClickhouseClientSettings.TRACING.value
+    assert settings.settings == {"readonly": 2, "max_execution_time": 25}
+    assert ClickhouseClientSettings.TRACING.value.timeout == 25
 
 
 def test_internal_profile_is_unbounded() -> None:
@@ -193,8 +204,6 @@ def test_internal_profile_is_unbounded() -> None:
     # (topology discovery, routing load lookups, delete throttling checks, the
     # span-export job, table copies). They use the INTERNAL profile, which stays
     # unbounded so long-running operations aren't capped at 30s.
-    from snuba.clusters.cluster import ClickhouseClientSettings
-
     assert ClickhouseClientSettings.INTERNAL.value.timeout is None
 
 
