@@ -33,6 +33,10 @@ from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
 from snuba.state import set_config
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from snuba.web import QueryResult
+from tests.configs.component_config import (
+    override_component_config,
+    override_component_configs,
+)
 
 
 def test_eq() -> None:
@@ -62,9 +66,9 @@ def test_eq() -> None:
 
 @pytest.mark.redis_db
 def test_passthrough_allows_queries() -> None:
-    DEFAULT_PASSTHROUGH_POLICY.set_config_value("max_threads", 420)
-    assert DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance({}, "deadbeef").can_run
-    assert DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance({}, "deadbeef").max_threads == 420
+    with override_component_config(DEFAULT_PASSTHROUGH_POLICY, "max_threads", 420):
+        assert DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance({}, "deadbeef").can_run
+        assert DEFAULT_PASSTHROUGH_POLICY.get_quota_allowance({}, "deadbeef").max_threads == 420
 
 
 class RejectingEverythingAllocationPolicy(PassthroughPolicy):
@@ -291,55 +295,48 @@ def test_config_validation(policy: AllocationPolicy) -> None:
         == "'my_param_config' parameter 'org' needs to be of type int (not str) for SomeParametrizedConfigPolicy!"
     )
 
-    # strings should convert into ints if expected type is int
-    policy.set_config_value(
-        config_key="my_param_config", value=10, params={"org": "10", "ref": "test"}
-    )
-    assert policy.get_config_value("my_param_config", {"org": 10, "ref": "test"}) == 10
+    # a valid set_config_value with string params/value that coerce to int must
+    # not raise; the coerced override is then read back with int params.
+    with override_component_config(
+        policy, "my_param_config", 10, params={"org": "10", "ref": "test"}
+    ):
+        assert policy.get_config_value("my_param_config", {"org": 10, "ref": "test"}) == 10
 
 
 @pytest.mark.redis_db
-def test_add_delete_config_value(policy: AllocationPolicy) -> None:
-    """Test adding + resetting a simple config"""
+def test_config_value_override(policy: AllocationPolicy) -> None:
+    """An override takes precedence; without one, the code default applies."""
     config_key = "my_config"
 
-    policy.set_config_value(config_key=config_key, value=100)
-    assert policy.get_config_value(config_key=config_key) == 100
-
-    policy.delete_config_value(config_key=config_key)
-    # back to default
+    with override_component_config(policy, config_key, 100):
+        assert policy.get_config_value(config_key=config_key) == 100
+    # no override -> back to default
     assert policy.get_config_value(config_key=config_key) == 10
 
-    """Test adding + deleting an optional config"""
     config_key = "my_param_config"
     params = {"org": 10, "ref": "test"}
 
-    policy.set_config_value(config_key=config_key, value=100, params=params)
-    assert policy.get_config_value(config_key=config_key, params=params) == 100
-
-    policy.delete_config_value(config_key=config_key, params=params)
-    # back to default
+    with override_component_config(policy, config_key, 100, params=params):
+        assert policy.get_config_value(config_key=config_key, params=params) == 100
+    # no override -> back to default
     assert policy.get_config_value(config_key=config_key, params=params) == -1
 
 
 @pytest.mark.redis_db
 def test_default_config_overrides(policy: AllocationPolicy) -> None:
     assert policy.is_enforced == 1
-    policy.set_config_value(config_key="is_enforced", value=0)
-    assert policy.is_enforced == 0
-    policy.set_config_value(config_key="is_enforced", value=1)
+    with override_component_config(policy, "is_enforced", 0):
+        assert policy.is_enforced == 0
     assert policy.is_enforced == 1
 
     assert policy.is_active == 1
-    policy.set_config_value(config_key="is_active", value=0)
-    assert policy.is_active == 0
-    policy.set_config_value(config_key="is_active", value=1)
+    with override_component_config(policy, "is_active", 0):
+        assert policy.is_active == 0
     assert policy.is_active == 1
 
     assert policy.max_threads == 10
-    policy.set_config_value(config_key="max_threads", value=4)
-    assert policy.max_threads == 4
-    policy.set_config_value(config_key="max_threads", value=10)
+    with override_component_config(policy, "max_threads", 4):
+        assert policy.max_threads == 4
     assert policy.max_threads == 10
 
 
@@ -415,8 +412,14 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
         "value": 4,
         "params": {},
     } in policy_configs
-    assert policy.is_enforced == 0
-    assert policy.max_threads == 4
+    # get_current_configs reflects the legacy Redis writes above (the snuba-admin
+    # view); the runtime property reads now come from the sentry-option overrides.
+    with override_component_configs(
+        (policy, "is_enforced", 0),
+        (policy, "max_threads", 4),
+    ):
+        assert policy.is_enforced == 0
+        assert policy.max_threads == 4
 
 
 @pytest.mark.redis_db
@@ -468,11 +471,10 @@ def test_is_not_active() -> None:
     with pytest.raises(ValueError):
         policy.update_quota_balance(tenant_ids, "deadbeef", result_or_error)
 
-    policy.set_config_value(config_key="is_active", value=0)  # make policy inactive
-
-    # Should not error anymore since private methods are not called due to inactivity
-    policy.get_quota_allowance(tenant_ids, "deadbeef")
-    policy.update_quota_balance(tenant_ids, "deadbeef", result_or_error)
+    with override_component_config(policy, "is_active", 0):  # make policy inactive
+        # Should not error anymore since private methods are not called due to inactivity
+        policy.get_quota_allowance(tenant_ids, "deadbeef")
+        policy.update_quota_balance(tenant_ids, "deadbeef", result_or_error)
 
 
 @pytest.mark.redis_db
@@ -500,13 +502,15 @@ def test_is_not_enforced() -> None:
     quota_allowance = reject_policy.get_quota_allowance(tenant_ids, "deadbeef")
     assert not quota_allowance.can_run and quota_allowance.max_threads == 0
 
-    reject_policy.set_config_value(config_key="is_enforced", value=0)
-    # policy not enforced so we don't reject the query
-    reject_policy.get_quota_allowance(tenant_ids, "deadbeef")
+    with override_component_config(reject_policy, "is_enforced", 0):
+        # policy not enforced so we don't reject the query
+        reject_policy.get_quota_allowance(tenant_ids, "deadbeef")
 
     assert throttle_policy.get_quota_allowance(tenant_ids, "deadbeef").max_threads == 1
-    throttle_policy.set_config_value(config_key="is_enforced", value=0)
-    assert throttle_policy.get_quota_allowance(tenant_ids, "deadbeef").max_threads == MAX_THREADS
+    with override_component_config(throttle_policy, "is_enforced", 0):
+        assert (
+            throttle_policy.get_quota_allowance(tenant_ids, "deadbeef").max_threads == MAX_THREADS
+        )
 
     rejected_metrics = get_recorded_metric_calls(
         "increment", "allocation_policy.db_request_rejected"

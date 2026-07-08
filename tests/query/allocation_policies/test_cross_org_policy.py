@@ -4,6 +4,7 @@ from snuba.configs.configuration import InvalidConfig
 from snuba.query.allocation_policies import QueryResultOrError
 from snuba.query.allocation_policies.cross_org import CrossOrgQueryAllocationPolicy
 from snuba.web import QueryResult
+from tests.configs.component_config import override_component_config
 
 _RESULT_SUCCESS = QueryResultOrError(
     QueryResult(
@@ -105,32 +106,33 @@ class TestCrossOrgQueryAllocationPolicy:
                 },
             }
         )
-        policy.set_config_value(
+        with override_component_config(
+            policy,
             "referrer_max_threads_override",
             2,
             {"referrer": "statistical_detectors"},
-        )
-        assert (
-            policy.get_quota_allowance(
-                tenant_ids={"referrer": "statistical_detectors"}, query_id="1"
-            ).max_threads
-            == 2
-        )
-        policy.update_quota_balance(
-            tenant_ids={"referrer": "statistical_detectors"},
-            query_id="1",
-            result_or_error=_RESULT_SUCCESS,
-        )
-        policy.set_config_value(
+        ):
+            assert (
+                policy.get_quota_allowance(
+                    tenant_ids={"referrer": "statistical_detectors"}, query_id="1"
+                ).max_threads
+                == 2
+            )
+            policy.update_quota_balance(
+                tenant_ids={"referrer": "statistical_detectors"},
+                query_id="1",
+                result_or_error=_RESULT_SUCCESS,
+            )
+        with override_component_config(
+            policy,
             "referrer_concurrent_override",
             0,
             {"referrer": "statistical_detectors"},
-        )
-
-        quota_allowance = policy.get_quota_allowance(
-            tenant_ids={"referrer": "statistical_detectors"}, query_id="2"
-        )
-        assert not quota_allowance.can_run and quota_allowance.max_threads == 0
+        ):
+            quota_allowance = policy.get_quota_allowance(
+                tenant_ids={"referrer": "statistical_detectors"}, query_id="2"
+            )
+            assert not quota_allowance.can_run and quota_allowance.max_threads == 0
 
     @pytest.mark.redis_db
     def test_override_unregistered_referrer(self):
@@ -160,10 +162,10 @@ class TestCrossOrgQueryAllocationPolicy:
             {"referrer": "statistical_detectors"},
         )
         # can still set regular configs
-        policy.set_config_value("is_enforced", False)
-        assert not policy.is_enforced
-        policy.set_config_value("is_enforced", True)
-        assert policy.is_enforced
+        with override_component_config(policy, "is_enforced", 0):
+            assert not policy.is_enforced
+        with override_component_config(policy, "is_enforced", 1):
+            assert policy.is_enforced
 
     @pytest.mark.redis_db
     def test_throttle_cross_org_query_with_unregistered_referrer(self):

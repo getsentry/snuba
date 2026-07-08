@@ -15,6 +15,10 @@ from snuba.query.allocation_policies.concurrent_rate_limit import (
     ConcurrentRateLimitAllocationPolicy,
 )
 from snuba.web import QueryException, QueryResult
+from tests.configs.component_config import (
+    override_component_config,
+    override_component_configs,
+)
 
 _RESULT_SUCCESS = QueryResultOrError(
     QueryResult(
@@ -85,16 +89,17 @@ def test_configure_max_query_duration(
 ) -> None:
     max_query_duration_s = 1
     sleep_time = 1.01
-    policy.set_config_value("concurrent_limit", 1)
-    policy.set_config_value("max_query_duration_s", max_query_duration_s)
-
-    policy.get_quota_allowance(tenant_ids={"organization_id": 123}, query_id="abc1")
-    time.sleep(sleep_time)
-    assert policy.get_quota_allowance(
-        tenant_ids={"organization_id": 123}, query_id="abc2"
-    ).can_run, (
-        "max_query_duration_s is set to {max_query_duration_s}, test sleeps for {sleep_time} seconds, the first query should have no longer been counted towards the concurrent limit"
-    )
+    with override_component_configs(
+        (policy, "concurrent_limit", 1),
+        (policy, "max_query_duration_s", max_query_duration_s),
+    ):
+        policy.get_quota_allowance(tenant_ids={"organization_id": 123}, query_id="abc1")
+        time.sleep(sleep_time)
+        assert policy.get_quota_allowance(
+            tenant_ids={"organization_id": 123}, query_id="abc2"
+        ).can_run, (
+            "max_query_duration_s is set to {max_query_duration_s}, test sleeps for {sleep_time} seconds, the first query should have no longer been counted towards the concurrent limit"
+        )
 
 
 @pytest.mark.redis_db
@@ -253,15 +258,14 @@ def test_apply_overrides(
     expected_overrides,
     expected_concurrent_limit,
 ) -> None:
-    for override in overrides:
-        policy.set_config_value(*override)
-    for i in range(expected_concurrent_limit):
-        policy.get_quota_allowance(tenant_ids=tenant_ids, query_id=f"{i}")
-    allowance = policy.get_quota_allowance(
-        tenant_ids=tenant_ids, query_id=f"{expected_concurrent_limit + 1}"
-    )
-    assert not allowance.can_run and allowance.max_threads == 0
-    assert allowance.explanation["overrides"] == expected_overrides
+    with override_component_configs(*[(policy, *override) for override in overrides]):
+        for i in range(expected_concurrent_limit):
+            policy.get_quota_allowance(tenant_ids=tenant_ids, query_id=f"{i}")
+        allowance = policy.get_quota_allowance(
+            tenant_ids=tenant_ids, query_id=f"{expected_concurrent_limit + 1}"
+        )
+        assert not allowance.can_run and allowance.max_threads == 0
+        assert allowance.explanation["overrides"] == expected_overrides
 
 
 @pytest.mark.redis_db
@@ -271,48 +275,49 @@ def test_override_isolation(
     override_concurrent_limit = 1
     project_id = 1234
     overridden_referrer = "overridden_referrer"
-    policy.set_config_value(
+    with override_component_config(
+        policy,
         "referrer_project_override",
         override_concurrent_limit,
         {"project_id": project_id, "referrer": overridden_referrer},
-    )
-    for i in range(MAX_CONCURRENT_QUERIES):
-        policy.get_quota_allowance(
-            tenant_ids={"project_id": project_id, "referrer": "a_different_referrer"},
-            query_id=str(i),
-        )
-    # query the override referrer, it should not reject because overrides are counted on their own
-    assert policy.get_quota_allowance(
-        tenant_ids={"project_id": project_id, "referrer": overridden_referrer},
-        query_id="uniq_string_1",
-    ).can_run
-
-    # finish the overridden referrer query, make sure another one can run
-    policy.update_quota_balance(
-        tenant_ids={"project_id": project_id, "referrer": overridden_referrer},
-        query_id="uniq_string_1",
-        result_or_error=_RESULT_SUCCESS,
-    )
-    try:
-        policy.get_quota_allowance(
+    ):
+        for i in range(MAX_CONCURRENT_QUERIES):
+            policy.get_quota_allowance(
+                tenant_ids={"project_id": project_id, "referrer": "a_different_referrer"},
+                query_id=str(i),
+            )
+        # query the override referrer, it should not reject because overrides are counted on their own
+        assert policy.get_quota_allowance(
             tenant_ids={"project_id": project_id, "referrer": overridden_referrer},
-            query_id="uniq_string_2",
+            query_id="uniq_string_1",
+        ).can_run
+
+        # finish the overridden referrer query, make sure another one can run
+        policy.update_quota_balance(
+            tenant_ids={"project_id": project_id, "referrer": overridden_referrer},
+            query_id="uniq_string_1",
+            result_or_error=_RESULT_SUCCESS,
         )
-    except Exception:
-        pytest.fail("overridden query was finished, another one should have been able to run")
+        try:
+            policy.get_quota_allowance(
+                tenant_ids={"project_id": project_id, "referrer": overridden_referrer},
+                query_id="uniq_string_2",
+            )
+        except Exception:
+            pytest.fail("overridden query was finished, another one should have been able to run")
 
-    # finish a non-overidden query
-    policy.update_quota_balance(
-        tenant_ids={"project_id": project_id, "referrer": "a_different_referrer"},
-        query_id="1",
-        result_or_error=_RESULT_SUCCESS,
-    )
+        # finish a non-overidden query
+        policy.update_quota_balance(
+            tenant_ids={"project_id": project_id, "referrer": "a_different_referrer"},
+            query_id="1",
+            result_or_error=_RESULT_SUCCESS,
+        )
 
-    # our overridden referrer should still error because an update to the non-overridden limits shouldn't affect the overridden ones
-    assert not policy.get_quota_allowance(
-        tenant_ids={"project_id": project_id, "referrer": overridden_referrer},
-        query_id="uniq_string_3",
-    ).can_run
+        # our overridden referrer should still error because an update to the non-overridden limits shouldn't affect the overridden ones
+        assert not policy.get_quota_allowance(
+            tenant_ids={"project_id": project_id, "referrer": overridden_referrer},
+            query_id="uniq_string_3",
+        ).can_run
 
 
 def test_pass_through(policy: ConcurrentRateLimitAllocationPolicy) -> None:

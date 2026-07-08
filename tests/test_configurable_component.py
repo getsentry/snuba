@@ -13,6 +13,7 @@ from snuba.query.allocation_policies import AllocationPolicy
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingStrategyConfig,
 )
+from tests.configs.component_config import override_component_config
 
 
 class SomeConfigurableComponent(ConfigurableComponent):
@@ -245,33 +246,51 @@ class TestConfigurableComponentConfigOperations:
         assert test_component.get_config_value("default_config_1") == 100  # Default value
 
     def test_get_config_value_with_params(self, test_component: SomeConfigurableComponent) -> None:
-        """Test getting config value with parameters."""
-        test_component.set_config_value(
-            "override_config_for_org_id", 100, params={"organization_id": 10}
-        )
-
-        assert (
-            test_component.get_config_value(
-                "override_config_for_org_id", params={"organization_id": 10}
+        """Test getting a parameterized config value from a sentry-option override."""
+        with override_component_config(
+            test_component, "override_config_for_org_id", 100, params={"organization_id": 10}
+        ):
+            assert (
+                test_component.get_config_value(
+                    "override_config_for_org_id", params={"organization_id": 10}
+                )
+                == 100
             )
-            == 100
-        )
 
-    def test_set_config_value(self, test_component: SomeConfigurableComponent) -> None:
-        """Test setting config value."""
-        test_component.set_config_value("default_config_1", 200)
-        assert test_component.get_config_value("default_config_1") == 200
+    def test_get_config_value_override(self, test_component: SomeConfigurableComponent) -> None:
+        """A sentry-option override takes precedence over the code default."""
+        assert test_component.get_config_value("default_config_1") == 100
+        with override_component_config(test_component, "default_config_1", 200):
+            assert test_component.get_config_value("default_config_1") == 200
 
-    def test_delete_config_value(self, test_component: SomeConfigurableComponent) -> None:
-        """Test deleting config value."""
+    def test_set_config_value_writes_to_redis(
+        self, test_component: SomeConfigurableComponent
+    ) -> None:
+        """set/delete_config_value still write the legacy Redis store used by
+        snuba-admin. The effect is observed via get_current_configs (not
+        get_config_value, which now reads sentry-options only)."""
         config_key = "default_config_1"
 
         test_component.set_config_value(config_key=config_key, value=5)
-        assert test_component.get_config_value(config_key=config_key) == 5
+        assert {
+            "name": config_key,
+            "type": "int",
+            "default": 100,
+            "description": "A default configuration",
+            "value": 5,
+            "params": {},
+        } in test_component.get_current_configs()
 
+        # default_config_1 is a required config, so deleting resets it to its default.
         test_component.delete_config_value(config_key=config_key)
-        # back to default
-        assert test_component.get_config_value(config_key=config_key) == 100
+        assert {
+            "name": config_key,
+            "type": "int",
+            "default": 100,
+            "description": "A default configuration",
+            "value": 100,
+            "params": {},
+        } in test_component.get_current_configs()
 
     def test_delete_config_value_with_params(
         self, test_component: SomeConfigurableComponent
@@ -280,11 +299,17 @@ class TestConfigurableComponentConfigOperations:
         params = {"organization_id": 10}
 
         test_component.set_config_value(config_key=config_key, value=100, params=params)
-        assert test_component.get_config_value(config_key=config_key, params=params) == 100
+        assert any(
+            c["name"] == config_key and c["params"] == params
+            for c in test_component.get_current_configs()
+        )
 
+        # An optional parameterized config disappears from the live configs on delete.
         test_component.delete_config_value(config_key=config_key, params=params)
-        # back to default
-        assert test_component.get_config_value(config_key=config_key, params=params) == -1
+        assert not any(
+            c["name"] == config_key and c["params"] == params
+            for c in test_component.get_current_configs()
+        )
 
     def test_get_config_value_invalid_config(
         self, test_component: SomeConfigurableComponent

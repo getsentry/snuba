@@ -3,11 +3,13 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
 from typing import Any, TypedDict, TypeVar, cast, final
 
+from sentry_options import OptionValue
+
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.state import delete_config as delete_runtime_config
 from snuba.state import get_all_configs as get_all_runtime_configs
-from snuba.state import get_config as get_runtime_config
 from snuba.state import set_config as set_runtime_config
+from snuba.state.sentry_options import get_option
 from snuba.utils.registered_class import RegisteredClass
 
 logger = logging.getLogger("snuba.configurable_component")
@@ -21,10 +23,10 @@ T = TypeVar("T", bound="ConfigurableComponent")
 # (int/float) on read. This is the authoritative, centrally-managed
 # (sentry-options-automator) source.
 #
-# Migrated components (currently the storage-routing strategies) read this option
-# in their ``get_config_value`` override, falling back only to the code default.
-# The base ``get_config_value`` below is unchanged and still reads the legacy
-# Redis runtime config, so components not yet migrated keep working as before.
+# The base ``get_config_value`` below reads this option and then the code
+# default; the legacy Redis runtime config is no longer consulted for any
+# ConfigurableComponent (allocation policies and storage-routing strategies
+# alike), so editing moves to sentry-options-automator rather than snuba-admin.
 CONFIGURABLE_COMPONENT_OVERRIDES_KEY = "configurable_component_overrides"
 
 
@@ -411,7 +413,13 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         params: dict[str, Any] | None = None,
         validate: bool = True,
     ) -> Any:
-        """Returns value of a configuration on this ConfigurableComponent, or the default if none exists in Redis."""
+        """Returns the value of a configuration on this ConfigurableComponent.
+
+        Reads from the centrally-managed ``configurable_component_overrides``
+        sentry-option (values stored as numbers, cast to the config's declared
+        int/float type), falling back to the code default. The legacy Redis
+        runtime config is not consulted.
+        """
         if params is None:
             params = {}
         config_definition = (
@@ -419,11 +427,11 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
             if validate
             else self.config_definitions()[config_key]
         )
-        return get_runtime_config(
-            key=self._build_runtime_config_key(config_key, params),
-            default=config_definition.default,
-            config_key=self._get_hash(),
-        )
+        full_key = self._build_runtime_config_key(config_key, params)
+        overrides: OptionValue = get_option(CONFIGURABLE_COMPONENT_OVERRIDES_KEY, {})
+        if isinstance(overrides, dict) and full_key in overrides:
+            return config_definition.value_type(overrides[full_key])
+        return config_definition.default
 
     def set_config_value(
         self,
