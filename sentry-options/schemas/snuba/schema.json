@@ -16,7 +16,7 @@
       "type": "object",
       "additionalProperties": { "type": "number" },
       "default": {},
-      "description": "Dict mapping storage name to the fraction (0.0-1.0) of messages older than consumer.dlq_by_age_threshold_seconds (by Kafka broker timestamp) to route to the DLQ, so a backlogged consumer can catch up to fresh data. Storages with no entry default to 0.0 (disabled)."
+      "description": "Dict mapping storage name to the fraction of messages older than consumer.dlq_by_age_threshold_seconds (by Kafka broker timestamp) to route to the DLQ, so a backlogged consumer can catch up to fresh data. 0.0 means route none (disabled); 1.0 means route every too-old message; 0.25 means route ~25% of too-old messages and forward the rest. Storages with no entry default to 0.0 (disabled)."
     },
     "consumer.dlq_by_age_threshold_seconds": {
       "type": "integer",
