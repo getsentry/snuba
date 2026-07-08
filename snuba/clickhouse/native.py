@@ -141,6 +141,32 @@ class ClickhousePool(ABC):
         """
         return self.execute(query, with_column_types=True)
 
+    def execute_with_totals(
+        self,
+        query: str,
+        params: Params = None,
+        query_id: str | None = None,
+        settings: Mapping[str, Any] | None = None,
+        capture_trace: bool = False,
+        robust: bool = False,
+    ) -> ClickhouseResult:
+        """
+        Run a ``WITH TOTALS`` query, returning the totals as the trailing result row
+        (the shape :class:`ClickhouseReader` expects). The native protocol already
+        streams it there, so this default just delegates to :meth:`execute`; the
+        clickhouse-connect pool overrides it (its output drops the totals block).
+        Callers must use this rather than ``execute`` so both drivers work.
+        """
+        execute = self.execute_robust if robust else self.execute
+        return execute(
+            query,
+            params=params,
+            with_column_types=True,
+            query_id=query_id,
+            settings=settings,
+            capture_trace=capture_trace,
+        )
+
     @abstractmethod
     def close(self) -> None:
         raise NotImplementedError
@@ -516,7 +542,9 @@ class ClickhouseReader(Reader):
 
         new_result: Result = {}
         if with_totals:
-            assert len(data) > 0
+            # Both pools return the totals as the trailing row (see
+            # ClickhousePool.execute_with_totals); an empty result means it went missing.
+            assert len(data) > 0, "WITH TOTALS query returned no rows (missing totals row)"
             totals = data.pop(-1)
             new_result = {
                 "data": data,
@@ -552,15 +580,24 @@ class ClickhouseReader(Reader):
         if "query_id" in settings:
             query_id = settings.pop("query_id")
 
-        execute_func = self.__client.execute_robust if robust is True else self.__client.execute
-
-        return self.__transform_result(
-            execute_func(
+        if with_totals:
+            # Totals travel differently per driver, so route through the entry
+            # point both pools implement (see ClickhousePool.execute_with_totals).
+            result = self.__client.execute_with_totals(
+                query.get_sql(),
+                query_id=query_id,
+                settings=settings,
+                capture_trace=capture_trace,
+                robust=robust,
+            )
+        else:
+            execute_func = self.__client.execute_robust if robust else self.__client.execute
+            result = execute_func(
                 query.get_sql(),
                 with_column_types=True,
                 query_id=query_id,
                 settings=settings,
                 capture_trace=capture_trace,
-            ),
-            with_totals=with_totals,
-        )
+            )
+
+        return self.__transform_result(result, with_totals=with_totals)
