@@ -196,7 +196,7 @@ def test_tracing_client_settings_use_25s_timeout() -> None:
 
     settings = ClickhouseClientSettings.TRACING.value
     assert settings.settings == {"readonly": 2, "max_execution_time": 25}
-    assert ClickhouseClientSettings.TRACING.value.timeout == 25
+    assert settings.timeout == 25
 
 
 def test_internal_profile_is_unbounded() -> None:
