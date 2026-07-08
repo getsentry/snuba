@@ -9,7 +9,15 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_trace_items_pb2 import ExportTraceItemsRequest
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
-from sentry_protos.snuba.v1.trace_item_pb2 import TraceItem
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    AttributeKey,
+    AttributeValue,
+)
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
+    ComparisonFilter,
+    TraceItemFilter,
+)
+from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, TraceItem
 
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -83,6 +91,13 @@ def _assert_attributes_keys(trace_items: list[TraceItem]) -> None:
         assert actual_keys == expected_keys
 
 
+def _assert_order_by(sql: str) -> None:
+    assert (
+        "ORDER BY organization_id ASC, project_id ASC, item_type ASC, timestamp ASC, trace_id ASC, item_id ASC"
+        in sql
+    )
+
+
 @pytest.fixture(autouse=False)
 def setup_teardown(eap: None, redis_db: None) -> None:
     items_storage = get_writable_storage(StorageKey("eap_items"))
@@ -113,6 +128,32 @@ class TestExportTraceItems(BaseApiTest):
 
         assert response.trace_items == []
 
+    def test_export_single_item(self) -> None:
+        item_id = uuid.uuid4().int.to_bytes(16, byteorder="little", signed=False)
+        write_raw_unprocessed_events(
+            get_writable_storage(StorageKey("eap_items")),
+            [gen_item_message(start_timestamp=BASE_TIME, item_id=item_id)],
+        )
+
+        message = ExportTraceItemsRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int((BASE_TIME + timedelta(seconds=1)).timestamp())
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                request_id=_REQUEST_ID,
+            ),
+        )
+        response = EndpointExportTraceItems().execute(message)
+
+        actual = response.trace_items[0].item_id
+        assert actual == item_id[::-1]
+
     def test_with_pagination(self, setup_teardown: Any) -> None:
         message = ExportTraceItemsRequest(
             meta=RequestMeta(
@@ -141,6 +182,133 @@ class TestExportTraceItems(BaseApiTest):
         _assert_attributes_keys(items)
 
         assert len(items) == _SPAN_COUNT + _LOG_COUNT
+
+    def test_with_filter(self, setup_teardown: Any) -> None:
+        filter_color = "red"
+        items = [
+            gen_item_message(
+                start_timestamp=BASE_TIME,
+                attributes={"color": AnyValue(string_value=color)},
+            )
+            for color in [
+                filter_color,
+                *[str(s) for s in range(10)],
+                filter_color,
+                filter_color + "not",
+            ]
+        ]
+        write_raw_unprocessed_events(get_writable_storage(StorageKey("eap_items")), items)
+
+        message = ExportTraceItemsRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int((BASE_TIME + timedelta(seconds=1)).timestamp())
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                request_id=_REQUEST_ID,
+            ),
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING,
+                        name="color",
+                    ),
+                    op=ComparisonFilter.OP_EQUALS,
+                    value=AttributeValue(val_str=filter_color),
+                ),
+            ),
+        )
+        response = EndpointExportTraceItems().execute(message)
+
+        assert len(response.trace_items) == 2
+        assert all(i.attributes["color"].string_value == filter_color for i in response.trace_items)
+
+    def test_pagination_with_filter(self, eap: Any, monkeypatch: Any) -> None:
+        # Capture the SQL of every page so we can also assert at the SQL level that
+        # keyset pagination stays anchored to the same total ordering as the ORDER BY.
+        captured: dict[str, Any] = {}
+
+        def _capture(
+            dataset: Any,
+            request: Any,
+            timer: Any,
+            robust: bool = False,
+            concurrent_queries_gauge: Any | None = None,
+        ) -> QueryResult:
+            qr = run_query(dataset, request, timer, robust, concurrent_queries_gauge)
+            captured["query_result"] = qr
+            return qr
+
+        monkeypatch.setattr("snuba.web.rpc.v1.endpoint_export_trace_items.run_query", _capture)
+
+        total = 23
+        limit = 5
+
+        item_ids: dict[str, list[bytes]] = {"red": [], "blue": []}
+        items: list[bytes] = []
+        for i in range(total):
+            item_id = uuid.uuid4().int.to_bytes(16, byteorder="little")
+            color = list(item_ids.keys())[i % 2]
+            # endianness for item_id doesn't get un-reversed on an export like
+            # it does for get_trace, reversing it here for easier validation later
+            item_ids[color].append(item_id[::-1])
+            items.append(
+                gen_item_message(
+                    start_timestamp=BASE_TIME + timedelta(seconds=i),
+                    item_id=item_id,
+                    project_id=i % 3 + 1,
+                    attributes={"color": AnyValue(string_value=color)},
+                )
+            )
+        write_raw_unprocessed_events(get_writable_storage(StorageKey("eap_items")), items)
+
+        seen_by_query: list[list[bytes]] = []
+        for i in range(2):
+            message = ExportTraceItemsRequest(
+                meta=RequestMeta(
+                    project_ids=[1, 2, 3],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                    end_timestamp=Timestamp(
+                        seconds=int((BASE_TIME + timedelta(seconds=total)).timestamp())
+                    ),
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                ),
+                filter=TraceItemFilter(
+                    comparison_filter=ComparisonFilter(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color"),
+                        op=ComparisonFilter.OP_EQUALS,
+                        value=AttributeValue(val_str="red"),
+                    ),
+                ),
+                limit=limit,
+            )
+
+            seen: list[bytes] = []
+            response = EndpointExportTraceItems().execute(message)  # readibility hack
+            while not response.page_token.end_pagination:
+                response = EndpointExportTraceItems().execute(message)
+                assert all(
+                    i.attributes["color"].string_value == "red" for i in response.trace_items
+                )
+                _assert_order_by(captured["query_result"].extra["sql"])
+
+                seen += [i.item_id for i in response.trace_items]
+
+                message.page_token.CopyFrom(response.page_token)
+
+            assert len(seen) == len(set(seen))
+            assert set(seen) == set(item_ids["red"])
+            seen_by_query.append(seen)
+
+        assert all(s == seen_by_query[0] for s in seen_by_query)
 
     def test_pagination_with_128_bit_item_id(self, eap: Any, redis_db: Any) -> None:
         num_items = 120
@@ -220,22 +388,45 @@ class TestExportTraceItems(BaseApiTest):
 
         EndpointExportTraceItems().execute(message)
 
-        qr = captured["query_result"]
-        assert (
-            "ORDER BY organization_id ASC, project_id ASC, item_type ASC, timestamp ASC, trace_id ASC, item_id ASC"
-            in qr.extra["sql"]
-        )
+        _assert_order_by(captured["query_result"].extra["sql"])
 
+    @pytest.mark.parametrize(
+        "trace_filter, expected_colors, routed_count, earlier_count",
+        [
+            (None, {"red", "blue"}, 15, 5),
+            (
+                TraceItemFilter(
+                    comparison_filter=ComparisonFilter(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color"),
+                        op=ComparisonFilter.OP_EQUALS,
+                        value=AttributeValue(val_str="red"),
+                    ),
+                ),
+                {"red"},
+                7,
+                3,
+            ),
+        ],
+    )
     def test_pagination_with_real_flex_window(
-        self, eap: Any, redis_db: Any, monkeypatch: Any
+        self,
+        eap: Any,
+        redis_db: Any,
+        monkeypatch: Any,
+        trace_filter: TraceItemFilter | None,
+        expected_colors: set[str],
+        routed_count: int,
+        earlier_count: int,
     ) -> None:
         """
         Verify end-to-end flex-window pagination by capturing the full sequence of
-        queries.
+        queries, with and without a filter applied.
 
-        Setup: 20 items [T0, T0+20s), limit=4, routing mock returns 20 outcomes for
-        any window crossing T0+5s → narrows to [T0+5, T0+20). After that window is
-        exhausted a window-only token advances to the earlier slice [T0, T0+5).
+        Setup: 20 items [T0, T0+20s) alternating red/blue, limit=4, routing mock returns
+        20 outcomes for any window crossing T0+5s → narrows to [T0+5, T0+20). After that
+        window is exhausted a window-only token advances to the earlier slice [T0, T0+5).
+        The filter is orthogonal to routing, so it narrows identically either way; only
+        the per-window item counts change.
         """
         total = 20
         max_items = 15
@@ -244,18 +435,28 @@ class TestExportTraceItems(BaseApiTest):
         # 20 outcomes / max 15 → factor 4/3 → routed window = last 15s = [T0+5, T0+20)
         routed_start_sec = start_sec + 5
 
-        write_raw_unprocessed_events(
-            get_writable_storage(StorageKey("eap_items")),
-            [
+        # (item_id, color) for every written item. item_id is reversed because export does
+        # not un-reverse endianness; full 128-bit ids make the reversal a real permutation.
+        written_items: list[tuple[bytes, str]] = []
+        messages = []
+        for i in range(total):
+            item_id = uuid.uuid4().int.to_bytes(16, byteorder="little")
+            color = "red" if i % 2 == 0 else "blue"
+            written_items.append((item_id[::-1], color))
+            messages.append(
                 gen_item_message(
                     start_timestamp=BASE_TIME + timedelta(seconds=i),
-                    item_id=int(uuid.uuid4().hex[:16], 16).to_bytes(16, byteorder="little"),
+                    item_id=item_id,
                     type=TraceItemType.TRACE_ITEM_TYPE_LOG,
                     project_id=1,
+                    attributes={"color": AnyValue(string_value=color)},
                 )
-                for i in range(total)
-            ],
-        )
+            )
+        write_raw_unprocessed_events(get_writable_storage(StorageKey("eap_items")), messages)
+
+        expected_ids = {item_id for item_id, color in written_items if color in expected_colors}
+
+        OutcomesFlexTimeRoutingStrategy().set_config_value("max_items_to_query", max_items)
 
         # outcomes_hourly buckets by hour, so second-level splits are invisible to routing.
         # Mock the count directly so each sub-range sees the logically correct volume.
@@ -316,6 +517,7 @@ class TestExportTraceItems(BaseApiTest):
                 ),
                 request_id=uuid.uuid4().hex,
             ),
+            filter=trace_filter,
             limit=4,
         )
 
@@ -324,6 +526,7 @@ class TestExportTraceItems(BaseApiTest):
             ["window_start", "window_end", "items_count", "has_cursor", "end_pagination"],
         )
         records: list[Any] = []
+        seen: list[bytes] = []
 
         with override_component_config(
             OutcomesFlexTimeRoutingStrategy(), "max_items_to_query", max_items
@@ -332,6 +535,11 @@ class TestExportTraceItems(BaseApiTest):
                 response = EndpointExportTraceItems().execute(message)
                 token = response.page_token
                 filter_count = len(token.filter_offset.and_filter.filters)
+                assert all(
+                    i.attributes["color"].string_value in expected_colors
+                    for i in response.trace_items
+                ), "a page returned an item outside the filtered set"
+                seen += [i.item_id for i in response.trace_items]
                 records.append(
                     PageRecord(
                         window_start=sql_queried_windows[-1][0],
@@ -349,12 +557,16 @@ class TestExportTraceItems(BaseApiTest):
         routed_pages = [r for r in records if r.window_start == routed_start_sec]
         earlier_pages = [r for r in records if r.window_start == start_sec]
 
-        assert sum(r.items_count for r in records) == total, "not all items were returned"
+        assert len(seen) == len(set(seen)), "an item was returned more than once across pages"
+        assert set(seen) == expected_ids, "did not return exactly the expected items"
+        assert sum(r.items_count for r in records) == routed_count + earlier_count, (
+            "not all items were returned"
+        )
         assert records.index(routed_pages[-1]) < records.index(earlier_pages[0]), (
             "routed window [T0+5, T0+20) must be fully exhausted before the earlier slice [T0, T0+5) begins"
         )
-        assert sum(r.items_count for r in routed_pages) == 15, (
-            "routed window [T0+5, T0+20) should contain exactly 15 items"
+        assert sum(r.items_count for r in routed_pages) == routed_count, (
+            "routed window [T0+5, T0+20) returned an unexpected number of items"
         )
         assert all(r.has_cursor for r in routed_pages[:-1]), (
             "every full page in the routed window carries a keyset cursor to continue within that window"
@@ -365,8 +577,8 @@ class TestExportTraceItems(BaseApiTest):
         assert not routed_pages[-1].end_pagination, (
             "exhausting the routed window is not the end — the earlier slice [T0, T0+5) still needs to be fetched"
         )
-        assert sum(r.items_count for r in earlier_pages) == 5, (
-            "earlier slice [T0, T0+5) should contain the remaining 5 items"
+        assert sum(r.items_count for r in earlier_pages) == earlier_count, (
+            "earlier slice [T0, T0+5) returned an unexpected number of items"
         )
         assert all(r.has_cursor for r in earlier_pages[:-1]), (
             "every full page in the earlier slice carries a keyset cursor"

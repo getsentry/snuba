@@ -43,6 +43,7 @@ from snuba.web.rpc.common.common import (
     base_conditions_and,
     decode_attributes_array_value,
     merge_typed_array_maps,
+    trace_item_filters_to_expression,
     treeify_or_and_conditions,
     typed_array_map_selected_expressions,
     use_array_map_columns,
@@ -344,7 +345,16 @@ def _build_query(
     query = Query(
         from_clause=entity,
         selected_columns=selected_columns,
-        condition=base_conditions_and(meta, *page_token_filter, *item_type_filter),
+        condition=base_conditions_and(
+            meta,
+            trace_item_filters_to_expression(
+                in_msg.filter,
+                attribute_key_to_expression,
+                use_array_map_columns=use_array_map_columns(meta),
+            ),
+            *page_token_filter,
+            *item_type_filter,
+        ),
         order_by=[
             # we add organization_id and project_id to the order by to optimize data reading
             # https://clickhouse.com/docs/sql-reference/statements/select/order-by#optimization-of-data-reading
@@ -533,6 +543,7 @@ class EndpointExportTraceItems(RPCEndpoint[ExportTraceItemsRequest, ExportTraceI
             limit = min(in_msg.limit, default_page_size)
         else:
             limit = default_page_size
+
         page_token = ExportTraceItemsPageToken.from_protobuf(in_msg.page_token)
         results = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
