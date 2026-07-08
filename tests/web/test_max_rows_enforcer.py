@@ -1,9 +1,10 @@
-from collections.abc import Callable
+from collections.abc import Callable, Generator
 from datetime import datetime
 from typing import Any
 from unittest import mock
 
 import pytest
+from sentry_options.testing import override_options
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
@@ -15,7 +16,6 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.data_source.simple import Table
 from snuba.query.dsl import and_cond, column, equals, literal
 from snuba.query.exceptions import TooManyDeleteRowsException
-from snuba.state import set_config
 from snuba.web.delete_query import _enforce_max_rows
 from tests.base import BaseApiTest
 from tests.web.rpc.v1.test_utils import write_eap_item
@@ -44,8 +44,12 @@ class TestMaxRowsEnforcer(BaseApiTest):
             is_delete=True,
         )
 
+    @pytest.fixture(autouse=True)
+    def _short_circuit_cache(self) -> Generator[None]:
+        with override_options("snuba", {"read_through_cache.short_circuit": True}):
+            yield
+
     def _insert_event(self) -> None:
-        set_config("read_through_cache.short_circuit", 1)
         now = datetime.now().replace(minute=0, second=0, microsecond=0)
 
         write_eap_item(
@@ -87,7 +91,7 @@ class TestMaxRowsEnforcer(BaseApiTest):
             allowed_columns=["project_id", "organization_id"],
         ),
     )
+    @override_options("snuba", {"enforce_max_rows_to_delete": False})
     def test_bypass_enforce_max_rows(self, mock: mock.MagicMock) -> None:
-        set_config("enforce_max_rows_to_delete", 0)
         self._insert_event()
         _enforce_max_rows(self.query)

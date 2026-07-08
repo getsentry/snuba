@@ -1,6 +1,5 @@
 from dataclasses import replace
 
-from snuba import state
 from snuba.query.expressions import (
     Column,
     Expression,
@@ -11,6 +10,7 @@ from snuba.query.expressions import (
 from snuba.query.logical import Query
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.query_settings import QuerySettings
+from snuba.state.sentry_options import get_option
 
 
 class LowCardinalityProcessor(LogicalQueryProcessor):
@@ -66,7 +66,7 @@ class LowCardinalityProcessor(LogicalQueryProcessor):
                     )
             return exp
 
-        if state.get_int_config("use.low.cardinality.processor", 1) == 0:
+        if not get_option("use.low.cardinality.processor", True):
             return
 
         query.transform_expressions(transform_expressions)

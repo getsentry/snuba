@@ -9,6 +9,7 @@ import pytest
 import simplejson as json
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.types import BrokerValue, Message, Partition, Topic
+from sentry_options.testing import override_options
 
 from snuba import replacer, settings
 from snuba.clickhouse import DATETIME_FORMAT
@@ -20,7 +21,6 @@ from snuba.processor import ReplacementType
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.replacers import errors_replacer
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
-from snuba.state import delete_config, set_config
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from tests.fixtures import get_raw_event
 from tests.helpers import write_unprocessed_events
@@ -28,6 +28,11 @@ from tests.helpers import write_unprocessed_events
 redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 
 CONSUMER_GROUP = "consumer_group"
+
+
+def _normalize_query(query: str | None) -> str:
+    assert query is not None
+    return re.sub("[\n ]+", " ", query).strip()
 
 
 class BaseTest:
@@ -93,7 +98,7 @@ class TestReplacer(BaseTest):
         run_optimize(clickhouse, self.storage, cluster.get_database())
 
     def _issue_count(self, project_id: int, group_id: int | None = None) -> Any:
-        args = {
+        args: dict[str, Any] = {
             "project": [project_id],
             "selected_columns": [],
             "aggregations": [["count()", "", "count"]],
@@ -159,6 +164,7 @@ class TestReplacer(BaseTest):
         )
 
         processed = self.replacer.process_message(message)
+        assert processed is not None
         self.replacer.flush_batch([processed])
 
         assert self._issue_count(self.project_id) == []
@@ -203,6 +209,7 @@ class TestReplacer(BaseTest):
         # the other events. Event 1 gets manually tombstoned by Sentry while
         # Event 2 prevails.
         processed = self.replacer.process_message(message)
+        assert processed is not None
         self.replacer.flush_batch([processed])
 
         # At this point the count doesn't make any sense but we don't care.
@@ -237,6 +244,7 @@ class TestReplacer(BaseTest):
         # regular group deletion, except only a subset of events have been
         # tombstoned (the ones that will *not* be reprocessed).
         processed = self.replacer.process_message(message)
+        assert processed is not None
         self.replacer.flush_batch([processed])
 
         # Group 2 should contain the one event that the user chose to
@@ -282,6 +290,7 @@ class TestReplacer(BaseTest):
         )
 
         processed = self.replacer.process_message(message)
+        assert processed is not None
         self.replacer.flush_batch([processed])
 
         assert self._issue_count(1) == [{"count": 1, "group_id": 2}]
@@ -324,12 +333,13 @@ class TestReplacer(BaseTest):
         )
 
         processed = self.replacer.process_message(message)
+        assert processed is not None
         self.replacer.flush_batch([processed])
 
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 2}]
 
+    @override_options("snuba", {"skip_seen_offsets": True})
     def test_process_offset_twice(self) -> None:
-        set_config("skip_seen_offsets", True)
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
         self.event["primary_hash"] = "a" * 32
@@ -361,16 +371,17 @@ class TestReplacer(BaseTest):
         )
 
         processed = self.replacer.process_message(message)
+        assert processed is not None
         self.replacer.flush_batch([processed])
 
         # should be None since the offset should be in Redis, indicating it should be skipped
         assert self.replacer.process_message(message) is None
 
+    @override_options("snuba", {"skip_seen_offsets": True})
     def test_multiple_partitions(self) -> None:
         """
         Different partitions should have independent offset checks.
         """
-        set_config("skip_seen_offsets", True)
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
         self.event["primary_hash"] = "a" * 32
@@ -414,12 +425,13 @@ class TestReplacer(BaseTest):
         )
 
         processed = self.replacer.process_message(partition_one)
+        assert processed is not None
         self.replacer.flush_batch([processed])
         # different partition should be unaffected even if it's the same offset
         assert self.replacer.process_message(partition_two) is not None
 
+    @override_options("snuba", {"skip_seen_offsets": True})
     def test_reset_consumer_group_offset_check(self) -> None:
-        set_config("skip_seen_offsets", True)
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
         self.event["primary_hash"] = "a" * 32
@@ -450,18 +462,19 @@ class TestReplacer(BaseTest):
             )
         )
 
-        self.replacer.flush_batch([self.replacer.process_message(message)])
+        processed = self.replacer.process_message(message)
+        assert processed is not None
+        self.replacer.flush_batch([processed])
 
-        set_config(replacer.RESET_CHECK_CONFIG, f"[{CONSUMER_GROUP}]")
+        with override_options("snuba", {replacer.RESET_CHECK_CONFIG: f"[{CONSUMER_GROUP}]"}):
+            # Offset to check against should be reset so this message shouldn't be skipped
+            assert self.replacer.process_message(message) is not None
 
-        # Offset to check against should be reset so this message shouldn't be skipped
-        assert self.replacer.process_message(message) is not None
-
+    @override_options("snuba", {"skip_seen_offsets": True})
     def test_offset_already_processed(self) -> None:
         """
         Don't process an offset that already exists in Redis.
         """
-        set_config("skip_seen_offsets", True)
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
         self.event["primary_hash"] = "a" * 32
@@ -529,7 +542,7 @@ class TestReplacerProcess(BaseTest):
         meta_and_replacement = self.replacer.process_message(self._wrap(message))
         assert meta_and_replacement is not None
         _, replacement = meta_and_replacement
-        assert replacement is not None
+        assert isinstance(replacement, errors_replacer.Replacement)
 
         query_args = {
             "all_columns": "project_id, timestamp, event_id, platform, environment, release, dist, ip_address_v4, ip_address_v6, user, user_id, user_name, user_email, sdk_name, sdk_version, http_method, http_referer, tags.key, tags.value, flags.key, flags.value, contexts.key, contexts.value, transaction_name, span_id, trace_id, partition, offset, message_timestamp, retention_days, deleted, group_id, primary_hash, received, message, title, culprit, level, location, version, type, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.colno, exception_frames.filename, exception_frames.function, exception_frames.lineno, exception_frames.in_app, exception_frames.package, exception_frames.module, exception_frames.stack_level, exception_main_thread, sdk_integrations, modules.name, modules.version, trace_sampled, num_processing_errors, replay_id, symbolicated_in_app, timestamp_ms, sample_weight, group_first_seen",
@@ -541,13 +554,13 @@ class TestReplacerProcess(BaseTest):
         }
 
         assert (
-            re.sub("[\n ]+", " ", replacement.get_count_query("foo")).strip()
+            _normalize_query(replacement.get_count_query("foo"))
             == "SELECT count() FROM {table_name} FINAL WHERE project_id = {project_id} AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted AND has(`tags.key`, {tag_str})".format(
                 **query_args
             )
         )
         assert (
-            re.sub("[\n ]+", " ", replacement.get_insert_query("foo")).strip()
+            _normalize_query(replacement.get_insert_query("foo"))
             == "INSERT INTO {table_name} ({all_columns}) SELECT {select_columns} FROM {table_name} FINAL WHERE project_id = {project_id} AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted AND has(`tags.key`, {tag_str})".format(
                 **query_args
             )
@@ -569,7 +582,7 @@ class TestReplacerProcess(BaseTest):
         meta_and_replacement = self.replacer.process_message(self._wrap(message))
         assert meta_and_replacement is not None
         _, replacement = meta_and_replacement
-        assert replacement is not None
+        assert isinstance(replacement, errors_replacer.Replacement)
 
         query_args = {
             "all_columns": "project_id, timestamp, event_id, platform, environment, release, dist, ip_address_v4, ip_address_v6, user, user_id, user_name, user_email, sdk_name, sdk_version, http_method, http_referer, tags.key, tags.value, flags.key, flags.value, contexts.key, contexts.value, transaction_name, span_id, trace_id, partition, offset, message_timestamp, retention_days, deleted, group_id, primary_hash, received, message, title, culprit, level, location, version, type, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.colno, exception_frames.filename, exception_frames.function, exception_frames.lineno, exception_frames.in_app, exception_frames.package, exception_frames.module, exception_frames.stack_level, exception_main_thread, sdk_integrations, modules.name, modules.version, trace_sampled, num_processing_errors, replay_id, symbolicated_in_app, timestamp_ms, sample_weight, group_first_seen",
@@ -581,13 +594,13 @@ class TestReplacerProcess(BaseTest):
         }
 
         assert (
-            re.sub("[\n ]+", " ", replacement.get_count_query("foo")).strip()
+            _normalize_query(replacement.get_count_query("foo"))
             == "SELECT count() FROM {table_name} FINAL WHERE project_id = {project_id} AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted AND has(`tags.key`, {tag_str})".format(
                 **query_args
             )
         )
         assert (
-            re.sub("[\n ]+", " ", replacement.get_insert_query("foo")).strip()
+            _normalize_query(replacement.get_insert_query("foo"))
             == "INSERT INTO {table_name} ({all_columns}) SELECT {select_columns} FROM {table_name} FINAL WHERE project_id = {project_id} AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted AND has(`tags.key`, {tag_str})".format(
                 **query_args
             )
@@ -596,7 +609,7 @@ class TestReplacerProcess(BaseTest):
         assert replacement.get_query_time_flags() == errors_replacer.NeedsFinal()
 
     @pytest.mark.parametrize("old_primary_hash", ["e3d704f3542b44a621ebed70dc0efe13", False, None])
-    def test_tombstone_events_process(self, old_primary_hash) -> None:
+    def test_tombstone_events_process(self, old_primary_hash: str | bool | None) -> None:
         timestamp = datetime.now()
         message_kwargs = {
             "project_id": self.project_id,
@@ -612,6 +625,7 @@ class TestReplacerProcess(BaseTest):
         meta_and_replacement = self.replacer.process_message(self._wrap(message))
         assert meta_and_replacement is not None
         _, replacement = meta_and_replacement
+        assert isinstance(replacement, errors_replacer.Replacement)
 
         old_primary_condition = (
             " AND primary_hash = 'e3d704f3-542b-44a6-21eb-ed70dc0efe13'" if old_primary_hash else ""
@@ -626,12 +640,12 @@ class TestReplacerProcess(BaseTest):
         }
 
         assert (
-            re.sub("[\n ]+", " ", replacement.get_count_query("foo")).strip()
+            _normalize_query(replacement.get_count_query("foo"))
             == f"SELECT count() FROM %(table_name)s FINAL PREWHERE event_id IN (%(event_ids)s){old_primary_condition} WHERE project_id = %(project_id)s AND NOT deleted"
             % query_args
         )
         assert (
-            re.sub("[\n ]+", " ", replacement.get_insert_query("foo")).strip()
+            _normalize_query(replacement.get_insert_query("foo"))
             == f"INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE event_id IN (%(event_ids)s){old_primary_condition} WHERE project_id = %(project_id)s AND NOT deleted"
             % query_args
         )
@@ -654,7 +668,7 @@ class TestReplacerProcess(BaseTest):
         meta_and_replacement = self.replacer.process_message(self._wrap(message))
         assert meta_and_replacement is not None
         _, replacement = meta_and_replacement
-        assert replacement is not None
+        assert isinstance(replacement, errors_replacer.Replacement)
 
         query_args = {
             "event_ids": "'00e24a15-0d7f-4ee4-b142-b61b4d893b6d'",
@@ -665,14 +679,14 @@ class TestReplacerProcess(BaseTest):
         }
 
         assert (
-            re.sub("[\n ]+", " ", replacement.get_count_query("foo")).strip()
+            _normalize_query(replacement.get_count_query("foo"))
             == "SELECT count() FROM {table_name} FINAL PREWHERE event_id IN ({event_ids}) WHERE project_id = {project_id} AND NOT deleted".format(
                 **query_args
             )
         )
 
         assert (
-            re.sub("[\n ]+", " ", replacement.get_insert_query("foo")).strip()
+            _normalize_query(replacement.get_insert_query("foo"))
             == "INSERT INTO {table_name} ({all_columns}) SELECT {select_columns} FROM {table_name} FINAL PREWHERE event_id IN ({event_ids}) WHERE project_id = {project_id} AND NOT deleted".format(
                 **query_args
             )
@@ -695,7 +709,7 @@ class TestReplacerProcess(BaseTest):
         meta_and_replacement = self.replacer.process_message(self._wrap(message))
         assert meta_and_replacement is not None
         _, replacement = meta_and_replacement
-        assert replacement is not None
+        assert isinstance(replacement, errors_replacer.Replacement)
 
         query_args = {
             "event_ids": "'00e24a15-0d7f-4ee4-b142-b61b4d893b6d'",
@@ -706,14 +720,14 @@ class TestReplacerProcess(BaseTest):
         }
 
         assert (
-            re.sub("[\n ]+", " ", replacement.get_count_query("foo")).strip()
+            _normalize_query(replacement.get_count_query("foo"))
             == "SELECT count() FROM {table_name} FINAL PREWHERE event_id IN ({event_ids}) WHERE project_id = {project_id} AND NOT deleted".format(
                 **query_args
             )
         )
 
         assert (
-            re.sub("[\n ]+", " ", replacement.get_insert_query("foo")).strip()
+            _normalize_query(replacement.get_insert_query("foo"))
             == "INSERT INTO {table_name} ({all_columns}) SELECT {select_columns} FROM {table_name} FINAL PREWHERE event_id IN ({event_ids}) WHERE project_id = {project_id} AND NOT deleted".format(
                 **query_args
             )
@@ -736,7 +750,7 @@ class TestReplacerProcess(BaseTest):
         meta_and_replacement = self.replacer.process_message(self._wrap(message))
         assert meta_and_replacement is not None
         _, replacement = meta_and_replacement
-        assert replacement is not None
+        assert isinstance(replacement, errors_replacer.Replacement)
 
         query_args = {
             "all_columns": "project_id, timestamp, event_id, platform, environment, release, dist, ip_address_v4, ip_address_v6, user, user_id, user_name, user_email, sdk_name, sdk_version, http_method, http_referer, tags.key, tags.value, flags.key, flags.value, contexts.key, contexts.value, transaction_name, span_id, trace_id, partition, offset, message_timestamp, retention_days, deleted, group_id, primary_hash, received, message, title, culprit, level, location, version, type, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.colno, exception_frames.filename, exception_frames.function, exception_frames.lineno, exception_frames.in_app, exception_frames.package, exception_frames.module, exception_frames.stack_level, exception_main_thread, sdk_integrations, modules.name, modules.version, trace_sampled, num_processing_errors, replay_id, symbolicated_in_app, timestamp_ms, sample_weight, group_first_seen",
@@ -748,13 +762,13 @@ class TestReplacerProcess(BaseTest):
         }
 
         assert (
-            re.sub("[\n ]+", " ", replacement.get_count_query("foo")).strip()
+            _normalize_query(replacement.get_count_query("foo"))
             == "SELECT count() FROM {table_name} FINAL PREWHERE group_id IN ({previous_group_ids}) WHERE project_id = {project_id} AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted".format(
                 **query_args
             )
         )
         assert (
-            re.sub("[\n ]+", " ", replacement.get_insert_query("foo")).strip()
+            _normalize_query(replacement.get_insert_query("foo"))
             == "INSERT INTO {table_name} ({all_columns}) SELECT {select_columns} FROM {table_name} FINAL PREWHERE group_id IN ({previous_group_ids}) WHERE project_id = {project_id} AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted".format(
                 **query_args
             )
@@ -779,6 +793,7 @@ class TestReplacerProcess(BaseTest):
         meta_and_replacement = self.replacer.process_message(self._wrap(message))
         assert meta_and_replacement is not None
         _, replacement = meta_and_replacement
+        assert isinstance(replacement, errors_replacer.Replacement)
 
         query_args = {
             "all_columns": "project_id, timestamp, event_id, platform, environment, release, dist, ip_address_v4, ip_address_v6, user, user_id, user_name, user_email, sdk_name, sdk_version, http_method, http_referer, tags.key, tags.value, flags.key, flags.value, contexts.key, contexts.value, transaction_name, span_id, trace_id, partition, offset, message_timestamp, retention_days, deleted, group_id, primary_hash, received, message, title, culprit, level, location, version, type, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.colno, exception_frames.filename, exception_frames.function, exception_frames.lineno, exception_frames.in_app, exception_frames.package, exception_frames.module, exception_frames.stack_level, exception_main_thread, sdk_integrations, modules.name, modules.version, trace_sampled, num_processing_errors, replay_id, symbolicated_in_app, timestamp_ms, sample_weight, group_first_seen",
@@ -791,13 +806,13 @@ class TestReplacerProcess(BaseTest):
         }
 
         assert (
-            re.sub("[\n ]+", " ", replacement.get_count_query("foo")).strip()
+            _normalize_query(replacement.get_count_query("foo"))
             == "SELECT count() FROM {table_name} FINAL PREWHERE primary_hash IN ({hashes}) WHERE group_id = {previous_group_id} AND project_id = {project_id} AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted".format(
                 **query_args
             )
         )
         assert (
-            re.sub("[\n ]+", " ", replacement.get_insert_query("foo")).strip()
+            _normalize_query(replacement.get_insert_query("foo"))
             == "INSERT INTO {table_name} ({all_columns}) SELECT {select_columns} FROM {table_name} FINAL PREWHERE primary_hash IN ({hashes}) WHERE group_id = {previous_group_id} AND project_id = {project_id} AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted".format(
                 **query_args
             )
@@ -822,7 +837,7 @@ class TestReplacerProcess(BaseTest):
         meta_and_replacement = self.replacer.process_message(self._wrap(message))
         assert meta_and_replacement is not None
         _, replacement = meta_and_replacement
-        assert replacement is not None
+        assert isinstance(replacement, errors_replacer.Replacement)
 
         query_args = {
             "event_ids": "'00e24a15-0d7f-4ee4-b142-b61b4d893b6d'",
@@ -833,12 +848,12 @@ class TestReplacerProcess(BaseTest):
         }
 
         assert (
-            re.sub("[\n ]+", " ", replacement.get_count_query("foo")).strip()
+            _normalize_query(replacement.get_count_query("foo"))
             == f"SELECT count() FROM %(table_name)s FINAL PREWHERE event_id IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp <= toDateTime('{to_ts.strftime(DATETIME_FORMAT)}')"
             % query_args
         )
         assert (
-            re.sub("[\n ]+", " ", replacement.get_insert_query("foo")).strip()
+            _normalize_query(replacement.get_insert_query("foo"))
             == f"INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE event_id IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp <= toDateTime('{to_ts.strftime(DATETIME_FORMAT)}')"
             % query_args
         )
@@ -859,7 +874,7 @@ class TestReplacerProcess(BaseTest):
         meta_and_replacement = self.replacer.process_message(self._wrap(message))
         assert meta_and_replacement is not None
         _, replacement = meta_and_replacement
-        assert replacement is not None
+        assert isinstance(replacement, errors_replacer.Replacement)
         query_args = {
             "group_ids": "1, 2, 3",
             "project_id": self.project_id,
@@ -869,13 +884,13 @@ class TestReplacerProcess(BaseTest):
             "table_name": "foo",
         }
         assert (
-            re.sub("[\n ]+", " ", replacement.get_count_query("foo")).strip()
+            _normalize_query(replacement.get_count_query("foo"))
             == "SELECT count() FROM {table_name} FINAL PREWHERE group_id IN ({group_ids}) WHERE project_id = {project_id} AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted".format(
                 **query_args
             )
         )
         assert (
-            re.sub("[\n ]+", " ", replacement.get_insert_query("foo")).strip()
+            _normalize_query(replacement.get_insert_query("foo"))
             == "INSERT INTO {table_name} ({required_columns}) SELECT {select_columns} FROM {table_name} FINAL PREWHERE group_id IN ({group_ids}) WHERE project_id = {project_id} AND received <= CAST('{timestamp}' AS DateTime) AND NOT deleted".format(
                 **query_args
             )
@@ -899,15 +914,19 @@ class TestReplacerProcess(BaseTest):
         meta_and_replacement = self.replacer.process_message(self._wrap(message))
         assert meta_and_replacement is not None
         _, replacement = meta_and_replacement
-        assert replacement is not None
+        assert isinstance(replacement, errors_replacer.Replacement)
 
-        set_config("replacements_bypass_projects", f"[{self.project_id + 1}]")
-        meta_and_replacement = self.replacer.process_message(self._wrap(message))
-        assert meta_and_replacement is not None
-        _, replacement = meta_and_replacement
-        assert replacement is not None
+        with override_options(
+            "snuba", {"replacements_bypass_projects": f"[{self.project_id + 1}]"}
+        ):
+            meta_and_replacement = self.replacer.process_message(self._wrap(message))
+            assert meta_and_replacement is not None
+            _, replacement = meta_and_replacement
+            assert isinstance(replacement, errors_replacer.Replacement)
 
-        set_config("replacements_bypass_projects", f"[{self.project_id + 1},{self.project_id}]")
-        meta_and_replacement = self.replacer.process_message(self._wrap(message))
-        assert meta_and_replacement is None
-        delete_config("replacements_bypass_projects")
+        with override_options(
+            "snuba",
+            {"replacements_bypass_projects": f"[{self.project_id + 1},{self.project_id}]"},
+        ):
+            meta_and_replacement = self.replacer.process_message(self._wrap(message))
+            assert meta_and_replacement is None

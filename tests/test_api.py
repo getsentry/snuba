@@ -12,6 +12,7 @@ import pytest
 import simplejson as json
 from confluent_kafka.admin import AdminClient
 from dateutil.parser import parse as parse_datetime
+from sentry_options.testing import override_options
 from sentry_sdk import Client, Hub
 
 from snuba import settings, state
@@ -29,7 +30,6 @@ from snuba.utils.manage_topics import create_topics
 from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.topics import Topic as SnubaTopic
 from tests.base import BaseApiTest
-from tests.conftest import SnubaSetConfig
 from tests.helpers import write_processed_messages
 
 
@@ -63,7 +63,6 @@ class SimpleAPITest(BaseApiTest):
         state.delete_config("project_concurrent_limit")
         state.delete_config("project_concurrent_limit_1")
         state.delete_config("project_per_second_limit")
-        state.delete_config("date_align_seconds")
 
     def write_events(self, events: Sequence[InsertEvent]) -> None:
         processor = self.storage.get_table_writer().get_stream_loader().get_processor()
@@ -267,25 +266,25 @@ class TestApi(SimpleAPITest):
 
         # But if we set time alignment to an hour, the buckets will fall back to
         # the 1hr boundary.
-        state.set_config("date_align_seconds", 3600)
-        result = json.loads(
-            self.post(
-                json.dumps(
-                    {
-                        "project": 1,
-                        "tenant_ids": {"referrer": "r", "organization_id": 1234},
-                        "granularity": 60,
-                        "selected_columns": ["time"],
-                        "groupby": "time",
-                        "from_date": (self.base_time + skew).isoformat(),
-                        "to_date": (
-                            self.base_time + skew + timedelta(minutes=self.minutes)
-                        ).isoformat(),
-                        "orderby": "time",
-                    }
-                ),
-            ).data
-        )
+        with override_options("snuba", {"date_align_seconds": 3600}):
+            result = json.loads(
+                self.post(
+                    json.dumps(
+                        {
+                            "project": 1,
+                            "tenant_ids": {"referrer": "r", "organization_id": 1234},
+                            "granularity": 60,
+                            "selected_columns": ["time"],
+                            "groupby": "time",
+                            "from_date": (self.base_time + skew).isoformat(),
+                            "to_date": (
+                                self.base_time + skew + timedelta(minutes=self.minutes)
+                            ).isoformat(),
+                            "orderby": "time",
+                        }
+                    ),
+                ).data
+            )
         bucket_time = parse_datetime(result["data"][0]["time"]).replace(tzinfo=None)
         assert bucket_time == self.base_time
 
@@ -1466,9 +1465,14 @@ class TestApi(SimpleAPITest):
             assert len(events) == 1
             assert events[0]["exception"]["values"][0]["type"] == "ZeroDivisionError"
 
+    @override_options(
+        "snuba",
+        {
+            "read_through_cache.short_circuit": True,
+            "consistent_override": "test_override=0;another=0.5",
+        },
+    )
     def test_consistent(self) -> None:
-        state.set_config("consistent_override", "test_override=0;another=0.5")
-        state.set_config("read_through_cache.short_circuit", 1)
         query_data: dict[str, Any] = {
             "project": 2,
             "tenant_ids": {"referrer": "test_query", "organization_id": 1234},
@@ -1957,5 +1961,6 @@ class TestAPIErrorsRO(TestApi):
     """
 
     @pytest.fixture(autouse=True)
-    def use_readonly_table(self, snuba_set_config: SnubaSetConfig) -> None:
-        snuba_set_config("enable_events_readonly_table", 1)
+    def use_readonly_table(self) -> Generator[None]:
+        with override_options("snuba", {"enable_events_readonly_table": True}):
+            yield

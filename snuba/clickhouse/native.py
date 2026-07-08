@@ -22,10 +22,11 @@ from clickhouse_driver import Client, errors
 from dateutil.tz import tz
 from sentry_sdk.integrations.logging import ignore_logger
 
-from snuba import environment, settings, state
+from snuba import environment, settings
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.reader import Reader, Result, build_result_transformer
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.gauge import ThreadSafeGauge
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
@@ -34,6 +35,13 @@ ignore_logger("clickhouse_driver.connection")
 logger = logging.getLogger("snuba.clickhouse")
 trace_logger = logging.getLogger("clickhouse_driver.log")
 trace_logger.setLevel("INFO")
+# The clickhouse-driver forwards the server's ``send_logs_level`` output (the
+# ``<Trace>`` lines emitted by SelectExecutor and friends) through this logger.
+# We only want those lines when a query explicitly captures them via
+# ``capture_logging`` below, which attaches its own handler directly to this
+# logger. Disabling propagation keeps them out of the root logger so they don't
+# flood stdout/GCP logging on every traced query.
+trace_logger.propagate = False
 
 Params = Sequence[Any] | Mapping[str, Any] | None
 
@@ -303,9 +311,7 @@ class ClickhouseNativePool(ClickhousePool):
                         if attempts_remaining <= 0:
                             raise ClickhouseError(e.message, code=e.code) from e
 
-                        sleep_interval_seconds = state.get_config(
-                            "simultaneous_queries_sleep_seconds", None
-                        )
+                        sleep_interval_seconds = get_option("simultaneous_queries_sleep_seconds", 0)
                         if not sleep_interval_seconds:
                             raise ClickhouseError(e.message, code=e.code) from e
 
@@ -383,11 +389,11 @@ class ClickhouseNativePool(ClickhousePool):
                     attempts_remaining -= 1
                     if attempts_remaining <= 0:
                         raise e
-                    sleep_interval_seconds = state.get_config(
-                        "simultaneous_queries_sleep_seconds", 1
-                    )
-                    assert sleep_interval_seconds is not None
-                    # Linear backoff. Adds one second at each iteration.
+                    # Linear backoff. Adds one second at each iteration. Falls
+                    # back to a 1-second base when the option is unset (0).
+                    sleep_interval_seconds = (
+                        get_option("simultaneous_queries_sleep_seconds", 0)
+                    ) or 1
                     time.sleep(
                         float((total_attempts - attempts_remaining) * sleep_interval_seconds)
                     )

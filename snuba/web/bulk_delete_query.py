@@ -26,7 +26,7 @@ from snuba.query.dsl import literal
 from snuba.query.exceptions import InvalidQueryException, NoRowsToDeleteException
 from snuba.query.expressions import Expression
 from snuba.reader import Result
-from snuba.state import get_int_config, get_str_config
+from snuba.state.sentry_options import get_mapped_option, get_option
 from snuba.utils.metrics.util import with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.schemas import ColumnValidator, InvalidColumnType
@@ -229,7 +229,7 @@ def delete_from_storage(
     if attribute_conditions:
         _validate_attribute_conditions(attribute_conditions, delete_settings)
 
-        if not get_int_config("permit_delete_by_attribute", default=0):
+        if not get_option("permit_delete_by_attribute", False):
             metrics.increment("delete_query.delete_ignored")
             return {}
 
@@ -374,5 +374,5 @@ def construct_or_conditions(
 
 
 def should_use_killswitch(storage_name: str, project_id: str) -> bool:
-    killswitch_config = get_str_config(f"lw_deletes_killswitch_{storage_name}", default="")
+    killswitch_config = get_mapped_option("lw_deletes_killswitch", storage_name, "")
     return project_id in killswitch_config if killswitch_config else False

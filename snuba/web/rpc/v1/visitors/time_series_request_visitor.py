@@ -15,7 +15,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
-from snuba.state import get_config
+from snuba.state.sentry_options import get_option
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.visitors.trace_item_table_request_visitor import (
     NormalizeFormulaLabelsVisitor,
@@ -129,7 +129,7 @@ class RejectTimestampAsStringVisitor(RequestVisitor):
             if (
                 k.name == "sentry.timestamp"
                 and k.type == AttributeKey.TYPE_STRING
-                and get_config("eap.reject_string_timestamp_filters", 1)
+                and get_option("eap.reject_string_timestamp_filters", True)
             ):
                 raise BadSnubaRPCRequestException(
                     "sentry.timestamp can only be compared to TYPE_INT or TYPE_DOUBLE, got TYPE_STRING"
