@@ -17,6 +17,11 @@
 //! when a DLQ is configured — otherwise an `InvalidMessage` is logged and
 //! silently dropped by arroyo, which would lose data.
 //!
+//! Dead-lettered messages use `InvalidMessageReason::Ignored` so they are not
+//! reported to Sentry: age-based routing is an expected outcome, and arroyo
+//! only logs `Invalid` (not `Ignored`) InvalidMessages at ERROR level, which
+//! the tracing→Sentry layer captures as issues.
+//!
 //! ## Configuration (sentry-options, read per-message so it is runtime-tunable)
 //!
 //! - `consumer.dlq_by_age_sample_rate_by_storage`: dict mapping storage name to
@@ -32,7 +37,8 @@ use chrono::{TimeDelta, Utc};
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::counter;
 use sentry_arroyo::processing::strategies::{
-    CommitRequest, InvalidMessage, ProcessingStrategy, StrategyError, SubmitError,
+    CommitRequest, InvalidMessage, InvalidMessageReason, ProcessingStrategy, StrategyError,
+    SubmitError,
 };
 use sentry_arroyo::types::{InnerMessage, Message};
 use sentry_options::options;
@@ -117,7 +123,17 @@ where
         // DLQ; forward the rest so we keep ingesting some old data live.
         counter!("dlq_by_age.stale_seen");
         if rand::random::<f64>() < rate {
-            let invalid = InvalidMessage::from(broker_message);
+            // Use `Ignored`, not `Invalid`, as the reason. Age-based DLQ
+            // routing is an expected outcome, not an error: arroyo logs an
+            // `Invalid` InvalidMessage at ERROR level (which the tracing→Sentry
+            // layer turns into a Sentry issue), whereas `Ignored` logs at DEBUG
+            // and is not reported. Both reasons produce to the DLQ identically.
+            // (Same intent as the SilencedDLQMessage path in the processor.)
+            let invalid = InvalidMessage {
+                partition: broker_message.partition,
+                offset: broker_message.offset,
+                reason: InvalidMessageReason::Ignored,
+            };
             counter!("dlq_by_age.routed_to_dlq");
             Err(SubmitError::InvalidMessage(invalid))
         } else {
@@ -199,7 +215,11 @@ mod tests {
         for _ in 0..n {
             match router.submit(make_message(Utc::now() - age)) {
                 Ok(()) => {}
-                Err(SubmitError::InvalidMessage(_)) => dlq += 1,
+                Err(SubmitError::InvalidMessage(invalid)) => {
+                    // Age-based DLQ routing must be silenced (kept out of Sentry).
+                    assert_eq!(invalid.reason, InvalidMessageReason::Ignored);
+                    dlq += 1;
+                }
                 Err(other) => panic!("unexpected submit error: {other:?}"),
             }
         }
