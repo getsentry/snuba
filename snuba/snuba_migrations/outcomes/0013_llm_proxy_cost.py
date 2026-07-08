@@ -50,7 +50,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     order_by="(org_id, project_id, timestamp)",
                     partition_by="(toStartOfMonth(timestamp))",
                     settings={"index_granularity": "8192"},
-                    ttl="timestamp + toIntervalDay(90)",
+                    ttl="timestamp + toIntervalDay(365)",
                 ),
                 target=OperationTarget.LOCAL,
             ),
