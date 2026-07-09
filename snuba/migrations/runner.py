@@ -560,7 +560,7 @@ class Runner:
             {
                 "group": migration_key.group.value,
                 "migration_id": migration_key.migration_id,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(),
                 "status": status.value,
                 "version": next_version,
             }

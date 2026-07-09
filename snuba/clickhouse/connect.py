@@ -194,6 +194,31 @@ class ClickhouseConnectPool(ClickhousePool):
             query_settings["send_logs_level"] = "trace"
         return query_settings or None
 
+    @staticmethod
+    def _make_json_safe(params: Params) -> Params:
+        """Convert datetime objects in params so they survive json.dumps.
+
+        The clickhouse-connect driver serialises bind parameters via
+        ``json.dumps``, which raises on bare ``datetime`` objects.  The
+        native driver handles them transparently via its binary protocol,
+        so callers (e.g. the migration runner) pass ``datetime`` values
+        directly.  This shim keeps that contract working on the HTTP path.
+        """
+        if params is None:
+            return None
+        if isinstance(params, Mapping):
+            return {k: v.isoformat() if isinstance(v, datetime) else v for k, v in params.items()}
+        if isinstance(params, Sequence):
+            return [
+                ClickhouseConnectPool._make_json_safe(item)
+                if isinstance(item, (dict, list))
+                else item.isoformat()
+                if isinstance(item, datetime)
+                else item
+                for item in params
+            ]
+        return params
+
     def _execute_once(
         self,
         query: str,
@@ -206,6 +231,7 @@ class ClickhouseConnectPool(ClickhousePool):
     ) -> ClickhouseResult:
         client = self._get_client()
         query_settings = self._build_query_settings(settings, query_id, capture_trace)
+        params = self._make_json_safe(params)
 
         with sentry_sdk.start_span(description=query, op="db.clickhouse") as span:
             span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
