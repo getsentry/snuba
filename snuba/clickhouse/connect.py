@@ -231,7 +231,24 @@ class ClickhouseConnectPool(ClickhousePool):
     ) -> ClickhouseResult:
         client = self._get_client()
         query_settings = self._build_query_settings(settings, query_id, capture_trace)
-        params = self._make_json_safe(params)
+
+        # The native driver treats INSERT … FORMAT JSONEachRow specially:
+        # the data list is serialised as JSON lines in the request body.
+        # clickhouse-connect's query() instead interprets ``parameters``
+        # as %-style bind params, which fails.  Inline the rows into the
+        # query string so they reach ClickHouse as the FORMAT body.
+        if (
+            params
+            and isinstance(params, Sequence)
+            and not isinstance(params, (str, bytes, Mapping))
+            and "FORMAT JSONEachRow" in query
+        ):
+            safe = self._make_json_safe(params)
+            body = "\n".join(json.dumps(row) for row in safe)
+            query = f"{query}\n{body}"
+            params = None
+        else:
+            params = self._make_json_safe(params)
 
         with sentry_sdk.start_span(description=query, op="db.clickhouse") as span:
             span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")

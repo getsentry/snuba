@@ -743,7 +743,7 @@ def test_make_json_safe_passthrough() -> None:
     assert ClickhouseConnectPool._make_json_safe([1, "two", 3]) == [1, "two", 3]
 
 
-def test_execute_makes_datetime_params_json_safe() -> None:
+def test_execute_inlines_json_each_row_data() -> None:
     client = mock.Mock()
     client.query.return_value = FakeQueryResult(result_set=[])
 
@@ -753,10 +753,26 @@ def test_execute_makes_datetime_params_json_safe() -> None:
         params=[{"ts": datetime(2026, 7, 9, 12, 0, 0), "v": 1}],
     )
 
+    args, kwargs = client.query.call_args
+    query = args[0]
+    assert kwargs["parameters"] is None
+    assert '"ts": "2026-07-09T12:00:00"' in query
+    assert '"v": 1' in query
+    assert query.startswith("INSERT INTO t FORMAT JSONEachRow\n")
+
+
+def test_execute_non_insert_passes_params_through() -> None:
+    client = mock.Mock()
+    client.query.return_value = FakeQueryResult(result_set=[])
+
+    pool = _make_pool(client)
+    pool.execute(
+        "SELECT * FROM t WHERE group = %(group)s",
+        params={"group": "events"},
+    )
+
     _, kwargs = client.query.call_args
-    params = kwargs["parameters"]
-    assert params[0]["ts"] == "2026-07-09T12:00:00"
-    assert params[0]["v"] == 1
+    assert kwargs["parameters"] == {"group": "events"}
 
 
 @pytest.mark.clickhouse_db
