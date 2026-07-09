@@ -232,11 +232,14 @@
       "additionalProperties": {
         "type": "object",
         "additionalProperties": {
-          "type": "number"
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          }
         }
       },
       "default": {},
-      "description": "Override values for object-typed (value_type dict) ConfigurableComponent configs, keyed by the same fully-qualified config key as configurable_component_overrides. Each value is a nested object mapping string subkeys to numbers, letting a single config hold a structured set of values (for example per-organization overrides collapsed under one key instead of many parameterized flat keys). Read as-is for configs whose declared value_type is dict. Authoritative source for these configs; a key absent here falls back to the code default (the legacy Redis runtime config is no longer consulted)."
+      "description": "Override values for object-typed (value_type dict) ConfigurableComponent configs, keyed by the same fully-qualified config key as configurable_component_overrides. Each value is a two-level nested object {outer: {inner: number}}. Its primary use is org/referrer-scoped settings, structured as {organization_id (or '*'): {referrer (or '*'): value}}: resolve_scoped_override reads it most-specific-first, (org, referrer) > (org, '*') > ('*', referrer) > code default, so one config can target a given org, a given referrer, or both. Read as-is for configs whose declared value_type is dict. Authoritative source for these configs; a key absent here falls back to the code default (the legacy Redis runtime config is no longer consulted)."
     },
     "storage_routing_sampled_too_low_threshold": {
       "type": "object",

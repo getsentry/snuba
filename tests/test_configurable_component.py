@@ -372,7 +372,7 @@ class TestConfigurableComponentNamespaces:
 
 
 class ObjectConfigComponent(ConfigurableComponent):
-    """A component with an object-typed (nested-object) config."""
+    """A component with an object-typed (two-level nested object) config."""
 
     @classmethod
     def component_namespace(cls) -> str:
@@ -381,8 +381,8 @@ class ObjectConfigComponent(ConfigurableComponent):
     def _get_default_config_definitions(self) -> list[Configuration]:
         return [
             Configuration(
-                name="per_org_limits",
-                description="A nested-object config: subkey -> number.",
+                name="scan_limit_overrides",
+                description="A two-level nested-object config: {org: {referrer: number}}.",
                 value_type=dict,
                 default={},
             ),
@@ -400,16 +400,17 @@ class ObjectConfigComponent(ConfigurableComponent):
 
 
 class TestConfigurableComponentObjectConfig:
-    """Object-typed configs read nested objects from
+    """Object-typed configs read two-level nested objects from
     ``configurable_component_object_overrides``."""
 
     def test_default_is_empty_object(self) -> None:
-        assert ObjectConfigComponent().get_config_value("per_org_limits") == {}
+        assert ObjectConfigComponent().get_config_value("scan_limit_overrides") == {}
 
     def test_reads_nested_object_override(self) -> None:
         component = ObjectConfigComponent()
-        nested = {"org:1": 100, "org:2": 5}
-        with override_component_config(component, "per_org_limits", nested):
-            assert component.get_config_value("per_org_limits") == nested
+        # {organization_id (or "*"): {referrer (or "*"): value}}
+        nested = {"123": {"api.foo": 500, "*": 1000}, "*": {"api.foo": 2000}}
+        with override_component_config(component, "scan_limit_overrides", nested):
+            assert component.get_config_value("scan_limit_overrides") == nested
         # outside the override the code default applies again
-        assert component.get_config_value("per_org_limits") == {}
+        assert component.get_config_value("scan_limit_overrides") == {}
