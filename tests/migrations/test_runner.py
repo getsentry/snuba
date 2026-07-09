@@ -423,6 +423,23 @@ def test_version() -> None:
 
 
 @pytest.mark.custom_clickhouse_db
+def test_update_migration_status_with_connect_driver() -> None:
+    """_update_migration_status passes datetime.now() in an INSERT FORMAT
+    JSONEachRow query. The clickhouse-connect HTTP driver serialises
+    parameters via json.dumps, which cannot handle bare datetime objects.
+    This test ensures the connect driver path works end-to-end."""
+    with patch("snuba.clusters.cluster.use_clickhouse_connect_driver", return_value=True):
+        runner = Runner()
+        runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"), force=True)
+        migration_key = MigrationKey(MigrationGroup.EVENTS, "test")
+        runner._update_migration_status(migration_key, Status.IN_PROGRESS)
+        status, ts = runner.get_status(migration_key)
+        assert status == Status.IN_PROGRESS
+        assert isinstance(ts, datetime)
+        assert runner._get_next_version(migration_key) == 2
+
+
+@pytest.mark.custom_clickhouse_db
 def test_no_schema_differences() -> None:
     settings.ENABLE_DEV_FEATURES = True
     importlib.reload(factory)
