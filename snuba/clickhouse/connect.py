@@ -243,8 +243,7 @@ class ClickhouseConnectPool(ClickhousePool):
             and not isinstance(params, (str, bytes, Mapping))
             and "FORMAT JSONEachRow" in query
         ):
-            safe = self._make_json_safe(params)
-            body = "\n".join(json.dumps(row) for row in safe)
+            body = "\n".join(json.dumps(self._make_json_safe(row)) for row in params)
             query = f"{query}\n{body}"
             params = None
         else:
