@@ -369,3 +369,47 @@ class TestConfigurableComponentNamespaces:
                 name
                 != f"{AllocationPolicy.component_namespace()}.{AllocationPolicy.component_namespace()}"
             )
+
+
+class ObjectConfigComponent(ConfigurableComponent):
+    """A component with an object-typed (nested-object) config."""
+
+    @classmethod
+    def component_namespace(cls) -> str:
+        return "ObjectConfigComponent"
+
+    def _get_default_config_definitions(self) -> list[Configuration]:
+        return [
+            Configuration(
+                name="per_org_limits",
+                description="A nested-object config: subkey -> number.",
+                value_type=dict,
+                default={},
+            ),
+        ]
+
+    def _additional_config_definitions(self) -> list[Configuration]:
+        return []
+
+    def additional_config_definitions(self) -> list[Configuration]:
+        return []
+
+    @property
+    def resource_identifier(self) -> ResourceIdentifier:
+        return ResourceIdentifier("some_resource")
+
+
+class TestConfigurableComponentObjectConfig:
+    """Object-typed configs read nested objects from
+    ``configurable_component_object_overrides``."""
+
+    def test_default_is_empty_object(self) -> None:
+        assert ObjectConfigComponent().get_config_value("per_org_limits") == {}
+
+    def test_reads_nested_object_override(self) -> None:
+        component = ObjectConfigComponent()
+        nested = {"org:1": 100, "org:2": 5}
+        with override_component_config(component, "per_org_limits", nested):
+            assert component.get_config_value("per_org_limits") == nested
+        # outside the override the code default applies again
+        assert component.get_config_value("per_org_limits") == {}

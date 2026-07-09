@@ -225,7 +225,18 @@
         "type": "number"
       },
       "default": {},
-      "description": "Override values for ConfigurableComponent (allocation policy and storage-routing strategy) configs, keyed by the fully-qualified config key '{resource}.{ClassName}.{config}' (parameterized configs append '.{param}:{value},...', sorted, with '.'/','/':' in param names/values escaped as __dot_literal__/__comma_literal__/__colon_literal__). Values are numbers cast to each config's declared numeric type (int/float) on read. All current ConfigurableComponent configs are numeric; a non-numeric config would require widening this type. Authoritative source for these configs; a key absent here falls back to the code default (the legacy Redis runtime config is no longer consulted). Migrated from per-component runtime config of the same key."
+      "description": "Override values for numeric (int/float) ConfigurableComponent (allocation policy and storage-routing strategy) configs, keyed by the fully-qualified config key '{resource}.{ClassName}.{config}' (parameterized configs append '.{param}:{value},...', sorted, with '.'/','/':' in param names/values escaped as __dot_literal__/__comma_literal__/__colon_literal__). Values are numbers cast to each config's declared numeric type (int/float) on read. Object-typed configs use configurable_component_object_overrides instead (the sentry-options meta-schema does not allow a single option to hold both numbers and objects). Authoritative source for these configs; a key absent here falls back to the code default (the legacy Redis runtime config is no longer consulted). Migrated from per-component runtime config of the same key."
+    },
+    "configurable_component_object_overrides": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "number"
+        }
+      },
+      "default": {},
+      "description": "Override values for object-typed (value_type dict) ConfigurableComponent configs, keyed by the same fully-qualified config key as configurable_component_overrides. Each value is a nested object mapping string subkeys to numbers, letting a single config hold a structured set of values (for example per-organization overrides collapsed under one key instead of many parameterized flat keys). Read as-is for configs whose declared value_type is dict. Authoritative source for these configs; a key absent here falls back to the code default (the legacy Redis runtime config is no longer consulted)."
     },
     "storage_routing_sampled_too_low_threshold": {
       "type": "object",

@@ -29,6 +29,14 @@ T = TypeVar("T", bound="ConfigurableComponent")
 # alike), so editing moves to sentry-options-automator rather than snuba-admin.
 CONFIGURABLE_COMPONENT_OVERRIDES_KEY = "configurable_component_overrides"
 
+# Companion option for object-typed (``value_type`` == ``dict``) configs. The
+# sentry-options meta-schema disallows a single option holding both numbers and
+# objects (no ``anyOf``/type-union), so nested-object config values live in their
+# own dict option, keyed by the same fully-qualified config key. Each value is a
+# nested object (subkey -> number), letting one config hold a structured set of
+# values instead of many parameterized flat keys.
+CONFIGURABLE_COMPONENT_OBJECT_OVERRIDES_KEY = "configurable_component_object_overrides"
+
 
 class InvalidConfig(Exception):
     pass
@@ -415,10 +423,11 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
     ) -> Any:
         """Returns the value of a configuration on this ConfigurableComponent.
 
-        Reads from the centrally-managed ``configurable_component_overrides``
-        sentry-option (values stored as numbers, cast to the config's declared
-        int/float type), falling back to the code default. The legacy Redis
-        runtime config is not consulted.
+        Reads from the centrally-managed sentry-option, falling back to the code
+        default; the legacy Redis runtime config is not consulted. Numeric configs
+        read ``configurable_component_overrides`` (value cast to the declared
+        int/float type); object-typed configs (``value_type`` == ``dict``) read
+        the nested-object values in ``configurable_component_object_overrides``.
         """
         if params is None:
             params = {}
@@ -428,7 +437,12 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
             else self.config_definitions()[config_key]
         )
         full_key = self._build_runtime_config_key(config_key, params)
-        overrides: OptionValue = get_option(CONFIGURABLE_COMPONENT_OVERRIDES_KEY, {})
+        option_key = (
+            CONFIGURABLE_COMPONENT_OBJECT_OVERRIDES_KEY
+            if config_definition.value_type is dict
+            else CONFIGURABLE_COMPONENT_OVERRIDES_KEY
+        )
+        overrides: OptionValue = get_option(option_key, {})
         if isinstance(overrides, dict) and full_key in overrides:
             return config_definition.value_type(overrides[full_key])
         return config_definition.default

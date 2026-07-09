@@ -4,6 +4,7 @@ from typing import Any
 from sentry_options.testing import override_options
 
 from snuba.configs.configuration import (
+    CONFIGURABLE_COMPONENT_OBJECT_OVERRIDES_KEY,
     CONFIGURABLE_COMPONENT_OVERRIDES_KEY,
     ConfigurableComponent,
 )
@@ -39,17 +40,29 @@ def override_component_configs(
 ) -> AbstractContextManager[None]:
     """Set several ConfigurableComponent configs at once.
 
-    ``configurable_component_overrides`` is a single dict option, so overriding
-    multiple keys must happen in one call — nesting ``override_component_config``
-    contexts would replace the whole dict each time, hiding all but the innermost
-    key. Each entry is ``(component, config_key, value[, params])``.
+    The override bags are single dict options, so overriding multiple keys must
+    happen in one call — nesting ``override_component_config`` contexts would
+    replace a whole dict each time, hiding all but the innermost key. Each entry
+    is ``(component, config_key, value[, params])``. Object-typed configs
+    (``value_type`` == ``dict``) are routed to ``configurable_component_object_overrides``
+    and numeric configs to ``configurable_component_overrides``, matching how
+    ``get_config_value`` reads them.
     """
-    merged: dict[str, Any] = {}
+    numeric: dict[str, Any] = {}
+    objects: dict[str, Any] = {}
     for component, config_key, value, *rest in overrides:
         params = rest[0] if rest else None
         full_key = component._build_runtime_config_key(config_key, params or {})
-        merged[full_key] = value
-    return override_options("snuba", {CONFIGURABLE_COMPONENT_OVERRIDES_KEY: merged})
+        if component.config_definitions()[config_key].value_type is dict:
+            objects[full_key] = value
+        else:
+            numeric[full_key] = value
+    option_overrides: dict[str, Any] = {}
+    if numeric:
+        option_overrides[CONFIGURABLE_COMPONENT_OVERRIDES_KEY] = numeric
+    if objects:
+        option_overrides[CONFIGURABLE_COMPONENT_OBJECT_OVERRIDES_KEY] = objects
+    return override_options("snuba", option_overrides)
 
 
 __all__ = ["override_component_config", "override_component_configs"]
