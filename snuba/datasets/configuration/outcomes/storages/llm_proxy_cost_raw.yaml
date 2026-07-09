@@ -1,5 +1,5 @@
 version: v1
-kind: readable_storage
+kind: writable_storage
 name: llm_proxy_cost_raw
 storage:
   key: llm_proxy_cost_raw
@@ -57,3 +57,6 @@ query_processors:
         - org_id
 mandatory_condition_checkers:
   - condition: OrgIdEnforcer
+stream_loader:
+  processor: LlmProxyCostProcessor
+  default_topic: snuba-llm-proxy-cost
