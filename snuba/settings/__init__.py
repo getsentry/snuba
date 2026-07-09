@@ -57,6 +57,11 @@ ADMIN_ALLOWED_PROD_PROJECTS: Sequence[int] = []
 ADMIN_ALLOWED_ORG_IDS: Sequence[int] = []
 ADMIN_ROLES_REDIS_TTL = 600
 
+# Hard cap on how long a single admin HTTP request may take before the web
+# layer gives up and returns 504. ClickHouse queries are already capped at 25s;
+# this is a backstop for anything that outlives that.
+ADMIN_REQUEST_TIMEOUT_SECONDS = int(os.environ.get("ADMIN_REQUEST_TIMEOUT_SECONDS", 30))
+
 # All available regions where region is:
 # https://snuba-admin.<region>.getsentry.net/
 ADMIN_REGIONS: Sequence[str] = []

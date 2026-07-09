@@ -49,6 +49,7 @@ from snuba.admin.migrations_policies import (
     get_migration_group_policies,
 )
 from snuba.admin.production_queries.prod_queries import run_mql_query, run_snql_query
+from snuba.admin.request_timeout import RequestTimeoutMiddleware
 from snuba.admin.rpc.rpc_queries import validate_request_meta
 from snuba.admin.runtime_config import (
     ConfigChange,
@@ -107,6 +108,9 @@ from snuba.web.views import dataset_query
 logger = structlog.get_logger().bind(module=__name__)
 
 application = Flask(__name__, static_url_path="/static", static_folder="dist")
+application.wsgi_app = RequestTimeoutMiddleware(  # type: ignore[method-assign]
+    application.wsgi_app, settings.ADMIN_REQUEST_TIMEOUT_SECONDS
+)
 
 runner = Runner()
 audit_log = AuditLog()
