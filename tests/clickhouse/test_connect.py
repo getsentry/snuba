@@ -709,6 +709,56 @@ def test_reader_routes_with_totals_through_execute_with_totals() -> None:
     assert result["totals"] == {"g": 0, "s": 10}
 
 
+def test_make_json_safe_converts_datetimes() -> None:
+    result = ClickhouseConnectPool._make_json_safe(
+        [
+            {
+                "group": "replays",
+                "migration_id": "0025_add_segment_names_column",
+                "timestamp": datetime(2026, 7, 9, 17, 38, 34),
+                "status": "in_progress",
+                "version": 1,
+            }
+        ]
+    )
+    assert isinstance(result, list)
+    row = result[0]
+    assert row["timestamp"] == "2026-07-09T17:38:34"
+    assert row["group"] == "replays"
+    assert row["version"] == 1
+    json.dumps(result)
+
+
+def test_make_json_safe_converts_dict_params() -> None:
+    result = ClickhouseConnectPool._make_json_safe({"ts": datetime(2026, 1, 1), "name": "test"})
+    assert isinstance(result, dict)
+    assert result["ts"] == "2026-01-01T00:00:00"
+    assert result["name"] == "test"
+    json.dumps(result)
+
+
+def test_make_json_safe_passthrough() -> None:
+    assert ClickhouseConnectPool._make_json_safe(None) is None
+    assert ClickhouseConnectPool._make_json_safe({"a": 1}) == {"a": 1}
+    assert ClickhouseConnectPool._make_json_safe([1, "two", 3]) == [1, "two", 3]
+
+
+def test_execute_makes_datetime_params_json_safe() -> None:
+    client = mock.Mock()
+    client.query.return_value = FakeQueryResult(result_set=[])
+
+    pool = _make_pool(client)
+    pool.execute(
+        "INSERT INTO t FORMAT JSONEachRow",
+        params=[{"ts": datetime(2026, 7, 9, 12, 0, 0), "v": 1}],
+    )
+
+    _, kwargs = client.query.call_args
+    params = kwargs["parameters"]
+    assert params[0]["ts"] == "2026-07-09T12:00:00"
+    assert params[0]["v"] == 1
+
+
 @pytest.mark.clickhouse_db
 def test_connect_driver_matches_native_for_totals_and_empty_results() -> None:
     # End-to-end vs a real ClickHouse: the connect (HTTP) pool must produce the same
