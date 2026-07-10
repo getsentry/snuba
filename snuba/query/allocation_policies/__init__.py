@@ -29,9 +29,6 @@ CAPMAN_HASH = "capman"
 IS_ACTIVE = "is_active"
 IS_ENFORCED = "is_enforced"
 MAX_THREADS = "max_threads"
-# Default number of ClickHouse threads a query is allowed to use when no policy
-# (or other setting) narrows it further.
-DEFAULT_MAX_THREADS = 10
 NO_UNITS = "no_units"
 NO_SUGGESTION = "no_suggestion"
 CROSS_ORG_SUGGESTION = "cross org queries do not have limits"
@@ -370,7 +367,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                 name=MAX_THREADS,
                 description="The max threads Clickhouse can use for the query.",
                 value_type=int,
-                default=default_config_overrides.get(MAX_THREADS, DEFAULT_MAX_THREADS),
+                default=default_config_overrides.get(MAX_THREADS, 10),
             ),
         ]
         self._overridden_additional_config_definitions = (

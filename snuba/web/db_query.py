@@ -29,7 +29,6 @@ from snuba.configs.configuration import ResourceIdentifier
 from snuba.downsampled_storage_tiers import Tier
 from snuba.query import ProcessableQuery
 from snuba.query.allocation_policies import (
-    DEFAULT_MAX_THREADS,
     MAX_THRESHOLD,
     AllocationPolicy,
     AllocationPolicyViolations,
@@ -214,13 +213,15 @@ def execute_query(
         {
             "result_rows": len(result["data"]),
             "result_cols": len(result["meta"]),
-            # Fall back to the default max threads a query is allowed rather than
-            # None: the snuba-queries schema requires an integer, so emitting null
-            # here causes the querylog consumer to reject the message with a
-            # SchemaViolation.
-            "max_threads": clickhouse_query_settings.get("max_threads", DEFAULT_MAX_THREADS),
         }
     )
+    # Only record max_threads when ClickHouse was actually given one. The
+    # snuba-queries schema types stats.max_threads as an integer (the field is
+    # optional), so emitting null when no resource quota applied a thread limit
+    # gets the querylog message rejected with a SchemaViolation.
+    max_threads = clickhouse_query_settings.get("max_threads")
+    if max_threads is not None:
+        stats["max_threads"] = max_threads
 
     return result
 
