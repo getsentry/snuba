@@ -424,6 +424,42 @@ def test_empty_result_meta_placeholder_for_unnamed_non_column() -> None:
     assert result["meta"] == [{"name": "_invalid_alias_0", "type": ""}]
 
 
+def test_max_threads_defaults_to_zero_when_unset() -> None:
+    # When max_threads isn't in the ClickHouse query settings (e.g. no resource
+    # quota was applied), execute_query must record an integer, not None. The
+    # snuba-queries schema requires an integer for stats.max_threads, so a null
+    # value gets the querylog message rejected with a SchemaViolation.
+    from snuba.reader import Reader, Result
+
+    query, _storage, _attribution_info = _build_test_query("count(distinct(project_id))")
+
+    class _Reader(Reader):
+        def __init__(self) -> None:
+            super().__init__(cache_partition_id=None, query_settings_prefix=None)
+
+        def execute(self, *args: Any, **kwargs: Any) -> Result:
+            return {
+                "data": [{"count": 0}],
+                "meta": [{"name": "count", "type": "UInt64"}],
+                "profile": None,
+                "trace_output": "",
+            }
+
+    stats: dict[str, Any] = {}
+    execute_query(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        formatted_query=format_query(query),
+        reader=_Reader(),
+        timer=Timer("test"),
+        stats=stats,
+        clickhouse_query_settings={},
+        robust=False,
+    )
+
+    assert stats["max_threads"] == 0
+
+
 def test_empty_result_meta_prefers_alias_over_name() -> None:
     # ClickHouse names the column by the SQL alias, not SelectedExpression.name. When
     # they differ (MQL: name "time" vs alias "events.time"), synthesis uses the alias.
