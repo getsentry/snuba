@@ -218,9 +218,7 @@ def execute_query(
             # None: the snuba-queries schema requires an integer, so emitting null
             # here causes the querylog consumer to reject the message with a
             # SchemaViolation.
-            "max_threads": clickhouse_query_settings.get(
-                "max_threads", DEFAULT_MAX_THREADS
-            ),
+            "max_threads": clickhouse_query_settings.get("max_threads", DEFAULT_MAX_THREADS),
         }
     )
 
