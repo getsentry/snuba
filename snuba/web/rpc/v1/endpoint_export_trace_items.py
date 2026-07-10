@@ -273,7 +273,11 @@ def _build_query(
         ),
         SelectedExpression(
             "trace_id",
-            column("trace_id", alias="trace_id"),
+            expression=(
+                attribute_key_to_expression(
+                    AttributeKey(name="sentry.trace_id", type=AttributeKey.Type.TYPE_STRING)
+                )
+            ),
         ),
         SelectedExpression("organization_id", column("organization_id", alias="organization_id")),
         SelectedExpression("project_id", column("project_id", alias="project_id")),
@@ -342,6 +346,7 @@ def _build_query(
     item_type_filter = []
     if meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
         item_type_filter.append(f.equals(column("item_type"), literal(meta.trace_item_type)))
+
     query = Query(
         from_clause=entity,
         selected_columns=selected_columns,
@@ -545,9 +550,10 @@ class EndpointExportTraceItems(RPCEndpoint[ExportTraceItemsRequest, ExportTraceI
             limit = default_page_size
 
         page_token = ExportTraceItemsPageToken.from_protobuf(in_msg.page_token)
+        snuba_request = _build_snuba_request(in_msg, self.routing_decision, limit, page_token)
         results = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
-            request=_build_snuba_request(in_msg, self.routing_decision, limit, page_token),
+            request=snuba_request,
             timer=self._timer,
         )
 
