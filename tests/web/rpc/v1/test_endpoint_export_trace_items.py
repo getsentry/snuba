@@ -228,6 +228,53 @@ class TestExportTraceItems(BaseApiTest):
         assert len(response.trace_items) == 2
         assert all(i.attributes["color"].string_value == filter_color for i in response.trace_items)
 
+    def test_with_trace_id_filter(self, setup_teardown: Any) -> None:
+        """
+        Some columns require special handling.  sentry.trace_id is one of them.
+        """
+        filter_trace_id = uuid.uuid4().hex
+        items = [
+            gen_item_message(
+                start_timestamp=BASE_TIME,
+                trace_id=trace_id,
+            )
+            for trace_id in [
+                filter_trace_id,
+                *[uuid.uuid4().hex for _ in range(10)],
+                filter_trace_id,
+            ]
+        ]
+        write_raw_unprocessed_events(get_writable_storage(StorageKey("eap_items")), items)
+
+        message = ExportTraceItemsRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int((BASE_TIME + timedelta(seconds=1)).timestamp())
+                ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                request_id=_REQUEST_ID,
+            ),
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING,
+                        name="sentry.trace_id",
+                    ),
+                    op=ComparisonFilter.OP_EQUALS,
+                    value=AttributeValue(val_str=filter_trace_id),
+                ),
+            ),
+        )
+        response = EndpointExportTraceItems().execute(message)
+
+        assert len(response.trace_items) == 2
+        assert all(i.trace_id == filter_trace_id for i in response.trace_items)
+
     def test_pagination_with_filter(self, eap: Any, monkeypatch: Any) -> None:
         # Capture the SQL of every page so we can also assert at the SQL level that
         # keyset pagination stays anchored to the same total ordering as the ORDER BY.
