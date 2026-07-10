@@ -424,11 +424,12 @@ def test_empty_result_meta_placeholder_for_unnamed_non_column() -> None:
     assert result["meta"] == [{"name": "_invalid_alias_0", "type": ""}]
 
 
-def test_max_threads_defaults_to_zero_when_unset() -> None:
+def test_max_threads_defaults_when_unset() -> None:
     # When max_threads isn't in the ClickHouse query settings (e.g. no resource
     # quota was applied), execute_query must record an integer, not None. The
     # snuba-queries schema requires an integer for stats.max_threads, so a null
     # value gets the querylog message rejected with a SchemaViolation.
+    from snuba.query.allocation_policies import DEFAULT_MAX_THREADS
     from snuba.reader import Reader, Result
 
     query, _storage, _attribution_info = _build_test_query("count(distinct(project_id))")
@@ -457,7 +458,7 @@ def test_max_threads_defaults_to_zero_when_unset() -> None:
         robust=False,
     )
 
-    assert stats["max_threads"] == 0
+    assert stats["max_threads"] == DEFAULT_MAX_THREADS
 
 
 def test_empty_result_meta_prefers_alias_over_name() -> None:

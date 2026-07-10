@@ -29,6 +29,7 @@ from snuba.configs.configuration import ResourceIdentifier
 from snuba.downsampled_storage_tiers import Tier
 from snuba.query import ProcessableQuery
 from snuba.query.allocation_policies import (
+    DEFAULT_MAX_THREADS,
     MAX_THRESHOLD,
     AllocationPolicy,
     AllocationPolicyViolations,
@@ -213,12 +214,13 @@ def execute_query(
         {
             "result_rows": len(result["data"]),
             "result_cols": len(result["meta"]),
-            # Default to 0 (the "unset" sentinel used by the UInt(8) querylog
-            # column and the Rust processor's ``unwrap_or(0)``) rather than None:
-            # the snuba-queries schema requires an integer, so emitting null here
-            # causes the querylog consumer to reject the message with a
+            # Fall back to the default max threads a query is allowed rather than
+            # None: the snuba-queries schema requires an integer, so emitting null
+            # here causes the querylog consumer to reject the message with a
             # SchemaViolation.
-            "max_threads": clickhouse_query_settings.get("max_threads", 0),
+            "max_threads": clickhouse_query_settings.get(
+                "max_threads", DEFAULT_MAX_THREADS
+            ),
         }
     )
 
