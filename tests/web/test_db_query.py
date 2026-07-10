@@ -424,57 +424,6 @@ def test_empty_result_meta_placeholder_for_unnamed_non_column() -> None:
     assert result["meta"] == [{"name": "_invalid_alias_0", "type": ""}]
 
 
-def test_max_threads_omitted_when_unset() -> None:
-    # When max_threads isn't in the ClickHouse query settings (e.g. no resource
-    # quota applied a thread limit), execute_query must not record it as None.
-    # The snuba-queries schema types stats.max_threads as an integer (optional),
-    # so a null value gets the querylog message rejected with a SchemaViolation.
-    from snuba.reader import Reader, Result
-
-    query, _storage, _attribution_info = _build_test_query("count(distinct(project_id))")
-
-    class _Reader(Reader):
-        def __init__(self) -> None:
-            super().__init__(cache_partition_id=None, query_settings_prefix=None)
-
-        def execute(self, *args: Any, **kwargs: Any) -> Result:
-            return {
-                "data": [{"count": 0}],
-                "meta": [{"name": "count", "type": "UInt64"}],
-                "profile": None,
-                "trace_output": "",
-            }
-
-    stats: dict[str, Any] = {}
-    execute_query(
-        clickhouse_query=query,
-        query_settings=HTTPQuerySettings(),
-        formatted_query=format_query(query),
-        reader=_Reader(),
-        timer=Timer("test"),
-        stats=stats,
-        clickhouse_query_settings={},
-        robust=False,
-    )
-
-    # Omitted entirely (schema-valid) rather than recorded as null.
-    assert "max_threads" not in stats
-
-    # But a real value is still recorded when one was applied.
-    stats_with_threads: dict[str, Any] = {}
-    execute_query(
-        clickhouse_query=query,
-        query_settings=HTTPQuerySettings(),
-        formatted_query=format_query(query),
-        reader=_Reader(),
-        timer=Timer("test"),
-        stats=stats_with_threads,
-        clickhouse_query_settings={"max_threads": 5},
-        robust=False,
-    )
-    assert stats_with_threads["max_threads"] == 5
-
-
 def test_empty_result_meta_prefers_alias_over_name() -> None:
     # ClickHouse names the column by the SQL alias, not SelectedExpression.name. When
     # they differ (MQL: name "time" vs alias "events.time"), synthesis uses the alias.

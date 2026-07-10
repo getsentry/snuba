@@ -215,12 +215,9 @@ def execute_query(
             "result_cols": len(result["meta"]),
         }
     )
-    # Only record max_threads when ClickHouse was actually given one. The
-    # snuba-queries schema types stats.max_threads as an integer (the field is
-    # optional), so emitting null when no resource quota applied a thread limit
-    # gets the querylog message rejected with a SchemaViolation.
-    max_threads = clickhouse_query_settings.get("max_threads")
-    if max_threads is not None:
+    # stats.max_threads is an optional integer in the querylog schema, so only
+    # record it when set (emitting null gets the message rejected).
+    if (max_threads := clickhouse_query_settings.get("max_threads")) is not None:
         stats["max_threads"] = max_threads
 
     return result
