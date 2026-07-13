@@ -543,6 +543,13 @@ def _process_results(
                 if isinstance(row_value, dict):
                     for column_key, column_value in row_value.items():
                         add_attribute(column_key, column_value)
+                elif isinstance(row_value, (list, tuple)):
+                    # A per-attribute element-typed array reads as a native list; an absent
+                    # or stored-empty attribute reads as [], which we drop (missing and
+                    # stored-empty arrays are indistinguishable in the typed columns) to
+                    # match every other read path rather than emit an empty val_array.
+                    if row_value:
+                        add_attribute(row_key, list(row_value))
                 else:
                     add_attribute(row_key, row_value)
 

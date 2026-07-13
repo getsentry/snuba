@@ -617,6 +617,22 @@ def test_process_results_skips_empty_typed_array_subcolumns() -> None:
     assert all(attr.key.name != "my_tags" for attr in item.attributes)
 
 
+def test_process_results_element_typed_array_empty_is_omitted() -> None:
+    """A per-attribute element-typed array read as an empty native list (absent or
+    stored-empty) is omitted, not surfaced as an empty val_array; a populated one is
+    returned."""
+    processed_results = _process_results(
+        [
+            {"id": "empty", "timestamp": 1778785776.0, "my_tags": []},
+            {"id": "full", "timestamp": 1778785776.0, "my_tags": ["a", "b"]},
+        ],
+    )
+    empty_item, full_item = processed_results.items
+    assert all(attr.key.name != "my_tags" for attr in empty_item.attributes)
+    my_tags = next(attr for attr in full_item.attributes if attr.key.name == "my_tags")
+    assert [e.val_str for e in my_tags.value.val_array.values] == ["a", "b"]
+
+
 def test_process_results_keeps_empty_string_attribute() -> None:
     processed_results = _process_results(
         [
