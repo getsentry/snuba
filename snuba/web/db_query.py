@@ -49,7 +49,7 @@ from snuba.querylog.query_metadata import (
     get_query_status_from_error_codes,
     get_request_status,
 )
-from snuba.reader import Reader, Result
+from snuba.reader import Column, Reader, Result
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state.cache.abstract import Cache, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import (
@@ -187,14 +187,38 @@ def execute_query(
         robust=robust,
     )
 
+    # The clickhouse-connect (HTTP) reader returns empty meta for a zero-row result
+    # (ClickHouse sends a zero-byte Native body, so there's no column header; the
+    # native driver always reports columns). Synthesize the names from the query we
+    # just ran instead of paying for a second scan; types are left blank (an empty
+    # result has no values to coerce).
+    if not result["meta"]:
+        synthesized_meta: list[Column] = []
+        for index, selected in enumerate(clickhouse_query.get_selected_columns()):
+            # ClickHouse names the column by its SQL alias (matching the native
+            # driver), so prefer that; fall back to the logical name (can differ,
+            # e.g. MQL ``time`` vs ``events.time``), then a bare column's own name,
+            # then the ``_invalid_alias_{index}`` placeholder Query.get_columns() uses.
+            name = (
+                selected.expression.alias
+                or selected.name
+                or getattr(selected.expression, "column_name", None)
+                or f"_invalid_alias_{index}"
+            )
+            synthesized_meta.append({"name": name, "type": ""})
+        result["meta"] = synthesized_meta
+
     timer.mark("execute")
     stats.update(
         {
             "result_rows": len(result["data"]),
             "result_cols": len(result["meta"]),
-            "max_threads": clickhouse_query_settings.get("max_threads", None),
         }
     )
+    # stats.max_threads is an optional integer in the querylog schema, so only
+    # record it when set (emitting null gets the message rejected).
+    if (max_threads := clickhouse_query_settings.get("max_threads")) is not None:
+        stats["max_threads"] = max_threads
 
     return result
 

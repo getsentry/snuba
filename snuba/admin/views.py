@@ -14,6 +14,7 @@ import structlog
 from flask import Flask, Response, g, jsonify, make_response, request
 from google.protobuf.json_format import MessageToDict, Parse
 from structlog.contextvars import bind_contextvars, clear_contextvars
+from werkzeug.exceptions import HTTPException
 
 from snuba import settings, state
 from snuba.admin.audit_log.action import AuditLogAction
@@ -128,6 +129,22 @@ def handle_invalid_dataset(exception: InvalidDatasetError) -> Response:
     return Response(
         json.dumps(data, sort_keys=True, indent=4),
         404,
+        {"Content-Type": "application/json"},
+    )
+
+
+# passthrough needed so that we don't turn these into 500s
+@application.errorhandler(HTTPException)
+def handle_http_exception(exception: HTTPException) -> HTTPException:
+    return exception
+
+
+@application.errorhandler(Exception)
+def handle_uncaught_exception(exception: Exception) -> Response:
+    logger.error(exception, exc_info=True)
+    return Response(
+        json.dumps({"error": {"type": "unknown", "message": str(exception)}}),
+        500,
         {"Content-Type": "application/json"},
     )
 

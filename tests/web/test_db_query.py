@@ -40,6 +40,7 @@ from snuba.web.db_query import (
     _apply_allocation_policies_quota,
     _get_query_settings_from_config,
     db_query,
+    execute_query,
 )
 
 test_data = [
@@ -275,6 +276,192 @@ def _build_test_query(
             parent_api=None,
         ),
     )
+
+
+def test_empty_result_meta_synthesized_from_query() -> None:
+    # The connect (HTTP) reader returns empty meta for a zero-row result; execute_query
+    # synthesizes the columns from the query (no second scan) so callers that validate
+    # columns (Sentry, else "got set()") still see them. No-op on the native driver.
+    from snuba.reader import Reader, Result
+
+    query, _storage, _attribution_info = _build_test_query("count(distinct(project_id))")
+
+    class _EmptyMetaReader(Reader):
+        def __init__(self) -> None:
+            super().__init__(cache_partition_id=None, query_settings_prefix=None)
+
+        def execute(self, *args: Any, **kwargs: Any) -> Result:
+            # Mirror what the connect pool returns for an empty result set.
+            return {"data": [], "meta": [], "profile": None, "trace_output": ""}
+
+    stats: dict[str, Any] = {}
+    result = execute_query(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        formatted_query=format_query(query),
+        reader=_EmptyMetaReader(),
+        timer=Timer("test"),
+        stats=stats,
+        clickhouse_query_settings={},
+        robust=False,
+    )
+
+    assert result["data"] == []
+    # The single selected column ("some_alias") is recovered from the query.
+    assert result["meta"] == [{"name": "some_alias", "type": ""}]
+    assert stats["result_cols"] == 1
+
+
+def test_empty_result_meta_falls_back_to_expression_alias() -> None:
+    # SelectedExpression.name is nullable; the result column name is the expression's
+    # alias. When name is None, synthesis falls back to the alias, not dropping the column.
+    from snuba.query import SelectedExpression
+    from snuba.query.expressions import Column as ColumnExpr
+    from snuba.reader import Reader, Result
+
+    query, _storage, _attribution_info = _build_test_query("count(distinct(project_id))")
+    query.set_ast_selected_columns(
+        [
+            SelectedExpression(
+                name=None,
+                expression=ColumnExpr(
+                    alias="aliased_col", table_name=None, column_name="project_id"
+                ),
+            )
+        ]
+    )
+
+    class _EmptyMetaReader(Reader):
+        def __init__(self) -> None:
+            super().__init__(cache_partition_id=None, query_settings_prefix=None)
+
+        def execute(self, *args: Any, **kwargs: Any) -> Result:
+            return {"data": [], "meta": [], "profile": None, "trace_output": ""}
+
+    stats: dict[str, Any] = {}
+    result = execute_query(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        formatted_query=format_query(query),
+        reader=_EmptyMetaReader(),
+        timer=Timer("test"),
+        stats=stats,
+        clickhouse_query_settings={},
+        robust=False,
+    )
+
+    # Recovered from the expression alias even though name is None.
+    assert result["meta"] == [{"name": "aliased_col", "type": ""}]
+    assert stats["result_cols"] == 1
+
+
+def test_empty_result_meta_uses_column_name_for_bare_column() -> None:
+    # A bare column with no name/alias is echoed under its own column name
+    # (SELECT project_id -> "project_id"), so synthesis uses that, not a placeholder.
+    from snuba.query import SelectedExpression
+    from snuba.query.expressions import Column as ColumnExpr
+    from snuba.reader import Reader, Result
+
+    query, _storage, _attribution_info = _build_test_query("count(distinct(project_id))")
+    query.set_ast_selected_columns(
+        [
+            SelectedExpression(
+                name=None,
+                expression=ColumnExpr(alias=None, table_name=None, column_name="project_id"),
+            )
+        ]
+    )
+
+    class _EmptyMetaReader(Reader):
+        def __init__(self) -> None:
+            super().__init__(cache_partition_id=None, query_settings_prefix=None)
+
+        def execute(self, *args: Any, **kwargs: Any) -> Result:
+            return {"data": [], "meta": [], "profile": None, "trace_output": ""}
+
+    result = execute_query(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        formatted_query=format_query(query),
+        reader=_EmptyMetaReader(),
+        timer=Timer("test"),
+        stats={},
+        clickhouse_query_settings={},
+        robust=False,
+    )
+    assert result["meta"] == [{"name": "project_id", "type": ""}]
+
+
+def test_empty_result_meta_placeholder_for_unnamed_non_column() -> None:
+    # A non-column expression with no name/alias still emits a column (never dropped),
+    # using the `_invalid_alias_{index}` placeholder Query.get_columns() uses.
+    from snuba.query import SelectedExpression
+    from snuba.query.expressions import FunctionCall
+    from snuba.reader import Reader, Result
+
+    query, _storage, _attribution_info = _build_test_query("count(distinct(project_id))")
+    query.set_ast_selected_columns(
+        [SelectedExpression(name=None, expression=FunctionCall(None, "now", ()))]
+    )
+
+    class _EmptyMetaReader(Reader):
+        def __init__(self) -> None:
+            super().__init__(cache_partition_id=None, query_settings_prefix=None)
+
+        def execute(self, *args: Any, **kwargs: Any) -> Result:
+            return {"data": [], "meta": [], "profile": None, "trace_output": ""}
+
+    result = execute_query(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        formatted_query=format_query(query),
+        reader=_EmptyMetaReader(),
+        timer=Timer("test"),
+        stats={},
+        clickhouse_query_settings={},
+        robust=False,
+    )
+    assert result["meta"] == [{"name": "_invalid_alias_0", "type": ""}]
+
+
+def test_empty_result_meta_prefers_alias_over_name() -> None:
+    # ClickHouse names the column by the SQL alias, not SelectedExpression.name. When
+    # they differ (MQL: name "time" vs alias "events.time"), synthesis uses the alias.
+    from snuba.query import SelectedExpression
+    from snuba.query.expressions import Column as ColumnExpr
+    from snuba.reader import Reader, Result
+
+    query, _storage, _attribution_info = _build_test_query("count(distinct(project_id))")
+    query.set_ast_selected_columns(
+        [
+            SelectedExpression(
+                name="time",
+                expression=ColumnExpr(alias="events.time", table_name="events", column_name="time"),
+            )
+        ]
+    )
+
+    class _EmptyMetaReader(Reader):
+        def __init__(self) -> None:
+            super().__init__(cache_partition_id=None, query_settings_prefix=None)
+
+        def execute(self, *args: Any, **kwargs: Any) -> Result:
+            return {"data": [], "meta": [], "profile": None, "trace_output": ""}
+
+    stats: dict[str, Any] = {}
+    result = execute_query(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        formatted_query=format_query(query),
+        reader=_EmptyMetaReader(),
+        timer=Timer("test"),
+        stats=stats,
+        clickhouse_query_settings={},
+        robust=False,
+    )
+
+    # Alias wins over the differing name -- matches what ClickHouse would return.
+    assert result["meta"] == [{"name": "events.time", "type": ""}]
 
 
 @pytest.mark.events_db

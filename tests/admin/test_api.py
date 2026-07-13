@@ -1482,3 +1482,25 @@ def test_list_rpc_endpoints(admin_api: FlaskClient) -> None:
     registered_endpoints = {tuple(name.split("__")) for name in RPCEndpoint.all_names()}
     response_endpoints = {tuple(endpoint) for endpoint in endpoint_names}
     assert response_endpoints == registered_endpoints
+
+
+@pytest.mark.redis_db
+def test_uncaught_exception_returns_json_500(admin_api: FlaskClient) -> None:
+    # The /tools endpoint has no try/except; make its handler raise an
+    # unexpected error and confirm the global handler repackages it as JSON.
+    with mock.patch(
+        "snuba.admin.views.get_user_allowed_tools",
+        side_effect=RuntimeError("boom"),
+    ):
+        response = admin_api.get("/tools")
+
+    assert response.status_code == 500
+    assert response.headers["Content-Type"] == "application/json"
+    assert json.loads(response.data) == {"error": {"type": "unknown", "message": "boom"}}
+
+
+@pytest.mark.redis_db
+def test_http_exception_passes_through(admin_api: FlaskClient) -> None:
+    # The catch-all must not swallow werkzeug HTTPExceptions into a 500.
+    response = admin_api.get("/this_route_does_not_exist")
+    assert response.status_code == 404
