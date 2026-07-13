@@ -36,17 +36,13 @@ from snuba.state.sentry_options import get_option
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
-    ATTRIBUTES_ARRAY_ALLOWLIST,
     BUCKET_COUNT,
     attribute_key_to_expression,
-    attributes_array_selected_expressions,
     base_conditions_and,
-    decode_attributes_array_value,
     merge_typed_array_maps,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
     typed_array_map_selected_expressions,
-    use_array_map_columns,
 )
 from snuba.web.rpc.common.debug_info import setup_trace_query_settings
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -306,13 +302,8 @@ def _build_query(
         ),
         SelectedExpression("attributes_int", column("attributes_int", alias="attributes_int")),
         SelectedExpression("attributes_bool", column("attributes_bool", alias="attributes_bool")),
-        # Past the cutoff, read every array attribute from the typed array map columns
-        # instead of the legacy attributes_array JSON-column allowlist.
-        *(
-            typed_array_map_selected_expressions()
-            if use_array_map_columns(meta)
-            else attributes_array_selected_expressions()
-        ),
+        # Read every array attribute from the typed array map columns.
+        *typed_array_map_selected_expressions(),
     ]
 
     entity = Entity(
@@ -355,7 +346,6 @@ def _build_query(
             trace_item_filters_to_expression(
                 in_msg.filter,
                 attribute_key_to_expression,
-                use_array_map_columns=use_array_map_columns(meta),
             ),
             *page_token_filter,
             *item_type_filter,
@@ -436,9 +426,7 @@ class ProcessedResults(NamedTuple):
     keyset_cursor: KeysetCursor
 
 
-def _convert_rows(
-    rows: Iterable[dict[str, Any]], read_typed_arrays: bool = False
-) -> ProcessedResults:
+def _convert_rows(rows: Iterable[dict[str, Any]]) -> ProcessedResults:
     items: list[TraceItem] = []
     last_seen_project_id = 0
     last_seen_item_type = TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
@@ -463,20 +451,10 @@ def _convert_rows(
 
         attributes_map: dict[str, AnyValue] = {}
 
-        if read_typed_arrays:
-            # Past the cutoff: every array attribute, merged from the typed array map
-            # columns (the allowlist is no longer needed).
-            for name, values in merge_typed_array_maps(row):
-                if values:
-                    attributes_map[name] = _to_any_value(values)
-        else:
-            # Each allowlisted attributes_array path is its own JSON-string column.
-            # Decode only those rather than probing every value in the row.
-            for path in ATTRIBUTES_ARRAY_ALLOWLIST:
-                decoded = decode_attributes_array_value(path, row.pop(path, None))
-                if decoded is None or (isinstance(decoded, list) and not decoded):
-                    continue
-                attributes_map[path] = _to_any_value(decoded)
+        # Every array attribute, merged from the typed array map columns.
+        for name, values in merge_typed_array_maps(row):
+            if values:
+                attributes_map[name] = _to_any_value(values)
 
         # Remaining columns are scalar map columns (e.g. attributes_string).
         for row_key, row_value in row.items():
@@ -559,12 +537,7 @@ class EndpointExportTraceItems(RPCEndpoint[ExportTraceItemsRequest, ExportTraceI
 
         rows = results.result.get("data", [])
         # Match _build_query: gate on the routing-adjusted window actually queried.
-        processed_results = _convert_rows(
-            rows,
-            read_typed_arrays=use_array_map_columns(
-                _export_query_meta(in_msg, self.routing_decision)
-            ),
-        )
+        processed_results = _convert_rows(rows)
         is_flex = _is_flextime_export(in_msg)
         orig_start = in_msg.meta.start_timestamp.seconds
         routed = self.routing_decision.time_window
