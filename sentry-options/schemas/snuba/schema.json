@@ -194,11 +194,6 @@
       "default": false,
       "description": "When true, GetTraces uses the cross-item query path for single-item queries as well as cross-item queries."
     },
-    "use_array_map_columns_timestamp_seconds": {
-      "type": "integer",
-      "default": 1782172800,
-      "description": "Unix timestamp (seconds) cutoff: EAP queries whose window starts on/after this read array attributes from the typed attributes_array_* map columns; older windows read the legacy attributes_array JSON column. 0 disables the typed-column read path entirely. Migrated from runtime config use_array_map_columns_timestamp_seconds."
-    },
     "storage_routing.enable_get_cluster_loadinfo": {
       "type": "boolean",
       "default": false,

@@ -11,7 +11,6 @@ from snuba.query.expressions import (
     Argument,
     Expression,
     FunctionCall,
-    JsonPath,
     Lambda,
     SubscriptableReference,
 )
@@ -61,6 +60,27 @@ PROTO_TYPE_TO_ATTRIBUTE_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]]
     AttributeKey.Type.TYPE_FLOAT: "attributes_float",
     AttributeKey.Type.TYPE_BOOLEAN: "attributes_bool",
 }
+
+# Element-typed array attribute types map 1:1 to a single typed array map column, so a
+# query on one of these reads exactly that column natively (no cross-column OR/merge).
+PROTO_ARRAY_TYPE_TO_COLUMN: Final[Mapping[AttributeKey.Type.ValueType, str]] = {
+    AttributeKey.Type.TYPE_ARRAY_STRING: "attributes_array_string",
+    AttributeKey.Type.TYPE_ARRAY_INT: "attributes_array_int",
+    AttributeKey.Type.TYPE_ARRAY_DOUBLE: "attributes_array_float",
+    AttributeKey.Type.TYPE_ARRAY_BOOL: "attributes_array_bool",
+}
+
+# Every array-typed AttributeKey type, including the deprecated untyped TYPE_ARRAY (which
+# has no element type, so its callers must read all four typed columns).
+ARRAY_TYPES: Final[frozenset[AttributeKey.Type.ValueType]] = frozenset(
+    {AttributeKey.Type.TYPE_ARRAY, *PROTO_ARRAY_TYPE_TO_COLUMN}
+)
+
+
+def array_element_column(attr_key: AttributeKey) -> str | None:
+    """The single typed array column for an element-typed array key
+    (TYPE_ARRAY_STRING/INT/DOUBLE/BOOL), or None for the deprecated untyped TYPE_ARRAY."""
+    return PROTO_ARRAY_TYPE_TO_COLUMN.get(attr_key.type)
 
 
 def _resolve_canonical(name: str) -> str:
@@ -142,61 +162,6 @@ def _generate_subscriptable_reference(
     )
 
 
-def type_array_to_membership_array_expression(attr_key: AttributeKey) -> FunctionCall:
-    """To be used only in WHERE clause, not SELECT"""
-    if attr_key.type != AttributeKey.Type.TYPE_ARRAY:
-        raise MalformedAttributeException(
-            f"type_array_to_membership_array_expression expected TYPE_ARRAY, got "
-            f"{AttributeKey.Type.Name(attr_key.type)}"
-        )
-    # We need different label than attribute_key_to_expression(TYPE_ARRAY) [toJSONString]
-    alias = f"{_build_label_mapping_key(attr_key)}__array_members"
-    x = Argument(None, "x")
-    return FunctionCall(
-        alias=alias,
-        function_name="arrayMap",
-        parameters=(
-            Lambda(
-                alias=None,
-                parameters=("x",),
-                transformation=FunctionCall(
-                    alias=None,
-                    function_name="coalesce",
-                    parameters=(
-                        JsonPath(None, x, "String", "Nullable(String)"),
-                        FunctionCall(
-                            None,
-                            "toString",
-                            (JsonPath(None, x, "Int", "Nullable(Int64)"),),
-                        ),
-                        FunctionCall(
-                            None,
-                            "toString",
-                            (JsonPath(None, x, "Double", "Nullable(Float64)"),),
-                        ),
-                        JsonPath(None, x, "Bool", "Nullable(String)"),
-                    ),
-                ),
-            ),
-            JsonPath(
-                alias=None,
-                base=column("attributes_array"),
-                path=attr_key.name,
-                return_type="Array(JSON)",
-            ),
-        ),
-    )
-
-
-def type_array_to_stored_array_json_path(attr_key: AttributeKey) -> JsonPath:
-    return JsonPath(
-        alias=None,
-        base=column("attributes_array"),
-        path=attr_key.name,
-        return_type="Array(JSON)",
-    )
-
-
 # The typed array map columns (Map(String, Array(T))), in element-type order. Shared by
 # the per-attribute SELECT (type_array_typed_columns_select_expressions) and the
 # whole-map reads / merges in snuba.web.rpc.common.common.
@@ -209,14 +174,15 @@ TYPED_ARRAY_MAP_COLUMNS: tuple[str, ...] = (
 
 
 def type_array_typed_columns_select_expressions(attr_key: AttributeKey) -> list[FunctionCall]:
-    """Native ``arrayElement`` read per typed array map column for a TYPE_ARRAY SELECT
-    past the cutoff (replaces the legacy ``toJSONString`` JSON-column form). Arrays are
-    homogeneous, so one sub-column is non-empty; the caller merges them back into one
-    array (``merge_typed_array_subcolumns``). Aliased ``"<label_mapping_key>.<column>"``
-    so SELECT and GROUP BY / ORDER BY agree."""
-    if attr_key.type != AttributeKey.Type.TYPE_ARRAY:
+    """Native ``arrayElement`` read per typed array map column, for a deprecated untyped
+    ``TYPE_ARRAY`` SELECT whose element type is unknown. Arrays are homogeneous, so one
+    sub-column is non-empty; the caller merges them back into one array
+    (``merge_typed_array_subcolumns``). Aliased ``"<label_mapping_key>.<column>"`` so
+    SELECT and GROUP BY / ORDER BY agree. Element-typed array keys read a single column
+    directly (``type_array_typed_element_column_native_array``)."""
+    if attr_key.type not in ARRAY_TYPES:
         raise MalformedAttributeException(
-            f"type_array_typed_columns_select_expressions expected TYPE_ARRAY, got "
+            f"type_array_typed_columns_select_expressions expected an array type, got "
             f"{AttributeKey.Type.Name(attr_key.type)}"
         )
     label_mapping_key = _build_label_mapping_key(attr_key)
@@ -229,28 +195,24 @@ def type_array_typed_columns_select_expressions(attr_key: AttributeKey) -> list[
 def type_array_to_membership_array_expression_from_typed_columns(
     attr_key: AttributeKey,
 ) -> FunctionCall:
-    """WHERE-clause membership array built from the typed array map columns.
-
-    Counterpart to ``type_array_to_membership_array_expression``, which reads the
-    legacy ``attributes_array`` JSON column. Since 2026-06-22 array attributes are
-    also double-written into typed ``Map(String, Array(T))`` columns; for query
-    windows new enough that those columns are fully populated (see
-    ``use_array_map_columns``) we read them instead.
+    """WHERE-clause membership array for a deprecated untyped ``TYPE_ARRAY`` key, whose
+    element type is unknown, so all four typed ``Map(String, Array(T))`` columns must be
+    read and concatenated.
 
     Returns a normalized ``Array(String)`` of every element across all four typed
-    columns so the per-element comparisons built by
-    ``_type_array_membership_rhs_expression`` keep matching the JSON-column
-    behaviour (string elements stay as-is, numbers become ``toString(...)``, and
-    bools become ``'true'``/``'false'``). Unlike the scalar double-write, array
-    integers are written only to ``attributes_array_int`` (not also to the float
-    column — see ``AttributeMap::insert_array`` in the ``eap_items`` Rust
-    processor), so the int column must be read for int arrays to match; element
-    types never overlap across columns, so no element is duplicated.
+    columns so value-less per-element comparisons match across types (string elements
+    stay as-is, numbers become ``toString(...)``, and bools become
+    ``'true'``/``'false'``). Array integers are written only to ``attributes_array_int``
+    (not also to the float column — see ``AttributeMap::insert_array`` in the
+    ``eap_items`` Rust processor), so the int column must be read for int arrays to
+    match; element types never overlap across columns, so no element is duplicated.
+    Element-typed array keys instead read their single column natively
+    (``type_array_typed_element_column_native_array``).
     """
-    if attr_key.type != AttributeKey.Type.TYPE_ARRAY:
+    if attr_key.type not in ARRAY_TYPES:
         raise MalformedAttributeException(
             f"type_array_to_membership_array_expression_from_typed_columns expected "
-            f"TYPE_ARRAY, got {AttributeKey.Type.Name(attr_key.type)}"
+            f"an array type, got {AttributeKey.Type.Name(attr_key.type)}"
         )
     alias = f"{_build_label_mapping_key(attr_key)}__array_members"
     name = attr_key.name
@@ -290,17 +252,31 @@ def type_array_to_membership_array_expression_from_typed_columns(
 
 
 def type_array_typed_column_native_array(attr_key: AttributeKey, col: str) -> FunctionCall:
-    """Native ``Array(T)`` of one typed array map column's elements, for a TYPE_ARRAY
-    membership comparison past the cutoff. The caller compares against the filter value
-    coerced to this column's native type, with no string conversion — unlike
+    """Native ``Array(T)`` of one typed array map column's elements, for an array
+    membership comparison. The caller compares against the filter value coerced to this
+    column's native type, with no string conversion — unlike
     ``type_array_to_membership_array_expression_from_typed_columns``, which normalizes
     every column to ``Array(String)`` for the value-less exists/notEmpty check."""
-    if attr_key.type != AttributeKey.Type.TYPE_ARRAY:
+    if attr_key.type not in ARRAY_TYPES:
         raise MalformedAttributeException(
-            f"type_array_typed_column_native_array expected TYPE_ARRAY, got "
+            f"type_array_typed_column_native_array expected an array type, got "
             f"{AttributeKey.Type.Name(attr_key.type)}"
         )
     alias = f"{_build_label_mapping_key(attr_key)}__array_members_{col}"
+    return arrayElement(alias, column(col), literal(attr_key.name))
+
+
+def type_array_typed_element_column_native_array(attr_key: AttributeKey) -> FunctionCall:
+    """Native ``Array(T)`` read of an element-typed array key's single column
+    (TYPE_ARRAY_STRING/INT/DOUBLE/BOOL), aliased with the label-mapping key. This is the
+    whole read path for such a key: one column, natively typed, no cross-column concat."""
+    col = PROTO_ARRAY_TYPE_TO_COLUMN.get(attr_key.type)
+    if col is None:
+        raise MalformedAttributeException(
+            f"type_array_typed_element_column_native_array expected an element-typed array "
+            f"type, got {AttributeKey.Type.Name(attr_key.type)}"
+        )
+    alias = _build_label_mapping_key(attr_key)
     return arrayElement(alias, column(col), literal(attr_key.name))
 
 
@@ -360,14 +336,14 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
             alias,
         )
 
+    if attr_key.type in PROTO_ARRAY_TYPE_TO_COLUMN:
+        # Element-typed array key: read its single typed column natively.
+        return type_array_typed_element_column_native_array(attr_key)
+
     if attr_key.type == AttributeKey.Type.TYPE_ARRAY:
-        # Legacy JSON column (used pre-cutoff and for aggregations); the typed-column read
-        # path is built separately (type_array_typed_columns_select_expressions).
-        return FunctionCall(
-            alias=alias,
-            function_name="toJSONString",
-            parameters=(type_array_to_stored_array_json_path(attr_key),),
-        )
+        # Deprecated untyped array: element type unknown, so concatenate all four typed
+        # columns (normalized to Array(String)). Element-typed keys take the branch above.
+        return type_array_to_membership_array_expression_from_typed_columns(attr_key)
 
     raise MalformedAttributeException(
         f"Attribute {attr_key.name} has an unknown type: {AttributeKey.Type.Name(attr_key.type)}"

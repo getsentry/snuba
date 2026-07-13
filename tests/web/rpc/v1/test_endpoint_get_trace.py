@@ -588,7 +588,6 @@ def test_process_results_merges_typed_array_subcolumns(
     type is preserved (no JSON, no tuple)."""
     processed_results = _process_results(
         [{"id": "abc123", "timestamp": 1778785776.0, **subcolumns}],
-        read_typed_arrays=True,
         array_attribute_names=["my_tags"],
     )
     item = processed_results.items[0]
@@ -612,7 +611,6 @@ def test_process_results_skips_empty_typed_array_subcolumns() -> None:
                 "my_tags.attributes_array_bool": [],
             }
         ],
-        read_typed_arrays=True,
         array_attribute_names=["my_tags"],
     )
     item = processed_results.items[0]

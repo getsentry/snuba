@@ -46,7 +46,6 @@ from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
-    use_array_map_columns,
     use_sampling_factor,
     valid_sampling_factor_conditions,
 )
@@ -251,7 +250,6 @@ def _get_reliability_context_columns(
             confidence_interval_column = get_confidence_interval_column(
                 aggregation,
                 _get_attribute_key_to_expression_function(request_meta),
-                use_array_map_columns=use_array_map_columns(request_meta),
             )
             if confidence_interval_column is not None:
                 additional_context_columns.append(
@@ -264,7 +262,6 @@ def _get_reliability_context_columns(
             average_sample_rate_column = get_average_sample_rate_column(
                 aggregation,
                 _get_attribute_key_to_expression_function(request_meta),
-                use_array_map_columns=use_array_map_columns(request_meta),
             )
             additional_context_columns.append(
                 SelectedExpression(
@@ -275,7 +272,6 @@ def _get_reliability_context_columns(
         count_column = get_count_column(
             aggregation,
             _get_attribute_key_to_expression_function(request_meta),
-            use_array_map_columns=use_array_map_columns(request_meta),
         )
         additional_context_columns.append(
             SelectedExpression(name=count_column.alias, expression=count_column)
@@ -305,7 +301,6 @@ def _proto_expression_to_ast_expression(
                 expr.conditional_aggregation,
                 (attribute_key_to_expression),
                 use_sampling_factor(request_meta),
-                use_array_map_columns(request_meta),
             )
             match expr.conditional_aggregation.WhichOneof("default_value"):
                 case None:
@@ -426,7 +421,6 @@ def build_query(
             trace_item_filters_to_expression(
                 request.filter,
                 _get_attribute_key_to_expression_function(request.meta),
-                use_array_map_columns=use_array_map_columns(request.meta),
             ),
             valid_sampling_factor_conditions(),
             *item_type_conds,
