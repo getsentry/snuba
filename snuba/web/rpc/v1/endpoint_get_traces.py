@@ -54,9 +54,11 @@ from snuba.web.rpc.common.debug_info import (
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
+    CROSS_ITEM_DISTRIBUTED_PRODUCT_MODE,
     convert_trace_filters_to_trace_item_filter_with_type,
     get_trace_ids_sql_for_cross_item_query,
     trace_id_in_subquery_condition,
+    use_local_join_for_cross_item_queries,
 )
 
 _DEFAULT_ROW_LIMIT = 10_000
@@ -883,9 +885,14 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
 
         treeify_or_and_conditions(query)
 
+        clickhouse_settings = (
+            {"distributed_product_mode": CROSS_ITEM_DISTRIBUTED_PRODUCT_MODE}
+            if use_local_join_for_cross_item_queries()
+            else None
+        )
         results = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
-            request=_build_snuba_request(request, query),
+            request=_build_snuba_request(request, query, clickhouse_settings=clickhouse_settings),
             timer=self._timer,
         )
 

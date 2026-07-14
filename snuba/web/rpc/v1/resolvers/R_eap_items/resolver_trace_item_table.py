@@ -55,7 +55,6 @@ from snuba.query.expressions import (
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
@@ -87,6 +86,7 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_count_column,
 )
 from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
+    apply_cross_item_outer_query_settings,
     get_trace_ids_sql_for_cross_item_query,
     trace_id_in_subquery_condition,
 )
@@ -777,13 +777,9 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
             )
         try:
             routing_decision.strategy.merge_clickhouse_settings(routing_decision, query_settings)
-            # When trace_filters are present and the feature is enabled, don't use sampling on the outer query
-            # The inner query (getting trace IDs) will use sampling
-            cross_item_queries_no_sample_outer = get_option(
-                "cross_item_queries_no_sample_outer", True
+            apply_cross_item_outer_query_settings(
+                query_settings, bool(in_msg.trace_filters), routing_decision.tier
             )
-            if not (in_msg.trace_filters and cross_item_queries_no_sample_outer):
-                query_settings.set_sampling_tier(routing_decision.tier)
         except Exception as e:
             sentry_sdk.capture_message(f"Error merging clickhouse settings: {e}")
         original_time_window = TimeWindow(

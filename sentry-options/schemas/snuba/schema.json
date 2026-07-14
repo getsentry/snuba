@@ -194,6 +194,11 @@
       "default": false,
       "description": "When true, GetTraces uses the cross-item query path for single-item queries as well as cross-item queries."
     },
+    "use_local_join_for_cross_item_queries": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, cross-item EAP queries set distributed_product_mode='local' so the trace_id IN (subquery) join runs locally on each shard (eap_items is sharded by trace_id) rather than as a distributed join. The bare-trace_id predicate that makes the bloom-filter index usable is always applied; this flag only controls the local join."
+    },
     "storage_routing.enable_get_cluster_loadinfo": {
       "type": "boolean",
       "default": false,
