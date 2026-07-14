@@ -24,6 +24,7 @@ from snuba.query.allocation_policies import (
     QueryResultOrError,
     QuotaAllowance,
 )
+from snuba.query.allocation_policies.utils import resolve_scoped_override
 from snuba.redis import RedisClientKey, get_redis_client
 
 logger = logging.getLogger("snuba.query.bytes_scanned_window_policy")
@@ -72,25 +73,15 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 param_types={"referrer": str},
             ),
             Configuration(
-                "referrer_all_organizations_scan_limit_override",
-                f"Specific referrer scan limit in the last {self.WINDOW_SECONDS / 60} mins, APPLIES TO ALL ORGANIZATIONS",
-                int,
-                DEFAULT_OVERRIDE_LIMIT,
-                param_types={"referrer": str},
-            ),
-            Configuration(
-                "organization_referrer_scan_limit_override",
-                f"Specific (organization_id, referrer) scan limit in the last {self.WINDOW_SECONDS / 60} mins",
-                int,
-                DEFAULT_OVERRIDE_LIMIT,
-                param_types={"organization_id": int, "referrer": str},
-            ),
-            Configuration(
-                "organization_scan_limit_override",
-                f"Scan limit for a specific organization_id across any referrer in the last {self.WINDOW_SECONDS / 60} mins",
-                int,
-                DEFAULT_OVERRIDE_LIMIT,
-                param_types={"organization_id": int},
+                "organization_referrer_scan_limit_overrides",
+                "Org/referrer scan limit overrides as a nested object "
+                "{organization_id (or '*'): {referrer (or '*'): limit}}. Resolved most-specific-first "
+                "by resolve_scoped_override: (org, referrer) > (org, '*') > ('*', referrer) > the "
+                "organization_referrer_scan_limit default, so one config sets a limit for a given org, a "
+                "given referrer, or both. Replaces the organization_referrer_scan_limit_override / "
+                "organization_scan_limit_override / referrer_all_organizations_scan_limit_override configs.",
+                dict,
+                {},
             ),
             Configuration(
                 "organization_referrer_max_bytes_to_read",
@@ -185,24 +176,17 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 return int(self.get_config_value("project_referrer_scan_limit"))
             return int(override)
         if customer_tenant_key == "organization_id":
-            org_referrer_override = self.get_config_value(
-                "organization_referrer_scan_limit_override",
-                {"organization_id": customer_tenant_value, "referrer": referrer},
+            # (org, referrer) > (org, any) > (any org, referrer) > the global
+            # per-class organization_referrer_scan_limit default.
+            scoped_overrides = self.get_config_value("organization_referrer_scan_limit_overrides")
+            return int(
+                resolve_scoped_override(
+                    scoped_overrides,
+                    customer_tenant_value,
+                    str(referrer),
+                    int(self.get_config_value("organization_referrer_scan_limit")),
+                )
             )
-            if org_referrer_override != DEFAULT_OVERRIDE_LIMIT:
-                return int(org_referrer_override)
-            org_override = self.get_config_value(
-                "organization_scan_limit_override",
-                {"organization_id": customer_tenant_value},
-            )
-            if org_override != DEFAULT_OVERRIDE_LIMIT:
-                return int(org_override)
-            all_orgs_referrer_override = self.get_config_value(
-                "referrer_all_organizations_scan_limit_override", {"referrer": referrer}
-            )
-            if all_orgs_referrer_override != DEFAULT_OVERRIDE_LIMIT:
-                return int(all_orgs_referrer_override)
-            return int(self.get_config_value("organization_referrer_scan_limit"))
         raise InvalidTenantsForAllocationPolicy.from_args(
             {customer_tenant_key: customer_tenant_value, "referrer": referrer},
             self.__class__.__name__,

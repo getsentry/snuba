@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from clickhouse_driver import errors
 
@@ -161,7 +163,7 @@ def test_invalid_tenants(
 
 
 @pytest.mark.parametrize(
-    ("tenant_ids", "overrides"),
+    ("tenant_ids", "override_entry", "limit"),
     [
         pytest.param(
             {
@@ -169,35 +171,26 @@ def test_invalid_tenants(
                 "project_id": 12345,
                 "referrer": "some_referrer",
             },
-            (
-                "referrer_all_projects_scan_limit_override",
-                10,
-                {"referrer": "some_referrer"},
-            ),
-            id="use overridden scan limit",
+            ("referrer_all_projects_scan_limit_override", 10, {"referrer": "some_referrer"}),
+            10,
+            id="project referrer override",
         ),
         pytest.param(
             {
                 "organization_id": 123,
                 "referrer": "some_referrer",
             },
-            (
-                "referrer_all_organizations_scan_limit_override",
-                100,
-                {"referrer": "some_referrer"},
-            ),
-            id="use overridden scan limit",
+            ("organization_referrer_scan_limit_overrides", {"*": {"some_referrer": 100}}),
+            100,
+            id="all-organizations referrer override",
         ),
         pytest.param(
             {
                 "organization_id": 123,
                 "referrer": "some_referrer",
             },
-            (
-                "organization_referrer_scan_limit_override",
-                50,
-                {"organization_id": 123, "referrer": "some_referrer"},
-            ),
+            ("organization_referrer_scan_limit_overrides", {"123": {"some_referrer": 50}}),
+            50,
             id="per (org, referrer) override",
         ),
         pytest.param(
@@ -205,11 +198,8 @@ def test_invalid_tenants(
                 "organization_id": 123,
                 "referrer": "some_referrer",
             },
-            (
-                "organization_scan_limit_override",
-                75,
-                {"organization_id": 123},
-            ),
+            ("organization_referrer_scan_limit_overrides", {"123": {"*": 75}}),
+            75,
             id="per-org override",
         ),
     ],
@@ -218,12 +208,12 @@ def test_invalid_tenants(
 def test_overrides(
     policy: BytesScannedRejectingPolicy,
     tenant_ids: dict[str, str | int],
-    overrides: tuple[str, int, dict[str, str | int]],
+    override_entry: tuple[str, Any] | tuple[str, Any, dict[str, str | int]],
+    limit: int,
 ) -> None:
-    limit = overrides[1]
     with override_component_configs(
         *_base_config_overrides(policy),
-        (policy, overrides[0], overrides[1], overrides[2]),
+        (policy, *override_entry),
     ):
         allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
         assert allowance.can_run
@@ -254,16 +244,11 @@ def test_org_override_precedence(policy: BytesScannedRejectingPolicy) -> None:
         *_base_config_overrides(policy),
         (
             policy,
-            "referrer_all_organizations_scan_limit_override",
-            1000,
-            {"referrer": "some_referrer"},
-        ),
-        (policy, "organization_scan_limit_override", 500, {"organization_id": 123}),
-        (
-            policy,
-            "organization_referrer_scan_limit_override",
-            100,
-            {"organization_id": 123, "referrer": "some_referrer"},
+            "organization_referrer_scan_limit_overrides",
+            {
+                "123": {"some_referrer": 100, "*": 500},
+                "*": {"some_referrer": 1000},
+            },
         ),
     ):
         allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
