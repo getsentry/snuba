@@ -76,13 +76,28 @@ columns: list[Column[Modifiers]] = [
 _attr_num_names = ", ".join([f"mapKeys(attributes_float_{i})" for i in range(num_attr_buckets)])
 _attr_str_names = ", ".join([f"mapKeys(attributes_string_{i})" for i in range(num_attr_buckets)])
 
-MV_QUERY = f"""
+# The materialized view is *refreshable*: rather than running incrementally on
+# every insert into eap_items_1_local, it re-runs on a fixed schedule and APPENDs
+# the result to the SummingMergeTree target. Because each run re-executes the
+# whole query, it aggregates only a recent window of items and uses
+# count()/max(timestamp) + GROUP BY instead of the per-row `1 AS count` an
+# incremental view would emit.
+REFRESH_INTERVAL = "1 MINUTE"
+# Window of source data scanned on each refresh. It is intentionally larger than
+# the 60s refresh interval so items that arrive slightly late are not missed
+# between runs. The overlap means items near a window boundary can be counted by
+# two consecutive refreshes, which slightly inflates `count` -- acceptable for
+# approximate autocomplete counts. Tune to exceed ingestion lag: too small risks
+# missing keys (gaps), too large inflates counts.
+REFRESH_WINDOW_SECONDS = 90
+
+MV_SELECT = f"""
 SELECT
     organization_id AS organization_id,
     project_id AS project_id,
-    item_type as item_type,
+    item_type AS item_type,
     toMonday(timestamp) AS date,
-    retention_days as retention_days,
+    retention_days AS retention_days,
     arrayConcat({_attr_str_names}) AS attributes_string,
     arrayConcat({_attr_num_names}) AS attributes_float,
     mapKeys(attributes_int) AS attributes_int,
@@ -91,9 +106,24 @@ SELECT
     mapKeys(attributes_array_int) AS attributes_array_int,
     mapKeys(attributes_array_float) AS attributes_array_float,
     mapKeys(attributes_array_bool) AS attributes_array_bool,
-    1 AS count,
-    timestamp AS last_seen
+    count() AS count,
+    max(timestamp) AS last_seen
 FROM eap_items_1_local
+WHERE timestamp >= now() - toIntervalSecond({REFRESH_WINDOW_SECONDS})
+GROUP BY
+    organization_id,
+    project_id,
+    item_type,
+    date,
+    retention_days,
+    attributes_string,
+    attributes_float,
+    attributes_int,
+    attributes_bool,
+    attributes_array_string,
+    attributes_array_int,
+    attributes_array_float,
+    attributes_array_bool
 """
 
 
@@ -144,14 +174,30 @@ class Migration(migration.ClickhouseNodeMigration):
             ),
         ]
 
+        # A refreshable materialized view needs the `REFRESH EVERY ...` clause,
+        # which the typed CreateMaterializedView operation can't express, so build
+        # the DDL directly. Columns are mapped to the target by SELECT alias name
+        # (the target computes its MATERIALIZED columns on append), so no explicit
+        # column list is needed.
+        #
+        # Operational caveats (verify before rollout):
+        #   - Refreshable materialized views may require
+        #     `allow_experimental_refreshable_materialized_view=1` depending on the
+        #     ClickHouse build.
+        #   - On a multi-replica cluster each replica runs the refresh
+        #     independently and would APPEND duplicate rows. Coordinating the
+        #     refresh (e.g. a Replicated database engine) is required to avoid
+        #     double counting; without it, only single-replica shards are safe.
         materialized_view_ops: list[SqlOperation] = [
-            operations.CreateMaterializedView(
+            operations.RunSql(
                 storage_set=self.storage_set_key,
-                view_name=self.mv_name,
-                columns=columns,
-                destination_table_name=self.local_table_name,
+                statement=(
+                    f"CREATE MATERIALIZED VIEW IF NOT EXISTS {self.mv_name} "
+                    f"REFRESH EVERY {REFRESH_INTERVAL} APPEND "
+                    f"TO {self.local_table_name} "
+                    f"AS {MV_SELECT}"
+                ),
                 target=OperationTarget.LOCAL,
-                query=MV_QUERY,
             ),
         ]
 
