@@ -280,6 +280,10 @@ class StrategyData(ConfigurableComponentData):
 
 
 class BaseRoutingStrategy(ConfigurableComponent, ABC):
+    # Routing strategies are fully migrated to sentry-options: read the option
+    # and then the code default, never the legacy Redis runtime config.
+    _falls_back_to_runtime_config = False
+
     def __init__(self, default_config_overrides: dict[str, Any] | None = None) -> None:
         if default_config_overrides is None:
             default_config_overrides = {}

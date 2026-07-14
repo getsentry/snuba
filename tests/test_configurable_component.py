@@ -399,6 +399,43 @@ class ObjectConfigComponent(ConfigurableComponent):
         return ResourceIdentifier("some_resource")
 
 
+class NoRedisFallbackComponent(SomeConfigurableComponent):
+    """A component that has fully migrated off the legacy Redis runtime config."""
+
+    _falls_back_to_runtime_config = False
+
+    @classmethod
+    def component_namespace(cls) -> str:
+        return "NoRedisFallbackComponent"
+
+
+@pytest.mark.redis_db
+class TestConfigurableComponentRedisFallback:
+    """Numeric configs fall back to the legacy Redis runtime config when the
+    sentry-option is absent, unless the component opts out."""
+
+    def test_reads_redis_when_option_absent(
+        self, test_component: SomeConfigurableComponent
+    ) -> None:
+        # No sentry-option override set; a value written to the legacy Redis
+        # runtime config is still honored (default_config_1 default is 100).
+        test_component.set_config_value("default_config_1", 55)
+        assert test_component.get_config_value("default_config_1") == 55
+
+    def test_option_takes_precedence_over_redis(
+        self, test_component: SomeConfigurableComponent
+    ) -> None:
+        test_component.set_config_value("default_config_1", 55)
+        with override_component_config(test_component, "default_config_1", 200):
+            assert test_component.get_config_value("default_config_1") == 200
+
+    def test_opted_out_component_ignores_redis(self) -> None:
+        component = NoRedisFallbackComponent()
+        component.set_config_value("default_config_1", 55)
+        # _falls_back_to_runtime_config = False: Redis is not consulted.
+        assert component.get_config_value("default_config_1") == 100
+
+
 class TestConfigurableComponentObjectConfig:
     """Object-typed configs read two-level nested objects from
     ``configurable_component_object_overrides``."""
