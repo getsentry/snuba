@@ -75,40 +75,32 @@ fn select_transport(env: &EnvConfig, use_uds: bool) -> DogStatsDTransport<'_> {
     }
 }
 
-/// Build the DogStatsD metrics backend, choosing the transport at runtime.
+/// Read the `use_dogstatsd_uds` rollout flag from the `snuba` sentry-options namespace.
 ///
-/// UDS is used only when the `use_dogstatsd_uds` runtime flag is set to `"1"` *and*
-/// a socket path is configured; otherwise we fall back to UDP (host/port). This
-/// mirrors the gating in the Python `create_metrics()` so the transport can be
-/// switched by flipping the Redis flag (followed by a restart) without a redeploy.
-/// If the flag cannot be read (e.g. runtime config unavailable), we default to the
-/// stable UDP path.
-///
-/// Returns `None` when neither transport is configured, leaving metrics disabled.
-/// Reads the `use_dogstatsd_uds` rollout flag from the legacy Redis runtime config
-/// (via `snuba.state.get_str_config`). snuba's generic Rust runtime-config reader has
-/// moved to sentry-options, but this toggle stays on the runtime config so it can be
-/// flipped live from snuba-admin without a deploy, and so it reads the same store as the
-/// Python `create_metrics()`. Any failure (config unavailable, Python error) defaults to
-/// `false`, i.e. the stable UDP path.
+/// Reads the same store as the rest of snuba's Rust runtime config (see
+/// `runtime_config.rs`) and as the Python `create_metrics()`
+/// (`snuba.state.sentry_options.get_option`). The option is declared as a boolean in
+/// `sentry-options/schemas/snuba/schema.json`. Any failure (options client
+/// uninitialized, key missing, wrong type) defaults to `false`, i.e. the stable UDP path.
+/// `sentry_options::init_with_schemas` is called at consumer startup before the metrics
+/// backend is built, so the option is available by the time this runs.
 fn use_dogstatsd_uds_enabled() -> bool {
-    use pyo3::prelude::{PyModule, Python};
-    use pyo3::types::PyAnyMethods;
-
-    Python::with_gil(|py| -> Option<bool> {
-        let value: Option<String> = PyModule::import(py, "snuba.state")
-            .ok()?
-            .getattr("get_str_config")
-            .ok()?
-            .call1(("use_dogstatsd_uds",))
-            .ok()?
-            .extract()
-            .ok()?;
-        Some(value.as_deref() == Some("1"))
-    })
-    .unwrap_or(false)
+    sentry_options::options("snuba")
+        .ok()
+        .and_then(|o| o.get("use_dogstatsd_uds").ok())
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
 }
 
+/// Build the DogStatsD metrics backend, choosing the transport at runtime.
+///
+/// UDS is used only when the `use_dogstatsd_uds` sentry-option is `true` *and* a socket
+/// path is configured; otherwise we fall back to UDP (host/port). This mirrors the gating
+/// in the Python `create_metrics()` so the transport can be switched by flipping the
+/// sentry-option (followed by a restart) without a redeploy. If the flag cannot be read
+/// (e.g. options unavailable) we default to the stable UDP path.
+///
+/// Returns `None` when neither transport is configured, leaving metrics disabled.
 pub fn create_dogstatsd_backend(
     env: &EnvConfig,
     prefix: &str,

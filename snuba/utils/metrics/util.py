@@ -18,7 +18,7 @@ def create_metrics(
 ) -> MetricsBackend:
     """Create a DogStatsd object if DOGSTATSD_HOST and DOGSTATSD_PORT are defined.
 
-    When the ``use_dogstatsd_uds`` runtime flag is ``"1"`` and ``DOGSTATSD_SOCKET_PATH``
+    When the ``use_dogstatsd_uds`` sentry-option is ``True`` and ``DOGSTATSD_SOCKET_PATH``
     is configured, metrics are sent over the Unix domain socket instead of UDP; with the
     flag off (or no socket configured) they use UDP (host/port). The flag is authoritative
     -- it never falls back to the socket when off -- so host/port stay configured as the
@@ -54,14 +54,17 @@ def create_metrics(
     udp = (host, port)
 
     def make_client() -> DogStatsd:
-        # The use_dogstatsd_uds flag is read lazily here -- when the first metric is
-        # emitted -- not at create_metrics() time. create_metrics() runs while
-        # snuba.environment is being imported, and snuba.state binds
-        # MetricsWrapper(environment.metrics, ...) at its own import time, so importing
-        # snuba.state any earlier would be a circular import.
-        from snuba import state
+        # The use_dogstatsd_uds sentry-option is read lazily here -- when the first metric
+        # is emitted -- not at create_metrics() time. create_metrics() runs while
+        # snuba.environment is being imported, and importing snuba.state.sentry_options
+        # pulls in the snuba.state package, whose __init__ binds
+        # MetricsWrapper(environment.metrics, ...) at import time, so importing it any
+        # earlier would be a circular import. By first-emit time sentry-options has been
+        # initialized (snuba.environment.setup_sentry -> init_options); if it hasn't,
+        # get_option returns the False default and we stay on UDP.
+        from snuba.state.sentry_options import get_option
 
-        use_uds = socket_path is not None and str(state.get_config("use_dogstatsd_uds", "0")) == "1"
+        use_uds = socket_path is not None and get_option("use_dogstatsd_uds", False)
         if use_uds:
             return DogStatsd(
                 socket_path=socket_path,

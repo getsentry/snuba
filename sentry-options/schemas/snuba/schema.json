@@ -565,6 +565,11 @@
       "default": false,
       "description": "When true, the dual-write metrics backend also emits to the Sentry metrics backend (sampled by settings.DDM_METRICS_SAMPLE_RATE)."
     },
+    "use_dogstatsd_uds": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true (and a DogStatsD socket path is configured), snuba's Python and Rust metrics backends send DogStatsD metrics over the Unix domain socket instead of UDP. The flag is authoritative: with it false, or with no socket configured, metrics stay on UDP (host/port), which is also the rollback target. Read at metrics-backend creation, so flipping it takes effect on the next process restart -- no redeploy required."
+    },
     "ondemand_profiler_hostnames": {
       "type": "string",
       "default": "",
