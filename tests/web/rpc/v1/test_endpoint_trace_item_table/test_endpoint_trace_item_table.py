@@ -57,13 +57,11 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
 
-from snuba import state
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import OrderBy, OrderByDirection
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column as snuba_column
-from snuba.query.expressions import FunctionCall
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import attribute_key_to_expression
@@ -82,6 +80,7 @@ from snuba.web.rpc.v1.endpoint_trace_item_table import (
     _validate_select_and_groupby,
 )
 from snuba.web.rpc.v1.resolvers.common.aggregation import aggregation_to_expression
+from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_table import build_query
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -3577,107 +3576,6 @@ class TestTraceItemTable(BaseApiTest):
             ),
         ]
 
-    def test_uniq_aggregation_with_default_value_double(self) -> None:
-        """
-        Ensures that FUNCTION_UNIQ (count_unique) with default_value_double works.
-        ClickHouse's uniqIfOrNull returns UInt64 which is incompatible with Float64
-        in coalesce(). The fix casts the aggregation to Float64 before coalescing.
-        """
-        span_ts = BASE_TIME - timedelta(minutes=1)
-        write_eap_item(span_ts, {"user": "alice"})
-        write_eap_item(span_ts, {"user": "bob"})
-        write_eap_item(span_ts, {"user": "alice"})
-
-        message = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=START_TIMESTAMP,
-                end_timestamp=END_TIMESTAMP,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            columns=[
-                Column(
-                    conditional_aggregation=AttributeConditionalAggregation(
-                        aggregate=Function.FUNCTION_UNIQ,
-                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="user"),
-                        label="count_unique(user)",
-                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-                        default_value_double=0.0,
-                    ),
-                    label="count_unique(user)",
-                ),
-            ],
-            limit=1,
-        )
-        response = EndpointTraceItemTable().execute(message)
-        assert response.column_values == [
-            TraceItemColumnValues(
-                attribute_name="count_unique(user)",
-                results=[AttributeValue(val_double=2.0)],
-            ),
-        ]
-
-    def test_uniq_formula_with_default_value_double(self) -> None:
-        """
-        Ensures that count_unique / count_unique formula with default_value_double works.
-        This is the dashboard formula scenario (e.g. count_unique(user) / count_unique(user))
-        that triggers the UInt64/Float64 type mismatch in coalesce().
-        """
-        span_ts = BASE_TIME - timedelta(minutes=1)
-        write_eap_item(span_ts, {"user": "alice"})
-        write_eap_item(span_ts, {"user": "bob"})
-
-        message = TraceItemTableRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=START_TIMESTAMP,
-                end_timestamp=END_TIMESTAMP,
-                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-            ),
-            columns=[
-                Column(
-                    formula=Column.BinaryFormula(
-                        op=Column.BinaryFormula.OP_DIVIDE,
-                        left=Column(
-                            conditional_aggregation=AttributeConditionalAggregation(
-                                aggregate=Function.FUNCTION_UNIQ,
-                                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="user"),
-                                label="count_unique_a",
-                                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-                                default_value_double=0.0,
-                            ),
-                            label="count_unique_a",
-                        ),
-                        right=Column(
-                            conditional_aggregation=AttributeConditionalAggregation(
-                                aggregate=Function.FUNCTION_UNIQ,
-                                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="user"),
-                                label="count_unique_b",
-                                extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-                                default_value_double=0.0,
-                            ),
-                            label="count_unique_b",
-                        ),
-                    ),
-                    label="uniq_ratio",
-                ),
-            ],
-            limit=1,
-        )
-        response = EndpointTraceItemTable().execute(message)
-        assert response.column_values == [
-            TraceItemColumnValues(
-                attribute_name="uniq_ratio",
-                results=[AttributeValue(val_double=1.0)],
-            ),
-        ]
-
     def test_coalesce_attributes(self) -> None:
         span_ts = BASE_TIME + timedelta(minutes=1)
 
@@ -4226,18 +4124,10 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
 
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
-    @pytest.mark.parametrize(
-        "read_from_typed_columns",
-        [True, False],
-        ids=["after_cutoff_typed_columns", "before_cutoff_json_column"],
-    )
-    def test_select_array_column_before_and_after_cutoff(
-        self, read_from_typed_columns: bool
-    ) -> None:
-        """A homogeneous array attribute decodes to the same val_array whether the query
-        window is on/after the typed-column cutoff (read from the typed attributes_array_*
-        columns) or before it (read from the legacy attributes_array JSON column). The
-        data is double-written to both column families, so the two read paths agree."""
+    def test_select_array_column_reads_typed_columns(self) -> None:
+        """A homogeneous array attribute decodes to a val_array read from the typed
+        attributes_array_* columns. Element-typed keys read one column; the deprecated
+        untyped TYPE_ARRAY reads all four and merges."""
         span_ts = BASE_TIME - timedelta(minutes=1)
         items_storage = get_storage(StorageKey("eap_items"))
         write_raw_unprocessed_events(
@@ -4248,12 +4138,6 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
                     attributes={"tags": _str_array("alpha", "beta"), "cols": _int_array(1, 3)},
                 ),
             ],
-        )
-        # 0 disables the typed-column read path (forces the legacy JSON column); a low
-        # value enables it for the (recent) request window.
-        state.set_config(
-            "use_array_map_columns_timestamp_seconds",
-            10 if read_from_typed_columns else 0,
         )
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -4267,8 +4151,8 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
             ),
             columns=[
                 Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
-                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags")),
-                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="cols")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY_STRING, name="tags")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY_INT, name="cols")),
             ],
         )
         response = EndpointTraceItemTable().execute(message)
@@ -4610,51 +4494,17 @@ def test_order_by_bug() -> None:
         _validate_order_by(message)
 
 
-def test_uniq_with_default_value_double_casts_to_float64() -> None:
-    """
-    Regression test: FUNCTION_UNIQ (uniqIfOrNull) returns UInt64, which is
-    incompatible with Float64 in ClickHouse's coalesce(). When
-    default_value_double is set, the aggregation must be CAST to Float64.
-    """
+def test_convert_results_empty_typed_array_is_null() -> None:
+    """An absent/empty element-typed array reads as an empty native list; convert_results
+    surfaces it as NULL (like a missing scalar), not an empty val_array. A populated array
+    still decodes to a val_array."""
     request = TraceItemTableRequest(
-        meta=RequestMeta(
-            project_ids=[1],
-            organization_id=1,
-            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-        ),
         columns=[
-            Column(
-                conditional_aggregation=AttributeConditionalAggregation(
-                    aggregate=Function.FUNCTION_UNIQ,
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="user"),
-                    label="count_unique(user)",
-                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-                    default_value_double=0.0,
-                ),
-                label="count_unique(user)",
-            ),
-        ],
+            Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY_STRING, name="tags"), label="tags")
+        ]
     )
-
-    wrapper = TraceItemTableRequestWrapper(request)
-    wrapper.accept(AggregationToConditionalAggregationVisitor())
-    request = _apply_labels_to_columns(request)
-
-    query = build_query(request)
-    selected = query.get_selected_columns()
-    # Find the count_unique(user) column
-    target_expr = None
-    for sel in selected:
-        if sel.name == "count_unique(user)":
-            target_expr = sel.expression
-            break
-    assert target_expr is not None, "count_unique(user) column not found in query"
-
-    # The expression should be coalesce(CAST(..., 'Float64'), 0.0)
-    assert isinstance(target_expr, FunctionCall)
-    assert target_expr.function_name == "coalesce"
-    cast_arg = target_expr.parameters[0]
-    assert isinstance(cast_arg, FunctionCall)
-    assert cast_arg.function_name == "CAST", (
-        f"Expected CAST as first arg of coalesce, got {cast_arg.function_name}"
-    )
+    result = convert_results(request, [{"tags": []}, {"tags": ["a", "b"]}])
+    (tags,) = result
+    assert tags.attribute_name == "tags"
+    assert tags.results[0].is_null is True
+    assert [e.val_str for e in tags.results[1].val_array.values] == ["a", "b"]

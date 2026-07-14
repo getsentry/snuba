@@ -7,7 +7,7 @@ use sentry_arroyo::processing::strategies::{
 };
 use sentry_arroyo::types::Message;
 
-use crate::runtime_config::get_str_config;
+use sentry_options::options;
 
 const TOUCH_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -57,11 +57,11 @@ where
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         let poll_result = self.next_step.poll();
 
-        if get_str_config("experimental_healthcheck")
+        if options("snuba")
             .ok()
-            .flatten()
-            .unwrap_or("0".to_string())
-            == "1"
+            .and_then(|o| o.get("experimental_healthcheck").ok())
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
         {
             // If we are receiving a commit request, it means we are making progress and this can be considered a healthy state
             if let Ok(Some(_commit_request)) = poll_result.as_ref() {
@@ -97,15 +97,23 @@ where
 #[cfg(test)]
 mod tests {
     use super::HealthCheck;
-    use crate::runtime_config::patch_str_config_for_test;
     use sentry_arroyo::processing::strategies::{
         CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
     };
     use sentry_arroyo::types::Message;
+    use sentry_options::init_with_schemas;
+    use sentry_options::testing::override_options;
+    use serde_json::json;
     use std::collections::HashMap;
     use std::fs;
     use std::path::Path;
+    use std::sync::Once;
     use std::time::Duration;
+
+    static INIT: Once = Once::new();
+    fn init_config() {
+        INIT.call_once(|| init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap());
+    }
 
     // Mock strategy that can be configured to return commit requests
     struct MockStrategy {
@@ -148,7 +156,9 @@ mod tests {
     #[test]
     fn test_file_created_when_making_progress() {
         // Setup
-        patch_str_config_for_test("experimental_healthcheck", Some("1"));
+        init_config();
+        let _guard =
+            override_options(&[("snuba", "experimental_healthcheck", json!(true))]).unwrap();
         let file_path = format!("/tmp/healthcheck_test_{}", uuid::Uuid::new_v4());
 
         // Create a mock strategy that returns a commit request
@@ -167,7 +177,9 @@ mod tests {
     #[test]
     fn test_not_making_progress() {
         // Setup
-        patch_str_config_for_test("experimental_healthcheck", Some("1"));
+        init_config();
+        let _guard =
+            override_options(&[("snuba", "experimental_healthcheck", json!(true))]).unwrap();
         let file_path = format!("/tmp/healthcheck_test_{}", uuid::Uuid::new_v4());
 
         // Create a mock strategy that doesn't return a commit request

@@ -66,7 +66,6 @@ from snuba.web.rpc.common.common import (
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
     typed_array_select_subcolumn_name,
-    use_array_map_columns,
     use_sampling_factor,
     valid_sampling_factor_conditions,
 )
@@ -246,7 +245,6 @@ def aggregation_filter_to_expression(
                     agg_filter.comparison_filter.conditional_aggregation,
                     attribute_key_to_expression,
                     use_sampling_factor(request_meta),
-                    use_array_map_columns(request_meta),
                 ),
                 agg_filter.comparison_filter.val,
             )
@@ -354,7 +352,6 @@ def _convert_order_by(
                         x.column.conditional_aggregation,
                         attribute_key_to_expression,
                         use_sampling_factor(request_meta),
-                        use_array_map_columns(request_meta),
                     ),
                 )
             )
@@ -432,7 +429,6 @@ def _get_reliability_context_columns(
         confidence_interval_column = get_confidence_interval_column(
             column.conditional_aggregation,
             attribute_key_to_expression,
-            use_array_map_columns=use_array_map_columns(request_meta),
         )
         if confidence_interval_column is not None:
             context_columns.append(
@@ -445,7 +441,6 @@ def _get_reliability_context_columns(
         average_sample_rate_column = get_average_sample_rate_column(
             column.conditional_aggregation,
             attribute_key_to_expression,
-            use_array_map_columns=use_array_map_columns(request_meta),
         )
         context_columns.append(
             SelectedExpression(
@@ -457,7 +452,6 @@ def _get_reliability_context_columns(
         count_column = get_count_column(
             column.conditional_aggregation,
             attribute_key_to_expression,
-            use_array_map_columns=use_array_map_columns(request_meta),
         )
         context_columns.append(SelectedExpression(name=count_column.alias, expression=count_column))
         return context_columns
@@ -538,14 +532,13 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
             column.conditional_aggregation,
             attribute_key_to_expression,
             use_sampling_factor(request_meta),
-            use_array_map_columns(request_meta),
         )
         match column.conditional_aggregation.WhichOneof("default_value"):
             case None:
                 pass
             case "default_value_double":
                 function_expr = f.coalesce(
-                    f.CAST(replace(function_expr, alias=None), "Float64"),
+                    replace(function_expr, alias=None),
                     column.conditional_aggregation.default_value_double,
                 )
             case "default_value_int64":
@@ -578,19 +571,17 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
     )
 
 
-def _reads_typed_array_columns(column: Column, request_meta: RequestMeta) -> bool:
-    """True if ``column`` is a TYPE_ARRAY attribute read from the typed array map columns
-    (past the cutoff) rather than the legacy ``attributes_array`` JSON column."""
-    return (
-        column.HasField("key")
-        and column.key.type == AttributeKey.Type.TYPE_ARRAY
-        and use_array_map_columns(request_meta)
-    )
+def _reads_typed_array_columns(column: Column) -> bool:
+    """True if ``column`` is the deprecated untyped ``TYPE_ARRAY``, which has no element
+    type and so is read as four typed sub-columns merged back in ``convert_results``.
+    Element-typed array keys (TYPE_ARRAY_STRING/INT/DOUBLE/BOOL) read their single column
+    directly through ``attribute_key_to_expression``, like scalars."""
+    return column.HasField("key") and column.key.type == AttributeKey.Type.TYPE_ARRAY
 
 
 def _array_subcolumn_selected_expressions(column: Column) -> list[SelectedExpression]:
-    """Four native typed sub-columns for a TYPE_ARRAY column, named ``"<label>.<col>"`` so
-    ``convert_results`` merges them back into ``column.label``."""
+    """Four native typed sub-columns for a deprecated untyped ``TYPE_ARRAY`` column, named
+    ``"<label>.<col>"`` so ``convert_results`` merges them back into ``column.label``."""
     return [
         SelectedExpression(
             name=typed_array_select_subcolumn_name(column.label, typed_col),
@@ -629,8 +620,9 @@ def build_query(
         # The key_col expression alias may differ from the column label. That is okay
         # the attribute key name is used in the groupby, the column label is just the name of
         # the returned attribute value
-        if _reads_typed_array_columns(column, request.meta):
-            # Read as four typed sub-columns, merged back by convert_results.
+        if _reads_typed_array_columns(column):
+            # Deprecated untyped TYPE_ARRAY: read as four typed sub-columns, merged back
+            # by convert_results (element-typed array keys read one column, like scalars).
             selected_columns.extend(_array_subcolumn_selected_expressions(column))
         else:
             selected_columns.append(
@@ -672,7 +664,6 @@ def build_query(
             trace_item_filters_to_expression(
                 request.filter,
                 attribute_key_to_expression,
-                use_array_map_columns=use_array_map_columns(request.meta),
             ),
             valid_sampling_factor_conditions(),
             *item_type_conds,

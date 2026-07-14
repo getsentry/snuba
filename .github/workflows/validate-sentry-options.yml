@@ -2,6 +2,10 @@ name: Validate Sentry Options Schema
 
 on:
   pull_request:
+    paths:
+      - 'sentry-options/schemas/**'
+      - 'uv.lock'
+      - '.github/workflows/validate-sentry-options.yml'
   merge_group:
 
 concurrency:
@@ -9,26 +13,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  files-changed:
-    name: files-changed
+  cli-version:
+    name: Determine sentry-options CLI version
     runs-on: ubuntu-latest
     outputs:
-      schemas: ${{ steps.changes.outputs.schemas }}
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - name: Check for relevant file changes
-        uses: getsentry/paths-filter@4512585405083f25c027a35db413c2b3b9006d50 # v2.11.1
-        id: changes
         with:
-          filters: |
-            schemas:
-              - 'sentry-options/schemas/**'
+          sparse-checkout: uv.lock
+          sparse-checkout-cone-mode: false
+      - name: Parse sentry-options version from uv.lock
+        id: version
+        run: |
+          echo -n "version=" >> "$GITHUB_OUTPUT"
+          yq -p toml -oy '.package[] | select(.name == "sentry-options") | .version' uv.lock >> "$GITHUB_OUTPUT"
 
   validate-schema:
-    if: needs.files-changed.outputs.schemas == 'true'
-    needs: files-changed
+    needs: cli-version
     name: Validate Schema Evolution
-    uses: getsentry/sentry-options/.github/workflows/validate-schema.yml@20eae26f689d6f01185d0c82f39cc4222286c7a2
+    uses: getsentry/sentry-options/.github/workflows/validate-schema.yml@f8b8cdc11b73938dbdb44792c96b7b64a3600033
     secrets: inherit
     with:
       schemas-path: sentry-options/schemas
+      cli-version: ${{ needs.cli-version.outputs.version }}

@@ -5,3 +5,4 @@ name: outcomes
 entities:
   - outcomes
   - outcomes_cross_org_hourly
+  - llm_proxy_cost_raw

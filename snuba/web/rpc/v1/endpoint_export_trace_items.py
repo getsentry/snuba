@@ -20,7 +20,6 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue, TraceItem
 
-from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
@@ -33,19 +32,17 @@ from snuba.query.dsl import column, literal
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
+from snuba.state.sentry_options import get_option
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
-    ATTRIBUTES_ARRAY_ALLOWLIST,
     BUCKET_COUNT,
     attribute_key_to_expression,
-    attributes_array_selected_expressions,
     base_conditions_and,
-    decode_attributes_array_value,
     merge_typed_array_maps,
+    trace_item_filters_to_expression,
     treeify_or_and_conditions,
     typed_array_map_selected_expressions,
-    use_array_map_columns,
 )
 from snuba.web.rpc.common.debug_info import setup_trace_query_settings
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -272,7 +269,11 @@ def _build_query(
         ),
         SelectedExpression(
             "trace_id",
-            column("trace_id", alias="trace_id"),
+            expression=(
+                attribute_key_to_expression(
+                    AttributeKey(name="sentry.trace_id", type=AttributeKey.Type.TYPE_STRING)
+                )
+            ),
         ),
         SelectedExpression("organization_id", column("organization_id", alias="organization_id")),
         SelectedExpression("project_id", column("project_id", alias="project_id")),
@@ -301,13 +302,8 @@ def _build_query(
         ),
         SelectedExpression("attributes_int", column("attributes_int", alias="attributes_int")),
         SelectedExpression("attributes_bool", column("attributes_bool", alias="attributes_bool")),
-        # Past the cutoff, read every array attribute from the typed array map columns
-        # instead of the legacy attributes_array JSON-column allowlist.
-        *(
-            typed_array_map_selected_expressions()
-            if use_array_map_columns(meta)
-            else attributes_array_selected_expressions()
-        ),
+        # Read every array attribute from the typed array map columns.
+        *typed_array_map_selected_expressions(),
     ]
 
     entity = Entity(
@@ -341,10 +337,19 @@ def _build_query(
     item_type_filter = []
     if meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
         item_type_filter.append(f.equals(column("item_type"), literal(meta.trace_item_type)))
+
     query = Query(
         from_clause=entity,
         selected_columns=selected_columns,
-        condition=base_conditions_and(meta, *page_token_filter, *item_type_filter),
+        condition=base_conditions_and(
+            meta,
+            trace_item_filters_to_expression(
+                in_msg.filter,
+                attribute_key_to_expression,
+            ),
+            *page_token_filter,
+            *item_type_filter,
+        ),
         order_by=[
             # we add organization_id and project_id to the order by to optimize data reading
             # https://clickhouse.com/docs/sql-reference/statements/select/order-by#optimization-of-data-reading
@@ -421,9 +426,7 @@ class ProcessedResults(NamedTuple):
     keyset_cursor: KeysetCursor
 
 
-def _convert_rows(
-    rows: Iterable[dict[str, Any]], read_typed_arrays: bool = False
-) -> ProcessedResults:
+def _convert_rows(rows: Iterable[dict[str, Any]]) -> ProcessedResults:
     items: list[TraceItem] = []
     last_seen_project_id = 0
     last_seen_item_type = TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
@@ -448,20 +451,10 @@ def _convert_rows(
 
         attributes_map: dict[str, AnyValue] = {}
 
-        if read_typed_arrays:
-            # Past the cutoff: every array attribute, merged from the typed array map
-            # columns (the allowlist is no longer needed).
-            for name, values in merge_typed_array_maps(row):
-                if values:
-                    attributes_map[name] = _to_any_value(values)
-        else:
-            # Each allowlisted attributes_array path is its own JSON-string column.
-            # Decode only those rather than probing every value in the row.
-            for path in ATTRIBUTES_ARRAY_ALLOWLIST:
-                decoded = decode_attributes_array_value(path, row.pop(path, None))
-                if decoded is None or (isinstance(decoded, list) and not decoded):
-                    continue
-                attributes_map[path] = _to_any_value(decoded)
+        # Every array attribute, merged from the typed array map columns.
+        for name, values in merge_typed_array_maps(row):
+            if values:
+                attributes_map[name] = _to_any_value(values)
 
         # Remaining columns are scalar map columns (e.g. attributes_string).
         for row_key, row_value in row.items():
@@ -526,28 +519,25 @@ class EndpointExportTraceItems(RPCEndpoint[ExportTraceItemsRequest, ExportTraceI
 
     def _execute(self, in_msg: ExportTraceItemsRequest) -> ExportTraceItemsResponse:
         default_page_size = (
-            state.get_int_config("export_trace_items_default_page_size", _DEFAULT_PAGE_SIZE)
+            get_option("export_trace_items_default_page_size", _DEFAULT_PAGE_SIZE)
             or _DEFAULT_PAGE_SIZE
         )
         if in_msg.limit > 0:
             limit = min(in_msg.limit, default_page_size)
         else:
             limit = default_page_size
+
         page_token = ExportTraceItemsPageToken.from_protobuf(in_msg.page_token)
+        snuba_request = _build_snuba_request(in_msg, self.routing_decision, limit, page_token)
         results = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
-            request=_build_snuba_request(in_msg, self.routing_decision, limit, page_token),
+            request=snuba_request,
             timer=self._timer,
         )
 
         rows = results.result.get("data", [])
         # Match _build_query: gate on the routing-adjusted window actually queried.
-        processed_results = _convert_rows(
-            rows,
-            read_typed_arrays=use_array_map_columns(
-                _export_query_meta(in_msg, self.routing_decision)
-            ),
-        )
+        processed_results = _convert_rows(rows)
         is_flex = _is_flextime_export(in_msg)
         orig_start = in_msg.meta.start_timestamp.seconds
         routed = self.routing_decision.time_window

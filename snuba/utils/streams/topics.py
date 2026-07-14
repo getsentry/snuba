@@ -74,6 +74,8 @@ class Topic(Enum):
 
     COGS_SHARED_RESOURCES_USAGE = "shared-resources-usage"
 
+    LLM_PROXY_COST = "snuba-llm-proxy-cost"
+
 
 def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
     try:

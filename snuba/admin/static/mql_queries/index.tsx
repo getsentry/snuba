@@ -82,7 +82,6 @@ function MQLQueries(props: { api: Client }) {
       mql_query.query = mql_query.query!.trim();
     } catch (err) {
       if (err instanceof Error) {
-        console.log("ERROR", err);
         window.alert("An error occurred: " + err.message);
       }
     }

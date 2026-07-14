@@ -14,6 +14,7 @@ import structlog
 from flask import Flask, Response, g, jsonify, make_response, request
 from google.protobuf.json_format import MessageToDict, Parse
 from structlog.contextvars import bind_contextvars, clear_contextvars
+from werkzeug.exceptions import HTTPException
 
 from snuba import settings, state
 from snuba.admin.audit_log.action import AuditLogAction
@@ -132,6 +133,22 @@ def handle_invalid_dataset(exception: InvalidDatasetError) -> Response:
     )
 
 
+# passthrough needed so that we don't turn these into 500s
+@application.errorhandler(HTTPException)
+def handle_http_exception(exception: HTTPException) -> HTTPException:
+    return exception
+
+
+@application.errorhandler(Exception)
+def handle_uncaught_exception(exception: Exception) -> Response:
+    logger.error(exception, exc_info=True)
+    return Response(
+        json.dumps({"error": {"type": "unknown", "message": str(exception)}}),
+        500,
+        {"Content-Type": "application/json"},
+    )
+
+
 @application.before_request
 def set_logging_context() -> None:
     clear_contextvars()
@@ -140,10 +157,8 @@ def set_logging_context() -> None:
 
 @application.before_request
 def authorize() -> None:
-    logger.debug("authorize.entered")
     if request.endpoint != "health":
         user = authorize_request()
-        logger.info("authorize.finished", user=user)
         with sentry_sdk.push_scope() as scope:
             scope.user = {"email": user.email}
             g.user = user

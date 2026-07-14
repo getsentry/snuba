@@ -38,6 +38,17 @@ def pytest_configure() -> None:
     """
     assert settings.TESTING, "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
 
+    # Point sentry-options at the in-repo schemas so init() reads the committed
+    # schema regardless of how tests are launched. This must *override* any
+    # inherited value rather than setdefault: the Docker image sets
+    # SENTRY_OPTIONS_DIR=/etc/sentry-options (where production values are
+    # mounted), which ships no schemas, so a setdefault() would be a no-op in
+    # the test container and sentry_options.init() would fail with a SchemaError
+    # (leaving the client uninitialized and breaking every override_options test).
+    os.environ["SENTRY_OPTIONS_DIR"] = os.path.join(
+        os.path.dirname(__file__), os.pardir, "sentry-options"
+    )
+
     initialize_snuba()
     setup_sentry()
     initialize_snuba()

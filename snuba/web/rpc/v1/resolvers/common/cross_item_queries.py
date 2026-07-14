@@ -8,7 +8,6 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
     TraceItemFilterWithType,
 )
 
-from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
@@ -18,11 +17,12 @@ from snuba.downsampled_storage_tiers import Tier
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond, column, in_cond, or_cond
-from snuba.query.expressions import DangerousRawSQL, Expression
+from snuba.query.dsl import and_cond, column, or_cond
+from snuba.query.expressions import DangerousRawSQL
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryResult
 from snuba.web.query import run_query
@@ -31,7 +31,6 @@ from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
-    use_array_map_columns,
 )
 
 # 50 million trace ids * 16 bytes per id = a limit of 1gigabyte memory usage per cross item query
@@ -48,16 +47,14 @@ CROSS_ITEM_DISTRIBUTED_PRODUCT_MODE = "local"
 
 def use_local_join_for_cross_item_queries() -> bool:
     """Whether cross-item queries should push the ``trace_id`` join down to the local
-    storage nodes (see EAP-377).
+    storage nodes via ``distributed_product_mode='local'`` (see EAP-377).
 
-    When enabled, the ``trace_id IN (subquery)`` comparison is emitted against the bare
-    ``trace_id`` UUID column (so the bloom-filter index can be used and the condition
-    stays in ``WHERE``), the trace-ids subquery selects the bare ``trace_id``, and
-    ``distributed_product_mode='local'`` is set so the join runs locally on each shard.
-    Gated behind a runtime config so it can be rolled out and rolled back without a
-    deploy; when disabled the legacy (dash-stripped, distributed-join) behavior is used.
+    The bare-``trace_id`` predicate (see :func:`trace_id_in_subquery_condition`) is always
+    applied — it only makes the bloom-filter index usable. This flag additionally runs the
+    ``IN (subquery)`` join locally on each shard rather than as a distributed join. Gated
+    so it can be rolled out and rolled back without a deploy.
     """
-    return bool(state.get_int_config("use_local_join_for_cross_item_queries", default=0))
+    return bool(get_option("use_local_join_for_cross_item_queries", False))
 
 
 def apply_cross_item_outer_query_settings(
@@ -69,17 +66,14 @@ def apply_cross_item_outer_query_settings(
     query. Shared by all EAP resolvers so the logic lives in one place.
 
     For cross-item queries (``has_trace_filters``):
-    - skip sampling on the outer query when ``cross_item_queries_no_sample_outer`` is
-      set — the inner trace-ids query is sampled, the outer one should not be;
+    - skip sampling on the outer query when ``cross_item_queries_no_sample_outer`` is set —
+      the inner trace-ids query is sampled, the outer one should not be;
     - when the local-join optimization is enabled, set ``distributed_product_mode='local'``
-      so the ``trace_id`` join runs locally on each shard and can use the bloom-filter
-      index (see EAP-377).
+      so the ``trace_id`` join runs locally on each shard (see EAP-377).
 
     For non-cross-item queries, the sampling tier is applied as usual.
     """
-    cross_item_queries_no_sample_outer = state.get_int_config(
-        "cross_item_queries_no_sample_outer", 1
-    )
+    cross_item_queries_no_sample_outer = get_option("cross_item_queries_no_sample_outer", True)
     if not (has_trace_filters and cross_item_queries_no_sample_outer):
         query_settings.set_sampling_tier(sampling_tier)
     if has_trace_filters and use_local_join_for_cross_item_queries():
@@ -88,26 +82,21 @@ def apply_cross_item_outer_query_settings(
         )
 
 
-def trace_id_in_subquery_condition(trace_ids_sql: str) -> Expression:
-    """Build the ``trace_id IN (<subquery>)`` condition for the outer query of a
-    cross-item query.
+def trace_id_in_subquery_condition(trace_ids_sql: str) -> DangerousRawSQL:
+    """Build a ``trace_id IN (<subquery>)`` predicate as raw SQL.
 
-    When the local-join optimization is enabled, the condition is emitted as raw SQL
-    referencing the bare ``trace_id`` UUID column. This keeps the column out of the
-    ``UUIDColumnProcessor`` (so it is not wrapped in
-    ``replaceAll(toString(trace_id), '-', '')``, which would defeat the bloom-filter
-    index) and out of the ``PrewhereProcessor`` (so it stays in ``WHERE`` rather than
-    ``PREWHERE``, which is incompatible with ``distributed_product_mode='local'`` due
-    to a ClickHouse bug). The subquery itself selects the bare ``trace_id`` (see
-    ``get_trace_ids_sql_for_cross_item_query``) so both sides of the comparison are
-    raw UUIDs. See EAP-377.
+    The ``trace_id`` column must stay *bare* for the ``bf_trace_id`` bloom-filter skip
+    index to prune granules. ``UUIDColumnProcessor`` only keeps ``trace_id`` bare for
+    ``=``/``IN`` comparisons against literal values; it does not recognize an
+    ``IN (subquery)`` term, so it would otherwise wrap the column in
+    ``replaceAll(toString(trace_id), '-', '')``, defeating the index. Emitting the whole
+    predicate as ``DangerousRawSQL`` bypasses that rewrite so the column reads bare.
 
-    When disabled, the legacy condition is produced: ``in(trace_id, <subquery>)``,
-    where ``trace_id`` is later dash-stripped by the ``UUIDColumnProcessor``.
+    The subquery built by :func:`get_trace_ids_sql_for_cross_item_query` projects
+    ``trace_id`` as a real ``UUID`` (it is not wrapped in the dash-stripping expression),
+    so the ``IN`` set matches the column type.
     """
-    if use_local_join_for_cross_item_queries():
-        return DangerousRawSQL(None, f"trace_id IN ({trace_ids_sql})")
-    return in_cond(column("trace_id"), DangerousRawSQL(None, f"({trace_ids_sql})"))
+    return DangerousRawSQL(None, f"trace_id IN ({trace_ids_sql})")
 
 
 def convert_trace_filters_to_trace_item_filter_with_type(
@@ -163,7 +152,6 @@ def get_trace_ids_sql_for_cross_item_query(
                     trace_item_filters_to_expression(
                         trace_filter.filter,
                         attribute_key_to_expression,
-                        use_array_map_columns=use_array_map_columns(request_meta),
                     ),
                 )
             )
@@ -174,7 +162,6 @@ def get_trace_ids_sql_for_cross_item_query(
                         trace_filter.filter,
                         attribute_key_to_expression,
                         membership_as_has=True,
-                        use_array_map_columns=use_array_map_columns(request_meta),
                     ),
                 )
             )
@@ -196,23 +183,17 @@ def get_trace_ids_sql_for_cross_item_query(
         schema=get_entity(EntityKey("eap_items")).get_data_model(),
         sample=None,
     )
-    # When the local-join optimization is enabled, select the bare ``trace_id`` UUID
-    # (as raw SQL, bypassing the UUIDColumnProcessor) instead of the dash-stripped
-    # ``replaceAll(toString(trace_id), '-', '')`` form so the outer
-    # ``trace_id IN (subquery)`` comparison is UUID-to-UUID and can use the bloom-filter
-    # index. The SELECT and GROUP BY expressions must match, so both use the same
-    # expression. See EAP-377.
-    trace_id_expression: Expression = (
-        DangerousRawSQL(None, "trace_id")
-        if use_local_join_for_cross_item_queries()
-        else column("trace_id")
-    )
     query = Query(
         from_clause=entity,
         selected_columns=[
             SelectedExpression(
                 name="trace_id",
-                expression=trace_id_expression,
+                # Project (and group by) trace_id bare via DangerousRawSQL so it is not
+                # rewritten to replaceAll(toString(trace_id), '-', '') by
+                # UUIDColumnProcessor. This keeps the subquery output a real UUID, which
+                # is what the outer `trace_id IN (...)` predicate compares against (see
+                # trace_id_in_subquery_condition).
+                expression=DangerousRawSQL(None, "trace_id"),
             )
         ],
         condition=base_conditions_and(
@@ -222,7 +203,7 @@ def get_trace_ids_sql_for_cross_item_query(
         groupby=[
             column("organization_id"),
             column("project_id"),
-            trace_id_expression,
+            DangerousRawSQL(None, "trace_id"),
         ],
         having=trace_item_filters_and_expression,
         order_by=[
@@ -239,7 +220,7 @@ def get_trace_ids_sql_for_cross_item_query(
                 expression=f.max(column("timestamp")),
             ),
         ],
-        limit=limit or state.get_config("trace_ids_cross_item_query_limit", _TRACE_LIMIT),
+        limit=limit or get_option("trace_ids_cross_item_query_limit", _TRACE_LIMIT),
     )
 
     treeify_or_and_conditions(query)

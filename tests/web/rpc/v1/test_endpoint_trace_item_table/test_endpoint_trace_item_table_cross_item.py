@@ -1,8 +1,10 @@
+from collections.abc import Generator
 from datetime import datetime
 from typing import Any
 from unittest.mock import patch
 
 import pytest
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
     TraceItemTableRequest,
@@ -18,12 +20,10 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
-from snuba import state
 from snuba.web import QueryResult
 from snuba.web.query import run_query
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.base import BaseApiTest
-from tests.conftest import SnubaSetConfig
 from tests.web.rpc.v1.test_utils import (
     comparison_filter,
     create_cross_item_test_data,
@@ -107,7 +107,6 @@ class TestTraceItemTableCrossItemQueries(BaseApiTest):
         test_distributed this runs against the ``_dist`` tables, exercising the
         ``trace_id IN (subquery)`` + ``distributed_product_mode='local'`` path against
         the Distributed table engine (where the setting actually takes effect)."""
-        state.set_config("use_local_join_for_cross_item_queries", 1)
         trace_ids, all_items, start_time, end_time = create_cross_item_test_data()
         write_cross_item_data_to_storage(all_items)
 
@@ -138,9 +137,12 @@ class TestTraceItemTableCrossItemQueries(BaseApiTest):
             captured["clickhouse_settings"] = dict(request.query_settings.get_clickhouse_settings())
             return run_query(dataset, request, timer, **kwargs)
 
-        with patch(
-            "snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_table.run_query",
-            side_effect=capturing_run_query,
+        with (
+            override_options("snuba", {"use_local_join_for_cross_item_queries": True}),
+            patch(
+                "snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_table.run_query",
+                side_effect=capturing_run_query,
+            ),
         ):
             response = EndpointTraceItemTable().execute(message)
 
@@ -299,5 +301,6 @@ class TestTraceItemTableCrossItemQueriesLocalJoin(TestTraceItemTableCrossItemQue
     the default (legacy) path proves the gated path executes correctly. See EAP-377."""
 
     @pytest.fixture(autouse=True)
-    def enable_local_join(self, snuba_set_config: SnubaSetConfig) -> None:
-        snuba_set_config("use_local_join_for_cross_item_queries", 1)
+    def enable_local_join(self) -> Generator[None]:
+        with override_options("snuba", {"use_local_join_for_cross_item_queries": True}):
+            yield

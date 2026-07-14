@@ -1,6 +1,8 @@
+from collections.abc import Generator
 from datetime import datetime
 
 import pytest
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     Expression,
     TimeSeriesRequest,
@@ -18,7 +20,6 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
 from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
 from tests.base import BaseApiTest
-from tests.conftest import SnubaSetConfig
 from tests.web.rpc.v1.test_utils import (
     comparison_filter,
     create_cross_item_test_data,
@@ -174,5 +175,6 @@ class TestTimeSeriesCrossItemQueriesLocalJoin(TestTimeSeriesCrossItemQueries):
     (raw trace_id join + distributed_product_mode='local'). See EAP-377."""
 
     @pytest.fixture(autouse=True)
-    def enable_local_join(self, snuba_set_config: SnubaSetConfig) -> None:
-        snuba_set_config("use_local_join_for_cross_item_queries", 1)
+    def enable_local_join(self) -> Generator[None]:
+        with override_options("snuba", {"use_local_join_for_cross_item_queries": True}):
+            yield

@@ -53,6 +53,7 @@ expression: snapshot_payload
     "sdk_name": "sentry.javascript.browser",
     "sdk_version": "7.52.1",
     "segment_id": 1,
+    "segment_names": [],
     "session_sample_rate": -1.0,
     "tags.key": [
       "correlationId"

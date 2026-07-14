@@ -23,7 +23,6 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     ExtrapolationMode,
 )
 
-from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
@@ -38,6 +37,7 @@ from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
@@ -46,7 +46,6 @@ from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
-    use_array_map_columns,
     use_sampling_factor,
     valid_sampling_factor_conditions,
 )
@@ -168,7 +167,7 @@ def _convert_result_timeseries(
 
         group_by_key = "|".join([f"{k},{v}" for k, v in group_by_map.items()])
         for col_name in aggregation_labels:
-            if not result_timeseries.get((group_by_key, col_name), None):
+            if not result_timeseries.get((group_by_key, col_name)):
                 result_timeseries[(group_by_key, col_name)] = TimeSeries(
                     group_by_attributes=group_by_map,
                     label=col_name,
@@ -252,7 +251,6 @@ def _get_reliability_context_columns(
             confidence_interval_column = get_confidence_interval_column(
                 aggregation,
                 _get_attribute_key_to_expression_function(request_meta),
-                use_array_map_columns=use_array_map_columns(request_meta),
             )
             if confidence_interval_column is not None:
                 additional_context_columns.append(
@@ -265,7 +263,6 @@ def _get_reliability_context_columns(
             average_sample_rate_column = get_average_sample_rate_column(
                 aggregation,
                 _get_attribute_key_to_expression_function(request_meta),
-                use_array_map_columns=use_array_map_columns(request_meta),
             )
             additional_context_columns.append(
                 SelectedExpression(
@@ -276,7 +273,6 @@ def _get_reliability_context_columns(
         count_column = get_count_column(
             aggregation,
             _get_attribute_key_to_expression_function(request_meta),
-            use_array_map_columns=use_array_map_columns(request_meta),
         )
         additional_context_columns.append(
             SelectedExpression(name=count_column.alias, expression=count_column)
@@ -306,14 +302,13 @@ def _proto_expression_to_ast_expression(
                 expr.conditional_aggregation,
                 (attribute_key_to_expression),
                 use_sampling_factor(request_meta),
-                use_array_map_columns(request_meta),
             )
             match expr.conditional_aggregation.WhichOneof("default_value"):
                 case None:
                     pass
                 case "default_value_double":
                     aggregate_expr = f.coalesce(
-                        f.CAST(replace(aggregate_expr, alias=None), "Float64"),
+                        replace(aggregate_expr, alias=None),
                         expr.conditional_aggregation.default_value_double,
                     )
                 case "default_value_int64":
@@ -427,7 +422,6 @@ def build_query(
             trace_item_filters_to_expression(
                 request.filter,
                 _get_attribute_key_to_expression_function(request.meta),
-                use_array_map_columns=use_array_map_columns(request.meta),
             ),
             valid_sampling_factor_conditions(),
             *item_type_conds,
@@ -496,7 +490,7 @@ class ResolverTimeSeriesEAPItems(ResolverTimeSeries):
         assert len(in_msg.aggregations) == 0
 
         # aggregation is deprecated, it gets converted to conditional_aggregation
-        if state.get_int_config("aggregation_deprecation_enabled", 1):
+        if get_option("aggregation_deprecation_enabled", True):
             for expr in in_msg.expressions:
                 if expr.WhichOneof("expression") == "aggregation":
                     raise RuntimeError(

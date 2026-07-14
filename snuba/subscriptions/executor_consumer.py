@@ -21,7 +21,6 @@ from arroyo.processing.strategies.healthcheck import Healthcheck
 from arroyo.processing.strategies.produce import Produce
 from arroyo.types import Commit
 
-from snuba import state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.consumers.utils import get_partition_count
 from snuba.datasets.dataset import Dataset
@@ -30,6 +29,7 @@ from snuba.datasets.entities.factory import get_entity, get_entity_name
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.reader import Result
+from snuba.state.sentry_options import get_option
 from snuba.subscriptions.codecs import (
     SubscriptionScheduledTaskEncoder,
     SubscriptionTaskResultEncoder,
@@ -324,8 +324,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         # If there are max_concurrent_queries + 10 pending futures in the queue,
         # we will start raising MessageRejected to slow down the consumer as
         # it means our executor cannot keep up
-        queue_size_factor = state.get_config("executor_queue_size_factor", 10)
-        assert queue_size_factor is not None, "Invalid executor_queue_size_factor config"
+        queue_size_factor = get_option("executor_queue_size_factor", 10)
         max_queue_size = self.__max_concurrent_queries * queue_size_factor
 
         # Tell the consumer to pause until we have removed some futures from

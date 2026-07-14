@@ -8,6 +8,7 @@ from sql_metadata import Parser, QueryType  # type: ignore[import-untyped]
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import (
+    DEFAULT_CLICKHOUSE_HTTP_PORT,
     ClickhouseClientSettings,
     ClickhouseCluster,
     ClickhouseNode,
@@ -106,9 +107,28 @@ def _build_validated_pool(
     # Go through the shared connection cache so the driver (native vs
     # clickhouse-connect/HTTP) is selected by the runtime config, behind the
     # abstract ClickhousePool type, just like the cluster's own connections.
+    #
+    # Pick the HTTP port for the clickhouse-connect (HTTP) driver. (The native
+    # driver ignores http_port and talks to clickhouse_port directly, so it is
+    # unaffected either way.)
+    #
+    # cluster.get_http_port() is the port of the cluster's configured query
+    # endpoint, which may be a load balancer / proxy on a non-default port. It
+    # is correct *only* when we are connecting to that endpoint — i.e. the query
+    # node, the same host the normal read path reaches on
+    # cluster.get_http_port() (this is what get_ro_query_node_connection, and
+    # thus the tracing/querylog/cardinality tools, rely on). For any other host
+    # — a specific individual node selected by host in the admin tools — that
+    # port does not apply: an individual node serves HTTP on the well-known
+    # default port, so use that instead.
+    query_node = cluster.get_query_node()
+    is_query_node = (
+        clickhouse_host == query_node.host_name and clickhouse_port == query_node.native_port
+    )
+    http_port = cluster.get_http_port() if is_query_node else DEFAULT_CLICKHOUSE_HTTP_PORT
     return connection_cache.get_node_connection(
         client_settings,
-        ClickhouseNode(clickhouse_host, clickhouse_port, http_port=cluster.get_http_port()),
+        ClickhouseNode(clickhouse_host, clickhouse_port, http_port=http_port),
         username,
         password,
         database,
