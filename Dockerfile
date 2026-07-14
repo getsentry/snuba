@@ -165,7 +165,7 @@ RUN ln -sf /opt/python/bin/python3 /.venv/bin/python3 && \
 RUN find /.venv -name "*.so" -exec ldd {} \; 2>&1 | grep "not found" && exit 1 || true
 
 # Distroless production image — minimal attack surface, no shell
-FROM ghcr.io/getsentry/dhi/python:3.13-debian13 AS application-distroless
+FROM ghcr.io/oioki/python-base-image/python:3.13-debian13 AS application-distroless
 
 COPY --from=distroless_prep /.venv /.venv
 COPY --from=distroless_prep /usr/src/snuba /usr/src/snuba
@@ -190,7 +190,7 @@ ENTRYPOINT ["python3", "/usr/src/snuba/docker_entrypoint.py"]
 CMD ["api"]
 
 # Debug distroless image — includes busybox (sh, ls, cat, wget, env, etc.)
-FROM ghcr.io/getsentry/dhi/python:3.13-debian13-dev AS application-distroless-debug
+FROM ghcr.io/oioki/python-base-image/python:3.13-debian13-dev AS application-distroless-debug
 
 COPY --from=distroless_prep /.venv /.venv
 COPY --from=distroless_prep /usr/src/snuba /usr/src/snuba
