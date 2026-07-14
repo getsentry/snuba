@@ -213,9 +213,12 @@ def execute_query(
         {
             "result_rows": len(result["data"]),
             "result_cols": len(result["meta"]),
-            "max_threads": clickhouse_query_settings.get("max_threads", None),
         }
     )
+    # stats.max_threads is an optional integer in the querylog schema, so only
+    # record it when set (emitting null gets the message rejected).
+    if (max_threads := clickhouse_query_settings.get("max_threads")) is not None:
+        stats["max_threads"] = max_threads
 
     return result
 
