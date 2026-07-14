@@ -8,7 +8,6 @@ from sentry_options import OptionValue
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.state import delete_config as delete_runtime_config
 from snuba.state import get_all_configs as get_all_runtime_configs
-from snuba.state import get_config as get_runtime_config
 from snuba.state import set_config as set_runtime_config
 from snuba.state.sentry_options import get_option
 from snuba.utils.registered_class import RegisteredClass
@@ -24,12 +23,10 @@ T = TypeVar("T", bound="ConfigurableComponent")
 # (int/float) on read. This is the authoritative, centrally-managed
 # (sentry-options-automator) source.
 #
-# The base ``get_config_value`` reads this option first. When a key is absent,
-# components with ``_falls_back_to_runtime_config`` set (allocation policies and
-# generic components) fall back to the legacy Redis runtime config, so values set
-# directly in Redis / snuba-admin are still honored; the code default applies
-# last. Storage-routing strategies opt out of the Redis fallback (option → code
-# default only), so their editing lives solely in sentry-options-automator.
+# The base ``get_config_value`` below reads this option and then the code
+# default; the legacy Redis runtime config is no longer consulted for any
+# ConfigurableComponent (allocation policies and storage-routing strategies
+# alike), so editing moves to sentry-options-automator rather than snuba-admin.
 CONFIGURABLE_COMPONENT_OVERRIDES_KEY = "configurable_component_overrides"
 
 # Companion option for object-typed (``value_type`` == ``dict``) configs. The
@@ -172,13 +169,6 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         ",": "__comma_literal__",
         ":": "__colon_literal__",
     }
-
-    # When a numeric config has no value in ``configurable_component_overrides``,
-    # fall back to the legacy Redis runtime config before the code default, so
-    # values set directly in Redis / snuba-admin are still honored. Subclasses
-    # that have fully migrated off Redis (e.g. storage-routing strategies) set
-    # this to False to read the sentry-option and then only the code default.
-    _falls_back_to_runtime_config: bool = True
 
     def component_name(self) -> str:
         # what is this configurable component's class name?
@@ -433,15 +423,11 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
     ) -> Any:
         """Returns the value of a configuration on this ConfigurableComponent.
 
-        Reads the centrally-managed sentry-option first: numeric configs use
-        ``configurable_component_overrides`` (value cast to the declared int/float
-        type), object-typed configs (``value_type`` == ``dict``) use the
-        nested-object values in ``configurable_component_object_overrides``. When
-        the key is absent and ``_falls_back_to_runtime_config`` is set, a numeric
-        config falls back to the legacy Redis runtime config (so values set in
-        Redis / snuba-admin are still honored) before the code default. Object
-        configs have no Redis representation and fall straight through to the
-        code default.
+        Reads from the centrally-managed sentry-option, falling back to the code
+        default; the legacy Redis runtime config is not consulted. Numeric configs
+        read ``configurable_component_overrides`` (value cast to the declared
+        int/float type); object-typed configs (``value_type`` == ``dict``) read
+        the nested-object values in ``configurable_component_object_overrides``.
         """
         if params is None:
             params = {}
@@ -459,12 +445,6 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         overrides: OptionValue = get_option(option_key, {})
         if isinstance(overrides, dict) and full_key in overrides:
             return config_definition.value_type(overrides[full_key])
-        if config_definition.value_type is not dict and self._falls_back_to_runtime_config:
-            return get_runtime_config(
-                key=full_key,
-                default=config_definition.default,
-                config_key=self._get_hash(),
-            )
         return config_definition.default
 
     def set_config_value(
