@@ -1,6 +1,6 @@
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
-from typing import Final
+from typing import Final, NamedTuple
 
 from sentry_conventions.attributes import ATTRIBUTE_METADATA
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
@@ -26,23 +26,32 @@ class MalformedAttributeException(Exception):
     pass
 
 
-COLUMN_PREFIX: str = "sentry."
+class NormalizedColumn(NamedTuple):
+    column_name: str
+    types: Sequence[AttributeKey.Type.ValueType]
 
-NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, Sequence[AttributeKey.Type.ValueType]]] = {
-    f"{COLUMN_PREFIX}organization_id": [AttributeKey.Type.TYPE_INT],
-    f"{COLUMN_PREFIX}project_id": [AttributeKey.Type.TYPE_INT],
-    f"{COLUMN_PREFIX}timestamp": [
-        AttributeKey.Type.TYPE_FLOAT,
-        AttributeKey.Type.TYPE_DOUBLE,
-        AttributeKey.Type.TYPE_INT,
-        AttributeKey.Type.TYPE_STRING,
-    ],
-    f"{COLUMN_PREFIX}trace_id": [
-        AttributeKey.Type.TYPE_STRING
-    ],  # this gets converted from a uuid to a string in a storage processor
-    f"{COLUMN_PREFIX}item_id": [AttributeKey.Type.TYPE_STRING],
-    f"{COLUMN_PREFIX}sampling_weight": [AttributeKey.Type.TYPE_DOUBLE],
-    f"{COLUMN_PREFIX}sampling_factor": [AttributeKey.Type.TYPE_DOUBLE],
+
+NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, NormalizedColumn]] = {
+    "sentry.organization_id": NormalizedColumn("organization_id", [AttributeKey.Type.TYPE_INT]),
+    "sentry.project_id": NormalizedColumn("project_id", [AttributeKey.Type.TYPE_INT]),
+    "sentry.timestamp": NormalizedColumn(
+        "timestamp",
+        [
+            AttributeKey.Type.TYPE_FLOAT,
+            AttributeKey.Type.TYPE_DOUBLE,
+            AttributeKey.Type.TYPE_INT,
+            AttributeKey.Type.TYPE_STRING,
+        ],
+    ),
+    # trace_id gets converted from a uuid to a string in a storage processor
+    "sentry.trace_id": NormalizedColumn("trace_id", [AttributeKey.Type.TYPE_STRING]),
+    "sentry.item_id": NormalizedColumn("item_id", [AttributeKey.Type.TYPE_STRING]),
+    "sentry.sampling_weight": NormalizedColumn("sampling_weight", [AttributeKey.Type.TYPE_DOUBLE]),
+    "sentry.sampling_factor": NormalizedColumn("sampling_factor", [AttributeKey.Type.TYPE_DOUBLE]),
+    "sentry.session_id": NormalizedColumn("session_id", [AttributeKey.Type.TYPE_STRING]),
+    "gen_ai.conversation.id": NormalizedColumn(
+        "ai_conversation_id", [AttributeKey.Type.TYPE_STRING]
+    ),
 }
 
 PROTO_TYPE_TO_CLICKHOUSE_TYPE: Final[Mapping[AttributeKey.Type.ValueType, str]] = {
@@ -297,11 +306,12 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
         return column("attr_key")
 
     if attr_key.name in NORMALIZED_COLUMNS_EAP_ITEMS:
-        if attr_key.type not in NORMALIZED_COLUMNS_EAP_ITEMS[attr_key.name]:
+        normalized_column = NORMALIZED_COLUMNS_EAP_ITEMS[attr_key.name]
+        if attr_key.type not in normalized_column.types:
             formatted_attribute_types = ", ".join(
                 map(
                     AttributeKey.Type.Name,
-                    NORMALIZED_COLUMNS_EAP_ITEMS[attr_key.name],
+                    normalized_column.types,
                 )
             )
             raise MalformedAttributeException(
@@ -309,7 +319,7 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
             )
 
         return f.cast(
-            column(attr_key.name[len(COLUMN_PREFIX) :]),
+            column(normalized_column.column_name),
             PROTO_TYPE_TO_CLICKHOUSE_TYPE[attr_key.type],
             alias=alias,
         )
