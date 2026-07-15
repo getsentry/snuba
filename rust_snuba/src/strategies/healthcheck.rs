@@ -101,8 +101,8 @@ mod tests {
         CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
     };
     use sentry_arroyo::types::Message;
-    use sentry_options::init_with_schemas;
     use sentry_options::testing::override_options;
+    use sentry_options::Options;
     use serde_json::json;
     use std::collections::HashMap;
     use std::fs;
@@ -112,7 +112,12 @@ mod tests {
 
     static INIT: Once = Once::new();
     fn init_config() {
-        INIT.call_once(|| init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap());
+        INIT.call_once(|| {
+            Options::builder()
+                .with_schemas(&[("snuba", crate::SNUBA_SCHEMA)])
+                .init()
+                .unwrap()
+        });
     }
 
     // Mock strategy that can be configured to return commit requests

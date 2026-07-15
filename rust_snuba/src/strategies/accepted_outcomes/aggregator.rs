@@ -333,7 +333,7 @@ mod tests {
     use prost::Message as ProstMessage;
     use prost_types::Timestamp;
     use sentry_arroyo::types::{Partition, Topic};
-    use sentry_options::init_with_schemas;
+    use sentry_options::Options;
     use sentry_protos::snuba::v1::TraceItemType;
     use sentry_protos::snuba::v1::{CategoryCount, Outcomes};
 
@@ -525,7 +525,10 @@ mod tests {
 
     #[test]
     fn poll_flushes_when_max_batch_size_reached() {
-        init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap();
+        Options::builder()
+            .with_schemas(&[("snuba", crate::SNUBA_SCHEMA)])
+            .init()
+            .unwrap();
         let mut aggregator = OutcomesAggregator::new(
             Noop { last_message: None },
             1,
@@ -551,7 +554,10 @@ mod tests {
 
     #[test]
     fn submit_returns_backpressure_when_message_carried_over() {
-        init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap();
+        Options::builder()
+            .with_schemas(&[("snuba", crate::SNUBA_SCHEMA)])
+            .init()
+            .unwrap();
         struct RejectOnce {
             rejected: bool,
         }
@@ -619,7 +625,10 @@ mod tests {
 
     #[test]
     fn join_honors_timeout_when_message_stays_carried_over() {
-        init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap();
+        Options::builder()
+            .with_schemas(&[("snuba", crate::SNUBA_SCHEMA)])
+            .init()
+            .unwrap();
         struct AlwaysReject;
         impl ProcessingStrategy<AggregatedOutcomesBatch> for AlwaysReject {
             fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {

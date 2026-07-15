@@ -12,7 +12,7 @@ use sentry_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrate
 use sentry_arroyo::processing::StreamProcessor;
 use sentry_arroyo::types::{Partition, Topic};
 
-use sentry_options::init_with_schemas;
+use sentry_options::Options;
 
 use pyo3::prelude::*;
 
@@ -120,7 +120,9 @@ pub fn accepted_outcomes_consumer_impl(
     commit_frequency_sec: u64,
 ) -> usize {
     setup_logging();
-    init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)])
+    Options::builder()
+        .with_schemas(&[("snuba", crate::SNUBA_SCHEMA)])
+        .init()
         .expect("failed to initialize sentry-options");
 
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
