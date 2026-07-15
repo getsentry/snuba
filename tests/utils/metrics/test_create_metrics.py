@@ -66,7 +66,7 @@ def test_create_metrics_uses_udp_when_flag_disabled(dogstatsd: MagicMock) -> Non
         port=8125,
         namespace="snuba.test",
         constant_tags=None,
-        disable_telemetry=True,
+        disable_telemetry=False,
     )
 
 

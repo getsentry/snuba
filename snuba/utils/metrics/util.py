@@ -113,7 +113,7 @@ def create_metrics(
             port=port,
             namespace=prefix,
             constant_tags=constant_tags,
-            disable_telemetry=True,
+            disable_telemetry=False,
         )
 
     return SentryDatadogMetricsBackend(
