@@ -5,16 +5,6 @@ from typing import Any
 from snuba.manual_jobs import Job, JobLogger
 from snuba.redis import RedisClientKey, RedisClientType, get_redis_client
 
-# Stores we deliberately skip: the ephemeral query cache and rate-limiter
-# counters, plus the large operational subscription / replacements stores.
-# Everything else we store in Redis is dumped.
-_EXCLUDED_CLIENTS = {
-    RedisClientKey.CACHE,
-    RedisClientKey.RATE_LIMITER,
-    RedisClientKey.SUBSCRIPTION_STORE,
-    RedisClientKey.REPLACEMENTS_STORE,
-}
-
 PAYLOAD_START_MARKER = "===== BEGIN REDIS DUMP ====="
 PAYLOAD_END_MARKER = "===== END REDIS DUMP ====="
 
@@ -65,18 +55,14 @@ def _dump_client(client: RedisClientType) -> dict[str, Any]:
 
 
 class LogRuntimeConfigs(Job):
-    """Dumps every value we store in Redis (all runtime configs, allocation
-    policy / CBRS overrides, and other operational state) as a single JSON
-    payload that can be pasted into an LLM to help migrate config to
-    sentry-options (see getsentry/snuba#8168).
+    """Dumps the ``config`` Redis store as a single JSON payload that can be
+    pasted into an LLM to help migrate config to sentry-options (see
+    getsentry/snuba#8168).
 
-    The ephemeral cache / rate-limiter stores and the large operational
-    subscription / replacements stores are skipped. Everything else is dumped
-    grouped by Redis client, with each key read according to its Redis type.
-    The allocation-policy /
-    CBRS overrides live in the ``config`` client under the ``capman`` and
-    ``cbrs`` hashes, keyed exactly like the ``configurable_component_overrides``
-    sentry-option.
+    This is every value in the ``config`` client -- all runtime configs plus
+    the allocation-policy / CBRS overrides, which live under the ``capman`` and
+    ``cbrs`` hashes keyed exactly like the ``configurable_component_overrides``
+    sentry-option. Each key is read according to its Redis type.
 
     Run it repeatably straight from the CLI (no job manifest entry, no
     job-status guard) with ``snuba jobs dump_runtime_configs``.
@@ -84,28 +70,12 @@ class LogRuntimeConfigs(Job):
 
     allow_adhoc_run = True
 
-    def _collect_redis_dump(self, logger: JobLogger) -> dict[str, Any]:
-        dumps_by_client_id: dict[int, dict[str, Any]] = {}
-        result: dict[str, Any] = {}
-        for client_key in RedisClientKey:
-            if client_key in _EXCLUDED_CLIENTS:
-                continue
-            try:
-                client = get_redis_client(client_key)
-                # Several logical stores can share one physical client; dump
-                # each physical client only once.
-                client_id = id(client)
-                if client_id not in dumps_by_client_id:
-                    dumps_by_client_id[client_id] = _dump_client(client)
-                result[client_key.value] = dumps_by_client_id[client_id]
-            except Exception as e:
-                logger.error(f"failed to dump redis client {client_key.value}: {e}")
-        return result
-
     def execute(self, logger: JobLogger) -> None:
-        dump = self._collect_redis_dump(logger)
-        for client_name, contents in dump.items():
-            logger.info(f"redis client {client_name}: {len(contents)} key(s)")
+        client_name = RedisClientKey.CONFIG.value
+        contents = _dump_client(get_redis_client(RedisClientKey.CONFIG))
+        logger.info(f"redis client {client_name}: {len(contents)} key(s)")
         logger.info(PAYLOAD_START_MARKER)
-        logger.info(json.dumps({"redis": dump}, indent=2, sort_keys=True, default=str))
+        logger.info(
+            json.dumps({"redis": {client_name: contents}}, indent=2, sort_keys=True, default=str)
+        )
         logger.info(PAYLOAD_END_MARKER)
