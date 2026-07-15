@@ -17,9 +17,13 @@ impl DogStatsDBackend {
         Self::build(&addr, prefix, tags)
     }
 
+    /// `socket_path` is passed to the exporter verbatim, so it must be a full DogStatsD
+    /// remote address including the transport scheme, e.g. `unixgram:///run/dogstatsd.sock`
+    /// (datagram) or `unix:///run/dogstatsd.sock` (stream). The scheme is supplied via the
+    /// `SNUBA_DOGSTATSD_SOCKET_PATH` env var rather than hardcoded here, so the same value
+    /// also works for the Python datadog client (which strips the scheme itself).
     pub fn new_uds(socket_path: &str, prefix: &str, tags: &[(&str, String)]) -> Self {
-        let addr = format!("unixgram://{socket_path}");
-        Self::build(&addr, prefix, tags)
+        Self::build(socket_path, prefix, tags)
     }
 
     fn build(addr: &str, prefix: &str, tags: &[(&str, String)]) -> Self {
@@ -212,11 +216,15 @@ mod tests {
 
     #[test]
     fn uds_only_when_flag_on_and_socket_set() {
-        let env = env_with(Some("localhost"), Some(8125), Some("/var/run/dd.sock"));
+        let env = env_with(
+            Some("localhost"),
+            Some(8125),
+            Some("unixgram:///var/run/dd.sock"),
+        );
         // Flag on + socket present -> UDS.
         assert_eq!(
             select_transport(&env, true),
-            DogStatsDTransport::Uds("/var/run/dd.sock")
+            DogStatsDTransport::Uds("unixgram:///var/run/dd.sock")
         );
         // Flag off + socket still present -> stays on UDP. This is the key property:
         // a deployed socket path does not force UDS, so flipping the flag back to "0"
@@ -253,14 +261,14 @@ mod tests {
     fn uds_when_socket_only() {
         // A socket alone (no host/port) is a usable transport: metrics go over UDS
         // regardless of the flag, since there is no UDP target to prefer or fall back to.
-        let env = env_with(None, None, Some("/var/run/dd.sock"));
+        let env = env_with(None, None, Some("unixgram:///var/run/dd.sock"));
         assert_eq!(
             select_transport(&env, true),
-            DogStatsDTransport::Uds("/var/run/dd.sock")
+            DogStatsDTransport::Uds("unixgram:///var/run/dd.sock")
         );
         assert_eq!(
             select_transport(&env, false),
-            DogStatsDTransport::Uds("/var/run/dd.sock")
+            DogStatsDTransport::Uds("unixgram:///var/run/dd.sock")
         );
     }
 }

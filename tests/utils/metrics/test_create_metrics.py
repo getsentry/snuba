@@ -27,7 +27,7 @@ def test_create_metrics_uses_uds_when_flag_enabled(dogstatsd: MagicMock) -> None
             TESTING=False,
             DOGSTATSD_HOST="localhost",
             DOGSTATSD_PORT=8125,
-            DOGSTATSD_SOCKET_PATH="/var/run/dogstatsd.sock",
+            DOGSTATSD_SOCKET_PATH="unixgram:///var/run/dogstatsd.sock",
         ),
         patch("snuba.state.sentry_options.get_option", side_effect=_get_option(True)),
     ):
@@ -37,7 +37,7 @@ def test_create_metrics_uses_uds_when_flag_enabled(dogstatsd: MagicMock) -> None
         backend.increment("snuba.test.metric")
 
     dogstatsd.assert_called_once_with(
-        socket_path="/var/run/dogstatsd.sock",
+        socket_path="unixgram:///var/run/dogstatsd.sock",
         namespace="snuba.test",
         constant_tags=None,
     )
@@ -52,7 +52,7 @@ def test_create_metrics_uses_udp_when_flag_disabled(dogstatsd: MagicMock) -> Non
             DOGSTATSD_HOST="localhost",
             DOGSTATSD_PORT=8125,
             # A socket path alone must not force UDS: the sentry-option gates it.
-            DOGSTATSD_SOCKET_PATH="/var/run/dogstatsd.sock",
+            DOGSTATSD_SOCKET_PATH="unixgram:///var/run/dogstatsd.sock",
         ),
         patch("snuba.state.sentry_options.get_option", side_effect=_get_option(False)),
     ):
@@ -82,7 +82,7 @@ def test_create_metrics_transport_decision_is_process_wide(dogstatsd: MagicMock)
         TESTING=False,
         DOGSTATSD_HOST="localhost",
         DOGSTATSD_PORT=8125,
-        DOGSTATSD_SOCKET_PATH="/var/run/dogstatsd.sock",
+        DOGSTATSD_SOCKET_PATH="unixgram:///var/run/dogstatsd.sock",
     ):
         with patch("snuba.state.sentry_options.get_option", side_effect=_get_option(False)):
             backend = create_metrics("snuba.test")
@@ -119,7 +119,7 @@ def test_create_metrics_socket_only_uses_uds(dogstatsd: MagicMock) -> None:
                 TESTING=False,
                 DOGSTATSD_HOST=None,
                 DOGSTATSD_PORT=None,
-                DOGSTATSD_SOCKET_PATH="/var/run/dogstatsd.sock",
+                DOGSTATSD_SOCKET_PATH="unixgram:///var/run/dogstatsd.sock",
             ),
             patch("snuba.state.sentry_options.get_option", side_effect=_get_option(flag)),
         ):
@@ -128,7 +128,7 @@ def test_create_metrics_socket_only_uses_uds(dogstatsd: MagicMock) -> None:
             backend.increment("snuba.test.metric")
 
         dogstatsd.assert_called_once_with(
-            socket_path="/var/run/dogstatsd.sock",
+            socket_path="unixgram:///var/run/dogstatsd.sock",
             namespace="snuba.test",
             constant_tags=None,
         )

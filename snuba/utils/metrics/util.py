@@ -26,6 +26,9 @@ def create_metrics(
     alone over UDP -- so the flag is authoritative only when both are configured (a socket
     never overrides an available UDP target while the flag is off), keeping host/port as the
     UDP rollback target. Return a DummyMetricsBackend when neither transport is configured.
+    ``DOGSTATSD_SOCKET_PATH`` is a full address including the transport scheme, e.g.
+    ``unixgram:///run/dogstatsd.sock``; it is passed to the datadog client verbatim (the
+    client strips the scheme), the same value the Rust exporter consumes.
     Prefixes must start with `snuba.<category>`, for example: `snuba.processor`.
     """
     host: str | None = settings.DOGSTATSD_HOST
@@ -90,6 +93,12 @@ def create_metrics(
                     )
 
         if resolved_use_uds:
+            # socket_path is passed to the datadog client verbatim. It is expected to be a
+            # full address including the transport scheme (e.g.
+            # "unixgram:///run/dogstatsd.sock"); the datadog client strips the scheme and
+            # selects the socket kind itself. The same env var (SNUBA_DOGSTATSD_SOCKET_PATH)
+            # is passed verbatim to the Rust exporter, which parses the scheme too, so no
+            # scheme is hardcoded on either side.
             return DogStatsd(
                 socket_path=socket_path,
                 namespace=prefix,
