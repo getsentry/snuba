@@ -1,6 +1,6 @@
 from collections import defaultdict
 from collections.abc import Mapping, MutableMapping, Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 from functools import partial
 from typing import NamedTuple
 
@@ -555,17 +555,16 @@ class Runner:
         self.__status = {}
         next_version = self._get_next_version(migration_key)
 
-        statement = f"INSERT INTO {self.__table_name} FORMAT JSONEachRow"
         data = [
             {
                 "group": migration_key.group.value,
                 "migration_id": migration_key.migration_id,
-                "timestamp": datetime.now(),
+                "timestamp": datetime.now(UTC),
                 "status": status.value,
                 "version": next_version,
             }
         ]
-        self.__connection.execute(statement, data)
+        self.__connection.insert(self.__table_name, data)
 
     def _get_next_version(self, migration_key: MigrationKey) -> int:
         result = self.__connection.execute(

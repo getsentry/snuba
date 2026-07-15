@@ -83,6 +83,92 @@ def test_execute_passes_query_id_and_settings() -> None:
     assert kwargs["settings"]["max_threads"] == 4
 
 
+def test_insert_dict_rows_use_client_insert() -> None:
+    client = mock.Mock()
+
+    pool = _make_pool(client)
+    ts = datetime(2026, 7, 8, 21, 14, 31)
+    rows = [
+        {
+            "group": "events",
+            "migration_id": "0025_add_segment_names_column",
+            "timestamp": ts,
+            "status": "in_progress",
+            "version": 3,
+        }
+    ]
+
+    pool.insert("migrations_local", rows)
+
+    client.query.assert_not_called()
+    args, kwargs = client.insert.call_args
+    assert args[0] == "migrations_local"
+    assert kwargs["column_names"] == [
+        "group",
+        "migration_id",
+        "timestamp",
+        "status",
+        "version",
+    ]
+    assert args[1] == [["events", "0025_add_segment_names_column", ts, "in_progress", 3]]
+
+
+def test_insert_multiple_rows_build_a_matrix() -> None:
+    client = mock.Mock()
+
+    pool = _make_pool(client)
+    rows = [
+        {"g": 1, "ts": datetime(2023, 1, 2, 3, 4, 5), "v": 10},
+        {"g": 2, "ts": datetime(2023, 1, 3, 0, 0, 0), "v": 30},
+    ]
+
+    pool.insert("metrics", rows)
+
+    _, kwargs = client.insert.call_args
+    assert kwargs["column_names"] == ["g", "ts", "v"]
+    assert client.insert.call_args[0][1] == [
+        [1, datetime(2023, 1, 2, 3, 4, 5), 10],
+        [2, datetime(2023, 1, 3, 0, 0, 0), 30],
+    ]
+
+
+def test_insert_empty_rows_short_circuits() -> None:
+    client = mock.Mock()
+
+    pool = _make_pool(client)
+    pool.insert("t", [])
+
+    client.insert.assert_not_called()
+    client.query.assert_not_called()
+
+
+def test_insert_forwards_query_id_and_settings() -> None:
+    client = mock.Mock()
+
+    pool = _make_pool(client)
+    pool.insert(
+        "t",
+        [{"a": 1}],
+        query_id="insert-id",
+        settings={"async_insert": 1},
+    )
+
+    _, kwargs = client.insert.call_args
+    assert kwargs["settings"]["query_id"] == "insert-id"
+    assert kwargs["settings"]["async_insert"] == 1
+
+
+def test_execute_does_not_handle_insert_rows() -> None:
+    client = mock.Mock()
+    client.query.return_value = FakeQueryResult(result_set=[[1]])
+
+    pool = _make_pool(client)
+    pool.execute("SELECT %(x)s", {"x": 1})
+
+    client.insert.assert_not_called()
+    client.query.assert_called_once()
+
+
 def test_too_many_simultaneous_queries_not_retried() -> None:
     # We delegate all retries to clickhouse-connect, which does not retry the
     # TOO_MANY_SIMULTANEOUS_QUERIES error. It should be surfaced directly,

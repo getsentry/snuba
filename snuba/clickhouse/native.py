@@ -167,6 +167,23 @@ class ClickhousePool(ABC):
             capture_trace=capture_trace,
         )
 
+    def insert(
+        self,
+        table: str,
+        data: Sequence[Mapping[str, Any]],
+        settings: Mapping[str, Any] | None = None,
+        query_id: str | None = None,
+    ) -> None:
+        rows = list(data)
+        if not rows:
+            return
+        self.execute(
+            f"INSERT INTO {table} FORMAT JSONEachRow",
+            rows,
+            settings=settings,
+            query_id=query_id,
+        )
+
     @abstractmethod
     def close(self) -> None:
         raise NotImplementedError
