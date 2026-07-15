@@ -83,14 +83,22 @@ def test_execute_passes_query_id_and_settings() -> None:
     assert kwargs["settings"]["max_threads"] == 4
 
 
-def test_insert_dict_rows_routed_to_client_insert() -> None:
+def _jsoneachrow(kwargs: Any, args: Any) -> list[dict[str, Any]]:
+    # raw_insert may receive insert_block positionally or by keyword; normalize
+    # to the parsed JSONEachRow rows either way.
+    block = kwargs.get("insert_block", args[1] if len(args) > 1 else None)
+    text = block.decode("utf-8") if isinstance(block, bytes) else block
+    return [json.loads(line) for line in text.splitlines()]
+
+
+def test_insert_dict_rows_sent_as_jsoneachrow() -> None:
     # The migration status writers pass an "INSERT INTO <table> FORMAT
-    # JSONEachRow" query with a list of dict rows (one of which is a datetime).
-    # This must be routed to client.insert() -- which serializes native Python
-    # types itself -- rather than client.query(), whose parameter binding would
-    # try to JSON-encode the datetime and fail.
+    # JSONEachRow" query with a list of dict rows, one of which is a datetime.
+    # This must be sent via raw_insert as a JSONEachRow body with the datetime
+    # encoded as a string, rather than through client.query(), whose parameter
+    # binding would try to JSON-encode the datetime and fail.
     client = mock.Mock()
-    client.insert.return_value = mock.Mock(written_rows=1, written_bytes=42)
+    client.raw_insert.return_value = mock.Mock(written_rows=1, written_bytes=42)
 
     pool = _make_pool(client)
     ts = datetime(2026, 7, 8, 21, 14, 31)
@@ -107,22 +115,42 @@ def test_insert_dict_rows_routed_to_client_insert() -> None:
     result = pool.execute("INSERT INTO migrations_local FORMAT JSONEachRow", rows)
 
     client.query.assert_not_called()
-    args, kwargs = client.insert.call_args
+    args, kwargs = client.raw_insert.call_args
     assert args[0] == "migrations_local"
-    # Rows are built as a positional matrix aligned to the dict key order.
-    assert kwargs["column_names"] == ["group", "migration_id", "timestamp", "status", "version"]
-    assert args[1] == [["events", "0025_add_segment_names_column", ts, "in_progress", 3]]
+    assert kwargs["fmt"] == "JSONEachRow"
+    # The datetime is encoded to ClickHouse's second-precision DateTime string.
+    assert _jsoneachrow(kwargs, args) == [
+        {
+            "group": "events",
+            "migration_id": "0025_add_segment_names_column",
+            "timestamp": "2026-07-08 21:14:31",
+            "status": "in_progress",
+            "version": 3,
+        }
+    ]
     # The written row count is surfaced (wrapped), mirroring the native driver.
     assert result.results == [1]
     assert result.profile is not None
     assert result.profile["rows"] == 1
 
 
-def test_insert_positional_rows_use_columns_from_sql() -> None:
-    # Positional rows (list of lists) take their column names from the SQL
-    # column list, e.g. "INSERT INTO t (g, ts, v) VALUES".
+def test_insert_encodes_date_without_time() -> None:
+    # A bare date encodes as YYYY-MM-DD (no time component).
     client = mock.Mock()
-    client.insert.return_value = mock.Mock(written_rows=2, written_bytes=0)
+    client.raw_insert.return_value = mock.Mock(written_rows=1, written_bytes=0)
+
+    pool = _make_pool(client)
+    pool.execute("INSERT INTO t FORMAT JSONEachRow", [{"d": date(2026, 7, 8)}])
+
+    args, kwargs = client.raw_insert.call_args
+    assert _jsoneachrow(kwargs, args) == [{"d": "2026-07-08"}]
+
+
+def test_insert_positional_rows_use_columns_from_sql() -> None:
+    # Positional rows (list of lists) take their field names from the SQL column
+    # list, e.g. "INSERT INTO t (g, ts, v) VALUES", and are zipped into objects.
+    client = mock.Mock()
+    client.raw_insert.return_value = mock.Mock(written_rows=2, written_bytes=0)
 
     pool = _make_pool(client)
     rows = [
@@ -133,13 +161,23 @@ def test_insert_positional_rows_use_columns_from_sql() -> None:
     pool.execute("INSERT INTO metrics (g, ts, v) VALUES", rows)
 
     client.query.assert_not_called()
-    args, kwargs = client.insert.call_args
+    args, kwargs = client.raw_insert.call_args
     assert args[0] == "metrics"
-    assert kwargs["column_names"] == ["g", "ts", "v"]
-    assert args[1] == [
-        [1, datetime(2023, 1, 2, 3, 4, 5), 10],
-        [2, datetime(2023, 1, 3, 0, 0, 0), 30],
+    assert _jsoneachrow(kwargs, args) == [
+        {"g": 1, "ts": "2023-01-02 03:04:05", "v": 10},
+        {"g": 2, "ts": "2023-01-03 00:00:00", "v": 30},
     ]
+
+
+def test_insert_positional_rows_without_columns_raise() -> None:
+    # Positional rows without a column list can't be turned into JSONEachRow
+    # objects; surface a clear error rather than sending a malformed body.
+    client = mock.Mock()
+
+    pool = _make_pool(client)
+    with pytest.raises(ClickhouseError):
+        pool.execute("INSERT INTO t FORMAT JSONEachRow", [[1, 2, 3]])
+    client.raw_insert.assert_not_called()
 
 
 def test_insert_empty_rows_short_circuits() -> None:
@@ -150,7 +188,7 @@ def test_insert_empty_rows_short_circuits() -> None:
     pool = _make_pool(client)
     result = pool.execute("INSERT INTO t FORMAT JSONEachRow", [])
 
-    client.insert.assert_not_called()
+    client.raw_insert.assert_not_called()
     client.query.assert_not_called()
     assert result.results == []
     assert result.profile is not None
@@ -159,7 +197,7 @@ def test_insert_empty_rows_short_circuits() -> None:
 
 def test_insert_forwards_query_id_and_settings() -> None:
     client = mock.Mock()
-    client.insert.return_value = mock.Mock(written_rows=1, written_bytes=0)
+    client.raw_insert.return_value = mock.Mock(written_rows=1, written_bytes=0)
 
     pool = _make_pool(client)
     pool.execute(
@@ -169,7 +207,7 @@ def test_insert_forwards_query_id_and_settings() -> None:
         settings={"async_insert": 1},
     )
 
-    _, kwargs = client.insert.call_args
+    _, kwargs = client.raw_insert.call_args
     assert kwargs["settings"]["query_id"] == "insert-id"
     assert kwargs["settings"]["async_insert"] == 1
 
@@ -183,7 +221,7 @@ def test_select_with_mapping_params_still_uses_query() -> None:
     pool = _make_pool(client)
     pool.execute("SELECT %(x)s", {"x": 1})
 
-    client.insert.assert_not_called()
+    client.raw_insert.assert_not_called()
     client.query.assert_called_once()
 
 

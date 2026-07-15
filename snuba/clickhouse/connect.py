@@ -5,9 +5,9 @@ import logging
 import re
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import date, datetime
 from threading import Lock
-from typing import Any
+from typing import Any, TypeGuard
 
 import clickhouse_connect
 import sentry_sdk
@@ -52,17 +52,17 @@ clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
 # statement, capturing the target table and (when present) the explicit column
 # list. The native driver treats an INSERT whose ``params`` is a sequence of
 # rows as a data insert; clickhouse-connect's ``query()`` has no such notion, so
-# the connect pool detects this shape and routes it to ``client.insert()``
-# instead (see ``_execute_insert``). Whatever trails the column list (``VALUES``,
-# ``FORMAT JSONEachRow``, ...) is irrelevant here -- clickhouse-connect builds
-# the wire format itself -- so we only need the table and columns.
+# the connect pool detects this shape and sends the rows as a JSONEachRow insert
+# body instead (see ``_execute_insert``). Whatever trails the column list
+# (``VALUES``, ``FORMAT JSONEachRow``, ...) is rebuilt as ``FORMAT JSONEachRow``,
+# so we only need the table and (for positional rows) the column list.
 _INSERT_RE = re.compile(
     r"^\s*INSERT\s+INTO\s+(?P<table>[^\s(]+)\s*(?:\((?P<columns>[^)]*)\))?",
     re.IGNORECASE,
 )
 
 
-def _is_row_data(params: Params) -> bool:
+def _is_row_data(params: Params) -> TypeGuard[Sequence[Any]]:
     """
     True when ``params`` is a sequence of rows (insert data) rather than a
     mapping of query-substitution parameters. ``str``/``bytes`` are sequences
@@ -70,6 +70,26 @@ def _is_row_data(params: Params) -> bool:
     and is therefore already excluded.
     """
     return isinstance(params, Sequence) and not isinstance(params, (str, bytes, bytearray))
+
+
+def _clickhouse_json_default(value: Any) -> Any:
+    """
+    ``json.dumps`` fallback that renders the Python types ClickHouse's JSONEachRow
+    parser cannot take as bare JSON into the string forms it accepts. Only
+    ``datetime``/``date`` need help here -- they are what the migration status
+    writers put in a row, and the crash they caused ("Object of type datetime is
+    not JSON serializable") is the whole reason this path exists.
+
+    ``datetime`` is formatted to second precision (``YYYY-MM-DD HH:MM:SS``), the
+    only form ClickHouse's default ``date_time_input_format=basic`` accepts for a
+    ``DateTime`` column -- a fractional part would be rejected. ``date`` becomes
+    ``YYYY-MM-DD``. ``datetime`` is checked first because it subclasses ``date``.
+    """
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d %H:%M:%S")
+    if isinstance(value, date):
+        return value.strftime("%Y-%m-%d")
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
 def _coerce_temporal(value: Any, ch_type: str) -> Any:
@@ -443,7 +463,7 @@ class ClickhouseConnectPool(ClickhousePool):
         JSONEachRow`` + list-of-rows pattern). clickhouse-connect's ``query()``
         would treat those rows as substitution parameters and JSON-encode them,
         which fails for native Python values such as ``datetime``. Such calls are
-        routed to ``client.insert()`` instead (see ``_execute_insert``).
+        sent as a JSONEachRow insert body instead (see ``_execute_insert``).
         """
         with self._translate_clickhouse_errors():
             if params is not None and _is_row_data(params) and _INSERT_RE.match(query):
@@ -466,15 +486,20 @@ class ClickhouseConnectPool(ClickhousePool):
         query_id: str | None,
     ) -> ClickhouseResult:
         """
-        Insert a sequence of rows via clickhouse-connect's ``client.insert()``,
-        reproducing the native driver's ``INSERT INTO ... + list-of-rows`` path.
+        Insert a sequence of rows, reproducing the native driver's ``INSERT INTO
+        ... + list-of-rows`` path over HTTP.
 
-        clickhouse-connect introspects the target table's column types and
-        serializes native Python values (``datetime``, ``date``, ints, ...)
-        itself, so -- unlike the ``query()`` parameter-binding path -- it does not
-        try to JSON-encode the values. Rows may be dicts (as the migration status
-        writers pass, mapping column name -> value) or positional sequences (with
-        the column list carried in the SQL, e.g. ``INSERT INTO t (a, b) VALUES``).
+        The rows are serialized to a JSONEachRow body -- the same format the
+        callers already name in their SQL -- and sent via
+        ``client.raw_insert(..., fmt="JSONEachRow")``. Serialization uses
+        :func:`_clickhouse_json_default` so native Python values that plain JSON
+        rejects (notably ``datetime``, which triggered this whole path) are
+        encoded into the string forms ClickHouse's JSONEachRow parser accepts.
+
+        Rows may be dicts (as the migration status writers pass, mapping column
+        name -> value) or positional sequences, in which case the column list is
+        taken from the SQL (e.g. ``INSERT INTO t (a, b) VALUES``) and zipped with
+        each row to form the JSON objects.
         """
         client = self._get_client()
 
@@ -492,20 +517,25 @@ class ClickhouseConnectPool(ClickhousePool):
                 trace_output="",
             )
 
-        column_names: str | list[str]
         if isinstance(row_list[0], Mapping):
-            # dict rows: column order comes from the keys of the first row.
-            column_names = list(row_list[0].keys())
-            matrix: list[list[Any]] = [[row[name] for name in column_names] for row in row_list]
+            dict_rows: list[Mapping[str, Any]] = list(row_list)
         else:
-            # positional rows: take the column list from the SQL if it names one,
-            # otherwise let clickhouse-connect default to every column ("*").
+            # positional rows need the column list from the SQL to become named
+            # JSON objects; without it JSONEachRow has no field names to map to.
             columns_sql = match.group("columns")
-            if columns_sql:
-                column_names = [name.strip().strip("`") for name in columns_sql.split(",")]
-            else:
-                column_names = "*"
-            matrix = [list(row) for row in row_list]
+            if not columns_sql:
+                raise ClickhouseError(
+                    "positional INSERT rows require an explicit column list in the query, "
+                    f"e.g. 'INSERT INTO t (a, b) VALUES'; got: {query}",
+                    code=-1,
+                )
+            column_names = [name.strip().strip("`") for name in columns_sql.split(",")]
+            dict_rows = [dict(zip(column_names, row, strict=True)) for row in row_list]
+
+        body = "\n".join(
+            json.dumps(row, default=_clickhouse_json_default, separators=(",", ":"))
+            for row in dict_rows
+        )
 
         insert_settings = dict(settings) if settings else {}
         if query_id is not None:
@@ -514,10 +544,10 @@ class ClickhouseConnectPool(ClickhousePool):
         with sentry_sdk.start_span(description=query, op="db.clickhouse") as span:
             span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
             span.set_data("query_id", query_id)
-            summary = client.insert(
+            summary = client.raw_insert(
                 table,
-                matrix,
-                column_names=column_names,
+                insert_block=body.encode("utf-8"),
+                fmt="JSONEachRow",
                 settings=insert_settings or None,
             )
 
