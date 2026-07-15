@@ -1504,3 +1504,45 @@ def test_http_exception_passes_through(admin_api: FlaskClient) -> None:
     # The catch-all must not swallow werkzeug HTTPExceptions into a 500.
     response = admin_api.get("/this_route_does_not_exist")
     assert response.status_code == 404
+
+
+@pytest.mark.redis_db
+def test_get_job_types_lists_only_adhoc_allowed(admin_api: FlaskClient) -> None:
+    response = admin_api.get("/job-types")
+    assert response.status_code == 200
+    job_types = json.loads(response.data)
+    assert isinstance(job_types, list)
+    # Read-only / idempotent jobs opt in and are runnable without a manifest.
+    assert "ToyJob" in job_types
+    assert "LogRuntimeConfigs" in job_types
+    # Destructive jobs stay gated behind a manifest entry.
+    assert "DeleteEventsByTagKeyValue" not in job_types
+    assert "ScrubIpFromEAPSpans" not in job_types
+
+
+@pytest.mark.redis_db
+def test_run_job_by_type_is_repeatable(admin_api: FlaskClient) -> None:
+    job_ids = set()
+    for _ in range(2):
+        response = admin_api.post("/job-types/ToyJob/run")
+        assert response.status_code == 200
+        body = json.loads(response.data)
+        assert body["status"] == "finished"
+        assert body["job_id"].startswith("ToyJob_")
+        job_ids.add(body["job_id"])
+    # A fresh job id per run is what makes it repeatable.
+    assert len(job_ids) == 2
+
+
+@pytest.mark.redis_db
+def test_run_job_by_type_rejects_non_adhoc_job(admin_api: FlaskClient) -> None:
+    response = admin_api.post("/job-types/DeleteEventsByTagKeyValue/run")
+    assert response.status_code == 403
+    assert "error" in json.loads(response.data)
+
+
+@pytest.mark.redis_db
+def test_run_job_by_type_unknown_type_returns_403(admin_api: FlaskClient) -> None:
+    response = admin_api.post("/job-types/NotARealJob/run")
+    assert response.status_code == 403
+    assert "error" in json.loads(response.data)
