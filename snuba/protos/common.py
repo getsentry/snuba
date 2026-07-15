@@ -191,6 +191,12 @@ TYPED_ARRAY_MAP_COLUMNS: tuple[str, ...] = (
     "attributes_array_bool",
 )
 
+# Normalized String columns whose unset value ingests as an empty string (not NULL) — e.g.
+# ai_conversation_id when a TraceItem has no conversation_id. Because the column is never NULL,
+# existence must be checked with notEmpty(...) instead of isNotNull(...), which would otherwise
+# match every row (see get_field_existence_expression).
+EMPTY_STRING_DEFAULT_COLUMNS: tuple[str, ...] = ("ai_conversation_id",)
+
 
 def type_array_typed_columns_select_expressions(attr_key: AttributeKey) -> list[FunctionCall]:
     """Native ``arrayElement`` read per typed array map column, for a deprecated untyped
