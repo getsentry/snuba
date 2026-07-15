@@ -415,19 +415,13 @@ fn lz4_compress(input: &[u8]) -> Vec<u8> {
 mod tests {
     use super::*;
     use sentry_options::testing::override_options;
-    use sentry_options::Options;
     use serde_json::json;
     use std::sync::Once;
     use tokio::time::Instant;
 
     static INIT: Once = Once::new();
     fn init_options() {
-        INIT.call_once(|| {
-            Options::builder()
-                .with_schemas(&[("snuba", crate::SNUBA_SCHEMA)])
-                .init()
-                .unwrap()
-        });
+        INIT.call_once(|| crate::init_sentry_options().unwrap());
     }
 
     fn make_test_config() -> ClickhouseConfig {

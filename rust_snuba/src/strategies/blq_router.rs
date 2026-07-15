@@ -241,18 +241,12 @@ mod tests {
     use chrono::DateTime;
     use sentry_arroyo::types::{Partition, Topic};
     use sentry_options::testing::override_options;
-    use sentry_options::Options;
     use serde_json::json;
     use std::sync::Once;
 
     static INIT: Once = Once::new();
     fn init_config() {
-        INIT.call_once(|| {
-            Options::builder()
-                .with_schemas(&[("snuba", crate::SNUBA_SCHEMA)])
-                .init()
-                .unwrap()
-        });
+        INIT.call_once(|| crate::init_sentry_options().unwrap());
     }
 
     struct MockStrategy {
