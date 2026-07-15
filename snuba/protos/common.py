@@ -31,10 +31,16 @@ class NormalizedColumn(NamedTuple):
     types: Sequence[AttributeKey.Type.ValueType]
 
 
+def sentry_column(column_name: str) -> str:
+    return f"sentry.{column_name}"
+
+
 NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, NormalizedColumn]] = {
-    "sentry.organization_id": NormalizedColumn("organization_id", [AttributeKey.Type.TYPE_INT]),
-    "sentry.project_id": NormalizedColumn("project_id", [AttributeKey.Type.TYPE_INT]),
-    "sentry.timestamp": NormalizedColumn(
+    sentry_column("organization_id"): NormalizedColumn(
+        "organization_id", [AttributeKey.Type.TYPE_INT]
+    ),
+    sentry_column("project_id"): NormalizedColumn("project_id", [AttributeKey.Type.TYPE_INT]),
+    sentry_column("timestamp"): NormalizedColumn(
         "timestamp",
         [
             AttributeKey.Type.TYPE_FLOAT,
@@ -44,11 +50,15 @@ NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, NormalizedColumn]] = {
         ],
     ),
     # trace_id gets converted from a uuid to a string in a storage processor
-    "sentry.trace_id": NormalizedColumn("trace_id", [AttributeKey.Type.TYPE_STRING]),
-    "sentry.item_id": NormalizedColumn("item_id", [AttributeKey.Type.TYPE_STRING]),
-    "sentry.sampling_weight": NormalizedColumn("sampling_weight", [AttributeKey.Type.TYPE_DOUBLE]),
-    "sentry.sampling_factor": NormalizedColumn("sampling_factor", [AttributeKey.Type.TYPE_DOUBLE]),
-    "sentry.session_id": NormalizedColumn("session_id", [AttributeKey.Type.TYPE_STRING]),
+    sentry_column("trace_id"): NormalizedColumn("trace_id", [AttributeKey.Type.TYPE_STRING]),
+    sentry_column("item_id"): NormalizedColumn("item_id", [AttributeKey.Type.TYPE_STRING]),
+    sentry_column("sampling_weight"): NormalizedColumn(
+        "sampling_weight", [AttributeKey.Type.TYPE_DOUBLE]
+    ),
+    sentry_column("sampling_factor"): NormalizedColumn(
+        "sampling_factor", [AttributeKey.Type.TYPE_DOUBLE]
+    ),
+    sentry_column("session_id"): NormalizedColumn("session_id", [AttributeKey.Type.TYPE_STRING]),
     "gen_ai.conversation.id": NormalizedColumn(
         "ai_conversation_id", [AttributeKey.Type.TYPE_STRING]
     ),
