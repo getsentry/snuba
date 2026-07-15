@@ -23,6 +23,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
+    ExistsFilter,
     TraceItemFilter,
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, TraceItem
@@ -83,6 +84,11 @@ class TestIndexedColumnSkipIndex:
         messages = [
             _item_message(self.base_time, SESSION_A, CONV_A, "red"),
             _item_message(self.base_time + timedelta(minutes=1), SESSION_B, CONV_B, "blue"),
+            # "green" sets neither: an unset conversation_id ingests as an empty
+            # ai_conversation_id, so exists on gen_ai.conversation.id must exclude it.
+            # (session_id is intentionally not exercised for exists: an unset session_id
+            # ingests as a random non-nil UUID, so absence is indistinguishable there.)
+            _item_message(self.base_time + timedelta(minutes=2), "", "", "green"),
         ]
         write_raw_unprocessed_events(get_writable_storage(StorageKey("eap_items")), messages)
 
@@ -178,3 +184,17 @@ class TestIndexedColumnSkipIndex:
         )
         assert colors == expected_colors
         assert self._explain_uses_index(sql, expected_index), sql
+
+    def test_exists_on_conversation_id_excludes_rows_without_a_value(self) -> None:
+        # gen_ai.conversation.id is optional: the "green" span never set it, so its
+        # ai_conversation_id is empty. exists() must treat empty as absent and exclude
+        # it, rather than matching every row (a non-nullable column is never NULL, so a
+        # plain isNotNull check would always be true).
+        _, colors = self._execute(
+            TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="gen_ai.conversation.id")
+                )
+            )
+        )
+        assert colors == ["blue", "red"]
