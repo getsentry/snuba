@@ -35,9 +35,7 @@ class LogRuntimeConfigs(Job):
         try:
             configs = policy.get_current_configs()
         except Exception as e:
-            logger.error(
-                f"[{storage_key}] failed to read configs for policy {policy_name}: {e}"
-            )
+            logger.error(f"[{storage_key}] failed to read configs for policy {policy_name}: {e}")
             return None
 
         logger.info(
@@ -69,13 +67,10 @@ class LogRuntimeConfigs(Job):
             try:
                 storage = get_storage(storage_key)
                 policies = (
-                    storage.get_allocation_policies()
-                    + storage.get_delete_allocation_policies()
+                    storage.get_allocation_policies() + storage.get_delete_allocation_policies()
                 )
             except Exception as e:
-                logger.error(
-                    f"[{storage_key.value}] failed to read allocation policies: {e}"
-                )
+                logger.error(f"[{storage_key.value}] failed to read allocation policies: {e}")
                 continue
 
             for policy in policies:
@@ -85,9 +80,7 @@ class LogRuntimeConfigs(Job):
 
         self._log_cbrs_summary(logger, cbrs_records)
 
-    def _log_cbrs_summary(
-        self, logger: JobLogger, cbrs_records: list[Mapping[str, Any]]
-    ) -> None:
+    def _log_cbrs_summary(self, logger: JobLogger, cbrs_records: list[Mapping[str, Any]]) -> None:
         logger.info(f"========== CBRS ({CBRS_POLICY_CLASS_NAME}) summary ==========")
         if not cbrs_records:
             logger.info(f"no {CBRS_POLICY_CLASS_NAME} policies found")
