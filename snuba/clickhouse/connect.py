@@ -4,7 +4,7 @@ import json
 import logging
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import datetime
 from threading import Lock
 from typing import Any
 
@@ -46,14 +46,6 @@ DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
 # forwards whatever settings it is given to the server, so to preserve parity
 # we tell clickhouse-connect to drop unrecognized settings instead of failing.
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
-
-
-def _clickhouse_json_default(value: Any) -> Any:
-    if isinstance(value, datetime):
-        return value.strftime("%Y-%m-%d %H:%M:%S")
-    if isinstance(value, date):
-        return value.strftime("%Y-%m-%d")
-    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
 def _coerce_temporal(value: Any, ch_type: str) -> Any:
@@ -444,9 +436,8 @@ class ClickhouseConnectPool(ClickhousePool):
         if not rows:
             return
 
-        body = "\n".join(
-            json.dumps(row, default=_clickhouse_json_default, separators=(",", ":")) for row in rows
-        )
+        column_names = list(rows[0].keys())
+        matrix = [[row[name] for name in column_names] for row in rows]
 
         insert_settings = dict(settings) if settings else {}
         if query_id is not None:
@@ -459,10 +450,10 @@ class ClickhouseConnectPool(ClickhousePool):
             ) as span:
                 span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
                 span.set_data("query_id", query_id)
-                client.raw_insert(
+                client.insert(
                     table,
-                    insert_block=body.encode("utf-8"),
-                    fmt="JSONEachRow",
+                    matrix,
+                    column_names=column_names,
                     settings=insert_settings or None,
                 )
 

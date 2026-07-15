@@ -83,13 +83,7 @@ def test_execute_passes_query_id_and_settings() -> None:
     assert kwargs["settings"]["max_threads"] == 4
 
 
-def _jsoneachrow(kwargs: Any, args: Any) -> list[dict[str, Any]]:
-    block = kwargs.get("insert_block", args[1] if len(args) > 1 else None)
-    text = block.decode("utf-8") if isinstance(block, bytes) else block
-    return [json.loads(line) for line in text.splitlines()]
-
-
-def test_insert_dict_rows_sent_as_jsoneachrow() -> None:
+def test_insert_dict_rows_use_client_insert() -> None:
     client = mock.Mock()
 
     pool = _make_pool(client)
@@ -107,28 +101,35 @@ def test_insert_dict_rows_sent_as_jsoneachrow() -> None:
     pool.insert("migrations_local", rows)
 
     client.query.assert_not_called()
-    args, kwargs = client.raw_insert.call_args
+    args, kwargs = client.insert.call_args
     assert args[0] == "migrations_local"
-    assert kwargs["fmt"] == "JSONEachRow"
-    assert _jsoneachrow(kwargs, args) == [
-        {
-            "group": "events",
-            "migration_id": "0025_add_segment_names_column",
-            "timestamp": "2026-07-08 21:14:31",
-            "status": "in_progress",
-            "version": 3,
-        }
+    assert kwargs["column_names"] == [
+        "group",
+        "migration_id",
+        "timestamp",
+        "status",
+        "version",
     ]
+    assert args[1] == [["events", "0025_add_segment_names_column", ts, "in_progress", 3]]
 
 
-def test_insert_encodes_date_without_time() -> None:
+def test_insert_multiple_rows_build_a_matrix() -> None:
     client = mock.Mock()
 
     pool = _make_pool(client)
-    pool.insert("t", [{"d": date(2026, 7, 8)}])
+    rows = [
+        {"g": 1, "ts": datetime(2023, 1, 2, 3, 4, 5), "v": 10},
+        {"g": 2, "ts": datetime(2023, 1, 3, 0, 0, 0), "v": 30},
+    ]
 
-    args, kwargs = client.raw_insert.call_args
-    assert _jsoneachrow(kwargs, args) == [{"d": "2026-07-08"}]
+    pool.insert("metrics", rows)
+
+    _, kwargs = client.insert.call_args
+    assert kwargs["column_names"] == ["g", "ts", "v"]
+    assert client.insert.call_args[0][1] == [
+        [1, datetime(2023, 1, 2, 3, 4, 5), 10],
+        [2, datetime(2023, 1, 3, 0, 0, 0), 30],
+    ]
 
 
 def test_insert_empty_rows_short_circuits() -> None:
@@ -137,7 +138,7 @@ def test_insert_empty_rows_short_circuits() -> None:
     pool = _make_pool(client)
     pool.insert("t", [])
 
-    client.raw_insert.assert_not_called()
+    client.insert.assert_not_called()
     client.query.assert_not_called()
 
 
@@ -152,7 +153,7 @@ def test_insert_forwards_query_id_and_settings() -> None:
         settings={"async_insert": 1},
     )
 
-    _, kwargs = client.raw_insert.call_args
+    _, kwargs = client.insert.call_args
     assert kwargs["settings"]["query_id"] == "insert-id"
     assert kwargs["settings"]["async_insert"] == 1
 
@@ -164,7 +165,7 @@ def test_execute_does_not_handle_insert_rows() -> None:
     pool = _make_pool(client)
     pool.execute("SELECT %(x)s", {"x": 1})
 
-    client.raw_insert.assert_not_called()
+    client.insert.assert_not_called()
     client.query.assert_called_once()
 
 
