@@ -40,9 +40,14 @@ class FuzzyMatchException:
 
 
 DONT_CAPTURE_ERRORS = (
-    # if you need to track this error, see datadog metric snuba.read_through_cache.redis_cache_set_error
+    # These errors are not actionable: they reflect transient redis/infra conditions
+    # rather than bugs in Snuba, so we don't send them to Sentry. They are still
+    # tracked via the datadog metrics snuba.read_through_cache.redis_cache_get_error
+    # and snuba.read_through_cache.redis_cache_set_error.
     FuzzyMatchException(ResponseError, "OOM command not allowed under OOM prevention."),
     FuzzyMatchException(RedisTimeoutError),
+    # Redis connection errors, e.g. "Connection reset by peer" (SNUBA-BQ6, SNUBA-B53).
+    FuzzyMatchException(ConnectionError),
 )
 
 
