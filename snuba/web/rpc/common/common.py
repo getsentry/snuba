@@ -18,7 +18,6 @@ from snuba.clickhouse import DATETIME_FORMAT
 from snuba.protos.common import (
     ARRAY_TYPES,
     ATTRIBUTES_TO_COALESCE,
-    COLUMN_PREFIX,
     NORMALIZED_COLUMNS_EAP_ITEMS,
     PROTO_TYPE_TO_ATTRIBUTE_COLUMN,
     PROTO_TYPE_TO_CLICKHOUSE_TYPE,
@@ -996,7 +995,7 @@ def trace_item_filters_to_expression(
         # index- and partition-prunable. We reuse timestamp_seconds_to_datetime_literal
         # so a bound equal to the mandatory range is byte-identical to it and gets
         # collapsed by dedupe_timestamp_conditions.
-        if k.name == f"{COLUMN_PREFIX}timestamp" and value_type in (
+        if k.name == "sentry.timestamp" and value_type in (
             "val_int",
             "val_float",
             "val_double",
