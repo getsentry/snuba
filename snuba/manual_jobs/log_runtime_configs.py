@@ -1,61 +1,104 @@
+import base64
 import json
 from typing import Any
 
-from snuba import state
-from snuba.configs.configuration import CONFIGURABLE_COMPONENT_OVERRIDES_KEY
 from snuba.manual_jobs import Job, JobLogger
-from snuba.query.allocation_policies import CAPMAN_HASH
-from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import CBRS_HASH
+from snuba.redis import RedisClientKey, RedisClientType, get_redis_client
 
-CBRS_POLICY_CLASS_NAME = "BytesScannedRejectingPolicy"
+# Ephemeral / high-churn stores we deliberately skip: the query cache and the
+# rate-limiter counters. Everything else we store in Redis is dumped.
+_EXCLUDED_CLIENTS = {RedisClientKey.CACHE, RedisClientKey.RATE_LIMITER}
 
-PAYLOAD_START_MARKER = "===== BEGIN SENTRY-OPTIONS PAYLOAD ====="
-PAYLOAD_END_MARKER = "===== END SENTRY-OPTIONS PAYLOAD ====="
+PAYLOAD_START_MARKER = "===== BEGIN REDIS DUMP ====="
+PAYLOAD_END_MARKER = "===== END REDIS DUMP ====="
+
+
+def _decode_key(value: Any) -> str:
+    """Redis keys / hash field names must be JSON-object keys, so always
+    produce a string (base64-tagged when the bytes are not valid utf-8)."""
+    if isinstance(value, bytes):
+        try:
+            return value.decode("utf-8")
+        except UnicodeDecodeError:
+            return "__base64__:" + base64.b64encode(value).decode("ascii")
+    return str(value)
+
+
+def _decode_value(value: Any) -> Any:
+    if isinstance(value, bytes):
+        try:
+            return value.decode("utf-8")
+        except UnicodeDecodeError:
+            return {"__base64__": base64.b64encode(value).decode("ascii")}
+    return value
+
+
+def _read_value(client: RedisClientType, key: Any) -> Any:
+    key_type = _decode_value(client.type(key))
+    if key_type == "string":
+        return _decode_value(client.get(key))
+    if key_type == "hash":
+        return {_decode_key(k): _decode_value(v) for k, v in client.hgetall(key).items()}
+    if key_type == "list":
+        return [_decode_value(v) for v in client.lrange(key, 0, -1)]
+    if key_type == "set":
+        return sorted((_decode_value(v) for v in client.smembers(key)), key=repr)
+    if key_type == "zset":
+        return [
+            [_decode_value(member), score]
+            for member, score in client.zrange(key, 0, -1, withscores=True)
+        ]
+    return f"<unsupported redis type: {key_type}>"
+
+
+def _dump_client(client: RedisClientType) -> dict[str, Any]:
+    dump: dict[str, Any] = {}
+    for raw_key in client.scan_iter(count=1000):
+        dump[_decode_key(raw_key)] = _read_value(client, raw_key)
+    return dict(sorted(dump.items()))
 
 
 class LogRuntimeConfigs(Job):
-    """Dumps all runtime configs (every allocation policy and CBRS values
-    included) as a single JSON payload that can be pasted into an LLM to
-    generate the equivalent sentry-options config.
+    """Dumps every value we store in Redis (all runtime configs, allocation
+    policy / CBRS overrides, and other operational state) as a single JSON
+    payload that can be pasted into an LLM to help migrate config to
+    sentry-options (see getsentry/snuba#8168).
 
-    This exists to help migrate allocation-policy (and storage-routing-strategy)
-    config off the legacy Redis runtime config and onto the
-    ``configurable_component_overrides`` sentry-option (see
-    getsentry/snuba#8168). The ``configurable_component_overrides`` section
-    holds the values currently set in Redis, keyed exactly like that
-    sentry-option (``{resource}.{ClassName}.{config}[.{param}:{value},...]``),
-    so the output is a ready-made migration payload.
+    The query cache and rate-limiter stores are skipped -- they are ephemeral
+    and not worth dumping. Everything else is dumped grouped by Redis client,
+    with each key read according to its Redis type. The allocation-policy /
+    CBRS overrides live in the ``config`` client under the ``capman`` and
+    ``cbrs`` hashes, keyed exactly like the ``configurable_component_overrides``
+    sentry-option.
 
     Run it repeatably straight from the CLI (no job manifest entry, no
     job-status guard) with ``snuba jobs dump_runtime_configs``.
     """
 
-    def _collect_runtime_configs(self) -> dict[str, Any]:
-        return dict(sorted(state.get_all_configs().items()))
+    allow_adhoc_run = True
 
-    def _collect_component_overrides(self) -> dict[str, Any]:
-        # ConfigurableComponent configs live in the Redis hashes named by each
-        # component's `_get_hash()`: `capman` for every allocation policy
-        # (including the EAP CBRS policy attached only to a routing strategy)
-        # and `cbrs` for the storage-routing strategies. Reading both gives the
-        # full set of overrides that feeds the combined
-        # `configurable_component_overrides` sentry-option.
-        overrides: dict[str, Any] = {}
-        for hash_name in (CAPMAN_HASH, CBRS_HASH):
-            overrides.update(state.get_all_configs(config_key=hash_name))
-        return dict(sorted(overrides.items()))
+    def _collect_redis_dump(self, logger: JobLogger) -> dict[str, Any]:
+        dumps_by_client_id: dict[int, dict[str, Any]] = {}
+        result: dict[str, Any] = {}
+        for client_key in RedisClientKey:
+            if client_key in _EXCLUDED_CLIENTS:
+                continue
+            try:
+                client = get_redis_client(client_key)
+                # Several logical stores can share one physical client; dump
+                # each physical client only once.
+                client_id = id(client)
+                if client_id not in dumps_by_client_id:
+                    dumps_by_client_id[client_id] = _dump_client(client)
+                result[client_key.value] = dumps_by_client_id[client_id]
+            except Exception as e:
+                logger.error(f"failed to dump redis client {client_key.value}: {e}")
+        return result
 
     def execute(self, logger: JobLogger) -> None:
-        component_overrides = self._collect_component_overrides()
-        payload = {
-            "runtime_configs": self._collect_runtime_configs(),
-            CONFIGURABLE_COMPONENT_OVERRIDES_KEY: component_overrides,
-            "cbrs": {
-                key: value
-                for key, value in component_overrides.items()
-                if CBRS_POLICY_CLASS_NAME in key
-            },
-        }
+        dump = self._collect_redis_dump(logger)
+        for client_name, contents in dump.items():
+            logger.info(f"redis client {client_name}: {len(contents)} key(s)")
         logger.info(PAYLOAD_START_MARKER)
-        logger.info(json.dumps(payload, indent=2, sort_keys=True, default=str))
+        logger.info(json.dumps({"redis": dump}, indent=2, sort_keys=True, default=str))
         logger.info(PAYLOAD_END_MARKER)

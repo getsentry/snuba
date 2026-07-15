@@ -5,25 +5,15 @@ from typing import Any, cast
 import pytest
 
 from snuba import state
-from snuba.configs.configuration import CONFIGURABLE_COMPONENT_OVERRIDES_KEY
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.manual_jobs import JobSpec
 from snuba.manual_jobs.job_logging import get_console_job_logger
-from snuba.manual_jobs.job_status import JobStatus
 from snuba.manual_jobs.log_runtime_configs import (
-    CBRS_POLICY_CLASS_NAME,
     PAYLOAD_END_MARKER,
     PAYLOAD_START_MARKER,
     LogRuntimeConfigs,
 )
-from snuba.manual_jobs.runner import run_job, view_job_logs
 from snuba.query.allocation_policies import AllocationPolicy, PassthroughPolicy
-
-JOB_ID = "log_runtime_configs_test"
-
-
-def _make_job_spec() -> JobSpec:
-    return JobSpec(job_id=JOB_ID, job_type="LogRuntimeConfigs")
 
 
 def _extract_payload(logs: Sequence[str]) -> dict[str, Any]:
@@ -32,6 +22,30 @@ def _extract_payload(logs: Sequence[str]) -> dict[str, Any]:
     body = "\n".join(logs[start + 1 : end])
     body = body[body.index("{") :]
     return cast(dict[str, Any], json.loads(body))
+
+
+def _run_and_get_payload() -> dict[str, Any]:
+    logs: list[str] = []
+
+    class _CapturingLogger:
+        def debug(self, line: str) -> None:
+            logs.append(line)
+
+        def info(self, line: str) -> None:
+            logs.append(line)
+
+        def warning(self, line: str) -> None:
+            logs.append(line)
+
+        def warn(self, line: str) -> None:
+            logs.append(line)
+
+        def error(self, line: str) -> None:
+            logs.append(line)
+
+    job = LogRuntimeConfigs(JobSpec(job_id="log_runtime_configs", job_type="LogRuntimeConfigs"))
+    job.execute(cast(Any, _CapturingLogger()))
+    return _extract_payload(logs)
 
 
 def _find_allocation_policy() -> AllocationPolicy:
@@ -43,33 +57,33 @@ def _find_allocation_policy() -> AllocationPolicy:
 
 
 @pytest.mark.redis_db
-def test_emits_runtime_configs_in_payload() -> None:
+def test_dumps_runtime_configs_from_config_client() -> None:
     state.set_config("a_test_config", 42)
     try:
-        assert run_job(_make_job_spec()) == JobStatus.FINISHED
+        payload = _run_and_get_payload()
     finally:
         state.delete_config("a_test_config")
 
-    payload = _extract_payload(view_job_logs(JOB_ID))
-    assert payload["runtime_configs"]["a_test_config"] == 42
+    # Values are dumped raw (as stored in Redis), grouped by client and key.
+    assert payload["redis"]["config"]["snuba-config"]["a_test_config"] == "42"
 
 
 @pytest.mark.redis_db
-def test_emits_component_overrides_in_payload() -> None:
+def test_dumps_allocation_policy_overrides_from_capman_hash() -> None:
     policy = _find_allocation_policy()
     policy.set_config_value("is_enforced", 0)
     expected_key = policy._build_runtime_config_key("is_enforced", {})
 
-    assert run_job(_make_job_spec()) == JobStatus.FINISHED
+    payload = _run_and_get_payload()
 
-    payload = _extract_payload(view_job_logs(JOB_ID))
-    overrides = payload[CONFIGURABLE_COMPONENT_OVERRIDES_KEY]
-    assert overrides[expected_key] == 0
-    # The cbrs section is a filtered view of the same overrides.
-    assert all(CBRS_POLICY_CLASS_NAME in key for key in payload["cbrs"])
-    assert payload["cbrs"] == {
-        key: value for key, value in overrides.items() if CBRS_POLICY_CLASS_NAME in key
-    }
+    assert payload["redis"]["config"]["capman"][expected_key] == "0"
+
+
+@pytest.mark.redis_db
+def test_excludes_cache_and_rate_limiter() -> None:
+    payload = _run_and_get_payload()
+    assert "cache" not in payload["redis"]
+    assert "rate_limiter" not in payload["redis"]
 
 
 @pytest.mark.redis_db

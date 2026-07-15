@@ -1473,16 +1473,38 @@ def get_job_logs(job_id: str) -> Response:
 @application.route("/job-types", methods=["GET"])
 @check_tool_perms(tools=[AdminTools.MANUAL_JOBS])
 def get_job_types() -> Response:
-    """Every registered job class, runnable without a manifest entry."""
-    return make_response(jsonify(sorted(Job.all_names())), 200)
+    """Registered jobs that may be run ad-hoc without a manifest entry. Only
+    jobs that opt in via ``allow_adhoc_run`` (read-only / idempotent ones) are
+    listed; destructive jobs stay gated behind an explicit manifest entry."""
+    adhoc_job_types = sorted(
+        name for name in Job.all_names() if Job.class_from_name(name).allow_adhoc_run
+    )
+    return make_response(jsonify(adhoc_job_types), 200)
 
 
 @application.route("/job-types/<job_type>/run", methods=["POST"])
 @check_tool_perms(tools=[AdminTools.MANUAL_JOBS])
 def run_job_by_type(job_type: str) -> Response:
-    """Run a job by its type without needing a manifest entry. A fresh job id
-    is generated on every call, so the same job can be run any number of
-    times, each run getting its own status and logs."""
+    """Run an ad-hoc-allowed job by its type without needing a manifest entry.
+    A fresh job id is generated on every call, so the same job can be run any
+    number of times, each run getting its own status and logs."""
+    try:
+        job_class = Job.class_from_name(job_type)
+    except InvalidConfigKeyError:
+        job_class = None
+    if job_class is None or not job_class.allow_adhoc_run:
+        return make_response(
+            jsonify(
+                {
+                    "error": (
+                        f"Job type '{job_type}' cannot be run ad-hoc. "
+                        "Add a manifest entry to run it."
+                    )
+                }
+            ),
+            403,
+        )
+
     try:
         params: dict[Any, Any] = {}
         if request.data:

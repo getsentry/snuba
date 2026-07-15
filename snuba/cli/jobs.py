@@ -67,7 +67,9 @@ def status(*, job_id: str) -> None:
 
 @jobs.command()
 def dump_runtime_configs() -> None:
-    """Dump all runtime configs + allocation-policy / CBRS overrides to stdout.
+    """Dump all Redis values (runtime configs, allocation-policy / CBRS
+    overrides, and other stored state, minus the cache and rate-limiter) to
+    stdout.
 
     Runs the LogRuntimeConfigs job directly, so it needs no job manifest entry
     and can be run as many times as you want (no job-status/lock guard).
