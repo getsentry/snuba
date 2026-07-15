@@ -3,7 +3,6 @@ from typing import Any
 
 from snuba import state
 from snuba.configs.configuration import CONFIGURABLE_COMPONENT_OVERRIDES_KEY
-from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.manual_jobs import Job, JobLogger
 
 CBRS_POLICY_CLASS_NAME = "BytesScannedRejectingPolicy"
@@ -17,47 +16,41 @@ class LogRuntimeConfigs(Job):
     included) as a single JSON payload that can be pasted into an LLM to
     generate the equivalent sentry-options config.
 
-    The ``configurable_component_overrides`` section is keyed exactly like the
-    sentry-options override dict of the same name, so an LLM has everything it
-    needs to produce the new options.
+    This exists to help migrate allocation-policy (and storage-routing-strategy)
+    config off the legacy Redis runtime config and onto the
+    ``configurable_component_overrides`` sentry-option (see
+    getsentry/snuba#8168). The ``configurable_component_overrides`` section
+    holds the values currently set in Redis, keyed exactly like that
+    sentry-option (``{resource}.{ClassName}.{config}[.{param}:{value},...]``),
+    so the output is a ready-made migration payload.
     """
 
     def _collect_runtime_configs(self) -> dict[str, Any]:
         return dict(sorted(state.get_all_configs().items()))
 
-    def _collect_component_overrides(self, logger: JobLogger) -> dict[str, Any]:
-        overrides: dict[str, Any] = {}
-        for storage_key in sorted(
-            get_all_storage_keys(), key=lambda storage_key: storage_key.value
-        ):
-            try:
-                storage = get_storage(storage_key)
-                policies = (
-                    storage.get_allocation_policies() + storage.get_delete_allocation_policies()
-                )
-            except Exception as e:
-                logger.error(f"[{storage_key.value}] failed to read allocation policies: {e}")
-                continue
+    def _collect_component_overrides(self) -> dict[str, Any]:
+        # ConfigurableComponent configs are stored in a per-namespace Redis hash
+        # (the namespace is the base class name). Reading every namespace hash
+        # gives the full set of overrides across allocation policies (including
+        # the ones only attached to storage-routing strategies, e.g. the EAP
+        # CBRS policy) and routing strategies, which is exactly what feeds the
+        # combined `configurable_component_overrides` sentry-option.
+        from snuba.query.allocation_policies import AllocationPolicy
+        from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+            BaseRoutingStrategy,
+        )
 
-            for policy in policies:
-                policy_name = policy.__class__.__name__
-                try:
-                    configs = policy.get_current_configs()
-                except Exception as e:
-                    logger.error(
-                        f"[{storage_key.value}] failed to read configs for "
-                        f"policy {policy_name}: {e}"
-                    )
-                    continue
-                for config in configs:
-                    key = policy._build_runtime_config_key(
-                        config["name"], config.get("params") or {}
-                    )
-                    overrides[key] = config.get("value")
+        namespaces = {
+            AllocationPolicy.component_namespace(),
+            BaseRoutingStrategy.component_namespace(),
+        }
+        overrides: dict[str, Any] = {}
+        for namespace in sorted(namespaces):
+            overrides.update(state.get_all_configs(config_key=namespace))
         return dict(sorted(overrides.items()))
 
     def execute(self, logger: JobLogger) -> None:
-        component_overrides = self._collect_component_overrides(logger)
+        component_overrides = self._collect_component_overrides()
         payload = {
             "runtime_configs": self._collect_runtime_configs(),
             CONFIGURABLE_COMPONENT_OVERRIDES_KEY: component_overrides,
