@@ -31,12 +31,55 @@ from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
-    use_array_map_columns,
 )
 
 # 50 million trace ids * 16 bytes per id = a limit of 1gigabyte memory usage per cross item query
 # most queries do not hit this number this is just an upper bound
 _TRACE_LIMIT = 50_000_000
+
+# ``distributed_product_mode='local'`` pushes the cross-item ``trace_id IN (subquery)``
+# join down to the local storage nodes. Because eap_items is sharded by ``trace_id``,
+# running the join locally on each shard lets ClickHouse use the ``trace_id``
+# bloom-filter index to skip scanning large amounts of data, instead of materializing
+# a temporary table of trace ids on the distributed (query) node. See EAP-377.
+CROSS_ITEM_DISTRIBUTED_PRODUCT_MODE = "local"
+
+
+def use_local_join_for_cross_item_queries() -> bool:
+    """Whether cross-item queries should push the ``trace_id`` join down to the local
+    storage nodes via ``distributed_product_mode='local'`` (see EAP-377).
+
+    The bare-``trace_id`` predicate (see :func:`trace_id_in_subquery_condition`) is always
+    applied — it only makes the bloom-filter index usable. This flag additionally runs the
+    ``IN (subquery)`` join locally on each shard rather than as a distributed join. Gated
+    so it can be rolled out and rolled back without a deploy.
+    """
+    return bool(get_option("use_local_join_for_cross_item_queries", False))
+
+
+def apply_cross_item_outer_query_settings(
+    query_settings: HTTPQuerySettings,
+    has_trace_filters: bool,
+    sampling_tier: Tier,
+) -> None:
+    """Apply the ClickHouse settings for the outer query of a (potentially) cross-item
+    query. Shared by all EAP resolvers so the logic lives in one place.
+
+    For cross-item queries (``has_trace_filters``):
+    - skip sampling on the outer query when ``cross_item_queries_no_sample_outer`` is set —
+      the inner trace-ids query is sampled, the outer one should not be;
+    - when the local-join optimization is enabled, set ``distributed_product_mode='local'``
+      so the ``trace_id`` join runs locally on each shard (see EAP-377).
+
+    For non-cross-item queries, the sampling tier is applied as usual.
+    """
+    cross_item_queries_no_sample_outer = get_option("cross_item_queries_no_sample_outer", True)
+    if not (has_trace_filters and cross_item_queries_no_sample_outer):
+        query_settings.set_sampling_tier(sampling_tier)
+    if has_trace_filters and use_local_join_for_cross_item_queries():
+        query_settings.push_clickhouse_setting(
+            "distributed_product_mode", CROSS_ITEM_DISTRIBUTED_PRODUCT_MODE
+        )
 
 
 def trace_id_in_subquery_condition(trace_ids_sql: str) -> DangerousRawSQL:
@@ -109,7 +152,6 @@ def get_trace_ids_sql_for_cross_item_query(
                     trace_item_filters_to_expression(
                         trace_filter.filter,
                         attribute_key_to_expression,
-                        use_array_map_columns=use_array_map_columns(request_meta),
                     ),
                 )
             )
@@ -120,7 +162,6 @@ def get_trace_ids_sql_for_cross_item_query(
                         trace_filter.filter,
                         attribute_key_to_expression,
                         membership_as_has=True,
-                        use_array_map_columns=use_array_map_columns(request_meta),
                     ),
                 )
             )
