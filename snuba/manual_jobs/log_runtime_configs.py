@@ -3,29 +3,17 @@ from typing import Any
 
 from snuba import state
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
-from snuba.manual_jobs import Job, JobLogger, JobSpec
-from snuba.query.allocation_policies import AllocationPolicy, PassthroughPolicy
+from snuba.manual_jobs import Job, JobLogger
+from snuba.query.allocation_policies import AllocationPolicy
 
 CBRS_POLICY_CLASS_NAME = "BytesScannedRejectingPolicy"
 
 
 class LogRuntimeConfigs(Job):
-    """Logs all runtime configs (allocation policies and CBRS values included)
-    to snapshot current values ahead of the transition to sentry-options.
+    """Logs all runtime configs (every allocation policy and CBRS values
+    included) to snapshot current values ahead of the transition to
+    sentry-options.
     """
-
-    def __init__(self, job_spec: JobSpec) -> None:
-        params = job_spec.params or {}
-        self._include_passthrough = self._as_bool(
-            params.get("include_passthrough", False)
-        )
-        super().__init__(job_spec)
-
-    @staticmethod
-    def _as_bool(value: Any) -> bool:
-        if isinstance(value, str):
-            return value.strip().lower() in ("1", "true", "yes", "y")
-        return bool(value)
 
     def _log_runtime_configs(self, logger: JobLogger) -> None:
         logger.info("========== runtime configs (snuba.state) ==========")
@@ -90,17 +78,7 @@ class LogRuntimeConfigs(Job):
                 )
                 continue
 
-            if not self._include_passthrough and all(
-                isinstance(policy, PassthroughPolicy) for policy in policies
-            ):
-                continue
-
             for policy in policies:
-                if (
-                    isinstance(policy, PassthroughPolicy)
-                    and not self._include_passthrough
-                ):
-                    continue
                 record = self._log_policy(logger, storage_key.value, policy)
                 if record is not None:
                     cbrs_records.append(record)
