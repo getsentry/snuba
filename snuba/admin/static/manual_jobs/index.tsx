@@ -79,6 +79,10 @@ function ViewCustomJobs(props: { api: Client }) {
       })
       .catch((err) => {
         setRunResult("Error: " + err.message);
+        // A failed run still has logs in Redis if it got a job id.
+        if (err.jobId) {
+          setLastRunJobId(err.jobId);
+        }
       });
   }
 

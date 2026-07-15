@@ -1489,10 +1489,16 @@ def run_job_by_type(job_type: str) -> Response:
             body = json.loads(request.data)
             params = body.get("params") or {}
             assert isinstance(params, dict), "`params` must be an object"
-        job_id = f"{job_type}_{uuid.uuid4().hex}"
+    except Exception as e:
+        return make_response(jsonify({"error": str(e)}), 400)
+
+    job_id = f"{job_type}_{uuid.uuid4().hex}"
+    try:
         job_status = run_job(JobSpec(job_id=job_id, job_type=job_type, params=params or None))
     except Exception as e:
-        return make_response(jsonify({"error": str(e)}), 500)
+        # The runner records status/logs under job_id before raising, so hand
+        # it back to let operators inspect the failed run's logs.
+        return make_response(jsonify({"error": str(e), "job_id": job_id}), 500)
 
     return make_response(jsonify({"job_id": job_id, "status": job_status}), 200)
 

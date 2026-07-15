@@ -633,7 +633,9 @@ function Client(): Client {
           return resp.json();
         }
         return resp.json().then((err) => {
-          throw new Error(err?.error || "Could not run job");
+          const error = new Error(err?.error || "Could not run job");
+          (error as any).jobId = err?.job_id;
+          throw error;
         });
       });
     },

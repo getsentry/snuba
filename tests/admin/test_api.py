@@ -1535,4 +1535,7 @@ def test_run_job_by_type_is_repeatable(admin_api: FlaskClient) -> None:
 def test_run_job_by_type_unknown_type_returns_500(admin_api: FlaskClient) -> None:
     response = admin_api.post("/job-types/NotARealJob/run")
     assert response.status_code == 500
-    assert "error" in json.loads(response.data)
+    body = json.loads(response.data)
+    assert "error" in body
+    # The job id is returned on failure so its logs stay reachable.
+    assert body["job_id"].startswith("NotARealJob_")
