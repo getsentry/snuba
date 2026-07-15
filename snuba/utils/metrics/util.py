@@ -1,5 +1,6 @@
 import _strptime  # NOQA fixes _strptime deferred import issue
 import inspect
+import threading
 from functools import wraps
 from typing import Any, TypeVar, cast
 from collections.abc import Callable, Mapping
@@ -53,19 +54,36 @@ def create_metrics(
     constant_tags = [f"{key}:{value}" for key, value in tags.items()] if tags is not None else None
     udp = (host, port)
 
-    def make_client() -> DogStatsd:
-        # The use_dogstatsd_uds sentry-option is read lazily here -- when the first metric
-        # is emitted -- not at create_metrics() time. create_metrics() runs while
-        # snuba.environment is being imported, and importing snuba.state.sentry_options
-        # pulls in the snuba.state package, whose __init__ binds
-        # MetricsWrapper(environment.metrics, ...) at import time, so importing it any
-        # earlier would be a circular import. By first-emit time sentry-options has been
-        # initialized (snuba.environment.setup_sentry -> init_options); if it hasn't,
-        # get_option returns the False default and we stay on UDP.
-        from snuba.state.sentry_options import get_option
+    # Resolve UDS-vs-UDP once for the whole process. DatadogMetricsBackend builds a
+    # DogStatsd client per thread, so the factory below runs on each thread's first
+    # metric emission; caching the decision keeps every thread on the same transport
+    # instead of letting a mid-process option flip put some threads on UDP and others on
+    # UDS. The value is fixed until restart, matching the documented "flip the option,
+    # then restart" contract. Double-checked locking: the lock is only contended on the
+    # first emission per thread until the decision is cached.
+    resolved_use_uds: bool | None = None
+    resolve_lock = threading.Lock()
 
-        use_uds = socket_path is not None and get_option("use_dogstatsd_uds", False)
-        if use_uds:
+    def make_client() -> DogStatsd:
+        nonlocal resolved_use_uds
+        if resolved_use_uds is None:
+            # The use_dogstatsd_uds sentry-option is read lazily here -- on the first
+            # metric emission -- not at create_metrics() time. create_metrics() runs while
+            # snuba.environment is being imported, and importing snuba.state.sentry_options
+            # pulls in the snuba.state package, whose __init__ binds
+            # MetricsWrapper(environment.metrics, ...) at import time, so importing it any
+            # earlier would be a circular import. By first-emit time sentry-options has been
+            # initialized (snuba.environment.setup_sentry -> init_options); if it hasn't,
+            # get_option returns the False default and we stay on UDP.
+            from snuba.state.sentry_options import get_option
+
+            with resolve_lock:
+                if resolved_use_uds is None:
+                    resolved_use_uds = socket_path is not None and bool(
+                        get_option("use_dogstatsd_uds", False)
+                    )
+
+        if resolved_use_uds:
             return DogStatsd(
                 socket_path=socket_path,
                 namespace=prefix,

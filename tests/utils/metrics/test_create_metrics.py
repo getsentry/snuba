@@ -68,6 +68,44 @@ def test_create_metrics_uses_udp_when_flag_disabled(dogstatsd: MagicMock) -> Non
     )
 
 
+@patch("datadog.DogStatsd")
+def test_create_metrics_transport_decision_is_process_wide(dogstatsd: MagicMock) -> None:
+    # DatadogMetricsBackend builds a DogStatsd client per thread, so the client factory
+    # runs on each thread's first emission. The use_dogstatsd_uds decision must be
+    # resolved once per process so a mid-flight flip cannot put one thread on UDP and
+    # another on UDS. Emit once with the flag off (-> UDP), flip it on, then emit from a
+    # fresh thread and assert that thread still builds a UDP client (never a socket one).
+    import threading
+
+    with patch.multiple(
+        "snuba.settings",
+        TESTING=False,
+        DOGSTATSD_HOST="localhost",
+        DOGSTATSD_PORT=8125,
+        DOGSTATSD_SOCKET_PATH="/var/run/dogstatsd.sock",
+    ):
+        with patch("snuba.state.sentry_options.get_option", side_effect=_get_option(False)):
+            backend = create_metrics("snuba.test")
+            backend.increment("snuba.test.metric")  # main thread resolves -> UDP
+
+        with patch("snuba.state.sentry_options.get_option", side_effect=_get_option(True)):
+
+            def emit_from_thread() -> None:
+                backend.increment("snuba.test.metric")
+
+            worker = threading.Thread(target=emit_from_thread)
+            worker.start()
+            worker.join()
+
+    # One client built per thread, and every one uses UDP (host/port), not the socket,
+    # even though the flag flipped to True before the worker thread emitted.
+    assert dogstatsd.call_count == 2
+    for call in dogstatsd.call_args_list:
+        assert "socket_path" not in call.kwargs
+        assert call.kwargs["host"] == "localhost"
+        assert call.kwargs["port"] == 8125
+
+
 def test_create_metrics_socket_only_without_host_port_is_dummy() -> None:
     # UDS is gated by the flag and uses host/port as the UDP transport, so a deployment
     # with only a socket and no host/port has no UDP target -> DummyMetricsBackend, even
