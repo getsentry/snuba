@@ -176,8 +176,6 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 return int(self.get_config_value("project_referrer_scan_limit"))
             return int(override)
         if customer_tenant_key == "organization_id":
-            # (org, referrer) > (org, any) > (any org, referrer) > the global
-            # per-class organization_referrer_scan_limit default.
             scoped_overrides = self.get_config_value("organization_referrer_scan_limit_overrides")
             return int(
                 resolve_scoped_override(

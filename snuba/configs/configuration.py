@@ -17,25 +17,7 @@ logger = logging.getLogger("snuba.configurable_component")
 
 T = TypeVar("T", bound="ConfigurableComponent")
 
-# Single sentry-options dict holding ConfigurableComponent config overrides,
-# keyed by the same fully-qualified runtime-config key these configs have always
-# used (``{resource}.{ClassName}.{config}[.{param}:{value},...]``). Values are
-# stored as numbers and cast to each config's declared numeric ``value_type``
-# (int/float) on read. This is the authoritative, centrally-managed
-# (sentry-options-automator) source.
-#
-# The base ``get_config_value`` below reads this option and then the code
-# default; the legacy Redis runtime config is no longer consulted for any
-# ConfigurableComponent (allocation policies and storage-routing strategies
-# alike), so editing moves to sentry-options-automator rather than snuba-admin.
 CONFIGURABLE_COMPONENT_OVERRIDES_KEY = "configurable_component_overrides"
-
-# Companion option for object-typed (``value_type`` == ``dict``) configs. The
-# sentry-options meta-schema disallows a single option holding both numbers and
-# objects (no ``anyOf``/type-union), so nested-object config values live in their
-# own dict option, keyed by the same fully-qualified config key. Each value is a
-# nested object (subkey -> number), letting one config hold a structured set of
-# values instead of many parameterized flat keys.
 CONFIGURABLE_COMPONENT_OBJECT_OVERRIDES_KEY = "configurable_component_object_overrides"
 
 
@@ -161,14 +143,6 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
 
     """
 
-    # Parameterized config keys are ``{resource}.{ClassName}.{config}`` followed by
-    # one ``|{name}:{value}`` per param (sorted by name). ``|`` separates params and
-    # ``:`` separates a param name from its value. ``|`` is used as the structural
-    # delimiter -- rather than ``.``/``,``/``:`` -- because it does not occur in
-    # resources, class names, config names, or param values (referrers like
-    # "api.foo" contain ``.``), so param components need no escaping. Only the first
-    # ``:`` in a param entry is treated as the separator, so a value may still
-    # contain ``:``.
     _PARAM_SEPARATOR = "|"
     _PARAM_KV_SEPARATOR = ":"
 
@@ -299,7 +273,6 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         params_dict = {}
         if params_string:
             for param_string in params_string.split(self._PARAM_SEPARATOR):
-                # split on the first ':' only, so a value may itself contain ':'
                 param_key, _, param_value = param_string.partition(self._PARAM_KV_SEPARATOR)
                 params_dict[param_key] = param_value
 
@@ -439,8 +412,6 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
             else config_definition.default
         )
         if config_definition.value_type is dict:
-            # Object configs are mutable; return a deep copy so callers can never
-            # mutate the shared code default or the cached sentry-option value.
             return copy.deepcopy(value)
         return config_definition.value_type(value)
 

@@ -3,7 +3,6 @@ from typing import TypeVar
 
 from snuba.query.allocation_policies import QuotaAllowance
 
-# Wildcard key used in a two-level org/referrer scoped override to mean "any".
 SCOPED_OVERRIDE_WILDCARD = "*"
 
 T = TypeVar("T")
