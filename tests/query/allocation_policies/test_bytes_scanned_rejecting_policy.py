@@ -171,9 +171,9 @@ def test_invalid_tenants(
                 "project_id": 12345,
                 "referrer": "some_referrer",
             },
-            ("referrer_all_projects_scan_limit_override", 10, {"referrer": "some_referrer"}),
+            ("project_referrer_scan_limit_overrides", {"*": {"some_referrer": 10}}),
             10,
-            id="project referrer override",
+            id="all-projects referrer override",
         ),
         pytest.param(
             {
@@ -277,6 +277,43 @@ def test_org_override_precedence(policy: BytesScannedRejectingPolicy) -> None:
         }
         allowance = policy.get_quota_allowance(other_org_tenant, QUERY_ID)
         assert allowance.rejection_threshold == 1000
+
+
+@pytest.mark.redis_db
+def test_project_override_precedence(policy: BytesScannedRejectingPolicy) -> None:
+    """(project_id, referrer) > project_id > (all projects, referrer) > default."""
+    tenant_ids: dict[str, str | int] = {
+        "project_id": 12345,
+        "referrer": "some_referrer",
+    }
+    with override_component_configs(
+        *_base_config_overrides(policy),
+        (
+            policy,
+            "project_referrer_scan_limit_overrides",
+            {
+                "12345": {"some_referrer": 100, "*": 500},
+                "*": {"some_referrer": 1000},
+            },
+        ),
+    ):
+        allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+        assert allowance.can_run
+        assert allowance.rejection_threshold == 100
+
+        # a different referrer for the same project falls back to (project, "*")
+        other_referrer: dict[str, str | int] = {
+            "project_id": 12345,
+            "referrer": "other_referrer",
+        }
+        assert policy.get_quota_allowance(other_referrer, QUERY_ID).rejection_threshold == 500
+
+        # a different project falls back to the all-projects referrer override
+        other_project: dict[str, str | int] = {
+            "project_id": 99999,
+            "referrer": "some_referrer",
+        }
+        assert policy.get_quota_allowance(other_project, QUERY_ID).rejection_threshold == 1000
 
 
 @pytest.mark.redis_db
@@ -498,9 +535,8 @@ def test_does_not_throttle_and_then_throttles(
         (policy, "bytes_throttle_divider", 100),
         (
             policy,
-            "referrer_all_projects_scan_limit_override",
-            20000000000,
-            {"referrer": "api.trace-explorer.stats"},
+            "project_referrer_scan_limit_overrides",
+            {"*": {"api.trace-explorer.stats": 20000000000}},
         ),
     ):
         policy.update_quota_balance(
@@ -554,9 +590,8 @@ def test_limit_bytes_read(
         (policy, "max_bytes_to_read_scan_limit_divider", max_bytes_to_read_scan_limit_divider),
         (
             policy,
-            "referrer_all_projects_scan_limit_override",
-            scan_limit,
-            {"referrer": "api.trace-explorer.stats"},
+            "project_referrer_scan_limit_overrides",
+            {"*": {"api.trace-explorer.stats": scan_limit}},
         ),
     ):
         policy.update_quota_balance(

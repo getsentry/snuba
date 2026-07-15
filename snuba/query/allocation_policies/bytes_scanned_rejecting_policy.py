@@ -61,25 +61,22 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
     WINDOW_GRANULARITY_SECONDS = 60
 
     def _additional_config_definitions(self) -> list[Configuration]:
-        # Overrides are checked in order of specificity; the first one set wins.
-        # For organization_id queries:
-        #   (organization_id, referrer) > organization_id > (all orgs, referrer) > default
         return [
             Configuration(
-                "referrer_all_projects_scan_limit_override",
-                f"Specific referrer scan limit in the last {self.WINDOW_SECONDS / 60} mins, APPLIES TO ALL PROJECTS",
-                int,
-                DEFAULT_OVERRIDE_LIMIT,
-                param_types={"referrer": str},
+                "project_referrer_scan_limit_overrides",
+                "Project/referrer scan limit overrides as a nested object "
+                "{project_id (or '*'): {referrer (or '*'): limit}}, resolved most-specific-first: "
+                "(project, referrer) > (project, '*') > ('*', referrer) > the project_referrer_scan_limit "
+                "default, so one config sets a limit for a given project, a given referrer, or both.",
+                dict,
+                {},
             ),
             Configuration(
                 "organization_referrer_scan_limit_overrides",
                 "Org/referrer scan limit overrides as a nested object "
-                "{organization_id (or '*'): {referrer (or '*'): limit}}. Resolved most-specific-first "
-                "by resolve_scoped_override: (org, referrer) > (org, '*') > ('*', referrer) > the "
-                "organization_referrer_scan_limit default, so one config sets a limit for a given org, a "
-                "given referrer, or both. Replaces the organization_referrer_scan_limit_override / "
-                "organization_scan_limit_override / referrer_all_organizations_scan_limit_override configs.",
+                "{organization_id (or '*'): {referrer (or '*'): limit}}, resolved most-specific-first: "
+                "(org, referrer) > (org, '*') > ('*', referrer) > the organization_referrer_scan_limit "
+                "default, so one config sets a limit for a given org, a given referrer, or both.",
                 dict,
                 {},
             ),
@@ -169,12 +166,15 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
         referrer: str | int,
     ) -> int:
         if customer_tenant_key == "project_id":
-            override = self.get_config_value(
-                "referrer_all_projects_scan_limit_override", {"referrer": referrer}
+            scoped_overrides = self.get_config_value("project_referrer_scan_limit_overrides")
+            return int(
+                resolve_scoped_override(
+                    scoped_overrides,
+                    customer_tenant_value,
+                    str(referrer),
+                    int(self.get_config_value("project_referrer_scan_limit")),
+                )
             )
-            if override == DEFAULT_OVERRIDE_LIMIT:
-                return int(self.get_config_value("project_referrer_scan_limit"))
-            return int(override)
         if customer_tenant_key == "organization_id":
             scoped_overrides = self.get_config_value("organization_referrer_scan_limit_overrides")
             return int(
