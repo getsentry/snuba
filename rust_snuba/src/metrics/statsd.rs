@@ -119,12 +119,17 @@ pub fn create_dogstatsd_backend(
 ) -> Option<DogStatsDBackend> {
     let use_uds = use_dogstatsd_uds_enabled();
 
+    // Tag every metric with the transport protocol in use, so metrics can be sliced by
+    // UDS vs UDP during (and after) the socket migration.
+    let mut tags = tags.to_vec();
     match select_transport(env, use_uds) {
         DogStatsDTransport::Uds(socket_path) => {
-            Some(DogStatsDBackend::new_uds(socket_path, prefix, tags))
+            tags.push(("dogstatsd_transport", "uds".to_owned()));
+            Some(DogStatsDBackend::new_uds(socket_path, prefix, &tags))
         }
         DogStatsDTransport::Udp(host, port) => {
-            Some(DogStatsDBackend::new_udp(host, port, prefix, tags))
+            tags.push(("dogstatsd_transport", "udp".to_owned()));
+            Some(DogStatsDBackend::new_udp(host, port, prefix, &tags))
         }
         DogStatsDTransport::Disabled => None,
     }
