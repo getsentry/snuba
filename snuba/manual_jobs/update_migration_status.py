@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
@@ -71,7 +71,7 @@ class UpdateMigrationStatus(Job):
             {
                 "group": self._group,
                 "migration_id": self._migration_id,
-                "timestamp": datetime.now(),
+                "timestamp": datetime.now(UTC),
                 "status": self._new_status,
                 "version": version + 1,
             }

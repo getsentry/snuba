@@ -1,6 +1,6 @@
 from collections import defaultdict
 from collections.abc import Mapping, MutableMapping, Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 from functools import partial
 from typing import NamedTuple
 
@@ -559,7 +559,7 @@ class Runner:
             {
                 "group": migration_key.group.value,
                 "migration_id": migration_key.migration_id,
-                "timestamp": datetime.now(),
+                "timestamp": datetime.now(UTC),
                 "status": status.value,
                 "version": next_version,
             }
