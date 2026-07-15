@@ -38,10 +38,7 @@ impl DogStatsDBackend {
             .set_global_prefix(prefix)
             .with_global_labels(global_labels)
             .send_histograms_as_distributions(false)
-            // Disable the exporter's client telemetry so we don't start emitting new
-            // `datadog.dogstatsd.client.*` metrics that the previous statsdproxy pipeline
-            // never sent. This keeps the set of emitted metrics unchanged by the migration.
-            .with_telemetry(false)
+            .with_telemetry(true)
             .install()
             .expect("failed to install DogStatsD exporter");
 
@@ -122,12 +119,17 @@ pub fn create_dogstatsd_backend(
 ) -> Option<DogStatsDBackend> {
     let use_uds = use_dogstatsd_uds_enabled();
 
+    // Tag every metric with the transport protocol in use, so metrics can be sliced by
+    // UDS vs UDP during (and after) the socket migration.
+    let mut tags = tags.to_vec();
     match select_transport(env, use_uds) {
         DogStatsDTransport::Uds(socket_path) => {
-            Some(DogStatsDBackend::new_uds(socket_path, prefix, tags))
+            tags.push(("dogstatsd_transport", "uds".to_owned()));
+            Some(DogStatsDBackend::new_uds(socket_path, prefix, &tags))
         }
         DogStatsDTransport::Udp(host, port) => {
-            Some(DogStatsDBackend::new_udp(host, port, prefix, tags))
+            tags.push(("dogstatsd_transport", "udp".to_owned()));
+            Some(DogStatsDBackend::new_udp(host, port, prefix, &tags))
         }
         DogStatsDTransport::Disabled => None,
     }
