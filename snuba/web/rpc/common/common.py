@@ -23,6 +23,7 @@ from snuba.protos.common import (
     TYPED_ARRAY_MAP_COLUMNS,
     MalformedAttributeException,
     array_element_column,
+    sentry_column,
     type_array_to_membership_array_expression_from_typed_columns,
     type_array_typed_column_native_array,
 )
@@ -921,7 +922,7 @@ def trace_item_filters_to_expression(
         # index- and partition-prunable. We reuse timestamp_seconds_to_datetime_literal
         # so a bound equal to the mandatory range is byte-identical to it and gets
         # collapsed by dedupe_timestamp_conditions.
-        if k.name == "sentry.timestamp" and value_type in (
+        if k.name == sentry_column("timestamp") and value_type in (
             "val_int",
             "val_float",
             "val_double",
