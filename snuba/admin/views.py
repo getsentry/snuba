@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import sys
+import uuid
 from collections.abc import Mapping, Sequence
 from contextlib import redirect_stdout
 from dataclasses import asdict
@@ -73,6 +74,7 @@ from snuba.consumers.dlq import (
 from snuba.datasets.factory import InvalidDatasetError, get_enabled_dataset_names
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.manual_jobs import Job, JobSpec
 from snuba.manual_jobs.runner import (
     list_job_specs,
     list_job_specs_with_status,
@@ -1466,6 +1468,33 @@ def execute_job(job_id: str) -> Response:
 @check_tool_perms(tools=[AdminTools.MANUAL_JOBS])
 def get_job_logs(job_id: str) -> Response:
     return make_response(jsonify(view_job_logs(job_id)), 200)
+
+
+@application.route("/job-types", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.MANUAL_JOBS])
+def get_job_types() -> Response:
+    """Every registered job class, runnable without a manifest entry."""
+    return make_response(jsonify(sorted(Job.all_names())), 200)
+
+
+@application.route("/job-types/<job_type>/run", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.MANUAL_JOBS])
+def run_job_by_type(job_type: str) -> Response:
+    """Run a job by its type without needing a manifest entry. A fresh job id
+    is generated on every call, so the same job can be run any number of
+    times, each run getting its own status and logs."""
+    try:
+        params: dict[Any, Any] = {}
+        if request.data:
+            body = json.loads(request.data)
+            params = body.get("params") or {}
+            assert isinstance(params, dict), "`params` must be an object"
+        job_id = f"{job_type}_{uuid.uuid4().hex}"
+        job_status = run_job(JobSpec(job_id=job_id, job_type=job_type, params=params or None))
+    except Exception as e:
+        return make_response(jsonify({"error": str(e)}), 500)
+
+    return make_response(jsonify({"job_id": job_id, "status": job_status}), 200)
 
 
 @application.route("/clickhouse_node_info")
