@@ -103,6 +103,7 @@ def create_metrics(
                 socket_path=socket_path,
                 namespace=prefix,
                 constant_tags=constant_tags,
+                disable_telemetry=False,
             )
         # UDP branch: reached only when a host/port target is configured -- socket-only
         # deployments always resolve to UDS above -- so host/port are set here.
@@ -112,6 +113,7 @@ def create_metrics(
             port=port,
             namespace=prefix,
             constant_tags=constant_tags,
+            disable_telemetry=True,
         )
 
     return SentryDatadogMetricsBackend(

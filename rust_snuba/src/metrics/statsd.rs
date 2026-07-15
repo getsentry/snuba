@@ -14,7 +14,7 @@ pub struct DogStatsDBackend;
 impl DogStatsDBackend {
     pub fn new_udp(host: &str, port: u16, prefix: &str, tags: &[(&str, String)]) -> Self {
         let addr = format!("{host}:{port}");
-        Self::build(&addr, prefix, tags)
+        Self::build(&addr, prefix, tags, false)
     }
 
     /// `socket_path` is passed to the exporter verbatim, so it must be a full DogStatsD
@@ -23,10 +23,10 @@ impl DogStatsDBackend {
     /// `SNUBA_DOGSTATSD_SOCKET_PATH` env var rather than hardcoded here, so the same value
     /// also works for the Python datadog client (which strips the scheme itself).
     pub fn new_uds(socket_path: &str, prefix: &str, tags: &[(&str, String)]) -> Self {
-        Self::build(socket_path, prefix, tags)
+        Self::build(socket_path, prefix, tags, true)
     }
 
-    fn build(addr: &str, prefix: &str, tags: &[(&str, String)]) -> Self {
+    fn build(addr: &str, prefix: &str, tags: &[(&str, String)], telemetry: bool) -> Self {
         let global_labels: Vec<Label> = tags
             .iter()
             .map(|(k, v)| Label::new(k.to_string(), v.clone()))
@@ -38,10 +38,10 @@ impl DogStatsDBackend {
             .set_global_prefix(prefix)
             .with_global_labels(global_labels)
             .send_histograms_as_distributions(false)
-            // Disable the exporter's client telemetry so we don't start emitting new
-            // `datadog.dogstatsd.client.*` metrics that the previous statsdproxy pipeline
-            // never sent. This keeps the set of emitted metrics unchanged by the migration.
-            .with_telemetry(false)
+            // Enable the exporter's client telemetry (`datadog.dogstatsd.client.*` metrics)
+            // only on the UDS transport, to observe socket health during the UDS migration.
+            // UDP keeps telemetry off, matching the pre-migration statsdproxy pipeline.
+            .with_telemetry(telemetry)
             .install()
             .expect("failed to install DogStatsD exporter");
 

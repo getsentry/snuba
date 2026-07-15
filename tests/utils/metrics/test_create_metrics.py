@@ -40,6 +40,7 @@ def test_create_metrics_uses_uds_when_flag_enabled(dogstatsd: MagicMock) -> None
         socket_path="unixgram:///var/run/dogstatsd.sock",
         namespace="snuba.test",
         constant_tags=None,
+        disable_telemetry=False,
     )
 
 
@@ -65,6 +66,7 @@ def test_create_metrics_uses_udp_when_flag_disabled(dogstatsd: MagicMock) -> Non
         port=8125,
         namespace="snuba.test",
         constant_tags=None,
+        disable_telemetry=True,
     )
 
 
@@ -131,6 +133,7 @@ def test_create_metrics_socket_only_uses_uds(dogstatsd: MagicMock) -> None:
             socket_path="unixgram:///var/run/dogstatsd.sock",
             namespace="snuba.test",
             constant_tags=None,
+            disable_telemetry=False,
         )
 
 
