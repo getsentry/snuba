@@ -5,9 +5,15 @@ from typing import Any
 from snuba.manual_jobs import Job, JobLogger
 from snuba.redis import RedisClientKey, RedisClientType, get_redis_client
 
-# Ephemeral / high-churn stores we deliberately skip: the query cache and the
-# rate-limiter counters. Everything else we store in Redis is dumped.
-_EXCLUDED_CLIENTS = {RedisClientKey.CACHE, RedisClientKey.RATE_LIMITER}
+# Stores we deliberately skip: the ephemeral query cache and rate-limiter
+# counters, plus the large operational subscription / replacements stores.
+# Everything else we store in Redis is dumped.
+_EXCLUDED_CLIENTS = {
+    RedisClientKey.CACHE,
+    RedisClientKey.RATE_LIMITER,
+    RedisClientKey.SUBSCRIPTION_STORE,
+    RedisClientKey.REPLACEMENTS_STORE,
+}
 
 PAYLOAD_START_MARKER = "===== BEGIN REDIS DUMP ====="
 PAYLOAD_END_MARKER = "===== END REDIS DUMP ====="
@@ -64,9 +70,10 @@ class LogRuntimeConfigs(Job):
     payload that can be pasted into an LLM to help migrate config to
     sentry-options (see getsentry/snuba#8168).
 
-    The query cache and rate-limiter stores are skipped -- they are ephemeral
-    and not worth dumping. Everything else is dumped grouped by Redis client,
-    with each key read according to its Redis type. The allocation-policy /
+    The ephemeral cache / rate-limiter stores and the large operational
+    subscription / replacements stores are skipped. Everything else is dumped
+    grouped by Redis client, with each key read according to its Redis type.
+    The allocation-policy /
     CBRS overrides live in the ``config`` client under the ``capman`` and
     ``cbrs`` hashes, keyed exactly like the ``configurable_component_overrides``
     sentry-option.

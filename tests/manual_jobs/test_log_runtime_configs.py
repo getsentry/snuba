@@ -80,10 +80,12 @@ def test_dumps_allocation_policy_overrides_from_capman_hash() -> None:
 
 
 @pytest.mark.redis_db
-def test_excludes_cache_and_rate_limiter() -> None:
+def test_excludes_ephemeral_and_operational_stores() -> None:
     payload = _run_and_get_payload()
     assert "cache" not in payload["redis"]
     assert "rate_limiter" not in payload["redis"]
+    assert "subscription_store" not in payload["redis"]
+    assert "replacements_store" not in payload["redis"]
 
 
 @pytest.mark.redis_db
