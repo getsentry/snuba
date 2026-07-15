@@ -4,6 +4,8 @@ from typing import Any
 from snuba import state
 from snuba.configs.configuration import CONFIGURABLE_COMPONENT_OVERRIDES_KEY
 from snuba.manual_jobs import Job, JobLogger
+from snuba.query.allocation_policies import CAPMAN_HASH
+from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import CBRS_HASH
 
 CBRS_POLICY_CLASS_NAME = "BytesScannedRejectingPolicy"
 
@@ -35,11 +37,6 @@ class LogRuntimeConfigs(Job):
         # and `cbrs` for the storage-routing strategies. Reading both gives the
         # full set of overrides that feeds the combined
         # `configurable_component_overrides` sentry-option.
-        from snuba.query.allocation_policies import CAPMAN_HASH
-        from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
-            CBRS_HASH,
-        )
-
         overrides: dict[str, Any] = {}
         for hash_name in (CAPMAN_HASH, CBRS_HASH):
             overrides.update(state.get_all_configs(config_key=hash_name))
