@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from datetime import date, datetime
 from threading import Lock
-from typing import Any, TypeGuard
+from typing import Any
 
 import clickhouse_connect
 import sentry_sdk
@@ -47,29 +46,6 @@ DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
 # forwards whatever settings it is given to the server, so to preserve parity
 # we tell clickhouse-connect to drop unrecognized settings instead of failing.
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
-
-# Matches the leading ``INSERT INTO <table> [(col, col, ...)]`` of an insert
-# statement, capturing the target table and (when present) the explicit column
-# list. The native driver treats an INSERT whose ``params`` is a sequence of
-# rows as a data insert; clickhouse-connect's ``query()`` has no such notion, so
-# the connect pool detects this shape and sends the rows as a JSONEachRow insert
-# body instead (see ``_execute_insert``). Whatever trails the column list
-# (``VALUES``, ``FORMAT JSONEachRow``, ...) is rebuilt as ``FORMAT JSONEachRow``,
-# so we only need the table and (for positional rows) the column list.
-_INSERT_RE = re.compile(
-    r"^\s*INSERT\s+INTO\s+(?P<table>[^\s(]+)\s*(?:\((?P<columns>[^)]*)\))?",
-    re.IGNORECASE,
-)
-
-
-def _is_row_data(params: Params) -> TypeGuard[Sequence[Any]]:
-    """
-    True when ``params`` is a sequence of rows (insert data) rather than a
-    mapping of query-substitution parameters. ``str``/``bytes`` are sequences
-    but never row data, so they are excluded. A ``Mapping`` is not a ``Sequence``
-    and is therefore already excluded.
-    """
-    return isinstance(params, Sequence) and not isinstance(params, (str, bytes, bytearray))
 
 
 def _clickhouse_json_default(value: Any) -> Any:
@@ -457,17 +433,8 @@ class ClickhouseConnectPool(ClickhousePool):
 
         The ``retryable`` argument is accepted for interface parity with the
         native pool but has no effect here.
-
-        When ``params`` is a sequence of rows and ``query`` is an INSERT, the
-        call is a data insert (the native driver's ``INSERT INTO ... FORMAT
-        JSONEachRow`` + list-of-rows pattern). clickhouse-connect's ``query()``
-        would treat those rows as substitution parameters and JSON-encode them,
-        which fails for native Python values such as ``datetime``. Such calls are
-        sent as a JSONEachRow insert body instead (see ``_execute_insert``).
         """
         with self._translate_clickhouse_errors():
-            if params is not None and _is_row_data(params) and _INSERT_RE.match(query):
-                return self._execute_insert(query, params, settings, query_id)
             return self._execute_once(
                 query,
                 params,
@@ -478,92 +445,49 @@ class ClickhouseConnectPool(ClickhousePool):
                 capture_trace,
             )
 
-    def _execute_insert(
+    def insert(
         self,
-        query: str,
-        rows: Sequence[Any],
-        settings: Mapping[str, Any] | None,
-        query_id: str | None,
-    ) -> ClickhouseResult:
+        table: str,
+        data: Sequence[Mapping[str, Any]],
+        settings: Mapping[str, Any] | None = None,
+        query_id: str | None = None,
+    ) -> None:
         """
-        Insert a sequence of rows, reproducing the native driver's ``INSERT INTO
-        ... + list-of-rows`` path over HTTP.
+        HTTP override of :meth:`ClickhousePool.insert`.
 
-        The rows are serialized to a JSONEachRow body -- the same format the
-        callers already name in their SQL -- and sent via
-        ``client.raw_insert(..., fmt="JSONEachRow")``. Serialization uses
-        :func:`_clickhouse_json_default` so native Python values that plain JSON
-        rejects (notably ``datetime``, which triggered this whole path) are
-        encoded into the string forms ClickHouse's JSONEachRow parser accepts.
-
-        Rows may be dicts (as the migration status writers pass, mapping column
-        name -> value) or positional sequences, in which case the column list is
-        taken from the SQL (e.g. ``INSERT INTO t (a, b) VALUES``) and zipped with
-        each row to form the JSON objects.
+        clickhouse-connect's ``query()`` has no insert notion -- it would treat
+        the rows as ``query`` substitution parameters and JSON-encode them, which
+        fails on native Python values such as ``datetime`` -- so instead the rows
+        are serialized to a JSONEachRow body and sent via
+        ``client.raw_insert(..., fmt="JSONEachRow")``. Serialization goes through
+        :func:`_clickhouse_json_default`, which renders ``datetime``/``date`` into
+        the string forms ClickHouse's JSONEachRow parser accepts.
         """
-        client = self._get_client()
-
-        match = _INSERT_RE.match(query)
-        if match is None:  # pragma: no cover - guarded by the caller
-            raise ClickhouseError(f"could not parse INSERT target from query: {query}", code=-1)
-        table = match.group("table")
-
-        row_list = list(rows)
-        if not row_list:
-            # Nothing to insert; mirror the native driver, which writes zero rows.
-            return ClickhouseResult(
-                results=[],
-                profile=ClickhouseProfile(blocks=0, bytes=0, elapsed=0.0, progress_bytes=0, rows=0),
-                trace_output="",
-            )
-
-        if isinstance(row_list[0], Mapping):
-            dict_rows: list[Mapping[str, Any]] = list(row_list)
-        else:
-            # positional rows need the column list from the SQL to become named
-            # JSON objects; without it JSONEachRow has no field names to map to.
-            columns_sql = match.group("columns")
-            if not columns_sql:
-                raise ClickhouseError(
-                    "positional INSERT rows require an explicit column list in the query, "
-                    f"e.g. 'INSERT INTO t (a, b) VALUES'; got: {query}",
-                    code=-1,
-                )
-            column_names = [name.strip().strip("`") for name in columns_sql.split(",")]
-            dict_rows = [dict(zip(column_names, row, strict=True)) for row in row_list]
+        rows = list(data)
+        if not rows:
+            return
 
         body = "\n".join(
-            json.dumps(row, default=_clickhouse_json_default, separators=(",", ":"))
-            for row in dict_rows
+            json.dumps(row, default=_clickhouse_json_default, separators=(",", ":")) for row in rows
         )
 
         insert_settings = dict(settings) if settings else {}
         if query_id is not None:
             insert_settings["query_id"] = query_id
 
-        with sentry_sdk.start_span(description=query, op="db.clickhouse") as span:
-            span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
-            span.set_data("query_id", query_id)
-            summary = client.raw_insert(
-                table,
-                insert_block=body.encode("utf-8"),
-                fmt="JSONEachRow",
-                settings=insert_settings or None,
-            )
-
-        written_rows = getattr(summary, "written_rows", 0) or 0
-        written_bytes = getattr(summary, "written_bytes", 0) or 0
-        profile = ClickhouseProfile(
-            blocks=0,
-            bytes=written_bytes,
-            elapsed=0.0,
-            progress_bytes=written_bytes,
-            rows=written_rows,
-        )
-        # The native driver returns the written row count for an INSERT (wrapped
-        # in a list by execute()); mirror that shape. Both current callers ignore
-        # the value beyond logging it.
-        return ClickhouseResult(results=[written_rows], profile=profile, trace_output="")
+        with self._translate_clickhouse_errors():
+            client = self._get_client()
+            with sentry_sdk.start_span(
+                description=f"INSERT INTO {table}", op="db.clickhouse"
+            ) as span:
+                span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
+                span.set_data("query_id", query_id)
+                client.raw_insert(
+                    table,
+                    insert_block=body.encode("utf-8"),
+                    fmt="JSONEachRow",
+                    settings=insert_settings or None,
+                )
 
     def execute_robust(
         self,

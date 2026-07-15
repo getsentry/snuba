@@ -555,7 +555,6 @@ class Runner:
         self.__status = {}
         next_version = self._get_next_version(migration_key)
 
-        statement = f"INSERT INTO {self.__table_name} FORMAT JSONEachRow"
         data = [
             {
                 "group": migration_key.group.value,
@@ -565,7 +564,7 @@ class Runner:
                 "version": next_version,
             }
         ]
-        self.__connection.execute(statement, data)
+        self.__connection.insert(self.__table_name, data)
 
     def _get_next_version(self, migration_key: MigrationKey) -> int:
         result = self.__connection.execute(
