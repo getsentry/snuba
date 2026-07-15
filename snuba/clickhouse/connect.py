@@ -437,7 +437,7 @@ class ClickhouseConnectPool(ClickhousePool):
             return
 
         column_names = list(rows[0].keys())
-        matrix = [[row[name] for name in column_names] for row in rows]
+        matrix = [list(row.values()) for row in rows]
 
         insert_settings = dict(settings) if settings else {}
         if query_id is not None:
