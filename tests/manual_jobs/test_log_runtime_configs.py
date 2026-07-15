@@ -1,6 +1,6 @@
 import json
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -29,7 +29,7 @@ def _extract_payload(logs: Sequence[str]) -> dict[str, Any]:
     end = next(i for i, line in enumerate(logs) if PAYLOAD_END_MARKER in line)
     body = "\n".join(logs[start + 1 : end])
     body = body[body.index("{") :]
-    return json.loads(body)
+    return cast(dict[str, Any], json.loads(body))
 
 
 def _find_allocation_policy() -> AllocationPolicy:
