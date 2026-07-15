@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from datetime import datetime
@@ -46,6 +47,29 @@ DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
 # forwards whatever settings it is given to the server, so to preserve parity
 # we tell clickhouse-connect to drop unrecognized settings instead of failing.
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
+
+# Matches the leading ``INSERT INTO <table> [(col, col, ...)]`` of an insert
+# statement, capturing the target table and (when present) the explicit column
+# list. The native driver treats an INSERT whose ``params`` is a sequence of
+# rows as a data insert; clickhouse-connect's ``query()`` has no such notion, so
+# the connect pool detects this shape and routes it to ``client.insert()``
+# instead (see ``_execute_insert``). Whatever trails the column list (``VALUES``,
+# ``FORMAT JSONEachRow``, ...) is irrelevant here -- clickhouse-connect builds
+# the wire format itself -- so we only need the table and columns.
+_INSERT_RE = re.compile(
+    r"^\s*INSERT\s+INTO\s+(?P<table>[^\s(]+)\s*(?:\((?P<columns>[^)]*)\))?",
+    re.IGNORECASE,
+)
+
+
+def _is_row_data(params: Params) -> bool:
+    """
+    True when ``params`` is a sequence of rows (insert data) rather than a
+    mapping of query-substitution parameters. ``str``/``bytes`` are sequences
+    but never row data, so they are excluded. A ``Mapping`` is not a ``Sequence``
+    and is therefore already excluded.
+    """
+    return isinstance(params, Sequence) and not isinstance(params, (str, bytes, bytearray))
 
 
 def _coerce_temporal(value: Any, ch_type: str) -> Any:
@@ -413,8 +437,17 @@ class ClickhouseConnectPool(ClickhousePool):
 
         The ``retryable`` argument is accepted for interface parity with the
         native pool but has no effect here.
+
+        When ``params`` is a sequence of rows and ``query`` is an INSERT, the
+        call is a data insert (the native driver's ``INSERT INTO ... FORMAT
+        JSONEachRow`` + list-of-rows pattern). clickhouse-connect's ``query()``
+        would treat those rows as substitution parameters and JSON-encode them,
+        which fails for native Python values such as ``datetime``. Such calls are
+        routed to ``client.insert()`` instead (see ``_execute_insert``).
         """
         with self._translate_clickhouse_errors():
+            if params is not None and _is_row_data(params) and _INSERT_RE.match(query):
+                return self._execute_insert(query, params, settings, query_id)
             return self._execute_once(
                 query,
                 params,
@@ -424,6 +457,85 @@ class ClickhouseConnectPool(ClickhousePool):
                 columnar,
                 capture_trace,
             )
+
+    def _execute_insert(
+        self,
+        query: str,
+        rows: Sequence[Any],
+        settings: Mapping[str, Any] | None,
+        query_id: str | None,
+    ) -> ClickhouseResult:
+        """
+        Insert a sequence of rows via clickhouse-connect's ``client.insert()``,
+        reproducing the native driver's ``INSERT INTO ... + list-of-rows`` path.
+
+        clickhouse-connect introspects the target table's column types and
+        serializes native Python values (``datetime``, ``date``, ints, ...)
+        itself, so -- unlike the ``query()`` parameter-binding path -- it does not
+        try to JSON-encode the values. Rows may be dicts (as the migration status
+        writers pass, mapping column name -> value) or positional sequences (with
+        the column list carried in the SQL, e.g. ``INSERT INTO t (a, b) VALUES``).
+        """
+        client = self._get_client()
+
+        match = _INSERT_RE.match(query)
+        if match is None:  # pragma: no cover - guarded by the caller
+            raise ClickhouseError(f"could not parse INSERT target from query: {query}", code=-1)
+        table = match.group("table")
+
+        row_list = list(rows)
+        if not row_list:
+            # Nothing to insert; mirror the native driver, which writes zero rows.
+            return ClickhouseResult(
+                results=[],
+                profile=ClickhouseProfile(
+                    blocks=0, bytes=0, elapsed=0.0, progress_bytes=0, rows=0
+                ),
+                trace_output="",
+            )
+
+        column_names: str | list[str]
+        if isinstance(row_list[0], Mapping):
+            # dict rows: column order comes from the keys of the first row.
+            column_names = list(row_list[0].keys())
+            matrix: list[list[Any]] = [[row[name] for name in column_names] for row in row_list]
+        else:
+            # positional rows: take the column list from the SQL if it names one,
+            # otherwise let clickhouse-connect default to every column ("*").
+            columns_sql = match.group("columns")
+            if columns_sql:
+                column_names = [name.strip().strip("`") for name in columns_sql.split(",")]
+            else:
+                column_names = "*"
+            matrix = [list(row) for row in row_list]
+
+        insert_settings = dict(settings) if settings else {}
+        if query_id is not None:
+            insert_settings["query_id"] = query_id
+
+        with sentry_sdk.start_span(description=query, op="db.clickhouse") as span:
+            span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
+            span.set_data("query_id", query_id)
+            summary = client.insert(
+                table,
+                matrix,
+                column_names=column_names,
+                settings=insert_settings or None,
+            )
+
+        written_rows = getattr(summary, "written_rows", 0) or 0
+        written_bytes = getattr(summary, "written_bytes", 0) or 0
+        profile = ClickhouseProfile(
+            blocks=0,
+            bytes=written_bytes,
+            elapsed=0.0,
+            progress_bytes=written_bytes,
+            rows=written_rows,
+        )
+        # The native driver returns the written row count for an INSERT (wrapped
+        # in a list by execute()); mirror that shape. Both current callers ignore
+        # the value beyond logging it.
+        return ClickhouseResult(results=[written_rows], profile=profile, trace_output="")
 
     def execute_robust(
         self,

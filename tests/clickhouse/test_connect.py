@@ -83,6 +83,107 @@ def test_execute_passes_query_id_and_settings() -> None:
     assert kwargs["settings"]["max_threads"] == 4
 
 
+def test_insert_dict_rows_routed_to_client_insert() -> None:
+    # The migration status writers pass an "INSERT INTO <table> FORMAT
+    # JSONEachRow" query with a list of dict rows (one of which is a datetime).
+    # This must be routed to client.insert() -- which serializes native Python
+    # types itself -- rather than client.query(), whose parameter binding would
+    # try to JSON-encode the datetime and fail.
+    client = mock.Mock()
+    client.insert.return_value = mock.Mock(written_rows=1, written_bytes=42)
+
+    pool = _make_pool(client)
+    ts = datetime(2026, 7, 8, 21, 14, 31)
+    rows = [
+        {
+            "group": "events",
+            "migration_id": "0025_add_segment_names_column",
+            "timestamp": ts,
+            "status": "in_progress",
+            "version": 3,
+        }
+    ]
+
+    result = pool.execute("INSERT INTO migrations_local FORMAT JSONEachRow", rows)
+
+    client.query.assert_not_called()
+    args, kwargs = client.insert.call_args
+    assert args[0] == "migrations_local"
+    # Rows are built as a positional matrix aligned to the dict key order.
+    assert kwargs["column_names"] == ["group", "migration_id", "timestamp", "status", "version"]
+    assert args[1] == [["events", "0025_add_segment_names_column", ts, "in_progress", 3]]
+    # The written row count is surfaced (wrapped), mirroring the native driver.
+    assert result.results == [1]
+    assert result.profile is not None
+    assert result.profile["rows"] == 1
+
+
+def test_insert_positional_rows_use_columns_from_sql() -> None:
+    # Positional rows (list of lists) take their column names from the SQL
+    # column list, e.g. "INSERT INTO t (g, ts, v) VALUES".
+    client = mock.Mock()
+    client.insert.return_value = mock.Mock(written_rows=2, written_bytes=0)
+
+    pool = _make_pool(client)
+    rows = [
+        [1, datetime(2023, 1, 2, 3, 4, 5), 10],
+        [2, datetime(2023, 1, 3, 0, 0, 0), 30],
+    ]
+
+    pool.execute("INSERT INTO metrics (g, ts, v) VALUES", rows)
+
+    client.query.assert_not_called()
+    args, kwargs = client.insert.call_args
+    assert args[0] == "metrics"
+    assert kwargs["column_names"] == ["g", "ts", "v"]
+    assert args[1] == [[1, datetime(2023, 1, 2, 3, 4, 5), 10], [2, datetime(2023, 1, 3, 0, 0, 0), 30]]
+
+
+def test_insert_empty_rows_short_circuits() -> None:
+    # An empty row sequence writes nothing and never touches the client, matching
+    # the native driver's zero-row insert.
+    client = mock.Mock()
+
+    pool = _make_pool(client)
+    result = pool.execute("INSERT INTO t FORMAT JSONEachRow", [])
+
+    client.insert.assert_not_called()
+    client.query.assert_not_called()
+    assert result.results == []
+    assert result.profile is not None
+    assert result.profile["rows"] == 0
+
+
+def test_insert_forwards_query_id_and_settings() -> None:
+    client = mock.Mock()
+    client.insert.return_value = mock.Mock(written_rows=1, written_bytes=0)
+
+    pool = _make_pool(client)
+    pool.execute(
+        "INSERT INTO t FORMAT JSONEachRow",
+        [{"a": 1}],
+        query_id="insert-id",
+        settings={"async_insert": 1},
+    )
+
+    _, kwargs = client.insert.call_args
+    assert kwargs["settings"]["query_id"] == "insert-id"
+    assert kwargs["settings"]["async_insert"] == 1
+
+
+def test_select_with_mapping_params_still_uses_query() -> None:
+    # Mapping params are query-substitution parameters, not insert rows: they must
+    # continue to go through client.query() unchanged.
+    client = mock.Mock()
+    client.query.return_value = FakeQueryResult(result_set=[[1]])
+
+    pool = _make_pool(client)
+    pool.execute("SELECT %(x)s", {"x": 1})
+
+    client.insert.assert_not_called()
+    client.query.assert_called_once()
+
+
 def test_too_many_simultaneous_queries_not_retried() -> None:
     # We delegate all retries to clickhouse-connect, which does not retry the
     # TOO_MANY_SIMULTANEOUS_QUERIES error. It should be surfaced directly,
