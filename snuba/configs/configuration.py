@@ -1,3 +1,4 @@
+import copy
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
@@ -432,9 +433,16 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
             else CONFIGURABLE_COMPONENT_OVERRIDES_KEY
         )
         overrides: OptionValue = get_option(option_key, {})
-        if isinstance(overrides, dict) and full_key in overrides:
-            return config_definition.value_type(overrides[full_key])
-        return config_definition.default
+        value = (
+            overrides[full_key]
+            if isinstance(overrides, dict) and full_key in overrides
+            else config_definition.default
+        )
+        if config_definition.value_type is dict:
+            # Object configs are mutable; return a deep copy so callers can never
+            # mutate the shared code default or the cached sentry-option value.
+            return copy.deepcopy(value)
+        return config_definition.value_type(value)
 
     def set_config_value(
         self,

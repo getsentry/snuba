@@ -414,3 +414,10 @@ class TestConfigurableComponentObjectConfig:
             assert component.get_config_value("scan_limit_overrides") == nested
         # outside the override the code default applies again
         assert component.get_config_value("scan_limit_overrides") == {}
+
+    def test_returned_object_is_isolated_from_default(self) -> None:
+        # Mutating the returned dict must not corrupt the shared code default.
+        component = ObjectConfigComponent()
+        value = component.get_config_value("scan_limit_overrides")
+        value["123"] = {"api.foo": 1}
+        assert component.get_config_value("scan_limit_overrides") == {}
