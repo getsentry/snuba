@@ -8,11 +8,13 @@ from snuba import state
 from snuba.configs.configuration import CONFIGURABLE_COMPONENT_OVERRIDES_KEY
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.manual_jobs import JobSpec
+from snuba.manual_jobs.job_logging import get_console_job_logger
 from snuba.manual_jobs.job_status import JobStatus
 from snuba.manual_jobs.log_runtime_configs import (
     CBRS_POLICY_CLASS_NAME,
     PAYLOAD_END_MARKER,
     PAYLOAD_START_MARKER,
+    LogRuntimeConfigs,
 )
 from snuba.manual_jobs.runner import run_job, view_job_logs
 from snuba.query.allocation_policies import AllocationPolicy, PassthroughPolicy
@@ -68,3 +70,16 @@ def test_emits_component_overrides_in_payload() -> None:
     assert payload["cbrs"] == {
         key: value for key, value in overrides.items() if CBRS_POLICY_CLASS_NAME in key
     }
+
+
+@pytest.mark.redis_db
+def test_repeatable_direct_execution(capsys: pytest.CaptureFixture[str]) -> None:
+    # Executing directly (as the `snuba jobs dump_runtime_configs` CLI does)
+    # bypasses the job-status guard, so it can be run any number of times.
+    job = LogRuntimeConfigs(JobSpec(job_id="log_runtime_configs", job_type="LogRuntimeConfigs"))
+    for _ in range(3):
+        job.execute(get_console_job_logger())
+
+    out = capsys.readouterr().out
+    assert out.count(PAYLOAD_START_MARKER) == 3
+    assert out.count(PAYLOAD_END_MARKER) == 3

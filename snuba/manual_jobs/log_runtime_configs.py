@@ -25,6 +25,9 @@ class LogRuntimeConfigs(Job):
     holds the values currently set in Redis, keyed exactly like that
     sentry-option (``{resource}.{ClassName}.{config}[.{param}:{value},...]``),
     so the output is a ready-made migration payload.
+
+    Run it repeatably straight from the CLI (no job manifest entry, no
+    job-status guard) with ``snuba jobs dump_runtime_configs``.
     """
 
     def _collect_runtime_configs(self) -> dict[str, Any]:
