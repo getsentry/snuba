@@ -530,7 +530,8 @@ def test_is_not_enforced() -> None:
 
 @pytest.mark.redis_db
 def test_configs_with_delimiter_values() -> None:
-    # test that configs with dots can be stored and read
+    # param values may contain '.'/','/':' (no escaping); '|' is the structural
+    # delimiter, and only the first ':' separates a param name from its value.
     policy = SomeParametrizedConfigPolicy(StorageKey("something"), [], {})
     policy.set_config_value("my_param_config", 5, {"ref": "a,::.b.c", "org": 1})
     configs = policy.get_current_configs()
@@ -545,10 +546,11 @@ def test_configs_with_delimiter_values() -> None:
     } in configs
 
 
-def test_cannot_use_escape_sequences() -> None:
+def test_cannot_use_param_separator() -> None:
+    # the '|' structural delimiter is rejected in a param value rather than escaped
     policy = SomeParametrizedConfigPolicy(StorageKey("something"), [], {})
     with pytest.raises(InvalidConfig):
-        policy.set_config_value("my_param_config", 5, {"ref": "a__dot_literal__.b.c", "org": 1})
+        policy.set_config_value("my_param_config", 5, {"ref": "a|b", "org": 1})
 
 
 class TestComponentNameBackwardsCompatibility:

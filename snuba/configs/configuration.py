@@ -160,15 +160,16 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
 
     """
 
-    # This component builds redis strings that are delimited by dots, commas, colons
-    # in order to allow those characters to exist in config we replace them with their
-    # counterparts on write/read. It may be better to just replace our serialization with JSON
-    # instead of what we're doing but this is where we're at rn 1/10/24
-    _KEY_DELIMITERS_TO_ESCAPE_SEQUENCES = {
-        ".": "__dot_literal__",
-        ",": "__comma_literal__",
-        ":": "__colon_literal__",
-    }
+    # Parameterized config keys are ``{resource}.{ClassName}.{config}`` followed by
+    # one ``|{name}:{value}`` per param (sorted by name). ``|`` separates params and
+    # ``:`` separates a param name from its value. ``|`` is used as the structural
+    # delimiter -- rather than ``.``/``,``/``:`` -- because it does not occur in
+    # resources, class names, config names, or param values (referrers like
+    # "api.foo" contain ``.``), so param components need no escaping. Only the first
+    # ``:`` in a param entry is treated as the separator, so a value may still
+    # contain ``:``.
+    _PARAM_SEPARATOR = "|"
+    _PARAM_KV_SEPARATOR = ":"
 
     def component_name(self) -> str:
         # what is this configurable component's class name?
@@ -219,14 +220,6 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
             for config in self._get_default_config_definitions()
             + self.additional_config_definitions()
         }
-
-    def __unescape_delimiter_chars(self, key: str) -> str:
-        for (
-            delimiter_char,
-            escape_sequence,
-        ) in self._KEY_DELIMITERS_TO_ESCAPE_SEQUENCES.items():
-            key = key.replace(escape_sequence, delimiter_char)
-        return key
 
     @final
     def _validate_config_params(
@@ -289,28 +282,24 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
 
     def __deserialize_runtime_config_key(self, key: str) -> tuple[str, dict[str, Any]]:
         """
-        Given a raw runtime config key, deconstructs it into it's config
+        Given a raw runtime config key, deconstructs it into its config
         key and parameters components.
 
         Examples:
         - `"mystorage.MyAllocationPolicy.my_config"`
             - returns `"my_config", {}`
-        - `"mystorage.MyAllocationPolicy.my_config.a:1,b:2"`
-            - returns `"my_config", {"a": 1, "b": 2}`
+        - `"mystorage.MyAllocationPolicy.my_config|a:1|b:2"`
+            - returns `"my_config", {"a": "1", "b": "2"}`
         """
 
-        # key is "storage.policy.config" or "storage.policy.config.param1:val1,param2:val2"
-        _, _, config_key, *params = key.split(".")
-        # (config_key, params) is ("config", []) or ("config", ["param1:val1,param2:val2"])
+        # key is "storage.policy.config" or "storage.policy.config|param1:val1|param2:val2"
+        base, _, params_string = key.partition(self._PARAM_SEPARATOR)
+        _, _, config_key = base.split(".")
         params_dict = {}
-        if params:
-            # convert ["param1:val1,param2:val2"] to {"param1": "val1", "param2": "val2"}
-            [params_string] = params
-            params_split = params_string.split(",")
-            for param_string in params_split:
-                param_key, param_value = param_string.split(":")
-                param_key = self.__unescape_delimiter_chars(param_key)
-                param_value = self.__unescape_delimiter_chars(param_value)
+        if params_string:
+            for param_string in params_string.split(self._PARAM_SEPARATOR):
+                # split on the first ':' only, so a value may itself contain ':'
+                param_key, _, param_value = param_string.partition(self._PARAM_KV_SEPARATOR)
                 params_dict[param_key] = param_value
 
         self._validate_config_params(config_key=config_key, params=params_dict)
@@ -384,32 +373,32 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
             for definition in definitions
         ]
 
-    def __escape_delimiter_chars(self, key: str) -> str:
-        if not isinstance(key, str):
-            return key
-        for (
-            delimiter_char,
-            escape_sequence,
-        ) in self._KEY_DELIMITERS_TO_ESCAPE_SEQUENCES.items():
-            if escape_sequence in str(key):
-                raise InvalidConfig(f"{escape_sequence} is not a valid string for a policy config")
-            key = key.replace(delimiter_char, escape_sequence)
-        return key
-
     def _build_runtime_config_key(self, config: str, params: dict[str, Any]) -> str:
         """
         Builds a unique key to be used in the actual datastore containing these configs.
 
         Example return values:
         - `"mystorage.MyAllocationPolicy.my_config"`            # no params
-        - `"mystorage.MyAllocationPolicy.my_config.a:1,b:2"`    # sorted params
+        - `"mystorage.MyAllocationPolicy.my_config|a:1|b:2"`    # sorted params
+
+        The ``|`` structural delimiter must not appear in a param name or value,
+        and a param name must not contain ``:``; these are rejected rather than
+        escaped. Param values may contain ``.``/``,``/``:``.
         """
-        parameters = "."
+        parameters = ""
         for param in sorted(params.keys()):
-            param_sanitized = self.__escape_delimiter_chars(param)
-            value_sanitized = self.__escape_delimiter_chars(params[param])
-            parameters += f"{param_sanitized}:{value_sanitized},"
-        parameters = parameters[:-1]
+            name = str(param)
+            value = str(params[param])
+            if self._PARAM_SEPARATOR in name or self._PARAM_KV_SEPARATOR in name:
+                raise InvalidConfig(
+                    f"config param name '{name}' may not contain "
+                    f"'{self._PARAM_SEPARATOR}' or '{self._PARAM_KV_SEPARATOR}'"
+                )
+            if self._PARAM_SEPARATOR in value:
+                raise InvalidConfig(
+                    f"config param value '{value}' may not contain '{self._PARAM_SEPARATOR}'"
+                )
+            parameters += f"{self._PARAM_SEPARATOR}{name}{self._PARAM_KV_SEPARATOR}{value}"
         return f"{self.component_name()}.{config}{parameters}"
 
     def _get_hash(self) -> str:
