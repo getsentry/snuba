@@ -14,6 +14,7 @@ from snuba.manual_jobs.log_runtime_configs import (
     LogRuntimeConfigs,
 )
 from snuba.query.allocation_policies import AllocationPolicy, PassthroughPolicy
+from snuba.redis import RedisClientKey, get_redis_client
 
 
 def _extract_payload(logs: Sequence[str]) -> dict[str, Any]:
@@ -64,8 +65,8 @@ def test_dumps_runtime_configs_from_config_client() -> None:
     finally:
         state.delete_config("a_test_config")
 
-    # Values are dumped raw (as stored in Redis), grouped by client and key.
-    assert payload["redis"]["config"]["snuba-config"]["a_test_config"] == "42"
+    # Values are dumped raw (as stored in Redis), grouped by config key.
+    assert payload["config"]["snuba-config"]["a_test_config"] == "42"
 
 
 @pytest.mark.redis_db
@@ -76,13 +77,29 @@ def test_dumps_allocation_policy_overrides_from_capman_hash() -> None:
 
     payload = _run_and_get_payload()
 
-    assert payload["redis"]["config"]["capman"][expected_key] == "0"
+    assert payload["config"]["capman"][expected_key] == "0"
 
 
 @pytest.mark.redis_db
-def test_dumps_only_the_config_client() -> None:
-    payload = _run_and_get_payload()
-    assert list(payload["redis"].keys()) == ["config"]
+def test_only_reads_known_config_keys() -> None:
+    # A blind scan of the (shared) config client would leak unrelated keys.
+    # Set such a key and confirm it is never dumped.
+    client = get_redis_client(RedisClientKey.CONFIG)
+    client.set("roles-someone@example.com", "admin")
+    try:
+        payload = _run_and_get_payload()
+    finally:
+        client.delete("roles-someone@example.com")
+
+    allowed = {
+        "snuba-config",
+        "snuba-config-description",
+        "snuba-config-changes",
+        "capman",
+        "cbrs",
+    }
+    assert set(payload["config"].keys()) <= allowed
+    assert "roles-someone@example.com" not in payload["config"]
 
 
 @pytest.mark.redis_db

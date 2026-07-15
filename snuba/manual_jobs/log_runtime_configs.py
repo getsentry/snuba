@@ -5,8 +5,8 @@ from typing import Any
 from snuba.manual_jobs import Job, JobLogger
 from snuba.redis import RedisClientKey, RedisClientType, get_redis_client
 
-PAYLOAD_START_MARKER = "===== BEGIN REDIS DUMP ====="
-PAYLOAD_END_MARKER = "===== END REDIS DUMP ====="
+PAYLOAD_START_MARKER = "===== BEGIN CONFIG DUMP ====="
+PAYLOAD_END_MARKER = "===== END CONFIG DUMP ====="
 
 
 def _decode_key(value: Any) -> str:
@@ -29,7 +29,7 @@ def _decode_value(value: Any) -> Any:
     return value
 
 
-def _read_value(client: RedisClientType, key: Any) -> Any:
+def _read_value(client: RedisClientType, key: str) -> Any:
     key_type = _decode_value(client.type(key))
     if key_type == "string":
         return _decode_value(client.get(key))
@@ -47,22 +47,17 @@ def _read_value(client: RedisClientType, key: Any) -> Any:
     return f"<unsupported redis type: {key_type}>"
 
 
-def _dump_client(client: RedisClientType) -> dict[str, Any]:
-    dump: dict[str, Any] = {}
-    for raw_key in client.scan_iter(count=1000):
-        dump[_decode_key(raw_key)] = _read_value(client, raw_key)
-    return dict(sorted(dump.items()))
-
-
 class LogRuntimeConfigs(Job):
-    """Dumps the ``config`` Redis store as a single JSON payload that can be
+    """Dumps the Snuba config Redis keys as a single JSON payload that can be
     pasted into an LLM to help migrate config to sentry-options (see
     getsentry/snuba#8168).
 
-    This is every value in the ``config`` client -- all runtime configs plus
-    the allocation-policy / CBRS overrides, which live under the ``capman`` and
-    ``cbrs`` hashes keyed exactly like the ``configurable_component_overrides``
-    sentry-option. Each key is read according to its Redis type.
+    Only the specific config keys are read (never a blind scan): the config
+    client can be the shared default Redis, so scanning it would leak unrelated
+    keys (cache, admin roles, job logs, ...) into the logs. The dumped keys are
+    the runtime config, its descriptions/changes, and the allocation-policy /
+    routing-strategy overrides (``capman`` / ``cbrs`` hashes, keyed exactly
+    like the ``configurable_component_overrides`` sentry-option).
 
     Run it repeatably straight from the CLI (no job manifest entry, no
     job-status guard) with ``snuba jobs dump_runtime_configs``.
@@ -70,12 +65,36 @@ class LogRuntimeConfigs(Job):
 
     allow_adhoc_run = True
 
-    def execute(self, logger: JobLogger) -> None:
-        client_name = RedisClientKey.CONFIG.value
-        contents = _dump_client(get_redis_client(RedisClientKey.CONFIG))
-        logger.info(f"redis client {client_name}: {len(contents)} key(s)")
-        logger.info(PAYLOAD_START_MARKER)
-        logger.info(
-            json.dumps({"redis": {client_name: contents}}, indent=2, sort_keys=True, default=str)
+    def _config_keys(self) -> list[str]:
+        # Imported lazily so pulling the RPC/routing stack (via storage_routing)
+        # doesn't happen for every `snuba jobs` invocation -- snuba.manual_jobs
+        # eagerly imports all job modules.
+        from snuba.query.allocation_policies import CAPMAN_HASH
+        from snuba.state import (
+            config_changes_list,
+            config_description_hash,
+            config_hash,
         )
+        from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
+            CBRS_HASH,
+        )
+
+        return [
+            config_hash,
+            config_description_hash,
+            config_changes_list,
+            CAPMAN_HASH,
+            CBRS_HASH,
+        ]
+
+    def execute(self, logger: JobLogger) -> None:
+        client = get_redis_client(RedisClientKey.CONFIG)
+        dump: dict[str, Any] = {}
+        for key in self._config_keys():
+            if client.exists(key):
+                dump[key] = _read_value(client, key)
+
+        logger.info(f"config keys dumped: {sorted(dump.keys())}")
+        logger.info(PAYLOAD_START_MARKER)
+        logger.info(json.dumps({"config": dump}, indent=2, sort_keys=True, default=str))
         logger.info(PAYLOAD_END_MARKER)
