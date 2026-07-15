@@ -29,24 +29,20 @@ class LogRuntimeConfigs(Job):
         return dict(sorted(state.get_all_configs().items()))
 
     def _collect_component_overrides(self) -> dict[str, Any]:
-        # ConfigurableComponent configs are stored in a per-namespace Redis hash
-        # (the namespace is the base class name). Reading every namespace hash
-        # gives the full set of overrides across allocation policies (including
-        # the ones only attached to storage-routing strategies, e.g. the EAP
-        # CBRS policy) and routing strategies, which is exactly what feeds the
-        # combined `configurable_component_overrides` sentry-option.
-        from snuba.query.allocation_policies import AllocationPolicy
+        # ConfigurableComponent configs live in the Redis hashes named by each
+        # component's `_get_hash()`: `capman` for every allocation policy
+        # (including the EAP CBRS policy attached only to a routing strategy)
+        # and `cbrs` for the storage-routing strategies. Reading both gives the
+        # full set of overrides that feeds the combined
+        # `configurable_component_overrides` sentry-option.
+        from snuba.query.allocation_policies import CAPMAN_HASH
         from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
-            BaseRoutingStrategy,
+            CBRS_HASH,
         )
 
-        namespaces = {
-            AllocationPolicy.component_namespace(),
-            BaseRoutingStrategy.component_namespace(),
-        }
         overrides: dict[str, Any] = {}
-        for namespace in sorted(namespaces):
-            overrides.update(state.get_all_configs(config_key=namespace))
+        for hash_name in (CAPMAN_HASH, CBRS_HASH):
+            overrides.update(state.get_all_configs(config_key=hash_name))
         return dict(sorted(overrides.items()))
 
     def execute(self, logger: JobLogger) -> None:
