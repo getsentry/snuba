@@ -17,13 +17,15 @@ def create_metrics(
     tags: Tags | None = None,
     sample_rates: Mapping[str, float] | None = None,
 ) -> MetricsBackend:
-    """Create a DogStatsd object if DOGSTATSD_HOST and DOGSTATSD_PORT are defined.
+    """Create a DogStatsd object if a DogStatsD transport (UDP or UDS) is configured.
 
-    When the ``use_dogstatsd_uds`` sentry-option is ``True`` and ``DOGSTATSD_SOCKET_PATH``
-    is configured, metrics are sent over the Unix domain socket instead of UDP; with the
-    flag off (or no socket configured) they use UDP (host/port). The flag is authoritative
-    -- it never falls back to the socket when off -- so host/port stay configured as the
-    UDP transport/rollback target. Return a DummyMetricsBackend when no host/port is set.
+    The ``use_dogstatsd_uds`` sentry-option selects the preferred transport: with it
+    ``True`` and ``DOGSTATSD_SOCKET_PATH`` configured, metrics are sent over the Unix domain
+    socket; otherwise they use UDP (host/port). A deployment configured with only one of the
+    two uses that one regardless of the flag -- a socket alone sends over UDS, host/port
+    alone over UDP -- so the flag is authoritative only when both are configured (a socket
+    never overrides an available UDP target while the flag is off), keeping host/port as the
+    UDP rollback target. Return a DummyMetricsBackend when neither transport is configured.
     Prefixes must start with `snuba.<category>`, for example: `snuba.processor`.
     """
     host: str | None = settings.DOGSTATSD_HOST
@@ -35,15 +37,18 @@ def create_metrics(
 
         return TestingMetricsBackend()
 
-    if host is None and port is None:
-        from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-
-        return DummyMetricsBackend()
-
-    if host is None or port is None:
+    # host/port must be both set or both unset; a partial UDP config is a misconfiguration.
+    if (host is None) != (port is None):
         raise ValueError(
             f"DOGSTATSD_HOST and DOGSTATSD_PORT should both be None or not None. Found DOGSTATSD_HOST: {host}, DOGSTATSD_PORT: {port} instead."
         )
+
+    # No transport configured at all -> no metrics. A socket alone is enough (it enables
+    # UDS); host/port alone enable UDP.
+    if host is None and port is None and socket_path is None:
+        from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
+
+        return DummyMetricsBackend()
 
     from datadog import DogStatsd  # type: ignore[attr-defined]  # datadog lacks explicit re-export
 
@@ -52,7 +57,6 @@ def create_metrics(
     from snuba.utils.metrics.backends.sentry import SentryMetricsBackend
 
     constant_tags = [f"{key}:{value}" for key, value in tags.items()] if tags is not None else None
-    udp = (host, port)
 
     # Resolve UDS-vs-UDP once for the whole process. DatadogMetricsBackend builds a
     # DogStatsd client per thread, so the factory below runs on each thread's first
@@ -74,13 +78,15 @@ def create_metrics(
             # MetricsWrapper(environment.metrics, ...) at import time, so importing it any
             # earlier would be a circular import. By first-emit time sentry-options has been
             # initialized (snuba.environment.setup_sentry -> init_options); if it hasn't,
-            # get_option returns the False default and we stay on UDP.
+            # get_option returns the False default and we prefer UDP.
             from snuba.state.sentry_options import get_option
 
             with resolve_lock:
                 if resolved_use_uds is None:
-                    resolved_use_uds = socket_path is not None and bool(
-                        get_option("use_dogstatsd_uds", False)
+                    # Use UDS when a socket is configured and either the flag selects it or
+                    # there is no UDP (host/port) target to fall back to (socket-only).
+                    resolved_use_uds = socket_path is not None and (
+                        bool(get_option("use_dogstatsd_uds", False)) or port is None
                     )
 
         if resolved_use_uds:
@@ -89,9 +95,12 @@ def create_metrics(
                 namespace=prefix,
                 constant_tags=constant_tags,
             )
+        # UDP branch: reached only when a host/port target is configured -- socket-only
+        # deployments always resolve to UDS above -- so host/port are set here.
+        assert host is not None and port is not None
         return DogStatsd(
-            host=udp[0],
-            port=udp[1],
+            host=host,
+            port=port,
             namespace=prefix,
             constant_tags=constant_tags,
         )

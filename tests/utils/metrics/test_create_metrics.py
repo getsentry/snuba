@@ -106,27 +106,49 @@ def test_create_metrics_transport_decision_is_process_wide(dogstatsd: MagicMock)
         assert call.kwargs["port"] == 8125
 
 
-def test_create_metrics_socket_only_without_host_port_is_dummy() -> None:
-    # UDS is gated by the flag and uses host/port as the UDP transport, so a deployment
-    # with only a socket and no host/port has no UDP target -> DummyMetricsBackend, even
-    # with the flag on. This keeps the flag authoritative and matches the Rust
-    # select_transport behavior. The decision is static (no sentry-options lookup).
+@patch("datadog.DogStatsd")
+def test_create_metrics_socket_only_uses_uds(dogstatsd: MagicMock) -> None:
+    # A socket alone (no host/port) is a usable transport: metrics go over UDS regardless
+    # of the flag, since there is no UDP target to prefer or fall back to. Matches the Rust
+    # select_transport behavior.
+    for flag in (True, False):
+        dogstatsd.reset_mock()
+        with (
+            patch.multiple(
+                "snuba.settings",
+                TESTING=False,
+                DOGSTATSD_HOST=None,
+                DOGSTATSD_PORT=None,
+                DOGSTATSD_SOCKET_PATH="/var/run/dogstatsd.sock",
+            ),
+            patch("snuba.state.sentry_options.get_option", side_effect=_get_option(flag)),
+        ):
+            backend = create_metrics("snuba.test")
+            assert isinstance(backend, SentryDatadogMetricsBackend)
+            backend.increment("snuba.test.metric")
+
+        dogstatsd.assert_called_once_with(
+            socket_path="/var/run/dogstatsd.sock",
+            namespace="snuba.test",
+            constant_tags=None,
+        )
+
+
+def test_create_metrics_partial_host_port_raises() -> None:
+    # host/port must be both set or both unset; a partial UDP config is a misconfiguration.
+    import pytest
+
     with (
         patch.multiple(
             "snuba.settings",
             TESTING=False,
-            DOGSTATSD_HOST=None,
+            DOGSTATSD_HOST="localhost",
             DOGSTATSD_PORT=None,
-            DOGSTATSD_SOCKET_PATH="/var/run/dogstatsd.sock",
+            DOGSTATSD_SOCKET_PATH=None,
         ),
-        patch("snuba.state.sentry_options.get_option") as get_option,
+        pytest.raises(ValueError),
     ):
-        backend = create_metrics("snuba.test")
-        get_option.assert_not_called()
-
-    from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-
-    assert isinstance(backend, DummyMetricsBackend)
+        create_metrics("snuba.test")
 
 
 def test_create_metrics_dummy_does_not_read_options() -> None:

@@ -58,20 +58,29 @@ enum DogStatsDTransport<'a> {
 
 /// Decide which DogStatsD transport to use.
 ///
-/// host/port (UDP) is the baseline transport: when it is configured, UDS is selected
-/// only if `use_uds` is true *and* a socket path is configured, otherwise UDP is used.
-/// The runtime flag is authoritative — a configured socket path alone never forces UDS,
-/// so a deployment ships with both available and flips between them at runtime, keeping
-/// host/port as the UDP fallback. When no host/port is configured there is no transport
-/// and metrics are disabled (matching the Python `create_metrics()` gating). Kept pure
-/// (no global recorder install) so the gating is unit-testable.
+/// The `use_uds` flag selects the *preferred* transport: when it is set and a socket path
+/// is configured, metrics go over UDS; otherwise they go over UDP (host/port). If only one
+/// transport is configured it is used regardless of the flag — a socket-only deployment
+/// sends over UDS, and a host/port-only deployment sends over UDP. The flag is therefore
+/// authoritative only when both are configured (a configured socket never overrides an
+/// available UDP target while the flag is off), which keeps host/port as the UDP rollback
+/// target. With neither configured, metrics are disabled. Matches the Python
+/// `create_metrics()` gating. Kept pure (no global recorder install) so it is unit-testable.
 fn select_transport(env: &EnvConfig, use_uds: bool) -> DogStatsDTransport<'_> {
-    match (env.dogstatsd_host.as_deref(), env.dogstatsd_port) {
-        (Some(host), Some(port)) => match (use_uds, env.dogstatsd_socket_path.as_deref()) {
-            (true, Some(socket_path)) => DogStatsDTransport::Uds(socket_path),
-            _ => DogStatsDTransport::Udp(host, port),
+    let socket = env.dogstatsd_socket_path.as_deref();
+    let udp = match (env.dogstatsd_host.as_deref(), env.dogstatsd_port) {
+        (Some(host), Some(port)) => Some((host, port)),
+        _ => None,
+    };
+    match socket {
+        // UDS when a socket is configured and either the flag selects it or there is no
+        // UDP (host/port) target to fall back to.
+        Some(socket_path) if use_uds || udp.is_none() => DogStatsDTransport::Uds(socket_path),
+        // Otherwise use UDP when host/port are configured; with neither, metrics are off.
+        _ => match udp {
+            Some((host, port)) => DogStatsDTransport::Udp(host, port),
+            None => DogStatsDTransport::Disabled,
         },
-        _ => DogStatsDTransport::Disabled,
     }
 }
 
@@ -94,11 +103,12 @@ fn use_dogstatsd_uds_enabled() -> bool {
 
 /// Build the DogStatsD metrics backend, choosing the transport at runtime.
 ///
-/// UDS is used only when the `use_dogstatsd_uds` sentry-option is `true` *and* a socket
-/// path is configured; otherwise we fall back to UDP (host/port). This mirrors the gating
-/// in the Python `create_metrics()` so the transport can be switched by flipping the
-/// sentry-option (followed by a restart) without a redeploy. If the flag cannot be read
-/// (e.g. options unavailable) we default to the stable UDP path.
+/// The `use_dogstatsd_uds` sentry-option selects the preferred transport: with it `true`
+/// and a socket path configured, metrics go over UDS; otherwise UDP (host/port). A
+/// deployment configured with only one of the two uses that one regardless of the flag.
+/// This mirrors the gating in the Python `create_metrics()` so the transport can be
+/// switched by flipping the sentry-option (followed by a restart) without a redeploy. If
+/// the flag cannot be read (e.g. options unavailable) we default to `false` (prefer UDP).
 ///
 /// Returns `None` when neither transport is configured, leaving metrics disabled.
 pub fn create_dogstatsd_backend(
@@ -232,17 +242,25 @@ mod tests {
     }
 
     #[test]
-    fn disabled_when_no_host_port() {
-        // Nothing configured at all.
+    fn disabled_when_nothing_configured() {
+        // Neither UDP (host/port) nor UDS (socket) configured -> metrics disabled.
         let env = env_with(None, None, None);
         assert_eq!(select_transport(&env, true), DogStatsDTransport::Disabled);
         assert_eq!(select_transport(&env, false), DogStatsDTransport::Disabled);
+    }
 
-        // host/port is the baseline transport: a socket alone (no host/port) is not a
-        // usable transport, so metrics are disabled regardless of the flag. This keeps
-        // the flag authoritative and consistent with the Python create_metrics().
+    #[test]
+    fn uds_when_socket_only() {
+        // A socket alone (no host/port) is a usable transport: metrics go over UDS
+        // regardless of the flag, since there is no UDP target to prefer or fall back to.
         let env = env_with(None, None, Some("/var/run/dd.sock"));
-        assert_eq!(select_transport(&env, true), DogStatsDTransport::Disabled);
-        assert_eq!(select_transport(&env, false), DogStatsDTransport::Disabled);
+        assert_eq!(
+            select_transport(&env, true),
+            DogStatsDTransport::Uds("/var/run/dd.sock")
+        );
+        assert_eq!(
+            select_transport(&env, false),
+            DogStatsDTransport::Uds("/var/run/dd.sock")
+        );
     }
 }
