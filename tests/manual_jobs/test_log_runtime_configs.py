@@ -43,7 +43,5 @@ def test_logs_allocation_policy_configs() -> None:
     assert run_job(_make_job_spec()) == JobStatus.FINISHED
 
     logs = view_job_logs(JOB_ID)
-    # At least one storage should have a non-passthrough allocation policy that
-    # gets logged with its live config values.
     assert _log_contains(logs, "allocation_policy")
     assert _log_contains(logs, "is_enforced")

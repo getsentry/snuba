@@ -6,25 +6,12 @@ from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.manual_jobs import Job, JobLogger, JobSpec
 from snuba.query.allocation_policies import AllocationPolicy, PassthroughPolicy
 
-# The "cost based rejection strategy" / bytes-scanned-rejecting policy. This is
-# the policy most people mean when they ask about "cbrs values".
 CBRS_POLICY_CLASS_NAME = "BytesScannedRejectingPolicy"
 
 
 class LogRuntimeConfigs(Job):
-    """Dumps every runtime config to the job log for auditing / debugging.
-
-    This logs, in order:
-      * all key/value runtime configs stored via ``snuba.state`` (the ones
-        managed through the admin "runtime config" tool)
-      * every allocation policy attached to every storage, along with its
-        currently-live configuration values
-      * a dedicated summary of the bytes-scanned-rejecting policy (a.k.a. CBRS)
-        values, since those are the ones we most often need to eyeball
-
-    params (all optional):
-      * ``include_passthrough`` (bool, default ``False``): also log storages
-        whose only allocation policy is the no-op ``PassthroughPolicy``.
+    """Logs all runtime configs (allocation policies and CBRS values included)
+    to snapshot current values ahead of the transition to sentry-options.
     """
 
     def __init__(self, job_spec: JobSpec) -> None:
@@ -36,8 +23,6 @@ class LogRuntimeConfigs(Job):
 
     @staticmethod
     def _as_bool(value: Any) -> bool:
-        # `snuba jobs run` passes params as strings, while the manifest passes
-        # already-typed JSON values. Handle both.
         if isinstance(value, str):
             return value.strip().lower() in ("1", "true", "yes", "y")
         return bool(value)
