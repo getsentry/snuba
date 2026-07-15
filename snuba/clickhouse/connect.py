@@ -488,9 +488,7 @@ class ClickhouseConnectPool(ClickhousePool):
             # Nothing to insert; mirror the native driver, which writes zero rows.
             return ClickhouseResult(
                 results=[],
-                profile=ClickhouseProfile(
-                    blocks=0, bytes=0, elapsed=0.0, progress_bytes=0, rows=0
-                ),
+                profile=ClickhouseProfile(blocks=0, bytes=0, elapsed=0.0, progress_bytes=0, rows=0),
                 trace_output="",
             )
 

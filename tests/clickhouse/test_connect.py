@@ -136,7 +136,10 @@ def test_insert_positional_rows_use_columns_from_sql() -> None:
     args, kwargs = client.insert.call_args
     assert args[0] == "metrics"
     assert kwargs["column_names"] == ["g", "ts", "v"]
-    assert args[1] == [[1, datetime(2023, 1, 2, 3, 4, 5), 10], [2, datetime(2023, 1, 3, 0, 0, 0), 30]]
+    assert args[1] == [
+        [1, datetime(2023, 1, 2, 3, 4, 5), 10],
+        [2, datetime(2023, 1, 3, 0, 0, 0), 30],
+    ]
 
 
 def test_insert_empty_rows_short_circuits() -> None:
