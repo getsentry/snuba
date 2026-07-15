@@ -84,18 +84,12 @@ def test_execute_passes_query_id_and_settings() -> None:
 
 
 def _jsoneachrow(kwargs: Any, args: Any) -> list[dict[str, Any]]:
-    # raw_insert may receive insert_block positionally or by keyword; normalize
-    # to the parsed JSONEachRow rows either way.
     block = kwargs.get("insert_block", args[1] if len(args) > 1 else None)
     text = block.decode("utf-8") if isinstance(block, bytes) else block
     return [json.loads(line) for line in text.splitlines()]
 
 
 def test_insert_dict_rows_sent_as_jsoneachrow() -> None:
-    # The migration status writers hand insert() a list of dict rows, one of
-    # which is a datetime. It must be sent via raw_insert as a JSONEachRow body
-    # with the datetime encoded as a string -- never through client.query(),
-    # whose parameter binding would try to JSON-encode the datetime and fail.
     client = mock.Mock()
 
     pool = _make_pool(client)
@@ -116,7 +110,6 @@ def test_insert_dict_rows_sent_as_jsoneachrow() -> None:
     args, kwargs = client.raw_insert.call_args
     assert args[0] == "migrations_local"
     assert kwargs["fmt"] == "JSONEachRow"
-    # The datetime is encoded to ClickHouse's second-precision DateTime string.
     assert _jsoneachrow(kwargs, args) == [
         {
             "group": "events",
@@ -129,7 +122,6 @@ def test_insert_dict_rows_sent_as_jsoneachrow() -> None:
 
 
 def test_insert_encodes_date_without_time() -> None:
-    # A bare date encodes as YYYY-MM-DD (no time component).
     client = mock.Mock()
 
     pool = _make_pool(client)
@@ -140,8 +132,6 @@ def test_insert_encodes_date_without_time() -> None:
 
 
 def test_insert_empty_rows_short_circuits() -> None:
-    # An empty row sequence writes nothing and never touches the client, matching
-    # the native driver's zero-row insert.
     client = mock.Mock()
 
     pool = _make_pool(client)
@@ -168,8 +158,6 @@ def test_insert_forwards_query_id_and_settings() -> None:
 
 
 def test_execute_does_not_handle_insert_rows() -> None:
-    # execute() is the query path only: insert data goes through insert(), so a
-    # plain query still routes to client.query() and never to raw_insert.
     client = mock.Mock()
     client.query.return_value = FakeQueryResult(result_set=[[1]])
 

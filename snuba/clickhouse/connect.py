@@ -49,18 +49,6 @@ clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
 
 
 def _clickhouse_json_default(value: Any) -> Any:
-    """
-    ``json.dumps`` fallback that renders the Python types ClickHouse's JSONEachRow
-    parser cannot take as bare JSON into the string forms it accepts. Only
-    ``datetime``/``date`` need help here -- they are what the migration status
-    writers put in a row, and the crash they caused ("Object of type datetime is
-    not JSON serializable") is the whole reason this path exists.
-
-    ``datetime`` is formatted to second precision (``YYYY-MM-DD HH:MM:SS``), the
-    only form ClickHouse's default ``date_time_input_format=basic`` accepts for a
-    ``DateTime`` column -- a fractional part would be rejected. ``date`` becomes
-    ``YYYY-MM-DD``. ``datetime`` is checked first because it subclasses ``date``.
-    """
     if isinstance(value, datetime):
         return value.strftime("%Y-%m-%d %H:%M:%S")
     if isinstance(value, date):
@@ -452,17 +440,6 @@ class ClickhouseConnectPool(ClickhousePool):
         settings: Mapping[str, Any] | None = None,
         query_id: str | None = None,
     ) -> None:
-        """
-        HTTP override of :meth:`ClickhousePool.insert`.
-
-        clickhouse-connect's ``query()`` has no insert notion -- it would treat
-        the rows as ``query`` substitution parameters and JSON-encode them, which
-        fails on native Python values such as ``datetime`` -- so instead the rows
-        are serialized to a JSONEachRow body and sent via
-        ``client.raw_insert(..., fmt="JSONEachRow")``. Serialization goes through
-        :func:`_clickhouse_json_default`, which renders ``datetime``/``date`` into
-        the string forms ClickHouse's JSONEachRow parser accepts.
-        """
         rows = list(data)
         if not rows:
             return

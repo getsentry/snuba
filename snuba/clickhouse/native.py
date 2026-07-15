@@ -174,20 +174,6 @@ class ClickhousePool(ABC):
         settings: Mapping[str, Any] | None = None,
         query_id: str | None = None,
     ) -> None:
-        """
-        Insert ``data`` -- a sequence of rows, each a column-name -> value
-        mapping -- into ``table``. This is the interface callers should use to
-        write rows; it keeps them off ``execute``'s query path, which the two
-        drivers implement differently for inserts.
-
-        The default implementation targets the native protocol: it issues an
-        ``INSERT INTO <table> FORMAT JSONEachRow`` through :meth:`execute`, where
-        the driver serializes native Python values (``datetime``, ...) into the
-        native binary block itself, using the column types from the server's
-        INSERT sample block, and maps each dict's keys to columns. The
-        clickhouse-connect (HTTP) pool has no such query-path insert notion and
-        overrides this -- see ``ClickhouseConnectPool.insert``.
-        """
         rows = list(data)
         if not rows:
             return
