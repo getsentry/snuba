@@ -486,6 +486,48 @@ class TestExistsFilterCoalesced:
         assert expr.function_name == "has"
 
 
+class TestBooleanAttributeFilters:
+    @staticmethod
+    def _comparison(value: bool) -> TraceItemFilter:
+        return TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_BOOLEAN, name="custom.flag"),
+                op=ComparisonFilter.OP_EQUALS,
+                value=AttributeValue(val_bool=value),
+            )
+        )
+
+    def test_equals_false_checks_key_exists(self) -> None:
+        expr = trace_item_filters_to_expression(
+            self._comparison(False), attribute_key_to_expression
+        )
+
+        assert isinstance(expr, FunctionCall)
+        assert expr.function_name == "and"
+        assert {"has", "mapKeys", "equals", "arrayElement"} <= _collect_function_names(expr)
+
+    def test_equals_true_does_not_need_existence_check(self) -> None:
+        expr = trace_item_filters_to_expression(self._comparison(True), attribute_key_to_expression)
+
+        assert isinstance(expr, FunctionCall)
+        assert expr.function_name == "equals"
+        assert "mapKeys" not in _collect_function_names(expr)
+
+    def test_exists_checks_boolean_map_key(self) -> None:
+        expr = trace_item_filters_to_expression(
+            TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.Type.TYPE_BOOLEAN, name="custom.flag")
+                )
+            ),
+            attribute_key_to_expression,
+        )
+
+        assert isinstance(expr, FunctionCall)
+        assert expr.function_name == "has"
+        assert _collect_column_names(expr) == {"attributes_bool"}
+
+
 class TestSentryTimestampFilter:
     """Range filters on `sentry.timestamp` must target the raw DateTime `timestamp`
     column (index- and partition-prunable) rather than CAST(timestamp, 'Float64')."""
@@ -1171,6 +1213,7 @@ class TestEmptyVsAbsentComparison:
     # Custom attribute names not present in gen_item_message's default set
     # (which injects e.g. status="ok"), so we fully control present/empty/absent.
     ATTR = "test.empty_vs_absent.status"
+    BOOL_ATTR = "test.empty_vs_absent.flag"
     BATCH_ATTR = "test.empty_vs_absent.batch"
 
     @pytest.fixture(autouse=True)
@@ -1188,6 +1231,7 @@ class TestEmptyVsAbsentComparison:
                 attributes={
                     self.BATCH_ATTR: batch,
                     self.ATTR: AnyValue(string_value="ok"),
+                    self.BOOL_ATTR: AnyValue(bool_value=True),
                     "color": AnyValue(string_value="red"),
                 },
             ),
@@ -1196,6 +1240,7 @@ class TestEmptyVsAbsentComparison:
                 attributes={
                     self.BATCH_ATTR: batch,
                     self.ATTR: AnyValue(string_value=""),
+                    self.BOOL_ATTR: AnyValue(bool_value=False),
                     "color": AnyValue(string_value="blue"),
                 },
             ),
@@ -1214,10 +1259,19 @@ class TestEmptyVsAbsentComparison:
         self,
         op: ComparisonFilter.Op.ValueType,
         *,
-        value: str | None = None,
+        value: str | bool | None = None,
         is_null: bool = False,
+        attribute_name: str = ATTR,
+        attribute_type: AttributeKey.Type.ValueType = AttributeKey.TYPE_STRING,
     ) -> list[str]:
-        av = AttributeValue(val_null=True) if is_null else AttributeValue(val_str=value or "")
+        if is_null:
+            av = AttributeValue(val_null=True)
+        elif attribute_type == AttributeKey.TYPE_BOOLEAN:
+            assert isinstance(value, bool)
+            av = AttributeValue(val_bool=value)
+        else:
+            assert isinstance(value, (str, type(None)))
+            av = AttributeValue(val_str=value or "")
         filt = TraceItemFilter(
             and_filter=AndFilter(
                 filters=[
@@ -1230,7 +1284,7 @@ class TestEmptyVsAbsentComparison:
                     ),
                     TraceItemFilter(
                         comparison_filter=ComparisonFilter(
-                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name=self.ATTR),
+                            key=AttributeKey(type=attribute_type, name=attribute_name),
                             op=op,
                             value=av,
                         )
@@ -1291,6 +1345,14 @@ class TestEmptyVsAbsentComparison:
     def test_not_like_wildcard_matches_only_absent(self) -> None:
         # Present rows all `like '%'`, so only the absent key survives NOT LIKE.
         assert self._execute(ComparisonFilter.OP_NOT_LIKE, value="%") == ["green"]
+
+    def test_boolean_equals_false_excludes_absent(self) -> None:
+        assert self._execute(
+            ComparisonFilter.OP_EQUALS,
+            value=False,
+            attribute_name=self.BOOL_ATTR,
+            attribute_type=AttributeKey.TYPE_BOOLEAN,
+        ) == ["blue"]
 
 
 class TestAnyAttributeFilterOption:

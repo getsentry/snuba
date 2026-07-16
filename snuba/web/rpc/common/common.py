@@ -334,14 +334,16 @@ def add_existence_check_to_subscriptable_references(query: Query) -> None:
     query.transform_expressions(transform)
 
 
-def _contains_subscriptable_reference(exp: Expression) -> bool:
-    """True if ``exp`` contains a ``SubscriptableReference`` (a map lookup) — the
-    map-backed keys we route through ``_map_backed_operands``."""
+def _contains_map_lookup(exp: Expression) -> bool:
+    """True if ``exp`` contains one of the map lookup representations we route
+    through ``_map_backed_operands``."""
     found = False
 
     def visit(node: Expression) -> Expression:
         nonlocal found
-        if isinstance(node, SubscriptableReference):
+        if isinstance(node, SubscriptableReference) or (
+            isinstance(node, FunctionCall) and node.function_name == "arrayElement"
+        ):
             found = True
         return node
 
@@ -367,14 +369,14 @@ def _map_backed_operands(k: AttributeKey) -> tuple[Expression, Expression]:
     Callers build ``cmp(value, v)``, wrapped in ``and(exists, ...)`` only when the
     literal could be the column default (see ``_comparison_can_match_column_default``)
     — then ``exists``, not the value, distinguishes a missing key from a stored
-    empty value, since ``arrayElement`` reads both as the '' / 0 default. The
+    empty value, since ``arrayElement`` reads both as the '' / 0 / false default. The
     ``multiIf`` else is only reached when all keys are absent.
 
     Built without aliases: conditions don't need them, and an alias here would
     collide with the SELECT clause's existence ``if(...)`` for the same attribute
     (same alias, different expression). Only valid for map-backed keys
-    (string/int/float); booleans / normalized columns / arrays take the legacy
-    path, and SELECT keeps its own ``coalesce(...)`` representation untouched.
+    (string/int/float/bool); normalized columns and arrays take the legacy path,
+    and SELECT keeps its own ``coalesce(...)`` representation untouched.
     """
     col_name = PROTO_TYPE_TO_ATTRIBUTE_COLUMN[k.type]
     names = [k.name] + list(ATTRIBUTES_TO_COALESCE.get(k.name, ()))
@@ -446,11 +448,16 @@ def _scalar_value(v: AttributeValue) -> bool | str | int | float | None:
 def _comparison_can_match_column_default(
     attr_type: AttributeKey.Type.ValueType, v: AttributeValue, value_type: str
 ) -> bool:
-    """True if any compared literal is the column default ('' / 0), which an
+    """True if any compared literal is the column default ('' / 0 / false), which an
     absent key also reads as — so the existence guard is needed to avoid
     matching absent keys. When no literal is the default the guard is dropped (the
     simplest form). LIKE/NOT_LIKE always guard; null comparisons are separate."""
-    default: str | int = "" if attr_type == AttributeKey.Type.TYPE_STRING else 0
+    if attr_type == AttributeKey.Type.TYPE_STRING:
+        default: str | int | bool = ""
+    elif attr_type == AttributeKey.Type.TYPE_BOOLEAN:
+        default = False
+    else:
+        default = 0
     if value_type == "val_array":
         scalars: list[Any] = [_scalar_value(x) for x in v.val_array.values]
     elif value_type in ("val_str_array", "val_int_array", "val_float_array", "val_double_array"):
@@ -969,7 +976,7 @@ def trace_item_filters_to_expression(
                 return _typed_array_includes_scalar_expression(
                     k, v, item_filter.comparison_filter.ignore_case
                 )
-            if _contains_subscriptable_reference(k_expression):
+            if _contains_map_lookup(k_expression):
                 # Map-backed: NULL-free (exists, value) form (see _map_backed_operands).
                 value, exists = _map_backed_operands(k)
                 if v_is_null:  # `attr = null` <=> key absent
@@ -980,7 +987,7 @@ def trace_item_filters_to_expression(
                     else (value, v_expression)
                 )
                 cmp = f.equals(lhs, rhs)
-                # existence guard only needed when '' / 0 could match an absent key.
+                # Existence guard only needed when the default could match an absent key.
                 if _comparison_can_match_column_default(k.type, v, value_type):
                     return and_cond(exists, cmp)
                 return cmp
@@ -1001,7 +1008,7 @@ def trace_item_filters_to_expression(
                         k, v, item_filter.comparison_filter.ignore_case
                     )
                 )
-            if _contains_subscriptable_reference(k_expression):
+            if _contains_map_lookup(k_expression):
                 # Negation of OP_EQUALS; an absent key is "not equal".
                 value, exists = _map_backed_operands(k)
                 if v_is_null:  # `attr != null` <=> key present
@@ -1033,7 +1040,7 @@ def trace_item_filters_to_expression(
                     "the LIKE comparison is only supported on string and array keys"
                 )
             comparison_function = f.ilike if item_filter.comparison_filter.ignore_case else f.like
-            if _contains_subscriptable_reference(k_expression):
+            if _contains_map_lookup(k_expression):
                 value, exists = _map_backed_operands(k)
                 return and_cond(exists, comparison_function(value, v_expression))
             return comparison_function(k_expression, v_expression)
@@ -1048,7 +1055,7 @@ def trace_item_filters_to_expression(
                 raise BadSnubaRPCRequestException(
                     "the NOT LIKE comparison is only supported on string and array keys"
                 )
-            if _contains_subscriptable_reference(k_expression):
+            if _contains_map_lookup(k_expression):
                 # Negation of OP_LIKE; an absent key is "not like".
                 like_fn = f.ilike if item_filter.comparison_filter.ignore_case else f.like
                 value, exists = _map_backed_operands(k)
@@ -1086,7 +1093,7 @@ def trace_item_filters_to_expression(
             # note: v_expression must be an array
             # we redefine the way in works for nulls
             # now null in ['hi', null] is true
-            if _contains_subscriptable_reference(k_expression):
+            if _contains_map_lookup(k_expression):
                 # Map-backed: keep the existence if(...) out of in() (see helper).
                 return _analyzer_safe_in_expression(
                     k,
@@ -1121,7 +1128,7 @@ def trace_item_filters_to_expression(
             # note: v_expression must be an array
             # we redefine the way not in works for nulls
             # now null not in ['hi'] is true
-            if _contains_subscriptable_reference(k_expression):
+            if _contains_map_lookup(k_expression):
                 # Map-backed: keep the existence if(...) out of in() (see helper).
                 return _analyzer_safe_in_expression(
                     k,
@@ -1262,6 +1269,14 @@ def get_field_existence_expression(field: Expression) -> Expression:
         if isinstance(base, Column) and base.column_name in TYPED_ARRAY_MAP_COLUMNS:
             return f.notEmpty(field)
         return map_key_exists(field.parameters[0], field.parameters[1])
+
+    if (
+        isinstance(field, FunctionCall)
+        and field.function_name == "cast"
+        and isinstance(field.parameters[0], FunctionCall)
+        and field.parameters[0].function_name == "arrayElement"
+    ):
+        return get_field_existence_expression(field.parameters[0])
 
     if isinstance(field, FunctionCall) and field.function_name in ("arrayMap", "arrayConcat"):
         # Array attributes return empty arrays (not NULL) for missing keys, so notEmpty
