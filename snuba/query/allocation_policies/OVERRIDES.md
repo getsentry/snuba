@@ -19,7 +19,7 @@ All configs live in a single option, a flat `{key: number}` map:
 
 ```
 {resource}.{ClassName}.{config}
-{resource}.{ClassName}.{config}.{param}:{value},...   # parameterized config
+{resource}.{ClassName}.{config}|{param}:{value}|...   # parameterized config
 ```
 
 - **resource** — the storage/strategy the component is attached to, e.g. `errors`, `eap_items`.
@@ -27,8 +27,8 @@ All configs live in a single option, a flat `{key: number}` map:
   `ConcurrentRateLimitAllocationPolicy`.
 - **config** — the config name, e.g. `is_enforced`, `max_threads`, `concurrent_limit`.
 - **params** — for a parameterized config, its declared params appended as a
-  sorted, comma-separated `param:value` suffix, e.g.
-  `.organization_id:123` or `.organization_id:123,referrer:api.foo`.
+  sorted, `|`-delimited `param:value` suffix, e.g.
+  `|organization_id:123` or `|organization_id:123|referrer:api.foo`.
 
 The lookup is an **exact match** on this key (the same key the policy has always
 built); there is no fallback/precedence walk in the base — a policy reads exactly
@@ -41,7 +41,7 @@ declares in `param_types`.
 {
   "errors.BytesScannedRejectingPolicy.is_enforced": 1,
   "errors.ConcurrentRateLimitAllocationPolicy.concurrent_limit": 22,
-  "errors.BytesScannedRejectingPolicy.organization_referrer_scan_limit.organization_id:456": 20000000000
+  "errors.BytesScannedRejectingPolicy.organization_referrer_scan_limit|organization_id:456": 20000000000
 }
 ```
 

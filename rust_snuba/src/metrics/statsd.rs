@@ -88,7 +88,7 @@ fn select_transport(env: &EnvConfig, use_uds: bool) -> DogStatsDTransport<'_> {
 /// Read the `use_dogstatsd_uds` rollout flag from the `snuba` sentry-options namespace.
 ///
 /// Reads the same store as the rest of snuba's Rust sentry-options access (see
-/// `snuba_options.rs`) and as the Python `create_metrics()`
+/// `options.rs`) and as the Python `create_metrics()`
 /// (`snuba.state.sentry_options.get_option`). The option is declared as a boolean in
 /// `sentry-options/schemas/snuba/schema.json`. Any failure (options client
 /// uninitialized, key missing, wrong type) defaults to `false`, i.e. the stable UDP path.

@@ -5,12 +5,8 @@ from typing import Any, TypedDict, TypeVar, cast, final
 
 from sentry_options import OptionValue
 
-from snuba import settings
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.state import delete_config as delete_runtime_config
-from snuba.state import get_all_configs as get_all_runtime_configs
-from snuba.state import set_config as set_runtime_config
-from snuba.state.sentry_options import SNUBA_OPTIONS_NAMESPACE, get_option
+from snuba.state.sentry_options import get_option
 from snuba.utils.registered_class import RegisteredClass
 
 logger = logging.getLogger("snuba.configurable_component")
@@ -18,16 +14,16 @@ logger = logging.getLogger("snuba.configurable_component")
 T = TypeVar("T", bound="ConfigurableComponent")
 
 # Single sentry-options dict holding ConfigurableComponent config overrides,
-# keyed by the same fully-qualified runtime-config key these configs have always
-# used (``{resource}.{ClassName}.{config}[.{param}:{value},...]``). Values are
-# stored as numbers and cast to each config's declared numeric ``value_type``
-# (int/float) on read. This is the authoritative, centrally-managed
-# (sentry-options-automator) source.
+# keyed by the fully-qualified config key
+# ``{resource}.{ClassName}.{config}[|{param}:{value}|...]`` (params sorted,
+# ``|``-delimited). Values are stored as numbers and cast to each config's
+# declared numeric ``value_type`` (int/float) on read. This option is the
+# authoritative, centrally-managed (sentry-options-automator) source; it is
+# read-only at runtime.
 #
 # All ConfigurableComponents (allocation policies and storage-routing strategies)
 # read this option in ``get_config_value``, falling back only to the code
-# default; the legacy Redis runtime config is no longer consulted for reads. The
-# policies themselves are otherwise unchanged -- only where the config value
+# default. The policies themselves are unchanged -- only where the config value
 # comes from has moved.
 CONFIGURABLE_COMPONENT_OVERRIDES_KEY = "configurable_component_overrides"
 
@@ -154,16 +150,6 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
 
     """
 
-    # This component builds redis strings that are delimited by dots, commas, colons
-    # in order to allow those characters to exist in config we replace them with their
-    # counterparts on write/read. It may be better to just replace our serialization with JSON
-    # instead of what we're doing but this is where we're at rn 1/10/24
-    _KEY_DELIMITERS_TO_ESCAPE_SEQUENCES = {
-        ".": "__dot_literal__",
-        ",": "__comma_literal__",
-        ":": "__colon_literal__",
-    }
-
     def component_name(self) -> str:
         # what is this configurable component's class name?
         # bytes scanned policy? outcomes based routing strategy?
@@ -213,14 +199,6 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
             for config in self._get_default_config_definitions()
             + self.additional_config_definitions()
         }
-
-    def __unescape_delimiter_chars(self, key: str) -> str:
-        for (
-            delimiter_char,
-            escape_sequence,
-        ) in self._KEY_DELIMITERS_TO_ESCAPE_SEQUENCES.items():
-            key = key.replace(escape_sequence, delimiter_char)
-        return key
 
     @final
     def _validate_config_params(
@@ -281,30 +259,25 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
 
         return config
 
-    def __deserialize_runtime_config_key(self, key: str) -> tuple[str, dict[str, Any]]:
+    def __deserialize_config_key(self, key: str) -> tuple[str, dict[str, Any]]:
         """
-        Given a raw runtime config key, deconstructs it into it's config
-        key and parameters components.
+        Given a fully-qualified config key, deconstructs it into its config key
+        and parameters components.
 
         Examples:
         - `"mystorage.MyAllocationPolicy.my_config"`
             - returns `"my_config", {}`
-        - `"mystorage.MyAllocationPolicy.my_config.a:1,b:2"`
+        - `"mystorage.MyAllocationPolicy.my_config|a:1|b:2"`
             - returns `"my_config", {"a": 1, "b": 2}`
         """
-
-        # key is "storage.policy.config" or "storage.policy.config.param1:val1,param2:val2"
-        _, _, config_key, *params = key.split(".")
-        # (config_key, params) is ("config", []) or ("config", ["param1:val1,param2:val2"])
+        # base is "storage.policy.config"; params (if any) follow after a "|",
+        # each a "param:value" pair, "|"-delimited.
+        base, _, params_string = key.partition("|")
+        config_key = base[len(self.component_name()) + 1 :]
         params_dict = {}
-        if params:
-            # convert ["param1:val1,param2:val2"] to {"param1": "val1", "param2": "val2"}
-            [params_string] = params
-            params_split = params_string.split(",")
-            for param_string in params_split:
-                param_key, param_value = param_string.split(":")
-                param_key = self.__unescape_delimiter_chars(param_key)
-                param_value = self.__unescape_delimiter_chars(param_value)
+        if params_string:
+            for param_string in params_string.split("|"):
+                param_key, _, param_value = param_string.partition(":")
                 params_dict[param_key] = param_value
 
         self._validate_config_params(config_key=config_key, params=params_dict)
@@ -312,9 +285,12 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         return config_key, params_dict
 
     def get_current_configs(self) -> list[dict[str, Any]]:
-        """Returns a list of live configs with their definitions on this ConfigurableComponent."""
+        """Returns a list of live configs with their definitions on this ConfigurableComponent.
 
-        runtime_configs = get_all_runtime_configs(self._get_hash())
+        Reads the centrally-managed ``configurable_component_overrides`` option.
+        """
+        overrides: OptionValue = get_option(CONFIGURABLE_COMPONENT_OVERRIDES_KEY, {})
+        overrides_map: dict[str, Any] = overrides if isinstance(overrides, dict) else {}
         definitions = self.config_definitions()
 
         required_configs = {
@@ -325,19 +301,17 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
 
         detailed_configs: list[dict[str, Any]] = []
 
-        for key in runtime_configs:
+        for key in overrides_map:
             if key.startswith(self.component_name()):
                 try:
-                    config_key, params = self.__deserialize_runtime_config_key(key)
+                    config_key, params = self.__deserialize_config_key(key)
                 except Exception:
                     logger.exception(
                         f"{self.component_namespace()} could not deserialize a key: {key}"
                     )
                     continue
                 detailed_configs.append(
-                    definitions[config_key].to_config_dict(
-                        value=runtime_configs[key], params=params
-                    )
+                    definitions[config_key].to_config_dict(value=overrides_map[key], params=params)
                 )
                 if config_key in required_configs:
                     required_configs.remove(config_key)
@@ -378,36 +352,19 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
             for definition in definitions
         ]
 
-    def __escape_delimiter_chars(self, key: str) -> str:
-        if not isinstance(key, str):
-            return key
-        for (
-            delimiter_char,
-            escape_sequence,
-        ) in self._KEY_DELIMITERS_TO_ESCAPE_SEQUENCES.items():
-            if escape_sequence in str(key):
-                raise InvalidConfig(f"{escape_sequence} is not a valid string for a policy config")
-            key = key.replace(delimiter_char, escape_sequence)
-        return key
-
-    def _build_runtime_config_key(self, config: str, params: dict[str, Any]) -> str:
+    def _build_config_key(self, config: str, params: dict[str, Any]) -> str:
         """
-        Builds a unique key to be used in the actual datastore containing these configs.
+        Builds the fully-qualified config key used to look up an override.
 
         Example return values:
         - `"mystorage.MyAllocationPolicy.my_config"`            # no params
-        - `"mystorage.MyAllocationPolicy.my_config.a:1,b:2"`    # sorted params
+        - `"mystorage.MyAllocationPolicy.my_config|a:1|b:2"`    # sorted params
         """
-        parameters = "."
-        for param in sorted(params.keys()):
-            param_sanitized = self.__escape_delimiter_chars(param)
-            value_sanitized = self.__escape_delimiter_chars(params[param])
-            parameters += f"{param_sanitized}:{value_sanitized},"
-        parameters = parameters[:-1]
-        return f"{self.component_name()}.{config}{parameters}"
-
-    def _get_hash(self) -> str:
-        return self.component_namespace()
+        base = f"{self.component_name()}.{config}"
+        if not params:
+            return base
+        suffix = "|".join(f"{param}:{params[param]}" for param in sorted(params))
+        return f"{base}|{suffix}"
 
     def get_config_value(
         self,
@@ -419,8 +376,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
 
         Reads from the centrally-managed ``configurable_component_overrides``
         sentry-option (values stored as numbers, cast to the config's declared
-        int/float type), or the code default. The legacy Redis runtime config is
-        not consulted."""
+        int/float type), or the code default when no override is set."""
         if params is None:
             params = {}
         config_definition = (
@@ -428,76 +384,11 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
             if validate
             else self.config_definitions()[config_key]
         )
-        full_key = self._build_runtime_config_key(config_key, params)
+        full_key = self._build_config_key(config_key, params)
         overrides: OptionValue = get_option(CONFIGURABLE_COMPONENT_OVERRIDES_KEY, {})
         if isinstance(overrides, dict) and full_key in overrides:
             return config_definition.value_type(overrides[full_key])
         return config_definition.default
-
-    def set_config_value(
-        self,
-        config_key: str,
-        value: Any,
-        params: dict[str, Any] | None = None,
-        user: str | None = None,
-    ) -> None:
-        """Sets a value of a configuration on this ConfigurableComponent."""
-        if params is None:
-            params = {}
-        config_definition = self._validate_config_params(config_key, params, value)
-        # ensure correct type is stored
-        value = config_definition.value_type(value)
-        full_key = self._build_runtime_config_key(config_key, params)
-        set_runtime_config(
-            key=full_key,
-            value=value,
-            user=user,
-            force=True,
-            config_key=self._get_hash(),
-        )
-        if settings.TESTING:
-            self.__mirror_test_option_override(full_key, value)
-
-    def __mirror_test_option_override(
-        self, full_key: str, value: Any, *, remove: bool = False
-    ) -> None:
-        """Mirror a set/delete into the ``configurable_component_overrides`` option.
-
-        Reads come from sentry-options, not Redis, so tests that write through
-        ``set_config_value``/``delete_config_value`` need the value in the option
-        store the test process reads back. ``tests/conftest.py`` clears these
-        between tests. TESTING-only."""
-        from sentry_options._core import _set_override
-
-        current: OptionValue = get_option(CONFIGURABLE_COMPONENT_OVERRIDES_KEY, {})
-        merged: dict[str, Any] = dict(current) if isinstance(current, dict) else {}
-        if remove:
-            merged.pop(full_key, None)
-        else:
-            merged[full_key] = value
-        _set_override(SNUBA_OPTIONS_NAMESPACE, CONFIGURABLE_COMPONENT_OVERRIDES_KEY, merged)
-
-    def delete_config_value(
-        self,
-        config_key: str,
-        params: dict[str, Any] | None = None,
-        user: str | None = None,
-    ) -> None:
-        """
-        Deletes an instance of an optional configuration on this ConfigurableComponent.
-        If this function is run on a required configuration, it resets the value to default instead.
-        """
-        if params is None:
-            params = {}
-        self._validate_config_params(config_key, params)
-        full_key = self._build_runtime_config_key(config_key, params)
-        delete_runtime_config(
-            key=full_key,
-            user=user,
-            config_key=self._get_hash(),
-        )
-        if settings.TESTING:
-            self.__mirror_test_option_override(full_key, None, remove=True)
 
     @classmethod
     def config_key(cls) -> str:

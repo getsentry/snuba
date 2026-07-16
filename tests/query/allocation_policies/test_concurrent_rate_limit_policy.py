@@ -15,6 +15,7 @@ from snuba.query.allocation_policies.concurrent_rate_limit import (
     ConcurrentRateLimitAllocationPolicy,
 )
 from snuba.web import QueryException, QueryResult
+from tests.configs.component_config import set_component_config
 
 _RESULT_SUCCESS = QueryResultOrError(
     QueryResult(
@@ -85,8 +86,8 @@ def test_configure_max_query_duration(
 ) -> None:
     max_query_duration_s = 1
     sleep_time = 1.01
-    policy.set_config_value("concurrent_limit", 1)
-    policy.set_config_value("max_query_duration_s", max_query_duration_s)
+    set_component_config(policy, "concurrent_limit", 1)
+    set_component_config(policy, "max_query_duration_s", max_query_duration_s)
 
     policy.get_quota_allowance(tenant_ids={"organization_id": 123}, query_id="abc1")
     time.sleep(sleep_time)
@@ -254,7 +255,7 @@ def test_apply_overrides(
     expected_concurrent_limit,
 ) -> None:
     for override in overrides:
-        policy.set_config_value(*override)
+        set_component_config(policy, *override)
     for i in range(expected_concurrent_limit):
         policy.get_quota_allowance(tenant_ids=tenant_ids, query_id=f"{i}")
     allowance = policy.get_quota_allowance(
@@ -271,7 +272,8 @@ def test_override_isolation(
     override_concurrent_limit = 1
     project_id = 1234
     overridden_referrer = "overridden_referrer"
-    policy.set_config_value(
+    set_component_config(
+        policy,
         "referrer_project_override",
         override_concurrent_limit,
         {"project_id": project_id, "referrer": overridden_referrer},

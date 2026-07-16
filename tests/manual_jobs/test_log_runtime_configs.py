@@ -70,17 +70,6 @@ def test_dumps_runtime_configs_from_config_client() -> None:
 
 
 @pytest.mark.redis_db
-def test_dumps_allocation_policy_overrides_from_capman_hash() -> None:
-    policy = _find_allocation_policy()
-    policy.set_config_value("is_enforced", 0)
-    expected_key = policy._build_runtime_config_key("is_enforced", {})
-
-    payload = _run_and_get_payload()
-
-    assert payload["config"]["capman"][expected_key] == "0"
-
-
-@pytest.mark.redis_db
 def test_only_reads_known_config_keys() -> None:
     # A blind scan of the (shared) config client would leak unrelated keys.
     # Set such a key and confirm it is never dumped.
