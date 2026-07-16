@@ -370,14 +370,15 @@ def _map_backed_operands(k: AttributeKey) -> tuple[Expression, Expression]:
     Callers build ``cmp(value, v)``, wrapped in ``and(exists, ...)`` only when the
     literal could be the column default (see ``_comparison_can_match_column_default``)
     — then ``exists``, not the value, distinguishes a missing key from a stored
-    empty value, since ``arrayElement`` reads both as the '' / 0 default. The
+    empty value, since ``arrayElement`` reads both as the '' / 0 / false default. The
     ``multiIf`` else is only reached when all keys are absent.
 
     Built without aliases: conditions don't need them, and an alias here would
     collide with the SELECT clause's existence ``if(...)`` for the same attribute
-    (same alias, different expression). Only valid for map-backed keys
-    (string/int/float); booleans / normalized columns / arrays take the legacy
-    path, and SELECT keeps its own ``coalesce(...)`` representation untouched.
+    (same alias, different expression). Only valid for map-backed scalar keys
+    (string/int/float/bool, see ``_is_map_backed_key``); normalized columns and arrays
+    are excluded (arrays take their own element-wise path), and SELECT keeps its own
+    ``coalesce(...)`` representation untouched.
     """
     col_name = PROTO_TYPE_TO_ATTRIBUTE_COLUMN[k.type]
     names = [k.name] + list(ATTRIBUTES_TO_COALESCE.get(k.name, ()))
