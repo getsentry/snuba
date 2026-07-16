@@ -14,6 +14,19 @@ logger = logging.getLogger("snuba.configurable_component")
 
 T = TypeVar("T", bound="ConfigurableComponent")
 
+# Single sentry-options dict holding ConfigurableComponent config overrides,
+# keyed by the same fully-qualified runtime-config key these configs have always
+# used (``{resource}.{ClassName}.{config}[.{param}:{value},...]``). Values are
+# stored as numbers and cast to each config's declared numeric ``value_type``
+# (int/float) on read. This is the authoritative, centrally-managed
+# (sentry-options-automator) source.
+#
+# Migrated components (currently the storage-routing strategies) read this option
+# in their ``get_config_value`` override, falling back only to the code default.
+# The base ``get_config_value`` below is unchanged and still reads the legacy
+# Redis runtime config, so components not yet migrated keep working as before.
+CONFIGURABLE_COMPONENT_OVERRIDES_KEY = "configurable_component_overrides"
+
 
 class InvalidConfig(Exception):
     pass
@@ -373,7 +386,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
             key = key.replace(delimiter_char, escape_sequence)
         return key
 
-    def __build_runtime_config_key(self, config: str, params: dict[str, Any]) -> str:
+    def _build_runtime_config_key(self, config: str, params: dict[str, Any]) -> str:
         """
         Builds a unique key to be used in the actual datastore containing these configs.
 
@@ -407,7 +420,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
             else self.config_definitions()[config_key]
         )
         return get_runtime_config(
-            key=self.__build_runtime_config_key(config_key, params),
+            key=self._build_runtime_config_key(config_key, params),
             default=config_definition.default,
             config_key=self._get_hash(),
         )
@@ -426,7 +439,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         # ensure correct type is stored
         value = config_definition.value_type(value)
         set_runtime_config(
-            key=self.__build_runtime_config_key(config_key, params),
+            key=self._build_runtime_config_key(config_key, params),
             value=value,
             user=user,
             force=True,
@@ -447,7 +460,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
             params = {}
         self._validate_config_params(config_key, params)
         delete_runtime_config(
-            key=self.__build_runtime_config_key(config_key, params),
+            key=self._build_runtime_config_key(config_key, params),
             user=user,
             config_key=self._get_hash(),
         )

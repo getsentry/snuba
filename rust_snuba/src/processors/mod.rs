@@ -4,6 +4,7 @@ pub mod eap_items;
 mod errors;
 mod functions;
 mod generic_metrics;
+mod llm_proxy_cost;
 mod outcomes;
 mod profile_chunks;
 mod profiles;
@@ -64,6 +65,7 @@ define_processing_functions! {
     ("ErrorsProcessor", "events", ProcessingFunctionType::ProcessingFunctionWithReplacements(errors::process_message_with_replacement)),
     ("ProfileChunksProcessor", "snuba-profile-chunks", ProcessingFunctionType::ProcessingFunction(profile_chunks::process_message)),
     ("EAPItemsProcessor", "snuba-items", ProcessingFunctionType::ProcessingFunction(eap_items::process_message)),
+    ("LlmProxyCostProcessor", "snuba-llm-proxy-cost", ProcessingFunctionType::ProcessingFunction(llm_proxy_cost::process_message)),
 }
 
 // COGS is recorded for these processors

@@ -32,9 +32,6 @@ def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
 
     for query_trace_data in parse_trace_for_query_ids(query_trace):
         sql = profile_events_raw_sql.format(query_trace_data.query_id)
-        logger.info(
-            f"Gathering profile event using host: {query_trace_data.host}, port = {query_trace_data.port}, storage = {storage}, sql = {sql}, g.user = {g.user}"
-        )
 
         system_query_result = None
         attempt = 0
@@ -93,7 +90,6 @@ def parse_trace_for_query_ids(trace_output: TraceOutput) -> list[QueryTraceData]
         node_name: query_summary.query_id
         for node_name, query_summary in summarized_trace_output.query_summaries.items()
     }
-    logger.info(f"node to query id mapping: {node_name_to_query_id}")
     return [
         QueryTraceData(
             host=node_name if hostname_resolves(node_name) else "127.0.0.1",

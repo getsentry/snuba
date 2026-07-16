@@ -39,13 +39,12 @@ from snuba.protos.common import (
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond, if_cond, in_cond, literal, literals_array, or_cond
+from snuba.query.dsl import and_cond, if_cond, literal, literals_array, or_cond
 from snuba.query.dsl import column as snuba_column
 from snuba.query.expressions import (
     Column as ColumnExpr,
 )
 from snuba.query.expressions import (
-    DangerousRawSQL,
     Expression,
     FunctionCall,
     SubscriptableReference,
@@ -56,7 +55,6 @@ from snuba.query.expressions import (
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
@@ -68,7 +66,6 @@ from snuba.web.rpc.common.common import (
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
     typed_array_select_subcolumn_name,
-    use_array_map_columns,
     use_sampling_factor,
     valid_sampling_factor_conditions,
 )
@@ -89,7 +86,9 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_count_column,
 )
 from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
+    apply_cross_item_outer_query_settings,
     get_trace_ids_sql_for_cross_item_query,
+    trace_id_in_subquery_condition,
 )
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 
@@ -246,7 +245,6 @@ def aggregation_filter_to_expression(
                     agg_filter.comparison_filter.conditional_aggregation,
                     attribute_key_to_expression,
                     use_sampling_factor(request_meta),
-                    use_array_map_columns(request_meta),
                 ),
                 agg_filter.comparison_filter.val,
             )
@@ -354,7 +352,6 @@ def _convert_order_by(
                         x.column.conditional_aggregation,
                         attribute_key_to_expression,
                         use_sampling_factor(request_meta),
-                        use_array_map_columns(request_meta),
                     ),
                 )
             )
@@ -432,7 +429,6 @@ def _get_reliability_context_columns(
         confidence_interval_column = get_confidence_interval_column(
             column.conditional_aggregation,
             attribute_key_to_expression,
-            use_array_map_columns=use_array_map_columns(request_meta),
         )
         if confidence_interval_column is not None:
             context_columns.append(
@@ -445,7 +441,6 @@ def _get_reliability_context_columns(
         average_sample_rate_column = get_average_sample_rate_column(
             column.conditional_aggregation,
             attribute_key_to_expression,
-            use_array_map_columns=use_array_map_columns(request_meta),
         )
         context_columns.append(
             SelectedExpression(
@@ -457,7 +452,6 @@ def _get_reliability_context_columns(
         count_column = get_count_column(
             column.conditional_aggregation,
             attribute_key_to_expression,
-            use_array_map_columns=use_array_map_columns(request_meta),
         )
         context_columns.append(SelectedExpression(name=count_column.alias, expression=count_column))
         return context_columns
@@ -538,7 +532,6 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
             column.conditional_aggregation,
             attribute_key_to_expression,
             use_sampling_factor(request_meta),
-            use_array_map_columns(request_meta),
         )
         match column.conditional_aggregation.WhichOneof("default_value"):
             case None:
@@ -578,19 +571,17 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
     )
 
 
-def _reads_typed_array_columns(column: Column, request_meta: RequestMeta) -> bool:
-    """True if ``column`` is a TYPE_ARRAY attribute read from the typed array map columns
-    (past the cutoff) rather than the legacy ``attributes_array`` JSON column."""
-    return (
-        column.HasField("key")
-        and column.key.type == AttributeKey.Type.TYPE_ARRAY
-        and use_array_map_columns(request_meta)
-    )
+def _reads_typed_array_columns(column: Column) -> bool:
+    """True if ``column`` is the deprecated untyped ``TYPE_ARRAY``, which has no element
+    type and so is read as four typed sub-columns merged back in ``convert_results``.
+    Element-typed array keys (TYPE_ARRAY_STRING/INT/DOUBLE/BOOL) read their single column
+    directly through ``attribute_key_to_expression``, like scalars."""
+    return column.HasField("key") and column.key.type == AttributeKey.Type.TYPE_ARRAY
 
 
 def _array_subcolumn_selected_expressions(column: Column) -> list[SelectedExpression]:
-    """Four native typed sub-columns for a TYPE_ARRAY column, named ``"<label>.<col>"`` so
-    ``convert_results`` merges them back into ``column.label``."""
+    """Four native typed sub-columns for a deprecated untyped ``TYPE_ARRAY`` column, named
+    ``"<label>.<col>"`` so ``convert_results`` merges them back into ``column.label``."""
     return [
         SelectedExpression(
             name=typed_array_select_subcolumn_name(column.label, typed_col),
@@ -629,8 +620,9 @@ def build_query(
         # The key_col expression alias may differ from the column label. That is okay
         # the attribute key name is used in the groupby, the column label is just the name of
         # the returned attribute value
-        if _reads_typed_array_columns(column, request.meta):
-            # Read as four typed sub-columns, merged back by convert_results.
+        if _reads_typed_array_columns(column):
+            # Deprecated untyped TYPE_ARRAY: read as four typed sub-columns, merged back
+            # by convert_results (element-typed array keys read one column, like scalars).
             selected_columns.extend(_array_subcolumn_selected_expressions(column))
         else:
             selected_columns.append(
@@ -649,9 +641,7 @@ def build_query(
         trace_ids_sql, _ = get_trace_ids_sql_for_cross_item_query(
             request, request.meta, list(request.trace_filters), sampling_tier, timer
         )
-        additional_conditions.append(
-            in_cond(snuba_column("trace_id"), DangerousRawSQL(None, f"({trace_ids_sql})"))
-        )
+        additional_conditions.append(trace_id_in_subquery_condition(trace_ids_sql))
     if time_window is not None:
         additional_conditions.append(
             timestamp_in_range_condition(
@@ -674,7 +664,6 @@ def build_query(
             trace_item_filters_to_expression(
                 request.filter,
                 attribute_key_to_expression,
-                use_array_map_columns=use_array_map_columns(request.meta),
             ),
             valid_sampling_factor_conditions(),
             *item_type_conds,
@@ -788,13 +777,9 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
             )
         try:
             routing_decision.strategy.merge_clickhouse_settings(routing_decision, query_settings)
-            # When trace_filters are present and the feature is enabled, don't use sampling on the outer query
-            # The inner query (getting trace IDs) will use sampling
-            cross_item_queries_no_sample_outer = get_option(
-                "cross_item_queries_no_sample_outer", True
+            apply_cross_item_outer_query_settings(
+                query_settings, bool(in_msg.trace_filters), routing_decision.tier
             )
-            if not (in_msg.trace_filters and cross_item_queries_no_sample_outer):
-                query_settings.set_sampling_tier(routing_decision.tier)
         except Exception as e:
             sentry_sdk.capture_message(f"Error merging clickhouse settings: {e}")
         original_time_window = TimeWindow(

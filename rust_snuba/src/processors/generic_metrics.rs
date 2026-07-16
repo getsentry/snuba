@@ -6,6 +6,7 @@ use serde::{
     de::value::{MapAccessDeserializer, SeqAccessDeserializer},
     Deserialize, Deserializer, Serialize,
 };
+use serde_json::value::RawValue;
 use std::{collections::BTreeMap, marker::PhantomData, vec};
 
 use crate::{
@@ -37,7 +38,7 @@ fn generate_timeseries_id(
     org_id: u64,
     project_id: u64,
     metric_id: u64,
-    tags: &BTreeMap<String, String>,
+    tags: &BTreeMap<&str, String>,
 ) -> u32 {
     let mut adler = Adler32::new();
 
@@ -54,16 +55,19 @@ fn generate_timeseries_id(
 }
 
 #[derive(Debug, Deserialize)]
-struct FromGenericMetricsMessage {
+struct FromGenericMetricsMessage<'a> {
     use_case_id: String,
     org_id: u64,
     project_id: u64,
     metric_id: u64,
     timestamp: f64,
     sentry_received_timestamp: f64,
-    tags: BTreeMap<String, String>,
-    #[serde(flatten)]
-    value: MetricValue,
+    #[serde(borrow)]
+    tags: BTreeMap<&'a str, String>,
+    #[serde(rename = "type")]
+    metric_type: MetricType,
+    #[serde(borrow)]
+    value: &'a RawValue,
     retention_days: u16,
     sampling_weight: Option<f64>,
     aggregation_option: Option<String>,
@@ -74,23 +78,40 @@ struct MessageUseCase {
     use_case_id: String,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(tag = "type", content = "value")]
-enum MetricValue {
+/// The metric type as sent in the `type` field of the message. The actual
+/// `value` payload is deserialized separately (by type) so that the message
+/// struct does not need `#[serde(flatten)]`, which forces serde into a slow,
+/// borrow-breaking buffered code path.
+#[derive(Debug, Deserialize, PartialEq, Eq, Clone, Copy)]
+enum MetricType {
     #[serde(rename = "c")]
-    Counter(f64),
-    #[serde(rename = "s", deserialize_with = "encoded_series_compat_deserializer")]
-    Set(EncodedSeries<u32>),
-    #[serde(rename = "d", deserialize_with = "encoded_series_compat_deserializer")]
-    Distribution(EncodedSeries<f64>),
+    Counter,
+    #[serde(rename = "s")]
+    Set,
+    #[serde(rename = "d")]
+    Distribution,
     #[serde(rename = "g")]
-    Gauge {
-        count: u64,
-        last: f64,
-        max: f64,
-        min: f64,
-        sum: f64,
-    },
+    Gauge,
+}
+
+/// The `value` payload for a gauge metric.
+#[derive(Debug, Deserialize)]
+struct GaugeValue {
+    count: u64,
+    last: f64,
+    max: f64,
+    min: f64,
+    sum: f64,
+}
+
+/// Deserialize a set/distribution `value` payload, supporting both the legacy
+/// bare-array format and the newer format-tagged map (array/base64/zstd).
+fn decode_series<T>(value: &RawValue) -> anyhow::Result<EncodedSeries<T>>
+where
+    T: for<'de> Deserialize<'de>,
+{
+    let mut de = serde_json::Deserializer::from_str(value.get());
+    Ok(encoded_series_compat_deserializer(&mut de)?)
 }
 
 trait Decodable<const SIZE: usize>: Copy {
@@ -166,7 +187,7 @@ fn decode_encoded_into_numeric_array<T, const SIZE: usize>(
 where
     T: Decodable<SIZE>,
 {
-    if data.len() % T::SIZE == 0 {
+    if data.len().is_multiple_of(T::SIZE) {
         Ok(data
             .chunks_exact(T::SIZE)
             .map(TryInto::try_into)
@@ -275,20 +296,20 @@ struct CountersRawRow {
 /// Item represents the row into which the message should be parsed.
 trait Parse: Sized {
     fn parse(
-        from: FromGenericMetricsMessage,
+        from: FromGenericMetricsMessage<'_>,
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<Self>>;
 }
 
 impl Parse for CountersRawRow {
     fn parse(
-        from: FromGenericMetricsMessage,
+        from: FromGenericMetricsMessage<'_>,
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<CountersRawRow>> {
-        let count_value = match from.value {
-            MetricValue::Counter(value) => value,
-            _ => return Ok(Option::None),
-        };
+        if from.metric_type != MetricType::Counter {
+            return Ok(Option::None);
+        }
+        let count_value: f64 = serde_json::from_str(from.value.get())?;
 
         let timeseries_id =
             generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
@@ -465,13 +486,13 @@ struct SetsRawRow {
 
 impl Parse for SetsRawRow {
     fn parse(
-        from: FromGenericMetricsMessage,
+        from: FromGenericMetricsMessage<'_>,
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<SetsRawRow>> {
-        let set_values = match from.value {
-            MetricValue::Set(values) => values.try_into_vec()?,
-            _ => return Ok(Option::None),
-        };
+        if from.metric_type != MetricType::Set {
+            return Ok(Option::None);
+        }
+        let set_values = decode_series::<u32>(from.value)?.try_into_vec()?;
 
         timer!(
             "generic_metrics.messages.sets_value_len",
@@ -551,15 +572,13 @@ struct DistributionsRawRow {
 
 impl Parse for DistributionsRawRow {
     fn parse(
-        from: FromGenericMetricsMessage,
+        from: FromGenericMetricsMessage<'_>,
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<DistributionsRawRow>> {
-        let maybe_dist = match from.value {
-            MetricValue::Distribution(value) => value.try_into_vec(),
-            _ => return Ok(Option::None),
-        };
-
-        let distribution_values = maybe_dist?;
+        if from.metric_type != MetricType::Distribution {
+            return Ok(Option::None);
+        }
+        let distribution_values = decode_series::<f64>(from.value)?.try_into_vec()?;
 
         timer!(
             "generic_metrics.messages.dists_value_len",
@@ -655,7 +674,7 @@ struct GaugesRawRow {
 
 impl Parse for GaugesRawRow {
     fn parse(
-        from: FromGenericMetricsMessage,
+        from: FromGenericMetricsMessage<'_>,
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<GaugesRawRow>> {
         let mut gauges_values_last = vec![];
@@ -663,22 +682,15 @@ impl Parse for GaugesRawRow {
         let mut gauges_values_max = vec![];
         let mut gauges_values_min = vec![];
         let mut gauges_values_sum = vec![];
-        match from.value {
-            MetricValue::Gauge {
-                last,
-                count,
-                max,
-                min,
-                sum,
-            } => {
-                gauges_values_last.push(last);
-                gauges_values_count.push(count);
-                gauges_values_max.push(max);
-                gauges_values_min.push(min);
-                gauges_values_sum.push(sum);
-            }
-            _ => return Ok(Option::None),
+        if from.metric_type != MetricType::Gauge {
+            return Ok(Option::None);
         }
+        let gauge: GaugeValue = serde_json::from_str(from.value.get())?;
+        gauges_values_last.push(gauge.last);
+        gauges_values_count.push(gauge.count);
+        gauges_values_max.push(gauge.max);
+        gauges_values_min.push(gauge.min);
+        gauges_values_sum.push(gauge.sum);
 
         let timeseries_id =
             generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
@@ -1431,10 +1443,10 @@ mod tests {
         let org_id = 1;
         let project_id = 2;
         let metric_id = 3;
-        let mut tags = BTreeMap::new();
-        tags.insert("3".to_string(), "value3".to_string());
-        tags.insert("2".to_string(), "value2".to_string());
-        tags.insert("1".to_string(), "value1".to_string());
+        let mut tags: BTreeMap<&str, String> = BTreeMap::new();
+        tags.insert("3", "value3".to_string());
+        tags.insert("2", "value2".to_string());
+        tags.insert("1", "value1".to_string());
 
         let timeseries_id = generate_timeseries_id(org_id, project_id, metric_id, &tags);
         assert_eq!(timeseries_id, 1403651978);

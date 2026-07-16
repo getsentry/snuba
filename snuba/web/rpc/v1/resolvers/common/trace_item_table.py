@@ -1,4 +1,3 @@
-import json
 import re
 from collections import defaultdict
 from collections.abc import Callable, Iterable
@@ -10,62 +9,22 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableRequest,
 )
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
-    Array,
     AttributeKey,
     AttributeValue,
     Function,
     Reliability,
 )
 
-from snuba.web.rpc.common.common import (
-    merge_typed_array_subcolumns,
-    use_array_map_columns,
-)
+from snuba.protos.common import ARRAY_TYPES, PROTO_ARRAY_TYPE_TO_COLUMN
+from snuba.web.rpc.common.common import merge_typed_array_subcolumns
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_get_trace import convert_to_attribute_value
 from snuba.web.rpc.v1.resolvers.common.aggregation import ExtrapolationContext
 
 
-def _json_array_element_to_scalar(obj: Any) -> Any:
-    if not isinstance(obj, dict) or len(obj) != 1:
-        return obj
-    (tag, val) = next(iter(obj.items()))
-    if tag == "String":
-        return str(val)
-    if tag == "Int":
-        return int(val)
-    if tag in ("Double", "Float"):
-        return float(val)
-    if tag == "Bool":
-        if isinstance(val, bool):
-            return val
-        return str(val).lower() == "true"
-    return obj
-
-
 def _array_raw_to_attribute_value(raw: Any) -> AttributeValue:
-    """
-    Array values will be JSON String
-    """
-    if isinstance(raw, str):
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError as e:
-            raise BadSnubaRPCRequestException(
-                f"TYPE_ARRAY column value is not valid JSON: {e}"
-            ) from e
-        if not isinstance(parsed, list):
-            raise BadSnubaRPCRequestException(
-                f"TYPE_ARRAY column JSON must decode to a list, got {type(parsed)}"
-            )
-        return AttributeValue(
-            val_array=Array(
-                values=[
-                    convert_to_attribute_value(_json_array_element_to_scalar(elem))
-                    for elem in parsed
-                ]
-            )
-        )
+    """Array columns are read natively (typed array map columns), so the value is a list
+    of native elements (or, for a deprecated untyped ``TYPE_ARRAY``, the merged list)."""
     if isinstance(raw, (list, tuple)):
         return convert_to_attribute_value(list(raw))
     return convert_to_attribute_value(raw)
@@ -85,8 +44,9 @@ def _get_converter_for_type(
         return lambda x: AttributeValue(val_float=float(x))
     if key_type == AttributeKey.TYPE_DOUBLE:
         return lambda x: AttributeValue(val_double=float(x))
-    if key_type == AttributeKey.TYPE_ARRAY:
-        # Native list (typed sub-columns merged in convert_results) or legacy JSON string.
+    if key_type in ARRAY_TYPES:
+        # Native list: an element-typed array key reads one typed column; a deprecated
+        # untyped TYPE_ARRAY reads four typed sub-columns merged in convert_results.
         return _array_raw_to_attribute_value
     raise BadSnubaRPCRequestException(f"unknown attribute type: {AttributeKey.Type.Name(key_type)}")
 
@@ -212,28 +172,35 @@ def convert_results(
 ) -> list[TraceItemColumnValues]:
     converters = get_converters_for_columns(request.columns)
 
-    # Past the cutoff a TYPE_ARRAY column is selected as four typed sub-columns; collapse
-    # them back into the column label so its converter sees one native list.
-    array_labels = (
-        [
-            column.label
-            for column in request.columns
-            if column.HasField("key") and column.key.type == AttributeKey.TYPE_ARRAY
-        ]
-        if use_array_map_columns(request.meta)
-        else []
-    )
+    # A deprecated untyped TYPE_ARRAY column is selected as four typed sub-columns; collapse
+    # them back into the column label so its converter sees one native list. Element-typed
+    # array keys read a single native column, so they need no merge — but both kinds must
+    # map an empty read to NULL below.
+    deprecated_array_labels = [
+        column.label
+        for column in request.columns
+        if column.HasField("key") and column.key.type == AttributeKey.TYPE_ARRAY
+    ]
+    typed_array_labels = [
+        column.label
+        for column in request.columns
+        if column.HasField("key") and column.key.type in PROTO_ARRAY_TYPE_TO_COLUMN
+    ]
 
     res: defaultdict[str, TraceItemColumnValues] = defaultdict(TraceItemColumnValues)
     for row in data:
-        if array_labels:
-            for label, elements in merge_typed_array_subcolumns(row, array_labels):
-                # An absent array attribute reads as four empty typed sub-columns; surface
-                # it as NULL (like a missing scalar attribute) rather than an empty array.
-                # Keep the label in the row so every requested column stays aligned across
-                # rows. The typed columns can't tell an absent array from a stored-empty
-                # one, so both map to NULL.
-                row[label] = elements if elements else None
+        for label, elements in merge_typed_array_subcolumns(row, deprecated_array_labels):
+            # An absent array attribute reads as four empty typed sub-columns; surface it as
+            # NULL (like a missing scalar attribute) rather than an empty array. Keep the
+            # label in the row so every requested column stays aligned across rows. The typed
+            # columns can't tell an absent array from a stored-empty one, so both map to NULL.
+            row[label] = elements if elements else None
+        for label in typed_array_labels:
+            # An element-typed array reads its single column as a native list; an absent (or
+            # stored-empty) attribute reads as an empty array, which we also surface as NULL
+            # for the same missing-attribute semantics as scalars and untyped arrays.
+            if not row.get(label):
+                row[label] = None
         for column_name, value in row.items():
             if column_name in converters:
                 extrapolation_context = ExtrapolationContext.from_row(column_name, row)

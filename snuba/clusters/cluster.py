@@ -35,6 +35,11 @@ logger = structlog.get_logger().bind(module=__name__)
 # tools) that only know a node's native address and have no cluster config to
 # read an http_port from.
 DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
+# User-facing read queries get a 25s timeout, leaving headroom under a ~30s
+# frontend request budget to still return a response. Migrations, DDL and
+# other long-running operations keep their own (default or longer) timeouts
+# above/below.
+_DEFAULT_USER_FACING_TIMEOUT = 25
 
 
 class ClickhouseClientSettingsType(NamedTuple):
@@ -68,11 +73,11 @@ class ClickhouseClientSettings(Enum):
     )
     DELETE = ClickhouseClientSettingsType({"mutations_sync": 1}, None)
     OPTIMIZE = ClickhouseClientSettingsType({}, settings.OPTIMIZE_QUERY_TIMEOUT)
-    # User-facing read queries get a 25s timeout, leaving headroom under a ~30s
-    # frontend request budget to still return a response. Migrations, DDL and
-    # other long-running operations keep their own (default or longer) timeouts
-    # above/below.
-    QUERY = ClickhouseClientSettingsType({}, 25)
+    QUERY = ClickhouseClientSettingsType({}, _DEFAULT_USER_FACING_TIMEOUT)
+    TRACING = ClickhouseClientSettingsType(
+        {"readonly": 2, "max_execution_time": _DEFAULT_USER_FACING_TIMEOUT},
+        _DEFAULT_USER_FACING_TIMEOUT,
+    )
     # Internal/maintenance queries that are NOT user-facing reads and must not
     # inherit QUERY's 25s cap: cluster topology discovery (system.clusters),
     # storage-routing load lookups, delete-throttling system-table checks, the
@@ -80,7 +85,6 @@ class ClickhouseClientSettings(Enum):
     # so they stay unbounded (their behavior before QUERY got a read timeout).
     INTERNAL = ClickhouseClientSettingsType({}, None)
     QUERYLOG = ClickhouseClientSettingsType({}, None)
-    TRACING = ClickhouseClientSettingsType({"readonly": 2}, None)
     REPLACE = ClickhouseClientSettingsType(
         {
             # Replacing existing rows requires reconstructing the entire tuple
@@ -519,16 +523,19 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         )
 
     def __get_cluster_nodes(self, cluster_name: str) -> Sequence[ClickhouseNode]:
-        # system.clusters only reports the native port; every node in the
-        # cluster shares the cluster's configured HTTP port, so stamp it on each
-        # discovered node so it is self-describing for the HTTP driver.
+        # system.clusters only reports the native port. The cluster's configured
+        # HTTP port is an Envoy intercept port that only fronts the cluster
+        # endpoint (the query node); individual nodes discovered here are
+        # addressed directly, bypassing Envoy, and serve HTTP on the well-known
+        # default port. Stamp that on each node so the HTTP driver connects to a
+        # port the node actually listens on.
         return [
             ClickhouseNode(
                 host_name=host[0],
                 native_port=host[1],
                 shard=host[2],
                 replica=host[3],
-                http_port=self.__http_port,
+                http_port=DEFAULT_CLICKHOUSE_HTTP_PORT,
             )
             for host in self.get_query_connection(ClickhouseClientSettings.INTERNAL)
             .execute(

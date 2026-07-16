@@ -14,6 +14,7 @@ from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
 )
+from tests.web.rpc.v1.routing_strategies.common import override_component_config
 
 BASE_TIME = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(
     hours=24
@@ -60,8 +61,10 @@ def test_no_override_uses_allocation_policy_value() -> None:
 @pytest.mark.redis_db
 def test_org_override_replaces_allocation_policy_value() -> None:
     strategy = OutcomesBasedRoutingStrategy()
-    strategy.set_config_value("organization_max_threads_override", 4, {"organization_id": _ORG_ID})
-    routing_decision = strategy.get_routing_decision(_build_context())
+    with override_component_config(
+        strategy, "organization_max_threads_override", 4, {"organization_id": _ORG_ID}
+    ):
+        routing_decision = strategy.get_routing_decision(_build_context())
     assert routing_decision.clickhouse_settings["max_threads"] == 4
     assert routing_decision.routing_context.extra_info["org_clickhouse_setting_overrides"] == {
         "max_threads": 4
@@ -74,8 +77,10 @@ def test_org_override_can_raise_above_allocation_policy_value() -> None:
     strategy = OutcomesBasedRoutingStrategy()
     # Baseline policy value is 10 (asserted in the no-override test); set the
     # override higher to confirm absolute precedence — not min/cap semantics.
-    strategy.set_config_value("organization_max_threads_override", 32, {"organization_id": _ORG_ID})
-    routing_decision = strategy.get_routing_decision(_build_context())
+    with override_component_config(
+        strategy, "organization_max_threads_override", 32, {"organization_id": _ORG_ID}
+    ):
+        routing_decision = strategy.get_routing_decision(_build_context())
     assert routing_decision.clickhouse_settings["max_threads"] == 32
 
 
@@ -85,8 +90,10 @@ def test_override_value_of_zero_is_honored() -> None:
     # ClickHouse treats max_threads=0 as "use all available cores", so 0 is a
     # legitimate override value — must not be mistaken for the unset sentinel.
     strategy = OutcomesBasedRoutingStrategy()
-    strategy.set_config_value("organization_max_threads_override", 0, {"organization_id": _ORG_ID})
-    routing_decision = strategy.get_routing_decision(_build_context())
+    with override_component_config(
+        strategy, "organization_max_threads_override", 0, {"organization_id": _ORG_ID}
+    ):
+        routing_decision = strategy.get_routing_decision(_build_context())
     assert routing_decision.clickhouse_settings["max_threads"] == 0
     assert routing_decision.routing_context.extra_info["org_clickhouse_setting_overrides"] == {
         "max_threads": 0
@@ -97,13 +104,16 @@ def test_override_value_of_zero_is_honored() -> None:
 @pytest.mark.redis_db
 def test_override_scoped_to_organization_id() -> None:
     strategy = OutcomesBasedRoutingStrategy()
-    strategy.set_config_value("organization_max_threads_override", 4, {"organization_id": _ORG_ID})
+    with override_component_config(
+        strategy, "organization_max_threads_override", 4, {"organization_id": _ORG_ID}
+    ):
+        # Same strategy instance, a different org_id should not be affected.
+        other_decision = strategy.get_routing_decision(
+            _build_context(organization_id=_OTHER_ORG_ID)
+        )
+        assert other_decision.clickhouse_settings == {"max_threads": 10}
+        assert "org_clickhouse_setting_overrides" not in other_decision.routing_context.extra_info
 
-    # Same strategy instance, a different org_id should not be affected.
-    other_decision = strategy.get_routing_decision(_build_context(organization_id=_OTHER_ORG_ID))
-    assert other_decision.clickhouse_settings == {"max_threads": 10}
-    assert "org_clickhouse_setting_overrides" not in other_decision.routing_context.extra_info
-
-    # And the configured org still sees the override.
-    target_decision = strategy.get_routing_decision(_build_context())
-    assert target_decision.clickhouse_settings["max_threads"] == 4
+        # And the configured org still sees the override.
+        target_decision = strategy.get_routing_decision(_build_context())
+        assert target_decision.clickhouse_settings["max_threads"] == 4

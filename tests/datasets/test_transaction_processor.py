@@ -1,5 +1,5 @@
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping, MutableMapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -7,6 +7,7 @@ from typing import Any
 from unittest.mock import ANY
 
 import pytest
+from sentry_options.testing import override_options
 
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
@@ -14,7 +15,6 @@ from snuba.datasets.processors.transactions_processor import (
     TransactionsMessageProcessor,
 )
 from snuba.processor import InsertBatch
-from snuba.state import set_config
 
 
 @dataclass
@@ -52,7 +52,7 @@ class TransactionEvent:
     received: float | None = None
 
     def get_trace_context(self) -> Mapping[str, Any] | None:
-        context = {
+        context: dict[str, Any] = {
             "sampled": True,
             "trace_id": self.trace_id,
             "op": self.op,
@@ -93,7 +93,7 @@ class TransactionEvent:
             return None
         return {"replay_id": self.replay_id}
 
-    def serialize(self) -> tuple[int, str, Mapping[str, Any]]:
+    def serialize(self) -> tuple[int, str, dict[str, Any]]:
         return (
             2,
             "insert",
@@ -217,13 +217,13 @@ class TransactionEvent:
             },
         )
 
-    def build_result(self, meta: KafkaMessageMetadata) -> Mapping[str, Any]:
+    def build_result(self, meta: KafkaMessageMetadata) -> MutableMapping[str, Any]:
         start_timestamp = datetime.utcfromtimestamp(self.start_timestamp)
         finish_timestamp = datetime.utcfromtimestamp(self.timestamp)
 
         spans = sorted([(self.op, int("a" * 16, 16), 1.2345), ("http", int("b" * 16, 16), 0.1234)])
 
-        ret = {
+        ret: dict[str, Any] = {
             "deleted": 0,
             "project_id": 1,
             "event_id": str(uuid.UUID(self.event_id)),
@@ -389,10 +389,10 @@ class TestTransactionsProcessor:
         ) == InsertBatch([message.build_result(meta)], ANY)
         settings.TRANSACT_SKIP_CONTEXT_STORE = old_skip_context
 
+    @override_options("snuba", {"max_spans_per_transaction": 1})
     def test_too_many_spans(self) -> None:
         old_skip_context = settings.TRANSACT_SKIP_CONTEXT_STORE
         settings.TRANSACT_SKIP_CONTEXT_STORE = {1: {"experiments"}}
-        set_config("max_spans_per_transaction", 1)
 
         message = self.__get_transaction_event()
         meta = KafkaMessageMetadata(offset=1, partition=2, timestamp=datetime(1970, 1, 1))
@@ -426,6 +426,7 @@ class TestTransactionsProcessor:
         actual_message = TransactionsMessageProcessor().process_message(
             payload_wo_transaction_info, meta
         )
+        assert isinstance(actual_message, InsertBatch)
         assert actual_message.rows[0]["transaction_source"] == ""
 
         # Remove transaction_info.source
@@ -433,6 +434,7 @@ class TestTransactionsProcessor:
 
         meta = KafkaMessageMetadata(offset=1, partition=2, timestamp=datetime(1970, 1, 1))
         actual_message = TransactionsMessageProcessor().process_message(payload_wo_source, meta)
+        assert isinstance(actual_message, InsertBatch)
         assert actual_message.rows[0]["transaction_source"] == ""
 
     def test_app_ctx_none(self) -> None:

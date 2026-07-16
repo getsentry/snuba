@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
+from datetime import datetime
 from threading import Lock
 from typing import Any
 
@@ -21,6 +23,7 @@ from snuba.clickhouse.native import (
     ClickhouseResult,
     Params,
 )
+from snuba.reader import unwrap_nullable_type
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger("snuba.clickhouse.connect")
@@ -43,6 +46,22 @@ DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
 # forwards whatever settings it is given to the server, so to preserve parity
 # we tell clickhouse-connect to drop unrecognized settings instead of failing.
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
+
+
+def _coerce_temporal(value: Any, ch_type: str) -> Any:
+    """
+    Parse a ``Date``/``DateTime`` string from JSONCompact into the ``date``/``datetime``
+    object the reader's transforms expect -- they call date/datetime methods on it and
+    would crash on a raw string. Other types (and non-strings) pass through unchanged.
+    """
+    if not isinstance(value, str):
+        return value
+    _, inner = unwrap_nullable_type(ch_type)
+    if not inner.startswith("Date"):  # Date, Date32, DateTime, DateTime64
+        return value
+    parsed = datetime.fromisoformat(value)
+    # DateTime/DateTime64 keep the time; Date/Date32 want a bare date.
+    return parsed if inner.startswith("DateTime") else parsed.date()
 
 
 class ClickhouseConnectPool(ClickhousePool):
@@ -228,24 +247,112 @@ class ClickhouseConnectPool(ClickhousePool):
         # for capturing the server's send_logs_level output (it only parses the
         # X-ClickHouse-Summary header for the profile above). This is a known,
         # accepted limitation of the HTTP path — see _build_query_settings.
-        if with_column_types:
-            meta = [
-                (name, column_type.name)
-                for name, column_type in zip(
-                    query_result.column_names, query_result.column_types, strict=True
-                )
-            ]
+        if not with_column_types:
             return ClickhouseResult(
                 results=results,
-                meta=meta,
                 profile=profile_data,
                 trace_output="",
             )
 
+        meta: list[tuple[str, str]] = [
+            (name, column_type.name)
+            for name, column_type in zip(
+                query_result.column_names, query_result.column_types, strict=True
+            )
+        ]
+
         return ClickhouseResult(
             results=results,
+            meta=meta,
             profile=profile_data,
             trace_output="",
+        )
+
+    def execute_with_totals(
+        self,
+        query: str,
+        params: Params = None,
+        query_id: str | None = None,
+        settings: Mapping[str, Any] | None = None,
+        capture_trace: bool = False,
+        robust: bool = False,
+    ) -> ClickhouseResult:
+        """
+        HTTP override of :meth:`ClickhousePool.execute_with_totals`. clickhouse-connect's
+        Native/HTTP output drops the ``WITH TOTALS`` row, so run the query once with
+        ``FORMAT JSONCompact`` (data + meta + totals together) and append the totals as
+        the trailing result row, the shape the reader expects. ``capture_trace``/``robust``
+        are accepted for interface parity but unused on this path.
+        """
+        with self._translate_clickhouse_errors():
+            client = self._get_client()
+            json_settings: dict[str, Any] = dict(settings) if settings else {}
+            # 64-bit ints as JSON numbers, matching the native driver's Python ints.
+            json_settings["output_format_json_quote_64bit_integers"] = 0
+            if query_id is not None:
+                json_settings["query_id"] = query_id
+
+            with sentry_sdk.start_span(description=query, op="db.clickhouse") as span:
+                span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
+                span.set_data("query_id", query_id)
+                raw = client.raw_query(
+                    query,
+                    parameters=params if params else None,
+                    settings=json_settings,
+                    fmt="JSONCompact",
+                )
+
+            payload = json.loads(raw)
+            meta = [(column["name"], column["type"]) for column in payload.get("meta", [])]
+            column_types = [ch_type for _, ch_type in meta]
+
+            # Each data row and the totals row is a positional array aligned to meta.
+            results: list[tuple[Any, ...]] = [
+                tuple(
+                    _coerce_temporal(value, column_types[index]) for index, value in enumerate(row)
+                )
+                for row in payload.get("data", [])
+            ]
+            totals = payload.get("totals")
+            if totals:
+                results.append(
+                    tuple(
+                        _coerce_temporal(value, column_types[index])
+                        for index, value in enumerate(totals)
+                    )
+                )
+
+            return ClickhouseResult(
+                results=results,
+                meta=meta,
+                profile=self._profile_from_statistics(payload),
+                trace_output="",
+            )
+
+    @staticmethod
+    def _profile_from_statistics(payload: Mapping[str, Any]) -> ClickhouseProfile:
+        # JSON's ``statistics`` object carries the same read counters as the Native
+        # path's X-ClickHouse-Summary header.
+        statistics = payload.get("statistics") or {}
+
+        def _int(key: str) -> int:
+            try:
+                return int(statistics.get(key) or 0)
+            except (TypeError, ValueError):
+                return 0
+
+        try:
+            elapsed = float(statistics.get("elapsed") or 0.0)
+        except (TypeError, ValueError):
+            elapsed = 0.0
+
+        read_bytes = _int("bytes_read")
+        return ClickhouseProfile(
+            blocks=0,
+            bytes=read_bytes,
+            elapsed=elapsed,
+            progress_bytes=read_bytes,
+            rows=_int("rows_read"),
         )
 
     @contextmanager
@@ -276,6 +383,10 @@ class ClickhouseConnectPool(ClickhousePool):
             # pool likewise wraps the whole clickhouse_driver errors.Error family
             # into ClickhouseError, preserving the server error code when present.
             raise ClickhouseError(str(e), code=getattr(e, "code", None) or -1) from e
+        except json.JSONDecodeError as e:
+            # A malformed body on the JSONCompact totals path (truncation, a proxy
+            # error page) surfaces as ClickhouseError, like the native driver does.
+            raise ClickhouseError(f"invalid JSON response: {e}", code=-1) from e
 
     def execute(
         self,
@@ -313,6 +424,38 @@ class ClickhouseConnectPool(ClickhousePool):
                 columnar,
                 capture_trace,
             )
+
+    def insert(
+        self,
+        table: str,
+        data: Sequence[Mapping[str, Any]],
+        settings: Mapping[str, Any] | None = None,
+        query_id: str | None = None,
+    ) -> None:
+        rows = list(data)
+        if not rows:
+            return
+
+        column_names = list(rows[0].keys())
+        matrix = [list(row.values()) for row in rows]
+
+        insert_settings = dict(settings) if settings else {}
+        if query_id is not None:
+            insert_settings["query_id"] = query_id
+
+        with self._translate_clickhouse_errors():
+            client = self._get_client()
+            with sentry_sdk.start_span(
+                description=f"INSERT INTO {table}", op="db.clickhouse"
+            ) as span:
+                span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
+                span.set_data("query_id", query_id)
+                client.insert(
+                    table,
+                    matrix,
+                    column_names=column_names,
+                    settings=insert_settings or None,
+                )
 
     def execute_robust(
         self,

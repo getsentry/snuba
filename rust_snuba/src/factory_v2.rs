@@ -164,6 +164,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             insert_columns,
         );
 
+        #[allow(clippy::result_large_err)]
         let accumulator = Arc::new(
             |batch: BytesInsertBatch<RowData>, small_batch: Message<BytesInsertBatch<RowData>>| {
                 Ok(batch.merge(small_batch.into_payload()))

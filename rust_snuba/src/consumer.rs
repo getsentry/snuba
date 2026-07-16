@@ -21,8 +21,7 @@ use sentry_options::init_with_schemas;
 use crate::config;
 use crate::factory_v2::ConsumerStrategyFactoryV2;
 use crate::logging::{setup_logging, setup_sentry};
-use crate::metrics::global_tags::set_global_tag;
-use crate::metrics::statsd::StatsDBackend;
+use crate::metrics::statsd::create_dogstatsd_backend;
 use crate::processors;
 use crate::rebalancing;
 use crate::types::{InsertOrReplacement, KafkaMessageMetadata};
@@ -144,20 +143,28 @@ pub fn consumer_impl(
     }
 
     // setup arroyo metrics
-    if let (Some(host), Some(port)) = (
-        consumer_config.env.dogstatsd_host,
-        consumer_config.env.dogstatsd_port,
-    ) {
+    {
         let storage_name = consumer_config
             .storages
             .iter()
             .map(|s| s.name.clone())
             .collect::<Vec<_>>()
             .join(",");
-        set_global_tag("storage".to_owned(), storage_name);
-        set_global_tag("consumer_group".to_owned(), consumer_group.to_owned());
 
-        metrics::init(StatsDBackend::new(&host, port, "snuba.consumer")).unwrap();
+        // Set tags on Sentry scope for error observability
+        sentry::configure_scope(|scope| {
+            scope.set_tag("storage", &storage_name);
+            scope.set_tag("consumer_group", consumer_group);
+        });
+
+        let tags = [
+            ("storage", storage_name.clone()),
+            ("consumer_group", consumer_group.to_owned()),
+        ];
+
+        if let Some(backend) = create_dogstatsd_backend(&env_config, "snuba.consumer", &tags) {
+            metrics::init(backend).unwrap();
+        }
     }
 
     if !use_rust_processor {

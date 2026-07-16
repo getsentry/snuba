@@ -22,10 +22,11 @@ from clickhouse_driver import Client, errors
 from dateutil.tz import tz
 from sentry_sdk.integrations.logging import ignore_logger
 
-from snuba import environment, settings, state
+from snuba import environment, settings
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.reader import Reader, Result, build_result_transformer
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.gauge import ThreadSafeGauge
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
@@ -34,6 +35,13 @@ ignore_logger("clickhouse_driver.connection")
 logger = logging.getLogger("snuba.clickhouse")
 trace_logger = logging.getLogger("clickhouse_driver.log")
 trace_logger.setLevel("INFO")
+# The clickhouse-driver forwards the server's ``send_logs_level`` output (the
+# ``<Trace>`` lines emitted by SelectExecutor and friends) through this logger.
+# We only want those lines when a query explicitly captures them via
+# ``capture_logging`` below, which attaches its own handler directly to this
+# logger. Disabling propagation keeps them out of the root logger so they don't
+# flood stdout/GCP logging on every traced query.
+trace_logger.propagate = False
 
 Params = Sequence[Any] | Mapping[str, Any] | None
 
@@ -132,6 +140,49 @@ class ClickhousePool(ABC):
         ``execute`` so they work on either driver.
         """
         return self.execute(query, with_column_types=True)
+
+    def execute_with_totals(
+        self,
+        query: str,
+        params: Params = None,
+        query_id: str | None = None,
+        settings: Mapping[str, Any] | None = None,
+        capture_trace: bool = False,
+        robust: bool = False,
+    ) -> ClickhouseResult:
+        """
+        Run a ``WITH TOTALS`` query, returning the totals as the trailing result row
+        (the shape :class:`ClickhouseReader` expects). The native protocol already
+        streams it there, so this default just delegates to :meth:`execute`; the
+        clickhouse-connect pool overrides it (its output drops the totals block).
+        Callers must use this rather than ``execute`` so both drivers work.
+        """
+        execute = self.execute_robust if robust else self.execute
+        return execute(
+            query,
+            params=params,
+            with_column_types=True,
+            query_id=query_id,
+            settings=settings,
+            capture_trace=capture_trace,
+        )
+
+    def insert(
+        self,
+        table: str,
+        data: Sequence[Mapping[str, Any]],
+        settings: Mapping[str, Any] | None = None,
+        query_id: str | None = None,
+    ) -> None:
+        rows = list(data)
+        if not rows:
+            return
+        self.execute(
+            f"INSERT INTO {table} FORMAT JSONEachRow",
+            rows,
+            settings=settings,
+            query_id=query_id,
+        )
 
     @abstractmethod
     def close(self) -> None:
@@ -303,9 +354,7 @@ class ClickhouseNativePool(ClickhousePool):
                         if attempts_remaining <= 0:
                             raise ClickhouseError(e.message, code=e.code) from e
 
-                        sleep_interval_seconds = state.get_config(
-                            "simultaneous_queries_sleep_seconds", None
-                        )
+                        sleep_interval_seconds = get_option("simultaneous_queries_sleep_seconds", 0)
                         if not sleep_interval_seconds:
                             raise ClickhouseError(e.message, code=e.code) from e
 
@@ -383,11 +432,11 @@ class ClickhouseNativePool(ClickhousePool):
                     attempts_remaining -= 1
                     if attempts_remaining <= 0:
                         raise e
-                    sleep_interval_seconds = state.get_config(
-                        "simultaneous_queries_sleep_seconds", 1
-                    )
-                    assert sleep_interval_seconds is not None
-                    # Linear backoff. Adds one second at each iteration.
+                    # Linear backoff. Adds one second at each iteration. Falls
+                    # back to a 1-second base when the option is unset (0).
+                    sleep_interval_seconds = (
+                        get_option("simultaneous_queries_sleep_seconds", 0)
+                    ) or 1
                     time.sleep(
                         float((total_attempts - attempts_remaining) * sleep_interval_seconds)
                     )
@@ -510,7 +559,9 @@ class ClickhouseReader(Reader):
 
         new_result: Result = {}
         if with_totals:
-            assert len(data) > 0
+            # Both pools return the totals as the trailing row (see
+            # ClickhousePool.execute_with_totals); an empty result means it went missing.
+            assert len(data) > 0, "WITH TOTALS query returned no rows (missing totals row)"
             totals = data.pop(-1)
             new_result = {
                 "data": data,
@@ -546,15 +597,24 @@ class ClickhouseReader(Reader):
         if "query_id" in settings:
             query_id = settings.pop("query_id")
 
-        execute_func = self.__client.execute_robust if robust is True else self.__client.execute
-
-        return self.__transform_result(
-            execute_func(
+        if with_totals:
+            # Totals travel differently per driver, so route through the entry
+            # point both pools implement (see ClickhousePool.execute_with_totals).
+            result = self.__client.execute_with_totals(
+                query.get_sql(),
+                query_id=query_id,
+                settings=settings,
+                capture_trace=capture_trace,
+                robust=robust,
+            )
+        else:
+            execute_func = self.__client.execute_robust if robust else self.__client.execute
+            result = execute_func(
                 query.get_sql(),
                 with_column_types=True,
                 query_id=query_id,
                 settings=settings,
                 capture_trace=capture_trace,
-            ),
-            with_totals=with_totals,
-        )
+            )
+
+        return self.__transform_result(result, with_totals=with_totals)
