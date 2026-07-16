@@ -336,24 +336,14 @@ def add_existence_check_to_subscriptable_references(query: Query) -> None:
 
 
 def _is_map_backed_key(k: AttributeKey) -> bool:
-    """True when ``k`` is a custom attribute stored in one of the ``attributes_*`` map
-    columns — the keys whose equality/membership filters take the NULL-free
-    ``(value, exists)`` path (see ``_map_backed_operands``) with a ``has(mapKeys(...))``
-    existence guard.
+    """True when ``k`` is a custom attribute stored in an ``attributes_*`` map column, so
+    its filters take the ``(value, exists)`` path (see ``_map_backed_operands``) with a
+    ``has(mapKeys(...))`` existence guard — needed because a missing key reads as the
+    column's value-type default (``''`` / ``0`` / ``false``).
 
-    Every custom string/int/float/bool attribute is a map lookup, and a missing key reads
-    as the column's value-type default (``''`` / ``0`` / ``false``), so only the explicit
-    existence check tells an absent key apart from a stored default. This is a property of
-    the key, not of its resolved expression: booleans resolve to a bare ``arrayElement``
-    rather than a ``SubscriptableReference`` (their map has no hash buckets), so detecting
-    map-backing by type/column rather than by inspecting the expression keeps every scalar
-    type on the same path.
-
-    ``attr_key`` and normalized/promoted columns (``NORMALIZED_COLUMNS_EAP_ITEMS``) are real
-    columns, not map lookups, so they're excluded — e.g. ``sentry.timestamp`` is a
-    ``TYPE_FLOAT`` key that must not be routed here. Array types have their own element-wise
-    path and are handled before reaching this check; they're absent from
-    ``PROTO_TYPE_TO_ATTRIBUTE_COLUMN`` anyway.
+    Decided by key kind, not expression shape, so booleans (a bare ``arrayElement``, not a
+    ``SubscriptableReference``) stay on the same path. Excludes ``attr_key`` and normalized
+    columns, which are real columns, not map lookups (e.g. ``sentry.timestamp``).
     """
     return (
         k.name != "attr_key"
