@@ -829,15 +829,11 @@ class TestBooleanAttributeFilters:
         return trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
 
     def test_equals_false_keeps_existence_guard(self) -> None:
-        # `attr:false` must not match items missing the attribute: `false` is the column
-        # default that an absent key also reads as, so the existence guard is required.
         expr = self._build(ComparisonFilter.OP_EQUALS, value=AttributeValue(val_bool=False))
         assert isinstance(expr, FunctionCall) and expr.function_name == "and"
         assert {"and", "has", "mapKeys", "equals", "arrayElement"} <= self._fn_names(expr)
 
     def test_equals_true_needs_no_guard(self) -> None:
-        # `true` is never the column default, so an absent key can't match and no guard is
-        # needed — the bare equality is emitted.
         expr = self._build(ComparisonFilter.OP_EQUALS, value=AttributeValue(val_bool=True))
         assert isinstance(expr, FunctionCall) and expr.function_name == "equals"
         assert "mapKeys" not in self._fn_names(expr)
@@ -885,13 +881,11 @@ class TestNormalizedColumnsNotMapBacked:
     def test_normalized_string_column_bypasses_map_backed_path(self) -> None:
         expr = self._build("sentry.trace_id")
         fn_names = {n.function_name for n in self._walk(expr) if isinstance(n, FunctionCall)}
-        # Legacy real-column equality, not the map-backed has(mapKeys(...))/arrayElement form.
         assert "mapKeys" not in fn_names and "arrayElement" not in fn_names
         columns = {n.column_name for n in self._walk(expr) if isinstance(n, ColumnExpr)}
         assert "attributes_string" not in columns
 
     def test_custom_string_column_is_map_backed(self) -> None:
-        # Contrast: a non-normalized attribute of the same type does use the map columns.
         expr = self._build("some.custom.tag")
         columns = {n.column_name for n in self._walk(expr) if isinstance(n, ColumnExpr)}
         assert columns == {"attributes_string"}

@@ -146,7 +146,6 @@ def setup_bool_logs_in_db(eap: None, redis_db: None) -> None:
             attributes["hasCodeTag"] = AnyValue(bool_value=False)
         elif i < 20:
             attributes["hasCodeTag"] = AnyValue(bool_value=True)
-        # i >= 20: no hasCodeTag attribute at all
         messages.append(
             gen_item_message(
                 start_timestamp=timestamp,
@@ -193,8 +192,6 @@ class TestBooleanAttributeFilteringForLogs(BaseApiTest):
         return EndpointTraceItemTable().execute(message)
 
     def test_equals_false_excludes_absent_attribute(self, setup_bool_logs_in_db: Any) -> None:
-        # `hasCodeTag:false` must return ONLY logs that explicitly set it to false
-        # (int_tag 0..9), never the logs missing the attribute (int_tag 20..29).
         response = self._query_hascodetag(False)
         (values,) = response.column_values
         returned = sorted(v.val_int for v in values.results)
