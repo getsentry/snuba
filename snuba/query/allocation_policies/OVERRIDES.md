@@ -36,14 +36,19 @@ project_id/organization_id. This lets one config carry, at once:
 - a **per-(id, referrer)** value — `{"<id>": {"<referrer>": v}}`
 
 On read, the value is resolved for the query's tenants **most-specific-first**, and
-the first match wins:
+the first match wins. A query carrying both a `project_id` and an
+`organization_id` tries the project tier first, then the org tier, then the
+wildcard — so a per-org override still applies to that org's project-carrying
+queries:
 
 ```
-(id, referrer)  >  (id, "*")  >  ("*", referrer)  >  ("*", "*")  >  code default
+(project, referrer) > (project, "*")
+    > (org, referrer) > (org, "*")
+    > ("*", referrer) > ("*", "*")  >  code default
 ```
 
-`id` is the query's `project_id` if present, otherwise its `organization_id`.
-Ids are stringified (`"123"`); referrers keep their dots (`"api.foo"`).
+(A query with only one of `project_id`/`organization_id` simply skips the tier it
+lacks.) Ids are stringified (`"123"`); referrers keep their dots (`"api.foo"`).
 
 ## Example
 

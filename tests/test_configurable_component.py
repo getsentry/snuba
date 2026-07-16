@@ -345,3 +345,30 @@ class TestConfigurableComponentScopedConfig:
             )
             # ("*", "*") global
             assert component.get_config_value(key, {"organization_id": 9, "referrer": "x"}) == 9000
+
+    def test_org_override_applies_to_project_carrying_query(self) -> None:
+        """A per-org override still resolves for a query that also carries a
+        project_id (which has no override of its own)."""
+        component = SomeConfigurableComponent()
+        key = "override_config_for_org_id"
+        with override_component_config(component, key, 500, {"organization_id": 123}):
+            # project 999 has no entry, so the query falls back to its org tier.
+            assert (
+                component.get_config_value(key, {"organization_id": 123, "project_id": 999}) == 500
+            )
+
+    def test_project_override_wins_over_org(self) -> None:
+        component = SomeConfigurableComponent()
+        key = "override_config_for_org_id"
+        with override_component_configs(
+            (component, key, 500, {"organization_id": 123}),
+            (component, key, 700, {"project_id": 999}),
+        ):
+            # project tier is more specific than org tier
+            assert (
+                component.get_config_value(key, {"organization_id": 123, "project_id": 999}) == 700
+            )
+            # a different project with no entry falls back to the org override
+            assert (
+                component.get_config_value(key, {"organization_id": 123, "project_id": 888}) == 500
+            )

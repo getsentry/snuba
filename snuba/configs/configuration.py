@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any, TypedDict, TypeVar, cast, final
 
@@ -25,7 +25,7 @@ SCOPED_OVERRIDE_WILDCARD = "*"
 
 def resolve_scoped_override(
     scoped: Mapping[str, Any],
-    scope_id: int | str | None,
+    scope_ids: int | str | Sequence[int | str | None] | None,
     referrer: str | None,
     default: V,
 ) -> V:
@@ -35,27 +35,33 @@ def resolve_scoped_override(
     ``{id (or "*"): {referrer (or "*"): value}}`` where ``id`` is a
     project_id/organization_id. This lets one config carry a global value, a
     per-id value, a per-referrer value, or a per-(id, referrer) value at once.
-    Lookups are most-specific-first, and the first match wins:
 
-        (id, referrer) > (id, "*") > ("*", referrer) > ("*", "*") > default
+    ``scope_ids`` is the id(s) a query is scoped by, **most-specific-first** --
+    e.g. ``[project_id, organization_id]`` -- so a query carrying both a project
+    and an org still matches an org-level override. A single id may be passed as
+    a scalar. Lookups are most-specific-first, and the first match wins; for two
+    ids the order is::
+
+        (project, referrer) > (project, "*")
+            > (org, referrer) > (org, "*")
+            > ("*", referrer) > ("*", "*") > default
 
     ``("*", "*")`` is the global override tier (distinct from the code
-    ``default``). ``scope_id`` is stringified to match the JSON object keys. A
-    ``None`` id or referrer simply skips the lookups that would need it.
+    ``default``). Ids are stringified to match the JSON object keys. A ``None``
+    id or referrer simply skips the lookups that would need it.
     """
-    id_key = str(scope_id) if scope_id is not None else None
+    if scope_ids is None or isinstance(scope_ids, (str, int)):
+        scope_ids = [scope_ids]
     w = SCOPED_OVERRIDE_WILDCARD
-    for outer, inner in (
-        (id_key, referrer),
-        (id_key, w),
-        (w, referrer),
-        (w, w),
-    ):
-        if outer is None or inner is None:
-            continue
+    id_keys = [str(s) for s in scope_ids if s is not None]
+    inners = [referrer, w] if referrer is not None else [w]
+    for outer in [*id_keys, w]:
         inner_map = scoped.get(outer)
-        if isinstance(inner_map, Mapping) and inner in inner_map:
-            return cast(V, inner_map[inner])
+        if not isinstance(inner_map, Mapping):
+            continue
+        for inner in inners:
+            if inner in inner_map:
+                return cast(V, inner_map[inner])
     return default
 
 
@@ -302,12 +308,17 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         return f"{self.component_name()}.{config}"
 
     @staticmethod
-    def _scope_ids(tenant_ids: dict[str, Any]) -> tuple[str | int | None, str | None]:
-        """The (id, referrer) a config is scoped by for a query. ``id`` prefers
-        project_id, then organization_id."""
-        scope_id = tenant_ids.get("project_id", tenant_ids.get("organization_id"))
+    def _scope_ids(tenant_ids: dict[str, Any]) -> tuple[list[str | int], str | None]:
+        """The (ids, referrer) a config is scoped by for a query. ``ids`` is
+        ordered most-specific-first -- project_id then organization_id -- so a
+        query carrying both still matches an org-level override."""
+        ids: list[str | int] = [
+            tenant_ids[key]
+            for key in ("project_id", "organization_id")
+            if tenant_ids.get(key) is not None
+        ]
         referrer = tenant_ids.get("referrer")
-        return scope_id, referrer
+        return ids, referrer
 
     def _get_hash(self) -> str:
         return self.component_namespace()
@@ -323,9 +334,9 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         Reads from the centrally-managed ``configurable_component_overrides``
         sentry-option, which stores each config as a nested object
         ``{id (or "*"): {referrer (or "*"): value}}``. The value is resolved for
-        the query's tenants most-specific-first --
-        (id, referrer) > (id, "*") > ("*", referrer) > ("*", "*") -- falling back
-        to the code default. The legacy Redis runtime config is not consulted.
+        the query's tenants most-specific-first, trying project_id then
+        organization_id then the ``"*"`` wildcard on each axis, falling back to
+        the code default. The legacy Redis runtime config is not consulted.
         """
         config_definition = (
             self._validate_config(config_key) if validate else self.config_definitions()[config_key]
@@ -337,8 +348,8 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
             else None
         )
         scoped: Mapping[str, Any] = entry if isinstance(entry, Mapping) else {}
-        scope_id, referrer = self._scope_ids(tenant_ids or {})
-        value = resolve_scoped_override(scoped, scope_id, referrer, config_definition.default)
+        scope_ids, referrer = self._scope_ids(tenant_ids or {})
+        value = resolve_scoped_override(scoped, scope_ids, referrer, config_definition.default)
         return config_definition.value_type(value)
 
     def set_config_value(
@@ -377,8 +388,9 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
     ) -> None:
         from sentry_options._core import _set_override
 
-        scope_id, referrer = self._scope_ids(tenant_ids)
-        outer = str(scope_id) if scope_id is not None else SCOPED_OVERRIDE_WILDCARD
+        scope_ids, referrer = self._scope_ids(tenant_ids)
+        # Writes land on the most-specific id present (project over org).
+        outer = str(scope_ids[0]) if scope_ids else SCOPED_OVERRIDE_WILDCARD
         inner = referrer if referrer is not None else SCOPED_OVERRIDE_WILDCARD
 
         current: OptionValue = get_option(CONFIGURABLE_COMPONENT_OVERRIDES_KEY, {})
