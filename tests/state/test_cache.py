@@ -12,7 +12,7 @@ import pytest
 import rapidjson
 import sentry_sdk
 from redis import RedisError, ResponseError
-from redis.exceptions import ReadOnlyError
+from redis.exceptions import ConnectionError, ReadOnlyError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 from sentry_options.testing import override_options
 from sentry_redis_tools.failover_redis import FailoverRedis
@@ -262,7 +262,12 @@ def test_set_fails_open(backend: Cache[bytes]) -> None:
 
 @pytest.mark.redis_db
 @pytest.mark.parametrize(
-    "error", [ResponseError("OOM command not allowed under OOM prevention."), RedisTimeoutError()]
+    "error",
+    [
+        ResponseError("OOM command not allowed under OOM prevention."),
+        RedisTimeoutError(),
+        ConnectionError("Error while reading from redis : (104, 'Connection reset by peer')"),
+    ],
 )
 def test_dont_record_expected_errors(backend: Cache[bytes], error: Exception) -> None:
     with (

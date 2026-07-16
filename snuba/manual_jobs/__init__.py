@@ -42,6 +42,13 @@ class JobSpec:
 
 
 class Job(ABC, metaclass=RegisteredClass):
+    # Whether this job may be run ad-hoc (from snuba-admin or the run-by-type
+    # endpoint) without a manifest entry. Only set this to True for read-only
+    # or idempotent jobs that are safe to run any number of times. Destructive
+    # jobs (deletes, scrubbers, migrations, mutations) must leave this False so
+    # they stay gated behind an explicit manifest entry.
+    allow_adhoc_run: bool = False
+
     def __init__(self, job_spec: JobSpec) -> None:
         self.job_spec = job_spec
         self.is_async = job_spec.is_async

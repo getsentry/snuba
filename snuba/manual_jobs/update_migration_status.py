@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
@@ -48,9 +48,6 @@ class UpdateMigrationStatus(Job):
     def _select_query(self, table_name: str) -> str:
         return f"SELECT status, version FROM {table_name} FINAL WHERE group = %(group)s AND migration_id = %(migration_id)s;"
 
-    def _insert_query(self, table_name: str) -> str:
-        return f"INSERT INTO {table_name} FORMAT JSONEachRow"
-
     def execute(self, logger: JobLogger) -> None:
         migrations_cluster = get_cluster(StorageSetKey.MIGRATIONS)
         table_name = LOCAL_TABLE_NAME if migrations_cluster.is_single_node() else DIST_TABLE_NAME
@@ -70,18 +67,17 @@ class UpdateMigrationStatus(Job):
             f"actual status {status} does not match expected {self._old_status}, aborting"
         )
 
-        query = self._insert_query(table_name)
         row_data = [
             {
                 "group": self._group,
                 "migration_id": self._migration_id,
-                "timestamp": datetime.now(),
+                "timestamp": datetime.now(UTC),
                 "status": self._new_status,
                 "version": version + 1,
             }
         ]
 
-        logger.info(f"{self.job_spec.job_id}: executing {query} with data = {row_data}")
+        logger.info(f"{self.job_spec.job_id}: inserting into {table_name} data = {row_data}")
 
-        result = connection.execute(query, row_data)
-        logger.info(result.__repr__())
+        connection.insert(table_name, row_data)
+        logger.info(f"{self.job_spec.job_id}: inserted {len(row_data)} row(s) into {table_name}")

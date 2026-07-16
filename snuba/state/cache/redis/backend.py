@@ -40,9 +40,10 @@ class FuzzyMatchException:
 
 
 DONT_CAPTURE_ERRORS = (
-    # if you need to track this error, see datadog metric snuba.read_through_cache.redis_cache_set_error
+    # if you need to track these errors, see datadog metrics snuba.read_through_cache.redis_cache_get_error and redis_cache_set_error
     FuzzyMatchException(ResponseError, "OOM command not allowed under OOM prevention."),
     FuzzyMatchException(RedisTimeoutError),
+    FuzzyMatchException(ConnectionError),
 )
 
 

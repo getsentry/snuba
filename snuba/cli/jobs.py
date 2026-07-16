@@ -66,6 +66,22 @@ def status(*, job_id: str) -> None:
 
 
 @jobs.command()
+def dump_runtime_configs() -> None:
+    """Dump all Redis values (runtime configs, allocation-policy / CBRS
+    overrides, and other stored state, minus the cache and rate-limiter) to
+    stdout.
+
+    Runs the LogRuntimeConfigs job directly, so it needs no job manifest entry
+    and can be run as many times as you want (no job-status/lock guard).
+    """
+    from snuba.manual_jobs.job_logging import get_console_job_logger
+    from snuba.manual_jobs.log_runtime_configs import LogRuntimeConfigs
+
+    job = LogRuntimeConfigs(JobSpec(job_id="log_runtime_configs", job_type="LogRuntimeConfigs"))
+    job.execute(get_console_job_logger())
+
+
+@jobs.command()
 @click.option("--job_id")
 def view_logs(*, job_id: str) -> None:
     logs = view_job_logs(job_id)

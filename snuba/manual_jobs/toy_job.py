@@ -2,6 +2,8 @@ from snuba.manual_jobs import Job, JobLogger, JobSpec
 
 
 class ToyJob(Job):
+    allow_adhoc_run = True
+
     def __init__(
         self,
         job_spec: JobSpec,

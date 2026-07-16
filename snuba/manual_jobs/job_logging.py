@@ -11,6 +11,30 @@ def get_job_logger(logger: Logger, job_id: str) -> JobLogger:
     return _MultiplexingRedisLogger(logger, job_id)
 
 
+def get_console_job_logger() -> JobLogger:
+    """A JobLogger that writes to stdout. Useful for running read-only,
+    repeatable jobs straight from the CLI without touching the Redis-backed
+    job status/log machinery."""
+    return _ConsoleLogger()
+
+
+class _ConsoleLogger(JobLogger):
+    def debug(self, line: str) -> None:
+        print(line)
+
+    def info(self, line: str) -> None:
+        print(line)
+
+    def warning(self, line: str) -> None:
+        print(line)
+
+    def warn(self, line: str) -> None:
+        self.warning(line)
+
+    def error(self, line: str) -> None:
+        print(line)
+
+
 class _MultiplexingRedisLogger(JobLogger):
     def __init__(self, logger: Logger, job_id: str):
         self.logger = logger

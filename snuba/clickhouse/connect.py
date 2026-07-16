@@ -425,6 +425,38 @@ class ClickhouseConnectPool(ClickhousePool):
                 capture_trace,
             )
 
+    def insert(
+        self,
+        table: str,
+        data: Sequence[Mapping[str, Any]],
+        settings: Mapping[str, Any] | None = None,
+        query_id: str | None = None,
+    ) -> None:
+        rows = list(data)
+        if not rows:
+            return
+
+        column_names = list(rows[0].keys())
+        matrix = [list(row.values()) for row in rows]
+
+        insert_settings = dict(settings) if settings else {}
+        if query_id is not None:
+            insert_settings["query_id"] = query_id
+
+        with self._translate_clickhouse_errors():
+            client = self._get_client()
+            with sentry_sdk.start_span(
+                description=f"INSERT INTO {table}", op="db.clickhouse"
+            ) as span:
+                span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
+                span.set_data("query_id", query_id)
+                client.insert(
+                    table,
+                    matrix,
+                    column_names=column_names,
+                    settings=insert_settings or None,
+                )
+
     def execute_robust(
         self,
         query: str,
