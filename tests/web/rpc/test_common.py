@@ -52,6 +52,7 @@ from snuba.query.expressions import (
 from snuba.query.logical import Query
 from snuba.web.rpc.common.common import (
     _any_attribute_filter_to_expression,
+    _comparison_can_match_column_default,
     attribute_key_to_expression,
     dedupe_and_conditions,
     next_monday,
@@ -885,6 +886,47 @@ class TestNormalizedColumnsNotMapBacked:
         expr = self._build("some.custom.tag")
         columns = {n.column_name for n in self._walk(expr) if isinstance(n, ColumnExpr)}
         assert columns == {"attributes_string"}
+
+
+class TestComparisonCanMatchColumnDefault:
+    """Flags when a compared literal equals the column default an absent key reads as —
+    the type's falsy value ('' / 0 / 0.0 / false). Null is not a default match.
+    """
+
+    @pytest.mark.parametrize(
+        "value,expected",
+        [
+            (AttributeValue(val_str=""), True),
+            (AttributeValue(val_str="x"), False),
+            (AttributeValue(val_int=0), True),
+            (AttributeValue(val_int=5), False),
+            (AttributeValue(val_float=0.0), True),
+            (AttributeValue(val_float=1.5), False),
+            (AttributeValue(val_double=0.0), True),
+            (AttributeValue(val_double=2.5), False),
+            (AttributeValue(val_bool=False), True),
+            (AttributeValue(val_bool=True), False),
+            (AttributeValue(val_null=True), False),
+        ],
+    )
+    def test_scalar(self, value: AttributeValue, expected: bool) -> None:
+        assert _comparison_can_match_column_default(value, value.WhichOneof("value")) is expected
+
+    def test_val_array_matches_when_any_element_is_default(self) -> None:
+        present = AttributeValue(
+            val_array=Array(values=[AttributeValue(val_int=5), AttributeValue(val_int=0)])
+        )
+        absent = AttributeValue(
+            val_array=Array(values=[AttributeValue(val_int=5), AttributeValue(val_int=7)])
+        )
+        assert _comparison_can_match_column_default(present, "val_array") is True
+        assert _comparison_can_match_column_default(absent, "val_array") is False
+
+    def test_typed_array_matches_when_any_element_is_default(self) -> None:
+        present = AttributeValue(val_str_array=StrArray(values=["x", ""]))
+        absent = AttributeValue(val_str_array=StrArray(values=["a", "b"]))
+        assert _comparison_can_match_column_default(present, "val_str_array") is True
+        assert _comparison_can_match_column_default(absent, "val_str_array") is False
 
 
 @pytest.mark.redis_db
