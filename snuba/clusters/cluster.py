@@ -12,7 +12,7 @@ from typing import (
 
 import structlog
 
-from snuba import settings, state
+from snuba import settings
 from snuba.clickhouse.http import HTTPBatchWriter, InsertStatement, JSONRow
 from snuba.clickhouse.native import (
     ClickhouseNativePool,
@@ -25,6 +25,7 @@ from snuba.clusters.storage_sets import (
     register_storage_set_key,
 )
 from snuba.reader import Reader
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.serializable_exception import SerializableException
 from snuba.writer import BatchWriter
@@ -193,12 +194,11 @@ def use_clickhouse_connect_driver() -> bool:
     Whether the read path should use the clickhouse-connect (HTTP) driver
     instead of the native protocol.
 
-    Controlled by a runtime config flag (defaulting to the
+    Controlled by a sentry-option (defaulting to the
     ``USE_CLICKHOUSE_CONNECT_DRIVER`` setting) so the migration can be rolled
     out and rolled back without a deploy.
     """
-    default = 1 if settings.USE_CLICKHOUSE_CONNECT_DRIVER else 0
-    return bool(state.get_int_config("use_clickhouse_connect_driver", default))
+    return get_option("use_clickhouse_connect_driver", settings.USE_CLICKHOUSE_CONNECT_DRIVER)
 
 
 # The driver discriminator is part of the cache key so that the native and the
@@ -237,7 +237,7 @@ class ConnectionCache:
         """
         Return a cached connection pool for the node, typed as the abstract
         :class:`ClickhousePool`. The driver is decided here, from the
-        ``use_clickhouse_connect_driver`` runtime config: when it is enabled the
+        ``use_clickhouse_connect_driver`` sentry-option: when it is enabled the
         clickhouse-connect (HTTP) pool is built (connecting on the node's
         ``http_port``), otherwise the native one (connecting on the node's
         ``native_port``). Both variants are cached side by side (the driver is
@@ -405,7 +405,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         connection.
 
         The driver is selected inside ``ConnectionCache.get_node_connection``
-        from the ``use_clickhouse_connect_driver`` runtime config (HTTP pool
+        from the ``use_clickhouse_connect_driver`` sentry-option (HTTP pool
         when enabled, native otherwise). The choice applies to every caller
         (reads, migrations, replacer, optimize, ...), not just the read path.
         """
@@ -439,7 +439,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         """
         Return a reader for the query node. The driver-agnostic ClickhouseReader
         wraps whichever pool (native or HTTP) get_query_connection selects from
-        the ``use_clickhouse_connect_driver`` runtime config, so the driver can
+        the ``use_clickhouse_connect_driver`` sentry-option, so the driver can
         be switched at runtime.
         """
         return ClickhouseReader(

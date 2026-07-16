@@ -306,7 +306,8 @@ def test_cache_connections() -> None:
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
 def test_get_node_connection_selects_driver() -> None:
-    from snuba import state
+    from sentry_options.testing import override_options
+
     from snuba.clickhouse.connect import ClickhouseConnectPool
     from snuba.clickhouse.native import ClickhouseNativePool, ClickhouseReader
 
@@ -327,22 +328,22 @@ def test_get_node_connection_selects_driver() -> None:
     # The driver is selected at the pool level; the reader is the single
     # driver-agnostic ClickhouseReader regardless.
     # Default: native pool.
-    state.set_config("use_clickhouse_connect_driver", 0)
-    native_pool = test_cluster.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
-    assert isinstance(native_pool, ClickhouseNativePool)
-    assert isinstance(test_cluster.get_reader(), ClickhouseReader)
+    with override_options("snuba", {"use_clickhouse_connect_driver": False}):
+        native_pool = test_cluster.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
+        assert isinstance(native_pool, ClickhouseNativePool)
+        assert isinstance(test_cluster.get_reader(), ClickhouseReader)
 
-    # Flip on at runtime: HTTP pool.
-    state.set_config("use_clickhouse_connect_driver", 1)
-    http_pool = test_cluster.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
-    assert isinstance(http_pool, ClickhouseConnectPool)
+    # Flip on: HTTP pool.
+    with override_options("snuba", {"use_clickhouse_connect_driver": True}):
+        http_pool = test_cluster.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
+        assert isinstance(http_pool, ClickhouseConnectPool)
 
     # Flip back: native pool again.
-    state.set_config("use_clickhouse_connect_driver", 0)
-    assert isinstance(
-        test_cluster.get_query_connection(cluster.ClickhouseClientSettings.QUERY),
-        ClickhouseNativePool,
-    )
+    with override_options("snuba", {"use_clickhouse_connect_driver": False}):
+        assert isinstance(
+            test_cluster.get_query_connection(cluster.ClickhouseClientSettings.QUERY),
+            ClickhouseNativePool,
+        )
 
 
 @patch("snuba.settings.SLICED_CLUSTERS", SLICED_CLUSTERS_CONFIG)

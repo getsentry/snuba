@@ -96,7 +96,7 @@ CLICKHOUSE_POOL_GET_TIMEOUT_SECONDS = 5
 
 # Default for routing ClickHouse queries through clickhouse-connect (over the
 # HTTP protocol) instead of the native clickhouse-driver protocol. This default
-# can be overridden at runtime with the `use_clickhouse_connect_driver` config.
+# can be overridden at runtime with the `use_clickhouse_connect_driver` sentry-option.
 USE_CLICKHOUSE_CONNECT_DRIVER = False
 
 CLUSTERS: Sequence[Mapping[str, Any]] = [

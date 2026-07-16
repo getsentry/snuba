@@ -66,6 +66,11 @@
       "default": {},
       "description": "Dict mapping storage name to a max_insert_block_size override for that storage's INSERTs. Values below ClickHouse's default (1048449) are ignored. Storages with no entry use the server default. Migrated from per-storage runtime config clickhouse_max_insert_block_size:<storage>."
     },
+    "use_clickhouse_connect_driver": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the read path uses the clickhouse-connect (HTTP) driver instead of the native clickhouse-driver protocol. Defaults to the USE_CLICKHOUSE_CONNECT_DRIVER setting; overriding here rolls the driver migration out or back without a deploy. Migrated from the use_clickhouse_connect_driver runtime config."
+    },
     "eap_items_dlq_grace_period_min": {
       "type": "object",
       "additionalProperties": {
