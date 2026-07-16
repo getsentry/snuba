@@ -177,13 +177,9 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
             tenant_id = tenant_ids[tenant_key]
             scoped = self.get_config_value(option_name).get(str(tenant_id), {})
             if referrer is not None and referrer in scoped:
-                overrides[f"{tenant_key}__{tenant_id}|referrer__{referrer}"] = int(
-                    scoped[referrer]
-                )
+                overrides[f"{tenant_key}__{tenant_id}|referrer__{referrer}"] = int(scoped[referrer])
             if SCOPED_OVERRIDE_WILDCARD in scoped:
-                overrides[f"{tenant_key}__{tenant_id}"] = int(
-                    scoped[SCOPED_OVERRIDE_WILDCARD]
-                )
+                overrides[f"{tenant_key}__{tenant_id}"] = int(scoped[SCOPED_OVERRIDE_WILDCARD])
         return overrides
 
     def _get_tenant_key_and_value(self, tenant_ids: dict[str, str | int]) -> tuple[str, str | int]:
