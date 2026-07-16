@@ -52,6 +52,7 @@ from snuba.query.expressions import (
 from snuba.query.logical import Query
 from snuba.web.rpc.common.common import (
     _any_attribute_filter_to_expression,
+    _comparison_can_match_column_default,
     attribute_key_to_expression,
     dedupe_and_conditions,
     next_monday,
@@ -788,6 +789,146 @@ class TestAnalyzerSafeFilters:
         assert "notLike" not in names  # positive like under the negation
         ilike = self._build(ComparisonFilter.OP_NOT_LIKE, value="%ok%", ignore_case=True)
         assert "ilike" in self._fn_names(ilike) and "notILike" not in self._fn_names(ilike)
+
+
+class TestBooleanAttributeFilters:
+    """Booleans are map-backed, so ``attr:false`` needs an existence guard — otherwise a
+    missing key reads as the ``false`` default and matches items lacking the attribute
+    (getsentry/sentry#119735).
+    """
+
+    @staticmethod
+    def _walk(expr: Expression) -> list[Expression]:
+        nodes: list[Expression] = []
+
+        def visit(node: Expression) -> Expression:
+            nodes.append(node)
+            return node
+
+        expr.transform(visit)
+        return nodes
+
+    def _fn_names(self, expr: Expression) -> set[str]:
+        return {n.function_name for n in self._walk(expr) if isinstance(n, FunctionCall)}
+
+    def _build(
+        self,
+        op: ComparisonFilter.Op.ValueType,
+        *,
+        value: AttributeValue,
+        name: str = "hasCodeTag",
+    ) -> Expression:
+        item_filter = TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_BOOLEAN, name=name),
+                op=op,
+                value=value,
+            )
+        )
+        return trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+
+    def test_equals_false_keeps_existence_guard(self) -> None:
+        expr = self._build(ComparisonFilter.OP_EQUALS, value=AttributeValue(val_bool=False))
+        assert isinstance(expr, FunctionCall) and expr.function_name == "and"
+        assert {"and", "has", "mapKeys", "equals", "arrayElement"} <= self._fn_names(expr)
+
+    def test_equals_true_needs_no_guard(self) -> None:
+        expr = self._build(ComparisonFilter.OP_EQUALS, value=AttributeValue(val_bool=True))
+        assert isinstance(expr, FunctionCall) and expr.function_name == "equals"
+        assert "mapKeys" not in self._fn_names(expr)
+
+    def test_not_equals_false_negates_guarded_equality(self) -> None:
+        expr = self._build(ComparisonFilter.OP_NOT_EQUALS, value=AttributeValue(val_bool=False))
+        assert isinstance(expr, FunctionCall) and expr.function_name == "not"
+        assert {"not", "and", "has", "mapKeys", "equals", "arrayElement"} <= self._fn_names(expr)
+
+    def test_uses_attributes_bool_column(self) -> None:
+        expr = self._build(ComparisonFilter.OP_EQUALS, value=AttributeValue(val_bool=False))
+        columns = {n.column_name for n in self._walk(expr) if isinstance(n, ColumnExpr)}
+        assert columns == {"attributes_bool"}
+
+
+class TestNormalizedColumnsNotMapBacked:
+    """Normalized columns share a map-eligible type (e.g. ``sentry.trace_id`` is
+    TYPE_STRING) but are real columns, so ``_is_map_backed_key``'s
+    ``NORMALIZED_COLUMNS_EAP_ITEMS`` exclusion must keep them off the map path.
+    """
+
+    @staticmethod
+    def _walk(expr: Expression) -> list[Expression]:
+        nodes: list[Expression] = []
+
+        def visit(node: Expression) -> Expression:
+            nodes.append(node)
+            return node
+
+        expr.transform(visit)
+        return nodes
+
+    def _build(self, name: str) -> Expression:
+        item_filter = TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_STRING, name=name),
+                op=ComparisonFilter.OP_EQUALS,
+                value=AttributeValue(val_str="abc"),
+            )
+        )
+        return trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+
+    def test_normalized_string_column_bypasses_map_backed_path(self) -> None:
+        expr = self._build("sentry.trace_id")
+        fn_names = {n.function_name for n in self._walk(expr) if isinstance(n, FunctionCall)}
+        assert "mapKeys" not in fn_names and "arrayElement" not in fn_names
+        columns = {n.column_name for n in self._walk(expr) if isinstance(n, ColumnExpr)}
+        assert "attributes_string" not in columns
+
+    def test_custom_string_column_is_map_backed(self) -> None:
+        expr = self._build("some.custom.tag")
+        columns = {n.column_name for n in self._walk(expr) if isinstance(n, ColumnExpr)}
+        assert columns == {"attributes_string"}
+
+
+class TestComparisonCanMatchColumnDefault:
+    """Flags when a compared literal equals the column default an absent key reads as —
+    the type's falsy value ('' / 0 / 0.0 / false). Null is not a default match.
+    """
+
+    @pytest.mark.parametrize(
+        "value,expected",
+        [
+            (AttributeValue(val_str=""), True),
+            (AttributeValue(val_str="x"), False),
+            (AttributeValue(val_int=0), True),
+            (AttributeValue(val_int=5), False),
+            (AttributeValue(val_float=0.0), True),
+            (AttributeValue(val_float=1.5), False),
+            (AttributeValue(val_double=0.0), True),
+            (AttributeValue(val_double=2.5), False),
+            (AttributeValue(val_bool=False), True),
+            (AttributeValue(val_bool=True), False),
+            (AttributeValue(val_null=True), False),
+        ],
+    )
+    def test_scalar(self, value: AttributeValue, expected: bool) -> None:
+        value_type = value.WhichOneof("value")
+        assert value_type is not None
+        assert _comparison_can_match_column_default(value, value_type) is expected
+
+    def test_val_array_matches_when_any_element_is_default(self) -> None:
+        present = AttributeValue(
+            val_array=Array(values=[AttributeValue(val_int=5), AttributeValue(val_int=0)])
+        )
+        absent = AttributeValue(
+            val_array=Array(values=[AttributeValue(val_int=5), AttributeValue(val_int=7)])
+        )
+        assert _comparison_can_match_column_default(present, "val_array") is True
+        assert _comparison_can_match_column_default(absent, "val_array") is False
+
+    def test_typed_array_matches_when_any_element_is_default(self) -> None:
+        present = AttributeValue(val_str_array=StrArray(values=["x", ""]))
+        absent = AttributeValue(val_str_array=StrArray(values=["a", "b"]))
+        assert _comparison_can_match_column_default(present, "val_str_array") is True
+        assert _comparison_can_match_column_default(absent, "val_str_array") is False
 
 
 @pytest.mark.redis_db
