@@ -558,7 +558,7 @@ def test_db_query_success() -> None:
                 "max_bytes_to_read": 0,
                 "explanation": {
                     "reason": "within limit",
-                    "concurrent_limit": 22,
+                    "overrides": {},
                     "storage_key": "errors_ro",
                 },
                 "is_throttled": False,
@@ -717,10 +717,7 @@ class MockThrottleAllocationPolicy(AllocationPolicy):
             required_tenant_types=required_tenant_types,
             default_config_overrides=default_config_overrides,
         )
-        # Not ``_max_threads``: that name is a method on the base AllocationPolicy
-        # (it resolves the scoped max_threads config), so shadowing it with an int
-        # would break the base quota flow that calls ``self._max_threads(tenant_ids)``.
-        self._mock_max_threads = max_threads
+        self._max_threads = max_threads
         self.policy_name = policy_name
 
     def _get_quota_allowance(
@@ -728,7 +725,7 @@ class MockThrottleAllocationPolicy(AllocationPolicy):
     ) -> QuotaAllowance:
         return QuotaAllowance(
             can_run=True,
-            max_threads=self._mock_max_threads,
+            max_threads=self._max_threads,
             explanation={"reason": self.policy_name + " throttles all queries"},
             is_throttled=True,
             throttle_threshold=MAX_THRESHOLD,

@@ -13,10 +13,6 @@ from snuba.query.allocation_policies import AllocationPolicy
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingStrategyConfig,
 )
-from tests.configs.component_config import (
-    override_component_config,
-    override_component_configs,
-)
 
 
 class SomeConfigurableComponent(ConfigurableComponent):
@@ -33,6 +29,7 @@ class SomeConfigurableComponent(ConfigurableComponent):
                 description="override config for org",
                 value_type=int,
                 default=-1,
+                param_types={"organization_id": int},
             ),
         ]
         self._overridden_additional_config_definitions = (
@@ -124,8 +121,32 @@ class TestConfigurableComponentBasic:
         )
 
     def test_get_current_configs(self, test_component: SomeConfigurableComponent) -> None:
-        """get_current_configs returns one entry per config with its effective
-        global value."""
+        """Test that get_current_configs returns the correct configs."""
+        configs = test_component.get_current_configs()
+        assert len(configs) == 2
+        assert {
+            "name": "default_config_1",
+            "type": "int",
+            "default": 100,
+            "description": "A default configuration",
+            "value": 100,
+            "params": {},
+        } in configs
+        assert {
+            "name": "additional_config_1",
+            "type": "int",
+            "default": 50,
+            "description": "An additional configuration",
+            "value": 50,
+            "params": {},
+        } in configs
+
+        # add an instance of an optional config
+        test_component.set_config_value(
+            config_key="override_config_for_org_id",
+            value=100,
+            params={"organization_id": 10},
+        )
         configs = test_component.get_current_configs()
         assert len(configs) == 3
         assert {
@@ -144,17 +165,14 @@ class TestConfigurableComponentBasic:
             "value": 50,
             "params": {},
         } in configs
-
-        # a global override is reflected in the effective value
-        with override_component_config(test_component, "default_config_1", 7):
-            assert {
-                "name": "default_config_1",
-                "type": "int",
-                "default": 100,
-                "description": "A default configuration",
-                "value": 7,
-                "params": {},
-            } in test_component.get_current_configs()
+        assert {
+            "name": "override_config_for_org_id",
+            "type": "int",
+            "default": -1,
+            "description": "override config for org",
+            "params": {"organization_id": 10},
+            "value": 100,
+        } in configs
 
     def test_invalid_default_value_type(self) -> None:
         """Test that Configuration with invalid default value type raises ValueError."""
@@ -166,13 +184,19 @@ class TestConfigurableComponentBasic:
 
 
 class TestConfigurableComponentValidation:
-    """Test configuration validation."""
+    """Test configuration parameter validation."""
 
-    def test_validate_config_valid(self, test_component: SomeConfigurableComponent) -> None:
-        config = test_component._validate_config(config_key="override_config_for_org_id")
+    def test_validate_config_params_valid_config(
+        self, test_component: SomeConfigurableComponent
+    ) -> None:
+        """Test validation with valid config and parameters."""
+        config = test_component._validate_config_params(
+            config_key="override_config_for_org_id", params={"organization_id": 42}
+        )
         assert config.name == "override_config_for_org_id"
+        assert config.param_types == {"organization_id": int}
 
-    def test_validate_config_invalid_config(
+    def test_validate_config_params_invalid_config(
         self, test_component: SomeConfigurableComponent
     ) -> None:
         """Test validation with invalid config key."""
@@ -180,13 +204,36 @@ class TestConfigurableComponentValidation:
             InvalidConfig,
             match="'invalid_config' is not a valid config for SomeConfigurableComponent",
         ):
-            test_component._validate_config("invalid_config")
+            test_component._validate_config_params("invalid_config", {})
 
-    def test_validate_config_wrong_value_type(
+    def test_validate_config_params_missing_required_params(
+        self, test_component: SomeConfigurableComponent
+    ) -> None:
+        with pytest.raises(
+            InvalidConfig,
+            match="'override_config_for_org_id' missing required parameters: {'organization_id': 'int'} for SomeConfigurableComponent!",
+        ):
+            test_component._validate_config_params("override_config_for_org_id", {})
+
+    def test_validate_config_params_wrong_param_type(
+        self, test_component: SomeConfigurableComponent
+    ) -> None:
+        with pytest.raises(
+            InvalidConfig, match="parameter 'organization_id' needs to be of type int"
+        ):
+            test_component._validate_config_params(
+                "override_config_for_org_id", {"organization_id": "not_an_int"}
+            )
+
+    def test_validate_config_params_wrong_value_type(
         self, test_component: SomeConfigurableComponent
     ) -> None:
         with pytest.raises(InvalidConfig, match="value needs to be of type int"):
-            test_component._validate_config("override_config_for_org_id", value="not_an_int")
+            test_component._validate_config_params(
+                "override_config_for_org_id",
+                {"organization_id": 42},
+                value="not_an_int",
+            )
 
 
 @pytest.mark.redis_db
@@ -197,70 +244,47 @@ class TestConfigurableComponentConfigOperations:
         """Test getting config value with default."""
         assert test_component.get_config_value("default_config_1") == 100  # Default value
 
-    def test_get_config_value_scoped(self, test_component: SomeConfigurableComponent) -> None:
-        """Test getting a per-org scoped config value from a sentry-option override."""
-        with override_component_config(
-            test_component, "override_config_for_org_id", 100, {"organization_id": 10}
-        ):
-            assert (
-                test_component.get_config_value(
-                    "override_config_for_org_id", {"organization_id": 10}
-                )
-                == 100
-            )
-            # a different org falls back to the code default
-            assert (
-                test_component.get_config_value(
-                    "override_config_for_org_id", {"organization_id": 99}
-                )
-                == -1
-            )
+    def test_get_config_value_with_params(self, test_component: SomeConfigurableComponent) -> None:
+        """Test getting config value with parameters."""
+        test_component.set_config_value(
+            "override_config_for_org_id", 100, params={"organization_id": 10}
+        )
 
-    def test_get_config_value_override(self, test_component: SomeConfigurableComponent) -> None:
-        """A sentry-option override takes precedence over the code default."""
-        assert test_component.get_config_value("default_config_1") == 100
-        with override_component_config(test_component, "default_config_1", 200):
-            assert test_component.get_config_value("default_config_1") == 200
+        assert (
+            test_component.get_config_value(
+                "override_config_for_org_id", params={"organization_id": 10}
+            )
+            == 100
+        )
 
-    def test_set_config_value_writes_to_redis(
-        self, test_component: SomeConfigurableComponent
-    ) -> None:
-        """set/delete_config_value still write the legacy Redis store used by
-        snuba-admin. The effect is observed via get_current_configs (not
-        get_config_value, which now reads sentry-options only)."""
+    def test_set_config_value(self, test_component: SomeConfigurableComponent) -> None:
+        """Test setting config value."""
+        test_component.set_config_value("default_config_1", 200)
+        assert test_component.get_config_value("default_config_1") == 200
+
+    def test_delete_config_value(self, test_component: SomeConfigurableComponent) -> None:
+        """Test deleting config value."""
         config_key = "default_config_1"
 
         test_component.set_config_value(config_key=config_key, value=5)
-        assert {
-            "name": config_key,
-            "type": "int",
-            "default": 100,
-            "description": "A default configuration",
-            "value": 5,
-            "params": {},
-        } in test_component.get_current_configs()
+        assert test_component.get_config_value(config_key=config_key) == 5
 
-        # default_config_1 is a required config, so deleting resets it to its default.
         test_component.delete_config_value(config_key=config_key)
-        assert {
-            "name": config_key,
-            "type": "int",
-            "default": 100,
-            "description": "A default configuration",
-            "value": 100,
-            "params": {},
-        } in test_component.get_current_configs()
+        # back to default
+        assert test_component.get_config_value(config_key=config_key) == 100
 
-    def test_delete_config_value_scoped(self, test_component: SomeConfigurableComponent) -> None:
+    def test_delete_config_value_with_params(
+        self, test_component: SomeConfigurableComponent
+    ) -> None:
         config_key = "override_config_for_org_id"
-        tenant = {"organization_id": 10}
+        params = {"organization_id": 10}
 
-        test_component.set_config_value(config_key=config_key, value=100, tenant_ids=tenant)
-        assert test_component.get_config_value(config_key, tenant) == 100
+        test_component.set_config_value(config_key=config_key, value=100, params=params)
+        assert test_component.get_config_value(config_key=config_key, params=params) == 100
 
-        # deleting the scoped override falls back to the code default
-        test_component.delete_config_value(config_key=config_key, tenant_ids=tenant)
-        assert test_component.get_config_value(config_key, tenant) == -1
+        test_component.delete_config_value(config_key=config_key, params=params)
+        # back to default
+        assert test_component.get_config_value(config_key=config_key, params=params) == -1
 
     def test_get_config_value_invalid_config(
         self, test_component: SomeConfigurableComponent
@@ -287,11 +311,14 @@ class TestConfigurableComponentConfigRetrieval:
     def test_get_optional_config_definitions_json(
         self, test_component: SomeConfigurableComponent
     ) -> None:
-        definitions = test_component.get_optional_config_definitions_json()
-        names = {d["name"] for d in definitions}
-        # every config is scopable now (no declared params), so it's listed
-        assert "override_config_for_org_id" in names
-        assert "default_config_1" in names
+        optional_configs = test_component.get_optional_config_definitions_json()
+
+        assert len(optional_configs) == 1
+        assert optional_configs[0]["name"] == "override_config_for_org_id"
+        assert "params" in optional_configs[0]
+        assert len(optional_configs[0]["params"]) == 1
+        assert optional_configs[0]["params"][0]["name"] == "organization_id"
+        assert optional_configs[0]["params"][0]["type"] == "int"
 
 
 class TestConfigurableComponentNamespaces:
@@ -316,59 +343,4 @@ class TestConfigurableComponentNamespaces:
             assert (
                 name
                 != f"{AllocationPolicy.component_namespace()}.{AllocationPolicy.component_namespace()}"
-            )
-
-
-class TestConfigurableComponentScopedConfig:
-    """Configs are scopable per id/referrer, resolved most-specific-first."""
-
-    def test_scoped_precedence(self) -> None:
-        component = SomeConfigurableComponent()
-        key = "override_config_for_org_id"
-        with override_component_configs(
-            (component, key, 100, {"organization_id": 123, "referrer": "api.foo"}),
-            (component, key, 500, {"organization_id": 123}),
-            (component, key, 2000, {"referrer": "api.foo"}),
-            (component, key, 9000),
-        ):
-            # (org, referrer) wins
-            assert (
-                component.get_config_value(key, {"organization_id": 123, "referrer": "api.foo"})
-                == 100
-            )
-            # (org, "*")
-            assert component.get_config_value(key, {"organization_id": 123, "referrer": "x"}) == 500
-            # ("*", referrer)
-            assert (
-                component.get_config_value(key, {"organization_id": 9, "referrer": "api.foo"})
-                == 2000
-            )
-            # ("*", "*") global
-            assert component.get_config_value(key, {"organization_id": 9, "referrer": "x"}) == 9000
-
-    def test_org_override_applies_to_project_carrying_query(self) -> None:
-        """A per-org override still resolves for a query that also carries a
-        project_id (which has no override of its own)."""
-        component = SomeConfigurableComponent()
-        key = "override_config_for_org_id"
-        with override_component_config(component, key, 500, {"organization_id": 123}):
-            # project 999 has no entry, so the query falls back to its org tier.
-            assert (
-                component.get_config_value(key, {"organization_id": 123, "project_id": 999}) == 500
-            )
-
-    def test_project_override_wins_over_org(self) -> None:
-        component = SomeConfigurableComponent()
-        key = "override_config_for_org_id"
-        with override_component_configs(
-            (component, key, 500, {"organization_id": 123}),
-            (component, key, 700, {"project_id": 999}),
-        ):
-            # project tier is more specific than org tier
-            assert (
-                component.get_config_value(key, {"organization_id": 123, "project_id": 999}) == 700
-            )
-            # a different project with no entry falls back to the org override
-            assert (
-                component.get_config_value(key, {"organization_id": 123, "project_id": 888}) == 500
             )

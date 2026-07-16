@@ -3,88 +3,54 @@
 Allocation-policy (and other `ConfigurableComponent`) config values are read from
 **sentry-options** and managed centrally in **sentry-options-automator**. When an
 override is absent the code default applies; the legacy Redis runtime config is no
-longer consulted.
+longer consulted for reads.
 
-Every config lives in a single option, keyed by a fully-qualified config key:
+The policies themselves are unchanged — only *where* a config value comes from has
+moved (Redis runtime config → sentry-options). Keys, parameters, and semantics are
+exactly as before.
+
+All configs live in a single option, a flat `{key: number}` map:
 
 | Option | Value shape |
 | --- | --- |
-| `configurable_component_overrides` | `{ "<key>": { id (or "*"): { referrer (or "*"): number } } }` |
+| `configurable_component_overrides` | `{ "<key>": number }` |
 
-## The config key
+## The key
 
 ```
 {resource}.{ClassName}.{config}
+{resource}.{ClassName}.{config}.{param}:{value},...   # parameterized config
 ```
 
 - **resource** — the storage/strategy the component is attached to, e.g. `errors`, `eap_items`.
 - **ClassName** — the concrete class, e.g. `BytesScannedRejectingPolicy`,
   `ConcurrentRateLimitAllocationPolicy`.
 - **config** — the config name, e.g. `is_enforced`, `max_threads`, `concurrent_limit`.
+- **params** — for a parameterized config, its declared params appended as a
+  sorted, comma-separated `param:value` suffix, e.g.
+  `.organization_id:123` or `.organization_id:123,referrer:api.foo`.
 
-There are no parameters in the key — **the scoping lives inside the value**.
-
-## Scoping: global / per-org / per-referrer / per-(org, referrer)
-
-Every config's value is a two-level nested object
-`{ id (or "*"): { referrer (or "*"): value } }`, where `id` is a
-project_id/organization_id. This lets one config carry, at once:
-
-- a **global** value — `{"*": {"*": v}}`
-- a **per-id** value (project/org) — `{"<id>": {"*": v}}`
-- a **per-referrer** value — `{"*": {"<referrer>": v}}`
-- a **per-(id, referrer)** value — `{"<id>": {"<referrer>": v}}`
-
-On read, the value is resolved for the query's tenants **most-specific-first**, and
-the first match wins. A query carrying both a `project_id` and an
-`organization_id` tries the project tier first, then the org tier, then the
-wildcard — so a per-org override still applies to that org's project-carrying
-queries:
-
-```
-(project, referrer) > (project, "*")
-    > (org, referrer) > (org, "*")
-    > ("*", referrer) > ("*", "*")  >  code default
-```
-
-(A query with only one of `project_id`/`organization_id` simply skips the tier it
-lacks.) Ids are stringified (`"123"`); referrers keep their dots (`"api.foo"`).
+The lookup is an **exact match** on this key (the same key the policy has always
+built); there is no fallback/precedence walk in the base — a policy reads exactly
+the key it asks for, or the code default. A config's parameters are whatever it
+declares in `param_types`.
 
 ## Example
 
 ```json
 {
-  "errors.ConcurrentRateLimitAllocationPolicy.concurrent_limit": {
-    "123": { "api.foo": 4, "*": 20 },
-    "*":   { "api.foo": 40 }
-  },
-  "errors.BytesScannedRejectingPolicy.is_enforced": {
-    "*": { "*": 1 }
-  },
-  "errors.BytesScannedRejectingPolicy.organization_referrer_scan_limit": {
-    "456": { "*": 20000000000 }
-  }
+  "errors.BytesScannedRejectingPolicy.is_enforced": 1,
+  "errors.ConcurrentRateLimitAllocationPolicy.concurrent_limit": 22,
+  "errors.BytesScannedRejectingPolicy.organization_referrer_scan_limit.organization_id:456": 20000000000
 }
 ```
 
-With the above, for a query on storage `errors`:
-
-| Query tenants | `concurrent_limit` | Matched tier |
-| --- | --- | --- |
-| org `123`, referrer `api.foo` | `4` | `(id, referrer)` |
-| org `123`, referrer `other` | `20` | `(id, "*")` |
-| org `999`, referrer `api.foo` | `40` | `("*", referrer)` |
-| org `999`, referrer `other` | code default (`22`) | none |
-
 ## Notes
 
-- **Any config is scopable**, including the base toggles `is_active` /
-  `is_enforced` / `max_threads` — a per-org `is_enforced` or `max_threads` takes
-  effect for that org's queries.
 - The value is cast to the config's declared `int`/`float` type on read.
-- Resolution is **most-specific-wins** (precedence), applied uniformly to every
-  policy — including `ConcurrentRateLimitAllocationPolicy`, which previously used a
-  min-of-all-applicable rule.
+- Values must be numeric — all current `ConfigurableComponent` configs are.
+- Parameterized (optional) configs are keyed exactly as the policy builds them;
+  snuba-admin's Capacity Management view lists the live configs and their params.
 
 ## Finding the exact names
 
@@ -92,5 +58,4 @@ With the above, for a query on storage `errors`:
 - **ClassName** — the class name.
 - **config** — the `Configuration` entries in the component's
   `_additional_config_definitions` (plus the base `is_active` / `is_enforced` /
-  `max_threads`). snuba-admin's Capacity Management view also lists the live
-  configs for a policy.
+  `max_threads`), with their `param_types` giving the params.

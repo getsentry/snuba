@@ -28,7 +28,6 @@ from snuba.query.validation.validators import ColumnValidationMode
 from snuba.querylog.query_metadata import QueryStatus
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from tests.base import BaseApiTest
-from tests.configs.component_config import override_component_configs
 from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import override_entity_column_validator, write_unprocessed_events
 
@@ -287,48 +286,45 @@ class TestSnQLApi(BaseApiTest):
         concurrent_rate_limit_policies = [
             p for p in policies if p.class_name() == "ConcurrentRateLimitAllocationPolicy"
         ]
-        with override_component_configs(
-            *(
-                (p, "concurrent_limit", 0, {"project_id": self.project_id})
-                for p in concurrent_rate_limit_policies
-            )
-        ):
-            response = self.post(
-                "/events/snql",
-                data=json.dumps(
-                    {
-                        "query": """MATCH (events)
-                        SELECT platform
-                        WHERE project_id = 2
-                        AND timestamp >= toDateTime('2021-01-01')
-                        AND timestamp < toDateTime('2021-01-02')
-                        """,
-                        "tenant_ids": {"referrer": "r", "organization_id": 123},
-                    }
-                ),
-            )
-            assert response.status_code == 200
-            allocation_policies = response.json["quota_allowance"]["details"]
-            assert allocation_policies["ConcurrentRateLimitAllocationPolicy"]["can_run"]
+        for p in concurrent_rate_limit_policies:
+            p.set_config_value("project_override", 0, {"project_id": self.project_id})
 
-            response = self.post(
-                "/events/snql",
-                data=json.dumps(
-                    {
-                        "query": f"""MATCH (events)
-                        SELECT platform
-                        WHERE project_id = {self.project_id}
-                        AND timestamp >= toDateTime('2021-01-01')
-                        AND timestamp < toDateTime('2021-01-02')
-                        """,
-                        "tenant_ids": {"referrer": "r", "organization_id": 123},
-                    }
-                ),
-            )
-            allocation_policies = response.json["quota_allowance"]["details"]
-            assert allocation_policies["ConcurrentRateLimitAllocationPolicy"]
-            assert not allocation_policies["ConcurrentRateLimitAllocationPolicy"]["can_run"]
-            assert response.status_code == 429
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": """MATCH (events)
+                    SELECT platform
+                    WHERE project_id = 2
+                    AND timestamp >= toDateTime('2021-01-01')
+                    AND timestamp < toDateTime('2021-01-02')
+                    """,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
+                }
+            ),
+        )
+        assert response.status_code == 200
+        allocation_policies = response.json["quota_allowance"]["details"]
+        assert allocation_policies["ConcurrentRateLimitAllocationPolicy"]["can_run"]
+
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (events)
+                    SELECT platform
+                    WHERE project_id = {self.project_id}
+                    AND timestamp >= toDateTime('2021-01-01')
+                    AND timestamp < toDateTime('2021-01-02')
+                    """,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
+                }
+            ),
+        )
+        allocation_policies = response.json["quota_allowance"]["details"]
+        assert allocation_policies["ConcurrentRateLimitAllocationPolicy"]
+        assert not allocation_policies["ConcurrentRateLimitAllocationPolicy"]["can_run"]
+        assert response.status_code == 429
 
     @patch("snuba.settings.RECORD_QUERIES", True)
     @patch("snuba.state.record_query")

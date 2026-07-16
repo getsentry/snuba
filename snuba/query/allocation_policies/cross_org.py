@@ -66,34 +66,36 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
         self,
         config_key: str,
         value: Any,
-        tenant_ids: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
         user: str | None = None,
     ) -> None:
         """makes sure only registered referrers can be overridden"""
-        if tenant_ids is None:
-            tenant_ids = {}
+        if params is None:
+            params = {}
         if config_key in (
             "referrer_concurrent_override",
             "referrer_max_threads_override",
         ):
-            referrer = tenant_ids.get("referrer")
+            referrer = params.get("referrer")
             if referrer is not None and not self._referrer_is_registered(referrer):
                 raise InvalidConfig(
                     f"Referrer {referrer} is not registered in the the {self._resource_identifier.value} yaml. Register it first to be able to override its limits"
                 )
-        super().set_config_value(config_key, value, tenant_ids, user)
+        super().set_config_value(config_key, value, params, user)
 
     def _additional_config_definitions(self) -> list[Configuration]:
         return super()._additional_config_definitions() + [
             Configuration(
                 name="referrer_concurrent_override",
-                description="""override the concurrent limit for a referrer (scope by referrer). -1 means use the registered yaml value.""",
+                description="""override the concurrent limit for a referrer""",
                 value_type=int,
+                param_types={"referrer": str},
                 default=-1,
             ),
             Configuration(
                 name="referrer_max_threads_override",
-                description="""override the max_threads for a referrer, applies to every query made by that referrer (scope by referrer). -1 means use the registered yaml value.""",
+                description="""override the max_threads for a referrer, applies to every query made by that referrer""",
+                param_types={"referrer": str},
                 value_type=int,
                 default=-1,
             ),
@@ -163,7 +165,7 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
             # This is not a cross org query and the referrer is not registered. This is outside the responsibility of this policy
             return QuotaAllowance(
                 can_run=True,
-                max_threads=self._max_threads(tenant_ids),
+                max_threads=self.max_threads,
                 explanation={"reason": "pass_through"},
                 is_throttled=False,
                 throttle_threshold=MAX_THRESHOLD,

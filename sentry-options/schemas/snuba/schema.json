@@ -66,11 +66,6 @@
       "default": {},
       "description": "Dict mapping storage name to a max_insert_block_size override for that storage's INSERTs. Values below ClickHouse's default (1048449) are ignored. Storages with no entry use the server default. Migrated from per-storage runtime config clickhouse_max_insert_block_size:<storage>."
     },
-    "use_clickhouse_connect_driver": {
-      "type": "boolean",
-      "default": false,
-      "description": "When true, the read path uses the clickhouse-connect (HTTP) driver instead of the native clickhouse-driver protocol. Defaults to false; setting it rolls the driver migration out or back without a deploy. Migrated from the use_clickhouse_connect_driver runtime config."
-    },
     "eap_items_dlq_grace_period_min": {
       "type": "object",
       "additionalProperties": {
@@ -227,16 +222,10 @@
     "configurable_component_overrides": {
       "type": "object",
       "additionalProperties": {
-        "type": "object",
-        "additionalProperties": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "number"
-          }
-        }
+        "type": "number"
       },
       "default": {},
-      "description": "Override values for ConfigurableComponent (allocation policy and storage-routing strategy) configs, keyed by the fully-qualified config key '{resource}.{ClassName}.{config}'. Each value is a two-level nested object {id (or '*'): {referrer (or '*'): value}} where id is a project_id/organization_id, letting one config carry a global value, a per-id value, a per-referrer value, or a per-(id, referrer) value at once. On read the value is resolved for the query's tenants most-specific-first: (id, referrer) > (id, '*') > ('*', referrer) > ('*', '*') > code default, then cast to the config's declared numeric type (int/float). '(\"*\", \"*\")' is the global override tier. Authoritative source for these configs; the legacy Redis runtime config is no longer consulted. Migrated from per-component runtime config of the same key."
+      "description": "Override values for ConfigurableComponent (allocation policy and storage-routing strategy) configs, keyed by the fully-qualified config key '{resource}.{ClassName}.{config}' (parameterized configs append '.{param}:{value},...', sorted, with '.'/','/':' in param names/values escaped as __dot_literal__/__comma_literal__/__colon_literal__). Values are numbers cast to each config's declared numeric type (int/float) on read. All current ConfigurableComponent configs are numeric; a non-numeric config would require widening this type. Authoritative source for these configs; a key absent here falls back to the code default. The legacy Redis runtime config is no longer consulted for reads. Migrated from per-component runtime config of the same key."
     },
     "storage_routing_sampled_too_low_threshold": {
       "type": "object",

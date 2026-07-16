@@ -60,24 +60,63 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
     WINDOW_GRANULARITY_SECONDS = 60
 
     def _additional_config_definitions(self) -> list[Configuration]:
+        # Overrides are checked in order of specificity; the first one set wins.
+        # For organization_id queries:
+        #   (organization_id, referrer) > organization_id > (all orgs, referrer) > default
         return [
             Configuration(
+                "referrer_all_projects_scan_limit_override",
+                f"Specific referrer scan limit in the last {self.WINDOW_SECONDS / 60} mins, APPLIES TO ALL PROJECTS",
+                int,
+                DEFAULT_OVERRIDE_LIMIT,
+                param_types={"referrer": str},
+            ),
+            Configuration(
+                "referrer_all_organizations_scan_limit_override",
+                f"Specific referrer scan limit in the last {self.WINDOW_SECONDS / 60} mins, APPLIES TO ALL ORGANIZATIONS",
+                int,
+                DEFAULT_OVERRIDE_LIMIT,
+                param_types={"referrer": str},
+            ),
+            Configuration(
+                "organization_referrer_scan_limit_override",
+                f"Specific (organization_id, referrer) scan limit in the last {self.WINDOW_SECONDS / 60} mins",
+                int,
+                DEFAULT_OVERRIDE_LIMIT,
+                param_types={"organization_id": int, "referrer": str},
+            ),
+            Configuration(
+                "organization_scan_limit_override",
+                f"Scan limit for a specific organization_id across any referrer in the last {self.WINDOW_SECONDS / 60} mins",
+                int,
+                DEFAULT_OVERRIDE_LIMIT,
+                param_types={"organization_id": int},
+            ),
+            Configuration(
+                "organization_referrer_max_bytes_to_read",
+                "Per-(organization_id, referrer) hard cap forwarded to clickhouse as max_bytes_to_read. Queries that match are allowed to run with this cap and bypass the sliding-window scan limit",
+                int,
+                DEFAULT_OVERRIDE_LIMIT,
+                param_types={"organization_id": int, "referrer": str},
+            ),
+            Configuration(
+                "organization_max_bytes_to_read",
+                "Per-organization_id hard cap forwarded to clickhouse as max_bytes_to_read across any referrer. Queries that match are allowed to run with this cap and bypass the sliding-window scan limit",
+                int,
+                DEFAULT_OVERRIDE_LIMIT,
+                param_types={"organization_id": int},
+            ),
+            Configuration(
                 "project_referrer_scan_limit",
-                f"how many bytes can a project scan per referrer in the last {self.WINDOW_SECONDS / 60} mins before queries start getting rejected. Scopable per project and/or referrer; the most-specific matching value wins.",
+                f"DEFAULT: how many bytes can a project scan per referrer in the last {self.WINDOW_SECONDS / 60} mins before queries start getting rejected",
                 int,
                 DEFAULT_BYTES_SCANNED_LIMIT,
             ),
             Configuration(
                 "organization_referrer_scan_limit",
-                f"how many bytes can an organization scan per referrer in the last {self.WINDOW_SECONDS / 60} mins before queries start getting rejected. Cross-project queries are limited by organization_id. Scopable per organization and/or referrer; the most-specific matching value wins.",
+                f"DEFAULT: how many bytes can an organization scan per referrer in the last {self.WINDOW_SECONDS / 60} mins before queries start getting rejected. Cross-project queries are limited by organization_id",
                 int,
                 DEFAULT_BYTES_SCANNED_LIMIT * 2,
-            ),
-            Configuration(
-                "organization_max_bytes_to_read",
-                "Per-organization hard cap forwarded to clickhouse as max_bytes_to_read. Queries that match are allowed to run with this cap and bypass the sliding-window scan limit. Scopable per organization and/or referrer; the most-specific matching value wins. -1 means no cap.",
-                int,
-                DEFAULT_OVERRIDE_LIMIT,
             ),
             Configuration(
                 "clickhouse_timeout_bytes_scanned_penalization",
@@ -138,24 +177,36 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
         customer_tenant_value: str | int,
         referrer: str | int,
     ) -> int:
-        if customer_tenant_key not in ("project_id", "organization_id"):
-            raise InvalidTenantsForAllocationPolicy.from_args(
-                {customer_tenant_key: customer_tenant_value, "referrer": referrer},
-                self.__class__.__name__,
-                "customer tenant key is neither project_id or organization_id, this should never happen",
+        if customer_tenant_key == "project_id":
+            override = self.get_config_value(
+                "referrer_all_projects_scan_limit_override", {"referrer": referrer}
             )
-        config = (
-            "project_referrer_scan_limit"
-            if customer_tenant_key == "project_id"
-            else "organization_referrer_scan_limit"
-        )
-        # The scan limit is scoped per (project/org, referrer): the most-specific
-        # override wins, else the code default.
-        return int(
-            self.get_config_value(
-                config,
-                {customer_tenant_key: customer_tenant_value, "referrer": str(referrer)},
+            if override == DEFAULT_OVERRIDE_LIMIT:
+                return int(self.get_config_value("project_referrer_scan_limit"))
+            return int(override)
+        if customer_tenant_key == "organization_id":
+            org_referrer_override = self.get_config_value(
+                "organization_referrer_scan_limit_override",
+                {"organization_id": customer_tenant_value, "referrer": referrer},
             )
+            if org_referrer_override != DEFAULT_OVERRIDE_LIMIT:
+                return int(org_referrer_override)
+            org_override = self.get_config_value(
+                "organization_scan_limit_override",
+                {"organization_id": customer_tenant_value},
+            )
+            if org_override != DEFAULT_OVERRIDE_LIMIT:
+                return int(org_override)
+            all_orgs_referrer_override = self.get_config_value(
+                "referrer_all_organizations_scan_limit_override", {"referrer": referrer}
+            )
+            if all_orgs_referrer_override != DEFAULT_OVERRIDE_LIMIT:
+                return int(all_orgs_referrer_override)
+            return int(self.get_config_value("organization_referrer_scan_limit"))
+        raise InvalidTenantsForAllocationPolicy.from_args(
+            {customer_tenant_key: customer_tenant_value, "referrer": referrer},
+            self.__class__.__name__,
+            "customer tenant key is neither project_id or organization_id, this should never happen",
         )
 
     def __get_organization_max_bytes_to_read(
@@ -163,14 +214,22 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
     ) -> int | None:
         """Return a per-org max_bytes_to_read cap if one is configured.
 
-        Resolved per (organization_id, referrer), most-specific-first. Returns
-        None when no cap applies.
+        Precedence: (organization_id, referrer) > organization_id.
+        Returns None when no cap applies.
         """
-        cap = self.get_config_value(
-            "organization_max_bytes_to_read",
-            {"organization_id": org_id, "referrer": str(referrer)},
+        org_referrer_cap = self.get_config_value(
+            "organization_referrer_max_bytes_to_read",
+            {"organization_id": org_id, "referrer": referrer},
         )
-        return int(cap) if cap != DEFAULT_OVERRIDE_LIMIT else None
+        if org_referrer_cap != DEFAULT_OVERRIDE_LIMIT:
+            return int(org_referrer_cap)
+        org_cap = self.get_config_value(
+            "organization_max_bytes_to_read",
+            {"organization_id": org_id},
+        )
+        if org_cap != DEFAULT_OVERRIDE_LIMIT:
+            return int(org_cap)
+        return None
 
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
@@ -183,7 +242,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
         if self.is_cross_org_query(tenant_ids):
             return QuotaAllowance(
                 can_run=True,
-                max_threads=self._max_threads(tenant_ids),
+                max_threads=self.max_threads,
                 explanation={"reason": "cross_org_query"},
                 is_throttled=False,
                 throttle_threshold=MAX_THRESHOLD,
@@ -200,7 +259,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
         if referrer in _PASS_THROUGH_REFERRERS:
             return QuotaAllowance(
                 can_run=True,
-                max_threads=self._max_threads(tenant_ids),
+                max_threads=self.max_threads,
                 explanation={},
                 is_throttled=False,
                 throttle_threshold=MAX_THRESHOLD,
@@ -215,7 +274,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             if org_cap is not None:
                 return QuotaAllowance(
                     can_run=True,
-                    max_threads=self._max_threads(tenant_ids),
+                    max_threads=self.max_threads,
                     max_bytes_to_read=org_cap,
                     explanation={
                         "reason": f"organization_id {customer_tenant_value} runs with a per-org max_bytes_to_read cap of {org_cap}"
@@ -278,8 +337,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                     can_run=True,
                     max_threads=max(
                         1,
-                        self._max_threads(tenant_ids)
-                        // self.get_config_value("threads_throttle_divider"),
+                        self.max_threads // self.get_config_value("threads_throttle_divider"),
                     ),
                     max_bytes_to_read=max_bytes_to_read,
                     explanation=explanation,
@@ -327,8 +385,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 can_run=True,
                 max_threads=max(
                     1,
-                    self._max_threads(tenant_ids)
-                    // self.get_config_value("threads_throttle_divider"),
+                    self.max_threads // self.get_config_value("threads_throttle_divider"),
                 ),
                 explanation={"reason": "within_limit but throttled"},
                 is_throttled=True,
@@ -341,7 +398,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
 
         return QuotaAllowance(
             can_run=True,
-            max_threads=self._max_threads(tenant_ids),
+            max_threads=self.max_threads,
             explanation={"reason": "within_limit"},
             is_throttled=False,
             throttle_threshold=throttle_threshold,

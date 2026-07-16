@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 import typing
+from collections.abc import Callable
+from typing import cast
 
 from snuba import state
 from snuba.configs.configuration import Configuration
@@ -132,15 +134,59 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
         return super()._additional_config_definitions() + [
             Configuration(
                 name="concurrent_limit",
-                description=(
-                    "maximum amount of concurrent queries per tenant. Scopable per "
-                    "project/organization and/or referrer via the override option; the "
-                    "most-specific matching value wins."
-                ),
+                description="maximum amount of concurrent queries per tenant",
                 value_type=int,
                 default=DEFAULT_CONCURRENT_QUERIES_LIMIT,
             ),
+            Configuration(
+                name="referrer_project_override",
+                description="override concurrent limit for a specific project, referrer combo",
+                value_type=int,
+                default=-1,
+                param_types={"referrer": str, "project_id": int},
+            ),
+            Configuration(
+                name="referrer_organization_override",
+                description="override concurrent limit for a specific organization_id, referrer combo",
+                value_type=int,
+                default=-1,
+                param_types={"referrer": str, "organization_id": int},
+            ),
+            Configuration(
+                name="project_override",
+                description="override concurrent limit for a specific project_id",
+                value_type=int,
+                default=-1,
+                param_types={"project_id": int},
+            ),
+            Configuration(
+                name="organization_override",
+                description="override concurrent limit for a specific organization_id",
+                value_type=int,
+                default=-1,
+                param_types={"organization_id": int},
+            ),
         ]
+
+    def _get_overrides(self, tenant_ids: dict[str, str | int]) -> dict[str, int]:
+        overrides = {}
+        available_tenant_ids = set(tenant_ids.keys())
+        # get all overrides that can be retrieved with the tenant_ids
+        # e.g. if organization_id and referrer are passed in, retrieve
+        # ('organization_override, 'referrer_organization_override')
+        for config_definition in self._additional_config_definitions():
+            if config_definition.name.endswith("_override"):
+                param_types = config_definition.param_types
+                if set(param_types.keys()).issubset(available_tenant_ids):
+                    params = {param: tenant_ids[param] for param in param_types}
+                    config_value = self.get_config_value(config_definition.name, params)
+                    if config_value != config_definition.default:
+                        key = "|".join(
+                            [f"{param}__{tenant_id}" for param, tenant_id in sorted(params.items())]
+                        )
+
+                        overrides[key] = config_value
+        return overrides
 
     def _get_tenant_key_and_value(self, tenant_ids: dict[str, str | int]) -> tuple[str, str | int]:
         if "project_id" in tenant_ids:
@@ -157,28 +203,24 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
     def rate_limit_name(self) -> str:
         return "concurrent_rate_limit_policy"
 
-    def _get_rate_limit_params(self, tenant_ids: dict[str, str | int]) -> RateLimitParameters:
-        _tenant_key, tenant_value = self._get_tenant_key_and_value(tenant_ids)
-        referrer = tenant_ids.get("referrer")
-        # Most-specific-matching concurrent limit for this (tenant, referrer).
-        concurrent_limit = int(self.get_config_value("concurrent_limit", tenant_ids))
-        # Bucket by tenant so all referrers share the tenant-wide limit, unless a
-        # referrer-specific override applies -- then count that referrer on its own
-        # so it neither consumes nor is consumed by the tenant-wide bucket. The
-        # comparison drops only the referrer (keeping the full project/org scope)
-        # so a plain per-org or per-project override is not mistaken for a
-        # referrer-specific one.
-        bucket = str(tenant_value)
-        if referrer is not None:
-            tenant_scope = {k: v for k, v in tenant_ids.items() if k != "referrer"}
-            tenant_wide_limit = int(self.get_config_value("concurrent_limit", tenant_scope))
-            if concurrent_limit != tenant_wide_limit:
-                bucket = f"{tenant_value}|referrer__{referrer}"
-        return RateLimitParameters(
-            self.rate_limit_name,
-            bucket=bucket,
-            per_second_limit=None,
-            concurrent_limit=concurrent_limit,
+    def _get_rate_limit_params(
+        self, tenant_ids: dict[str, str | int]
+    ) -> tuple[RateLimitParameters, dict[str, int]]:
+        tenant_key, tenant_value = self._get_tenant_key_and_value(tenant_ids)
+        overrides = self._get_overrides(tenant_ids)
+        concurrent_limit = self.get_config_value("concurrent_limit")
+        if overrides:
+            concurrent_limit = min(overrides.values())
+            tenant_value = min(overrides, key=cast(Callable[[str], int], overrides.get))
+
+        return (
+            RateLimitParameters(
+                self.rate_limit_name,
+                bucket=str(tenant_value),
+                per_second_limit=None,
+                concurrent_limit=concurrent_limit,
+            ),
+            overrides,
         )
 
     def _get_quota_allowance(
@@ -187,7 +229,7 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
         if tenant_ids.get("referrer", "no_referrer") in _PASS_THROUGH_REFERRERS:
             return QuotaAllowance(
                 can_run=True,
-                max_threads=self._max_threads(tenant_ids),
+                max_threads=self.max_threads,
                 explanation={"reason": "pass_through"},
                 is_throttled=False,
                 throttle_threshold=MAX_THRESHOLD,
@@ -199,7 +241,7 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
         if self.is_cross_org_query(tenant_ids):
             return QuotaAllowance(
                 can_run=True,
-                max_threads=self._max_threads(tenant_ids),
+                max_threads=self.max_threads,
                 explanation={"reason": "cross_org"},
                 is_throttled=False,
                 throttle_threshold=MAX_THRESHOLD,
@@ -209,7 +251,7 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
                 suggestion=CROSS_ORG_SUGGESTION,
             )
 
-        rate_limit_params = self._get_rate_limit_params(tenant_ids)
+        rate_limit_params, overrides = self._get_rate_limit_params(tenant_ids)
         rate_limit_stats, within_rate_limit, why = self._is_within_rate_limit(
             query_id,
             rate_limit_params,
@@ -217,8 +259,8 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
 
         return QuotaAllowance(
             can_run=within_rate_limit,
-            max_threads=self._max_threads(tenant_ids) if within_rate_limit else 0,
-            explanation={"reason": why, "concurrent_limit": rate_limit_params.concurrent_limit},
+            max_threads=self.max_threads if within_rate_limit else 0,
+            explanation={"reason": why, "overrides": overrides},
             is_throttled=False,
             throttle_threshold=typing.cast(int, rate_limit_params.concurrent_limit),
             rejection_threshold=typing.cast(int, rate_limit_params.concurrent_limit),
@@ -235,7 +277,7 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
     ) -> None:
         if self.is_cross_org_query(tenant_ids):
             return
-        rate_limit_params = self._get_rate_limit_params(tenant_ids)
+        rate_limit_params, _ = self._get_rate_limit_params(tenant_ids)
         self._end_query(query_id, rate_limit_params, result_or_error)
 
 

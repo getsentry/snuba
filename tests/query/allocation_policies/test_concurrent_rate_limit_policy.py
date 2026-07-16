@@ -87,6 +87,7 @@ def test_configure_max_query_duration(
     sleep_time = 1.01
     policy.set_config_value("concurrent_limit", 1)
     policy.set_config_value("max_query_duration_s", max_query_duration_s)
+
     policy.get_quota_allowance(tenant_ids={"organization_id": 123}, query_id="abc1")
     time.sleep(sleep_time)
     assert policy.get_quota_allowance(
@@ -162,55 +163,78 @@ def test_tenant_selection(policy: ConcurrentRateLimitAllocationPolicy):
         policy._get_tenant_key_and_value({})
 
 
-# Each case: (scoped concurrent_limit sets, query tenant_ids, expected effective limit).
-# The concurrent_limit is scoped per (project/org, referrer); the most-specific
-# override wins (precedence, not min-of-all).
 OVERRIDE_TEST_CASES = [
     pytest.param(
-        [(1, {"organization_id": 123})],
+        [("organization_override", 1, {"organization_id": 123})],
         {"organization_id": 123},
+        {"organization_id__123": 1},
         1,
-        id="per-org override",
+        id="organization_override",
     ),
     pytest.param(
-        [(1, {"organization_id": 123})],
+        [("organization_override", 1, {"organization_id": 123})],
         {"organization_id": 456},
+        {},
         MAX_CONCURRENT_QUERIES,
-        id="non-matching tenant_id -> default",
-    ),
-    pytest.param(
-        [(1, {"organization_id": 456, "referrer": "abcd"})],
-        {"organization_id": 456, "referrer": "abcd"},
-        1,
-        id="per (org, referrer) override",
+        id="non-matching tenant_id",
     ),
     pytest.param(
         [
-            (1, {"project_id": 134, "referrer": "abcd"}),
-            (4, {"project_id": 134}),
+            (
+                "referrer_organization_override",
+                1,
+                {"referrer": "abcd", "organization_id": 456},
+            )
+        ],
+        {"organization_id": 456, "referrer": "abcd"},
+        {"organization_id__456|referrer__abcd": 1},
+        1,
+    ),
+    pytest.param(
+        [
+            ("referrer_project_override", 1, {"referrer": "abcd", "project_id": 134}),
+            ("project_override", 4, {"project_id": 134}),
         ],
         {"organization_id": 456, "referrer": "abcd", "project_id": 134},
+        {"project_id__134|referrer__abcd": 1, "project_id__134": 4},
         1,
-        id="(project, referrer) beats (project, '*')",
     ),
     pytest.param(
         [
-            (1, {"project_id": 134, "referrer": "abcd"}),
-            (4, {"project_id": 134}),
+            (
+                "referrer_organization_override",
+                1,
+                {"referrer": "abcd", "organization_id": 123},
+            ),
         ],
-        {"organization_id": 456, "referrer": "other", "project_id": 134},
-        4,
-        id="(project, '*') applies to other referrers",
-    ),
-    pytest.param(
-        [(1, {"project_id": 456, "referrer": "abcd"})],
-        {"organization_id": 123, "referrer": "abcd", "project_id": 456},
+        {"organization_id": 123, "referrer": "abcd", "project_id": 134},
+        {"organization_id__123|referrer__abcd": 1},
         1,
-        id="per (project, referrer) override",
+        id="referrer_organization_override",
     ),
     pytest.param(
-        [(MAX_CONCURRENT_QUERIES * 2, {"project_id": 456, "referrer": "abcd"})],
+        [
+            (
+                "referrer_project_override",
+                1,
+                {"referrer": "abcd", "project_id": 456},
+            ),
+        ],
         {"organization_id": 123, "referrer": "abcd", "project_id": 456},
+        {"project_id__456|referrer__abcd": 1},
+        1,
+        id="referrer_organization_override",
+    ),
+    pytest.param(
+        [
+            (
+                "referrer_project_override",
+                MAX_CONCURRENT_QUERIES * 2,
+                {"referrer": "abcd", "project_id": 456},
+            ),
+        ],
+        {"organization_id": 123, "referrer": "abcd", "project_id": 456},
+        {"project_id__456|referrer__abcd": MAX_CONCURRENT_QUERIES * 2},
         MAX_CONCURRENT_QUERIES * 2,
         id="override to a greater number",
     ),
@@ -219,24 +243,25 @@ OVERRIDE_TEST_CASES = [
 
 @pytest.mark.redis_db
 @pytest.mark.parametrize(
-    "overrides,tenant_ids,expected_concurrent_limit",
+    "overrides,tenant_ids,expected_overrides,expected_concurrent_limit",
     OVERRIDE_TEST_CASES,
 )
 def test_apply_overrides(
     policy: ConcurrentRateLimitAllocationPolicy,
     overrides,
     tenant_ids,
+    expected_overrides,
     expected_concurrent_limit,
 ) -> None:
-    for value, scope in overrides:
-        policy.set_config_value("concurrent_limit", value, scope)
+    for override in overrides:
+        policy.set_config_value(*override)
     for i in range(expected_concurrent_limit):
         policy.get_quota_allowance(tenant_ids=tenant_ids, query_id=f"{i}")
     allowance = policy.get_quota_allowance(
         tenant_ids=tenant_ids, query_id=f"{expected_concurrent_limit + 1}"
     )
     assert not allowance.can_run and allowance.max_threads == 0
-    assert allowance.explanation["concurrent_limit"] == expected_concurrent_limit
+    assert allowance.explanation["overrides"] == expected_overrides
 
 
 @pytest.mark.redis_db
@@ -247,7 +272,7 @@ def test_override_isolation(
     project_id = 1234
     overridden_referrer = "overridden_referrer"
     policy.set_config_value(
-        "concurrent_limit",
+        "referrer_project_override",
         override_concurrent_limit,
         {"project_id": project_id, "referrer": overridden_referrer},
     )
@@ -287,33 +312,6 @@ def test_override_isolation(
     assert not policy.get_quota_allowance(
         tenant_ids={"project_id": project_id, "referrer": overridden_referrer},
         query_id="uniq_string_3",
-    ).can_run
-
-
-@pytest.mark.redis_db
-def test_org_override_shares_bucket_across_referrers(
-    policy: ConcurrentRateLimitAllocationPolicy,
-) -> None:
-    """A per-org override on a query that also carries a project_id must share one
-    tenant-wide bucket across referrers -- it is not a referrer-specific override,
-    so different referrers count against the same limit."""
-    org_id = 456
-    project_id = 1234
-    override_limit = 2
-    policy.set_config_value("concurrent_limit", override_limit, {"organization_id": org_id})
-
-    # Fill the bucket using one referrer.
-    for i in range(override_limit):
-        assert policy.get_quota_allowance(
-            tenant_ids={"organization_id": org_id, "project_id": project_id, "referrer": "ref_a"},
-            query_id=f"a{i}",
-        ).can_run
-
-    # A different referrer for the same org shares the (now full) bucket -- it must
-    # be rejected rather than getting its own fresh bucket of size override_limit.
-    assert not policy.get_quota_allowance(
-        tenant_ids={"organization_id": org_id, "project_id": project_id, "referrer": "ref_b"},
-        query_id="b0",
     ).can_run
 
 

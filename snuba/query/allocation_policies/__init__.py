@@ -294,7 +294,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         >>>
         >>> def _update_quota_balance(...) -> None:
         >>>     # don't count this query towards the quota if the referrer is overridden
-        >>>     if self.get_config_value("qps_limit_referrer_override", {"referrer": tenant_ids.get("referrer")}):
+        >>>     if self.get_config_value("qps_limit_referrer_override", params={"referrer": tenant_ids.get("referrer")}):
         >>>         return
         >>>     self.__add_query_hit()
 
@@ -336,7 +336,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
     * Every allocation policy takes a `storage_key` in its init. The storage_key is like a pseudo-tenant. In different
         environments, storages may be co-located on the same cluster. To facilitate resource sharing, every allocation policy
         knows which storage_key it is serving. This is used to create unique keys for saving the config values.
-        See `_build_config_key()` for more info.
+        See `__build_runtime_config_key()` for more info.
     * Reiterating that you should no longer use `snuba.state.{get,set}_config()` for runtime configs for a specific Policy. Refer to the Configurations
         section of this docstring for more info.
     """
@@ -397,34 +397,18 @@ class AllocationPolicy(ConfigurableComponent, ABC):
             },
         )
 
-    def _is_active(self, tenant_ids: dict[str, str | int]) -> bool:
-        return (
-            bool(self.get_config_value(IS_ACTIVE, tenant_ids))
-            and settings.ALLOCATION_POLICY_ENABLED
-        )
-
-    def _is_enforced(self, tenant_ids: dict[str, str | int]) -> bool:
-        return bool(self.get_config_value(IS_ENFORCED, tenant_ids))
-
-    def _max_threads(self, tenant_ids: dict[str, str | int]) -> int:
-        """Maximum number of threads to run a single query on ClickHouse with,
-        resolved for the query's tenants."""
-        return int(self.get_config_value(MAX_THREADS, tenant_ids))
-
     @property
     def is_active(self) -> bool:
-        """Global (unscoped) value; use ``_is_active(tenant_ids)`` for a query."""
-        return self._is_active({})
+        return bool(self.get_config_value(IS_ACTIVE)) and settings.ALLOCATION_POLICY_ENABLED
 
     @property
     def is_enforced(self) -> bool:
-        """Global (unscoped) value; use ``_is_enforced(tenant_ids)`` for a query."""
-        return self._is_enforced({})
+        return bool(self.get_config_value(IS_ENFORCED))
 
     @property
     def max_threads(self) -> int:
-        """Global (unscoped) value; use ``_max_threads(tenant_ids)`` for a query."""
-        return self._max_threads({})
+        """Maximum number of threads run a single query on ClickHouse with."""
+        return int(self.get_config_value(MAX_THREADS))
 
     def __eq__(self, other: Any) -> bool:
         """There should not be a need to compare these except that
@@ -473,10 +457,10 @@ class AllocationPolicy(ConfigurableComponent, ABC):
             for t, tid in tenant_ids.items():
                 span.set_data(f"tenant_ids.{t}", str(tid))
             try:
-                if not self._is_active(tenant_ids):
+                if not self.is_active:
                     allowance = QuotaAllowance(
                         can_run=True,
-                        max_threads=self._max_threads(tenant_ids),
+                        max_threads=self.max_threads,
                         explanation={},
                         is_throttled=False,
                         throttle_threshold=MAX_THRESHOLD,
@@ -521,7 +505,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                     "db_request_rejected",
                     tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
                 )
-            elif allowance.max_threads < self._max_threads(tenant_ids):
+            elif allowance.max_threads < self.max_threads:
                 # NOTE: The elif is very intentional here. Don't count the throttling
                 # if the request was rejected.
                 self.metrics.increment(
@@ -532,10 +516,10 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                     },
                 )
                 span.set_data("db_request_throttled", True)
-            if not self._is_enforced(tenant_ids):
+            if not self.is_enforced:
                 allowance = QuotaAllowance(
                     can_run=True,
-                    max_threads=self._max_threads(tenant_ids),
+                    max_threads=self.max_threads,
                     explanation={},
                     is_throttled=allowance.is_throttled,
                     throttle_threshold=allowance.throttle_threshold,
@@ -563,7 +547,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
         result_or_error: QueryResultOrError,
     ) -> None:
         try:
-            if not self._is_active(tenant_ids):
+            if not self.is_active:
                 return None
             return self._update_quota_balance(tenant_ids, query_id, result_or_error)
         except InvalidTenantsForAllocationPolicy:
@@ -612,7 +596,7 @@ class PassthroughPolicy(AllocationPolicy):
     ) -> QuotaAllowance:
         return QuotaAllowance(
             can_run=True,
-            max_threads=self._max_threads(tenant_ids),
+            max_threads=self.max_threads,
             explanation={},
             is_throttled=False,
             throttle_threshold=MAX_THRESHOLD,

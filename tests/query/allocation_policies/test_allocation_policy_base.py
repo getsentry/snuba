@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from unittest import mock
+from unittest import TestCase, mock
 
 import pytest
 
 from snuba.configs.configuration import Configuration, InvalidConfig
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
+    CAPMAN_HASH,
     DEFAULT_PASSTHROUGH_POLICY,
     MAX_THRESHOLD,
     NO_SUGGESTION,
@@ -29,6 +30,7 @@ from snuba.query.allocation_policies.concurrent_rate_limit import (
 )
 from snuba.query.allocation_policies.cross_org import CrossOrgQueryAllocationPolicy
 from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
+from snuba.state import set_config
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from snuba.web import QueryResult
 
@@ -206,6 +208,7 @@ class SomeParametrizedConfigPolicy(AllocationPolicy):
                 description="",
                 value_type=int,
                 default=-1,
+                param_types={"org": int, "ref": str},
             ),
         ]
 
@@ -220,6 +223,41 @@ class SomeParametrizedConfigPolicy(AllocationPolicy):
         pass
 
 
+class TestAllocationPolicyLogs(TestCase):
+    @pytest.mark.redis_db
+    def test_bad_config_key_in_redis(self) -> None:
+        policy = SomeParametrizedConfigPolicy(StorageKey("something"), [], {})
+        set_config(
+            key="something.SomeParametrizedConfigPolicy.my_bad_config.org:10,ref:ref",
+            value=10,
+            config_key=CAPMAN_HASH,
+        )
+        set_config(
+            key="something.SomeParametrizedConfigPolicy.my_param_config.org:10",
+            value=10,
+            config_key=CAPMAN_HASH,
+        )
+        set_config(
+            key="something.SomeParametrizedConfigPolicy.my_param_config.org:10,ref:ref,yeet:yeet",
+            value=10,
+            config_key=CAPMAN_HASH,
+        )
+        with self.assertLogs() as captured:
+            configs = policy.get_current_configs()
+
+        # the bad configs are not returned
+        assert len(configs) == 4
+
+        # the bad configs are logged
+        assert len(captured.records) == 3
+        logs = {record.getMessage() for record in captured.records}
+        assert logs == {
+            "AllocationPolicy could not deserialize a key: something.SomeParametrizedConfigPolicy.my_bad_config.org:10,ref:ref",
+            "AllocationPolicy could not deserialize a key: something.SomeParametrizedConfigPolicy.my_param_config.org:10",
+            "AllocationPolicy could not deserialize a key: something.SomeParametrizedConfigPolicy.my_param_config.org:10,ref:ref,yeet:yeet",
+        }
+
+
 @pytest.fixture(scope="function")
 def policy() -> AllocationPolicy:
     policy = SomeParametrizedConfigPolicy(StorageKey("something"), [], {})
@@ -229,22 +267,35 @@ def policy() -> AllocationPolicy:
 @pytest.mark.redis_db
 def test_config_validation(policy: AllocationPolicy) -> None:
     with pytest.raises(InvalidConfig) as err:
+        policy.set_config_value(config_key="my_config", value=10, params={"bad_param": 10})
+    assert str(err.value) == "'my_config' takes no params for SomeParametrizedConfigPolicy!"
+    with pytest.raises(InvalidConfig) as err:
         policy.set_config_value(config_key="my_config", value="lol")
     assert (
         str(err.value)
         == "'my_config' value needs to be of type int (not str) for SomeParametrizedConfigPolicy!"
     )
     with pytest.raises(InvalidConfig) as err:
-        policy.set_config_value(config_key="does_not_exist", value=10)
+        policy.set_config_value(config_key="my_param_config", value=10)
     assert (
-        str(err.value) == "'does_not_exist' is not a valid config for SomeParametrizedConfigPolicy!"
+        str(err.value)
+        == "'my_param_config' missing required parameters: {'org': 'int', 'ref': 'str'} for SomeParametrizedConfigPolicy!"
     )
 
-    # strings convert into ints if the expected type is int
-    policy.set_config_value(
-        config_key="my_param_config", value="10", tenant_ids={"organization_id": 10}
+    with pytest.raises(InvalidConfig) as err:
+        policy.set_config_value(
+            config_key="my_param_config", value=10, params={"org": "lol", "ref": "test"}
+        )
+    assert (
+        str(err.value)
+        == "'my_param_config' parameter 'org' needs to be of type int (not str) for SomeParametrizedConfigPolicy!"
     )
-    assert policy.get_config_value("my_param_config", {"organization_id": 10}) == 10
+
+    # strings should convert into ints if expected type is int
+    policy.set_config_value(
+        config_key="my_param_config", value=10, params={"org": "10", "ref": "test"}
+    )
+    assert policy.get_config_value("my_param_config", {"org": 10, "ref": "test"}) == 10
 
 
 @pytest.mark.redis_db
@@ -259,16 +310,16 @@ def test_add_delete_config_value(policy: AllocationPolicy) -> None:
     # back to default
     assert policy.get_config_value(config_key=config_key) == 10
 
-    """Test adding + deleting a scoped config"""
+    """Test adding + deleting an optional config"""
     config_key = "my_param_config"
-    tenant = {"organization_id": 10}
+    params = {"org": 10, "ref": "test"}
 
-    policy.set_config_value(config_key=config_key, value=100, tenant_ids=tenant)
-    assert policy.get_config_value(config_key=config_key, tenant_ids=tenant) == 100
+    policy.set_config_value(config_key=config_key, value=100, params=params)
+    assert policy.get_config_value(config_key=config_key, params=params) == 100
 
-    policy.delete_config_value(config_key=config_key, tenant_ids=tenant)
+    policy.delete_config_value(config_key=config_key, params=params)
     # back to default
-    assert policy.get_config_value(config_key=config_key, tenant_ids=tenant) == -1
+    assert policy.get_config_value(config_key=config_key, params=params) == -1
 
 
 @pytest.mark.redis_db
@@ -294,8 +345,7 @@ def test_default_config_overrides(policy: AllocationPolicy) -> None:
 
 @pytest.mark.redis_db
 def test_get_current_configs(policy: AllocationPolicy) -> None:
-    # One entry per config, each with its effective global value.
-    assert len(policy_configs := policy.get_current_configs()) == 5
+    assert len(policy_configs := policy.get_current_configs()) == 4
     assert all(
         config in policy_configs
         for config in [
@@ -308,19 +358,47 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
                 "params": {},
             },
             {
-                "name": "my_param_config",
+                "name": "is_active",
                 "type": "int",
-                "default": -1,
-                "description": "",
-                "value": -1,
+                "default": 1,
+                "description": "Toggles whether or not this policy is active. If active, policy code will be excecuted. If inactive, the policy code will not run and the query will pass through.",
+                "value": 1,
+                "params": {},
+            },
+            {
+                "name": "is_enforced",
+                "type": "int",
+                "default": 1,
+                "description": "Toggles whether or not this policy is enforced. If enforced, policy will be able to throttle/reject incoming queries. If not enforced, this policy will not throttle/reject queries if policy is triggered, but all the policy code will still run.",
+                "value": 1,
+                "params": {},
+            },
+            {
+                "name": "max_threads",
+                "type": "int",
+                "default": 10,
+                "description": "The max threads Clickhouse can use for the query.",
+                "value": 10,
                 "params": {},
             },
         ]
     )
 
-    # a global override is reflected in the effective value
+    # add an instance of an optional config
+    policy.set_config_value(
+        config_key="my_param_config", value=100, params={"org": 10, "ref": "test"}
+    )
     policy.set_config_value(config_key="is_enforced", value=0)
     policy.set_config_value(config_key="max_threads", value=4)
+    assert len(policy_configs := policy.get_current_configs()) == 5
+    assert {
+        "name": "my_param_config",
+        "type": "int",
+        "default": -1,
+        "description": "",
+        "value": 100,
+        "params": {"org": 10, "ref": "test"},
+    } in policy_configs
     assert {
         "name": "is_enforced",
         "type": "int",
@@ -328,7 +406,15 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
         "description": "Toggles whether or not this policy is enforced. If enforced, policy will be able to throttle/reject incoming queries. If not enforced, this policy will not throttle/reject queries if policy is triggered, but all the policy code will still run.",
         "value": 0,
         "params": {},
-    } in policy.get_current_configs()
+    } in policy_configs
+    assert {
+        "name": "max_threads",
+        "type": "int",
+        "default": 10,
+        "description": "The max threads Clickhouse can use for the query.",
+        "value": 4,
+        "params": {},
+    } in policy_configs
     assert policy.is_enforced == 0
     assert policy.max_threads == 4
 
@@ -338,7 +424,10 @@ def test_default_config_override() -> None:
     policy = SomeParametrizedConfigPolicy(
         StorageKey("some_storage"), [], {"my_param_config": 420, "is_enforced": 0}
     )
-    assert policy.get_config_value("my_param_config", {"organization_id": 1}, validate=True) == 420
+    assert (
+        policy.get_config_value("my_param_config", params={"org": 1, "ref": "a"}, validate=True)
+        == 420
+    )
     assert policy.get_config_value("is_enforced") == 0
 
 
@@ -436,13 +525,26 @@ def test_is_not_enforced() -> None:
 
 
 @pytest.mark.redis_db
-def test_referrer_with_delimiter_chars_is_a_valid_scope() -> None:
-    # A referrer scope key may contain any characters (it's a nested dict key,
-    # not encoded into a string key), so scoping by such a referrer works.
+def test_configs_with_delimiter_values() -> None:
+    # test that configs with dots can be stored and read
     policy = SomeParametrizedConfigPolicy(StorageKey("something"), [], {})
-    tenant = {"organization_id": 1, "referrer": "a,::.b.c|d"}
-    policy.set_config_value("my_param_config", 5, tenant)
-    assert policy.get_config_value("my_param_config", tenant) == 5
+    policy.set_config_value("my_param_config", 5, {"ref": "a,::.b.c", "org": 1})
+    configs = policy.get_current_configs()
+    print(configs)
+    assert {
+        "name": "my_param_config",
+        "type": "int",
+        "default": -1,
+        "description": "",
+        "value": 5,
+        "params": {"org": 1, "ref": "a,::.b.c"},
+    } in configs
+
+
+def test_cannot_use_escape_sequences() -> None:
+    policy = SomeParametrizedConfigPolicy(StorageKey("something"), [], {})
+    with pytest.raises(InvalidConfig):
+        policy.set_config_value("my_param_config", 5, {"ref": "a__dot_literal__.b.c", "org": 1})
 
 
 class TestComponentNameBackwardsCompatibility:

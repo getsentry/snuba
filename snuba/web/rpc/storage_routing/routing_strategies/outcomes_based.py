@@ -62,14 +62,14 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             Configuration(
                 name="max_items_before_downsampling",
                 description=(
-                    "Override for the max ingested items threshold above which a query is "
+                    "Per-org override for the max ingested items threshold above which a query is "
                     "downsampled. When set to a positive value, takes precedence over the global "
-                    "storage_routing_max_items_before_downsampling option. Scopable per "
-                    "organization and/or referrer; the most-specific matching value wins. "
+                    "OutcomesBasedRoutingStrategy.max_items_before_downsampling runtime config. "
                     "Default 0 means no override (use global)."
                 ),
                 value_type=int,
                 default=0,
+                param_types={"organization_id": int},
             ),
         ]
 
@@ -201,7 +201,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
     def _get_max_items_before_downsampling(self, organization_id: int) -> int:
         per_org_override = self.get_config_value(
             "max_items_before_downsampling",
-            {"organization_id": organization_id},
+            params={"organization_id": organization_id},
         )
         if per_org_override > 0:
             return cast(int, per_org_override)

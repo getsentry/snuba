@@ -9,16 +9,15 @@ from tests.web.rpc.v1.routing_strategies.common import override_component_config
 
 @pytest.mark.redis_db
 def test_routing_strategy_reads_option_not_redis() -> None:
-    """Routing strategies read config from the ``configurable_component_overrides``
-    sentry-option (then the code default). The legacy Redis runtime config is not
-    consulted."""
+    """Configs are read from the ``configurable_component_overrides`` sentry-option
+    (then the code default). The legacy Redis runtime config is not consulted."""
     strategy = OutcomesBasedRoutingStrategy()
 
     # A value written straight to the legacy Redis runtime config is ignored -- the
     # code default wins. (set_config_value is not used here because in tests it also
     # mirrors the write into the sentry-option that get_config_value reads.)
     state.set_config(
-        strategy._build_config_key("some_default_config"),
+        strategy._build_runtime_config_key("some_default_config", {}),
         5,
         config_key=strategy._get_hash(),
     )

@@ -90,9 +90,16 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         return [
             Configuration(
                 name="org_limit_bytes_scanned",
-                description="Number of bytes an org can scan in a 10 minute window. Scopable per organization and/or referrer; the most-specific matching value wins.",
+                description="Number of bytes any org can scan in a 10 minute window.",
                 value_type=int,
                 default=DEFAULT_BYTES_SCANNED_LIMIT,
+            ),
+            Configuration(
+                name="org_limit_bytes_scanned_override",
+                description="Number of bytes a specific org can scan in a 10 minute window.",
+                value_type=int,
+                default=DEFAULT_OVERRIDE_LIMIT,
+                param_types={"org_id": int},
             ),
             Configuration(
                 name="throttled_thread_number",
@@ -120,7 +127,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
         ids_are_valid, why = self._are_tenant_ids_valid(tenant_ids)
-        if not ids_are_valid and self._is_enforced(tenant_ids):
+        if not ids_are_valid and self.is_enforced:
             return QuotaAllowance(
                 can_run=False,
                 max_threads=0,
@@ -135,7 +142,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         if self.is_cross_org_query(tenant_ids):
             return QuotaAllowance(
                 can_run=True,
-                max_threads=self._max_threads(tenant_ids),
+                max_threads=self.max_threads,
                 explanation={"reason": "cross_org_query"},
                 is_throttled=False,
                 throttle_threshold=MAX_THRESHOLD,
@@ -149,7 +156,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         if referrer in _PASS_THROUGH_REFERRERS:
             return QuotaAllowance(
                 can_run=True,
-                max_threads=self._max_threads(tenant_ids),
+                max_threads=self.max_threads,
                 explanation={},
                 is_throttled=False,
                 throttle_threshold=MAX_THRESHOLD,
@@ -171,7 +178,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                 suggestion=NO_SUGGESTION,
             )
         if org_id is not None:
-            org_limit_bytes_scanned = self.__get_org_limit_bytes_scanned(org_id, referrer)
+            org_limit_bytes_scanned = self.__get_org_limit_bytes_scanned(org_id)
 
             timestamp, granted_quotas = _RATE_LIMITER.check_within_quotas(
                 [
@@ -193,7 +200,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                     ),
                 ]
             )
-            num_threads = self._max_threads(tenant_ids)
+            num_threads = self.max_threads
             explanation: dict[str, Any] = {}
             granted_quota = granted_quotas[0]
             is_throttled = False
@@ -202,11 +209,11 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                 explanation["reason"] = (
                     f"organization {org_id} is over the bytes scanned limit of {org_limit_bytes_scanned}"
                 )
-                explanation["is_enforced"] = self._is_enforced(tenant_ids)
+                explanation["is_enforced"] = self.is_enforced
                 explanation["granted_quota"] = granted_quota.granted
                 explanation["limit"] = org_limit_bytes_scanned
 
-                if self._is_enforced(tenant_ids):
+                if self.is_enforced:
                     num_threads = self.get_config_value("throttled_thread_number")
 
             return QuotaAllowance(
@@ -222,7 +229,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
             )
         return QuotaAllowance(
             can_run=True,
-            max_threads=self._max_threads(tenant_ids),
+            max_threads=self.max_threads,
             explanation={},
             is_throttled=False,
             throttle_threshold=MAX_THRESHOLD,
@@ -272,7 +279,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
             return
         if "organization_id" in tenant_ids:
             org_limit_bytes_scanned = self.__get_org_limit_bytes_scanned(
-                tenant_ids.get("organization_id"), tenant_ids.get("referrer", "no_referrer")
+                tenant_ids.get("organization_id")
             )
             # we can assume that the requested quota was granted (because it was)
             # we just need to update the quota with however many bytes were consumed
@@ -301,14 +308,15 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                 timestamp=int(time.time()),
             )
 
-    def __get_org_limit_bytes_scanned(
-        self, org_id: Any, referrer: str | int = "no_referrer"
-    ) -> int:
-        """Bytes-scanned limit for this org, resolved per (organization_id,
-        referrer) most-specific-first, falling back to the code default."""
-        return int(
-            self.get_config_value(
-                "org_limit_bytes_scanned",
-                {"organization_id": int(org_id), "referrer": str(referrer)},
-            )
+    def __get_org_limit_bytes_scanned(self, org_id: Any) -> int:
+        """
+        Checks if org specific limit exists and returns that. Returns the "all" orgs
+        bytes scanned limit if specific one DNE.
+        """
+        org_limit_bytes_scanned = self.get_config_value(
+            "org_limit_bytes_scanned_override", {"org_id": int(org_id)}
         )
+        if org_limit_bytes_scanned == DEFAULT_OVERRIDE_LIMIT:
+            org_limit_bytes_scanned = self.get_config_value("org_limit_bytes_scanned")
+
+        return int(org_limit_bytes_scanned)

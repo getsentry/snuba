@@ -62,13 +62,15 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
             ),
             Configuration(
                 name="referrer_concurrent_override",
-                description="""override the concurrent limit for a referrer (scope by referrer)""",
+                description="""override the concurrent limit for a referrer""",
                 value_type=int,
+                param_types={"referrer": str},
                 default=_REFERRER_CONCURRENT_OVERRIDE,
             ),
             Configuration(
                 name="referrer_max_threads_override",
-                description="""override the max_threads for a referrer, applies to every query made by that referrer (scope by referrer)""",
+                description="""override the max_threads for a referrer, applies to every query made by that referrer""",
+                param_types={"referrer": str},
                 value_type=int,
                 default=_REFERRER_MAX_THREADS_OVERRIDE,
             ),
