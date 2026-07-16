@@ -134,9 +134,7 @@ class TestTraceItemTableForLogs(BaseApiTest):
 
 @pytest.fixture(autouse=False)
 def setup_bool_logs_in_db(eap: None, redis_db: None) -> None:
-    """Three groups of logs: the boolean attribute explicitly ``false``, explicitly
-    ``true``, and absent entirely. Used to verify boolean filtering
-    (getsentry/sentry#119735)."""
+    """Three log groups: ``hasCodeTag`` false, true, and absent (getsentry/sentry#119735)."""
     logs_storage = get_writable_storage(StorageKey("eap_items"))
     messages = []
     for i in range(30):

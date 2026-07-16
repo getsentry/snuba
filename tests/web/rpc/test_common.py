@@ -791,10 +791,8 @@ class TestAnalyzerSafeFilters:
 
 
 class TestBooleanAttributeFilters:
-    """Boolean attributes live in the ``attributes_bool`` map but resolve to a bare
-    ``arrayElement`` (their map has no hash buckets), so they must still be routed through
-    the map-backed ``(exists, value)`` path. Otherwise a missing key reads as the ``false``
-    column default and ``attr:false`` matches items that lack the attribute entirely
+    """Booleans are map-backed, so ``attr:false`` needs an existence guard — otherwise a
+    missing key reads as the ``false`` default and matches items lacking the attribute
     (getsentry/sentry#119735).
     """
 
@@ -850,11 +848,9 @@ class TestBooleanAttributeFilters:
 
 
 class TestNormalizedColumnsNotMapBacked:
-    """Map-backing is routed by attribute kind, not expression shape: only custom
-    attributes stored in the ``attributes_*`` maps take the ``(value, exists)`` path.
-    Normalized/promoted columns share a map-eligible type (e.g. ``sentry.trace_id`` is
-    TYPE_STRING) but are real columns, so the ``NORMALIZED_COLUMNS_EAP_ITEMS`` exclusion in
-    ``_is_map_backed_key`` is load-bearing — without it they'd be misrouted to a map lookup.
+    """Normalized columns share a map-eligible type (e.g. ``sentry.trace_id`` is
+    TYPE_STRING) but are real columns, so ``_is_map_backed_key``'s
+    ``NORMALIZED_COLUMNS_EAP_ITEMS`` exclusion must keep them off the map path.
     """
 
     @staticmethod
