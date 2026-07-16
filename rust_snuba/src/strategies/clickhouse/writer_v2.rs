@@ -13,7 +13,7 @@ use sentry_arroyo::types::Message;
 use sentry_arroyo::{counter, timer};
 
 use crate::config::ClickhouseConfig;
-use crate::options::{get_load_balancing_config, get_max_insert_block_size};
+use crate::snuba_options::{get_load_balancing_config, get_max_insert_block_size};
 use crate::types::{BytesInsertBatch, RowData};
 
 fn clickhouse_task_runner(

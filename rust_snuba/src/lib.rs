@@ -23,9 +23,9 @@ mod consumer;
 mod factory_v2;
 mod logging;
 mod metrics;
-mod options;
 mod processors;
 mod rebalancing;
+mod snuba_options;
 mod strategies;
 mod types;
 
