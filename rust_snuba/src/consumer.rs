@@ -200,17 +200,6 @@ pub fn consumer_impl(
     // DLQ policy applies only if we are not skipping writes, otherwise we don't want to be
     // writing to the DLQ topics in prod.
 
-    let blq_producer_config = consumer_config.dlq_topic.as_ref().map(|dlq_topic_config| {
-        let mut overrides = dlq_topic_config.broker_config.clone();
-        overrides.insert("message.max.bytes".to_string(), "10000000".to_string()); // 10 MB, broker max
-        KafkaConfig::new_producer_config(vec![], Some(overrides))
-    });
-
-    let dlq_topic = consumer_config
-        .dlq_topic
-        .as_ref()
-        .map(|dlq_topic_config| Topic::new(&dlq_topic_config.physical_topic_name));
-
     let dlq_policy = consumer_config.dlq_topic.map(|dlq_topic_config| {
         let producer = KafkaProducer::new(KafkaConfig::new_producer_config(
             vec![],
@@ -296,8 +285,6 @@ pub fn consumer_impl(
         join_timeout_ms,
         health_check: health_check.to_string(),
         use_row_binary,
-        blq_producer_config: blq_producer_config.clone(),
-        blq_topic: dlq_topic,
     };
 
     let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);
