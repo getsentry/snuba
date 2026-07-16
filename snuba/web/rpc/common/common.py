@@ -337,14 +337,8 @@ def add_existence_check_to_subscriptable_references(query: Query) -> None:
 
 def _is_map_backed_key(k: AttributeKey) -> bool:
     """True when ``k`` is a custom attribute stored in an ``attributes_*`` map column, so
-    its filters take the ``(value, exists)`` path (see ``_map_backed_operands``) with a
-    ``has(mapKeys(...))`` existence guard — needed because a missing key reads as the
-    column's value-type default (``''`` / ``0`` / ``false``).
-
-    Decided by key kind, not expression shape, so booleans (a bare ``arrayElement``, not a
-    ``SubscriptableReference``) stay on the same path. Excludes ``attr_key`` and normalized
-    columns, which are real columns, not map lookups (e.g. ``sentry.timestamp``).
-    """
+    its filters take the ``(value, exists)`` path (see ``_map_backed_operands``). Excludes
+    ``attr_key`` and normalized columns, which are real columns, not map lookups."""
     return (
         k.name != "attr_key"
         and k.name not in NORMALIZED_COLUMNS_EAP_ITEMS
