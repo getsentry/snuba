@@ -766,8 +766,8 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
                     "configurable_component_namespace": "AllocationPolicy",
                     "configurable_component_class_name": "BytesScannedWindowAllocationPolicy",
                     "resource_name": "errors",
-                    "key": "org_limit_bytes_scanned_override",
-                    "params": {"org_id": 1},
+                    "key": "org_limit_bytes_scanned",
+                    "params": {},
                     "value": "420",
                 }
             ),
@@ -779,7 +779,6 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
         response = admin_api.get("/allocation_policy_configs/errors")
         assert response.status_code == 200
 
-        # three policies
         assert response.json is not None and len(response.json) == 5
         policy_configs = response.json
         bytes_scanned_policy = [
@@ -788,18 +787,11 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
             if policy["configurable_component_class_name"] == "BytesScannedWindowAllocationPolicy"
         ][0]
 
-        assert (
-            bytes_scanned_policy["configurable_component_class_name"]
-            == "BytesScannedWindowAllocationPolicy"
-        )
-        assert {
-            "default": -1,
-            "description": "Number of bytes a specific org can scan in a 10 minute window.",
-            "name": "org_limit_bytes_scanned_override",
-            "params": {"org_id": 1},
-            "type": "int",
-            "value": 420,
-        } in bytes_scanned_policy["configurations"]
+        def _org_limit_config(configs: Any) -> Any:
+            return next(c for c in configs if c["name"] == "org_limit_bytes_scanned")
+
+        # the global value reflects the set
+        assert _org_limit_config(bytes_scanned_policy["configurations"])["value"] == 420
 
         # no need to record auditlog when nothing was updated
         assert not auditlog_records
@@ -811,8 +803,8 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
                         "configurable_component_namespace": "AllocationPolicy",
                         "configurable_component_class_name": "BytesScannedWindowAllocationPolicy",
                         "resource_name": "errors",
-                        "key": "org_limit_bytes_scanned_override",
-                        "params": {"org_id": 1},
+                        "key": "org_limit_bytes_scanned",
+                        "params": {},
                     }
                 ),
             ).status_code
@@ -822,14 +814,13 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
         response = admin_api.get("/allocation_policy_configs/errors")
         assert response.status_code == 200
         assert response.json is not None and len(response.json) == 5
-        assert {
-            "default": -1,
-            "description": "Number of bytes a specific org can scan in a 10 minute window.",
-            "name": "org_limit_bytes_scanned_override",
-            "params": {"org_id": 1},
-            "type": "int",
-            "value": 420,
-        } not in response.json[0]["configurations"]
+        bytes_scanned_policy = [
+            policy
+            for policy in response.json
+            if policy["configurable_component_class_name"] == "BytesScannedWindowAllocationPolicy"
+        ][0]
+        # after delete, back to the code default
+        assert _org_limit_config(bytes_scanned_policy["configurations"])["value"] != 420
         # make sure an auditlog entry was recorded
         assert auditlog_records.pop()
 

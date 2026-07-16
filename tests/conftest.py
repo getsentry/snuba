@@ -207,17 +207,10 @@ def _clear_component_config_option_overrides() -> Generator[None]:
 
     from sentry_options._core import _clear_override
 
-    from snuba.configs.configuration import (
-        CONFIGURABLE_COMPONENT_OBJECT_OVERRIDES_KEY,
-        CONFIGURABLE_COMPONENT_OVERRIDES_KEY,
-    )
+    from snuba.configs.configuration import CONFIGURABLE_COMPONENT_OVERRIDES_KEY
 
-    for option_key in (
-        CONFIGURABLE_COMPONENT_OVERRIDES_KEY,
-        CONFIGURABLE_COMPONENT_OBJECT_OVERRIDES_KEY,
-    ):
-        with contextlib.suppress(Exception):
-            _clear_override("snuba", option_key)
+    with contextlib.suppress(Exception):
+        _clear_override("snuba", CONFIGURABLE_COMPONENT_OVERRIDES_KEY)
 
 
 def _build_db_cache(cache_key: CacheKey) -> None:

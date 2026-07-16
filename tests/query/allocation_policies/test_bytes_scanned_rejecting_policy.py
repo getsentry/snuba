@@ -162,7 +162,7 @@ def test_invalid_tenants(
                 "project_id": 12345,
                 "referrer": "some_referrer",
             },
-            ("project_referrer_scan_limit_overrides", {"*": {"some_referrer": 10}}),
+            ("project_referrer_scan_limit", 10, {"referrer": "some_referrer"}),
             10,
             id="all-projects referrer override",
         ),
@@ -171,7 +171,7 @@ def test_invalid_tenants(
                 "organization_id": 123,
                 "referrer": "some_referrer",
             },
-            ("organization_referrer_scan_limit_overrides", {"*": {"some_referrer": 100}}),
+            ("organization_referrer_scan_limit", 100, {"referrer": "some_referrer"}),
             100,
             id="all-organizations referrer override",
         ),
@@ -180,7 +180,11 @@ def test_invalid_tenants(
                 "organization_id": 123,
                 "referrer": "some_referrer",
             },
-            ("organization_referrer_scan_limit_overrides", {"123": {"some_referrer": 50}}),
+            (
+                "organization_referrer_scan_limit",
+                50,
+                {"organization_id": 123, "referrer": "some_referrer"},
+            ),
             50,
             id="per (org, referrer) override",
         ),
@@ -189,7 +193,7 @@ def test_invalid_tenants(
                 "organization_id": 123,
                 "referrer": "some_referrer",
             },
-            ("organization_referrer_scan_limit_overrides", {"123": {"*": 75}}),
+            ("organization_referrer_scan_limit", 75, {"organization_id": 123}),
             75,
             id="per-org override",
         ),
@@ -199,7 +203,7 @@ def test_invalid_tenants(
 def test_overrides(
     policy: BytesScannedRejectingPolicy,
     tenant_ids: dict[str, str | int],
-    override_entry: tuple[str, Any] | tuple[str, Any, dict[str, str | int]],
+    override_entry: tuple[str, Any, dict[str, str | int]],
     limit: int,
 ) -> None:
     _configure_policy(policy)
@@ -231,12 +235,12 @@ def test_org_override_precedence(policy: BytesScannedRejectingPolicy) -> None:
     }
     _configure_policy(policy)
     policy.set_config_value(
-        "organization_referrer_scan_limit_overrides",
-        {
-            "123": {"some_referrer": 100, "*": 500},
-            "*": {"some_referrer": 1000},
-        },
+        "organization_referrer_scan_limit",
+        100,
+        {"organization_id": 123, "referrer": "some_referrer"},
     )
+    policy.set_config_value("organization_referrer_scan_limit", 500, {"organization_id": 123})
+    policy.set_config_value("organization_referrer_scan_limit", 1000, {"referrer": "some_referrer"})
     allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
     assert allowance.can_run
     assert allowance.rejection_threshold == 100
@@ -274,12 +278,10 @@ def test_project_override_precedence(policy: BytesScannedRejectingPolicy) -> Non
     }
     _configure_policy(policy)
     policy.set_config_value(
-        "project_referrer_scan_limit_overrides",
-        {
-            "12345": {"some_referrer": 100, "*": 500},
-            "*": {"some_referrer": 1000},
-        },
+        "project_referrer_scan_limit", 100, {"project_id": 12345, "referrer": "some_referrer"}
     )
+    policy.set_config_value("project_referrer_scan_limit", 500, {"project_id": 12345})
+    policy.set_config_value("project_referrer_scan_limit", 1000, {"referrer": "some_referrer"})
     allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
     assert allowance.can_run
     assert allowance.rejection_threshold == 100
@@ -397,7 +399,7 @@ def test_org_referrer_cap_beats_org_cap(policy: BytesScannedRejectingPolicy) -> 
     _configure_policy(policy)
     policy.set_config_value("organization_max_bytes_to_read", 1000, {"organization_id": 123})
     policy.set_config_value(
-        "organization_referrer_max_bytes_to_read",
+        "organization_max_bytes_to_read",
         200,
         {"organization_id": 123, "referrer": "some_referrer"},
     )
@@ -433,7 +435,7 @@ def test_org_caps_do_not_apply_to_project_queries(
     _configure_policy(policy)
     policy.set_config_value("organization_max_bytes_to_read", 500, {"organization_id": 123})
     policy.set_config_value(
-        "organization_referrer_max_bytes_to_read",
+        "organization_max_bytes_to_read",
         200,
         {"organization_id": 123, "referrer": "some_referrer"},
     )
@@ -496,8 +498,9 @@ def test_does_not_throttle_and_then_throttles(
     _configure_policy(policy)
     policy.set_config_value("bytes_throttle_divider", 100)
     policy.set_config_value(
-        "project_referrer_scan_limit_overrides",
-        {"*": {"api.trace-explorer.stats": 20000000000}},
+        "project_referrer_scan_limit",
+        20000000000,
+        {"referrer": "api.trace-explorer.stats"},
     )
     policy.update_quota_balance(
         tenant_ids,
@@ -550,8 +553,9 @@ def test_limit_bytes_read(
         "max_bytes_to_read_scan_limit_divider", max_bytes_to_read_scan_limit_divider
     )
     policy.set_config_value(
-        "project_referrer_scan_limit_overrides",
-        {"*": {"api.trace-explorer.stats": scan_limit}},
+        "project_referrer_scan_limit",
+        scan_limit,
+        {"referrer": "api.trace-explorer.stats"},
     )
     policy.update_quota_balance(
         tenant_ids,

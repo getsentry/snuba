@@ -1124,7 +1124,7 @@ def set_configuration() -> Response:
         )
 
     if request.method == "DELETE":
-        configurable_component.delete_config_value(config_key=key, params=params, user=user)
+        configurable_component.delete_config_value(config_key=key, tenant_ids=params, user=user)
         audit_log.record(
             user or "",
             AuditLogAction.CONFIGURABLE_COMPONENT_DELETE,
@@ -1141,7 +1141,7 @@ def set_configuration() -> Response:
             value = data["value"]
             assert isinstance(value, str), "Invalid value"
             configurable_component.set_config_value(
-                config_key=key, value=value, params=params, user=user
+                config_key=key, value=value, tenant_ids=params, user=user
             )
             audit_log.record(
                 user or "",

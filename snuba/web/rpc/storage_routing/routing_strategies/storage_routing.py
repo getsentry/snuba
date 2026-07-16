@@ -298,7 +298,6 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                     description=setting.description,
                     value_type=setting.value_type,
                     default=setting.unset_sentinel,
-                    param_types={"organization_id": int},
                 )
             )
         self._overridden_additional_config_definitions = (

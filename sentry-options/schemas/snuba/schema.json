@@ -227,14 +227,6 @@
     "configurable_component_overrides": {
       "type": "object",
       "additionalProperties": {
-        "type": "number"
-      },
-      "default": {},
-      "description": "Override values for numeric (int/float) ConfigurableComponent (allocation policy and storage-routing strategy) configs, keyed by the fully-qualified config key '{resource}.{ClassName}.{config}' (parameterized configs append '|{param}:{value}' per param, sorted by name; '|' separates params and the first ':' separates a param name from its value, so param values need no escaping and may contain '.'/','/':'). Values are numbers cast to each config's declared numeric type (int/float) on read. Object-typed configs use configurable_component_object_overrides instead (the sentry-options meta-schema does not allow a single option to hold both numbers and objects). Authoritative source for these configs; a key absent here falls back to the code default (the legacy Redis runtime config is no longer consulted). Migrated from per-component runtime config of the same key."
-    },
-    "configurable_component_object_overrides": {
-      "type": "object",
-      "additionalProperties": {
         "type": "object",
         "additionalProperties": {
           "type": "object",
@@ -244,7 +236,7 @@
         }
       },
       "default": {},
-      "description": "Override values for object-typed (value_type dict) ConfigurableComponent configs, keyed by the same fully-qualified config key as configurable_component_overrides. Each value is a two-level nested object {outer: {inner: number}}. Its primary use is org/referrer-scoped settings, structured as {organization_id (or '*'): {referrer (or '*'): value}}: resolve_scoped_override reads it most-specific-first, (org, referrer) > (org, '*') > ('*', referrer) > code default, so one config can target a given org, a given referrer, or both. Read as-is for configs whose declared value_type is dict. Authoritative source for these configs; a key absent here falls back to the code default (the legacy Redis runtime config is no longer consulted)."
+      "description": "Override values for ConfigurableComponent (allocation policy and storage-routing strategy) configs, keyed by the fully-qualified config key '{resource}.{ClassName}.{config}'. Each value is a two-level nested object {id (or '*'): {referrer (or '*'): value}} where id is a project_id/organization_id, letting one config carry a global value, a per-id value, a per-referrer value, or a per-(id, referrer) value at once. On read the value is resolved for the query's tenants most-specific-first: (id, referrer) > (id, '*') > ('*', referrer) > ('*', '*') > code default, then cast to the config's declared numeric type (int/float). '(\"*\", \"*\")' is the global override tier. Authoritative source for these configs; the legacy Redis runtime config is no longer consulted. Migrated from per-component runtime config of the same key."
     },
     "storage_routing_sampled_too_low_threshold": {
       "type": "object",

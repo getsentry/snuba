@@ -1,6 +1,6 @@
-import copy
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any, TypedDict, TypeVar, cast, final
 
@@ -9,17 +9,54 @@ from sentry_options import OptionValue
 from snuba import settings
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.state import delete_config as delete_runtime_config
-from snuba.state import get_all_configs as get_all_runtime_configs
 from snuba.state import set_config as set_runtime_config
-from snuba.state.sentry_options import get_option
+from snuba.state.sentry_options import SNUBA_OPTIONS_NAMESPACE, get_option
 from snuba.utils.registered_class import RegisteredClass
 
 logger = logging.getLogger("snuba.configurable_component")
 
 T = TypeVar("T", bound="ConfigurableComponent")
+V = TypeVar("V")
 
 CONFIGURABLE_COMPONENT_OVERRIDES_KEY = "configurable_component_overrides"
-CONFIGURABLE_COMPONENT_OBJECT_OVERRIDES_KEY = "configurable_component_object_overrides"
+
+SCOPED_OVERRIDE_WILDCARD = "*"
+
+
+def resolve_scoped_override(
+    scoped: Mapping[str, Any],
+    scope_id: int | str | None,
+    referrer: str | None,
+    default: V,
+) -> V:
+    """Resolve a config's nested override to a single value.
+
+    ``scoped`` is one config's override entry, shaped as
+    ``{id (or "*"): {referrer (or "*"): value}}`` where ``id`` is a
+    project_id/organization_id. This lets one config carry a global value, a
+    per-id value, a per-referrer value, or a per-(id, referrer) value at once.
+    Lookups are most-specific-first, and the first match wins:
+
+        (id, referrer) > (id, "*") > ("*", referrer) > ("*", "*") > default
+
+    ``("*", "*")`` is the global override tier (distinct from the code
+    ``default``). ``scope_id`` is stringified to match the JSON object keys. A
+    ``None`` id or referrer simply skips the lookups that would need it.
+    """
+    id_key = str(scope_id) if scope_id is not None else None
+    w = SCOPED_OVERRIDE_WILDCARD
+    for outer, inner in (
+        (id_key, referrer),
+        (id_key, w),
+        (w, referrer),
+        (w, w),
+    ):
+        if outer is None or inner is None:
+            continue
+        inner_map = scoped.get(outer)
+        if isinstance(inner_map, Mapping) and inner in inner_map:
+            return cast(V, inner_map[inner])
+    return default
 
 
 class InvalidConfig(Exception):
@@ -144,9 +181,6 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
 
     """
 
-    _PARAM_SEPARATOR = "|"
-    _PARAM_KV_SEPARATOR = ":"
-
     def component_name(self) -> str:
         # what is this configurable component's class name?
         # bytes scanned policy? outcomes based routing strategy?
@@ -198,11 +232,8 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         }
 
     @final
-    def _validate_config_params(
-        self, config_key: str, params: dict[str, Any], value: Any = None
-    ) -> Configuration:
+    def _validate_config(self, config_key: str, value: Any = None) -> Configuration:
         definitions = self.config_definitions()
-
         class_name = self.__class__.__name__
 
         # config doesn't exist
@@ -210,37 +241,6 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
             raise InvalidConfig(f"'{config_key}' is not a valid config for {class_name}!")
 
         config = definitions[config_key]
-
-        # missing required parameters
-        if (
-            diff := {
-                key: config.param_types[key].__name__
-                for key in config.param_types
-                if key not in params
-            }
-        ) != {}:
-            raise InvalidConfig(
-                f"'{config_key}' missing required parameters: {diff} for {class_name}!"
-            )
-
-        # not an optional config (no parameters)
-        if params and not config.param_types:
-            raise InvalidConfig(f"'{config_key}' takes no params for {class_name}!")
-
-        # parameters aren't correct types
-        if params:
-            for param_name in params:
-                if not isinstance(params[param_name], config.param_types[param_name]):
-                    try:
-                        # try casting to the right type, eg try int("10")
-                        expected_type = config.param_types[param_name]
-                        params[param_name] = expected_type(params[param_name])
-                    except Exception as e:
-                        raise InvalidConfig(
-                            f"'{config_key}' parameter '{param_name}' needs to be of type"
-                            f" {config.param_types[param_name].__name__} (not {type(params[param_name]).__name__})"
-                            f" for {class_name}!"
-                        ) from e
 
         # value isn't correct type
         if value is not None and not isinstance(value, config.value_type):
@@ -256,74 +256,18 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
 
         return config
 
-    def __deserialize_config_key(self, key: str) -> tuple[str, dict[str, str]]:
-        """
-        Given a raw runtime config key, deconstructs it into its config
-        key and parameters components.
-
-        Examples:
-        - `"mystorage.MyAllocationPolicy.my_config"`
-            - returns `"my_config", {}`
-        - `"mystorage.MyAllocationPolicy.my_config|a:1|b:2"`
-            - returns `"my_config", {"a": "1", "b": "2"}`
-        """
-
-        # key is "storage.policy.config" or "storage.policy.config|param1:val1|param2:val2"
-        base, _, params_string = key.partition(self._PARAM_SEPARATOR)
-        _, _, config_key = base.split(".")
-        params_dict: dict[str, str] = {}
-        # filter(None, ...) drops the empty segment a param-less key produces
-        # ("".split("|") == [""]), so we don't need a nesting `if params_string:`.
-        for param_string in filter(None, params_string.split(self._PARAM_SEPARATOR)):
-            name, _, value = param_string.partition(self._PARAM_KV_SEPARATOR)
-            params_dict[name] = value
-
-        self._validate_config_params(config_key=config_key, params=params_dict)
-
-        return config_key, params_dict
-
     def get_current_configs(self) -> list[dict[str, Any]]:
-        """Returns a list of live configs with their definitions on this ConfigurableComponent."""
-
-        runtime_configs = get_all_runtime_configs(self._get_hash())
-        definitions = self.config_definitions()
-
-        required_configs = {
-            config_name
-            for config_name, config_def in definitions.items()
-            if not config_def.param_types
-        }
-
-        detailed_configs: list[dict[str, Any]] = []
-
-        for key in runtime_configs:
-            if key.startswith(self.component_name()):
-                try:
-                    config_key, params = self.__deserialize_config_key(key)
-                except Exception:
-                    logger.exception(
-                        f"{self.component_namespace()} could not deserialize a key: {key}"
-                    )
-                    continue
-                detailed_configs.append(
-                    definitions[config_key].to_config_dict(
-                        value=runtime_configs[key], params=params
-                    )
-                )
-                if config_key in required_configs:
-                    required_configs.remove(config_key)
-
-        for required_config_key in required_configs:
-            detailed_configs.append(definitions[required_config_key].to_config_dict())
-
-        return detailed_configs
+        """Returns each config with its effective global value (the ``("*", "*")``
+        override if set, else the code default)."""
+        return [
+            definition.to_config_dict(value=self.get_config_value(name))
+            for name, definition in self.config_definitions().items()
+        ]
 
     def get_optional_config_definitions_json(self) -> list[dict[str, Any]]:
         """Returns a json-like dictionary of optional config definitions on this ConfigurableComponent."""
         return [
-            definition.to_definition_dict()
-            for definition in self.config_definitions().values()
-            if definition.param_types
+            definition.to_definition_dict() for definition in self.config_definitions().values()
         ]
 
     @abstractmethod
@@ -349,35 +293,21 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
             for definition in definitions
         ]
 
-    def _build_config_key(self, config: str, params: dict[str, Any]) -> str:
-        """
-        Builds a unique key to be used in the actual datastore containing these configs.
+    def _build_config_key(self, config: str) -> str:
+        """The key under which this config's overrides live: ``resource.Class.config``.
 
-        Example return values:
-        - `"mystorage.MyAllocationPolicy.my_config"`            # no params
-        - `"mystorage.MyAllocationPolicy.my_config|a:1|b:2"`    # sorted params
-
-        The ``|`` structural delimiter must not appear in a param name or value,
-        and a param name must not contain ``:``; these are rejected rather than
-        escaped. Param values may contain ``.``/``,``/``:``.
+        Scoping (global / per-id / per-referrer / per-(id, referrer)) lives inside
+        the value as a nested object, not in the key.
         """
-        parameters = ""
-        for name, value in sorted(params.items()):
-            name, value = str(name), str(value)
-            if self._PARAM_SEPARATOR in name or self._PARAM_KV_SEPARATOR in name:
-                raise InvalidConfig(
-                    f"config param name '{name}' may not contain "
-                    f"'{self._PARAM_SEPARATOR}' or '{self._PARAM_KV_SEPARATOR}'"
-                )
-            # Only `|` is rejected in a value; `:` is allowed on purpose, since
-            # deserialization splits each param on its *first* `:`
-            # (str.partition), so a value may itself contain `:`.
-            if self._PARAM_SEPARATOR in value:
-                raise InvalidConfig(
-                    f"config param value '{value}' may not contain '{self._PARAM_SEPARATOR}'"
-                )
-            parameters += f"{self._PARAM_SEPARATOR}{name}{self._PARAM_KV_SEPARATOR}{value}"
-        return f"{self.component_name()}.{config}{parameters}"
+        return f"{self.component_name()}.{config}"
+
+    @staticmethod
+    def _scope_ids(tenant_ids: dict[str, Any]) -> tuple[str | int | None, str | None]:
+        """The (id, referrer) a config is scoped by for a query. ``id`` prefers
+        project_id, then organization_id."""
+        scope_id = tenant_ids.get("project_id", tenant_ids.get("organization_id"))
+        referrer = tenant_ids.get("referrer")
+        return scope_id, referrer
 
     def _get_hash(self) -> str:
         return self.component_namespace()
@@ -385,62 +315,44 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
     def get_config_value(
         self,
         config_key: str,
-        params: dict[str, Any] | None = None,
+        tenant_ids: dict[str, Any] | None = None,
         validate: bool = True,
     ) -> Any:
         """Returns the value of a configuration on this ConfigurableComponent.
 
-        Reads from the centrally-managed sentry-option, falling back to the code
-        default; the legacy Redis runtime config is not consulted. Numeric configs
-        read ``configurable_component_overrides`` (value cast to the declared
-        int/float type); object-typed configs (``value_type`` == ``dict``) read
-        the nested-object values in ``configurable_component_object_overrides``.
+        Reads from the centrally-managed ``configurable_component_overrides``
+        sentry-option, which stores each config as a nested object
+        ``{id (or "*"): {referrer (or "*"): value}}``. The value is resolved for
+        the query's tenants most-specific-first --
+        (id, referrer) > (id, "*") > ("*", referrer) > ("*", "*") -- falling back
+        to the code default. The legacy Redis runtime config is not consulted.
         """
-        if params is None:
-            params = {}
         config_definition = (
-            self._validate_config_params(config_key, params)
-            if validate
-            else self.config_definitions()[config_key]
+            self._validate_config(config_key) if validate else self.config_definitions()[config_key]
         )
-        try:
-            full_key: str | None = self._build_config_key(config_key, params)
-        except InvalidConfig:
-            # A caller-controlled param value (e.g. a referrer containing the
-            # '|' delimiter) can't be encoded into a lookup key. No override can
-            # match it, so fall back to the code default instead of propagating:
-            # get_quota_allowance catches exceptions and fails open, which would
-            # let such a request skip this limit entirely.
-            full_key = None
-        option_key = (
-            CONFIGURABLE_COMPONENT_OBJECT_OVERRIDES_KEY
-            if config_definition.value_type is dict
-            else CONFIGURABLE_COMPONENT_OVERRIDES_KEY
+        overrides: OptionValue = get_option(CONFIGURABLE_COMPONENT_OVERRIDES_KEY, {})
+        entry = (
+            overrides.get(self._build_config_key(config_key))
+            if isinstance(overrides, dict)
+            else None
         )
-        overrides: OptionValue = get_option(option_key, {})
-        value = (
-            overrides[full_key]
-            if full_key is not None and isinstance(overrides, dict) and full_key in overrides
-            else config_definition.default
-        )
-        if config_definition.value_type is dict:
-            return copy.deepcopy(value)
+        scoped: Mapping[str, Any] = entry if isinstance(entry, Mapping) else {}
+        scope_id, referrer = self._scope_ids(tenant_ids or {})
+        value = resolve_scoped_override(scoped, scope_id, referrer, config_definition.default)
         return config_definition.value_type(value)
 
     def set_config_value(
         self,
         config_key: str,
         value: Any,
-        params: dict[str, Any] | None = None,
+        tenant_ids: dict[str, Any] | None = None,
         user: str | None = None,
     ) -> None:
-        """Sets a value of a configuration on this ConfigurableComponent."""
-        if params is None:
-            params = {}
-        config_definition = self._validate_config_params(config_key, params, value)
-        # ensure correct type is stored
+        """Sets a config value, scoped to ``tenant_ids`` (empty = the global
+        ``("*", "*")`` scope)."""
+        config_definition = self._validate_config(config_key, value)
         value = config_definition.value_type(value)
-        full_key = self._build_config_key(config_key, params)
+        full_key = self._build_config_key(config_key)
         set_runtime_config(
             key=full_key,
             value=value,
@@ -453,54 +365,59 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
             # the option store the test process reads back. This keeps
             # set_config_value the single config-setting API in tests (no bespoke
             # override helper); tests/conftest.py clears these between tests.
-            self.__mirror_test_option_override(config_definition, full_key, value)
+            self.__mirror_test_option_override(full_key, value, tenant_ids or {})
 
     def __mirror_test_option_override(
         self,
-        config_definition: Configuration,
         full_key: str,
         value: Any,
+        tenant_ids: dict[str, Any],
         *,
         remove: bool = False,
     ) -> None:
         from sentry_options._core import _set_override
 
-        from snuba.state.sentry_options import SNUBA_OPTIONS_NAMESPACE
+        scope_id, referrer = self._scope_ids(tenant_ids)
+        outer = str(scope_id) if scope_id is not None else SCOPED_OVERRIDE_WILDCARD
+        inner = referrer if referrer is not None else SCOPED_OVERRIDE_WILDCARD
 
-        option_key = (
-            CONFIGURABLE_COMPONENT_OBJECT_OVERRIDES_KEY
-            if config_definition.value_type is dict
-            else CONFIGURABLE_COMPONENT_OVERRIDES_KEY
-        )
-        current: OptionValue = get_option(option_key, {})
-        merged = dict(current) if isinstance(current, dict) else {}
+        current: OptionValue = get_option(CONFIGURABLE_COMPONENT_OVERRIDES_KEY, {})
+        merged: dict[str, Any] = dict(current) if isinstance(current, dict) else {}
+        existing_entry = merged.get(full_key)
+        entry: dict[str, Any] = dict(existing_entry) if isinstance(existing_entry, dict) else {}
+        existing_inner = entry.get(outer)
+        inner_map: dict[str, Any] = dict(existing_inner) if isinstance(existing_inner, dict) else {}
         if remove:
-            merged.pop(full_key, None)
+            inner_map.pop(inner, None)
         else:
-            merged[full_key] = value
-        _set_override(SNUBA_OPTIONS_NAMESPACE, option_key, merged)
+            inner_map[inner] = value
+        if inner_map:
+            entry[outer] = inner_map
+        else:
+            entry.pop(outer, None)
+        if entry:
+            merged[full_key] = entry
+        else:
+            merged.pop(full_key, None)
+        _set_override(SNUBA_OPTIONS_NAMESPACE, CONFIGURABLE_COMPONENT_OVERRIDES_KEY, merged)
 
     def delete_config_value(
         self,
         config_key: str,
-        params: dict[str, Any] | None = None,
+        tenant_ids: dict[str, Any] | None = None,
         user: str | None = None,
     ) -> None:
-        """
-        Deletes an instance of an optional configuration on this ConfigurableComponent.
-        If this function is run on a required configuration, it resets the value to default instead.
-        """
-        if params is None:
-            params = {}
-        config_definition = self._validate_config_params(config_key, params)
-        full_key = self._build_config_key(config_key, params)
+        """Deletes a config's override for the given scope (empty ``tenant_ids`` =
+        the global scope), falling back to the code default."""
+        self._validate_config(config_key)
+        full_key = self._build_config_key(config_key)
         delete_runtime_config(
             key=full_key,
             user=user,
             config_key=self._get_hash(),
         )
         if settings.TESTING:
-            self.__mirror_test_option_override(config_definition, full_key, None, remove=True)
+            self.__mirror_test_option_override(full_key, None, tenant_ids or {}, remove=True)
 
     @classmethod
     def config_key(cls) -> str:

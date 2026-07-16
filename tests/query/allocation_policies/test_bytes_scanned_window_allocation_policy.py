@@ -180,7 +180,6 @@ def test_simple_config_values(policy: AllocationPolicy) -> None:
     config_params = policy.config_definitions()
     assert set(config_params.keys()) == {
         "org_limit_bytes_scanned",
-        "org_limit_bytes_scanned_override",
         "throttled_thread_number",
         "is_active",
         "is_enforced",
@@ -189,6 +188,9 @@ def test_simple_config_values(policy: AllocationPolicy) -> None:
     assert policy.get_config_value("org_limit_bytes_scanned") == ORG_SCAN_LIMIT
     policy.set_config_value("org_limit_bytes_scanned", 100)
     assert policy.get_config_value("org_limit_bytes_scanned") == 100
+    # scopable per-org
+    policy.set_config_value("org_limit_bytes_scanned", 42, {"organization_id": 5})
+    assert policy.get_config_value("org_limit_bytes_scanned", {"organization_id": 5}) == 42
 
 
 @pytest.mark.redis_db

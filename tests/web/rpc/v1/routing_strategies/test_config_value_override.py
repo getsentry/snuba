@@ -18,7 +18,7 @@ def test_routing_strategy_reads_option_not_redis() -> None:
     # code default wins. (set_config_value is not used here because in tests it also
     # mirrors the write into the sentry-option that get_config_value reads.)
     state.set_config(
-        strategy._build_config_key("some_default_config", {}),
+        strategy._build_config_key("some_default_config"),
         5,
         config_key=strategy._get_hash(),
     )
