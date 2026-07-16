@@ -20,7 +20,7 @@
     },
     "consumer.dlq_by_age_threshold_seconds": {
       "type": "integer",
-      "default": 3600,
+      "default": 600,
       "description": "Age threshold in seconds for consumer.dlq_by_age_sample_rate_by_storage. Messages whose Kafka broker timestamp is older than this are candidates for being routed to the DLQ."
     },
     "eap_items_drop_invalid_timestamps": {

@@ -29,7 +29,7 @@
 //!   with no entry default to 0.0 (disabled), which makes the strategy a
 //!   no-op passthrough.
 //! - `consumer.dlq_by_age_threshold_seconds`: messages whose broker timestamp
-//!   is older than this are considered "too old". Defaults to 3600s.
+//!   is older than this are considered "too old". Defaults to 600s.
 
 use std::time::Duration;
 
@@ -45,7 +45,7 @@ use sentry_options::options;
 
 /// Default staleness threshold when `consumer.dlq_by_age_threshold_seconds` is
 /// missing or non-positive.
-const DEFAULT_THRESHOLD_SECONDS: i64 = 3600;
+const DEFAULT_THRESHOLD_SECONDS: i64 = 600;
 
 pub struct DlqByAge<Next> {
     next_step: Next,
@@ -238,6 +238,13 @@ mod tests {
     }
 
     #[test]
+    fn test_default_threshold_is_ten_minutes() {
+        init_config();
+        let router = DlqByAge::new(MockStrategy::new(), "test_storage".to_string());
+        assert_eq!(router.threshold(), TimeDelta::minutes(10));
+    }
+
+    #[test]
     fn test_rate_zero_forwards_stale() {
         // Explicit 0.0 for this storage -> passthrough.
         init_config();
@@ -254,6 +261,23 @@ mod tests {
         let (dlq, forwarded) = run_n(&mut router, 20, TimeDelta::minutes(30));
         assert_eq!(dlq, 0);
         assert_eq!(forwarded, 20);
+    }
+
+    #[test]
+    fn test_sample_rate_is_clamped() {
+        init_config();
+        let _guard = override_options(&[(
+            "snuba",
+            "consumer.dlq_by_age_sample_rate_by_storage",
+            json!({ "test_storage": 2.0, "disabled_storage": -1.0 }),
+        )])
+        .unwrap();
+
+        let enabled = DlqByAge::new(MockStrategy::new(), "test_storage".to_string());
+        assert_eq!(enabled.sample_rate(), 1.0);
+
+        let disabled = DlqByAge::new(MockStrategy::new(), "disabled_storage".to_string());
+        assert_eq!(disabled.sample_rate(), 0.0);
     }
 
     #[test]
