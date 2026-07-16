@@ -790,6 +790,69 @@ class TestAnalyzerSafeFilters:
         assert "ilike" in self._fn_names(ilike) and "notILike" not in self._fn_names(ilike)
 
 
+class TestBooleanAttributeFilters:
+    """Boolean attributes live in the ``attributes_bool`` map but resolve to a bare
+    ``arrayElement`` (their map has no hash buckets), so they must still be routed through
+    the map-backed ``(exists, value)`` path. Otherwise a missing key reads as the ``false``
+    column default and ``attr:false`` matches items that lack the attribute entirely
+    (getsentry/sentry#119735).
+    """
+
+    @staticmethod
+    def _walk(expr: Expression) -> list[Expression]:
+        nodes: list[Expression] = []
+
+        def visit(node: Expression) -> Expression:
+            nodes.append(node)
+            return node
+
+        expr.transform(visit)
+        return nodes
+
+    def _fn_names(self, expr: Expression) -> set[str]:
+        return {n.function_name for n in self._walk(expr) if isinstance(n, FunctionCall)}
+
+    def _build(
+        self,
+        op: ComparisonFilter.Op.ValueType,
+        *,
+        value: AttributeValue,
+        name: str = "hasCodeTag",
+    ) -> Expression:
+        item_filter = TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_BOOLEAN, name=name),
+                op=op,
+                value=value,
+            )
+        )
+        return trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+
+    def test_equals_false_keeps_existence_guard(self) -> None:
+        # `attr:false` must not match items missing the attribute: `false` is the column
+        # default that an absent key also reads as, so the existence guard is required.
+        expr = self._build(ComparisonFilter.OP_EQUALS, value=AttributeValue(val_bool=False))
+        assert isinstance(expr, FunctionCall) and expr.function_name == "and"
+        assert {"and", "has", "mapKeys", "equals", "arrayElement"} <= self._fn_names(expr)
+
+    def test_equals_true_needs_no_guard(self) -> None:
+        # `true` is never the column default, so an absent key can't match and no guard is
+        # needed — the bare equality is emitted.
+        expr = self._build(ComparisonFilter.OP_EQUALS, value=AttributeValue(val_bool=True))
+        assert isinstance(expr, FunctionCall) and expr.function_name == "equals"
+        assert "mapKeys" not in self._fn_names(expr)
+
+    def test_not_equals_false_negates_guarded_equality(self) -> None:
+        expr = self._build(ComparisonFilter.OP_NOT_EQUALS, value=AttributeValue(val_bool=False))
+        assert isinstance(expr, FunctionCall) and expr.function_name == "not"
+        assert {"not", "and", "has", "mapKeys", "equals", "arrayElement"} <= self._fn_names(expr)
+
+    def test_uses_attributes_bool_column(self) -> None:
+        expr = self._build(ComparisonFilter.OP_EQUALS, value=AttributeValue(val_bool=False))
+        columns = {n.column_name for n in self._walk(expr) if isinstance(n, ColumnExpr)}
+        assert columns == {"attributes_bool"}
+
+
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
 def test_convert_rpc_exception_to_proto_packs_details() -> None:
