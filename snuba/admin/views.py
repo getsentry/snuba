@@ -62,7 +62,6 @@ from snuba.admin.tool_policies import (
     get_user_allowed_tools,
 )
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.configs.configuration import ConfigurableComponent
 from snuba.consumers.dlq import (
     DlqInstruction,
     DlqInstructionStatus,
@@ -1090,84 +1089,26 @@ def get_allocation_policy_configs(storage_key: str) -> Response:
 @application.route("/set_configurable_component_configuration", methods=["POST", "DELETE"])
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
 def set_configuration() -> Response:
-    data = json.loads(request.data)
-    user = request.headers.get(USER_HEADER_KEY)
-
-    try:
-        configurable_component_namespace = data["configurable_component_namespace"]
-        configurable_component_class_name = data["configurable_component_class_name"]
-        resource_name = data["resource_name"]
-        assert isinstance(configurable_component_namespace, str), (
-            f"Invalid configurable_component_namespace: {configurable_component_namespace}"
-        )
-        assert isinstance(configurable_component_class_name, str), (
-            f"Invalid configurable_component_class_name: {configurable_component_class_name}"
-        )
-        assert isinstance(resource_name, str), f"Invalid resource_name {resource_name}"
-        configurable_component = (
-            ConfigurableComponent.get_component_class(configurable_component_namespace)
-            .get_from_name(configurable_component_class_name)
-            .create_minimal_instance(resource_name)
-        )
-
-        key = data["key"]
-        params = data.get("params", {})
-        assert isinstance(key, str), "Invalid key"
-        assert isinstance(params, dict), "Invalid params"
-        assert key != "", "Key cannot be empty string"
-
-    except Exception as exc:
-        return Response(
-            json.dumps({"error": f"Invalid config: {str(exc)}"}),
-            400,
-            {"Content-Type": "application/json"},
-        )
-
-    if request.method == "DELETE":
-        configurable_component.delete_config_value(config_key=key, tenant_ids=params, user=user)
-        audit_log.record(
-            user or "",
-            AuditLogAction.CONFIGURABLE_COMPONENT_DELETE,
+    # Configurable-component overrides are read from the
+    # ``configurable_component_overrides`` sentry-option, managed centrally in
+    # sentry-options-automator. A write from snuba-admin would only land in the
+    # legacy Redis store that running queries no longer consult, so it would
+    # silently have no effect. Reject the write and point operators to automator
+    # rather than returning a misleading success.
+    return Response(
+        json.dumps(
             {
-                "resource_identifier": resource_name,
-                "configurable_component_class_name": configurable_component.class_name(),
-                "key": key,
-            },
-            notify=True,
-        )
-        return Response("", 200)
-    if request.method == "POST":
-        try:
-            value = data["value"]
-            assert isinstance(value, str), "Invalid value"
-            configurable_component.set_config_value(
-                config_key=key, value=value, tenant_ids=params, user=user
-            )
-            audit_log.record(
-                user or "",
-                AuditLogAction.CONFIGURABLE_COMPONENT_UPDATE,
-                {
-                    "resource_identifier": resource_name,
-                    "configurable_component_class_name": configurable_component.class_name(),
-                    "key": key,
-                    "value": value,
-                    "params": str(params),
-                },
-                notify=True,
-            )
-            return Response("", 200)
-        except (KeyError, AssertionError) as exc:
-            return Response(
-                json.dumps({"error": f"Invalid config: {str(exc)}"}),
-                400,
-                {"Content-Type": "application/json"},
-            )
-    else:
-        return Response(
-            json.dumps({"error": "Method not allowed"}),
-            405,
-            {"Content-Type": "application/json"},
-        )
+                "error": (
+                    "Configurable component overrides are now managed in "
+                    "sentry-options-automator via the "
+                    "`configurable_component_overrides` option and can no longer "
+                    "be set or deleted from snuba-admin."
+                )
+            }
+        ),
+        405,
+        {"Content-Type": "application/json"},
+    )
 
 
 @application.route("/cardinality_query", methods=["POST"])
