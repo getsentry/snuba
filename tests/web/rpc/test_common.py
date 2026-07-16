@@ -910,7 +910,9 @@ class TestComparisonCanMatchColumnDefault:
         ],
     )
     def test_scalar(self, value: AttributeValue, expected: bool) -> None:
-        assert _comparison_can_match_column_default(value, value.WhichOneof("value")) is expected
+        value_type = value.WhichOneof("value")
+        assert value_type is not None
+        assert _comparison_can_match_column_default(value, value_type) is expected
 
     def test_val_array_matches_when_any_element_is_default(self) -> None:
         present = AttributeValue(
