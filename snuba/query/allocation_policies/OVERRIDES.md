@@ -138,3 +138,22 @@ With the above, a query from org `123` with referrer `api.foo` is limited to `4`
 (the min of the `api.foo` limit `4` and the org-wide `*` limit `20`); the same org
 with any other referrer is limited to `20`; project `4505240668733440` is limited
 to `8` for any referrer.
+
+### Referrer-only policies
+
+`CrossOrgQueryAllocationPolicy` and `ReferrerGuardRailPolicy` scope only by
+referrer (they take `referrer` as their required tenant, with no project/org
+dimension), so the nested object shape above does not apply. Their per-referrer
+overrides remain **numeric parameterized** configs in
+`configurable_component_overrides`, keyed as
+`{resource}.{ClassName}.{config}|referrer:{referrer}`:
+
+```json
+{
+  "spans.ReferrerGuardRailPolicy.referrer_concurrent_override|referrer:api.foo": 50,
+  "spans.ReferrerGuardRailPolicy.referrer_max_threads_override|referrer:api.foo": 4
+}
+```
+
+(`CrossOrgQueryAllocationPolicy` only accepts overrides for referrers registered
+in its storage YAML.)
