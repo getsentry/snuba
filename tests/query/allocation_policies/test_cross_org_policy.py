@@ -115,12 +115,10 @@ class TestCrossOrgQueryAllocationPolicy:
             2,
             {"referrer": "statistical_detectors"},
         ):
-            assert (
-                policy.get_quota_allowance(
-                    tenant_ids={"referrer": "statistical_detectors"}, query_id="1"
-                ).max_threads
-                == 2
+            allowance = policy.get_quota_allowance(
+                tenant_ids={"referrer": "statistical_detectors"}, query_id="1"
             )
+            assert allowance.max_threads == 2
             policy.update_quota_balance(
                 tenant_ids={"referrer": "statistical_detectors"},
                 query_id="1",

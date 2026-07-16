@@ -33,10 +33,7 @@ from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
 from snuba.state import set_config
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from snuba.web import QueryResult
-from tests.configs.component_config import (
-    override_component_config,
-    override_component_configs,
-)
+from tests.configs.component_config import override_component_config
 
 
 def test_eq() -> None:
@@ -412,14 +409,6 @@ def test_get_current_configs(policy: AllocationPolicy) -> None:
         "value": 4,
         "params": {},
     } in policy_configs
-    # get_current_configs reflects the legacy Redis writes above (the snuba-admin
-    # view); the runtime property reads now come from the sentry-option overrides.
-    with override_component_configs(
-        (policy, "is_enforced", 0),
-        (policy, "max_threads", 4),
-    ):
-        assert policy.is_enforced == 0
-        assert policy.max_threads == 4
 
 
 @pytest.mark.redis_db

@@ -255,7 +255,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
 
         return config
 
-    def __deserialize_runtime_config_key(self, key: str) -> tuple[str, dict[str, Any]]:
+    def __deserialize_runtime_config_key(self, key: str) -> tuple[str, dict[str, str]]:
         """
         Given a raw runtime config key, deconstructs it into its config
         key and parameters components.
@@ -270,11 +270,12 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         # key is "storage.policy.config" or "storage.policy.config|param1:val1|param2:val2"
         base, _, params_string = key.partition(self._PARAM_SEPARATOR)
         _, _, config_key = base.split(".")
-        params_dict = {}
-        if params_string:
-            for param_string in params_string.split(self._PARAM_SEPARATOR):
-                param_key, _, param_value = param_string.partition(self._PARAM_KV_SEPARATOR)
-                params_dict[param_key] = param_value
+        params_dict: dict[str, str] = {}
+        # filter(None, ...) drops the empty segment a param-less key produces
+        # ("".split("|") == [""]), so we don't need a nesting `if params_string:`.
+        for param_string in filter(None, params_string.split(self._PARAM_SEPARATOR)):
+            name, _, value = param_string.partition(self._PARAM_KV_SEPARATOR)
+            params_dict[name] = value
 
         self._validate_config_params(config_key=config_key, params=params_dict)
 
@@ -360,14 +361,16 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         escaped. Param values may contain ``.``/``,``/``:``.
         """
         parameters = ""
-        for param in sorted(params.keys()):
-            name = str(param)
-            value = str(params[param])
+        for name, value in sorted(params.items()):
+            name, value = str(name), str(value)
             if self._PARAM_SEPARATOR in name or self._PARAM_KV_SEPARATOR in name:
                 raise InvalidConfig(
                     f"config param name '{name}' may not contain "
                     f"'{self._PARAM_SEPARATOR}' or '{self._PARAM_KV_SEPARATOR}'"
                 )
+            # Only `|` is rejected in a value; `:` is allowed on purpose, since
+            # deserialization splits each param on its *first* `:`
+            # (str.partition), so a value may itself contain `:`.
             if self._PARAM_SEPARATOR in value:
                 raise InvalidConfig(
                     f"config param value '{value}' may not contain '{self._PARAM_SEPARATOR}'"
