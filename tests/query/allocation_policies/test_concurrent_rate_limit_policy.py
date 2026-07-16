@@ -290,6 +290,33 @@ def test_override_isolation(
     ).can_run
 
 
+@pytest.mark.redis_db
+def test_org_override_shares_bucket_across_referrers(
+    policy: ConcurrentRateLimitAllocationPolicy,
+) -> None:
+    """A per-org override on a query that also carries a project_id must share one
+    tenant-wide bucket across referrers -- it is not a referrer-specific override,
+    so different referrers count against the same limit."""
+    org_id = 456
+    project_id = 1234
+    override_limit = 2
+    policy.set_config_value("concurrent_limit", override_limit, {"organization_id": org_id})
+
+    # Fill the bucket using one referrer.
+    for i in range(override_limit):
+        assert policy.get_quota_allowance(
+            tenant_ids={"organization_id": org_id, "project_id": project_id, "referrer": "ref_a"},
+            query_id=f"a{i}",
+        ).can_run
+
+    # A different referrer for the same org shares the (now full) bucket -- it must
+    # be rejected rather than getting its own fresh bucket of size override_limit.
+    assert not policy.get_quota_allowance(
+        tenant_ids={"organization_id": org_id, "project_id": project_id, "referrer": "ref_b"},
+        query_id="b0",
+    ).can_run
+
+
 def test_pass_through(policy: ConcurrentRateLimitAllocationPolicy) -> None:
     ## should not be blocked because the subscriptions_executor referrer is not rate limited
     for i in range(MAX_CONCURRENT_QUERIES * 2):

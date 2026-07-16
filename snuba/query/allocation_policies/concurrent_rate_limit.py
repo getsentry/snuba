@@ -158,18 +158,20 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
         return "concurrent_rate_limit_policy"
 
     def _get_rate_limit_params(self, tenant_ids: dict[str, str | int]) -> RateLimitParameters:
-        tenant_key, tenant_value = self._get_tenant_key_and_value(tenant_ids)
+        _tenant_key, tenant_value = self._get_tenant_key_and_value(tenant_ids)
         referrer = tenant_ids.get("referrer")
         # Most-specific-matching concurrent limit for this (tenant, referrer).
         concurrent_limit = int(self.get_config_value("concurrent_limit", tenant_ids))
         # Bucket by tenant so all referrers share the tenant-wide limit, unless a
         # referrer-specific override applies -- then count that referrer on its own
-        # so it neither consumes nor is consumed by the tenant-wide bucket.
+        # so it neither consumes nor is consumed by the tenant-wide bucket. The
+        # comparison drops only the referrer (keeping the full project/org scope)
+        # so a plain per-org or per-project override is not mistaken for a
+        # referrer-specific one.
         bucket = str(tenant_value)
         if referrer is not None:
-            tenant_wide_limit = int(
-                self.get_config_value("concurrent_limit", {tenant_key: tenant_value})
-            )
+            tenant_scope = {k: v for k, v in tenant_ids.items() if k != "referrer"}
+            tenant_wide_limit = int(self.get_config_value("concurrent_limit", tenant_scope))
             if concurrent_limit != tenant_wide_limit:
                 bucket = f"{tenant_value}|referrer__{referrer}"
         return RateLimitParameters(
