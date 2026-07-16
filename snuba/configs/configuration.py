@@ -6,6 +6,7 @@ from typing import Any, TypedDict, TypeVar, cast, final
 
 from sentry_options import OptionValue
 
+from snuba import settings
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.state import delete_config as delete_runtime_config
 from snuba.state import get_all_configs as get_all_runtime_configs
@@ -402,7 +403,15 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
             if validate
             else self.config_definitions()[config_key]
         )
-        full_key = self._build_config_key(config_key, params)
+        try:
+            full_key: str | None = self._build_config_key(config_key, params)
+        except InvalidConfig:
+            # A caller-controlled param value (e.g. a referrer containing the
+            # '|' delimiter) can't be encoded into a lookup key. No override can
+            # match it, so fall back to the code default instead of propagating:
+            # get_quota_allowance catches exceptions and fails open, which would
+            # let such a request skip this limit entirely.
+            full_key = None
         option_key = (
             CONFIGURABLE_COMPONENT_OBJECT_OVERRIDES_KEY
             if config_definition.value_type is dict
@@ -411,7 +420,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         overrides: OptionValue = get_option(option_key, {})
         value = (
             overrides[full_key]
-            if isinstance(overrides, dict) and full_key in overrides
+            if full_key is not None and isinstance(overrides, dict) and full_key in overrides
             else config_definition.default
         )
         if config_definition.value_type is dict:
@@ -431,13 +440,45 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         config_definition = self._validate_config_params(config_key, params, value)
         # ensure correct type is stored
         value = config_definition.value_type(value)
+        full_key = self._build_config_key(config_key, params)
         set_runtime_config(
-            key=self._build_config_key(config_key, params),
+            key=full_key,
             value=value,
             user=user,
             force=True,
             config_key=self._get_hash(),
         )
+        if settings.TESTING:
+            # Reads come from sentry-options, not Redis, so mirror the write into
+            # the option store the test process reads back. This keeps
+            # set_config_value the single config-setting API in tests (no bespoke
+            # override helper); tests/conftest.py clears these between tests.
+            self.__mirror_test_option_override(config_definition, full_key, value)
+
+    def __mirror_test_option_override(
+        self,
+        config_definition: Configuration,
+        full_key: str,
+        value: Any,
+        *,
+        remove: bool = False,
+    ) -> None:
+        from sentry_options._core import _set_override
+
+        from snuba.state.sentry_options import SNUBA_OPTIONS_NAMESPACE
+
+        option_key = (
+            CONFIGURABLE_COMPONENT_OBJECT_OVERRIDES_KEY
+            if config_definition.value_type is dict
+            else CONFIGURABLE_COMPONENT_OVERRIDES_KEY
+        )
+        current: OptionValue = get_option(option_key, {})
+        merged = dict(current) if isinstance(current, dict) else {}
+        if remove:
+            merged.pop(full_key, None)
+        else:
+            merged[full_key] = value
+        _set_override(SNUBA_OPTIONS_NAMESPACE, option_key, merged)
 
     def delete_config_value(
         self,
@@ -451,12 +492,15 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         """
         if params is None:
             params = {}
-        self._validate_config_params(config_key, params)
+        config_definition = self._validate_config_params(config_key, params)
+        full_key = self._build_config_key(config_key, params)
         delete_runtime_config(
-            key=self._build_config_key(config_key, params),
+            key=full_key,
             user=user,
             config_key=self._get_hash(),
         )
+        if settings.TESTING:
+            self.__mirror_test_option_override(config_definition, full_key, None, remove=True)
 
     @classmethod
     def config_key(cls) -> str:

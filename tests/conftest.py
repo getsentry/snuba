@@ -1,3 +1,4 @@
+import contextlib
 import hashlib
 import json
 import os
@@ -190,6 +191,33 @@ def redis_db(request: pytest.FixtureRequest) -> Generator[None]:
     state.get_raw_configs.clear()  # type: ignore[attr-defined]
 
     yield
+
+
+@pytest.fixture(autouse=True)
+def _clear_component_config_option_overrides() -> Generator[None]:
+    """Isolate ConfigurableComponent config overrides between tests.
+
+    In TESTING, ``ConfigurableComponent.set_config_value`` mirrors each write
+    into the sentry-options store that ``get_config_value`` reads (so tests use
+    the real config API instead of a bespoke override helper). Those overrides
+    are thread-local and persist, so clear the two component-config option bags
+    after every test to stop them leaking across tests.
+    """
+    yield
+
+    from sentry_options._core import _clear_override
+
+    from snuba.configs.configuration import (
+        CONFIGURABLE_COMPONENT_OBJECT_OVERRIDES_KEY,
+        CONFIGURABLE_COMPONENT_OVERRIDES_KEY,
+    )
+
+    for option_key in (
+        CONFIGURABLE_COMPONENT_OVERRIDES_KEY,
+        CONFIGURABLE_COMPONENT_OBJECT_OVERRIDES_KEY,
+    ):
+        with contextlib.suppress(Exception):
+            _clear_override("snuba", option_key)
 
 
 def _build_db_cache(cache_key: CacheKey) -> None:

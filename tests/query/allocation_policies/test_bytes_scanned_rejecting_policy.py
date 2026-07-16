@@ -13,10 +13,6 @@ from snuba.query.allocation_policies.bytes_scanned_rejecting_policy import (
     BytesScannedRejectingPolicy,
 )
 from snuba.web import QueryException, QueryResult
-from tests.configs.component_config import (
-    ComponentConfigOverride,
-    override_component_configs,
-)
 
 PROJECT_REFERRER_SCAN_LIMIT = 1000
 ORGANIZATION_REFERRER_SCAN_LIMIT = PROJECT_REFERRER_SCAN_LIMIT * 2
@@ -36,17 +32,12 @@ def policy() -> AllocationPolicy:
     return policy
 
 
-def _base_config_overrides(policy: AllocationPolicy) -> list[ComponentConfigOverride]:
-    """Base config overrides shared by most tests; combine with any test-specific
-    overrides in a single ``override_component_configs`` call (the option is one
-    dict, so nesting contexts would drop all but the innermost key)."""
-    return [
-        (policy, "is_active", 1),
-        (policy, "is_enforced", 1),
-        (policy, "max_threads", MAX_THREAD_NUMBER),
-        (policy, "project_referrer_scan_limit", PROJECT_REFERRER_SCAN_LIMIT),
-        (policy, "organization_referrer_scan_limit", ORGANIZATION_REFERRER_SCAN_LIMIT),
-    ]
+def _configure_policy(policy: AllocationPolicy) -> None:
+    policy.set_config_value("is_active", 1)
+    policy.set_config_value("is_enforced", 1)
+    policy.set_config_value("max_threads", MAX_THREAD_NUMBER)
+    policy.set_config_value("project_referrer_scan_limit", PROJECT_REFERRER_SCAN_LIMIT)
+    policy.set_config_value("organization_referrer_scan_limit", ORGANIZATION_REFERRER_SCAN_LIMIT)
 
 
 @pytest.mark.parametrize(
@@ -83,41 +74,41 @@ def test_consume_quota(
     reason: str,
     limit: int,
 ) -> None:
-    with override_component_configs(*_base_config_overrides(policy)):
-        allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-        assert allowance.can_run
-        assert allowance.max_threads == MAX_THREAD_NUMBER
-        policy.update_quota_balance(
-            tenant_ids,
-            QUERY_ID,
-            QueryResultOrError(
-                query_result=QueryResult(
-                    result={"profile": {"progress_bytes": bytes_to_scan}},
-                    extra={"stats": {}, "sql": "", "experiments": {}},
-                ),
-                error=None,
+    _configure_policy(policy)
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert allowance.can_run
+    assert allowance.max_threads == MAX_THREAD_NUMBER
+    policy.update_quota_balance(
+        tenant_ids,
+        QUERY_ID,
+        QueryResultOrError(
+            query_result=QueryResult(
+                result={"profile": {"progress_bytes": bytes_to_scan}},
+                extra={"stats": {}, "sql": "", "experiments": {}},
             ),
-        )
-        allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-        assert not allowance.can_run and allowance.max_threads == 0
-        assert {
-            "granted_quota": 0,
-            "limit": limit,
-            "storage_key": "errors",
-        }.items() <= allowance.explanation.items()
+            error=None,
+        ),
+    )
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert not allowance.can_run and allowance.max_threads == 0
+    assert {
+        "granted_quota": 0,
+        "limit": limit,
+        "storage_key": "errors",
+    }.items() <= allowance.explanation.items()
 
-        assert reason in str(allowance.explanation["reason"])
-        new_tenant_ids: dict[str, str | int] = {
-            **tenant_ids,
-            "referrer": str(tenant_ids["referrer"]) + "abcd",
-        }
+    assert reason in str(allowance.explanation["reason"])
+    new_tenant_ids: dict[str, str | int] = {
+        **tenant_ids,
+        "referrer": str(tenant_ids["referrer"]) + "abcd",
+    }
 
-        # a different referrer should work fine though
-        allowance = policy.get_quota_allowance(
-            new_tenant_ids,
-            QUERY_ID,
-        )
-        assert allowance.can_run
+    # a different referrer should work fine though
+    allowance = policy.get_quota_allowance(
+        new_tenant_ids,
+        QUERY_ID,
+    )
+    assert allowance.can_run
 
 
 @pytest.mark.redis_db
@@ -126,25 +117,25 @@ def test_cross_org_query(policy: BytesScannedRejectingPolicy) -> None:
         "cross_org_query": 1,
         "referrer": "some_referrer",
     }
-    with override_component_configs(*_base_config_overrides(policy)):
-        allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-        assert allowance.can_run
-        assert allowance.max_threads == MAX_THREAD_NUMBER
-        policy.update_quota_balance(
-            tenant_ids,
-            QUERY_ID,
-            QueryResultOrError(
-                query_result=QueryResult(
-                    result={"profile": {"progress_bytes": ORGANIZATION_REFERRER_SCAN_LIMIT * 100}},
-                    extra={"stats": {}, "sql": "", "experiments": {}},
-                ),
-                error=None,
+    _configure_policy(policy)
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert allowance.can_run
+    assert allowance.max_threads == MAX_THREAD_NUMBER
+    policy.update_quota_balance(
+        tenant_ids,
+        QUERY_ID,
+        QueryResultOrError(
+            query_result=QueryResult(
+                result={"profile": {"progress_bytes": ORGANIZATION_REFERRER_SCAN_LIMIT * 100}},
+                extra={"stats": {}, "sql": "", "experiments": {}},
             ),
-        )
-        # doesn't apply to cross org queries, should still have no effect
-        allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-        assert allowance.can_run
-        assert allowance.max_threads == MAX_THREAD_NUMBER
+            error=None,
+        ),
+    )
+    # doesn't apply to cross org queries, should still have no effect
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert allowance.can_run
+    assert allowance.max_threads == MAX_THREAD_NUMBER
 
 
 @pytest.mark.parametrize(
@@ -211,26 +202,24 @@ def test_overrides(
     override_entry: tuple[str, Any] | tuple[str, Any, dict[str, str | int]],
     limit: int,
 ) -> None:
-    with override_component_configs(
-        *_base_config_overrides(policy),
-        (policy, *override_entry),
-    ):
-        allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-        assert allowance.can_run
-        policy.update_quota_balance(
-            tenant_ids,
-            QUERY_ID,
-            QueryResultOrError(
-                query_result=QueryResult(
-                    result={"profile": {"progress_bytes": limit}},
-                    extra={"stats": {}, "sql": "", "experiments": {}},
-                ),
-                error=None,
+    _configure_policy(policy)
+    policy.set_config_value(*override_entry)
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert allowance.can_run
+    policy.update_quota_balance(
+        tenant_ids,
+        QUERY_ID,
+        QueryResultOrError(
+            query_result=QueryResult(
+                result={"profile": {"progress_bytes": limit}},
+                extra={"stats": {}, "sql": "", "experiments": {}},
             ),
-        )
-        allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-        assert not allowance.can_run and allowance.max_threads == 0
-        assert allowance.explanation["limit"] == limit
+            error=None,
+        ),
+    )
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert not allowance.can_run and allowance.max_threads == 0
+    assert allowance.explanation["limit"] == limit
 
 
 @pytest.mark.redis_db
@@ -240,43 +229,40 @@ def test_org_override_precedence(policy: BytesScannedRejectingPolicy) -> None:
         "organization_id": 123,
         "referrer": "some_referrer",
     }
-    with override_component_configs(
-        *_base_config_overrides(policy),
-        (
-            policy,
-            "organization_referrer_scan_limit_overrides",
-            {
-                "123": {"some_referrer": 100, "*": 500},
-                "*": {"some_referrer": 1000},
-            },
-        ),
-    ):
-        allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-        assert allowance.can_run
-        assert allowance.rejection_threshold == 100
+    _configure_policy(policy)
+    policy.set_config_value(
+        "organization_referrer_scan_limit_overrides",
+        {
+            "123": {"some_referrer": 100, "*": 500},
+            "*": {"some_referrer": 1000},
+        },
+    )
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert allowance.can_run
+    assert allowance.rejection_threshold == 100
 
-        policy.update_quota_balance(
-            tenant_ids,
-            QUERY_ID,
-            QueryResultOrError(
-                query_result=QueryResult(
-                    result={"profile": {"progress_bytes": 100}},
-                    extra={"stats": {}, "sql": "", "experiments": {}},
-                ),
-                error=None,
+    policy.update_quota_balance(
+        tenant_ids,
+        QUERY_ID,
+        QueryResultOrError(
+            query_result=QueryResult(
+                result={"profile": {"progress_bytes": 100}},
+                extra={"stats": {}, "sql": "", "experiments": {}},
             ),
-        )
-        allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-        assert not allowance.can_run
-        assert allowance.explanation["limit"] == 100
+            error=None,
+        ),
+    )
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert not allowance.can_run
+    assert allowance.explanation["limit"] == 100
 
-        # different org still uses the all-orgs referrer override
-        other_org_tenant: dict[str, str | int] = {
-            "organization_id": 456,
-            "referrer": "some_referrer",
-        }
-        allowance = policy.get_quota_allowance(other_org_tenant, QUERY_ID)
-        assert allowance.rejection_threshold == 1000
+    # different org still uses the all-orgs referrer override
+    other_org_tenant: dict[str, str | int] = {
+        "organization_id": 456,
+        "referrer": "some_referrer",
+    }
+    allowance = policy.get_quota_allowance(other_org_tenant, QUERY_ID)
+    assert allowance.rejection_threshold == 1000
 
 
 @pytest.mark.redis_db
@@ -286,34 +272,31 @@ def test_project_override_precedence(policy: BytesScannedRejectingPolicy) -> Non
         "project_id": 12345,
         "referrer": "some_referrer",
     }
-    with override_component_configs(
-        *_base_config_overrides(policy),
-        (
-            policy,
-            "project_referrer_scan_limit_overrides",
-            {
-                "12345": {"some_referrer": 100, "*": 500},
-                "*": {"some_referrer": 1000},
-            },
-        ),
-    ):
-        allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-        assert allowance.can_run
-        assert allowance.rejection_threshold == 100
+    _configure_policy(policy)
+    policy.set_config_value(
+        "project_referrer_scan_limit_overrides",
+        {
+            "12345": {"some_referrer": 100, "*": 500},
+            "*": {"some_referrer": 1000},
+        },
+    )
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert allowance.can_run
+    assert allowance.rejection_threshold == 100
 
-        # a different referrer for the same project falls back to (project, "*")
-        other_referrer: dict[str, str | int] = {
-            "project_id": 12345,
-            "referrer": "other_referrer",
-        }
-        assert policy.get_quota_allowance(other_referrer, QUERY_ID).rejection_threshold == 500
+    # a different referrer for the same project falls back to (project, "*")
+    other_referrer: dict[str, str | int] = {
+        "project_id": 12345,
+        "referrer": "other_referrer",
+    }
+    assert policy.get_quota_allowance(other_referrer, QUERY_ID).rejection_threshold == 500
 
-        # a different project falls back to the all-projects referrer override
-        other_project: dict[str, str | int] = {
-            "project_id": 99999,
-            "referrer": "some_referrer",
-        }
-        assert policy.get_quota_allowance(other_project, QUERY_ID).rejection_threshold == 1000
+    # a different project falls back to the all-projects referrer override
+    other_project: dict[str, str | int] = {
+        "project_id": 99999,
+        "referrer": "some_referrer",
+    }
+    assert policy.get_quota_allowance(other_project, QUERY_ID).rejection_threshold == 1000
 
 
 @pytest.mark.redis_db
@@ -323,47 +306,45 @@ def test_org_max_bytes_to_read_cap(policy: BytesScannedRejectingPolicy) -> None:
         "organization_id": 123,
         "referrer": "some_referrer",
     }
-    with override_component_configs(
-        *_base_config_overrides(policy),
-        (policy, "organization_max_bytes_to_read", 500, {"organization_id": 123}),
-    ):
-        # Exhaust the quota first; the cap should still let the query through.
-        policy.update_quota_balance(
-            tenant_ids,
-            QUERY_ID,
-            QueryResultOrError(
-                query_result=QueryResult(
-                    result={"profile": {"progress_bytes": ORGANIZATION_REFERRER_SCAN_LIMIT * 10}},
-                    extra={"stats": {}, "sql": "", "experiments": {}},
-                ),
-                error=None,
+    _configure_policy(policy)
+    policy.set_config_value("organization_max_bytes_to_read", 500, {"organization_id": 123})
+    # Exhaust the quota first; the cap should still let the query through.
+    policy.update_quota_balance(
+        tenant_ids,
+        QUERY_ID,
+        QueryResultOrError(
+            query_result=QueryResult(
+                result={"profile": {"progress_bytes": ORGANIZATION_REFERRER_SCAN_LIMIT * 10}},
+                extra={"stats": {}, "sql": "", "experiments": {}},
             ),
-        )
+            error=None,
+        ),
+    )
 
-        allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-        assert allowance.can_run
-        assert allowance.max_bytes_to_read == 500
-        assert allowance.max_threads == MAX_THREAD_NUMBER
-        assert not allowance.is_throttled
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert allowance.can_run
+    assert allowance.max_bytes_to_read == 500
+    assert allowance.max_threads == MAX_THREAD_NUMBER
+    assert not allowance.is_throttled
 
-        # An org without a cap configured is still subject to the sliding-window limit.
-        other_org_tenant: dict[str, str | int] = {
-            "organization_id": 456,
-            "referrer": "some_referrer",
-        }
-        policy.update_quota_balance(
-            other_org_tenant,
-            QUERY_ID,
-            QueryResultOrError(
-                query_result=QueryResult(
-                    result={"profile": {"progress_bytes": ORGANIZATION_REFERRER_SCAN_LIMIT}},
-                    extra={"stats": {}, "sql": "", "experiments": {}},
-                ),
-                error=None,
+    # An org without a cap configured is still subject to the sliding-window limit.
+    other_org_tenant: dict[str, str | int] = {
+        "organization_id": 456,
+        "referrer": "some_referrer",
+    }
+    policy.update_quota_balance(
+        other_org_tenant,
+        QUERY_ID,
+        QueryResultOrError(
+            query_result=QueryResult(
+                result={"profile": {"progress_bytes": ORGANIZATION_REFERRER_SCAN_LIMIT}},
+                extra={"stats": {}, "sql": "", "experiments": {}},
             ),
-        )
-        allowance = policy.get_quota_allowance(other_org_tenant, QUERY_ID)
-        assert not allowance.can_run
+            error=None,
+        ),
+    )
+    allowance = policy.get_quota_allowance(other_org_tenant, QUERY_ID)
+    assert not allowance.can_run
 
 
 @pytest.mark.redis_db
@@ -381,34 +362,29 @@ def test_org_cap_does_not_record_into_sliding_window(
         "organization_id": 123,
         "referrer": "some_referrer",
     }
-    with override_component_configs(
-        *_base_config_overrides(policy),
-        (policy, "organization_max_bytes_to_read", 500, {"organization_id": 123}),
-    ):
-        # While the cap is set, lots of bytes scanned must not be recorded.
-        for _ in range(5):
-            policy.update_quota_balance(
-                tenant_ids,
-                QUERY_ID,
-                QueryResultOrError(
-                    query_result=QueryResult(
-                        result={"profile": {"progress_bytes": ORGANIZATION_REFERRER_SCAN_LIMIT}},
-                        extra={"stats": {}, "sql": "", "experiments": {}},
-                    ),
-                    error=None,
+    _configure_policy(policy)
+    policy.set_config_value("organization_max_bytes_to_read", 500, {"organization_id": 123})
+    # While the cap is set, lots of bytes scanned must not be recorded.
+    for _ in range(5):
+        policy.update_quota_balance(
+            tenant_ids,
+            QUERY_ID,
+            QueryResultOrError(
+                query_result=QueryResult(
+                    result={"profile": {"progress_bytes": ORGANIZATION_REFERRER_SCAN_LIMIT}},
+                    extra={"stats": {}, "sql": "", "experiments": {}},
                 ),
-            )
+                error=None,
+            ),
+        )
 
     # Remove the cap; the sliding window should be empty, so the next query
     # is allowed under the normal org-referrer limit.
-    with override_component_configs(
-        *_base_config_overrides(policy),
-        (policy, "organization_max_bytes_to_read", -1, {"organization_id": 123}),
-    ):
-        allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-        assert allowance.can_run
-        assert allowance.max_threads == MAX_THREAD_NUMBER
-        assert not allowance.is_throttled
+    policy.set_config_value("organization_max_bytes_to_read", -1, {"organization_id": 123})
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert allowance.can_run
+    assert allowance.max_threads == MAX_THREAD_NUMBER
+    assert not allowance.is_throttled
 
 
 @pytest.mark.redis_db
@@ -418,28 +394,25 @@ def test_org_referrer_cap_beats_org_cap(policy: BytesScannedRejectingPolicy) -> 
         "organization_id": 123,
         "referrer": "some_referrer",
     }
-    with override_component_configs(
-        *_base_config_overrides(policy),
-        (policy, "organization_max_bytes_to_read", 1000, {"organization_id": 123}),
-        (
-            policy,
-            "organization_referrer_max_bytes_to_read",
-            200,
-            {"organization_id": 123, "referrer": "some_referrer"},
-        ),
-    ):
-        allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-        assert allowance.can_run
-        assert allowance.max_bytes_to_read == 200
+    _configure_policy(policy)
+    policy.set_config_value("organization_max_bytes_to_read", 1000, {"organization_id": 123})
+    policy.set_config_value(
+        "organization_referrer_max_bytes_to_read",
+        200,
+        {"organization_id": 123, "referrer": "some_referrer"},
+    )
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert allowance.can_run
+    assert allowance.max_bytes_to_read == 200
 
-        # A different referrer falls back to the org-wide cap.
-        other_referrer: dict[str, str | int] = {
-            "organization_id": 123,
-            "referrer": "other_referrer",
-        }
-        allowance = policy.get_quota_allowance(other_referrer, QUERY_ID)
-        assert allowance.can_run
-        assert allowance.max_bytes_to_read == 1000
+    # A different referrer falls back to the org-wide cap.
+    other_referrer: dict[str, str | int] = {
+        "organization_id": 123,
+        "referrer": "other_referrer",
+    }
+    allowance = policy.get_quota_allowance(other_referrer, QUERY_ID)
+    assert allowance.can_run
+    assert allowance.max_bytes_to_read == 1000
 
 
 @pytest.mark.redis_db
@@ -457,31 +430,28 @@ def test_org_caps_do_not_apply_to_project_queries(
         "project_id": 12345,
         "referrer": "some_referrer",
     }
-    with override_component_configs(
-        *_base_config_overrides(policy),
-        (policy, "organization_max_bytes_to_read", 500, {"organization_id": 123}),
-        (
-            policy,
-            "organization_referrer_max_bytes_to_read",
-            200,
-            {"organization_id": 123, "referrer": "some_referrer"},
-        ),
-    ):
-        # Exhaust the project quota; the org cap must not let the query through.
-        policy.update_quota_balance(
-            tenant_ids,
-            QUERY_ID,
-            QueryResultOrError(
-                query_result=QueryResult(
-                    result={"profile": {"progress_bytes": PROJECT_REFERRER_SCAN_LIMIT}},
-                    extra={"stats": {}, "sql": "", "experiments": {}},
-                ),
-                error=None,
+    _configure_policy(policy)
+    policy.set_config_value("organization_max_bytes_to_read", 500, {"organization_id": 123})
+    policy.set_config_value(
+        "organization_referrer_max_bytes_to_read",
+        200,
+        {"organization_id": 123, "referrer": "some_referrer"},
+    )
+    # Exhaust the project quota; the org cap must not let the query through.
+    policy.update_quota_balance(
+        tenant_ids,
+        QUERY_ID,
+        QueryResultOrError(
+            query_result=QueryResult(
+                result={"profile": {"progress_bytes": PROJECT_REFERRER_SCAN_LIMIT}},
+                extra={"stats": {}, "sql": "", "experiments": {}},
             ),
-        )
-        allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-        assert not allowance.can_run
-        assert allowance.max_bytes_to_read == 0
+            error=None,
+        ),
+    )
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert not allowance.can_run
+    assert allowance.max_bytes_to_read == 0
 
 
 @pytest.mark.redis_db
@@ -491,34 +461,27 @@ def test_penalize_timeout(policy: BytesScannedRejectingPolicy) -> None:
         "project_id": 12345,
         "referrer": "some_referrer",
     }
-    with override_component_configs(
-        *_base_config_overrides(policy),
-        (
-            policy,
-            "clickhouse_timeout_bytes_scanned_penalization",
-            ORGANIZATION_REFERRER_SCAN_LIMIT * 2,
-        ),
-    ):
-        allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    _configure_policy(policy)
+    policy.set_config_value(
+        "clickhouse_timeout_bytes_scanned_penalization",
+        ORGANIZATION_REFERRER_SCAN_LIMIT * 2,
+    )
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
 
-        assert allowance.can_run
-        # regular query exception is thrown, should not affect quota
-        policy.update_quota_balance(
-            tenant_ids, QUERY_ID, QueryResultOrError(None, QueryException())
-        )
-        allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-        assert allowance.can_run
+    assert allowance.can_run
+    # regular query exception is thrown, should not affect quota
+    policy.update_quota_balance(tenant_ids, QUERY_ID, QueryResultOrError(None, QueryException()))
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert allowance.can_run
 
-        # timneout exception is thrown, the penalization is greater than the quota, therefore
-        # next query should be rejected
-        timeout_exception = QueryException()
-        timeout_exception.__cause__ = ClickhouseError(code=errors.ErrorCodes.TIMEOUT_EXCEEDED)
-        policy.update_quota_balance(
-            tenant_ids, QUERY_ID, QueryResultOrError(None, timeout_exception)
-        )
+    # timneout exception is thrown, the penalization is greater than the quota, therefore
+    # next query should be rejected
+    timeout_exception = QueryException()
+    timeout_exception.__cause__ = ClickhouseError(code=errors.ErrorCodes.TIMEOUT_EXCEEDED)
+    policy.update_quota_balance(tenant_ids, QUERY_ID, QueryResultOrError(None, timeout_exception))
 
-        allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-        assert not allowance.can_run and allowance.max_threads == 0
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert not allowance.can_run and allowance.max_threads == 0
 
 
 @pytest.mark.redis_db
@@ -530,45 +493,42 @@ def test_does_not_throttle_and_then_throttles(
         "referrer": "api.trace-explorer.stats",
     }
     bytes_to_scan = 100000001
-    with override_component_configs(
-        *_base_config_overrides(policy),
-        (policy, "bytes_throttle_divider", 100),
-        (
-            policy,
-            "project_referrer_scan_limit_overrides",
-            {"*": {"api.trace-explorer.stats": 20000000000}},
+    _configure_policy(policy)
+    policy.set_config_value("bytes_throttle_divider", 100)
+    policy.set_config_value(
+        "project_referrer_scan_limit_overrides",
+        {"*": {"api.trace-explorer.stats": 20000000000}},
+    )
+    policy.update_quota_balance(
+        tenant_ids,
+        QUERY_ID,
+        QueryResultOrError(
+            query_result=QueryResult(
+                result={"profile": {"progress_bytes": bytes_to_scan}},
+                extra={"stats": {}, "sql": "", "experiments": {}},
+            ),
+            error=None,
         ),
-    ):
-        policy.update_quota_balance(
-            tenant_ids,
-            QUERY_ID,
-            QueryResultOrError(
-                query_result=QueryResult(
-                    result={"profile": {"progress_bytes": bytes_to_scan}},
-                    extra={"stats": {}, "sql": "", "experiments": {}},
-                ),
-                error=None,
-            ),
-        )
+    )
 
-        allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-        assert not allowance.is_throttled
-        assert allowance.max_threads == MAX_THREAD_NUMBER
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert not allowance.is_throttled
+    assert allowance.max_threads == MAX_THREAD_NUMBER
 
-        policy.update_quota_balance(
-            tenant_ids,
-            QUERY_ID,
-            QueryResultOrError(
-                query_result=QueryResult(
-                    result={"profile": {"progress_bytes": bytes_to_scan}},
-                    extra={"stats": {}, "sql": "", "experiments": {}},
-                ),
-                error=None,
+    policy.update_quota_balance(
+        tenant_ids,
+        QUERY_ID,
+        QueryResultOrError(
+            query_result=QueryResult(
+                result={"profile": {"progress_bytes": bytes_to_scan}},
+                extra={"stats": {}, "sql": "", "experiments": {}},
             ),
-        )
-        allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-        assert allowance.is_throttled
-        assert allowance.max_threads == MAX_THREAD_NUMBER // 2
+            error=None,
+        ),
+    )
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert allowance.is_throttled
+    assert allowance.max_threads == MAX_THREAD_NUMBER // 2
 
 
 @pytest.mark.redis_db
@@ -582,31 +542,30 @@ def test_limit_bytes_read(
     scan_limit = 20000000000
     threads_throttle_divider = 2
     max_bytes_to_read_scan_limit_divider = 100
-    with override_component_configs(
-        *_base_config_overrides(policy),
-        (policy, "threads_throttle_divider", threads_throttle_divider),
-        (policy, "bytes_throttle_divider", 100),
-        (policy, "limit_bytes_instead_of_rejecting", 1),
-        (policy, "max_bytes_to_read_scan_limit_divider", max_bytes_to_read_scan_limit_divider),
-        (
-            policy,
-            "project_referrer_scan_limit_overrides",
-            {"*": {"api.trace-explorer.stats": scan_limit}},
-        ),
-    ):
-        policy.update_quota_balance(
-            tenant_ids,
-            QUERY_ID,
-            QueryResultOrError(
-                query_result=QueryResult(
-                    result={"profile": {"progress_bytes": scan_limit}},
-                    extra={"stats": {}, "sql": "", "experiments": {}},
-                ),
-                error=None,
+    _configure_policy(policy)
+    policy.set_config_value("threads_throttle_divider", threads_throttle_divider)
+    policy.set_config_value("bytes_throttle_divider", 100)
+    policy.set_config_value("limit_bytes_instead_of_rejecting", 1)
+    policy.set_config_value(
+        "max_bytes_to_read_scan_limit_divider", max_bytes_to_read_scan_limit_divider
+    )
+    policy.set_config_value(
+        "project_referrer_scan_limit_overrides",
+        {"*": {"api.trace-explorer.stats": scan_limit}},
+    )
+    policy.update_quota_balance(
+        tenant_ids,
+        QUERY_ID,
+        QueryResultOrError(
+            query_result=QueryResult(
+                result={"profile": {"progress_bytes": scan_limit}},
+                extra={"stats": {}, "sql": "", "experiments": {}},
             ),
-        )
+            error=None,
+        ),
+    )
 
-        allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-        assert allowance.is_throttled
-        assert allowance.max_threads == MAX_THREAD_NUMBER // threads_throttle_divider
-        assert allowance.max_bytes_to_read == int(scan_limit / max_bytes_to_read_scan_limit_divider)
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert allowance.is_throttled
+    assert allowance.max_threads == MAX_THREAD_NUMBER // threads_throttle_divider
+    assert allowance.max_bytes_to_read == int(scan_limit / max_bytes_to_read_scan_limit_divider)
