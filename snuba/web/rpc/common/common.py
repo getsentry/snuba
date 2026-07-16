@@ -335,48 +335,31 @@ def add_existence_check_to_subscriptable_references(query: Query) -> None:
     query.transform_expressions(transform)
 
 
-def _contains_subscriptable_reference(exp: Expression) -> bool:
-    """True if ``exp`` contains a ``SubscriptableReference`` (a map lookup) — the
-    map-backed keys we route through ``_map_backed_operands``."""
-    found = False
+def _is_map_backed_key(k: AttributeKey) -> bool:
+    """True when ``k`` is a custom attribute stored in one of the ``attributes_*`` map
+    columns — the keys whose equality/membership filters take the NULL-free
+    ``(value, exists)`` path (see ``_map_backed_operands``) with a ``has(mapKeys(...))``
+    existence guard.
 
-    def visit(node: Expression) -> Expression:
-        nonlocal found
-        if isinstance(node, SubscriptableReference):
-            found = True
-        return node
+    Every custom string/int/float/bool attribute is a map lookup, and a missing key reads
+    as the column's value-type default (``''`` / ``0`` / ``false``), so only the explicit
+    existence check tells an absent key apart from a stored default. This is a property of
+    the key, not of its resolved expression: booleans resolve to a bare ``arrayElement``
+    rather than a ``SubscriptableReference`` (their map has no hash buckets), so detecting
+    map-backing by type/column rather than by inspecting the expression keeps every scalar
+    type on the same path.
 
-    exp.transform(visit)
-    return found
-
-
-def _is_map_backed_bool_key(k: AttributeKey) -> bool:
-    """True for a boolean attribute stored in the ``attributes_bool`` map.
-
-    Boolean attributes are map-backed like string/int/float ones, but resolve to a bare
-    ``arrayElement`` rather than a ``SubscriptableReference`` — their map has no hash
-    buckets, so ``_generate_subscriptable_reference`` emits ``arrayElement`` directly.
-    That makes ``_contains_subscriptable_reference`` miss them, so they must be detected by
-    type here and routed through ``_map_backed_operands`` (like the other map keys). Without
-    that, a missing key reads as the ``false`` column default and ``attr:false`` wrongly
-    matches items lacking the attribute entirely (getsentry/sentry#119735).
-
-    ``attr_key`` and normalized columns are never boolean map lookups, so they're excluded.
+    ``attr_key`` and normalized/promoted columns (``NORMALIZED_COLUMNS_EAP_ITEMS``) are real
+    columns, not map lookups, so they're excluded — e.g. ``sentry.timestamp`` is a
+    ``TYPE_FLOAT`` key that must not be routed here. Array types have their own element-wise
+    path and are handled before reaching this check; they're absent from
+    ``PROTO_TYPE_TO_ATTRIBUTE_COLUMN`` anyway.
     """
     return (
-        k.type == AttributeKey.Type.TYPE_BOOLEAN
-        and k.name != "attr_key"
+        k.name != "attr_key"
         and k.name not in NORMALIZED_COLUMNS_EAP_ITEMS
+        and k.type in PROTO_TYPE_TO_ATTRIBUTE_COLUMN
     )
-
-
-def _is_map_backed_key(k: AttributeKey, k_expression: Expression) -> bool:
-    """True when ``k`` is a map-backed attribute, so equality/membership filters take the
-    NULL-free ``(exists, value)`` path (see ``_map_backed_operands``) with an existence
-    guard against the column default. String/int/float keys are detected from the resolved
-    expression's ``SubscriptableReference``; booleans need the extra type check
-    (see ``_is_map_backed_bool_key``)."""
-    return _contains_subscriptable_reference(k_expression) or _is_map_backed_bool_key(k)
 
 
 def _map_backed_operands(k: AttributeKey) -> tuple[Expression, Expression]:
@@ -999,7 +982,7 @@ def trace_item_filters_to_expression(
                 return _typed_array_includes_scalar_expression(
                     k, v, item_filter.comparison_filter.ignore_case
                 )
-            if _is_map_backed_key(k, k_expression):
+            if _is_map_backed_key(k):
                 # Map-backed: NULL-free (exists, value) form (see _map_backed_operands).
                 value, exists = _map_backed_operands(k)
                 if v_is_null:  # `attr = null` <=> key absent
@@ -1031,7 +1014,7 @@ def trace_item_filters_to_expression(
                         k, v, item_filter.comparison_filter.ignore_case
                     )
                 )
-            if _is_map_backed_key(k, k_expression):
+            if _is_map_backed_key(k):
                 # Negation of OP_EQUALS; an absent key is "not equal".
                 value, exists = _map_backed_operands(k)
                 if v_is_null:  # `attr != null` <=> key present
@@ -1063,7 +1046,7 @@ def trace_item_filters_to_expression(
                     "the LIKE comparison is only supported on string and array keys"
                 )
             comparison_function = f.ilike if item_filter.comparison_filter.ignore_case else f.like
-            if _contains_subscriptable_reference(k_expression):
+            if _is_map_backed_key(k):
                 value, exists = _map_backed_operands(k)
                 return and_cond(exists, comparison_function(value, v_expression))
             return comparison_function(k_expression, v_expression)
@@ -1078,7 +1061,7 @@ def trace_item_filters_to_expression(
                 raise BadSnubaRPCRequestException(
                     "the NOT LIKE comparison is only supported on string and array keys"
                 )
-            if _contains_subscriptable_reference(k_expression):
+            if _is_map_backed_key(k):
                 # Negation of OP_LIKE; an absent key is "not like".
                 like_fn = f.ilike if item_filter.comparison_filter.ignore_case else f.like
                 value, exists = _map_backed_operands(k)
@@ -1116,7 +1099,7 @@ def trace_item_filters_to_expression(
             # note: v_expression must be an array
             # we redefine the way in works for nulls
             # now null in ['hi', null] is true
-            if _is_map_backed_key(k, k_expression):
+            if _is_map_backed_key(k):
                 # Map-backed: keep the existence if(...) out of in() (see helper).
                 return _analyzer_safe_in_expression(
                     k,
@@ -1151,7 +1134,7 @@ def trace_item_filters_to_expression(
             # note: v_expression must be an array
             # we redefine the way not in works for nulls
             # now null not in ['hi'] is true
-            if _is_map_backed_key(k, k_expression):
+            if _is_map_backed_key(k):
                 # Map-backed: keep the existence if(...) out of in() (see helper).
                 return _analyzer_safe_in_expression(
                     k,

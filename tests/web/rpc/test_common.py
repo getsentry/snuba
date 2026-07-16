@@ -853,6 +853,50 @@ class TestBooleanAttributeFilters:
         assert columns == {"attributes_bool"}
 
 
+class TestNormalizedColumnsNotMapBacked:
+    """Map-backing is routed by attribute kind, not expression shape: only custom
+    attributes stored in the ``attributes_*`` maps take the ``(value, exists)`` path.
+    Normalized/promoted columns share a map-eligible type (e.g. ``sentry.trace_id`` is
+    TYPE_STRING) but are real columns, so the ``NORMALIZED_COLUMNS_EAP_ITEMS`` exclusion in
+    ``_is_map_backed_key`` is load-bearing — without it they'd be misrouted to a map lookup.
+    """
+
+    @staticmethod
+    def _walk(expr: Expression) -> list[Expression]:
+        nodes: list[Expression] = []
+
+        def visit(node: Expression) -> Expression:
+            nodes.append(node)
+            return node
+
+        expr.transform(visit)
+        return nodes
+
+    def _build(self, name: str) -> Expression:
+        item_filter = TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_STRING, name=name),
+                op=ComparisonFilter.OP_EQUALS,
+                value=AttributeValue(val_str="abc"),
+            )
+        )
+        return trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+
+    def test_normalized_string_column_bypasses_map_backed_path(self) -> None:
+        expr = self._build("sentry.trace_id")
+        fn_names = {n.function_name for n in self._walk(expr) if isinstance(n, FunctionCall)}
+        # Legacy real-column equality, not the map-backed has(mapKeys(...))/arrayElement form.
+        assert "mapKeys" not in fn_names and "arrayElement" not in fn_names
+        columns = {n.column_name for n in self._walk(expr) if isinstance(n, ColumnExpr)}
+        assert "attributes_string" not in columns
+
+    def test_custom_string_column_is_map_backed(self) -> None:
+        # Contrast: a non-normalized attribute of the same type does use the map columns.
+        expr = self._build("some.custom.tag")
+        columns = {n.column_name for n in self._walk(expr) if isinstance(n, ColumnExpr)}
+        assert columns == {"attributes_string"}
+
+
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
 def test_convert_rpc_exception_to_proto_packs_details() -> None:
