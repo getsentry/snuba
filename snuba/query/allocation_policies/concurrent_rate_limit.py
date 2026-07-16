@@ -19,6 +19,7 @@ from snuba.query.allocation_policies import (
     QueryType,
     QuotaAllowance,
 )
+from snuba.query.allocation_policies.utils import SCOPED_OVERRIDE_WILDCARD
 from snuba.state.rate_limit import (
     RateLimitParameters,
     RateLimitStats,
@@ -139,53 +140,50 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
                 default=DEFAULT_CONCURRENT_QUERIES_LIMIT,
             ),
             Configuration(
-                name="referrer_project_override",
-                description="override concurrent limit for a specific project, referrer combo",
-                value_type=int,
-                default=-1,
-                param_types={"referrer": str, "project_id": int},
+                name="concurrent_limit_project_overrides",
+                description=(
+                    "per-project concurrent-limit overrides, shaped as "
+                    '{project_id: {referrer (or "*"): limit}}. A referrer of "*" '
+                    "applies to any referrer for that project."
+                ),
+                value_type=dict,
+                default={},
             ),
             Configuration(
-                name="referrer_organization_override",
-                description="override concurrent limit for a specific organization_id, referrer combo",
-                value_type=int,
-                default=-1,
-                param_types={"referrer": str, "organization_id": int},
-            ),
-            Configuration(
-                name="project_override",
-                description="override concurrent limit for a specific project_id",
-                value_type=int,
-                default=-1,
-                param_types={"project_id": int},
-            ),
-            Configuration(
-                name="organization_override",
-                description="override concurrent limit for a specific organization_id",
-                value_type=int,
-                default=-1,
-                param_types={"organization_id": int},
+                name="concurrent_limit_organization_overrides",
+                description=(
+                    "per-organization concurrent-limit overrides, shaped as "
+                    '{organization_id: {referrer (or "*"): limit}}. A referrer of "*" '
+                    "applies to any referrer for that organization."
+                ),
+                value_type=dict,
+                default={},
             ),
         ]
 
     def _get_overrides(self, tenant_ids: dict[str, str | int]) -> dict[str, int]:
-        overrides = {}
-        available_tenant_ids = set(tenant_ids.keys())
-        # get all overrides that can be retrieved with the tenant_ids
-        # e.g. if organization_id and referrer are passed in, retrieve
-        # ('organization_override, 'referrer_organization_override')
-        for config_definition in self._additional_config_definitions():
-            if config_definition.name.endswith("_override"):
-                param_types = config_definition.param_types
-                if set(param_types.keys()).issubset(available_tenant_ids):
-                    params = {param: tenant_ids[param] for param in param_types}
-                    config_value = self.get_config_value(config_definition.name, params)
-                    if config_value != config_definition.default:
-                        key = "|".join(
-                            [f"{param}__{tenant_id}" for param, tenant_id in sorted(params.items())]
-                        )
-
-                        overrides[key] = config_value
+        # Collect every override applicable to this query keyed by a stable string
+        # so the caller can pick the most restrictive one (min) and use it as the
+        # rate-limit bucket. For each tenant scope (project/organization) both a
+        # referrer-specific and a wildcard ("*") override may apply.
+        overrides: dict[str, int] = {}
+        referrer = tenant_ids.get("referrer")
+        for tenant_key, option_name in (
+            ("project_id", "concurrent_limit_project_overrides"),
+            ("organization_id", "concurrent_limit_organization_overrides"),
+        ):
+            if tenant_key not in tenant_ids:
+                continue
+            tenant_id = tenant_ids[tenant_key]
+            scoped = self.get_config_value(option_name).get(str(tenant_id), {})
+            if referrer is not None and referrer in scoped:
+                overrides[f"{tenant_key}__{tenant_id}|referrer__{referrer}"] = int(
+                    scoped[referrer]
+                )
+            if SCOPED_OVERRIDE_WILDCARD in scoped:
+                overrides[f"{tenant_key}__{tenant_id}"] = int(
+                    scoped[SCOPED_OVERRIDE_WILDCARD]
+                )
         return overrides
 
     def _get_tenant_key_and_value(self, tenant_ids: dict[str, str | int]) -> tuple[str, str | int]:

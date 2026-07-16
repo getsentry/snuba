@@ -289,7 +289,11 @@ class TestSnQLApi(BaseApiTest):
         ]
         with override_component_configs(
             *(
-                (p, "project_override", 0, {"project_id": self.project_id})
+                (
+                    p,
+                    "concurrent_limit_project_overrides",
+                    {str(self.project_id): {"*": 0}},
+                )
                 for p in concurrent_rate_limit_policies
             )
         ):

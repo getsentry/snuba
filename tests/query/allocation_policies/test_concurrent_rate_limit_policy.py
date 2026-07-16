@@ -170,72 +170,52 @@ def test_tenant_selection(policy: ConcurrentRateLimitAllocationPolicy):
 
 OVERRIDE_TEST_CASES = [
     pytest.param(
-        [("organization_override", 1, {"organization_id": 123})],
+        [("concurrent_limit_organization_overrides", {"123": {"*": 1}})],
         {"organization_id": 123},
         {"organization_id__123": 1},
         1,
         id="organization_override",
     ),
     pytest.param(
-        [("organization_override", 1, {"organization_id": 123})],
+        [("concurrent_limit_organization_overrides", {"123": {"*": 1}})],
         {"organization_id": 456},
         {},
         MAX_CONCURRENT_QUERIES,
         id="non-matching tenant_id",
     ),
     pytest.param(
-        [
-            (
-                "referrer_organization_override",
-                1,
-                {"referrer": "abcd", "organization_id": 456},
-            )
-        ],
+        [("concurrent_limit_organization_overrides", {"456": {"abcd": 1}})],
         {"organization_id": 456, "referrer": "abcd"},
         {"organization_id__456|referrer__abcd": 1},
         1,
+        id="referrer_organization_override",
     ),
     pytest.param(
-        [
-            ("referrer_project_override", 1, {"referrer": "abcd", "project_id": 134}),
-            ("project_override", 4, {"project_id": 134}),
-        ],
+        [("concurrent_limit_project_overrides", {"134": {"abcd": 1, "*": 4}})],
         {"organization_id": 456, "referrer": "abcd", "project_id": 134},
         {"project_id__134|referrer__abcd": 1, "project_id__134": 4},
         1,
+        id="project referrer and wildcard, min applies",
     ),
     pytest.param(
-        [
-            (
-                "referrer_organization_override",
-                1,
-                {"referrer": "abcd", "organization_id": 123},
-            ),
-        ],
+        [("concurrent_limit_organization_overrides", {"123": {"abcd": 1}})],
         {"organization_id": 123, "referrer": "abcd", "project_id": 134},
         {"organization_id__123|referrer__abcd": 1},
         1,
-        id="referrer_organization_override",
+        id="org referrer override with unrelated project_id",
     ),
     pytest.param(
-        [
-            (
-                "referrer_project_override",
-                1,
-                {"referrer": "abcd", "project_id": 456},
-            ),
-        ],
+        [("concurrent_limit_project_overrides", {"456": {"abcd": 1}})],
         {"organization_id": 123, "referrer": "abcd", "project_id": 456},
         {"project_id__456|referrer__abcd": 1},
         1,
-        id="referrer_organization_override",
+        id="referrer_project_override",
     ),
     pytest.param(
         [
             (
-                "referrer_project_override",
-                MAX_CONCURRENT_QUERIES * 2,
-                {"referrer": "abcd", "project_id": 456},
+                "concurrent_limit_project_overrides",
+                {"456": {"abcd": MAX_CONCURRENT_QUERIES * 2}},
             ),
         ],
         {"organization_id": 123, "referrer": "abcd", "project_id": 456},
@@ -277,9 +257,8 @@ def test_override_isolation(
     overridden_referrer = "overridden_referrer"
     with override_component_config(
         policy,
-        "referrer_project_override",
-        override_concurrent_limit,
-        {"project_id": project_id, "referrer": overridden_referrer},
+        "concurrent_limit_project_overrides",
+        {str(project_id): {overridden_referrer: override_concurrent_limit}},
     ):
         for i in range(MAX_CONCURRENT_QUERIES):
             policy.get_quota_allowance(

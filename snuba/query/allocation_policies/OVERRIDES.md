@@ -28,8 +28,7 @@ For **numeric parameterized** configs, each param is appended as `|name:value`
 value (so values may contain `.`/`,`/`:`, and never need escaping):
 
 ```
-errors.ConcurrentRateLimitAllocationPolicy.organization_override|organization_id:123
-errors.ConcurrentRateLimitAllocationPolicy.referrer_organization_override|organization_id:123|referrer:api.foo
+errors.BytesScannedRejectingPolicy.organization_referrer_max_bytes_to_read|organization_id:123
 ```
 
 Object configs (below) take no params — the scoping lives inside the value.
@@ -41,8 +40,7 @@ Set the fully-qualified key to a number in `configurable_component_overrides`:
 ```json
 {
   "errors.BytesScannedRejectingPolicy.is_enforced": 1,
-  "errors.ConcurrentRateLimitAllocationPolicy.concurrent_limit": 40,
-  "errors.ConcurrentRateLimitAllocationPolicy.organization_override|organization_id:123": 80
+  "errors.ConcurrentRateLimitAllocationPolicy.concurrent_limit": 40
 }
 ```
 
@@ -107,10 +105,36 @@ Notes:
 
 ## Per-policy resolution semantics
 
-Scoped nested-object overrides with the precedence above currently apply to
-`BytesScannedRejectingPolicy`. The `ConcurrentRateLimitAllocationPolicy` family
-still uses individual parameterized numeric override configs
-(`organization_override`, `project_override`, `referrer_organization_override`,
-`referrer_project_override`) and applies the **most restrictive** (minimum) of all
-that match a query, rather than first-match precedence. Consult a policy's config
-definitions for exactly which overrides it supports.
+Both `BytesScannedRejectingPolicy` and the `ConcurrentRateLimitAllocationPolicy`
+family (including `DeleteConcurrentRateLimitAllocationPolicy`) read their scoped
+overrides from the same nested-object shape `{ id (or "*"): { referrer (or "*"):
+value } }`. **How multiple matches are combined differs by policy**, so consult a
+policy's config definitions for the exact behavior:
+
+- **`BytesScannedRejectingPolicy`** — **first-match precedence**
+  (`(id, referrer) > (id, "*") > ("*", referrer) > default`); the most specific
+  match wins. Configs: `project_referrer_scan_limit_overrides`,
+  `organization_referrer_scan_limit_overrides`.
+- **`ConcurrentRateLimitAllocationPolicy`** — **most restrictive (minimum) of all
+  applicable** overrides. For a query, both the referrer-specific and the wildcard
+  (`"*"`) limit for the matched project/organization apply, and the smallest is
+  enforced (each override is also counted in its own rate-limit bucket). Configs:
+  `concurrent_limit_project_overrides`, `concurrent_limit_organization_overrides`.
+
+Example (`configurable_component_object_overrides`) for the concurrent policy:
+
+```json
+{
+  "errors.ConcurrentRateLimitAllocationPolicy.concurrent_limit_organization_overrides": {
+    "123": { "api.foo": 4, "*": 20 }
+  },
+  "errors.ConcurrentRateLimitAllocationPolicy.concurrent_limit_project_overrides": {
+    "4505240668733440": { "*": 8 }
+  }
+}
+```
+
+With the above, a query from org `123` with referrer `api.foo` is limited to `4`
+(the min of the `api.foo` limit `4` and the org-wide `*` limit `20`); the same org
+with any other referrer is limited to `20`; project `4505240668733440` is limited
+to `8` for any referrer.
