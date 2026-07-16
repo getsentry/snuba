@@ -73,7 +73,7 @@ def test_dumps_runtime_configs_from_config_client() -> None:
 def test_dumps_allocation_policy_overrides_from_capman_hash() -> None:
     policy = _find_allocation_policy()
     policy.set_config_value("is_enforced", 0)
-    expected_key = policy._build_runtime_config_key("is_enforced", {})
+    expected_key = policy._build_config_key("is_enforced", {})
 
     payload = _run_and_get_payload()
 
