@@ -52,7 +52,7 @@ def override_component_configs(
     objects: dict[str, Any] = {}
     for component, config_key, value, *rest in overrides:
         params = rest[0] if rest else None
-        full_key = component._build_runtime_config_key(config_key, params or {})
+        full_key = component._build_config_key(config_key, params or {})
         if component.config_definitions()[config_key].value_type is dict:
             objects[full_key] = value
         else:

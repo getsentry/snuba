@@ -255,7 +255,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
 
         return config
 
-    def __deserialize_runtime_config_key(self, key: str) -> tuple[str, dict[str, str]]:
+    def __deserialize_config_key(self, key: str) -> tuple[str, dict[str, str]]:
         """
         Given a raw runtime config key, deconstructs it into its config
         key and parameters components.
@@ -298,7 +298,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         for key in runtime_configs:
             if key.startswith(self.component_name()):
                 try:
-                    config_key, params = self.__deserialize_runtime_config_key(key)
+                    config_key, params = self.__deserialize_config_key(key)
                 except Exception:
                     logger.exception(
                         f"{self.component_namespace()} could not deserialize a key: {key}"
@@ -348,7 +348,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
             for definition in definitions
         ]
 
-    def _build_runtime_config_key(self, config: str, params: dict[str, Any]) -> str:
+    def _build_config_key(self, config: str, params: dict[str, Any]) -> str:
         """
         Builds a unique key to be used in the actual datastore containing these configs.
 
@@ -402,7 +402,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
             if validate
             else self.config_definitions()[config_key]
         )
-        full_key = self._build_runtime_config_key(config_key, params)
+        full_key = self._build_config_key(config_key, params)
         option_key = (
             CONFIGURABLE_COMPONENT_OBJECT_OVERRIDES_KEY
             if config_definition.value_type is dict
@@ -432,7 +432,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         # ensure correct type is stored
         value = config_definition.value_type(value)
         set_runtime_config(
-            key=self._build_runtime_config_key(config_key, params),
+            key=self._build_config_key(config_key, params),
             value=value,
             user=user,
             force=True,
@@ -453,7 +453,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
             params = {}
         self._validate_config_params(config_key, params)
         delete_runtime_config(
-            key=self._build_runtime_config_key(config_key, params),
+            key=self._build_config_key(config_key, params),
             user=user,
             config_key=self._get_hash(),
         )

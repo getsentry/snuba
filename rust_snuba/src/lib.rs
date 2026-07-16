@@ -7,15 +7,12 @@ pub(crate) const SNUBA_SCHEMA: &str =
 /// (now deprecated) `sentry_options::init_with_schemas`. This keeps repeated
 /// calls -- e.g. across unit tests sharing one process -- from erroring with
 /// `AlreadyInitialized`.
-// `::sentry_options` (leading `::`) refers to the external crate; a bare
-// `sentry_options` here would resolve to the crate-local `sentry_options` module
-// declared below, which shadows the extern crate name at the crate root.
-pub(crate) fn init_sentry_options() -> ::sentry_options::Result<()> {
-    match ::sentry_options::Options::builder()
+pub(crate) fn init_sentry_options() -> sentry_options::Result<()> {
+    match sentry_options::Options::builder()
         .with_schemas(&[("snuba", SNUBA_SCHEMA)])
         .init()
     {
-        Err(::sentry_options::OptionsError::AlreadyInitialized) => Ok(()),
+        Err(sentry_options::OptionsError::AlreadyInitialized) => Ok(()),
         other => other,
     }
 }
@@ -28,7 +25,7 @@ mod logging;
 mod metrics;
 mod processors;
 mod rebalancing;
-mod sentry_options;
+mod snuba_options;
 mod strategies;
 mod types;
 
