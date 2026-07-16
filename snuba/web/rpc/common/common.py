@@ -447,9 +447,7 @@ def _scalar_value(v: AttributeValue) -> bool | str | int | float | None:
             raise NotImplementedError(f"not a scalar AttributeValue type: {other}")
 
 
-# The value an absent key reads as, per map-backed scalar type: arrayElement on a Map
-# returns the value type's ClickHouse default for a missing key. Keyed by exactly the
-# types _is_map_backed_key admits (see PROTO_TYPE_TO_ATTRIBUTE_COLUMN).
+# The value an absent key reads as, per map-backed scalar type.
 _COLUMN_DEFAULT_BY_TYPE: dict[AttributeKey.Type.ValueType, str | int | float | bool] = {
     AttributeKey.Type.TYPE_STRING: "",
     AttributeKey.Type.TYPE_INT: 0,
