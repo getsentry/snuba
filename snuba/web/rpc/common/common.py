@@ -454,13 +454,8 @@ def _comparison_can_match_column_default(
     absent key also reads as — so the existence guard is needed to avoid
     matching absent keys. When no literal is the default the guard is dropped (the
     simplest form). LIKE/NOT_LIKE always guard; null comparisons are separate."""
-    default: str | int | bool
-    if attr_type == AttributeKey.Type.TYPE_STRING:
-        default = ""
-    elif attr_type == AttributeKey.Type.TYPE_BOOLEAN:
-        default = False
-    else:
-        default = 0
+    # bool is an int subclass and False == 0, so the numeric default covers TYPE_BOOLEAN.
+    default: str | int = "" if attr_type == AttributeKey.Type.TYPE_STRING else 0
     if value_type == "val_array":
         scalars: list[Any] = [_scalar_value(x) for x in v.val_array.values]
     elif value_type in ("val_str_array", "val_int_array", "val_float_array", "val_double_array"):
