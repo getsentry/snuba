@@ -194,11 +194,12 @@ def use_clickhouse_connect_driver() -> bool:
     Whether the read path should use the clickhouse-connect (HTTP) driver
     instead of the native protocol.
 
-    Controlled by a sentry-option (defaulting to the
-    ``USE_CLICKHOUSE_CONNECT_DRIVER`` setting) so the migration can be rolled
-    out and rolled back without a deploy.
+    Controlled by the ``use_clickhouse_connect_driver`` sentry-option (schema
+    default ``false``), so the migration can be rolled out and rolled back
+    without a deploy. The literal here is only the fallback for when the
+    options store is unavailable; the effective default is the schema default.
     """
-    return get_option("use_clickhouse_connect_driver", settings.USE_CLICKHOUSE_CONNECT_DRIVER)
+    return get_option("use_clickhouse_connect_driver", False)
 
 
 # The driver discriminator is part of the cache key so that the native and the

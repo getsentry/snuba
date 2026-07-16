@@ -69,7 +69,7 @@
     "use_clickhouse_connect_driver": {
       "type": "boolean",
       "default": false,
-      "description": "When true, the read path uses the clickhouse-connect (HTTP) driver instead of the native clickhouse-driver protocol. Defaults to the USE_CLICKHOUSE_CONNECT_DRIVER setting; overriding here rolls the driver migration out or back without a deploy. Migrated from the use_clickhouse_connect_driver runtime config."
+      "description": "When true, the read path uses the clickhouse-connect (HTTP) driver instead of the native clickhouse-driver protocol. Defaults to false; setting it rolls the driver migration out or back without a deploy. Migrated from the use_clickhouse_connect_driver runtime config."
     },
     "eap_items_dlq_grace_period_min": {
       "type": "object",
