@@ -441,31 +441,18 @@ def _scalar_value(v: AttributeValue) -> bool | str | int | float | None:
             raise NotImplementedError(f"not a scalar AttributeValue type: {other}")
 
 
-# The value an absent key reads as, per map-backed scalar type.
-_COLUMN_DEFAULT_BY_TYPE: dict[AttributeKey.Type.ValueType, str | int | float | bool] = {
-    AttributeKey.Type.TYPE_STRING: "",
-    AttributeKey.Type.TYPE_INT: 0,
-    AttributeKey.Type.TYPE_FLOAT: 0.0,
-    AttributeKey.Type.TYPE_DOUBLE: 0.0,
-    AttributeKey.Type.TYPE_BOOLEAN: False,
-}
-
-
-def _comparison_can_match_column_default(
-    attr_type: AttributeKey.Type.ValueType, v: AttributeValue, value_type: str
-) -> bool:
-    """True if any compared literal is the column default ('' / 0 / false), which an
-    absent key also reads as — so the existence guard is needed to avoid
-    matching absent keys. When no literal is the default the guard is dropped (the
+def _comparison_can_match_column_default(v: AttributeValue, value_type: str) -> bool:
+    """True if any compared literal is the column default — its type's falsy value
+    ('' / 0 / false), which an absent key also reads as — so the existence guard is needed
+    to avoid matching absent keys. When no literal is the default the guard is dropped (the
     simplest form). LIKE/NOT_LIKE always guard; null comparisons are separate."""
-    default = _COLUMN_DEFAULT_BY_TYPE[attr_type]
     if value_type == "val_array":
         scalars: list[Any] = [_scalar_value(x) for x in v.val_array.values]
     elif value_type in ("val_str_array", "val_int_array", "val_float_array", "val_double_array"):
         scalars = list(getattr(v, value_type).values)
     else:
         scalars = [_scalar_value(v)]
-    return any(s == default for s in scalars)
+    return any(not s for s in scalars if s is not None)
 
 
 def _attribute_value_to_expression(v: AttributeValue) -> Expression:
@@ -989,7 +976,7 @@ def trace_item_filters_to_expression(
                 )
                 cmp = f.equals(lhs, rhs)
                 # existence guard only needed when '' / 0 could match an absent key.
-                if _comparison_can_match_column_default(k.type, v, value_type):
+                if _comparison_can_match_column_default(v, value_type):
                     return and_cond(exists, cmp)
                 return cmp
             expr = (
@@ -1019,7 +1006,7 @@ def trace_item_filters_to_expression(
                     if item_filter.comparison_filter.ignore_case
                     else (value, v_expression)
                 )
-                if _comparison_can_match_column_default(k.type, v, value_type):
+                if _comparison_can_match_column_default(v, value_type):
                     return not_cond(and_cond(exists, f.equals(lhs, rhs)))
                 return f.notEquals(lhs, rhs)
             expr = (
@@ -1101,7 +1088,7 @@ def trace_item_filters_to_expression(
                     v_expression,
                     negated=False,
                     ignore_case=ignore_case,
-                    guard=_comparison_can_match_column_default(k.type, v, value_type),
+                    guard=_comparison_can_match_column_default(v, value_type),
                     membership_as_has=membership_as_has,
                 )
             if ignore_case:
@@ -1136,7 +1123,7 @@ def trace_item_filters_to_expression(
                     v_expression,
                     negated=True,
                     ignore_case=ignore_case,
-                    guard=_comparison_can_match_column_default(k.type, v, value_type),
+                    guard=_comparison_can_match_column_default(v, value_type),
                     membership_as_has=membership_as_has,
                 )
             if ignore_case:
