@@ -1086,6 +1086,29 @@ def get_allocation_policy_configs(storage_key: str) -> Response:
     )
 
 
+@application.route("/set_configurable_component_configuration", methods=["POST", "DELETE"])
+@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
+def set_configuration() -> Response:
+    # ConfigurableComponent config (allocation policy / storage-routing strategy)
+    # is now read-only at runtime and managed centrally in sentry-options-automator.
+    # snuba-admin no longer writes it; reject with a clear message rather than a
+    # bare 404 for the Capacity Management save/delete actions.
+    return Response(
+        json.dumps(
+            {
+                "error": (
+                    "Configurable component overrides are now managed in "
+                    "sentry-options-automator via the "
+                    "`configurable_component_overrides` option and can no longer "
+                    "be set or deleted from snuba-admin."
+                )
+            }
+        ),
+        405,
+        {"Content-Type": "application/json"},
+    )
+
+
 @application.route("/cardinality_query", methods=["POST"])
 @check_tool_perms(tools=[AdminTools.CARDINALITY_ANALYZER])
 def cardinality_analyzer_query() -> Response:

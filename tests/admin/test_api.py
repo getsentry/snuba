@@ -750,6 +750,28 @@ def test_get_allocation_policy_configs(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
+def test_configurable_component_writes_are_rejected(admin_api: FlaskClient) -> None:
+    """Config is managed in sentry-options-automator; snuba-admin no longer writes
+    it, so set/delete are rejected with a clear 405 (not a bare 404)."""
+    body = json.dumps(
+        {
+            "configurable_component_namespace": "AllocationPolicy",
+            "configurable_component_class_name": "BytesScannedWindowAllocationPolicy",
+            "resource_name": "errors",
+            "key": "org_limit_bytes_scanned",
+            "params": {},
+            "value": "420",
+        }
+    )
+    for response in (
+        admin_api.post("/set_configurable_component_configuration", data=body),
+        admin_api.delete("/set_configurable_component_configuration", data=body),
+    ):
+        assert response.status_code == 405, response.json
+        assert response.json is not None and "sentry-options-automator" in response.json["error"]
+
+
+@pytest.mark.redis_db
 def test_prod_snql_query_invalid_dataset(admin_api: FlaskClient) -> None:
     response = admin_api.post(
         "/production_snql_query", data=json.dumps({"dataset": "", "query": ""})
