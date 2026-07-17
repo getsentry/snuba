@@ -3,8 +3,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
 from typing import Any, TypedDict, TypeVar, cast, final
 
-from sentry_options import OptionValue
-
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.state.sentry_options import get_mapped_option, get_option
 from snuba.utils.registered_class import RegisteredClass
@@ -282,8 +280,9 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
 
         Reads the centrally-managed ``configurable_component_overrides`` option.
         """
-        overrides: OptionValue = get_option(CONFIGURABLE_COMPONENT_OVERRIDES_KEY, {})
-        overrides_map: dict[str, Any] = overrides if isinstance(overrides, dict) else {}
+        # The schema declares this option as ``type: object``, and get_option's
+        # fallback is ``{}``, so the value is always a dict -- no guard needed.
+        overrides: dict[str, Any] = get_option(CONFIGURABLE_COMPONENT_OVERRIDES_KEY, {})
         definitions = self.config_definitions()
 
         required_configs = {
@@ -296,7 +295,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
 
         # Trailing "." so e.g. "errors.MyPolicy" does not match "errors.MyPolicyV2".
         prefix = f"{self.component_name()}."
-        for key in overrides_map:
+        for key in overrides:
             if key.startswith(prefix):
                 try:
                     config_key, params = self.__deserialize_config_key(key)
@@ -306,7 +305,7 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
                     )
                     continue
                 detailed_configs.append(
-                    definitions[config_key].to_config_dict(value=overrides_map[key], params=params)
+                    definitions[config_key].to_config_dict(value=overrides[key], params=params)
                 )
                 if config_key in required_configs:
                     required_configs.remove(config_key)
