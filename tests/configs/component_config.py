@@ -24,6 +24,21 @@ def _write_bag(bag: dict[str, Any]) -> None:
     _set_override("snuba", CONFIGURABLE_COMPONENT_OVERRIDES_KEY, bag)
 
 
+def set_raw_component_overrides(bag: dict[str, Any]) -> None:
+    """Replace the whole override bag verbatim (no key building / validation).
+
+    For tests that need to inject exactly-shaped keys, e.g. malformed ones.
+    """
+    _write_bag(bag)
+
+
+def clear_component_config_overrides() -> None:
+    """Drop all component-config overrides (used by the autouse conftest fixture)."""
+    from sentry_options._core import _clear_override
+
+    _clear_override("snuba", CONFIGURABLE_COMPONENT_OVERRIDES_KEY)
+
+
 def set_component_config(
     component: ConfigurableComponent,
     config_key: str,

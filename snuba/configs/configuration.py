@@ -6,7 +6,7 @@ from typing import Any, TypedDict, TypeVar, cast, final
 from sentry_options import OptionValue
 
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.state.sentry_options import get_option
+from snuba.state.sentry_options import get_mapped_option, get_option
 from snuba.utils.registered_class import RegisteredClass
 
 logger = logging.getLogger("snuba.configurable_component")
@@ -374,11 +374,14 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
             if validate
             else self.config_definitions()[config_key]
         )
-        full_key = self._build_config_key(config_key, params)
-        overrides: OptionValue = get_option(CONFIGURABLE_COMPONENT_OVERRIDES_KEY, {})
-        if isinstance(overrides, dict) and full_key in overrides:
-            return config_definition.value_type(overrides[full_key])
-        return config_definition.default
+        # Casting the code default is a no-op (Configuration.__post_init__ enforces
+        # ``type(default) is value_type``), so no separate "missing" branch is needed.
+        raw = get_mapped_option(
+            CONFIGURABLE_COMPONENT_OVERRIDES_KEY,
+            self._build_config_key(config_key, params),
+            config_definition.default,
+        )
+        return config_definition.value_type(raw)
 
     @classmethod
     def config_key(cls) -> str:

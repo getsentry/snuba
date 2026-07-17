@@ -228,9 +228,7 @@ class SomeParametrizedConfigPolicy(AllocationPolicy):
 class TestAllocationPolicyLogs(TestCase):
     @pytest.mark.redis_db
     def test_bad_config_key_in_option(self) -> None:
-        from sentry_options._core import _set_override
-
-        from snuba.configs.configuration import CONFIGURABLE_COMPONENT_OVERRIDES_KEY
+        from tests.configs.component_config import set_raw_component_overrides
 
         policy = SomeParametrizedConfigPolicy(StorageKey("something"), [], {})
         base = policy.component_name()
@@ -239,11 +237,7 @@ class TestAllocationPolicyLogs(TestCase):
             f"{base}.my_param_config|org:10",
             f"{base}.my_param_config|org:10|ref:ref|yeet:yeet",
         ]
-        _set_override(
-            "snuba",
-            CONFIGURABLE_COMPONENT_OVERRIDES_KEY,
-            dict.fromkeys(bad_keys, 10),
-        )
+        set_raw_component_overrides(dict.fromkeys(bad_keys, 10))
 
         with self.assertLogs() as captured:
             configs = policy.get_current_configs()

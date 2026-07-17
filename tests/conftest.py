@@ -205,12 +205,10 @@ def _clear_component_config_option_overrides() -> Generator[None]:
     """
     yield
 
-    from sentry_options._core import _clear_override
-
-    from snuba.configs.configuration import CONFIGURABLE_COMPONENT_OVERRIDES_KEY
+    from tests.configs.component_config import clear_component_config_overrides
 
     with contextlib.suppress(Exception):
-        _clear_override("snuba", CONFIGURABLE_COMPONENT_OVERRIDES_KEY)
+        clear_component_config_overrides()
 
 
 def _build_db_cache(cache_key: CacheKey) -> None:
