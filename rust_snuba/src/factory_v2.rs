@@ -91,10 +91,9 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
     // arroyo's API, not us.
     #[allow(clippy::result_large_err)]
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
-        // When `use_row_binary` is set, eap_items inserts go through the
-        // official clickhouse-crate inserter sink (RowBinaryWithNamesAndTypes +
-        // schema validation), bypassing the JSONEachRow `Reduce` +
-        // `ClickhouseWriterStep` pair. It is only wired for EAPItemsProcessor.
+        // `use_row_binary` routes inserts through the clickhouse-crate sink
+        // instead of the JSONEachRow `Reduce` + `ClickhouseWriterStep` pair.
+        // Only wired for EAPItemsProcessor for now.
         let use_eap_crate_path = self.use_row_binary;
         if use_eap_crate_path {
             let processor_name = self
@@ -148,8 +147,6 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
         );
 
         let next_step: Box<dyn ProcessingStrategy<KafkaPayload>> = if use_eap_crate_path {
-            // eap_items: typed processor → long-lived clickhouse-crate inserter
-            // sink (which replaces Reduce + ClickhouseWriterStep for this path).
             let sink = RowBinaryInserterSink::<crate::processors::eap_items::EAPItemRow, _>::new(
                 next_step,
                 self.storage_config.clickhouse_cluster.clone(),

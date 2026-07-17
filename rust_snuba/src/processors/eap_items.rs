@@ -197,18 +197,14 @@ pub fn process_message(
     Ok(batch)
 }
 
-/// Production RowBinary path: build the typed `EAPItemRow` and hand it
-/// downstream to the `clickhouse`-crate inserter sink, which serializes it
-/// itself (`write(&row)`) the moment it arrives and drops the wide struct,
-/// keeping only the inserter's byte buffer in memory. No bytes are encoded
-/// here — the crate owns RowBinary encoding + schema validation.
+/// Production RowBinary path: build the typed `EAPItemRow` and hand it to the
+/// `clickhouse`-crate inserter sink, which encodes it. No bytes are encoded here.
 pub fn process_message_eap_row(
     msg: KafkaPayload,
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<TypedInsertBatch<EAPItemRow>> {
-    // Source proto length, used as the byte-size estimate for byte-based batch
-    // sizing (the sink also reports the exact encoded size after each flush).
+    // Proto length, used as the byte-size estimate for byte-based batch sizing.
     let num_bytes = msg.payload().map(|p| p.len()).unwrap_or(0);
     let processed = process_eap_item(msg, config)?;
     if processed.should_skip {
@@ -225,11 +221,8 @@ pub fn process_message_eap_row(
     })
 }
 
-/// Test-only: returns the typed `EAPItemRow` (plus the metadata fields the
-/// pipeline carries) without the bytes serialization step. Tests that
-/// inspect individual columns use this; the production path goes through
-/// `process_message_eap_row` and never holds the typed struct beyond
-/// `process_eap_item`.
+/// Test-only: returns the typed `EAPItemRow` so tests can inspect columns
+/// directly, without the sink's serialization step.
 #[cfg(test)]
 pub(crate) struct EAPItemRowBatch {
     pub rows: Vec<EAPItemRow>,
