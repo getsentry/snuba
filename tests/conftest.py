@@ -197,11 +197,11 @@ def redis_db(request: pytest.FixtureRequest) -> Generator[None]:
 def _clear_component_config_option_overrides() -> Generator[None]:
     """Isolate ConfigurableComponent config overrides between tests.
 
-    In TESTING, ``ConfigurableComponent.set_config_value`` mirrors each write
-    into the sentry-options store that ``get_config_value`` reads (so tests use
-    the real config API instead of a bespoke override helper). Those overrides
-    are thread-local and persist, so clear the two component-config option bags
-    after every test to stop them leaking across tests.
+    ConfigurableComponent config is read-only at runtime, sourced from the
+    ``configurable_component_overrides`` sentry-option. Tests set overrides in
+    that option via ``tests/configs/component_config.py``; those overrides are
+    thread-local and persist, so clear the option after every test to stop them
+    leaking across tests.
     """
     yield
 

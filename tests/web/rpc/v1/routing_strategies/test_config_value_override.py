@@ -14,10 +14,9 @@ def test_routing_strategy_reads_option_not_redis() -> None:
     strategy = OutcomesBasedRoutingStrategy()
 
     # A value written straight to the legacy Redis runtime config is ignored -- the
-    # code default wins. (set_config_value is not used here because in tests it also
-    # mirrors the write into the sentry-option that get_config_value reads.)
+    # code default wins, because config is read only from the sentry-option.
     state.set_config(
-        strategy._build_runtime_config_key("some_default_config", {}),
+        strategy._build_config_key("some_default_config", {}),
         5,
         config_key=strategy._get_hash(),
     )
