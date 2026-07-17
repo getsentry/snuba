@@ -1,36 +1,15 @@
-from contextlib import AbstractContextManager
 from datetime import datetime
-from typing import Any
 
-from sentry_options.testing import override_options
 from sentry_relay.consts import DataCategory
 
-from snuba.configs.configuration import (
-    CONFIGURABLE_COMPONENT_OVERRIDES_KEY,
-    ConfigurableComponent,
-)
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.storage_routing.routing_strategies.common import Outcome
+
+# Re-exported so routing-strategy tests can keep importing it from here; the
+# canonical implementation lives in tests/configs/component_config.py.
+from tests.configs.component_config import override_component_config
 from tests.helpers import write_raw_unprocessed_events
-
-
-def override_component_config(
-    component: ConfigurableComponent,
-    config_key: str,
-    value: Any,
-    params: dict[str, Any] | None = None,
-) -> AbstractContextManager[None]:
-    """Set a ConfigurableComponent config via the ``configurable_component_overrides``
-    sentry-option for the duration of the context.
-
-    Component config is read-only at runtime, sourced from this option; tests
-    supply overrides through it. The key is built with the component's own key
-    builder so it matches exactly what ``get_config_value`` looks up, and the
-    value is stored as a number just like production data.
-    """
-    full_key = component._build_config_key(config_key, params or {})
-    return override_options("snuba", {CONFIGURABLE_COMPONENT_OVERRIDES_KEY: {full_key: value}})
 
 
 def gen_ingest_outcome(
