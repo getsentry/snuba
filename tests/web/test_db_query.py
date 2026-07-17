@@ -950,6 +950,12 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
         assert update_called, (
             "update_quota_balance should have been called even though the query was rejected but was not"
         )
+        rejected_metrics = get_recorded_metric_calls("increment", "db_query.rejected_query")
+        assert rejected_metrics
+        assert rejected_metrics[0].tags == {
+            "storage_key": "doesntmatter",
+            "policy": "RejectAllocationPolicy",
+        }
 
 
 @pytest.mark.events_db

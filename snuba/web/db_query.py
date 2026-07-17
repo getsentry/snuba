@@ -914,9 +914,18 @@ def _apply_allocation_policies_quota(
         stats["quota_allowance"]["summary"] = summary
 
         if not can_run:
+            rejecting_policy = (
+                rejection_quota_and_policy.policy.class_name()
+                if rejection_quota_and_policy is not None
+                else "unknown"
+            )
+            span.set_data("rejected_by_policy", rejecting_policy)
             metrics.increment(
                 "rejected_query",
-                tags={"storage_key": allocation_policies[0].resource_identifier.value},
+                tags={
+                    "storage_key": allocation_policies[0].resource_identifier.value,
+                    "policy": rejecting_policy,
+                },
             )
             raise AllocationPolicyViolations.from_args(stats["quota_allowance"])
 
