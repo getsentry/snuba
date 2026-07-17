@@ -294,8 +294,10 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
 
         detailed_configs: list[dict[str, Any]] = []
 
+        # Trailing "." so e.g. "errors.MyPolicy" does not match "errors.MyPolicyV2".
+        prefix = f"{self.component_name()}."
         for key in overrides_map:
-            if key.startswith(self.component_name()):
+            if key.startswith(prefix):
                 try:
                     config_key, params = self.__deserialize_config_key(key)
                 except Exception:
