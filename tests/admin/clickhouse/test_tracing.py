@@ -54,3 +54,16 @@ def test_array_join_aliasing_to_exempt_column_raises() -> None:
         run_query_and_get_trace(
             STORAGE, f"SELECT trace_id FROM {TABLE} ARRAY JOIN some_arr AS ai_conversation_id"
         )
+
+
+def test_with_clause_aliasing_to_exempt_column_raises() -> None:
+    # ClickHouse `WITH <expr> AS <name>` defines an alias, so a WITH clause can
+    # surface an arbitrary expression under the exempt result column name and
+    # bypass scrubbing. sql_metadata mis-parses this inverted syntax (the exempt
+    # name lands in neither columns_aliases_names nor tables_aliases), so this
+    # must be rejected explicitly. WITH is otherwise allowed in the trace shell.
+    with pytest.raises(InvalidCustomQuery, match="Aliasing"):
+        run_query_and_get_trace(
+            STORAGE,
+            f"WITH project_id AS ai_conversation_id SELECT ai_conversation_id FROM {TABLE}",
+        )

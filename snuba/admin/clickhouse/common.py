@@ -368,10 +368,22 @@ def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) ->
     if parsed.query_type != QueryType.SELECT:
         raise InvalidCustomQuery("Only SELECT queries are allowed")
 
-    # we need to unscrub some specific values.  Currently we do it by column name.  Don't allow queries that alias those names.
-    # ARRAY JOIN aliases are parsed into tables_aliases keys rather than columns_aliases_names (see below), so check both.
-    aliased_names = set(parsed.columns_aliases_names) | set(parsed.tables_aliases)
-    invalid_aliases = sorted(a for a in aliased_names if is_scrub_exempt_column(a))
+    # Result scrubbing is keyed on the column name ClickHouse reports (see
+    # is_scrub_exempt_column / scrub_row), so a query that aliases an arbitrary
+    # expression to an exempt name would surface unscrubbed data under a name
+    # the scrubber trusts. Reject any such alias here.
+    #
+    # We can't rely on the parser's alias views to catch every form: plain
+    # `expr AS x` lands in columns_aliases_names, ARRAY JOIN aliases in
+    # tables_aliases, and ClickHouse's `WITH <expr> AS <alias>` is in neither.
+    #
+    # So we walk the token stream and reject whenever the
+    # token right after an AS is an exempt column name.
+    invalid_aliases = sorted(
+        t.next_token.value
+        for t in parsed.tokens
+        if t.is_as_keyword and t.next_token and is_scrub_exempt_column(t.next_token.value)
+    )
     if invalid_aliases:
         raise InvalidCustomQuery(
             f"Aliasing the following columns aren't allowed: {','.join(invalid_aliases)}"
