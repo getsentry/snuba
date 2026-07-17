@@ -343,7 +343,7 @@ def _non_bucketed_scalar_map_read(exp: Expression) -> tuple[Column, Expression] 
     return None
 
 
-def add_existence_check_to_subscriptable_references(query: Query) -> None:
+def add_existence_check_to_map_attribute_reads(query: Query) -> None:
     def transform(exp: Expression) -> Expression:
         if isinstance(exp, SubscriptableReference):
             return FunctionCall(

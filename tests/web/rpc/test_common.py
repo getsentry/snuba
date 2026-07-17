@@ -54,7 +54,7 @@ from snuba.query.logical import Query
 from snuba.web.rpc.common.common import (
     _any_attribute_filter_to_expression,
     _comparison_can_match_column_default,
-    add_existence_check_to_subscriptable_references,
+    add_existence_check_to_map_attribute_reads,
     attribute_key_to_expression,
     dedupe_and_conditions,
     next_monday,
@@ -856,7 +856,7 @@ class TestBooleanAttributeFilters:
             from_clause=None,
             selected_columns=[SelectedExpression(name, attribute_key_to_expression(key))],
         )
-        add_existence_check_to_subscriptable_references(query)
+        add_existence_check_to_map_attribute_reads(query)
         return query.get_selected_columns()[0].expression
 
     def test_select_guards_missing_key_as_null(self) -> None:
