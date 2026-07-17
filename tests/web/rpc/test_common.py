@@ -56,7 +56,6 @@ from snuba.web.rpc.common.common import (
     _comparison_can_match_column_default,
     add_existence_check_to_subscriptable_references,
     attribute_key_to_expression,
-    attribute_key_to_projection_expression,
     dedupe_and_conditions,
     next_monday,
     prev_monday,
@@ -878,56 +877,6 @@ class TestBooleanAttributeFilters:
         # alias would collide in the SELECT clause).
         assert expr.alias == "hasCodeTag_TYPE_BOOLEAN"
         assert value.alias is None
-
-
-class TestProjectionExpressionExistenceGuard:
-    """[Prototype] ``attribute_key_to_projection_expression`` derives the missing-key -> NULL
-    guard from the attribute *type*, so every scalar map type is guarded uniformly — unlike
-    the per-type shape matching in ``add_existence_check_to_subscriptable_references`` that
-    booleans slipped through. Normalized (real) columns are returned unguarded.
-    """
-
-    @staticmethod
-    def _walk(expr: Expression) -> list[Expression]:
-        nodes: list[Expression] = []
-
-        def visit(node: Expression) -> Expression:
-            nodes.append(node)
-            return node
-
-        expr.transform(visit)
-        return nodes
-
-    def _fn_names(self, expr: Expression) -> set[str]:
-        return {n.function_name for n in self._walk(expr) if isinstance(n, FunctionCall)}
-
-    @pytest.mark.parametrize(
-        "attr_type,column",
-        [
-            (AttributeKey.Type.TYPE_STRING, "attributes_string"),
-            (AttributeKey.Type.TYPE_INT, "attributes_float"),
-            (AttributeKey.Type.TYPE_FLOAT, "attributes_float"),
-            (AttributeKey.Type.TYPE_DOUBLE, "attributes_float"),
-            (AttributeKey.Type.TYPE_BOOLEAN, "attributes_bool"),
-        ],
-    )
-    def test_scalar_types_are_guarded_uniformly(
-        self, attr_type: "AttributeKey.Type.ValueType", column: str
-    ) -> None:
-        expr = attribute_key_to_projection_expression(AttributeKey(type=attr_type, name="myattr"))
-        # if(has(mapKeys(<col>), 'myattr'), value, cast(NULL, ...)) for every scalar type.
-        assert isinstance(expr, FunctionCall) and expr.function_name == "if"
-        assert {"if", "has", "mapKeys"} <= self._fn_names(expr)
-        columns = {n.column_name for n in self._walk(expr) if isinstance(n, ColumnExpr)}
-        assert columns == {column}
-
-    def test_normalized_column_is_not_guarded(self) -> None:
-        # a real column (not a map lookup) is returned as-is, no existence guard.
-        expr = attribute_key_to_projection_expression(
-            AttributeKey(type=AttributeKey.Type.TYPE_STRING, name="sentry.trace_id")
-        )
-        assert not (isinstance(expr, FunctionCall) and expr.function_name == "if")
-        assert "mapKeys" not in self._fn_names(expr)
 
 
 class TestNormalizedColumnsNotMapBacked:

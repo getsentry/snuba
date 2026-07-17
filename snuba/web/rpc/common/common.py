@@ -319,18 +319,29 @@ def _typed_null_for_map_column(column_name: str) -> Expression:
     return literal(None)
 
 
-def _boolean_map_read(exp: Expression) -> tuple[Column, Expression] | None:
-    """Return ``(map_column, key)`` if ``exp`` is a boolean-attribute SELECT read
-    ``cast(arrayElement(attributes_bool, <key>), 'Nullable(Boolean)')``, else ``None``.
+# Scalar attribute maps that are NOT hash-bucketed, so a projection reads them as a plain
+# ``arrayElement`` rather than a ``SubscriptableReference``. The bucketed string/int/float
+# maps read as ``SubscriptableReference`` and are guarded by the first branch of the transform
+# below; these escape that branch and are matched by ``_non_bucketed_scalar_map_read`` instead.
+# Today only the bool map is non-bucketed — a future non-bucketed scalar type is covered by
+# adding its column here (and a NULL type to ``_MAP_COLUMN_NULL_TYPE``). Deriving the match
+# from this set rather than hardcoding a single type is what keeps the guard from silently
+# missing a type again (getsentry/sentry#119735 was exactly such a miss for booleans).
+_NON_BUCKETED_SCALAR_ATTRIBUTE_MAP_COLUMNS: frozenset[str] = frozenset(
+    {PROTO_TYPE_TO_ATTRIBUTE_COLUMN[AttributeKey.Type.TYPE_BOOLEAN]}
+)
 
-    Booleans live in a Map column with no hash buckets, so
-    ``_generate_subscriptable_reference`` emits ``arrayElement`` directly rather than a
-    ``SubscriptableReference``. The existence check below only rewrites
-    ``SubscriptableReference`` reads, so booleans slipped through — and ``arrayElement``
-    reads a missing key as the ``Bool`` default (``false``). A boolean attribute therefore
-    showed as ``false`` for items that don't have it, instead of an empty value
-    (getsentry/sentry#119735 follow-up)."""
-    bool_column = PROTO_TYPE_TO_ATTRIBUTE_COLUMN[AttributeKey.Type.TYPE_BOOLEAN]
+
+def _non_bucketed_scalar_map_read(exp: Expression) -> tuple[Column, Expression] | None:
+    """``(map_column, key)`` if ``exp`` is a projection read of a non-bucketed scalar map,
+    ``cast(arrayElement(<non-bucketed map>, <key>), 'Nullable(...)')`` — else ``None``.
+
+    A projection read of such a map is always this cast+``arrayElement`` shape (see
+    ``_generate_subscriptable_reference``); a bare ``arrayElement`` (the WHERE-clause map
+    operands in ``_map_backed_operands``, and typed-array reads) is intentionally not matched,
+    so this never touches a filter/condition read. ``arrayElement`` returns the column
+    default for a missing key (``false`` for ``Bool``), so without the guard the transform
+    adds, the attribute rendered as that default instead of empty."""
     if not (isinstance(exp, FunctionCall) and exp.function_name == "cast" and exp.parameters):
         return None
     inner = exp.parameters[0]
@@ -341,12 +352,24 @@ def _boolean_map_read(exp: Expression) -> tuple[Column, Expression] | None:
     ):
         return None
     array_arg, key_arg = inner.parameters
-    if isinstance(array_arg, Column) and array_arg.column_name == bool_column:
+    if (
+        isinstance(array_arg, Column)
+        and array_arg.column_name in _NON_BUCKETED_SCALAR_ATTRIBUTE_MAP_COLUMNS
+    ):
         return array_arg, key_arg
     return None
 
 
 def add_existence_check_to_subscriptable_references(query: Query) -> None:
+    """Guard every projection read of a custom (map-backed) attribute so a missing key reads
+    as NULL, not the column default. The two branches cover the two map storage layouts:
+    bucketed maps read as ``SubscriptableReference`` (string/int/float), non-bucketed maps as
+    ``cast(arrayElement(...))`` (bool). Both are rewritten to ``if(has(mapKeys(col), key),
+    <read>, NULL)``. Keying the second branch off ``_NON_BUCKETED_SCALAR_ATTRIBUTE_MAP_COLUMNS``
+    (rather than a single hardcoded type) means a new non-bucketed type is covered by that set
+    alone, so the guard can't silently miss a type as it did for booleans
+    (getsentry/sentry#119735 follow-up)."""
+
     def transform(exp: Expression) -> Expression:
         if isinstance(exp, SubscriptableReference):
             return FunctionCall(
@@ -359,12 +382,9 @@ def add_existence_check_to_subscriptable_references(query: Query) -> None:
                 ),
             )
 
-        # Booleans read via arrayElement (not a SubscriptableReference), so they need the
-        # same existence guard applied explicitly — otherwise a missing key reads as the
-        # `false` default instead of NULL (getsentry/sentry#119735 follow-up).
-        bool_read = _boolean_map_read(exp)
-        if bool_read is not None:
-            map_column, key = bool_read
+        non_bucketed_read = _non_bucketed_scalar_map_read(exp)
+        if non_bucketed_read is not None:
+            map_column, key = non_bucketed_read
             return FunctionCall(
                 alias=exp.alias,
                 function_name="if",
@@ -378,60 +398,6 @@ def add_existence_check_to_subscriptable_references(query: Query) -> None:
         return exp
 
     query.transform_expressions(transform)
-
-
-def _projection_existence_check(read: Expression) -> Expression:
-    """Existence check for a map-backed SELECT read, treating a ``cast`` as transparent and a
-    ``coalesce`` (deprecated-attribute fan-out) as "exists if any branch does". The leaf
-    cases (``SubscriptableReference`` for bucketed maps, ``arrayElement`` for the bool map)
-    are delegated to ``get_field_existence_expression`` so there's a single source of truth
-    for "does this key exist". The cast/coalesce unwrapping is what makes it type-agnostic:
-    int/bool wrap their read in a cast, and deprecated attributes wrap it in a coalesce."""
-    if isinstance(read, FunctionCall) and read.function_name == "cast" and read.parameters:
-        return _projection_existence_check(read.parameters[0])
-    if isinstance(read, FunctionCall) and read.function_name == "coalesce":
-        return combine_or_conditions([_projection_existence_check(p) for p in read.parameters])
-    return get_field_existence_expression(read)
-
-
-def attribute_key_to_projection_expression(attr_key: AttributeKey) -> Expression:
-    """PROTOTYPE — type-driven SELECT read of a custom attribute, guarded so a missing key
-    reads as NULL for *every* scalar type uniformly.
-
-    This is the generic replacement for ``add_existence_check_to_subscriptable_references``.
-    That pass enumerates per-type AST *shapes* — a ``SubscriptableReference`` for the
-    bucketed string/int/float maps, ``cast(arrayElement(...))`` for the non-bucketed bool map
-    — so a type whose read has a novel shape silently escapes the guard (exactly how booleans
-    regressed; see getsentry/sentry#119735 and its follow-up). Here the guard is derived from
-    the attribute's *type* (``_is_map_backed_key`` + the type→ClickHouse-type map), so a new
-    attribute type is covered the moment it's added to those maps — no new shape to teach a
-    matcher.
-
-    Why this can't just be a smarter version of the post-hoc transform: that pass runs over
-    the whole query, and SELECT and WHERE reads share shapes (a WHERE int read is also
-    ``cast(arrayElement(attributes_float, ...))``). A shape matcher general enough to catch
-    every SELECT read would also catch WHERE reads, and wrapping those in ``if(exists, v,
-    NULL)`` re-introduces the analyzer "Not found column ... in block" bug that
-    ``_map_backed_operands`` avoids. Building the guard at SELECT-construction time — where we
-    know the position is a projection — sidesteps that entirely.
-
-    Projection-only, therefore: it emits ``if(exists, value, NULL)``. Normalized columns,
-    ``attr_key`` and array attributes are returned unchanged (real columns / their own
-    empty-array semantics).
-
-    NOT YET WIRED IN. Adopting it means routing every projection read (SELECT columns,
-    group_by, order_by, aggregation inputs) through this builder and dropping the post-hoc
-    transform — a change that needs the full ClickHouse e2e suite to validate, so it's left
-    as a follow-up. Proven in isolation by ``TestProjectionExpressionExistenceGuard``.
-    """
-    read = attribute_key_to_expression(attr_key)
-    if not _is_map_backed_key(attr_key):
-        return read
-
-    alias = read.alias
-    read = replace(read, alias=None)
-    typed_null = f.cast(literal(None), f"Nullable({PROTO_TYPE_TO_CLICKHOUSE_TYPE[attr_key.type]})")
-    return FunctionCall(alias, "if", (_projection_existence_check(read), read, typed_null))
 
 
 def _is_map_backed_key(k: AttributeKey) -> bool:
