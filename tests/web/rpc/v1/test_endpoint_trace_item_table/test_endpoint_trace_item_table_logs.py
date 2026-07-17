@@ -200,3 +200,64 @@ class TestBooleanAttributeFilteringForLogs(BaseApiTest):
         (values,) = response.column_values
         returned = sorted(v.val_int for v in values.results)
         assert returned == list(range(10, 20))
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
+class TestBooleanAttributeSelectForLogs(BaseApiTest):
+    """Selecting a boolean attribute must return an empty (NULL) value for items that don't
+    have it, not ``false``. Booleans read via ``arrayElement``, which yields the ``false``
+    default for a missing key unless an existence guard is added (getsentry/sentry#119735
+    follow-up)."""
+
+    def _select_hascodetag(self) -> TraceItemTableResponse:
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.Type.TYPE_INT, name="int_tag"),
+                    label="int_tag",
+                ),
+                Column(
+                    key=AttributeKey(type=AttributeKey.Type.TYPE_BOOLEAN, name="hasCodeTag"),
+                    label="hasCodeTag",
+                ),
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(key=AttributeKey(type=AttributeKey.TYPE_INT, name="int_tag"))
+                )
+            ],
+            limit=50,
+        )
+        return EndpointTraceItemTable().execute(message)
+
+    def test_absent_boolean_is_null_not_false(self, setup_bool_logs_in_db: Any) -> None:
+        response = self._select_hascodetag()
+        by_label = {v.attribute_name: v for v in response.column_values}
+        int_values = [v.val_int for v in by_label["int_tag"].results]
+        bool_results = by_label["hasCodeTag"].results
+        # int_tag drives the row order, so zip pairs each row's int with its bool value.
+        by_int = dict(zip(int_values, bool_results, strict=True))
+
+        # 0-9: attribute stored false -> an explicit false value (not NULL).
+        for i in range(10):
+            assert by_int[i].WhichOneof("value") == "val_bool"
+            assert by_int[i].val_bool is False
+        # 10-19: attribute stored true.
+        for i in range(10, 20):
+            assert by_int[i].WhichOneof("value") == "val_bool"
+            assert by_int[i].val_bool is True
+        # 20-29: attribute absent -> NULL/empty, NOT false.
+        for i in range(20, 30):
+            assert by_int[i].is_null is True
+            assert by_int[i].WhichOneof("value") != "val_bool"

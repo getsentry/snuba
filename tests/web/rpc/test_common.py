@@ -37,6 +37,7 @@ from snuba.protos.common import (
     MalformedAttributeException,
     type_array_to_membership_array_expression_from_typed_columns,
 )
+from snuba.query import SelectedExpression
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column
 from snuba.query.expressions import (
@@ -53,6 +54,7 @@ from snuba.query.logical import Query
 from snuba.web.rpc.common.common import (
     _any_attribute_filter_to_expression,
     _comparison_can_match_column_default,
+    add_existence_check_to_subscriptable_references,
     attribute_key_to_expression,
     dedupe_and_conditions,
     next_monday,
@@ -846,6 +848,76 @@ class TestBooleanAttributeFilters:
         expr = self._build(ComparisonFilter.OP_EQUALS, value=AttributeValue(val_bool=False))
         columns = {n.column_name for n in self._walk(expr) if isinstance(n, ColumnExpr)}
         assert columns == {"attributes_bool"}
+
+
+class TestBooleanAttributeExistenceCheckInSelect:
+    """A boolean read in the SELECT clause is ``arrayElement(attributes_bool, key)`` (the
+    bool Map has no hash buckets, so it's not a ``SubscriptableReference``). Without an
+    explicit existence guard, ``arrayElement`` returns the ``false`` default for a missing
+    key, so the attribute rendered as ``false`` for items lacking it instead of an empty
+    value. ``add_existence_check_to_subscriptable_references`` must wrap it in
+    ``if(has(mapKeys(...)), value, NULL)`` (getsentry/sentry#119735 follow-up).
+    """
+
+    @staticmethod
+    def _walk(expr: Expression) -> list[Expression]:
+        nodes: list[Expression] = []
+
+        def visit(node: Expression) -> Expression:
+            nodes.append(node)
+            return node
+
+        expr.transform(visit)
+        return nodes
+
+    def _fn_names(self, expr: Expression) -> set[str]:
+        return {n.function_name for n in self._walk(expr) if isinstance(n, FunctionCall)}
+
+    def _select_after_transform(self, key: AttributeKey) -> Expression:
+        expr = attribute_key_to_expression(key)
+        query = Query(
+            from_clause=None,
+            selected_columns=[SelectedExpression(key.name, expr)],
+        )
+        add_existence_check_to_subscriptable_references(query)
+        return query.get_selected_columns()[0].expression
+
+    def test_boolean_select_is_guarded_with_null_default(self) -> None:
+        expr = self._select_after_transform(
+            AttributeKey(type=AttributeKey.Type.TYPE_BOOLEAN, name="hasCodeTag")
+        )
+        # if(has(mapKeys(attributes_bool), 'hasCodeTag'), <value>, cast(NULL, ...))
+        assert isinstance(expr, FunctionCall) and expr.function_name == "if"
+        assert {"if", "has", "mapKeys", "arrayElement"} <= self._fn_names(expr)
+        condition, value, otherwise = expr.parameters
+        assert isinstance(condition, FunctionCall) and condition.function_name == "has"
+        # the else branch is a typed NULL, so a missing key reads as empty, not false.
+        assert isinstance(otherwise, FunctionCall) and otherwise.function_name == "cast"
+        assert otherwise.parameters[0] == Literal(None, None)
+
+    def test_boolean_select_reads_attributes_bool(self) -> None:
+        expr = self._select_after_transform(
+            AttributeKey(type=AttributeKey.Type.TYPE_BOOLEAN, name="hasCodeTag")
+        )
+        columns = {n.column_name for n in self._walk(expr) if isinstance(n, ColumnExpr)}
+        assert columns == {"attributes_bool"}
+
+    def test_boolean_select_keeps_column_alias(self) -> None:
+        key = AttributeKey(type=AttributeKey.Type.TYPE_BOOLEAN, name="hasCodeTag")
+        expr = self._select_after_transform(key)
+        # alias moves to the outer if(...); the inner cast must not carry it (a duplicate
+        # alias would collide in the SELECT clause).
+        assert expr.alias == "hasCodeTag_TYPE_BOOLEAN"
+        _, value, _ = expr.parameters
+        assert value.alias is None
+
+    def test_string_select_still_guarded(self) -> None:
+        # regression: strings resolve to a SubscriptableReference and keep their guard.
+        expr = self._select_after_transform(
+            AttributeKey(type=AttributeKey.Type.TYPE_STRING, name="some.tag")
+        )
+        assert isinstance(expr, FunctionCall) and expr.function_name == "if"
+        assert {"if", "has", "mapKeys"} <= self._fn_names(expr)
 
 
 class TestNormalizedColumnsNotMapBacked:

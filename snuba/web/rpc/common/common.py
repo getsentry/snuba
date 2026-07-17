@@ -1,5 +1,6 @@
 import math
 from collections.abc import Callable, Iterable
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from typing import Any, TypeVar
 
@@ -307,6 +308,7 @@ def dedupe_and_conditions(query: Query) -> None:
 _MAP_COLUMN_NULL_TYPE = {
     "attributes_string": "Nullable(String)",
     "attributes_float": "Nullable(Float64)",
+    "attributes_bool": "Nullable(Boolean)",
 }
 
 
@@ -317,20 +319,63 @@ def _typed_null_for_map_column(column_name: str) -> Expression:
     return literal(None)
 
 
+def _boolean_map_read(exp: Expression) -> tuple[Column, Expression] | None:
+    """Return ``(map_column, key)`` if ``exp`` is a boolean-attribute SELECT read
+    ``cast(arrayElement(attributes_bool, <key>), 'Nullable(Boolean)')``, else ``None``.
+
+    Booleans live in a Map column with no hash buckets, so
+    ``_generate_subscriptable_reference`` emits ``arrayElement`` directly rather than a
+    ``SubscriptableReference``. The existence check below only rewrites
+    ``SubscriptableReference`` reads, so booleans slipped through — and ``arrayElement``
+    reads a missing key as the ``Bool`` default (``false``). A boolean attribute therefore
+    showed as ``false`` for items that don't have it, instead of an empty value
+    (getsentry/sentry#119735 follow-up)."""
+    bool_column = PROTO_TYPE_TO_ATTRIBUTE_COLUMN[AttributeKey.Type.TYPE_BOOLEAN]
+    if not (isinstance(exp, FunctionCall) and exp.function_name == "cast" and exp.parameters):
+        return None
+    inner = exp.parameters[0]
+    if not (
+        isinstance(inner, FunctionCall)
+        and inner.function_name == "arrayElement"
+        and len(inner.parameters) == 2
+    ):
+        return None
+    array_arg, key_arg = inner.parameters
+    if isinstance(array_arg, Column) and array_arg.column_name == bool_column:
+        return array_arg, key_arg
+    return None
+
+
 def add_existence_check_to_subscriptable_references(query: Query) -> None:
     def transform(exp: Expression) -> Expression:
-        if not isinstance(exp, SubscriptableReference):
-            return exp
+        if isinstance(exp, SubscriptableReference):
+            return FunctionCall(
+                alias=exp.alias,
+                function_name="if",
+                parameters=(
+                    map_key_exists(exp.column, exp.key),
+                    SubscriptableReference(None, exp.column, exp.key),
+                    _typed_null_for_map_column(exp.column.column_name),
+                ),
+            )
 
-        return FunctionCall(
-            alias=exp.alias,
-            function_name="if",
-            parameters=(
-                map_key_exists(exp.column, exp.key),
-                SubscriptableReference(None, exp.column, exp.key),
-                _typed_null_for_map_column(exp.column.column_name),
-            ),
-        )
+        # Booleans read via arrayElement (not a SubscriptableReference), so they need the
+        # same existence guard applied explicitly — otherwise a missing key reads as the
+        # `false` default instead of NULL (getsentry/sentry#119735 follow-up).
+        bool_read = _boolean_map_read(exp)
+        if bool_read is not None:
+            map_column, key = bool_read
+            return FunctionCall(
+                alias=exp.alias,
+                function_name="if",
+                parameters=(
+                    map_key_exists(map_column, key),
+                    replace(exp, alias=None),
+                    _typed_null_for_map_column(map_column.column_name),
+                ),
+            )
+
+        return exp
 
     query.transform_expressions(transform)
 
