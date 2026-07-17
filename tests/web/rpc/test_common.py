@@ -907,6 +907,7 @@ class TestBooleanAttributeExistenceCheckInSelect:
         expr = self._select_after_transform(key)
         # alias moves to the outer if(...); the inner cast must not carry it (a duplicate
         # alias would collide in the SELECT clause).
+        assert isinstance(expr, FunctionCall)
         assert expr.alias == "hasCodeTag_TYPE_BOOLEAN"
         _, value, _ = expr.parameters
         assert value.alias is None
