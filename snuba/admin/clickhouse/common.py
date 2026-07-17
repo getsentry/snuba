@@ -377,12 +377,17 @@ def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) ->
     # `expr AS x` lands in columns_aliases_names, ARRAY JOIN aliases in
     # tables_aliases, and ClickHouse's `WITH <expr> AS <alias>` is in neither.
     #
+    # Also `SELECT a b FROM c` doesn't have an `as` keyword.  So need to check
+    # if the next token is a valid alias instead of relying on that.
+    #
     # So we walk the token stream and reject whenever the
     # token right after an AS is an exempt column name.
     invalid_aliases = sorted(
         t.next_token.value
         for t in parsed.tokens
-        if t.is_as_keyword and t.next_token and is_scrub_exempt_column(t.next_token.value)
+        if t.next_token
+        and (t.is_as_keyword or t.next_token.is_a_valid_alias)
+        and is_scrub_exempt_column(t.next_token.value)
     )
     if invalid_aliases:
         raise InvalidCustomQuery(

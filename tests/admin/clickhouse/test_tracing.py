@@ -38,32 +38,62 @@ def test_ai_conversation_id_column_is_not_scrubbed() -> None:
     assert conversation_id in values
 
 
-def test_aliasing_to_exempt_column_raises() -> None:
-    # The scrub exemption is keyed on the reported column name, so aliasing an
-    # arbitrary expression to an exempt name would let it bypass scrubbing.
-    # Such queries are rejected up front by validate_ro_query.
+# Aliasing an arbitrary expression to the exempt `ai_conversation_id` name must
+# be rejected in every position it can appear -- SELECT scalar, ARRAY JOIN, and
+# CTE (WITH) -- and in every spelling: plain `AS`, keywordless (SELECT only),
+# and quoted (double-quote / backtick, which ClickHouse treats as identifiers).
+_ALIASING_QUERIES = [
+    # SELECT scalar alias
+    pytest.param(
+        f"SELECT project_id AS ai_conversation_id FROM {TABLE}",
+        id="select_scalar-as",
+    ),
+    pytest.param(
+        f"SELECT project_id ai_conversation_id FROM {TABLE}",
+        id="select_scalar-no_as",
+    ),
+    pytest.param(
+        f'SELECT project_id AS "ai_conversation_id" FROM {TABLE}',
+        id="select_scalar-quoted_double",
+    ),
+    pytest.param(
+        f"SELECT project_id AS `ai_conversation_id` FROM {TABLE}",
+        id="select_scalar-quoted_backtick",
+    ),
+    # ARRAY JOIN alias
+    pytest.param(
+        f"SELECT trace_id FROM {TABLE} ARRAY JOIN some_arr AS ai_conversation_id",
+        id="array_join-as",
+    ),
+    pytest.param(
+        f'SELECT trace_id FROM {TABLE} ARRAY JOIN some_arr AS "ai_conversation_id"',
+        id="array_join-quoted_double",
+    ),
+    pytest.param(
+        f"SELECT trace_id FROM {TABLE} ARRAY JOIN some_arr AS `ai_conversation_id`",
+        id="array_join-quoted_backtick",
+    ),
+    # CTE (WITH) alias -- ClickHouse's inverted `WITH <expr> AS <name>`
+    pytest.param(
+        f"WITH project_id AS ai_conversation_id SELECT ai_conversation_id FROM {TABLE}",
+        id="cte-as",
+    ),
+    pytest.param(
+        f'WITH project_id AS "ai_conversation_id" SELECT "ai_conversation_id" FROM {TABLE}',
+        id="cte-quoted_double",
+    ),
+    pytest.param(
+        f"WITH project_id AS `ai_conversation_id` SELECT `ai_conversation_id` FROM {TABLE}",
+        id="cte-quoted_backtick",
+    ),
+]
+
+
+@pytest.mark.parametrize("query", _ALIASING_QUERIES)
+def test_aliasing_to_exempt_column_raises(query: str) -> None:
+    # Result scrubbing trusts the reported column name (see is_scrub_exempt_column
+    # / scrub_row), so aliasing an arbitrary expression to an exempt name would
+    # surface unscrubbed data under a trusted name. validate_ro_query must reject
+    # it up front, in every position and spelling above.
     with pytest.raises(InvalidCustomQuery, match="Aliasing"):
-        run_query_and_get_trace(STORAGE, f"SELECT project_id AS ai_conversation_id FROM {TABLE}")
-
-
-def test_array_join_aliasing_to_exempt_column_raises() -> None:
-    # ARRAY JOIN aliases are parsed into tables_aliases rather than
-    # columns_aliases_names, so they must be rejected too -- otherwise an
-    # arbitrary array could be surfaced under the exempt column name.
-    with pytest.raises(InvalidCustomQuery, match="Aliasing"):
-        run_query_and_get_trace(
-            STORAGE, f"SELECT trace_id FROM {TABLE} ARRAY JOIN some_arr AS ai_conversation_id"
-        )
-
-
-def test_with_clause_aliasing_to_exempt_column_raises() -> None:
-    # ClickHouse `WITH <expr> AS <name>` defines an alias, so a WITH clause can
-    # surface an arbitrary expression under the exempt result column name and
-    # bypass scrubbing. sql_metadata mis-parses this inverted syntax (the exempt
-    # name lands in neither columns_aliases_names nor tables_aliases), so this
-    # must be rejected explicitly. WITH is otherwise allowed in the trace shell.
-    with pytest.raises(InvalidCustomQuery, match="Aliasing"):
-        run_query_and_get_trace(
-            STORAGE,
-            f"WITH project_id AS ai_conversation_id SELECT ai_conversation_id FROM {TABLE}",
-        )
+        run_query_and_get_trace(STORAGE, query)
