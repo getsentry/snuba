@@ -368,8 +368,10 @@ def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) ->
     if parsed.query_type != QueryType.SELECT:
         raise InvalidCustomQuery("Only SELECT queries are allowed")
 
-    # we need to unscrub some specific values.  Currently we do it by column name.  Don't allow queries that alias those names
-    invalid_aliases = [a for a in parsed.columns_aliases_names if is_scrub_exempt_column(a)]
+    # we need to unscrub some specific values.  Currently we do it by column name.  Don't allow queries that alias those names.
+    # ARRAY JOIN aliases are parsed into tables_aliases keys rather than columns_aliases_names (see below), so check both.
+    aliased_names = set(parsed.columns_aliases_names) | set(parsed.tables_aliases)
+    invalid_aliases = sorted(a for a in aliased_names if is_scrub_exempt_column(a))
     if invalid_aliases:
         raise InvalidCustomQuery(
             f"Aliasing the following columns aren't allowed: {','.join(invalid_aliases)}"

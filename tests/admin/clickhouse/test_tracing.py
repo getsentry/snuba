@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from sentry_protos.snuba.v1.trace_item_pb2 import TraceItem
 
 from snuba.admin.clickhouse.common import InvalidCustomQuery
 from snuba.admin.clickhouse.tracing import run_query_and_get_trace
@@ -18,15 +19,14 @@ TABLE = "eap_items_1_local"
 def test_ai_conversation_id_column_is_not_scrubbed() -> None:
     # Seed a span whose ai_conversation_id is a non-hex string, so that only the
     # scrub exemption (and not the hex/UUID passthrough) can leave it intact.
+    # The proto conversation_id field is written to the ai_conversation_id column.
     conversation_id = "conv-not-hex-zzz"
+    item = TraceItem()
+    item.ParseFromString(gen_item_message(start_timestamp=datetime.now(tz=UTC) - timedelta(minutes=5)))
+    item.conversation_id = conversation_id
     write_raw_unprocessed_events(
         get_writable_storage(StorageKey("eap_items")),
-        [
-            gen_item_message(
-                start_timestamp=datetime.now(tz=UTC) - timedelta(minutes=5),
-                conversation_id=conversation_id,
-            )
-        ],
+        [item.SerializeToString()],
     )
 
     trace = run_query_and_get_trace(STORAGE, f"SELECT ai_conversation_id FROM {TABLE}")
@@ -42,3 +42,13 @@ def test_aliasing_to_exempt_column_raises() -> None:
     # Such queries are rejected up front by validate_ro_query.
     with pytest.raises(InvalidCustomQuery, match="Aliasing"):
         run_query_and_get_trace(STORAGE, f"SELECT project_id AS ai_conversation_id FROM {TABLE}")
+
+
+def test_array_join_aliasing_to_exempt_column_raises() -> None:
+    # ARRAY JOIN aliases are parsed into tables_aliases rather than
+    # columns_aliases_names, so they must be rejected too -- otherwise an
+    # arbitrary array could be surfaced under the exempt column name.
+    with pytest.raises(InvalidCustomQuery, match="Aliasing"):
+        run_query_and_get_trace(
+            STORAGE, f"SELECT trace_id FROM {TABLE} ARRAY JOIN some_arr AS ai_conversation_id"
+        )
