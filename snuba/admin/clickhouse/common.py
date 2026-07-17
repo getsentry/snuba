@@ -34,6 +34,14 @@ class InvalidStorageError(SerializableException):
 
 
 def is_scrub_exempt_column(col_name: str | None) -> bool:
+    """Return whether a column is exempt from result scrubbing.
+
+    Scrubbing is deny-by-default: trace query results are scrubbed unless a
+    value is obviously safe (number, datetime, UUID, hex) or its column appears
+    here. This exemption list is maintained separately, by hand, so that adding
+    a column is a deliberate act -- we never want to accidentally unscrub a
+    column that may carry sensitive data.
+    """
     return col_name in {"ai_conversation_id"}
 
 
