@@ -1,3 +1,4 @@
+import contextlib
 import hashlib
 import json
 import os
@@ -37,6 +38,17 @@ def pytest_configure() -> None:
     Ensure the snuba_test database exists
     """
     assert settings.TESTING, "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
+
+    # Point sentry-options at the in-repo schemas so init() reads the committed
+    # schema regardless of how tests are launched. This must *override* any
+    # inherited value rather than setdefault: the Docker image sets
+    # SENTRY_OPTIONS_DIR=/etc/sentry-options (where production values are
+    # mounted), which ships no schemas, so a setdefault() would be a no-op in
+    # the test container and sentry_options.init() would fail with a SchemaError
+    # (leaving the client uninitialized and breaking every override_options test).
+    os.environ["SENTRY_OPTIONS_DIR"] = os.path.join(
+        os.path.dirname(__file__), os.pardir, "sentry-options"
+    )
 
     initialize_snuba()
     setup_sentry()
@@ -179,6 +191,24 @@ def redis_db(request: pytest.FixtureRequest) -> Generator[None]:
     state.get_raw_configs.clear()  # type: ignore[attr-defined]
 
     yield
+
+
+@pytest.fixture(autouse=True)
+def _clear_component_config_option_overrides() -> Generator[None]:
+    """Isolate ConfigurableComponent config overrides between tests.
+
+    ConfigurableComponent config is read-only at runtime, sourced from the
+    ``configurable_component_overrides`` sentry-option. Tests set overrides in
+    that option via ``tests/configs/component_config.py``; those overrides are
+    thread-local and persist, so clear the option after every test to stop them
+    leaking across tests.
+    """
+    yield
+
+    from tests.configs.component_config import clear_component_config_overrides
+
+    with contextlib.suppress(Exception):
+        clear_component_config_overrides()
 
 
 def _build_db_cache(cache_key: CacheKey) -> None:

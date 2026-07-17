@@ -156,7 +156,7 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       - name: Create multiplatform manifests
         run: |
@@ -180,7 +180,7 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       - name: Create distroless multiplatform manifests
         run: |
@@ -204,7 +204,7 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       - name: Create debug multiplatform manifests
         run: |
@@ -221,8 +221,7 @@ jobs:
 
     steps:
       - name: Run Sentry self-hosted e2e CI
-        uses: getsentry/self-hosted@d6a84062bfe3abdc8be7dc1af1bfa7a8607bed95 # master
+        uses: getsentry/self-hosted@3db978e2659e1d34eb2cfb8516b563d72fec58f4 # master
         with:
           project_name: snuba
           image_url: ghcr.io/getsentry/snuba:${{ github.sha }}
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

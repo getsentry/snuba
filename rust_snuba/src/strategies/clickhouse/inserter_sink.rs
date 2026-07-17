@@ -1,19 +1,22 @@
-//! Arroyo sink that inserts `eap_items` rows through the official `clickhouse`
-//! crate's [`Inserter`].
+//! Arroyo sink that inserts typed rows through the official `clickhouse`
+//! crate's [`Inserter`]. Generic over the row type `R` (a `#[derive(Row)]`
+//! struct) so any consumer can reuse it; `eap_items` (`EAPItemRow`) is the
+//! first caller.
 //!
-//! Shape: the processor hands this strategy a *typed* [`EAPItemRow`] per
-//! message (wrapped in `BytesInsertBatch<Option<EAPItemRow>>`; `None` == a
-//! skipped/empty message that still carries offsets). A long-lived actor task
-//! owns one [`clickhouse::inserter::Inserter`] and writes each row the moment
-//! it arrives. To allow retrying transient insert errors, the rows of the
-//! current unflushed window are retained until that window's flush succeeds, so
-//! peak memory is bounded by one batch (`max_batch_size`) of rows plus the
-//! inserter's serialized byte buffer — not by total row count.
+//! Shape: the processor hands this strategy a *typed* row `R` per message
+//! (wrapped in `BytesInsertBatch<Option<R>>`; `None` == a skipped/empty message
+//! that still carries offsets). A long-lived actor task owns one
+//! [`clickhouse::inserter::Inserter`] and writes each row the moment it arrives.
+//! To allow retrying transient insert errors, the rows of the current unflushed
+//! window are retained until that window's flush succeeds, so peak memory is
+//! bounded by one batch (`max_batch_size`) of rows plus the inserter's
+//! serialized byte buffer — not by total row count.
 //!
 //! Wire format is plain `RowBinary` (crate validation is off — see
-//! `build_client`: the `attributes_array` JSON column can't be sent under
-//! `RowBinaryWithNamesAndTypes`). The crate still emits the column list from the
-//! `Row` derive in the INSERT, so column mapping is correct.
+//! `build_client`). Plain RowBinary plus `input_format_binary_read_json_as_string`
+//! lets a `String` field feed a native `JSON` column, which the first consumer
+//! relies on; the crate still emits the column list from `R`'s `Row` derive in
+//! the INSERT, so column mapping is correct regardless of row type.
 //!
 //! The inserter owns the flush boundary: it is configured with our batch
 //! settings (`with_max_rows`/`with_max_bytes` + `with_period`), and we drive it
@@ -41,8 +44,7 @@ use tokio::sync::mpsc;
 use clickhouse::inserter::Quantities;
 
 use crate::config::{BatchSizeCalculation, ClickhouseConfig};
-use crate::processors::eap_items::EAPItemRow;
-use crate::runtime_config::{get_load_balancing_config, get_max_insert_block_size};
+use crate::options::{get_load_balancing_config, get_max_insert_block_size};
 use crate::types::BytesInsertBatch;
 
 /// Upper bound on typed rows in flight between `submit` and the actor. Kept
@@ -58,11 +60,11 @@ const MAX_INSERT_RETRIES: usize = 4;
 const INITIAL_RETRY_BACKOFF_MS: u64 = 500;
 
 /// Work handed from the strategy (sync) to the actor (async), in arrival order.
-enum WorkItem {
+enum WorkItem<R> {
     Row {
-        // Boxed because `EAPItemRow` is wide (~96 columns); keeps the channel
-        // item small and the enum cheap to move.
-        row: Box<EAPItemRow>,
+        // Boxed because row structs can be wide (e.g. `EAPItemRow` has ~100
+        // columns); keeps the channel item small and the enum cheap to move.
+        row: Box<R>,
         committable: Vec<(Partition, u64)>,
         meta: BytesInsertBatch<()>,
     },
@@ -95,14 +97,25 @@ enum FlushOutcome {
 /// the window's rows are retained here (bounded by `max_batch_size`) until its
 /// flush succeeds — the only place a batch of typed rows lives, in addition to
 /// the inserter's serialized byte buffer.
-#[derive(Default)]
-struct Acc {
-    rows: Vec<EAPItemRow>,
+struct Acc<R> {
+    rows: Vec<R>,
     committable: BTreeMap<Partition, u64>,
     meta: BytesInsertBatch<()>,
 }
 
-impl Acc {
+// Hand-written (not `#[derive(Default)]`) so the impl doesn't require `R: Default`
+// — an empty `Vec<R>` needs no such bound.
+impl<R> Default for Acc<R> {
+    fn default() -> Self {
+        Self {
+            rows: Vec::new(),
+            committable: BTreeMap::new(),
+            meta: BytesInsertBatch::default(),
+        }
+    }
+}
+
+impl<R> Acc<R> {
     fn merge(&mut self, committable: Vec<(Partition, u64)>, meta: BytesInsertBatch<()>) {
         for (partition, offset) in committable {
             let entry = self.committable.entry(partition).or_insert(offset);
@@ -136,9 +149,9 @@ impl Acc {
 /// mismatch we fail the batch (it replays from the last committed offset)
 /// rather than risk that.
 #[must_use]
-fn emit_ready(
+fn emit_ready<R>(
     out_tx: &mpsc::UnboundedSender<FlushOutcome>,
-    acc: &mut Acc,
+    acc: &mut Acc<R>,
     bytes: u64,
     rows: u64,
     elapsed: Duration,
@@ -188,17 +201,17 @@ fn build_client(cfg: &ClickhouseConfig) -> clickhouse::Client {
         .with_setting("input_format_binary_read_json_as_string", "1")
 }
 
-fn make_inserter(
+fn make_inserter<R: clickhouse::Row>(
     client: &clickhouse::Client,
     table: &str,
     storage_name: &str,
     max_rows: u64,
     max_bytes: u64,
     max_batch_time: Duration,
-) -> clickhouse::inserter::Inserter<EAPItemRow> {
+) -> clickhouse::inserter::Inserter<R> {
     let lb = get_load_balancing_config(storage_name);
     let mut inserter = client
-        .inserter::<EAPItemRow>(table)
+        .inserter::<R>(table)
         .with_max_rows(max_rows)
         .with_max_bytes(max_bytes)
         .with_period(Some(max_batch_time))
@@ -217,15 +230,18 @@ fn make_inserter(
 /// inserter hit a write/commit error (which poisons it). Returns the inserted
 /// `Quantities` on success, or the last error string after exhausting retries.
 #[allow(clippy::too_many_arguments)]
-async fn flush_window_with_retry(
+async fn flush_window_with_retry<R>(
     client: &clickhouse::Client,
     table: &str,
     storage_name: &str,
     max_rows: u64,
     max_bytes: u64,
     max_batch_time: Duration,
-    rows: &[EAPItemRow],
-) -> Result<Quantities, String> {
+    rows: &[R],
+) -> Result<Quantities, String>
+where
+    R: clickhouse::RowOwned + serde::Serialize + Send + Sync,
+{
     if rows.is_empty() {
         return Ok(Quantities::ZERO);
     }
@@ -235,7 +251,7 @@ async fn flush_window_with_retry(
         // Fresh inserter each attempt; write the whole window then force-flush
         // via end(). We never call commit() here, so size/period thresholds are
         // irrelevant — end() flushes all buffered rows as one INSERT.
-        let mut inserter = make_inserter(
+        let mut inserter = make_inserter::<R>(
             client,
             table,
             storage_name,
@@ -286,7 +302,7 @@ async fn flush_window_with_retry(
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn run_inserter_actor(
+async fn run_inserter_actor<R>(
     config: ClickhouseConfig,
     table: String,
     storage_name: String,
@@ -294,11 +310,13 @@ async fn run_inserter_actor(
     max_bytes: u64,
     max_batch_time: Duration,
     skip_write: bool,
-    mut work_rx: mpsc::Receiver<WorkItem>,
+    mut work_rx: mpsc::Receiver<WorkItem<R>>,
     out_tx: mpsc::UnboundedSender<FlushOutcome>,
-) {
+) where
+    R: clickhouse::RowOwned + serde::Serialize + Send + Sync,
+{
     let client = build_client(&config);
-    let mut inserter = make_inserter(
+    let mut inserter = make_inserter::<R>(
         &client,
         &table,
         &storage_name,
@@ -341,7 +359,7 @@ async fn run_inserter_actor(
             .await
             {
                 Ok(quantities) => {
-                    inserter = make_inserter(
+                    inserter = make_inserter::<R>(
                         &client,
                         &table,
                         &storage_name,
@@ -483,10 +501,10 @@ async fn run_inserter_actor(
     }
 }
 
-pub struct EapItemsInserterSink<N> {
+pub struct RowBinaryInserterSink<R, N> {
     next_step: N,
     /// `None` once the stream has been closed (in `join`/`terminate`).
-    work_tx: Option<mpsc::Sender<WorkItem>>,
+    work_tx: Option<mpsc::Sender<WorkItem<R>>>,
     out_rx: mpsc::UnboundedReceiver<FlushOutcome>,
     actor: Option<tokio::task::JoinHandle<()>>,
     /// A flushed message that the next step rejected; retried before pulling more.
@@ -495,9 +513,10 @@ pub struct EapItemsInserterSink<N> {
     actor_done: bool,
 }
 
-impl<N> EapItemsInserterSink<N>
+impl<R, N> RowBinaryInserterSink<R, N>
 where
     N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
+    R: clickhouse::RowOwned + serde::Serialize + Send + Sync,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -516,7 +535,7 @@ where
             BatchSizeCalculation::Bytes => (u64::MAX, max_batch_size as u64),
         };
 
-        let (work_tx, work_rx) = mpsc::channel::<WorkItem>(WORK_CHANNEL_CAPACITY);
+        let (work_tx, work_rx) = mpsc::channel::<WorkItem<R>>(WORK_CHANNEL_CAPACITY);
         let (out_tx, out_rx) = mpsc::unbounded_channel::<FlushOutcome>();
 
         let actor = concurrency.handle().spawn(run_inserter_actor(
@@ -603,9 +622,10 @@ where
     }
 }
 
-impl<N> ProcessingStrategy<BytesInsertBatch<Option<EAPItemRow>>> for EapItemsInserterSink<N>
+impl<R, N> ProcessingStrategy<BytesInsertBatch<Option<R>>> for RowBinaryInserterSink<R, N>
 where
     N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
+    R: clickhouse::RowOwned + serde::Serialize + Send + Sync,
 {
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         let commit_request = self.next_step.poll()?;
@@ -618,8 +638,8 @@ where
 
     fn submit(
         &mut self,
-        message: Message<BytesInsertBatch<Option<EAPItemRow>>>,
-    ) -> Result<(), SubmitError<BytesInsertBatch<Option<EAPItemRow>>>> {
+        message: Message<BytesInsertBatch<Option<R>>>,
+    ) -> Result<(), SubmitError<BytesInsertBatch<Option<R>>>> {
         // Downstream is backpressured, or we're shutting down: reject upstream too.
         if self.message_carried_over.is_some() {
             return Err(SubmitError::MessageRejected(MessageRejected { message }));
@@ -719,7 +739,7 @@ where
     }
 }
 
-impl<N> Drop for EapItemsInserterSink<N> {
+impl<R, N> Drop for RowBinaryInserterSink<R, N> {
     fn drop(&mut self) {
         // Abort the actor if it's still around so a dropped sink never flushes a
         // partial INSERT (whose offsets were never pushed) behind our back.
@@ -736,6 +756,8 @@ mod tests {
 
     use sentry_arroyo::processing::strategies::ProcessingStrategy;
     use sentry_arroyo::types::{Partition, Topic};
+
+    use crate::processors::eap_items::EAPItemRow;
 
     /// Records the committable of every message it receives.
     struct RecordingStep {
@@ -786,7 +808,7 @@ mod tests {
         };
         let concurrency = ConcurrencyConfig::new(1);
 
-        let mut sink = EapItemsInserterSink::new(
+        let mut sink = RowBinaryInserterSink::<EAPItemRow, _>::new(
             next_step,
             test_cluster(),
             "eap_items_1_local".to_string(),

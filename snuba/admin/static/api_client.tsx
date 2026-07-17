@@ -121,6 +121,11 @@ interface Client {
   ) => Promise<Response>;
   listJobSpecs: () => Promise<JobSpecMap>;
   runJob(job_id: string): Promise<String>;
+  listJobTypes: () => Promise<string[]>;
+  runJobByType(
+    job_type: string,
+    params: { [key: string]: any },
+  ): Promise<{ job_id: string; status: string }>;
   getJobLogs(job_id: string): Promise<string[]>;
   getClickhouseSystemSettings: (host: string, port: number, storage: string) => Promise<ClickhouseSystemSetting[]>;
   summarizeTraceWithProfile: (traceLogs: string, spanType: string, signal?: AbortSignal) => Promise<any>;
@@ -609,6 +614,30 @@ function Client(): Client {
         headers: { "Content-Type": "application/json" },
         method: "POST",
       }).then((resp) => resp.text());
+    },
+    listJobTypes: () => {
+      const url = baseUrl + "job-types";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "GET",
+      }).then((resp) => resp.json());
+    },
+    runJobByType: (job_type: string, params: { [key: string]: any }) => {
+      const url = baseUrl + "job-types/" + job_type + "/run";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        body: JSON.stringify({ params }),
+      }).then((resp) => {
+        if (resp.ok) {
+          return resp.json();
+        }
+        return resp.json().then((err) => {
+          const error = new Error(err?.error || "Could not run job");
+          (error as any).jobId = err?.job_id;
+          throw error;
+        });
+      });
     },
     getJobLogs: (job_id: string) => {
       const url = baseUrl + "job-specs/" + job_id + "/logs";

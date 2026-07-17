@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import sys
+import uuid
 from collections.abc import Mapping, Sequence
 from contextlib import redirect_stdout
 from dataclasses import asdict
@@ -14,6 +15,7 @@ import structlog
 from flask import Flask, Response, g, jsonify, make_response, request
 from google.protobuf.json_format import MessageToDict, Parse
 from structlog.contextvars import bind_contextvars, clear_contextvars
+from werkzeug.exceptions import HTTPException
 
 from snuba import settings, state
 from snuba.admin.audit_log.action import AuditLogAction
@@ -60,7 +62,6 @@ from snuba.admin.tool_policies import (
     get_user_allowed_tools,
 )
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.configs.configuration import ConfigurableComponent
 from snuba.consumers.dlq import (
     DlqInstruction,
     DlqInstructionStatus,
@@ -72,6 +73,7 @@ from snuba.consumers.dlq import (
 from snuba.datasets.factory import InvalidDatasetError, get_enabled_dataset_names
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.manual_jobs import Job, JobSpec
 from snuba.manual_jobs.runner import (
     list_job_specs,
     list_job_specs_with_status,
@@ -132,6 +134,22 @@ def handle_invalid_dataset(exception: InvalidDatasetError) -> Response:
     )
 
 
+# passthrough needed so that we don't turn these into 500s
+@application.errorhandler(HTTPException)
+def handle_http_exception(exception: HTTPException) -> HTTPException:
+    return exception
+
+
+@application.errorhandler(Exception)
+def handle_uncaught_exception(exception: Exception) -> Response:
+    logger.error(exception, exc_info=True)
+    return Response(
+        json.dumps({"error": {"type": "unknown", "message": str(exception)}}),
+        500,
+        {"Content-Type": "application/json"},
+    )
+
+
 @application.before_request
 def set_logging_context() -> None:
     clear_contextvars()
@@ -140,10 +158,8 @@ def set_logging_context() -> None:
 
 @application.before_request
 def authorize() -> None:
-    logger.debug("authorize.entered")
     if request.endpoint != "health":
         user = authorize_request()
-        logger.info("authorize.finished", user=user)
         with sentry_sdk.push_scope() as scope:
             scope.user = {"email": user.email}
             g.user = user
@@ -1073,84 +1089,24 @@ def get_allocation_policy_configs(storage_key: str) -> Response:
 @application.route("/set_configurable_component_configuration", methods=["POST", "DELETE"])
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
 def set_configuration() -> Response:
-    data = json.loads(request.data)
-    user = request.headers.get(USER_HEADER_KEY)
-
-    try:
-        configurable_component_namespace = data["configurable_component_namespace"]
-        configurable_component_class_name = data["configurable_component_class_name"]
-        resource_name = data["resource_name"]
-        assert isinstance(configurable_component_namespace, str), (
-            f"Invalid configurable_component_namespace: {configurable_component_namespace}"
-        )
-        assert isinstance(configurable_component_class_name, str), (
-            f"Invalid configurable_component_class_name: {configurable_component_class_name}"
-        )
-        assert isinstance(resource_name, str), f"Invalid resource_name {resource_name}"
-        configurable_component = (
-            ConfigurableComponent.get_component_class(configurable_component_namespace)
-            .get_from_name(configurable_component_class_name)
-            .create_minimal_instance(resource_name)
-        )
-
-        key = data["key"]
-        params = data.get("params", {})
-        assert isinstance(key, str), "Invalid key"
-        assert isinstance(params, dict), "Invalid params"
-        assert key != "", "Key cannot be empty string"
-
-    except Exception as exc:
-        return Response(
-            json.dumps({"error": f"Invalid config: {str(exc)}"}),
-            400,
-            {"Content-Type": "application/json"},
-        )
-
-    if request.method == "DELETE":
-        configurable_component.delete_config_value(config_key=key, params=params, user=user)
-        audit_log.record(
-            user or "",
-            AuditLogAction.CONFIGURABLE_COMPONENT_DELETE,
+    # ConfigurableComponent config (allocation policy / storage-routing strategy)
+    # is now read-only at runtime and managed centrally in sentry-options-automator.
+    # snuba-admin no longer writes it; reject with a clear message rather than a
+    # bare 404 for the Capacity Management save/delete actions.
+    return Response(
+        json.dumps(
             {
-                "resource_identifier": resource_name,
-                "configurable_component_class_name": configurable_component.class_name(),
-                "key": key,
-            },
-            notify=True,
-        )
-        return Response("", 200)
-    if request.method == "POST":
-        try:
-            value = data["value"]
-            assert isinstance(value, str), "Invalid value"
-            configurable_component.set_config_value(
-                config_key=key, value=value, params=params, user=user
-            )
-            audit_log.record(
-                user or "",
-                AuditLogAction.CONFIGURABLE_COMPONENT_UPDATE,
-                {
-                    "resource_identifier": resource_name,
-                    "configurable_component_class_name": configurable_component.class_name(),
-                    "key": key,
-                    "value": value,
-                    "params": str(params),
-                },
-                notify=True,
-            )
-            return Response("", 200)
-        except (KeyError, AssertionError) as exc:
-            return Response(
-                json.dumps({"error": f"Invalid config: {str(exc)}"}),
-                400,
-                {"Content-Type": "application/json"},
-            )
-    else:
-        return Response(
-            json.dumps({"error": "Method not allowed"}),
-            405,
-            {"Content-Type": "application/json"},
-        )
+                "error": (
+                    "Configurable component overrides are now managed in "
+                    "sentry-options-automator via the "
+                    "`configurable_component_overrides` option and can no longer "
+                    "be set or deleted from snuba-admin."
+                )
+            }
+        ),
+        405,
+        {"Content-Type": "application/json"},
+    )
 
 
 @application.route("/cardinality_query", methods=["POST"])
@@ -1451,6 +1407,61 @@ def execute_job(job_id: str) -> Response:
 @check_tool_perms(tools=[AdminTools.MANUAL_JOBS])
 def get_job_logs(job_id: str) -> Response:
     return make_response(jsonify(view_job_logs(job_id)), 200)
+
+
+@application.route("/job-types", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.MANUAL_JOBS])
+def get_job_types() -> Response:
+    """Registered jobs that may be run ad-hoc without a manifest entry. Only
+    jobs that opt in via ``allow_adhoc_run`` (read-only / idempotent ones) are
+    listed; destructive jobs stay gated behind an explicit manifest entry."""
+    adhoc_job_types = sorted(
+        name for name in Job.all_names() if Job.class_from_name(name).allow_adhoc_run
+    )
+    return make_response(jsonify(adhoc_job_types), 200)
+
+
+@application.route("/job-types/<job_type>/run", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.MANUAL_JOBS])
+def run_job_by_type(job_type: str) -> Response:
+    """Run an ad-hoc-allowed job by its type without needing a manifest entry.
+    A fresh job id is generated on every call, so the same job can be run any
+    number of times, each run getting its own status and logs."""
+    try:
+        job_class = Job.class_from_name(job_type)
+    except InvalidConfigKeyError:
+        job_class = None
+    if job_class is None or not job_class.allow_adhoc_run:
+        return make_response(
+            jsonify(
+                {
+                    "error": (
+                        f"Job type '{job_type}' cannot be run ad-hoc. "
+                        "Add a manifest entry to run it."
+                    )
+                }
+            ),
+            403,
+        )
+
+    try:
+        params: dict[Any, Any] = {}
+        if request.data:
+            body = json.loads(request.data)
+            params = body.get("params") or {}
+            assert isinstance(params, dict), "`params` must be an object"
+    except Exception as e:
+        return make_response(jsonify({"error": str(e)}), 400)
+
+    job_id = f"{job_type}_{uuid.uuid4().hex}"
+    try:
+        job_status = run_job(JobSpec(job_id=job_id, job_type=job_type, params=params or None))
+    except Exception as e:
+        # The runner records status/logs under job_id before raising, so hand
+        # it back to let operators inspect the failed run's logs.
+        return make_response(jsonify({"error": str(e), "job_id": job_id}), 500)
+
+    return make_response(jsonify({"job_id": job_id, "status": job_status}), 200)
 
 
 @application.route("/clickhouse_node_info")

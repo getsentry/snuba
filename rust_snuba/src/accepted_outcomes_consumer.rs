@@ -12,14 +12,12 @@ use sentry_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrate
 use sentry_arroyo::processing::StreamProcessor;
 use sentry_arroyo::types::{Partition, Topic};
 
-use sentry_options::init_with_schemas;
-
 use pyo3::prelude::*;
 
 use crate::config;
 use crate::logging::{setup_logging, setup_sentry};
 use crate::metrics::global_tags::set_global_tag;
-use crate::metrics::statsd::StatsDBackend;
+use crate::metrics::statsd::create_dogstatsd_backend;
 use crate::strategies::accepted_outcomes::aggregator::OutcomesAggregator;
 use crate::strategies::accepted_outcomes::commit_outcomes::CommitOutcomes;
 use crate::strategies::accepted_outcomes::produce_outcome::ProduceAcceptedOutcome;
@@ -120,12 +118,13 @@ pub fn accepted_outcomes_consumer_impl(
     commit_frequency_sec: u64,
 ) -> usize {
     setup_logging();
-    init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)])
-        .expect("failed to initialize sentry-options");
+    crate::init_sentry_options().expect("failed to initialize sentry-options");
 
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
 
     assert_eq!(consumer_config.storages.len(), 1);
+
+    let env_config = consumer_config.env.clone();
 
     let mut _sentry_guard = None;
 
@@ -137,20 +136,28 @@ pub fn accepted_outcomes_consumer_impl(
     }
 
     // setup arroyo metrics
-    if let (Some(host), Some(port)) = (
-        consumer_config.env.dogstatsd_host,
-        consumer_config.env.dogstatsd_port,
-    ) {
+    {
         let storage_name = consumer_config
             .storages
             .iter()
             .map(|s| s.name.clone())
             .collect::<Vec<_>>()
             .join(",");
-        set_global_tag("storage".to_owned(), storage_name);
-        set_global_tag("consumer_group".to_owned(), consumer_group.to_owned());
 
-        metrics::init(StatsDBackend::new(&host, port, "snuba.consumer")).unwrap();
+        // Set tags on Sentry scope for error observability
+        sentry::configure_scope(|scope| {
+            scope.set_tag("storage", &storage_name);
+            scope.set_tag("consumer_group", consumer_group);
+        });
+
+        let tags = [
+            ("storage", storage_name.clone()),
+            ("consumer_group", consumer_group.to_owned()),
+        ];
+
+        if let Some(backend) = create_dogstatsd_backend(&env_config, "snuba.consumer", &tags) {
+            metrics::init(backend).unwrap();
+        }
     }
 
     // DLQ setup

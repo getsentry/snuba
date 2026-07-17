@@ -29,7 +29,10 @@ from snuba.web.rpc.storage_routing.routing_strategies.outcomes_flex_time import 
 )
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.helpers import write_raw_unprocessed_events
-from tests.web.rpc.v1.routing_strategies.common import store_outcomes_data
+from tests.web.rpc.v1.routing_strategies.common import (
+    override_component_config,
+    store_outcomes_data,
+)
 from tests.web.rpc.v1.test_utils import BASE_TIME, gen_item_message
 
 _LOG_COUNT = 120
@@ -303,7 +306,6 @@ class TestTraceItemTableFlexTime:
         strategy = OutcomesFlexTimeRoutingStrategy()
         # we tell the routing strategy that the most items we can query is 20_000_000
         # this means that if we query a four hour time range, it will get split in two
-        strategy.set_config_value("max_items_to_query", 20_000_000)
 
         limit_per_query = 120
 
@@ -318,21 +320,22 @@ class TestTraceItemTableFlexTime:
         result_size = 120
 
         queried_item_ids = []
-        while page_token != end_pagination:
-            times_queried += 1
-            message = _generate_table_request(
-                start_timestamp,
-                end_timestamp,
-                accuracy=DownsampledStorageConfig.Mode.MODE_HIGHEST_ACCURACY_FLEXTIME,
-                limit=limit_per_query,
-                page_token=page_token,
-            )
-            response = EndpointTraceItemTable().execute(message)
-            assert isinstance(response, TraceItemTableResponse)
-            result_size = len(response.column_values[0].results)
-            page_token = response.page_token
-            assert result_size == limit_per_query
-            queried_item_ids.extend(get_item_ids_from_response(response))
+        with override_component_config(strategy, "max_items_to_query", 20_000_000):
+            while page_token != end_pagination:
+                times_queried += 1
+                message = _generate_table_request(
+                    start_timestamp,
+                    end_timestamp,
+                    accuracy=DownsampledStorageConfig.Mode.MODE_HIGHEST_ACCURACY_FLEXTIME,
+                    limit=limit_per_query,
+                    page_token=page_token,
+                )
+                response = EndpointTraceItemTable().execute(message)
+                assert isinstance(response, TraceItemTableResponse)
+                result_size = len(response.column_values[0].results)
+                page_token = response.page_token
+                assert result_size == limit_per_query
+                queried_item_ids.extend(get_item_ids_from_response(response))
 
         assert times_queried == expected_times_queried
         assert len(set(queried_item_ids)) == len(queried_item_ids)
@@ -363,7 +366,6 @@ class TestTraceItemTableFlexTime:
         strategy = OutcomesFlexTimeRoutingStrategy()
         # we tell the routing strategy that the most items we can query is 20_000_000
         # this means that if we query a four hour time range, it will get split in two
-        strategy.set_config_value("max_items_to_query", 20_000_000)
 
         start_timestamp = Timestamp(
             seconds=int((BASE_TIME - timedelta(hours=num_hours_to_query)).timestamp())
@@ -380,25 +382,28 @@ class TestTraceItemTableFlexTime:
         expected_times_queried = 2
         end_pagination = PageToken(end_pagination=True)
         page_token = PageToken(offset=0)
-        while page_token != end_pagination:
-            times_queried += 1
-            message = _generate_table_request(
-                start_timestamp,
-                end_timestamp,
-                accuracy=DownsampledStorageConfig.Mode.MODE_HIGHEST_ACCURACY_FLEXTIME,
-                limit=limit_per_query,
-                page_token=page_token,
-            )
-            response = EndpointTraceItemTable().execute(message)
-            assert isinstance(response, TraceItemTableResponse)
-            page_token = response.page_token
-            result_size = len(response.column_values[0].results) if response.column_values else 0
-            if times_queried == 1:
-                assert result_size == 0
-            elif times_queried == 2:
-                assert result_size == 120
-            else:
-                raise AssertionError()
+        with override_component_config(strategy, "max_items_to_query", 20_000_000):
+            while page_token != end_pagination:
+                times_queried += 1
+                message = _generate_table_request(
+                    start_timestamp,
+                    end_timestamp,
+                    accuracy=DownsampledStorageConfig.Mode.MODE_HIGHEST_ACCURACY_FLEXTIME,
+                    limit=limit_per_query,
+                    page_token=page_token,
+                )
+                response = EndpointTraceItemTable().execute(message)
+                assert isinstance(response, TraceItemTableResponse)
+                page_token = response.page_token
+                result_size = (
+                    len(response.column_values[0].results) if response.column_values else 0
+                )
+                if times_queried == 1:
+                    assert result_size == 0
+                elif times_queried == 2:
+                    assert result_size == 120
+                else:
+                    raise AssertionError()
 
         assert times_queried == expected_times_queried
 
@@ -434,7 +439,6 @@ class TestTraceItemTableFlexTime:
         strategy = OutcomesFlexTimeRoutingStrategy()
         # we tell the routing strategy that the most items we can query is 20_000_000
         # this means that if we query a four hour time range, it will get split in two
-        strategy.set_config_value("max_items_to_query", 20_000_000)
 
         limit_per_query = 120
 
@@ -446,27 +450,28 @@ class TestTraceItemTableFlexTime:
         end_pagination = PageToken(end_pagination=True)
         page_token = PageToken(offset=0)
         queried_item_ids: list[str] = []
-        while page_token != end_pagination:
-            times_queried += 1
-            message = _generate_table_request(
-                start_timestamp,
-                end_timestamp,
-                accuracy=DownsampledStorageConfig.Mode.MODE_HIGHEST_ACCURACY_FLEXTIME,
-                limit=limit_per_query,
-                page_token=page_token,
-            )
-            response = EndpointTraceItemTable().execute(message)
-            assert isinstance(response, TraceItemTableResponse)
-            # insert new data so we make sure the the page token lets us resume where we left off
-            # event if new data comes in
-            new_data_points = LogOutcomeDataPoint(
-                time=BASE_TIME - timedelta(minutes=1),
-                num_outcomes=1000,
-                num_logs=1000,
-            )
-            queried_item_ids.extend(get_item_ids_from_response(response))
-            _store_logs_and_outcomes([new_data_points])
-            page_token = response.page_token
+        with override_component_config(strategy, "max_items_to_query", 20_000_000):
+            while page_token != end_pagination:
+                times_queried += 1
+                message = _generate_table_request(
+                    start_timestamp,
+                    end_timestamp,
+                    accuracy=DownsampledStorageConfig.Mode.MODE_HIGHEST_ACCURACY_FLEXTIME,
+                    limit=limit_per_query,
+                    page_token=page_token,
+                )
+                response = EndpointTraceItemTable().execute(message)
+                assert isinstance(response, TraceItemTableResponse)
+                # insert new data so we make sure the the page token lets us resume where we left off
+                # event if new data comes in
+                new_data_points = LogOutcomeDataPoint(
+                    time=BASE_TIME - timedelta(minutes=1),
+                    num_outcomes=1000,
+                    num_logs=1000,
+                )
+                queried_item_ids.extend(get_item_ids_from_response(response))
+                _store_logs_and_outcomes([new_data_points])
+                page_token = response.page_token
 
         # make sure there are no duplicates and we got all the items from the time range (before we added new data)
         assert len(set(queried_item_ids)) == len(queried_item_ids)

@@ -94,11 +94,6 @@ CLICKHOUSE_MAX_POOL_SIZE = 25
 # pool.get() when ClickHouse is hung but not dropping connections.
 CLICKHOUSE_POOL_GET_TIMEOUT_SECONDS = 5
 
-# Default for routing ClickHouse queries through clickhouse-connect (over the
-# HTTP protocol) instead of the native clickhouse-driver protocol. This default
-# can be overridden at runtime with the `use_clickhouse_connect_driver` config.
-USE_CLICKHOUSE_CONNECT_DRIVER = False
-
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
         "host": os.environ.get("CLICKHOUSE_HOST", "127.0.0.1"),
@@ -151,6 +146,7 @@ DDM_METRICS_SAMPLE_RATE = float(os.environ.get("SNUBA_DDM_METRICS_SAMPLE_RATE", 
 
 NEW_DOGSTATSD_HOST: str | None = os.environ.get("SNUBA_NEW_STATSD_HOST") or None
 NEW_DOGSTATSD_PORT: int | None = int(os.environ.get("SNUBA_NEW_STATSD_PORT") or 0) or None
+DOGSTATSD_SOCKET_PATH: str | None = os.environ.get("SNUBA_DOGSTATSD_SOCKET_PATH") or None
 
 CLICKHOUSE_READONLY_USER = os.environ.get("CLICKHOUSE_READONLY_USER", "default")
 CLICKHOUSE_READONLY_PASSWORD = os.environ.get("CLICKHOUSE_READONLY_PASSWORD", "")
@@ -248,13 +244,6 @@ USE_EAP_ITEMS_TABLE_START_TIMESTAMP_SECONDS = 1741762800
 
 # Represents 10AM PST April 8, 2025 which is the date we started writing the sampling factor. We can remove this setting once 90 days have passed since this date.
 USE_SAMPLING_FACTOR_TIMESTAMP_SECONDS = 1744131600
-
-# Represents 2026-06-23 00:00 UTC, the day after we began double-writing array
-# attributes into the typed `attributes_array_*` map columns (2026-06-22). Only
-# queries whose window starts on/after this read those typed columns; older data
-# only exists in the legacy `attributes_array` JSON column. We can remove this
-# setting once enough time has passed that all queryable data is double-written.
-USE_ARRAY_MAP_COLUMNS_TIMESTAMP_SECONDS = 1782172800
 
 # Processor/Writer Options
 

@@ -336,7 +336,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
     * Every allocation policy takes a `storage_key` in its init. The storage_key is like a pseudo-tenant. In different
         environments, storages may be co-located on the same cluster. To facilitate resource sharing, every allocation policy
         knows which storage_key it is serving. This is used to create unique keys for saving the config values.
-        See `__build_runtime_config_key()` for more info.
+        See `_build_config_key()` for more info.
     * Reiterating that you should no longer use `snuba.state.{get,set}_config()` for runtime configs for a specific Policy. Refer to the Configurations
         section of this docstring for more info.
     """

@@ -16,13 +16,10 @@ use sentry_arroyo::types::Topic;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
-use sentry_options::init_with_schemas;
-
 use crate::config;
 use crate::factory_v2::ConsumerStrategyFactoryV2;
 use crate::logging::{setup_logging, setup_sentry};
-use crate::metrics::global_tags::set_global_tag;
-use crate::metrics::statsd::StatsDBackend;
+use crate::metrics::statsd::create_dogstatsd_backend;
 use crate::processors;
 use crate::rebalancing;
 use crate::types::{InsertOrReplacement, KafkaMessageMetadata};
@@ -96,8 +93,7 @@ pub fn consumer_impl(
     use_row_binary: bool,
 ) -> usize {
     setup_logging();
-    init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)])
-        .expect("failed to initialize sentry-options");
+    crate::init_sentry_options().expect("failed to initialize sentry-options");
 
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
     let max_batch_size = consumer_config.max_batch_size;
@@ -144,20 +140,28 @@ pub fn consumer_impl(
     }
 
     // setup arroyo metrics
-    if let (Some(host), Some(port)) = (
-        consumer_config.env.dogstatsd_host,
-        consumer_config.env.dogstatsd_port,
-    ) {
+    {
         let storage_name = consumer_config
             .storages
             .iter()
             .map(|s| s.name.clone())
             .collect::<Vec<_>>()
             .join(",");
-        set_global_tag("storage".to_owned(), storage_name);
-        set_global_tag("consumer_group".to_owned(), consumer_group.to_owned());
 
-        metrics::init(StatsDBackend::new(&host, port, "snuba.consumer")).unwrap();
+        // Set tags on Sentry scope for error observability
+        sentry::configure_scope(|scope| {
+            scope.set_tag("storage", &storage_name);
+            scope.set_tag("consumer_group", consumer_group);
+        });
+
+        let tags = [
+            ("storage", storage_name.clone()),
+            ("consumer_group", consumer_group.to_owned()),
+        ];
+
+        if let Some(backend) = create_dogstatsd_backend(&env_config, "snuba.consumer", &tags) {
+            metrics::init(backend).unwrap();
+        }
     }
 
     if !use_rust_processor {
@@ -192,17 +196,6 @@ pub fn consumer_impl(
 
     // DLQ policy applies only if we are not skipping writes, otherwise we don't want to be
     // writing to the DLQ topics in prod.
-
-    let blq_producer_config = consumer_config.dlq_topic.as_ref().map(|dlq_topic_config| {
-        let mut overrides = dlq_topic_config.broker_config.clone();
-        overrides.insert("message.max.bytes".to_string(), "10000000".to_string()); // 10 MB, broker max
-        KafkaConfig::new_producer_config(vec![], Some(overrides))
-    });
-
-    let dlq_topic = consumer_config
-        .dlq_topic
-        .as_ref()
-        .map(|dlq_topic_config| Topic::new(&dlq_topic_config.physical_topic_name));
 
     let dlq_policy = consumer_config.dlq_topic.map(|dlq_topic_config| {
         let producer = KafkaProducer::new(KafkaConfig::new_producer_config(
@@ -289,8 +282,6 @@ pub fn consumer_impl(
         join_timeout_ms,
         health_check: health_check.to_string(),
         use_row_binary,
-        blq_producer_config: blq_producer_config.clone(),
-        blq_topic: dlq_topic,
     };
 
     let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);

@@ -1,6 +1,5 @@
 pub mod accepted_outcomes;
 pub mod accountant;
-pub mod blq_router;
 pub mod clickhouse;
 pub mod commit_log;
 pub mod healthcheck;
