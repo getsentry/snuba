@@ -26,7 +26,11 @@ fn is_broker_transport_failure_event(event: &Event<'_>) -> bool {
 }
 
 fn is_broker_transport_failure_log(log: &Log) -> bool {
-    log.body.starts_with(BROKER_TRANSPORT_FAILURE_LOG)
+    log.attributes
+        .get("tracing.module_path")
+        .and_then(|attribute| attribute.0.as_str())
+        == Some(ARROYO_KAFKA_LOGGER)
+        && log.body.starts_with(BROKER_TRANSPORT_FAILURE_LOG)
 }
 
 pub fn setup_logging() {
@@ -113,14 +117,19 @@ mod tests {
         }
     }
 
-    fn log(body: &str) -> Log {
+    fn log(module_path: &str, body: &str) -> Log {
         Log {
             level: LogLevel::Error,
             body: body.to_owned(),
             trace_id: None,
             timestamp: SystemTime::now(),
             severity_number: None,
-            attributes: Default::default(),
+            attributes: [(
+                "tracing.module_path".to_owned(),
+                module_path.to_owned().into(),
+            )]
+            .into_iter()
+            .collect(),
         }
     }
 
@@ -150,10 +159,16 @@ mod tests {
     #[test]
     fn identifies_only_broker_transport_failure_log() {
         assert!(is_broker_transport_failure_log(&log(
+            ARROYO_KAFKA_LOGGER,
             "librdkafka: Global error: BrokerTransportFailure (Local: Broker transport failure): broker:9092 disconnected",
         )));
         assert!(!is_broker_transport_failure_log(&log(
+            ARROYO_KAFKA_LOGGER,
             "librdkafka: Global error: Authentication (Local: Authentication failure)",
+        )));
+        assert!(!is_broker_transport_failure_log(&log(
+            "snuba::consumer",
+            "librdkafka: Global error: BrokerTransportFailure (Local: Broker transport failure): unrelated source",
         )));
     }
 }
