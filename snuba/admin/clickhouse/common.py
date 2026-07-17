@@ -33,6 +33,10 @@ class InvalidStorageError(SerializableException):
     pass
 
 
+def is_scrub_exempt_column(col_name: str | None) -> bool:
+    return col_name in {"ai_conversation_id"}
+
+
 def is_valid_node(host: str, port: int, cluster: ClickhouseCluster, storage_name: str) -> bool:
     nodes = [
         cluster.get_query_node(),
@@ -355,6 +359,13 @@ def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) ->
 
     if parsed.query_type != QueryType.SELECT:
         raise InvalidCustomQuery("Only SELECT queries are allowed")
+
+    # we need to unscrub some specific values.  Currently we do it by column name.  Don't allow queries that alias those names
+    invalid_aliases = [a for a in parsed.columns_aliases_names if is_scrub_exempt_column(a)]
+    if invalid_aliases:
+        raise InvalidCustomQuery(
+            f"Aliasing the following columns aren't allowed: {','.join(invalid_aliases)}"
+        )
 
     # This parser doesn't handle ARRAY JOIN clauses correctly, so do some
     # massaging to get around that. What ends up happening is that the columns

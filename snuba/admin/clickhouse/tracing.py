@@ -9,6 +9,7 @@ from uuid import UUID
 
 from snuba.admin.clickhouse.common import (
     get_ro_query_node_connection,
+    is_scrub_exempt_column,
     validate_ro_query,
 )
 from snuba.admin.clickhouse.trace_log_parsing import (
@@ -47,12 +48,13 @@ def run_query_and_get_trace(
         query=query, capture_trace=True, with_column_types=True, settings=settings or {}
     )
     summarized_trace_output = summarize_trace_output(query_result.trace_output)
+    cols = cast("list[tuple[str, str]]", query_result.meta)
     return TraceOutput(
         trace_output=query_result.trace_output,
         summarized_trace_output=summarized_trace_output,
-        cols=cast("list[tuple[str, str]]", query_result.meta),
+        cols=cols,
         num_rows_result=len(query_result.results),
-        result=list(map(scrub_row, query_result.results)),
+        result=[scrub_row(row, cols) for row in query_result.results],
         profile_events_results={},
         profile_events_meta=[],
         profile_events_profile={},
@@ -70,10 +72,11 @@ def is_hex(value: Any) -> bool:
         return False
 
 
-def scrub_row(row: tuple[Any, ...]) -> tuple[Any, ...]:
+def scrub_row(row: tuple[Any, ...], meta: list[tuple[str, str]] | None = None) -> tuple[Any, ...]:
     rv: list[Any] = []
-    for val in row:
-        if isinstance(val, (datetime, UUID)) or is_hex(val):
+    for i, val in enumerate(row):
+        col_name = meta[i][0] if meta and i < len(meta) else None
+        if is_scrub_exempt_column(col_name) or isinstance(val, (datetime, UUID)) or is_hex(val):
             rv.append(val)
         elif isinstance(val, (int, float)):
             if math.isnan(val):
