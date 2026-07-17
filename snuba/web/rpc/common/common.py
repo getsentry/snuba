@@ -1,5 +1,6 @@
 import math
 from collections.abc import Callable, Iterable
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from typing import Any, TypeVar
 
@@ -307,6 +308,7 @@ def dedupe_and_conditions(query: Query) -> None:
 _MAP_COLUMN_NULL_TYPE = {
     "attributes_string": "Nullable(String)",
     "attributes_float": "Nullable(Float64)",
+    "attributes_bool": "Nullable(Boolean)",
 }
 
 
@@ -317,20 +319,57 @@ def _typed_null_for_map_column(column_name: str) -> Expression:
     return literal(None)
 
 
-def add_existence_check_to_subscriptable_references(query: Query) -> None:
-    def transform(exp: Expression) -> Expression:
-        if not isinstance(exp, SubscriptableReference):
-            return exp
+_NON_BUCKETED_SCALAR_ATTRIBUTE_MAP_COLUMNS: frozenset[str] = frozenset(
+    {PROTO_TYPE_TO_ATTRIBUTE_COLUMN[AttributeKey.Type.TYPE_BOOLEAN]}
+)
 
-        return FunctionCall(
-            alias=exp.alias,
-            function_name="if",
-            parameters=(
-                map_key_exists(exp.column, exp.key),
-                SubscriptableReference(None, exp.column, exp.key),
-                _typed_null_for_map_column(exp.column.column_name),
-            ),
-        )
+
+def _non_bucketed_scalar_map_read(exp: Expression) -> tuple[Column, Expression] | None:
+    if not (isinstance(exp, FunctionCall) and exp.function_name == "cast" and exp.parameters):
+        return None
+    inner = exp.parameters[0]
+    if not (
+        isinstance(inner, FunctionCall)
+        and inner.function_name == "arrayElement"
+        and len(inner.parameters) == 2
+    ):
+        return None
+    array_arg, key_arg = inner.parameters
+    if (
+        isinstance(array_arg, Column)
+        and array_arg.column_name in _NON_BUCKETED_SCALAR_ATTRIBUTE_MAP_COLUMNS
+    ):
+        return array_arg, key_arg
+    return None
+
+
+def add_existence_check_to_map_attribute_reads(query: Query) -> None:
+    def transform(exp: Expression) -> Expression:
+        if isinstance(exp, SubscriptableReference):
+            return FunctionCall(
+                alias=exp.alias,
+                function_name="if",
+                parameters=(
+                    map_key_exists(exp.column, exp.key),
+                    SubscriptableReference(None, exp.column, exp.key),
+                    _typed_null_for_map_column(exp.column.column_name),
+                ),
+            )
+
+        non_bucketed_read = _non_bucketed_scalar_map_read(exp)
+        if non_bucketed_read is not None:
+            map_column, key = non_bucketed_read
+            return FunctionCall(
+                alias=exp.alias,
+                function_name="if",
+                parameters=(
+                    map_key_exists(map_column, key),
+                    replace(exp, alias=None),
+                    _typed_null_for_map_column(map_column.column_name),
+                ),
+            )
+
+        return exp
 
     query.transform_expressions(transform)
 

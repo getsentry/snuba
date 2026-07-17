@@ -41,7 +41,7 @@ from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
-    add_existence_check_to_subscriptable_references,
+    add_existence_check_to_map_attribute_reads,
     attribute_key_to_expression,
     base_conditions_and,
     trace_item_filters_to_expression,
@@ -437,7 +437,7 @@ def build_query(
         order_by=[OrderBy(expression=column("time_slot"), direction=OrderByDirection.ASC)],
     )
     treeify_or_and_conditions(res)
-    add_existence_check_to_subscriptable_references(res)
+    add_existence_check_to_map_attribute_reads(res)
     return res
 
 

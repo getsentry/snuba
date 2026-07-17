@@ -58,7 +58,7 @@ from snuba.request import Request as SnubaRequest
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
-    add_existence_check_to_subscriptable_references,
+    add_existence_check_to_map_attribute_reads,
     attribute_key_to_expression,
     base_conditions_and,
     get_field_existence_expression,
@@ -689,7 +689,7 @@ def build_query(
     )
     treeify_or_and_conditions(res)
     _apply_virtual_columns(res, request.virtual_column_contexts)
-    add_existence_check_to_subscriptable_references(res)
+    add_existence_check_to_map_attribute_reads(res)
     return res
 
 

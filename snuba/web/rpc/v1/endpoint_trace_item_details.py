@@ -28,7 +28,7 @@ from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     BUCKET_COUNT,
-    add_existence_check_to_subscriptable_references,
+    add_existence_check_to_map_attribute_reads,
     attribute_key_to_expression,
     base_conditions_and,
     merge_typed_array_maps,
@@ -110,7 +110,7 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
         limit=1,
     )
     treeify_or_and_conditions(res)
-    add_existence_check_to_subscriptable_references(res)
+    add_existence_check_to_map_attribute_reads(res)
     return res
 
 

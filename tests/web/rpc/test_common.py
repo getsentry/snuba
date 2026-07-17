@@ -37,6 +37,7 @@ from snuba.protos.common import (
     MalformedAttributeException,
     type_array_to_membership_array_expression_from_typed_columns,
 )
+from snuba.query import SelectedExpression
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column
 from snuba.query.expressions import (
@@ -53,6 +54,7 @@ from snuba.query.logical import Query
 from snuba.web.rpc.common.common import (
     _any_attribute_filter_to_expression,
     _comparison_can_match_column_default,
+    add_existence_check_to_map_attribute_reads,
     attribute_key_to_expression,
     dedupe_and_conditions,
     next_monday,
@@ -792,9 +794,10 @@ class TestAnalyzerSafeFilters:
 
 
 class TestBooleanAttributeFilters:
-    """Booleans are map-backed, so ``attr:false`` needs an existence guard — otherwise a
-    missing key reads as the ``false`` default and matches items lacking the attribute
-    (getsentry/sentry#119735).
+    """Booleans are map-backed, so they need an existence guard — otherwise a missing key
+    reads as the ``false`` default. In a filter (``attr:false``) that wrongly matches items
+    lacking the attribute; in a SELECT it wrongly renders as ``false`` instead of empty
+    (getsentry/sentry#119735 and its follow-up).
     """
 
     @staticmethod
@@ -846,6 +849,27 @@ class TestBooleanAttributeFilters:
         expr = self._build(ComparisonFilter.OP_EQUALS, value=AttributeValue(val_bool=False))
         columns = {n.column_name for n in self._walk(expr) if isinstance(n, ColumnExpr)}
         assert columns == {"attributes_bool"}
+
+    def _bool_select_after_transform(self, name: str = "hasCodeTag") -> Expression:
+        key = AttributeKey(type=AttributeKey.Type.TYPE_BOOLEAN, name=name)
+        query = Query(
+            from_clause=None,
+            selected_columns=[SelectedExpression(name, attribute_key_to_expression(key))],
+        )
+        add_existence_check_to_map_attribute_reads(query)
+        return query.get_selected_columns()[0].expression
+
+    def test_select_guards_missing_key_as_null(self) -> None:
+        expr = self._bool_select_after_transform()
+        assert isinstance(expr, FunctionCall) and expr.function_name == "if"
+        assert {"if", "has", "mapKeys", "arrayElement"} <= self._fn_names(expr)
+        _, value, otherwise = expr.parameters
+        assert isinstance(otherwise, FunctionCall) and otherwise.function_name == "cast"
+        assert otherwise.parameters[0] == Literal(None, None)
+        columns = {n.column_name for n in self._walk(expr) if isinstance(n, ColumnExpr)}
+        assert columns == {"attributes_bool"}
+        assert expr.alias == "hasCodeTag_TYPE_BOOLEAN"
+        assert value.alias is None
 
 
 class TestNormalizedColumnsNotMapBacked:
