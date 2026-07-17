@@ -32,6 +32,7 @@ from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
 )
+from tests.configs.component_config import set_component_config
 
 BASE_TIME = datetime.utcnow().replace(
     hour=8, minute=0, second=0, microsecond=0, tzinfo=UTC
@@ -500,12 +501,12 @@ class FakeRoutingStrategy(BaseRoutingStrategy):
 
     def get_allocation_policies(self) -> list[AllocationPolicy]:
         policy = FakePolicy(ResourceIdentifier(self.__class__.__name__), [], {})
-        policy.set_config_value("fake_optional_config", 15, {"org_id": 15})
+        set_component_config(policy, "fake_optional_config", 15, {"org_id": 15})
         return [policy]
 
     def get_delete_allocation_policies(self) -> list[AllocationPolicy]:
         policy = FakeDeletePolicy(ResourceIdentifier(self.__class__.__name__), [], {})
-        policy.set_config_value("fake_optional_config", 20, {"org_id": 20})
+        set_component_config(policy, "fake_optional_config", 20, {"org_id": 20})
         return [policy]
 
 
@@ -715,7 +716,7 @@ class FakeDeletePolicy(AllocationPolicy):
 def test_get_allocation_policy_configs(admin_api: FlaskClient) -> None:
     def mock_get_policies() -> list[AllocationPolicy]:
         policy = FakePolicy(ResourceIdentifier(StorageKey("nothing")), [], {})
-        policy.set_config_value("fake_optional_config", 10, {"org_id": 10})
+        set_component_config(policy, "fake_optional_config", 10, {"org_id": 10})
         return [policy]
 
     with mock.patch(
@@ -749,274 +750,25 @@ def test_get_allocation_policy_configs(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
-    # an end to end test setting a config, retrieving allocation policy configs,
-    # and deleting the config afterwards
-    auditlog_records = []
-
-    def mock_record(user: Any, action: Any, data: Any, notify: Any) -> None:
-        nonlocal auditlog_records
-        auditlog_records.append((user, action, data, notify))
-
-    with mock.patch("snuba.admin.views.audit_log.record", side_effect=mock_record):
-        response = admin_api.post(
-            "/set_configurable_component_configuration",
-            data=json.dumps(
-                {
-                    "configurable_component_namespace": "AllocationPolicy",
-                    "configurable_component_class_name": "BytesScannedWindowAllocationPolicy",
-                    "resource_name": "errors",
-                    "key": "org_limit_bytes_scanned_override",
-                    "params": {"org_id": 1},
-                    "value": "420",
-                }
-            ),
-        )
-
-        assert response.status_code == 200, response.json
-        # make sure an auditlog entry was recorded
-        assert auditlog_records.pop()
-        response = admin_api.get("/allocation_policy_configs/errors")
-        assert response.status_code == 200
-
-        # three policies
-        assert response.json is not None and len(response.json) == 5
-        policy_configs = response.json
-        bytes_scanned_policy = [
-            policy
-            for policy in policy_configs
-            if policy["configurable_component_class_name"] == "BytesScannedWindowAllocationPolicy"
-        ][0]
-
-        assert (
-            bytes_scanned_policy["configurable_component_class_name"]
-            == "BytesScannedWindowAllocationPolicy"
-        )
-        assert {
-            "default": -1,
-            "description": "Number of bytes a specific org can scan in a 10 minute window.",
-            "name": "org_limit_bytes_scanned_override",
-            "params": {"org_id": 1},
-            "type": "int",
-            "value": 420,
-        } in bytes_scanned_policy["configurations"]
-
-        # no need to record auditlog when nothing was updated
-        assert not auditlog_records
-        assert (
-            admin_api.delete(
-                "/set_configurable_component_configuration",
-                data=json.dumps(
-                    {
-                        "configurable_component_namespace": "AllocationPolicy",
-                        "configurable_component_class_name": "BytesScannedWindowAllocationPolicy",
-                        "resource_name": "errors",
-                        "key": "org_limit_bytes_scanned_override",
-                        "params": {"org_id": 1},
-                    }
-                ),
-            ).status_code
-            == 200
-        )
-
-        response = admin_api.get("/allocation_policy_configs/errors")
-        assert response.status_code == 200
-        assert response.json is not None and len(response.json) == 5
-        assert {
-            "default": -1,
-            "description": "Number of bytes a specific org can scan in a 10 minute window.",
-            "name": "org_limit_bytes_scanned_override",
-            "params": {"org_id": 1},
-            "type": "int",
-            "value": 420,
-        } not in response.json[0]["configurations"]
-        # make sure an auditlog entry was recorded
-        assert auditlog_records.pop()
-
-
-@pytest.mark.redis_db
-def test_set_routing_strategy_config(admin_api: FlaskClient) -> None:
-    auditlog_records = []
-
-    def mock_record(user: Any, action: Any, data: Any, notify: Any) -> None:
-        nonlocal auditlog_records
-        auditlog_records.append((user, action, data, notify))
-
-    with (
-        mock.patch(
-            "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.BaseRoutingStrategy.get_from_name",
-            side_effect=lambda strategy_name: FakeRoutingStrategy,
-        ),
-        mock.patch("snuba.admin.views.audit_log.record", side_effect=mock_record),
-    ):
-        # Set a routing strategy config
-        response = admin_api.post(
-            "/set_configurable_component_configuration",
-            data=json.dumps(
-                {
-                    "configurable_component_namespace": "BaseRoutingStrategy",
-                    "configurable_component_class_name": "FakeRoutingStrategy",
-                    "resource_name": "FakeRoutingStrategy",
-                    "key": "fake_strategy_config",
-                    "value": "75",
-                }
-            ),
-        )
-        assert response.status_code == 200, response.json
-        assert auditlog_records.pop()
-
-        # Retrieve the routing strategy configs to verify the config was set
-        response = admin_api.get("/routing_strategy_configs/FakeRoutingStrategy")
-        assert response.status_code == 200
-        assert response.json is not None
-
-        # Verify the config was set correctly
-        strategy_data = response.json
-        assert strategy_data["configurable_component_class_name"] == "FakeRoutingStrategy"
-        assert {
-            "name": "fake_strategy_config",
-            "type": "int",
-            "default": 50,
-            "description": "A fake config for testing",
-            "value": 75,
+def test_configurable_component_writes_are_rejected(admin_api: FlaskClient) -> None:
+    """Config is managed in sentry-options-automator; snuba-admin no longer writes
+    it, so set/delete are rejected with a clear 405 (not a bare 404)."""
+    body = json.dumps(
+        {
+            "configurable_component_namespace": "AllocationPolicy",
+            "configurable_component_class_name": "BytesScannedWindowAllocationPolicy",
+            "resource_name": "errors",
+            "key": "org_limit_bytes_scanned",
             "params": {},
-        } in strategy_data["configurations"]
-
-        # Delete the routing strategy config
-        response = admin_api.delete(
-            "/set_configurable_component_configuration",
-            data=json.dumps(
-                {
-                    "configurable_component_namespace": "BaseRoutingStrategy",
-                    "configurable_component_class_name": "FakeRoutingStrategy",
-                    "resource_name": "FakeRoutingStrategy",
-                    "key": "fake_strategy_config",
-                }
-            ),
-        )
-        assert response.status_code == 200
-
-        # Verify the config was deleted by checking again
-        response = admin_api.get("/routing_strategy_configs/FakeRoutingStrategy")
-        assert response.status_code == 200
-        assert response.json is not None
-
-        # The config should be back to its default value
-        strategy_data = response.json
-        assert strategy_data["configurable_component_class_name"] == "FakeRoutingStrategy"
-        assert {
-            "name": "fake_strategy_config",
-            "type": "int",
-            "default": 50,
-            "description": "A fake config for testing",
-            "value": 50,
-            "params": {},
-        } in strategy_data["configurations"]
-
-        # make sure an auditlog entry was recorded for the delete
-        assert auditlog_records.pop()
-
-
-@pytest.mark.redis_db
-def test_set_allocation_policy_config_for_strategy(admin_api: FlaskClient) -> None:
-    auditlog_records = []
-
-    def mock_record(user: Any, action: Any, data: Any, notify: Any) -> None:
-        nonlocal auditlog_records
-        auditlog_records.append((user, action, data, notify))
-
-    def mock_get_from_name(strategy_name: str) -> type[BaseRoutingStrategy]:
-        return FakeRoutingStrategy
-
-    with (
-        mock.patch(
-            "snuba.web.rpc.storage_routing.routing_strategies.storage_routing.BaseRoutingStrategy.get_from_name",
-            side_effect=mock_get_from_name,
-        ),
-        mock.patch("snuba.admin.views.audit_log.record", side_effect=mock_record),
+            "value": "420",
+        }
+    )
+    for response in (
+        admin_api.post("/set_configurable_component_configuration", data=body),
+        admin_api.delete("/set_configurable_component_configuration", data=body),
     ):
-        # Set an allocation policy config for the strategy
-        response = admin_api.post(
-            "/set_configurable_component_configuration",
-            data=json.dumps(
-                {
-                    "configurable_component_namespace": "AllocationPolicy",
-                    "configurable_component_class_name": "FakePolicy",
-                    "resource_name": "FakeRoutingStrategy",
-                    "key": "fake_optional_config",
-                    "params": {"org_id": 1},
-                    "value": "420",
-                }
-            ),
-        )
-        assert response.status_code == 200, response.json
-        # make sure an auditlog entry was recorded
-        assert auditlog_records.pop()
-
-        # Retrieve the allocation policy configs to verify the config was set
-        response = admin_api.get("/routing_strategy_configs/FakeRoutingStrategy")
-        assert response.status_code == 200
-        assert response.json is not None
-
-        strategy_data = response.json
-        assert strategy_data["configurable_component_class_name"] == "FakeRoutingStrategy"
-        assert len(strategy_data["policies_data"]) == 2
-
-        fake_policy = next(
-            policy
-            for policy in strategy_data["policies_data"]
-            if policy["configurable_component_class_name"] == "FakePolicy"
-        )
-
-        assert fake_policy["configurable_component_class_name"] == "FakePolicy"
-        assert {
-            "default": -1,
-            "description": "",
-            "name": "fake_optional_config",
-            "params": {"org_id": 1},
-            "type": "int",
-            "value": 420,
-        } in fake_policy["configurations"]
-
-        # Delete the allocation policy config for the strategy
-        response = admin_api.delete(
-            "/set_configurable_component_configuration",
-            data=json.dumps(
-                {
-                    "configurable_component_namespace": "AllocationPolicy",
-                    "configurable_component_class_name": "FakePolicy",
-                    "resource_name": "FakeRoutingStrategy",
-                    "key": "fake_optional_config",
-                    "params": {"org_id": 1},
-                }
-            ),
-        )
-        assert response.status_code == 200
-
-        # Verify the config was deleted by checking again
-        response = admin_api.get("/routing_strategy_configs/FakeRoutingStrategy")
-        assert response.status_code == 200
-        assert response.json is not None
-
-        strategy_data = response.json
-        fake_policy = next(
-            policy
-            for policy in strategy_data["policies_data"]
-            if policy["configurable_component_class_name"] == "FakePolicy"
-        )
-
-        # The config should be back to its default value
-        assert {
-            "default": -1,
-            "description": "",
-            "name": "fake_optional_config",
-            "params": {"org_id": 1},
-            "type": "int",
-            "value": 420,
-        } not in fake_policy["configurations"]
-
-        # make sure an auditlog entry was recorded for the delete
-        assert auditlog_records.pop()
+        assert response.status_code == 405, response.json
+        assert response.json is not None and "sentry-options-automator" in response.json["error"]
 
 
 @pytest.mark.redis_db

@@ -11,6 +11,7 @@ from snuba.query.allocation_policies.bytes_scanned_rejecting_policy import (
     BytesScannedRejectingPolicy,
 )
 from snuba.web import QueryException, QueryResult
+from tests.configs.component_config import set_component_config
 
 PROJECT_REFERRER_SCAN_LIMIT = 1000
 ORGANIZATION_REFERRER_SCAN_LIMIT = PROJECT_REFERRER_SCAN_LIMIT * 2
@@ -31,11 +32,13 @@ def policy() -> AllocationPolicy:
 
 
 def _configure_policy(policy: AllocationPolicy) -> None:
-    policy.set_config_value("is_active", 1)
-    policy.set_config_value("is_enforced", 1)
-    policy.set_config_value("max_threads", MAX_THREAD_NUMBER)
-    policy.set_config_value("project_referrer_scan_limit", PROJECT_REFERRER_SCAN_LIMIT)
-    policy.set_config_value("organization_referrer_scan_limit", ORGANIZATION_REFERRER_SCAN_LIMIT)
+    set_component_config(policy, "is_active", 1)
+    set_component_config(policy, "is_enforced", 1)
+    set_component_config(policy, "max_threads", MAX_THREAD_NUMBER)
+    set_component_config(policy, "project_referrer_scan_limit", PROJECT_REFERRER_SCAN_LIMIT)
+    set_component_config(
+        policy, "organization_referrer_scan_limit", ORGANIZATION_REFERRER_SCAN_LIMIT
+    )
 
 
 @pytest.mark.parametrize(
@@ -213,7 +216,7 @@ def test_overrides(
 ) -> None:
     _configure_policy(policy)
     limit = overrides[1]
-    policy.set_config_value(*overrides)
+    set_component_config(policy, *overrides)
     allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
     assert allowance.can_run
     policy.update_quota_balance(
@@ -240,17 +243,20 @@ def test_org_override_precedence(policy: BytesScannedRejectingPolicy) -> None:
         "organization_id": 123,
         "referrer": "some_referrer",
     }
-    policy.set_config_value(
+    set_component_config(
+        policy,
         "referrer_all_organizations_scan_limit_override",
         1000,
         {"referrer": "some_referrer"},
     )
-    policy.set_config_value(
+    set_component_config(
+        policy,
         "organization_scan_limit_override",
         500,
         {"organization_id": 123},
     )
-    policy.set_config_value(
+    set_component_config(
+        policy,
         "organization_referrer_scan_limit_override",
         100,
         {"organization_id": 123, "referrer": "some_referrer"},
@@ -292,7 +298,8 @@ def test_org_max_bytes_to_read_cap(policy: BytesScannedRejectingPolicy) -> None:
         "organization_id": 123,
         "referrer": "some_referrer",
     }
-    policy.set_config_value(
+    set_component_config(
+        policy,
         "organization_max_bytes_to_read",
         500,
         {"organization_id": 123},
@@ -353,7 +360,8 @@ def test_org_cap_does_not_record_into_sliding_window(
         "organization_id": 123,
         "referrer": "some_referrer",
     }
-    policy.set_config_value(
+    set_component_config(
+        policy,
         "organization_max_bytes_to_read",
         500,
         {"organization_id": 123},
@@ -375,7 +383,8 @@ def test_org_cap_does_not_record_into_sliding_window(
 
     # Remove the cap; the sliding window should be empty, so the next query
     # is allowed under the normal org-referrer limit.
-    policy.set_config_value(
+    set_component_config(
+        policy,
         "organization_max_bytes_to_read",
         -1,
         {"organization_id": 123},
@@ -394,12 +403,14 @@ def test_org_referrer_cap_beats_org_cap(policy: BytesScannedRejectingPolicy) -> 
         "organization_id": 123,
         "referrer": "some_referrer",
     }
-    policy.set_config_value(
+    set_component_config(
+        policy,
         "organization_max_bytes_to_read",
         1000,
         {"organization_id": 123},
     )
-    policy.set_config_value(
+    set_component_config(
+        policy,
         "organization_referrer_max_bytes_to_read",
         200,
         {"organization_id": 123, "referrer": "some_referrer"},
@@ -435,12 +446,14 @@ def test_org_caps_do_not_apply_to_project_queries(
         "project_id": 12345,
         "referrer": "some_referrer",
     }
-    policy.set_config_value(
+    set_component_config(
+        policy,
         "organization_max_bytes_to_read",
         500,
         {"organization_id": 123},
     )
-    policy.set_config_value(
+    set_component_config(
+        policy,
         "organization_referrer_max_bytes_to_read",
         200,
         {"organization_id": 123, "referrer": "some_referrer"},
@@ -471,7 +484,8 @@ def test_penalize_timeout(policy: BytesScannedRejectingPolicy) -> None:
         "project_id": 12345,
         "referrer": "some_referrer",
     }
-    policy.set_config_value(
+    set_component_config(
+        policy,
         "clickhouse_timeout_bytes_scanned_penalization",
         ORGANIZATION_REFERRER_SCAN_LIMIT * 2,
     )
@@ -502,8 +516,9 @@ def test_does_not_throttle_and_then_throttles(
         "referrer": "api.trace-explorer.stats",
     }
     bytes_to_scan = 100000001
-    policy.set_config_value("bytes_throttle_divider", 100)
-    policy.set_config_value(
+    set_component_config(policy, "bytes_throttle_divider", 100)
+    set_component_config(
+        policy,
         "referrer_all_projects_scan_limit_override",
         20000000000,
         {"referrer": "api.trace-explorer.stats"},
@@ -553,14 +568,15 @@ def test_limit_bytes_read(
     scan_limit = 20000000000
     threads_throttle_divider = 2
     max_bytes_to_read_scan_limit_divider = 100
-    policy.set_config_value("threads_throttle_divider", threads_throttle_divider)
-    policy.set_config_value("bytes_throttle_divider", 100)
-    policy.set_config_value("limit_bytes_instead_of_rejecting", 1)
-    policy.set_config_value(
-        "max_bytes_to_read_scan_limit_divider", max_bytes_to_read_scan_limit_divider
+    set_component_config(policy, "threads_throttle_divider", threads_throttle_divider)
+    set_component_config(policy, "bytes_throttle_divider", 100)
+    set_component_config(policy, "limit_bytes_instead_of_rejecting", 1)
+    set_component_config(
+        policy, "max_bytes_to_read_scan_limit_divider", max_bytes_to_read_scan_limit_divider
     )
 
-    policy.set_config_value(
+    set_component_config(
+        policy,
         "referrer_all_projects_scan_limit_override",
         scan_limit,
         {"referrer": "api.trace-explorer.stats"},

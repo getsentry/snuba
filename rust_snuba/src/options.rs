@@ -57,7 +57,6 @@ pub fn get_max_insert_block_size(storage_name: &str) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sentry_options::init_with_schemas;
     use sentry_options::testing::override_options;
     use serde_json::json;
     use std::sync::Once;
@@ -65,7 +64,7 @@ mod tests {
     static INIT: Once = Once::new();
 
     fn init_options() {
-        INIT.call_once(|| init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap());
+        INIT.call_once(|| crate::init_sentry_options().unwrap());
     }
 
     #[test]

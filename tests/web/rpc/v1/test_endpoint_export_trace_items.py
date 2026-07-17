@@ -32,6 +32,7 @@ from snuba.web.rpc.v1.endpoint_export_trace_items import (
     KeysetCursor,
 )
 from tests.base import BaseApiTest
+from tests.configs.component_config import set_component_config
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.routing_strategies.common import override_component_config
 from tests.web.rpc.v1.test_utils import _DEFAULT_ATTRIBUTES, BASE_TIME, gen_item_message
@@ -503,7 +504,7 @@ class TestExportTraceItems(BaseApiTest):
 
         expected_ids = {item_id for item_id, color in written_items if color in expected_colors}
 
-        OutcomesFlexTimeRoutingStrategy().set_config_value("max_items_to_query", max_items)
+        set_component_config(OutcomesFlexTimeRoutingStrategy(), "max_items_to_query", max_items)
 
         # outcomes_hourly buckets by hour, so second-level splits are invisible to routing.
         # Mock the count directly so each sub-range sees the logically correct volume.

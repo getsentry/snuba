@@ -5,7 +5,6 @@ from typing import Any, cast
 import pytest
 
 from snuba import state
-from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.manual_jobs import JobSpec
 from snuba.manual_jobs.job_logging import get_console_job_logger
 from snuba.manual_jobs.log_runtime_configs import (
@@ -13,7 +12,6 @@ from snuba.manual_jobs.log_runtime_configs import (
     PAYLOAD_START_MARKER,
     LogRuntimeConfigs,
 )
-from snuba.query.allocation_policies import AllocationPolicy, PassthroughPolicy
 from snuba.redis import RedisClientKey, get_redis_client
 
 
@@ -49,14 +47,6 @@ def _run_and_get_payload() -> dict[str, Any]:
     return _extract_payload(logs)
 
 
-def _find_allocation_policy() -> AllocationPolicy:
-    for storage_key in get_all_storage_keys():
-        for policy in get_storage(storage_key).get_allocation_policies():
-            if not isinstance(policy, PassthroughPolicy):
-                return policy
-    raise AssertionError("no non-passthrough allocation policy found")
-
-
 @pytest.mark.redis_db
 def test_dumps_runtime_configs_from_config_client() -> None:
     state.set_config("a_test_config", 42)
@@ -67,17 +57,6 @@ def test_dumps_runtime_configs_from_config_client() -> None:
 
     # Values are dumped raw (as stored in Redis), grouped by config key.
     assert payload["config"]["snuba-config"]["a_test_config"] == "42"
-
-
-@pytest.mark.redis_db
-def test_dumps_allocation_policy_overrides_from_capman_hash() -> None:
-    policy = _find_allocation_policy()
-    policy.set_config_value("is_enforced", 0)
-    expected_key = policy._build_runtime_config_key("is_enforced", {})
-
-    payload = _run_and_get_payload()
-
-    assert payload["config"]["capman"][expected_key] == "0"
 
 
 @pytest.mark.redis_db

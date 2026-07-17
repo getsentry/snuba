@@ -665,7 +665,6 @@ mod tests {
     use std::time::SystemTime;
 
     use prost_types::Timestamp;
-    use sentry_options::init_with_schemas;
     use sentry_options::testing::override_options;
     use sentry_protos::snuba::v1::any_value::Value;
     use sentry_protos::snuba::v1::{AnyValue, ArrayValue, TraceItemType};
@@ -677,7 +676,7 @@ mod tests {
 
     static INIT: Once = Once::new();
     fn init_options() {
-        INIT.call_once(|| init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap());
+        INIT.call_once(|| crate::init_sentry_options().unwrap());
     }
 
     fn generate_trace_item(item_id: Uuid) -> TraceItem {

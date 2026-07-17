@@ -13,7 +13,7 @@ use sentry_arroyo::types::Message;
 use sentry_arroyo::{counter, timer};
 
 use crate::config::ClickhouseConfig;
-use crate::runtime_config::{get_load_balancing_config, get_max_insert_block_size};
+use crate::options::{get_load_balancing_config, get_max_insert_block_size};
 use crate::types::{BytesInsertBatch, RowData};
 
 fn clickhouse_task_runner(
@@ -414,7 +414,6 @@ fn lz4_compress(input: &[u8]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sentry_options::init_with_schemas;
     use sentry_options::testing::override_options;
     use serde_json::json;
     use std::sync::Once;
@@ -422,7 +421,7 @@ mod tests {
 
     static INIT: Once = Once::new();
     fn init_options() {
-        INIT.call_once(|| init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)]).unwrap());
+        INIT.call_once(|| crate::init_sentry_options().unwrap());
     }
 
     fn make_test_config() -> ClickhouseConfig {
