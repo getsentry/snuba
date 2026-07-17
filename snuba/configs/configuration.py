@@ -27,6 +27,12 @@ T = TypeVar("T", bound="ConfigurableComponent")
 # comes from has moved.
 CONFIGURABLE_COMPONENT_OVERRIDES_KEY = "configurable_component_overrides"
 
+# A parameterized config key is ``{resource}.{ClassName}.{config}`` followed by a
+# sorted, PARAM_DELIMITER-joined run of ``{name}PARAM_KV_DELIMITER{value}`` pairs,
+# e.g. ``errors.MyPolicy.my_config|organization_id:1|referrer:api.foo``.
+PARAM_DELIMITER = "|"
+PARAM_KV_DELIMITER = ":"
+
 
 class InvalidConfig(Exception):
     pass
@@ -260,29 +266,16 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         return config
 
     def __deserialize_config_key(self, key: str) -> tuple[str, dict[str, Any]]:
+        """Inverse of ``_build_config_key``: split ``{component}.{config}[|k:v...]``
+        into ``(config, {k: v})``.
+
+        - `"mystorage.MyAllocationPolicy.my_config"` -> `("my_config", {})`
+        - `"mystorage.MyAllocationPolicy.my_config|a:1|b:2"` -> `("my_config", {"a": "1", "b": "2"})`
         """
-        Given a fully-qualified config key, deconstructs it into its config key
-        and parameters components.
-
-        Examples:
-        - `"mystorage.MyAllocationPolicy.my_config"`
-            - returns `"my_config", {}`
-        - `"mystorage.MyAllocationPolicy.my_config|a:1|b:2"`
-            - returns `"my_config", {"a": 1, "b": 2}`
-        """
-        # base is "storage.policy.config"; params (if any) follow after a "|",
-        # each a "param:value" pair, "|"-delimited.
-        base, _, params_string = key.partition("|")
-        config_key = base[len(self.component_name()) + 1 :]
-        params_dict = {}
-        if params_string:
-            for param_string in params_string.split("|"):
-                param_key, _, param_value = param_string.partition(":")
-                params_dict[param_key] = param_value
-
-        self._validate_config_params(config_key=config_key, params=params_dict)
-
-        return config_key, params_dict
+        config_key, *param_pairs = key[len(self.component_name()) + 1 :].split(PARAM_DELIMITER)
+        params = dict(pair.split(PARAM_KV_DELIMITER, 1) for pair in param_pairs)
+        self._validate_config_params(config_key=config_key, params=params)
+        return config_key, params
 
     def get_current_configs(self) -> list[dict[str, Any]]:
         """Returns a list of live configs with their definitions on this ConfigurableComponent.
@@ -353,18 +346,15 @@ class ConfigurableComponent(ABC, metaclass=RegisteredClass):
         ]
 
     def _build_config_key(self, config: str, params: dict[str, Any]) -> str:
-        """
-        Builds the fully-qualified config key used to look up an override.
+        """Builds the fully-qualified config key used to look up an override.
 
-        Example return values:
-        - `"mystorage.MyAllocationPolicy.my_config"`            # no params
-        - `"mystorage.MyAllocationPolicy.my_config|a:1|b:2"`    # sorted params
+        - no params -> `"mystorage.MyAllocationPolicy.my_config"`
+        - sorted params -> `"mystorage.MyAllocationPolicy.my_config|a:1|b:2"`
         """
-        base = f"{self.component_name()}.{config}"
-        if not params:
-            return base
-        suffix = "|".join(f"{param}:{params[param]}" for param in sorted(params))
-        return f"{base}|{suffix}"
+        key = f"{self.component_name()}.{config}"
+        for param in sorted(params):
+            key += f"{PARAM_DELIMITER}{param}{PARAM_KV_DELIMITER}{params[param]}"
+        return key
 
     def get_config_value(
         self,
