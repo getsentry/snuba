@@ -202,9 +202,6 @@ class TestBooleanAttributeFilteringForLogs(BaseApiTest):
         assert returned == list(range(10, 20))
 
     def test_select_absent_attribute_is_null_not_false(self, setup_bool_logs_in_db: Any) -> None:
-        # Selecting the attribute (rather than filtering on it) must return an empty (NULL)
-        # value for items lacking it, not the `false` default (getsentry/sentry#119735
-        # follow-up).
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -236,12 +233,11 @@ class TestBooleanAttributeFilteringForLogs(BaseApiTest):
         response = EndpointTraceItemTable().execute(message)
         by_label = {v.attribute_name: v for v in response.column_values}
         int_values = [v.val_int for v in by_label["int_tag"].results]
-        # int_tag drives the row order, so zip pairs each row's int with its bool value.
         by_int = dict(zip(int_values, by_label["hasCodeTag"].results, strict=True))
 
-        for i in range(10):  # stored false -> explicit false, not NULL
+        for i in range(10):
             assert by_int[i].WhichOneof("value") == "val_bool" and by_int[i].val_bool is False
-        for i in range(10, 20):  # stored true
+        for i in range(10, 20):
             assert by_int[i].WhichOneof("value") == "val_bool" and by_int[i].val_bool is True
-        for i in range(20, 30):  # absent -> NULL/empty, NOT false
+        for i in range(20, 30):
             assert by_int[i].is_null is True and by_int[i].WhichOneof("value") != "val_bool"

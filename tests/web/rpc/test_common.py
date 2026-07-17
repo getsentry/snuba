@@ -860,21 +860,14 @@ class TestBooleanAttributeFilters:
         return query.get_selected_columns()[0].expression
 
     def test_select_guards_missing_key_as_null(self) -> None:
-        # In a SELECT a bool read is cast(arrayElement(attributes_bool, key)), not a
-        # SubscriptableReference, so add_existence_check_to_subscriptable_references must
-        # guard it too — otherwise a missing key renders as the `false` default instead of
-        # empty (getsentry/sentry#119735 follow-up).
         expr = self._bool_select_after_transform()
-        # if(has(mapKeys(attributes_bool), 'hasCodeTag'), value, cast(NULL, ...))
         assert isinstance(expr, FunctionCall) and expr.function_name == "if"
         assert {"if", "has", "mapKeys", "arrayElement"} <= self._fn_names(expr)
         _, value, otherwise = expr.parameters
         assert isinstance(otherwise, FunctionCall) and otherwise.function_name == "cast"
-        assert otherwise.parameters[0] == Literal(None, None)  # typed NULL, not false
+        assert otherwise.parameters[0] == Literal(None, None)
         columns = {n.column_name for n in self._walk(expr) if isinstance(n, ColumnExpr)}
         assert columns == {"attributes_bool"}
-        # alias moves to the outer if(...); the inner value must not carry it (a duplicate
-        # alias would collide in the SELECT clause).
         assert expr.alias == "hasCodeTag_TYPE_BOOLEAN"
         assert value.alias is None
 
