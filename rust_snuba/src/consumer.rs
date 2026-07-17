@@ -197,6 +197,10 @@ pub fn consumer_impl(
     // DLQ policy applies only if we are not skipping writes, otherwise we don't want to be
     // writing to the DLQ topics in prod.
 
+    // Whether a DLQ topic is configured. The DLQ-by-age strategy relies on the
+    // DLQ policy, so it is only wired into the factory when this is true.
+    let dlq_configured = consumer_config.dlq_topic.is_some();
+
     let dlq_policy = consumer_config.dlq_topic.map(|dlq_topic_config| {
         let producer = KafkaProducer::new(KafkaConfig::new_producer_config(
             vec![],
@@ -282,6 +286,7 @@ pub fn consumer_impl(
         join_timeout_ms,
         health_check: health_check.to_string(),
         use_row_binary,
+        dlq_configured,
     };
 
     let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);

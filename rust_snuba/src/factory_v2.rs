@@ -27,6 +27,7 @@ use crate::strategies::accountant::RecordCogs;
 
 use crate::strategies::clickhouse::writer_v2::{ClickhouseWriterStep, InsertFormat};
 use crate::strategies::commit_log::ProduceCommitLog;
+use crate::strategies::dlq_by_age::DlqByAge;
 use crate::strategies::healthcheck::HealthCheck as SnubaHealthCheck;
 use crate::strategies::join_timeout::SetJoinTimeout;
 use crate::strategies::processor::{
@@ -62,6 +63,10 @@ pub struct ConsumerStrategyFactoryV2 {
     pub join_timeout_ms: Option<u64>,
     pub health_check: String,
     pub use_row_binary: bool,
+    // Whether this consumer has a DLQ topic configured. The DLQ-by-age strategy
+    // is only inserted when true, since without a DLQ policy an InvalidMessage
+    // is logged and silently dropped by arroyo (losing data).
+    pub dlq_configured: bool,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
@@ -288,6 +293,16 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             next_step,
             Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
         );
+
+        // Shed a configurable proportion of too-old messages to the DLQ so a
+        // backlogged consumer can catch up to fresh data. Only wired when a DLQ
+        // is configured (see DlqByAge docs / the `dlq_configured` field);
+        // disabled per-storage by default via sentry-options.
+        let next_step: Box<dyn ProcessingStrategy<KafkaPayload>> = if self.dlq_configured {
+            Box::new(DlqByAge::new(next_step, self.storage_config.name.clone()))
+        } else {
+            Box::new(next_step)
+        };
 
         if let Some(path) = &self.health_check_file {
             {
