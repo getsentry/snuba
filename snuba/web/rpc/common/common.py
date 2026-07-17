@@ -380,6 +380,60 @@ def add_existence_check_to_subscriptable_references(query: Query) -> None:
     query.transform_expressions(transform)
 
 
+def _projection_existence_check(read: Expression) -> Expression:
+    """Existence check for a map-backed SELECT read, treating a ``cast`` as transparent and a
+    ``coalesce`` (deprecated-attribute fan-out) as "exists if any branch does". The leaf
+    cases (``SubscriptableReference`` for bucketed maps, ``arrayElement`` for the bool map)
+    are delegated to ``get_field_existence_expression`` so there's a single source of truth
+    for "does this key exist". The cast/coalesce unwrapping is what makes it type-agnostic:
+    int/bool wrap their read in a cast, and deprecated attributes wrap it in a coalesce."""
+    if isinstance(read, FunctionCall) and read.function_name == "cast" and read.parameters:
+        return _projection_existence_check(read.parameters[0])
+    if isinstance(read, FunctionCall) and read.function_name == "coalesce":
+        return combine_or_conditions([_projection_existence_check(p) for p in read.parameters])
+    return get_field_existence_expression(read)
+
+
+def attribute_key_to_projection_expression(attr_key: AttributeKey) -> Expression:
+    """PROTOTYPE — type-driven SELECT read of a custom attribute, guarded so a missing key
+    reads as NULL for *every* scalar type uniformly.
+
+    This is the generic replacement for ``add_existence_check_to_subscriptable_references``.
+    That pass enumerates per-type AST *shapes* — a ``SubscriptableReference`` for the
+    bucketed string/int/float maps, ``cast(arrayElement(...))`` for the non-bucketed bool map
+    — so a type whose read has a novel shape silently escapes the guard (exactly how booleans
+    regressed; see getsentry/sentry#119735 and its follow-up). Here the guard is derived from
+    the attribute's *type* (``_is_map_backed_key`` + the type→ClickHouse-type map), so a new
+    attribute type is covered the moment it's added to those maps — no new shape to teach a
+    matcher.
+
+    Why this can't just be a smarter version of the post-hoc transform: that pass runs over
+    the whole query, and SELECT and WHERE reads share shapes (a WHERE int read is also
+    ``cast(arrayElement(attributes_float, ...))``). A shape matcher general enough to catch
+    every SELECT read would also catch WHERE reads, and wrapping those in ``if(exists, v,
+    NULL)`` re-introduces the analyzer "Not found column ... in block" bug that
+    ``_map_backed_operands`` avoids. Building the guard at SELECT-construction time — where we
+    know the position is a projection — sidesteps that entirely.
+
+    Projection-only, therefore: it emits ``if(exists, value, NULL)``. Normalized columns,
+    ``attr_key`` and array attributes are returned unchanged (real columns / their own
+    empty-array semantics).
+
+    NOT YET WIRED IN. Adopting it means routing every projection read (SELECT columns,
+    group_by, order_by, aggregation inputs) through this builder and dropping the post-hoc
+    transform — a change that needs the full ClickHouse e2e suite to validate, so it's left
+    as a follow-up. Proven in isolation by ``TestProjectionExpressionExistenceGuard``.
+    """
+    read = attribute_key_to_expression(attr_key)
+    if not _is_map_backed_key(attr_key):
+        return read
+
+    alias = read.alias
+    read = replace(read, alias=None)
+    typed_null = f.cast(literal(None), f"Nullable({PROTO_TYPE_TO_CLICKHOUSE_TYPE[attr_key.type]})")
+    return FunctionCall(alias, "if", (_projection_existence_check(read), read, typed_null))
+
+
 def _is_map_backed_key(k: AttributeKey) -> bool:
     """True when ``k`` is a custom attribute stored in an ``attributes_*`` map column, so
     its filters take the ``(value, exists)`` path (see ``_map_backed_operands``). Excludes

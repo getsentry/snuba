@@ -56,6 +56,7 @@ from snuba.web.rpc.common.common import (
     _comparison_can_match_column_default,
     add_existence_check_to_subscriptable_references,
     attribute_key_to_expression,
+    attribute_key_to_projection_expression,
     dedupe_and_conditions,
     next_monday,
     prev_monday,
@@ -794,9 +795,10 @@ class TestAnalyzerSafeFilters:
 
 
 class TestBooleanAttributeFilters:
-    """Booleans are map-backed, so ``attr:false`` needs an existence guard — otherwise a
-    missing key reads as the ``false`` default and matches items lacking the attribute
-    (getsentry/sentry#119735).
+    """Booleans are map-backed, so they need an existence guard — otherwise a missing key
+    reads as the ``false`` default. In a filter (``attr:false``) that wrongly matches items
+    lacking the attribute; in a SELECT it wrongly renders as ``false`` instead of empty
+    (getsentry/sentry#119735 and its follow-up).
     """
 
     @staticmethod
@@ -849,14 +851,40 @@ class TestBooleanAttributeFilters:
         columns = {n.column_name for n in self._walk(expr) if isinstance(n, ColumnExpr)}
         assert columns == {"attributes_bool"}
 
+    def _bool_select_after_transform(self, name: str = "hasCodeTag") -> Expression:
+        key = AttributeKey(type=AttributeKey.Type.TYPE_BOOLEAN, name=name)
+        query = Query(
+            from_clause=None,
+            selected_columns=[SelectedExpression(name, attribute_key_to_expression(key))],
+        )
+        add_existence_check_to_subscriptable_references(query)
+        return query.get_selected_columns()[0].expression
 
-class TestBooleanAttributeExistenceCheckInSelect:
-    """A boolean read in the SELECT clause is ``arrayElement(attributes_bool, key)`` (the
-    bool Map has no hash buckets, so it's not a ``SubscriptableReference``). Without an
-    explicit existence guard, ``arrayElement`` returns the ``false`` default for a missing
-    key, so the attribute rendered as ``false`` for items lacking it instead of an empty
-    value. ``add_existence_check_to_subscriptable_references`` must wrap it in
-    ``if(has(mapKeys(...)), value, NULL)`` (getsentry/sentry#119735 follow-up).
+    def test_select_guards_missing_key_as_null(self) -> None:
+        # In a SELECT a bool read is cast(arrayElement(attributes_bool, key)), not a
+        # SubscriptableReference, so add_existence_check_to_subscriptable_references must
+        # guard it too — otherwise a missing key renders as the `false` default instead of
+        # empty (getsentry/sentry#119735 follow-up).
+        expr = self._bool_select_after_transform()
+        # if(has(mapKeys(attributes_bool), 'hasCodeTag'), value, cast(NULL, ...))
+        assert isinstance(expr, FunctionCall) and expr.function_name == "if"
+        assert {"if", "has", "mapKeys", "arrayElement"} <= self._fn_names(expr)
+        _, value, otherwise = expr.parameters
+        assert isinstance(otherwise, FunctionCall) and otherwise.function_name == "cast"
+        assert otherwise.parameters[0] == Literal(None, None)  # typed NULL, not false
+        columns = {n.column_name for n in self._walk(expr) if isinstance(n, ColumnExpr)}
+        assert columns == {"attributes_bool"}
+        # alias moves to the outer if(...); the inner value must not carry it (a duplicate
+        # alias would collide in the SELECT clause).
+        assert expr.alias == "hasCodeTag_TYPE_BOOLEAN"
+        assert value.alias is None
+
+
+class TestProjectionExpressionExistenceGuard:
+    """[Prototype] ``attribute_key_to_projection_expression`` derives the missing-key -> NULL
+    guard from the attribute *type*, so every scalar map type is guarded uniformly — unlike
+    the per-type shape matching in ``add_existence_check_to_subscriptable_references`` that
+    booleans slipped through. Normalized (real) columns are returned unguarded.
     """
 
     @staticmethod
@@ -873,52 +901,33 @@ class TestBooleanAttributeExistenceCheckInSelect:
     def _fn_names(self, expr: Expression) -> set[str]:
         return {n.function_name for n in self._walk(expr) if isinstance(n, FunctionCall)}
 
-    def _select_after_transform(self, key: AttributeKey) -> Expression:
-        expr = attribute_key_to_expression(key)
-        query = Query(
-            from_clause=None,
-            selected_columns=[SelectedExpression(key.name, expr)],
-        )
-        add_existence_check_to_subscriptable_references(query)
-        return query.get_selected_columns()[0].expression
-
-    def test_boolean_select_is_guarded_with_null_default(self) -> None:
-        expr = self._select_after_transform(
-            AttributeKey(type=AttributeKey.Type.TYPE_BOOLEAN, name="hasCodeTag")
-        )
-        # if(has(mapKeys(attributes_bool), 'hasCodeTag'), <value>, cast(NULL, ...))
-        assert isinstance(expr, FunctionCall) and expr.function_name == "if"
-        assert {"if", "has", "mapKeys", "arrayElement"} <= self._fn_names(expr)
-        condition, value, otherwise = expr.parameters
-        assert isinstance(condition, FunctionCall) and condition.function_name == "has"
-        # the else branch is a typed NULL, so a missing key reads as empty, not false.
-        assert isinstance(otherwise, FunctionCall) and otherwise.function_name == "cast"
-        assert otherwise.parameters[0] == Literal(None, None)
-
-    def test_boolean_select_reads_attributes_bool(self) -> None:
-        expr = self._select_after_transform(
-            AttributeKey(type=AttributeKey.Type.TYPE_BOOLEAN, name="hasCodeTag")
-        )
-        columns = {n.column_name for n in self._walk(expr) if isinstance(n, ColumnExpr)}
-        assert columns == {"attributes_bool"}
-
-    def test_boolean_select_keeps_column_alias(self) -> None:
-        key = AttributeKey(type=AttributeKey.Type.TYPE_BOOLEAN, name="hasCodeTag")
-        expr = self._select_after_transform(key)
-        # alias moves to the outer if(...); the inner cast must not carry it (a duplicate
-        # alias would collide in the SELECT clause).
-        assert isinstance(expr, FunctionCall)
-        assert expr.alias == "hasCodeTag_TYPE_BOOLEAN"
-        _, value, _ = expr.parameters
-        assert value.alias is None
-
-    def test_string_select_still_guarded(self) -> None:
-        # regression: strings resolve to a SubscriptableReference and keep their guard.
-        expr = self._select_after_transform(
-            AttributeKey(type=AttributeKey.Type.TYPE_STRING, name="some.tag")
-        )
+    @pytest.mark.parametrize(
+        "attr_type,column",
+        [
+            (AttributeKey.Type.TYPE_STRING, "attributes_string"),
+            (AttributeKey.Type.TYPE_INT, "attributes_float"),
+            (AttributeKey.Type.TYPE_FLOAT, "attributes_float"),
+            (AttributeKey.Type.TYPE_DOUBLE, "attributes_float"),
+            (AttributeKey.Type.TYPE_BOOLEAN, "attributes_bool"),
+        ],
+    )
+    def test_scalar_types_are_guarded_uniformly(
+        self, attr_type: "AttributeKey.Type.ValueType", column: str
+    ) -> None:
+        expr = attribute_key_to_projection_expression(AttributeKey(type=attr_type, name="myattr"))
+        # if(has(mapKeys(<col>), 'myattr'), value, cast(NULL, ...)) for every scalar type.
         assert isinstance(expr, FunctionCall) and expr.function_name == "if"
         assert {"if", "has", "mapKeys"} <= self._fn_names(expr)
+        columns = {n.column_name for n in self._walk(expr) if isinstance(n, ColumnExpr)}
+        assert columns == {column}
+
+    def test_normalized_column_is_not_guarded(self) -> None:
+        # a real column (not a map lookup) is returned as-is, no existence guard.
+        expr = attribute_key_to_projection_expression(
+            AttributeKey(type=AttributeKey.Type.TYPE_STRING, name="sentry.trace_id")
+        )
+        assert not (isinstance(expr, FunctionCall) and expr.function_name == "if")
+        assert "mapKeys" not in self._fn_names(expr)
 
 
 class TestNormalizedColumnsNotMapBacked:

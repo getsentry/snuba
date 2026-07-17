@@ -201,16 +201,10 @@ class TestBooleanAttributeFilteringForLogs(BaseApiTest):
         returned = sorted(v.val_int for v in values.results)
         assert returned == list(range(10, 20))
 
-
-@pytest.mark.eap
-@pytest.mark.redis_db
-class TestBooleanAttributeSelectForLogs(BaseApiTest):
-    """Selecting a boolean attribute must return an empty (NULL) value for items that don't
-    have it, not ``false``. Booleans read via ``arrayElement``, which yields the ``false``
-    default for a missing key unless an existence guard is added (getsentry/sentry#119735
-    follow-up)."""
-
-    def _select_hascodetag(self) -> TraceItemTableResponse:
+    def test_select_absent_attribute_is_null_not_false(self, setup_bool_logs_in_db: Any) -> None:
+        # Selecting the attribute (rather than filtering on it) must return an empty (NULL)
+        # value for items lacking it, not the `false` default (getsentry/sentry#119735
+        # follow-up).
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -239,25 +233,15 @@ class TestBooleanAttributeSelectForLogs(BaseApiTest):
             ],
             limit=50,
         )
-        return EndpointTraceItemTable().execute(message)
-
-    def test_absent_boolean_is_null_not_false(self, setup_bool_logs_in_db: Any) -> None:
-        response = self._select_hascodetag()
+        response = EndpointTraceItemTable().execute(message)
         by_label = {v.attribute_name: v for v in response.column_values}
         int_values = [v.val_int for v in by_label["int_tag"].results]
-        bool_results = by_label["hasCodeTag"].results
         # int_tag drives the row order, so zip pairs each row's int with its bool value.
-        by_int = dict(zip(int_values, bool_results, strict=True))
+        by_int = dict(zip(int_values, by_label["hasCodeTag"].results, strict=True))
 
-        # 0-9: attribute stored false -> an explicit false value (not NULL).
-        for i in range(10):
-            assert by_int[i].WhichOneof("value") == "val_bool"
-            assert by_int[i].val_bool is False
-        # 10-19: attribute stored true.
-        for i in range(10, 20):
-            assert by_int[i].WhichOneof("value") == "val_bool"
-            assert by_int[i].val_bool is True
-        # 20-29: attribute absent -> NULL/empty, NOT false.
-        for i in range(20, 30):
-            assert by_int[i].is_null is True
-            assert by_int[i].WhichOneof("value") != "val_bool"
+        for i in range(10):  # stored false -> explicit false, not NULL
+            assert by_int[i].WhichOneof("value") == "val_bool" and by_int[i].val_bool is False
+        for i in range(10, 20):  # stored true
+            assert by_int[i].WhichOneof("value") == "val_bool" and by_int[i].val_bool is True
+        for i in range(20, 30):  # absent -> NULL/empty, NOT false
+            assert by_int[i].is_null is True and by_int[i].WhichOneof("value") != "val_bool"
