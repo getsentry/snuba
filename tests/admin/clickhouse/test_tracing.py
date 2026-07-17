@@ -22,7 +22,9 @@ def test_ai_conversation_id_column_is_not_scrubbed() -> None:
     # The proto conversation_id field is written to the ai_conversation_id column.
     conversation_id = "conv-not-hex-zzz"
     item = TraceItem()
-    item.ParseFromString(gen_item_message(start_timestamp=datetime.now(tz=UTC) - timedelta(minutes=5)))
+    item.ParseFromString(
+        gen_item_message(start_timestamp=datetime.now(tz=UTC) - timedelta(minutes=5))
+    )
     item.conversation_id = conversation_id
     write_raw_unprocessed_events(
         get_writable_storage(StorageKey("eap_items")),
