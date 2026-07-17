@@ -16,8 +16,6 @@ use sentry_arroyo::types::Topic;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
-use sentry_options::init_with_schemas;
-
 use crate::config;
 use crate::factory_v2::ConsumerStrategyFactoryV2;
 use crate::logging::{setup_logging, setup_sentry};
@@ -95,8 +93,7 @@ pub fn consumer_impl(
     use_row_binary: bool,
 ) -> usize {
     setup_logging();
-    init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)])
-        .expect("failed to initialize sentry-options");
+    crate::init_sentry_options().expect("failed to initialize sentry-options");
 
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
     let max_batch_size = consumer_config.max_batch_size;

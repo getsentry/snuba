@@ -221,7 +221,7 @@
         "type": "number"
       },
       "default": {},
-      "description": "Override values for ConfigurableComponent (allocation policy and storage-routing strategy) configs, keyed by the fully-qualified config key '{resource}.{ClassName}.{config}' (parameterized configs append '.{param}:{value},...', sorted, with '.'/','/':' in param names/values escaped as __dot_literal__/__comma_literal__/__colon_literal__). Values are numbers cast to each config's declared numeric type (int/float) on read. All current ConfigurableComponent configs are numeric; a non-numeric config would require widening this type. Authoritative source for these configs; a key absent here falls back to the legacy Redis runtime config and then the code default. Migrated from per-component runtime config of the same key."
+      "description": "Override values for ConfigurableComponent (allocation policy and storage-routing strategy) configs, keyed by the fully-qualified config key '{resource}.{ClassName}.{config}' (parameterized configs append '|{param}:{value}|...', params sorted). Values are numbers cast to each config's declared numeric type (int/float) on read. All current ConfigurableComponent configs are numeric; a non-numeric config would require widening this type. Authoritative source for these configs; a key absent here falls back to the code default. Read-only at runtime and managed in sentry-options-automator. Migrated from the per-component runtime config of the same key."
     },
     "storage_routing_sampled_too_low_threshold": {
       "type": "object",
@@ -565,6 +565,11 @@
       "type": "boolean",
       "default": false,
       "description": "Selects the preferred DogStatsD transport for snuba's Python and Rust metrics backends. When true and a socket path (DOGSTATSD_SOCKET_PATH) is configured, metrics are sent over the Unix domain socket; otherwise they use UDP (host/port). A deployment configured with only one transport uses that one regardless of the flag (socket-only sends over UDS, host/port-only over UDP), so the flag is authoritative only when both are configured, keeping host/port as the UDP rollback target. Read at metrics-backend creation, so flipping it takes effect on the next process restart -- no redeploy required."
+    },
+    "use_clickhouse_connect_driver": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the ClickHouse read path uses the clickhouse-connect (HTTP) driver instead of the native protocol. Lets the driver migration roll out and roll back without a deploy. Migrated from the runtime config of the same name."
     },
     "ondemand_profiler_hostnames": {
       "type": "string",

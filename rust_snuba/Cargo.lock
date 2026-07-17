@@ -53,12 +53,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c6cb57a04249c6480766f7f7cef5467412af1490f8d1e243141daddada3264f"
 
 [[package]]
-name = "android-tzdata"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e999941b234f3131b00bc13c22d06e8c5ff726d1b6318ac7eb276997bbb4fef0"
-
-[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -573,17 +567,16 @@ checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
 
 [[package]]
 name = "chrono"
-version = "0.4.37"
+version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a0d04d43504c61aa6c7531f1871dd0d418d91130162063b789da00fd7057a5e"
+checksum = "1aa79e62e7697b8e29b513a68abacf485adcd1fe8284a4316c5ae868e6633327"
 dependencies = [
- "android-tzdata",
  "iana-time-zone",
  "js-sys",
  "num-traits",
  "serde",
  "wasm-bindgen",
- "windows-targets 0.52.4",
+ "windows-link 0.2.1",
 ]
 
 [[package]]
@@ -3749,9 +3742,9 @@ dependencies = [
 
 [[package]]
 name = "sentry-options"
-version = "1.0.11"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3de92e3c2a89bb457dc44fcc10711c8dd22a399b3d51118f4aa69b7e73276cf1"
+checksum = "43de0ef77feb227951c1d3eda86e84469389ec2805d7f27eee68e38fe20f2e40"
 dependencies = [
  "arc-swap",
  "num",
@@ -3763,12 +3756,13 @@ dependencies = [
 
 [[package]]
 name = "sentry-options-validation"
-version = "1.0.13"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1157d8b5a93260b87f4640422a093055f5d72ad697e4d48baf396f955de9ae16"
+checksum = "60660c98c3ef950d6ac6986792a55280fe3fa38c2846389b2a4ca99676c1efd0"
 dependencies = [
  "anyhow",
  "arc-swap",
+ "chrono",
  "jsonschema 0.36.0",
  "serde",
  "serde_json",
