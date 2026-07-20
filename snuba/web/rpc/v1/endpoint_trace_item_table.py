@@ -122,9 +122,7 @@ def _validate_limit_by(in_msg: TraceItemTableRequest) -> None:
         )
 
     array_limit_by_columns = [
-        c.key.name
-        for c in limit_by.columns
-        if c.HasField("key") and c.key.type in ARRAY_TYPES
+        c.key.name for c in limit_by.columns if c.HasField("key") and c.key.type in ARRAY_TYPES
     ]
     if array_limit_by_columns:
         raise BadSnubaRPCRequestException(
