@@ -112,6 +112,11 @@ def _validate_limit_by(in_msg: TraceItemTableRequest) -> None:
     if not in_msg.HasField("limit_by"):
         return
 
+    if in_msg.limit > 0:
+        raise BadSnubaRPCRequestException(
+            "Cannot specify both limit and limit_by; use one or the other"
+        )
+
     limit_by = in_msg.limit_by
     if not limit_by.columns:
         raise BadSnubaRPCRequestException("limit_by must specify at least one column")

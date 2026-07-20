@@ -4622,6 +4622,25 @@ def test_build_query_limit_by_aggregation_is_converted() -> None:
     assert limitby.limit == 3
 
 
+def test_validate_limit_by_and_limit_mutually_exclusive() -> None:
+    """A request cannot set both the top-level `limit` and `limit_by`."""
+    message = TraceItemTableRequest(
+        columns=[
+            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="foo"), label="foo"),
+        ],
+        limit=10,
+        limit_by=TraceItemTableRequest.LimitBy(
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="foo"), label="foo")
+            ],
+            limit=5,
+        ),
+    )
+    message = _apply_labels_to_columns(message)
+    with pytest.raises(BadSnubaRPCRequestException, match="both limit and limit_by"):
+        _validate_limit_by(message)
+
+
 def test_validate_limit_by_not_selected() -> None:
     """`limit_by` columns must be part of the selected columns."""
     message = TraceItemTableRequest(
