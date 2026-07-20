@@ -367,14 +367,26 @@ def _convert_order_by(
 
 def _convert_limit_by(
     limit_by: TraceItemTableRequest.LimitBy,
-    request_meta: RequestMeta,
+    selected_columns: Sequence[SelectedExpression],
 ) -> LimitBy | None:
+    """Translates the request's ``limit_by`` into a ``LimitBy``.
+
+    ``limit_by.columns`` are aliases of selected columns (validated to be group_by
+    columns), so we resolve each alias to the expression that was selected under
+    that label. Returns ``None`` when no ``limit_by`` is set.
+    """
     if not limit_by.columns:
         return None
-    return LimitBy(
-        limit=limit_by.limit,
-        columns=[_column_to_expression(column, request_meta) for column in limit_by.columns],
-    )
+    label_to_expression = {c.name: c.expression for c in selected_columns}
+    columns: list[Expression] = []
+    for alias in limit_by.columns:
+        expression = label_to_expression.get(alias)
+        if expression is None:
+            raise BadSnubaRPCRequestException(
+                f"limit_by column '{alias}' is not a selected column"
+            )
+        columns.append(expression)
+    return LimitBy(limit=limit_by.limit, columns=columns)
 
 
 def _get_reliability_context_columns(
@@ -686,7 +698,7 @@ def build_query(
             request.order_by,
             request.meta,
         ),
-        limitby=_convert_limit_by(request.limit_by, request.meta),
+        limitby=_convert_limit_by(request.limit_by, selected_columns),
         groupby=groupby,
         # Only support offset page tokens for now
         offset=_get_offset_from_page_token(request.page_token),

@@ -100,8 +100,6 @@ class TraceItemTableRequestWrapper(ProtoWrapper[TraceItemTableRequest]):
             ColumnWrapper(col).accept(visitor)
         for ob in trace_item_table_request.order_by:
             ColumnWrapper(ob.column).accept(visitor)
-        for limit_by_col in trace_item_table_request.limit_by.columns:
-            ColumnWrapper(limit_by_col).accept(visitor)
         if trace_item_table_request.HasField("aggregation_filter"):
             AggregationFilterWrapper(trace_item_table_request.aggregation_filter).accept(visitor)
 

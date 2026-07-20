@@ -4511,53 +4511,52 @@ def test_convert_results_empty_typed_array_is_null() -> None:
     assert [e.val_str for e in tags.results[1].val_array.values] == ["a", "b"]
 
 
-def test_build_query_with_limit_by() -> None:
-    """A `limit_by` on the request produces a `LIMIT n BY ...` clause referencing the
-    selected columns."""
-    request = TraceItemTableRequest(
+def _limit_by_request(
+    limit_by: TraceItemTableRequest.LimitBy,
+    limit: int = 0,
+    downsampled_storage_config: DownsampledStorageConfig | None = None,
+) -> TraceItemTableRequest:
+    """Builds a project_id/transaction/count() request grouped by project and
+    transaction, with the given limit_by attached."""
+    return TraceItemTableRequest(
         meta=RequestMeta(
             project_ids=[1, 2, 3],
             trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            downsampled_storage_config=downsampled_storage_config
+            or DownsampledStorageConfig(mode=DownsampledStorageConfig.MODE_NORMAL),
         ),
         columns=[
             Column(
                 key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id"),
                 label="project_id",
             ),
-            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="transaction")),
+            Column(
+                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="transaction"),
+                label="transaction",
+            ),
             Column(
                 aggregation=AttributeAggregation(
                     aggregate=Function.FUNCTION_COUNT,
                     key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id"),
                     label="count()",
                 ),
+                label="count()",
             ),
         ],
         group_by=[
             AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id"),
             AttributeKey(type=AttributeKey.TYPE_STRING, name="transaction"),
         ],
-        order_by=[
-            TraceItemTableRequest.OrderBy(
-                column=Column(
-                    aggregation=AttributeAggregation(
-                        aggregate=Function.FUNCTION_COUNT,
-                        key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id"),
-                        label="count()",
-                    ),
-                ),
-                descending=True,
-            ),
-        ],
-        limit_by=TraceItemTableRequest.LimitBy(
-            columns=[
-                Column(
-                    key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id"),
-                    label="project_id",
-                )
-            ],
-            limit=10,
-        ),
+        limit=limit,
+        limit_by=limit_by,
+    )
+
+
+def test_build_query_with_limit_by() -> None:
+    """A `limit_by` referencing a group_by column by alias produces a `LIMIT n BY ...`
+    clause using that column's selected expression."""
+    request = _limit_by_request(
+        TraceItemTableRequest.LimitBy(columns=["project_id"], limit=10)
     )
 
     wrapper = TraceItemTableRequestWrapper(request)
@@ -4590,51 +4589,10 @@ def test_build_query_without_limit_by() -> None:
     assert query.get_limitby() is None
 
 
-def test_build_query_limit_by_aggregation_is_converted() -> None:
-    """`limit_by` columns must be walked by TraceItemTableRequestWrapper so the deprecated
-    `aggregation` field is rewritten to `conditional_aggregation`; otherwise
-    `_column_to_expression` would reject it at build time."""
-    agg = AttributeAggregation(
-        aggregate=Function.FUNCTION_COUNT,
-        key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id"),
-        label="count()",
-    )
-    request = TraceItemTableRequest(
-        meta=RequestMeta(
-            project_ids=[1],
-            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-        ),
-        columns=[Column(aggregation=agg, label="count()")],
-        limit_by=TraceItemTableRequest.LimitBy(
-            columns=[Column(aggregation=agg, label="count()")], limit=3
-        ),
-    )
-
-    wrapper = TraceItemTableRequestWrapper(request)
-    wrapper.accept(AggregationToConditionalAggregationVisitor())
-    # the visitor should have rewritten the deprecated aggregation on the limit_by column
-    assert request.limit_by.columns[0].HasField("conditional_aggregation")
-
-    request = _apply_labels_to_columns(request)
-    query = build_query(request)
-    limitby = query.get_limitby()
-    assert limitby is not None
-    assert limitby.limit == 3
-
-
 def test_validate_limit_by_and_limit_mutually_exclusive() -> None:
     """A request cannot set both the top-level `limit` and `limit_by`."""
-    message = TraceItemTableRequest(
-        columns=[
-            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="foo"), label="foo"),
-        ],
-        limit=10,
-        limit_by=TraceItemTableRequest.LimitBy(
-            columns=[
-                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="foo"), label="foo")
-            ],
-            limit=5,
-        ),
+    message = _limit_by_request(
+        TraceItemTableRequest.LimitBy(columns=["project_id"], limit=5), limit=10
     )
     message = _apply_labels_to_columns(message)
     with pytest.raises(BadSnubaRPCRequestException, match="both limit and limit_by"):
@@ -4644,20 +4602,10 @@ def test_validate_limit_by_and_limit_mutually_exclusive() -> None:
 def test_validate_limit_by_rejected_with_flextime() -> None:
     """limit_by cannot be combined with flextime routing (flextime paginates on the
     top-level limit, which limit_by forces to 0)."""
-    message = TraceItemTableRequest(
-        meta=RequestMeta(
-            downsampled_storage_config=DownsampledStorageConfig(
-                mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
-            ),
-        ),
-        columns=[
-            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="foo"), label="foo"),
-        ],
-        limit_by=TraceItemTableRequest.LimitBy(
-            columns=[
-                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="foo"), label="foo")
-            ],
-            limit=5,
+    message = _limit_by_request(
+        TraceItemTableRequest.LimitBy(columns=["project_id"], limit=5),
+        downsampled_storage_config=DownsampledStorageConfig(
+            mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
         ),
     )
     message = _apply_labels_to_columns(message)
@@ -4666,35 +4614,29 @@ def test_validate_limit_by_rejected_with_flextime() -> None:
 
 
 def test_validate_limit_by_not_selected() -> None:
-    """`limit_by` columns must be part of the selected columns."""
-    message = TraceItemTableRequest(
-        columns=[
-            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="foo"), label="foo"),
-        ],
-        limit_by=TraceItemTableRequest.LimitBy(
-            columns=[
-                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="bar"), label="bar")
-            ],
-            limit=5,
-        ),
+    """`limit_by` aliases must reference a selected column."""
+    message = _limit_by_request(
+        TraceItemTableRequest.LimitBy(columns=["not_a_column"], limit=5)
     )
     message = _apply_labels_to_columns(message)
-    with pytest.raises(BadSnubaRPCRequestException, match="limit_by columns"):
+    with pytest.raises(BadSnubaRPCRequestException, match="is not a selected column"):
+        _validate_limit_by(message)
+
+
+def test_validate_limit_by_not_in_group_by() -> None:
+    """`limit_by` aliases must reference a group_by column, not e.g. an aggregate."""
+    message = _limit_by_request(
+        TraceItemTableRequest.LimitBy(columns=["count()"], limit=5)
+    )
+    message = _apply_labels_to_columns(message)
+    with pytest.raises(BadSnubaRPCRequestException, match="must be a group_by column"):
         _validate_limit_by(message)
 
 
 def test_validate_limit_by_zero_limit() -> None:
     """A `limit_by` with columns set but a non-positive limit is rejected."""
-    message = TraceItemTableRequest(
-        columns=[
-            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="foo"), label="foo"),
-        ],
-        limit_by=TraceItemTableRequest.LimitBy(
-            columns=[
-                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="foo"), label="foo")
-            ],
-            limit=0,
-        ),
+    message = _limit_by_request(
+        TraceItemTableRequest.LimitBy(columns=["project_id"], limit=0)
     )
     message = _apply_labels_to_columns(message)
     with pytest.raises(BadSnubaRPCRequestException, match="greater than 0"):
@@ -4703,12 +4645,7 @@ def test_validate_limit_by_zero_limit() -> None:
 
 def test_validate_limit_by_no_columns() -> None:
     """A `limit_by` with a limit but no columns is rejected."""
-    message = TraceItemTableRequest(
-        columns=[
-            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="foo"), label="foo"),
-        ],
-        limit_by=TraceItemTableRequest.LimitBy(columns=[], limit=5),
-    )
+    message = _limit_by_request(TraceItemTableRequest.LimitBy(columns=[], limit=5))
     message = _apply_labels_to_columns(message)
     with pytest.raises(BadSnubaRPCRequestException, match="at least one column"):
         _validate_limit_by(message)

@@ -47,9 +47,6 @@ def _apply_labels_to_columns(in_msg: TraceItemTableRequest) -> TraceItemTableReq
     for order_by in in_msg.order_by:
         _apply_label_to_column(order_by.column)
 
-    for limit_by_column in in_msg.limit_by.columns:
-        _apply_label_to_column(limit_by_column)
-
     return in_msg
 
 
@@ -134,20 +131,20 @@ def _validate_limit_by(in_msg: TraceItemTableRequest) -> None:
             f"limit_by.limit must be greater than 0, got {limit_by.limit}"
         )
 
-    array_limit_by_columns = [
-        c.key.name for c in limit_by.columns if c.HasField("key") and c.key.type in ARRAY_TYPES
-    ]
-    if array_limit_by_columns:
-        raise BadSnubaRPCRequestException(
-            f"limit_by is not supported on array attributes: {', '.join(array_limit_by_columns)}"
-        )
-
-    limit_by_cols = {c.label if c.label else str(c) for c in limit_by.columns}
-    selected_columns = {c.label if c.label else str(c) for c in in_msg.columns}
-    if not limit_by_cols.issubset(selected_columns):
-        raise BadSnubaRPCRequestException(
-            f"limit_by columns {sorted(limit_by_cols)} not selected: {sorted(selected_columns)}"
-        )
+    # limit_by columns are aliases of selected columns, and must be grouped by so
+    # each row belongs to exactly one group.
+    group_by_names = {c.name for c in in_msg.group_by}
+    selected_by_label = {c.label: c for c in in_msg.columns if c.label}
+    for alias in limit_by.columns:
+        column = selected_by_label.get(alias)
+        if column is None:
+            raise BadSnubaRPCRequestException(
+                f"limit_by column '{alias}' is not a selected column"
+            )
+        if not (column.HasField("key") and column.key.name in group_by_names):
+            raise BadSnubaRPCRequestException(
+                f"limit_by column '{alias}' must be a group_by column"
+            )
 
 
 def _transform_request(request: TraceItemTableRequest) -> TraceItemTableRequest:
