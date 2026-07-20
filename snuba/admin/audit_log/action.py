@@ -14,9 +14,6 @@ class AuditLogAction(Enum):
     RAN_MIGRATION_FAILED = "ran.migration.failed"
     REVERSED_MIGRATION_FAILED = "reversed.migration.failed"
     FORCE_MIGRATION_OVERWRITE = "force.migration.overwrite"
-    CONFIGURABLE_COMPONENT_UPDATE = "configurable_component.update"
-    CONFIGURABLE_COMPONENT_DELETE = "configurable_component.delete"
-    DLQ_REPLAY = "dlq.replay"
     RAN_SUDO_SYSTEM_QUERY = "ran.sudo.system.query"
     RAN_CLUSTERLESS_SYSTEM_QUERY = "ran.clusterless.system.query"
 
@@ -34,9 +31,4 @@ MIGRATION_ACTIONS = [
     AuditLogAction.REVERSED_MIGRATION_COMPLETED,
     AuditLogAction.RAN_MIGRATION_FAILED,
     AuditLogAction.REVERSED_MIGRATION_FAILED,
-]
-
-CONFIGURABLE_COMPONENT_ACTIONS = [
-    AuditLogAction.CONFIGURABLE_COMPONENT_DELETE,
-    AuditLogAction.CONFIGURABLE_COMPONENT_UPDATE,
 ]
