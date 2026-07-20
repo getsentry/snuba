@@ -117,6 +117,14 @@ def _validate_limit_by(in_msg: TraceItemTableRequest) -> None:
             "Cannot specify both limit and limit_by; use one or the other"
         )
 
+    if (
+        in_msg.meta.downsampled_storage_config.mode
+        == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
+    ):
+        # flextime routing paginates on limit, which limit_by forces to 0, so the
+        # two cannot be combined (see _get_page_token / flextime enforcement).
+        raise BadSnubaRPCRequestException("limit_by is not supported with flextime routing")
+
     limit_by = in_msg.limit_by
     if not limit_by.columns:
         raise BadSnubaRPCRequestException("limit_by must specify at least one column")

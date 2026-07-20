@@ -4641,6 +4641,30 @@ def test_validate_limit_by_and_limit_mutually_exclusive() -> None:
         _validate_limit_by(message)
 
 
+def test_validate_limit_by_rejected_with_flextime() -> None:
+    """limit_by cannot be combined with flextime routing (flextime paginates on the
+    top-level limit, which limit_by forces to 0)."""
+    message = TraceItemTableRequest(
+        meta=RequestMeta(
+            downsampled_storage_config=DownsampledStorageConfig(
+                mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
+            ),
+        ),
+        columns=[
+            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="foo"), label="foo"),
+        ],
+        limit_by=TraceItemTableRequest.LimitBy(
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="foo"), label="foo")
+            ],
+            limit=5,
+        ),
+    )
+    message = _apply_labels_to_columns(message)
+    with pytest.raises(BadSnubaRPCRequestException, match="flextime"):
+        _validate_limit_by(message)
+
+
 def test_validate_limit_by_not_selected() -> None:
     """`limit_by` columns must be part of the selected columns."""
     message = TraceItemTableRequest(
