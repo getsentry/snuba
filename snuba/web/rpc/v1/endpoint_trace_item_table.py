@@ -133,18 +133,11 @@ def _validate_limit_by(in_msg: TraceItemTableRequest) -> None:
         )
 
     # A limit_by column may be a column, an alias of a selected column (a Column
-    # with only `label` set), or a non-aggregate transformation. ClickHouse cannot
-    # LIMIT BY an aggregate, so reject those (including aggregates nested in a
-    # formula), and make sure any alias-only reference points at a selected column.
+    # with only `label` set), or a non-aggregate transformation. Resolve alias-only
+    # references to the selected column first, then apply the checks to the resolved
+    # column so an alias pointing at an aggregate/array is caught too.
     selected_by_label = {c.label: c for c in in_msg.columns if c.label}
     for column in limit_by.columns:
-        wrapper = ColumnWrapper(column)
-        wrapper.accept(AggregationToConditionalAggregationVisitor())
-        contains_aggregate_visitor = ContainsAggregateVisitor()
-        wrapper.accept(contains_aggregate_visitor)
-        if contains_aggregate_visitor.contains_aggregate:
-            raise BadSnubaRPCRequestException("limit_by does not support aggregations")
-
         if column.WhichOneof("column") is None:
             # alias-only reference: it must name a selected column so ClickHouse
             # can resolve it.
@@ -155,6 +148,15 @@ def _validate_limit_by(in_msg: TraceItemTableRequest) -> None:
                 )
         else:
             referenced = column
+
+        # ClickHouse cannot LIMIT BY an aggregate, so reject those (including
+        # aggregates nested in a formula).
+        wrapper = ColumnWrapper(referenced)
+        wrapper.accept(AggregationToConditionalAggregationVisitor())
+        contains_aggregate_visitor = ContainsAggregateVisitor()
+        wrapper.accept(contains_aggregate_visitor)
+        if contains_aggregate_visitor.contains_aggregate:
+            raise BadSnubaRPCRequestException("limit_by does not support aggregations")
 
         # array attributes expand into typed sub-columns and cannot be grouped on,
         # same as order_by / group_by.

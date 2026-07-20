@@ -4692,6 +4692,17 @@ def test_validate_limit_by_rejects_array_attribute() -> None:
         _validate_limit_by(alias)
 
 
+def test_validate_limit_by_alias_to_aggregate_rejected() -> None:
+    """An alias-only `limit_by` pointing at a selected aggregate is rejected (the
+    aggregate lives on the resolved column, not the alias)."""
+    message = _limit_by_request(
+        TraceItemTableRequest.LimitBy(columns=[Column(label="count()")], limit=5)
+    )
+    message = _apply_labels_to_columns(message)
+    with pytest.raises(BadSnubaRPCRequestException, match="does not support aggregations"):
+        _validate_limit_by(message)
+
+
 def test_validate_limit_by_alias_not_selected() -> None:
     """An alias-only `limit_by` column must reference a selected column."""
     message = _limit_by_request(
