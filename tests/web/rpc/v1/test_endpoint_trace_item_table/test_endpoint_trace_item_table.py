@@ -4676,9 +4676,7 @@ def test_validate_limit_by_rejects_aggregation() -> None:
 def test_validate_limit_by_rejects_array_attribute() -> None:
     """limit_by cannot be an array attribute (arrays expand into typed sub-columns and
     can't be grouped on), whether passed directly or as an alias reference."""
-    array_column = Column(
-        key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags"), label="tags"
-    )
+    array_column = Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags"), label="tags")
     direct = _limit_by_request(TraceItemTableRequest.LimitBy(columns=[array_column], limit=5))
     direct.columns.append(array_column)
     direct = _apply_labels_to_columns(direct)
