@@ -4552,10 +4552,42 @@ def _limit_by_request(
     )
 
 
+def _project_id_column() -> Column:
+    return Column(
+        key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id"),
+        label="project_id",
+    )
+
+
 def test_build_query_with_limit_by() -> None:
-    """A `limit_by` referencing a group_by column by alias produces a `LIMIT n BY ...`
-    clause using that column's selected expression."""
-    request = _limit_by_request(TraceItemTableRequest.LimitBy(columns=["project_id"], limit=10))
+    """A `limit_by` on a column produces a `LIMIT n BY ...` clause using that column's
+    expression."""
+    request = _limit_by_request(
+        TraceItemTableRequest.LimitBy(columns=[_project_id_column()], limit=10)
+    )
+
+    wrapper = TraceItemTableRequestWrapper(request)
+    wrapper.accept(AggregationToConditionalAggregationVisitor())
+    request = _apply_labels_to_columns(request)
+
+    query = build_query(request)
+    limitby = query.get_limitby()
+    assert limitby == LimitBy(
+        limit=10,
+        columns=[
+            attribute_key_to_expression(
+                AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id")
+            )
+        ],
+    )
+
+
+def test_build_query_limit_by_alias_reference() -> None:
+    """An alias-only `limit_by` column (only `label` set) resolves to the expression
+    selected under that label."""
+    request = _limit_by_request(
+        TraceItemTableRequest.LimitBy(columns=[Column(label="project_id")], limit=10)
+    )
 
     wrapper = TraceItemTableRequestWrapper(request)
     wrapper.accept(AggregationToConditionalAggregationVisitor())
@@ -4590,7 +4622,7 @@ def test_build_query_without_limit_by() -> None:
 def test_validate_limit_by_and_limit_mutually_exclusive() -> None:
     """A request cannot set both the top-level `limit` and `limit_by`."""
     message = _limit_by_request(
-        TraceItemTableRequest.LimitBy(columns=["project_id"], limit=5), limit=10
+        TraceItemTableRequest.LimitBy(columns=[_project_id_column()], limit=5), limit=10
     )
     message = _apply_labels_to_columns(message)
     with pytest.raises(BadSnubaRPCRequestException, match="both limit and limit_by"):
@@ -4601,7 +4633,7 @@ def test_validate_limit_by_rejected_with_flextime() -> None:
     """limit_by cannot be combined with flextime routing (flextime paginates on the
     top-level limit, which limit_by forces to 0)."""
     message = _limit_by_request(
-        TraceItemTableRequest.LimitBy(columns=["project_id"], limit=5),
+        TraceItemTableRequest.LimitBy(columns=[_project_id_column()], limit=5),
         downsampled_storage_config=DownsampledStorageConfig(
             mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
         ),
@@ -4611,25 +4643,43 @@ def test_validate_limit_by_rejected_with_flextime() -> None:
         _validate_limit_by(message)
 
 
-def test_validate_limit_by_not_selected() -> None:
-    """`limit_by` aliases must reference a selected column."""
-    message = _limit_by_request(TraceItemTableRequest.LimitBy(columns=["not_a_column"], limit=5))
+def test_validate_limit_by_rejects_aggregation() -> None:
+    """limit_by cannot be an aggregation (ClickHouse cannot LIMIT BY an aggregate)."""
+    message = _limit_by_request(
+        TraceItemTableRequest.LimitBy(
+            columns=[
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_COUNT,
+                        key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id"),
+                        label="count()",
+                    ),
+                    label="count()",
+                )
+            ],
+            limit=5,
+        )
+    )
+    message = _apply_labels_to_columns(message)
+    with pytest.raises(BadSnubaRPCRequestException, match="does not support aggregations"):
+        _validate_limit_by(message)
+
+
+def test_validate_limit_by_alias_not_selected() -> None:
+    """An alias-only `limit_by` column must reference a selected column."""
+    message = _limit_by_request(
+        TraceItemTableRequest.LimitBy(columns=[Column(label="not_a_column")], limit=5)
+    )
     message = _apply_labels_to_columns(message)
     with pytest.raises(BadSnubaRPCRequestException, match="is not a selected column"):
         _validate_limit_by(message)
 
 
-def test_validate_limit_by_not_in_group_by() -> None:
-    """`limit_by` aliases must reference a group_by column, not e.g. an aggregate."""
-    message = _limit_by_request(TraceItemTableRequest.LimitBy(columns=["count()"], limit=5))
-    message = _apply_labels_to_columns(message)
-    with pytest.raises(BadSnubaRPCRequestException, match="must be a group_by column"):
-        _validate_limit_by(message)
-
-
 def test_validate_limit_by_zero_limit() -> None:
     """A `limit_by` with columns set but a non-positive limit is rejected."""
-    message = _limit_by_request(TraceItemTableRequest.LimitBy(columns=["project_id"], limit=0))
+    message = _limit_by_request(
+        TraceItemTableRequest.LimitBy(columns=[_project_id_column()], limit=0)
+    )
     message = _apply_labels_to_columns(message)
     with pytest.raises(BadSnubaRPCRequestException, match="greater than 0"):
         _validate_limit_by(message)

@@ -368,21 +368,28 @@ def _convert_order_by(
 def _convert_limit_by(
     limit_by: TraceItemTableRequest.LimitBy,
     selected_columns: Sequence[SelectedExpression],
+    request_meta: RequestMeta,
 ) -> LimitBy | None:
-    """Translates the request's ``limit_by`` into a ``LimitBy``.
+    """Translates the request's ``limit_by`` into a ``LimitBy`` (ClickHouse ``LIMIT n BY``).
 
-    ``limit_by.columns`` are aliases of selected columns (validated to be group_by
-    columns), so we resolve each alias to the expression that was selected under
-    that label. Returns ``None`` when no ``limit_by`` is set.
+    Each column may be a column/transformation, converted the same way as a SELECT
+    column, or an alias-only reference (a Column with just ``label`` set) that resolves
+    to the expression selected under that label. Returns ``None`` when no ``limit_by``
+    is set. Aggregations are rejected upstream in ``_validate_limit_by``.
     """
     if not limit_by.columns:
         return None
     label_to_expression = {c.name: c.expression for c in selected_columns}
     columns: list[Expression] = []
-    for alias in limit_by.columns:
-        expression = label_to_expression.get(alias)
-        if expression is None:
-            raise BadSnubaRPCRequestException(f"limit_by column '{alias}' is not a selected column")
+    for column in limit_by.columns:
+        if column.WhichOneof("column") is None:
+            expression = label_to_expression.get(column.label)
+            if expression is None:
+                raise BadSnubaRPCRequestException(
+                    f"limit_by column '{column.label}' is not a selected column"
+                )
+        else:
+            expression = _column_to_expression(column, request_meta)
         columns.append(expression)
     return LimitBy(limit=limit_by.limit, columns=columns)
 
@@ -696,7 +703,7 @@ def build_query(
             request.order_by,
             request.meta,
         ),
-        limitby=_convert_limit_by(request.limit_by, selected_columns),
+        limitby=_convert_limit_by(request.limit_by, selected_columns, request.meta),
         groupby=groupby,
         # Only support offset page tokens for now
         offset=_get_offset_from_page_token(request.page_token),

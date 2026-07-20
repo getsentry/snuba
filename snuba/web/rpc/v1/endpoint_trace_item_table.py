@@ -11,6 +11,7 @@ from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.proto_visitor import (
     AggregationToConditionalAggregationVisitor,
+    ColumnWrapper,
     ContainsAggregateVisitor,
     TraceItemTableRequestWrapper,
 )
@@ -131,18 +132,26 @@ def _validate_limit_by(in_msg: TraceItemTableRequest) -> None:
             f"limit_by.limit must be greater than 0, got {limit_by.limit}"
         )
 
-    # limit_by columns are aliases of selected columns, and must be grouped by so
-    # each row belongs to exactly one group.
-    group_by_names = {c.name for c in in_msg.group_by}
-    selected_by_label = {c.label: c for c in in_msg.columns if c.label}
-    for alias in limit_by.columns:
-        column = selected_by_label.get(alias)
-        if column is None:
-            raise BadSnubaRPCRequestException(f"limit_by column '{alias}' is not a selected column")
-        if not (column.HasField("key") and column.key.name in group_by_names):
-            raise BadSnubaRPCRequestException(
-                f"limit_by column '{alias}' must be a group_by column"
-            )
+    # A limit_by column may be a column, an alias of a selected column (a Column
+    # with only `label` set), or a non-aggregate transformation. ClickHouse cannot
+    # LIMIT BY an aggregate, so reject those (including aggregates nested in a
+    # formula), and make sure any alias-only reference points at a selected column.
+    selected_labels = {c.label for c in in_msg.columns if c.label}
+    for column in limit_by.columns:
+        wrapper = ColumnWrapper(column)
+        wrapper.accept(AggregationToConditionalAggregationVisitor())
+        contains_aggregate_visitor = ContainsAggregateVisitor()
+        wrapper.accept(contains_aggregate_visitor)
+        if contains_aggregate_visitor.contains_aggregate:
+            raise BadSnubaRPCRequestException("limit_by does not support aggregations")
+
+        if column.WhichOneof("column") is None:
+            # alias-only reference: it must name a selected column so ClickHouse
+            # can resolve it.
+            if column.label not in selected_labels:
+                raise BadSnubaRPCRequestException(
+                    f"limit_by column '{column.label}' is not a selected column"
+                )
 
 
 def _transform_request(request: TraceItemTableRequest) -> TraceItemTableRequest:
