@@ -365,6 +365,14 @@ def _convert_order_by(
     return res
 
 
+def _strip_aliases(expression: Expression) -> Expression:
+    """Removes aliases from an expression tree (all nodes) so it is safe to use in a
+    ``LIMIT BY`` clause, where ``expr AS alias`` is only valid when the alias is declared
+    in the SELECT. Called after all query transforms since e.g. virtual-column rewriting
+    re-applies aliases."""
+    return expression.transform(lambda e: replace(e, alias=None))
+
+
 def _convert_limit_by(
     limit_by: TraceItemTableRequest.LimitBy,
     selected_columns: Sequence[SelectedExpression],
@@ -395,7 +403,7 @@ def _convert_limit_by(
                 )
         else:
             expression = _column_to_expression(column, request_meta)
-        columns.append(replace(expression, alias=None))
+        columns.append(_strip_aliases(expression))
     return LimitBy(limit=limit_by.limit, columns=columns)
 
 
@@ -725,6 +733,17 @@ def build_query(
     treeify_or_and_conditions(res)
     _apply_virtual_columns(res, request.virtual_column_contexts)
     add_existence_check_to_map_attribute_reads(res)
+    # The transforms above (notably virtual-column rewriting) can re-apply aliases to
+    # limit_by expressions; a LIMIT BY must stay alias-free unless the alias is declared
+    # in the SELECT, so strip any aliases they reintroduced.
+    limitby = res.get_limitby()
+    if limitby is not None:
+        res.set_limitby(
+            LimitBy(
+                limit=limitby.limit,
+                columns=[_strip_aliases(column) for column in limitby.columns],
+            )
+        )
     return res
 
 

@@ -4577,12 +4577,9 @@ def test_build_query_with_limit_by() -> None:
     assert limitby == LimitBy(
         limit=10,
         columns=[
-            replace(
-                attribute_key_to_expression(
-                    AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id")
-                ),
-                alias=None,
-            )
+            attribute_key_to_expression(
+                AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id")
+            ).transform(lambda e: replace(e, alias=None))
         ],
     )
 
@@ -4603,14 +4600,51 @@ def test_build_query_limit_by_alias_reference() -> None:
     assert limitby == LimitBy(
         limit=10,
         columns=[
-            replace(
-                attribute_key_to_expression(
-                    AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id")
-                ),
-                alias=None,
-            )
+            attribute_key_to_expression(
+                AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id")
+            ).transform(lambda e: replace(e, alias=None))
         ],
     )
+
+
+def test_build_query_limit_by_virtual_column_has_no_alias() -> None:
+    """A `limit_by` on a virtual column must not leak an alias into the LIMIT BY clause:
+    `_apply_virtual_columns` re-aliases the expression, so build_query must strip it (an
+    aliased `expr AS alias` in LIMIT BY is invalid unless declared in the SELECT)."""
+    request = TraceItemTableRequest(
+        meta=RequestMeta(
+            project_ids=[1],
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        ),
+        columns=[
+            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="foo"), label="foo"),
+        ],
+        virtual_column_contexts=[
+            VirtualColumnContext(
+                from_column_name="sentry.project_id",
+                to_column_name="project_name",
+                value_map={"1": "sentry"},
+            )
+        ],
+        limit_by=TraceItemTableRequest.LimitBy(
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="project_name"),
+                    label="project_name",
+                )
+            ],
+            limit=5,
+        ),
+    )
+    request = _apply_labels_to_columns(request)
+    query = build_query(request)
+    limitby = query.get_limitby()
+    assert limitby is not None
+    # every node in the LIMIT BY expression must be alias-free
+    aliases: list[str | None] = []
+    for column in limitby.columns:
+        column.transform(lambda e: (aliases.append(e.alias), e)[1])
+    assert all(alias is None for alias in aliases)
 
 
 def test_build_query_without_limit_by() -> None:
