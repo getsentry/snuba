@@ -4590,6 +4590,38 @@ def test_build_query_without_limit_by() -> None:
     assert query.get_limitby() is None
 
 
+def test_build_query_limit_by_aggregation_is_converted() -> None:
+    """`limit_by` columns must be walked by TraceItemTableRequestWrapper so the deprecated
+    `aggregation` field is rewritten to `conditional_aggregation`; otherwise
+    `_column_to_expression` would reject it at build time."""
+    agg = AttributeAggregation(
+        aggregate=Function.FUNCTION_COUNT,
+        key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id"),
+        label="count()",
+    )
+    request = TraceItemTableRequest(
+        meta=RequestMeta(
+            project_ids=[1],
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        ),
+        columns=[Column(aggregation=agg, label="count()")],
+        limit_by=TraceItemTableRequest.LimitBy(
+            columns=[Column(aggregation=agg, label="count()")], limit=3
+        ),
+    )
+
+    wrapper = TraceItemTableRequestWrapper(request)
+    wrapper.accept(AggregationToConditionalAggregationVisitor())
+    # the visitor should have rewritten the deprecated aggregation on the limit_by column
+    assert request.limit_by.columns[0].HasField("conditional_aggregation")
+
+    request = _apply_labels_to_columns(request)
+    query = build_query(request)
+    limitby = query.get_limitby()
+    assert limitby is not None
+    assert limitby.limit == 3
+
+
 def test_validate_limit_by_not_selected() -> None:
     """`limit_by` columns must be part of the selected columns."""
     message = TraceItemTableRequest(

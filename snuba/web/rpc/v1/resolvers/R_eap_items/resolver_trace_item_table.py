@@ -369,13 +369,6 @@ def _convert_limit_by(
     limit_by: TraceItemTableRequest.LimitBy,
     request_meta: RequestMeta,
 ) -> LimitBy | None:
-    """Translates the request's ``limit_by`` into a ``LimitBy`` (ClickHouse ``LIMIT n BY ...``).
-
-    Returns ``None`` when no ``limit_by`` is set on the request so the query is left
-    without a LIMIT BY clause. Each column is converted with the same expression logic
-    used for the SELECT clause so the emitted ``LIMIT ... BY`` references the selected
-    columns.
-    """
     if not limit_by.columns:
         return None
     return LimitBy(
