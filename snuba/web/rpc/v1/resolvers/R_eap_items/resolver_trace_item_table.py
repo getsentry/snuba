@@ -808,12 +808,17 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
         )
         routing_decision.routing_context.query_result = res
         # we added 1 to the limit to know if there are more rows to fetch
-        # so we need to remove the last row
+        # so we need to remove the last row. When limit_by is set the top-level
+        # limit is unset (0), so fall back to the same default cap build_query
+        # applied, otherwise the sentinel +1 row would leak into the response.
+        effective_limit = in_msg.limit
+        if effective_limit <= 0 and in_msg.HasField("limit_by"):
+            effective_limit = _DEFAULT_ROW_LIMIT
         total_rows = len(res.result.get("data", []))
         data = iter(res.result.get("data", []))
 
-        if in_msg.limit > 0 and total_rows > in_msg.limit:
-            data = islice(data, in_msg.limit)
+        if effective_limit > 0 and total_rows > effective_limit:
+            data = islice(data, effective_limit)
         column_values = convert_results(in_msg, data)
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
