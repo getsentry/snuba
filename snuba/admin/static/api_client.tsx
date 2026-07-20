@@ -25,19 +25,15 @@ import {
   RunMigrationResult,
 } from "SnubaAdmin/clickhouse_migrations/types";
 import { TracingRequest, TracingResult } from "SnubaAdmin/tracing/types";
-import { MQLRequest } from "SnubaAdmin/mql_queries/types";
 import {
   SnQLRequest,
   SnQLResult,
   SnubaDatasetName,
 } from "SnubaAdmin/snql_to_sql/types";
 
-import { KafkaTopicData } from "SnubaAdmin/kafka/types";
 import { QuerylogRequest, QuerylogResult } from "SnubaAdmin/querylog/types";
 
-import { ReplayInstruction, Topic } from "SnubaAdmin/dead_letter_queue/types";
 import { AutoReplacementsBypassProjectsData } from "SnubaAdmin/auto_replacements_bypass_projects/types";
-import { ClickhouseNodeInfo, ClickhouseSystemSetting } from "SnubaAdmin/database_clusters/types";
 
 interface Client {
   getSettings: () => Promise<Settings>;
@@ -59,17 +55,14 @@ interface Client {
   getDescriptions: () => Promise<ConfigDescriptions>;
   getAuditlog: () => Promise<ConfigChange[]>;
   getClickhouseNodes: () => Promise<[ClickhouseNodeData]>;
-  getClickhouseNodeInfo: () => Promise<[ClickhouseNodeInfo]>;
   getSnubaDatasetNames: () => Promise<SnubaDatasetName[]>;
   getAllowedProjects: () => Promise<string[]>;
   executeSnQLQuery: (query: SnQLRequest) => Promise<any>;
-  executeMQLQuery: (query: MQLRequest) => Promise<any>;
   debugSnQLQuery: (query: SnQLRequest) => Promise<SnQLResult>;
   getPredefinedQueryOptions: () => Promise<[PredefinedQuery]>;
   executeSystemQuery: (req: QueryRequest) => Promise<QueryResult>;
   executeCopyTable: (req: CopyTableRequest) => Promise<any>;
   executeTracingQuery: (req: TracingRequest) => Promise<TracingResult>;
-  getKafkaData: () => Promise<KafkaTopicData[]>;
   getRpcEndpoints: () => Promise<Array<[string, string]>>;
   executeRpcEndpoint: (endpointName: string, version: string, requestBody: any, signal?: AbortSignal) => Promise<any>;
   getPredefinedQuerylogOptions: () => Promise<[PredefinedQuery]>;
@@ -78,18 +71,7 @@ interface Client {
   getAllMigrationGroups: () => Promise<MigrationGroupResult[]>;
   runMigration: (req: RunMigrationRequest) => Promise<RunMigrationResult>;
   getAllowedTools: () => Promise<AllowedTools>;
-  getDlqTopics: () => Promise<Topic[]>;
-  getDlqInstruction: () => Promise<ReplayInstruction | null>;
-  setDlqInstruction: (
-    topic: Topic,
-    instruction: ReplayInstruction,
-  ) => Promise<ReplayInstruction | null>;
-  clearDlqInstruction: () => Promise<ReplayInstruction | null>;
   getAdminRegions: () => Promise<string[]>;
-  runLightweightDelete: (
-    storage_name: string,
-    column_conditions: object,
-  ) => Promise<Response>;
   listJobSpecs: () => Promise<JobSpecMap>;
   runJob(job_id: string): Promise<String>;
   listJobTypes: () => Promise<string[]>;
@@ -98,7 +80,6 @@ interface Client {
     params: { [key: string]: any },
   ): Promise<{ job_id: string; status: string }>;
   getJobLogs(job_id: string): Promise<string[]>;
-  getClickhouseSystemSettings: (host: string, port: number, storage: string) => Promise<ClickhouseSystemSetting[]>;
   summarizeTraceWithProfile: (traceLogs: string, spanType: string, signal?: AbortSignal) => Promise<any>;
 }
 
@@ -200,11 +181,6 @@ function Client(): Client {
         });
     },
 
-    getClickhouseNodeInfo: () => {
-      const url = baseUrl + "clickhouse_node_info";
-      return fetch(url).then((resp) => resp.json());
-    },
-
     getSnubaDatasetNames: () => {
       const url = baseUrl + "snuba_datasets";
       return fetch(url).then((resp) => resp.json());
@@ -240,25 +216,6 @@ function Client(): Client {
 
     executeSnQLQuery: (query: SnQLRequest) => {
       const url = baseUrl + "production_snql_query";
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-        body: JSON.stringify(query),
-      }).then((res) => {
-        if (res.ok) {
-          return Promise.resolve(res.json());
-        } else {
-          return res.json().then((err) => {
-            let errMsg = err?.error.message || "Could not execute SnQL";
-            throw new Error(errMsg);
-          });
-        }
-      });
-    },
-
-    executeMQLQuery: (query: MQLRequest) => {
-      const url = baseUrl + "production_mql_query";
-      query.dataset = "generic_metrics";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "POST",
@@ -321,13 +278,6 @@ function Client(): Client {
         }
       });
     },
-    getKafkaData: () => {
-      const url = baseUrl + "kafka";
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-      }).then((resp) => resp.json());
-    },
-
     getRpcEndpoints: () => {
       const url = baseUrl + "rpc_endpoints";
       return fetch(url, {
@@ -426,62 +376,6 @@ function Client(): Client {
       }).then((resp) => resp.json());
     },
 
-    getDlqTopics: () => {
-      const url = baseUrl + "dead_letter_queue";
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-      }).then((resp) => resp.json());
-    },
-    getDlqInstruction: () => {
-      const url = baseUrl + "dead_letter_queue/replay";
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-      }).then((resp) => resp.json());
-    },
-    setDlqInstruction: (topic: Topic, instruction: ReplayInstruction) => {
-      const url = baseUrl + "dead_letter_queue/replay";
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-        body: JSON.stringify({
-          logicalName: topic.logicalName,
-          physicalName: topic.physicalName,
-          storage: topic.storage,
-          slice: topic.slice,
-          maxMessages: instruction.messagesToProcess,
-          policy: instruction.policy,
-        }),
-      }).then((res) => {
-        if (res.ok) {
-          return res.json();
-        } else {
-          return res.json().then((err) => {
-            let errMsg = err?.error || "Could not replay";
-            throw new Error(errMsg);
-          });
-        }
-      });
-    },
-    clearDlqInstruction: () => {
-      const url = baseUrl + "dead_letter_queue/replay";
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-        method: "DELETE",
-      }).then((resp) => resp.json());
-    },
-    runLightweightDelete: (storage_name: string, column_conditions: object) => {
-      const url = baseUrl + "delete";
-      return fetch(url, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          storage: storage_name,
-          query: { columns: column_conditions },
-        }),
-      });
-    },
     listJobSpecs: () => {
       const url = baseUrl + "job-specs";
       return fetch(url, {
@@ -526,22 +420,6 @@ function Client(): Client {
         headers: { "Content-Type": "application/json" },
         method: "GET",
       }).then((resp) => resp.json());
-    },
-    getClickhouseSystemSettings: (host: string, port: number, storage: string) => {
-      const url = `${baseUrl}clickhouse_system_settings?host=${encodeURIComponent(host)}&port=${encodeURIComponent(port)}&storage=${encodeURIComponent(storage)}`;
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-        method: "GET",
-      }).then((resp) => {
-        if (resp.ok) {
-          return resp.json();
-        } else {
-          return resp.json().then((err) => {
-            let errMsg = err?.error || "Could not get Clickhouse system settings";
-            throw new Error(errMsg);
-          });
-        }
-      });
     },
     summarizeTraceWithProfile: (traceLogs: string, storage: string, signal?: AbortSignal) => {
       const url = baseUrl + "rpc_summarize_trace_with_profile";

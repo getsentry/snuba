@@ -23,7 +23,6 @@ from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
 from snuba.admin.clickhouse.common import InvalidCustomQuery, InvalidNodeError
 from snuba.admin.clickhouse.copy_tables import copy_tables
-from snuba.admin.clickhouse.database_clusters import get_node_info, get_system_settings
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_querylog_queries import QuerylogQuery
@@ -36,13 +35,11 @@ from snuba.admin.clickhouse.system_queries import (
 )
 from snuba.admin.clickhouse.trace_log_parsing import summarize_trace_output
 from snuba.admin.clickhouse.tracing import TraceOutput, run_query_and_get_trace
-from snuba.admin.dead_letter_queue import get_dlq_topics
-from snuba.admin.kafka.topics import get_broker_data
 from snuba.admin.migrations_policies import (
     check_migration_perms,
     get_migration_group_policies,
 )
-from snuba.admin.production_queries.prod_queries import run_mql_query, run_snql_query
+from snuba.admin.production_queries.prod_queries import run_snql_query
 from snuba.admin.rpc.rpc_queries import validate_request_meta
 from snuba.admin.runtime_config import (
     ConfigChange,
@@ -55,17 +52,7 @@ from snuba.admin.tool_policies import (
     get_user_allowed_tools,
 )
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.consumers.dlq import (
-    DlqInstruction,
-    DlqInstructionStatus,
-    DlqReplayPolicy,
-    clear_instruction,
-    load_instruction,
-    store_instruction,
-)
 from snuba.datasets.factory import InvalidDatasetError, get_enabled_dataset_names
-from snuba.datasets.storages.factory import get_writable_storage
-from snuba.datasets.storages.storage_key import StorageKey
 from snuba.manual_jobs import Job, JobSpec
 from snuba.manual_jobs.runner import (
     list_job_specs,
@@ -78,20 +65,12 @@ from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 from snuba.query.exceptions import InvalidQueryException
-from snuba.query.query_settings import HTTPQuerySettings
 from snuba.replacers.replacements_and_expiry import (
     get_config_auto_replacements_bypass_projects,
 )
-from snuba.request.exceptions import InvalidJsonRequestException
-from snuba.request.schema import RequestSchema
 from snuba.state.explain_meta import explain_cleanup, get_explain_meta
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.registered_class import InvalidConfigKeyError
-from snuba.web.delete_query import (
-    DeletesNotEnabledError,
-    delete_from_storage,
-    deletes_are_enabled,
-)
 from snuba.web.rpc import RPCEndpoint, list_all_endpoint_names, run_rpc_handler
 from snuba.web.views import dataset_query
 
@@ -386,12 +365,6 @@ def clickhouse_queries() -> Response:
 def querylog_queries() -> Response:
     res = [q.to_json() for q in QuerylogQuery.all_classes()]
     return make_response(jsonify(res), 200)
-
-
-@application.route("/kafka")
-@check_tool_perms(tools=[AdminTools.KAFKA])
-def kafka_topics() -> Response:
-    return make_response(jsonify(get_broker_data()), 200)
 
 
 @application.route("/auto-replacements-bypass-projects")
@@ -1024,59 +997,6 @@ def snuba_debug() -> Response:
         explain_cleanup()
 
 
-@application.route("/dead_letter_queue", methods=["GET"])
-@check_tool_perms(tools=[AdminTools.KAFKA])
-def dlq_topics() -> Response:
-    return make_response(jsonify(get_dlq_topics()), 200)
-
-
-@application.route("/dead_letter_queue/replay", methods=["GET", "POST", "DELETE"])
-@check_tool_perms(tools=[AdminTools.KAFKA])
-def dlq_replay() -> Response:
-    if request.method == "POST":
-        req = request.get_json() or {}  # Required for typing
-
-        try:
-            policy = DlqReplayPolicy(req["policy"])
-            storage_key = StorageKey(req["storage"])
-            slice_id = req["slice"]
-            max_messages_to_process = req["maxMessages"]
-            assert max_messages_to_process > 0, "maxMessages must be greater than 1"
-        except (KeyError, AssertionError):
-            return make_response("Missing required fields", 400)
-
-        if load_instruction() is not None:
-            return make_response("Instruction exists", 400)
-
-        instruction = DlqInstruction(
-            policy,
-            DlqInstructionStatus.NOT_STARTED,
-            storage_key,
-            slice_id,
-            max_messages_to_process,
-        )
-
-        user = request.headers.get(USER_HEADER_KEY)
-
-        audit_log.record(
-            user or "",
-            AuditLogAction.DLQ_REPLAY,
-            {"instruction": str(instruction)},
-            notify=True,
-        )
-        store_instruction(instruction)
-
-    if request.method == "DELETE":
-        clear_instruction()
-
-    loaded_instruction = load_instruction()
-
-    if loaded_instruction is None:
-        return make_response(jsonify(None), 200)
-
-    return make_response(loaded_instruction.to_bytes().decode("utf-8"), 200)
-
-
 @application.route("/rpc_endpoints", methods=["GET"])
 @check_tool_perms(tools=[AdminTools.RPC_ENDPOINTS])
 def list_rpc_endpoints() -> Response:
@@ -1135,21 +1055,6 @@ def production_snql_query() -> Response:
         )
 
 
-@application.route("/production_mql_query", methods=["POST"])
-@check_tool_perms(tools=[AdminTools.PRODUCTION_QUERIES])
-def production_mql_query() -> Response:
-    body = json.loads(request.data)
-    body["tenant_ids"] = {"referrer": request.referrer, "organization_id": ORG_ID}
-    try:
-        return run_mql_query(body, g.user.email)
-    except InvalidQueryException as exception:
-        return Response(
-            json.dumps({"error": {"message": str(exception)}}, indent=4),
-            400,
-            {"Content-Type": "application/json"},
-        )
-
-
 @application.route("/allowed_projects", methods=["GET"])
 @check_tool_perms(tools=[AdminTools.PRODUCTION_QUERIES])
 def get_allowed_projects() -> Response:
@@ -1159,77 +1064,6 @@ def get_allowed_projects() -> Response:
 @application.route("/admin_regions", methods=["GET"])
 def get_admin_regions() -> Response:
     return make_response(jsonify(settings.ADMIN_REGIONS), 200)
-
-
-@application.route(
-    "/delete",
-    methods=["DELETE"],
-)
-@check_tool_perms(tools=[AdminTools.DELETE_TOOL])
-def delete() -> Response:
-    """
-    Given a storage name and columns object, parses the input and calls
-    delete_from_storage with them.
-
-    Input:
-        an http DELETE request with a json body containing elements "storage" and "columns"
-        see delete_from_storage for definition of these inputs.
-    """
-    body = request.get_json()
-    assert isinstance(body, dict)
-    storage = body.pop("storage", None)
-    if storage is None:
-        return make_response(
-            jsonify(
-                {
-                    "error",
-                    "all required input 'storage' is not present in the request body",
-                }
-            ),
-            400,
-        )
-    try:
-        storage = get_writable_storage(StorageKey(storage))
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {
-                    "error": str(e),
-                }
-            ),
-            400,
-        )
-    try:
-        schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
-        request_parts = schema.validate(body)
-        delete_results = delete_from_storage(
-            storage,
-            request_parts.query["query"]["columns"],
-            request_parts.attribution_info,
-        )
-    except (InvalidJsonRequestException, DeletesNotEnabledError) as schema_error:
-        return make_response(
-            jsonify({"error": str(schema_error)}),
-            400,
-        )
-    except Exception as e:
-        if application.debug:
-            from traceback import format_exception
-
-            return make_response(jsonify({"error": format_exception(e)}), 500)
-        sentry_sdk.capture_exception(e)
-        return make_response(jsonify({"error": "unexpected internal error"}), 500)
-
-    return Response(json.dumps(delete_results), 200, {"Content-Type": "application/json"})
-
-
-@application.route(
-    "/deletes-enabled",
-    methods=["GET"],
-)
-@check_tool_perms(tools=[AdminTools.DELETE_TOOL])
-def deletes_enabled() -> Response:
-    return make_response(jsonify(deletes_are_enabled()), 200)
 
 
 @application.route("/job-specs", methods=["GET"])
@@ -1317,30 +1151,3 @@ def run_job_by_type(job_type: str) -> Response:
         return make_response(jsonify({"error": str(e), "job_id": job_id}), 500)
 
     return make_response(jsonify({"job_id": job_id, "status": job_status}), 200)
-
-
-@application.route("/clickhouse_node_info")
-@check_tool_perms(tools=[AdminTools.DATABASE_CLUSTERS])
-def clickhouse_node_info() -> Response:
-    try:
-        node_info = get_node_info()
-        return make_response(jsonify(node_info), 200)
-    except Exception as e:
-        return make_response(jsonify({"error": str(e)}), 500)
-
-
-@application.route("/clickhouse_system_settings")
-@check_tool_perms(tools=[AdminTools.DATABASE_CLUSTERS])
-def clickhouse_system_settings() -> Response:
-    host = request.args.get("host")
-    port = request.args.get("port")
-    storage = request.args.get("storage")
-    if not all([host, port, storage]):
-        return make_response(jsonify({"error": "Host, port, and storage are required"}), 400)
-    try:
-        # conversions for typing
-        settings = get_system_settings(str(host), int(str(port)), str(storage))
-        return make_response(jsonify(settings), 200)
-    except Exception as e:
-        sentry_sdk.capture_exception(e)
-        return make_response(jsonify({"error": str(e)}), 500)

@@ -27,12 +27,9 @@ class AdminTools(Enum):
     QUERY_TRACING = "tracing"
     QUERYLOG = "querylog"
     AUDIT_LOG = "audit-log"
-    KAFKA = "kafka"
     PRODUCTION_QUERIES = "production-queries"
     SNUBA_EXPLAIN = "snuba-explain"
-    DELETE_TOOL = "delete_tool"
     MANUAL_JOBS = "view-jobs"
-    DATABASE_CLUSTERS = "database-clusters"
     RPC_ENDPOINTS = "rpc-endpoints"
 
 
