@@ -138,9 +138,7 @@ def _validate_limit_by(in_msg: TraceItemTableRequest) -> None:
     for alias in limit_by.columns:
         column = selected_by_label.get(alias)
         if column is None:
-            raise BadSnubaRPCRequestException(
-                f"limit_by column '{alias}' is not a selected column"
-            )
+            raise BadSnubaRPCRequestException(f"limit_by column '{alias}' is not a selected column")
         if not (column.HasField("key") and column.key.name in group_by_names):
             raise BadSnubaRPCRequestException(
                 f"limit_by column '{alias}' must be a group_by column"

@@ -4555,9 +4555,7 @@ def _limit_by_request(
 def test_build_query_with_limit_by() -> None:
     """A `limit_by` referencing a group_by column by alias produces a `LIMIT n BY ...`
     clause using that column's selected expression."""
-    request = _limit_by_request(
-        TraceItemTableRequest.LimitBy(columns=["project_id"], limit=10)
-    )
+    request = _limit_by_request(TraceItemTableRequest.LimitBy(columns=["project_id"], limit=10))
 
     wrapper = TraceItemTableRequestWrapper(request)
     wrapper.accept(AggregationToConditionalAggregationVisitor())
@@ -4615,9 +4613,7 @@ def test_validate_limit_by_rejected_with_flextime() -> None:
 
 def test_validate_limit_by_not_selected() -> None:
     """`limit_by` aliases must reference a selected column."""
-    message = _limit_by_request(
-        TraceItemTableRequest.LimitBy(columns=["not_a_column"], limit=5)
-    )
+    message = _limit_by_request(TraceItemTableRequest.LimitBy(columns=["not_a_column"], limit=5))
     message = _apply_labels_to_columns(message)
     with pytest.raises(BadSnubaRPCRequestException, match="is not a selected column"):
         _validate_limit_by(message)
@@ -4625,9 +4621,7 @@ def test_validate_limit_by_not_selected() -> None:
 
 def test_validate_limit_by_not_in_group_by() -> None:
     """`limit_by` aliases must reference a group_by column, not e.g. an aggregate."""
-    message = _limit_by_request(
-        TraceItemTableRequest.LimitBy(columns=["count()"], limit=5)
-    )
+    message = _limit_by_request(TraceItemTableRequest.LimitBy(columns=["count()"], limit=5))
     message = _apply_labels_to_columns(message)
     with pytest.raises(BadSnubaRPCRequestException, match="must be a group_by column"):
         _validate_limit_by(message)
@@ -4635,9 +4629,7 @@ def test_validate_limit_by_not_in_group_by() -> None:
 
 def test_validate_limit_by_zero_limit() -> None:
     """A `limit_by` with columns set but a non-positive limit is rejected."""
-    message = _limit_by_request(
-        TraceItemTableRequest.LimitBy(columns=["project_id"], limit=0)
-    )
+    message = _limit_by_request(TraceItemTableRequest.LimitBy(columns=["project_id"], limit=0))
     message = _apply_labels_to_columns(message)
     with pytest.raises(BadSnubaRPCRequestException, match="greater than 0"):
         _validate_limit_by(message)

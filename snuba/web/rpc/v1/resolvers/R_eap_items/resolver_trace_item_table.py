@@ -382,9 +382,7 @@ def _convert_limit_by(
     for alias in limit_by.columns:
         expression = label_to_expression.get(alias)
         if expression is None:
-            raise BadSnubaRPCRequestException(
-                f"limit_by column '{alias}' is not a selected column"
-            )
+            raise BadSnubaRPCRequestException(f"limit_by column '{alias}' is not a selected column")
         columns.append(expression)
     return LimitBy(limit=limit_by.limit, columns=columns)
 
