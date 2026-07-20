@@ -36,7 +36,7 @@ from snuba.protos.common import (
     TYPED_ARRAY_MAP_COLUMNS,
     type_array_typed_columns_select_expressions,
 )
-from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, if_cond, literal, literals_array, or_cond
@@ -365,6 +365,25 @@ def _convert_order_by(
     return res
 
 
+def _convert_limit_by(
+    limit_by: TraceItemTableRequest.LimitBy,
+    request_meta: RequestMeta,
+) -> LimitBy | None:
+    """Translates the request's ``limit_by`` into a ``LimitBy`` (ClickHouse ``LIMIT n BY ...``).
+
+    Returns ``None`` when no ``limit_by`` is set on the request so the query is left
+    without a LIMIT BY clause. Each column is converted with the same expression logic
+    used for the SELECT clause so the emitted ``LIMIT ... BY`` references the selected
+    columns.
+    """
+    if not limit_by.columns:
+        return None
+    return LimitBy(
+        limit=limit_by.limit,
+        columns=[_column_to_expression(column, request_meta) for column in limit_by.columns],
+    )
+
+
 def _get_reliability_context_columns(
     column: Column, request_meta: RequestMeta
 ) -> list[SelectedExpression]:
@@ -674,6 +693,7 @@ def build_query(
             request.order_by,
             request.meta,
         ),
+        limitby=_convert_limit_by(request.limit_by, request.meta),
         groupby=groupby,
         # Only support offset page tokens for now
         offset=_get_offset_from_page_token(request.page_token),

@@ -47,6 +47,9 @@ def _apply_labels_to_columns(in_msg: TraceItemTableRequest) -> TraceItemTableReq
     for order_by in in_msg.order_by:
         _apply_label_to_column(order_by.column)
 
+    for limit_by_column in in_msg.limit_by.columns:
+        _apply_label_to_column(limit_by_column)
+
     return in_msg
 
 
@@ -102,6 +105,37 @@ def _validate_order_by(in_msg: TraceItemTableRequest) -> None:
     if not order_by_cols.issubset(selected_columns):
         raise BadSnubaRPCRequestException(
             f"Ordered by columns {sorted(order_by_cols)} not selected: {sorted(selected_columns)}"
+        )
+
+
+def _validate_limit_by(in_msg: TraceItemTableRequest) -> None:
+    if not in_msg.HasField("limit_by"):
+        return
+
+    limit_by = in_msg.limit_by
+    if not limit_by.columns:
+        raise BadSnubaRPCRequestException("limit_by must specify at least one column")
+
+    if limit_by.limit <= 0:
+        raise BadSnubaRPCRequestException(
+            f"limit_by.limit must be greater than 0, got {limit_by.limit}"
+        )
+
+    array_limit_by_columns = [
+        c.key.name
+        for c in limit_by.columns
+        if c.HasField("key") and c.key.type in ARRAY_TYPES
+    ]
+    if array_limit_by_columns:
+        raise BadSnubaRPCRequestException(
+            f"limit_by is not supported on array attributes: {', '.join(array_limit_by_columns)}"
+        )
+
+    limit_by_cols = {c.label if c.label else str(c) for c in limit_by.columns}
+    selected_columns = {c.label if c.label else str(c) for c in in_msg.columns}
+    if not limit_by_cols.issubset(selected_columns):
+        raise BadSnubaRPCRequestException(
+            f"limit_by columns {sorted(limit_by_cols)} not selected: {sorted(selected_columns)}"
         )
 
 
@@ -187,6 +221,7 @@ class EndpointTraceItemTable(RPCEndpoint[TraceItemTableRequest, TraceItemTableRe
         in_msg = _apply_labels_to_columns(in_msg)
         _validate_select_and_groupby(in_msg)
         _validate_order_by(in_msg)
+        _validate_limit_by(in_msg)
         _enforce_flextime_routing_orders_by_timestamp_and_item_id(in_msg)
 
         RejectTimestampAsStringVisitor().visit(in_msg)
