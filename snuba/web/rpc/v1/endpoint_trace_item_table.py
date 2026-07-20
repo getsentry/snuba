@@ -136,7 +136,7 @@ def _validate_limit_by(in_msg: TraceItemTableRequest) -> None:
     # with only `label` set), or a non-aggregate transformation. ClickHouse cannot
     # LIMIT BY an aggregate, so reject those (including aggregates nested in a
     # formula), and make sure any alias-only reference points at a selected column.
-    selected_labels = {c.label for c in in_msg.columns if c.label}
+    selected_by_label = {c.label: c for c in in_msg.columns if c.label}
     for column in limit_by.columns:
         wrapper = ColumnWrapper(column)
         wrapper.accept(AggregationToConditionalAggregationVisitor())
@@ -148,10 +148,20 @@ def _validate_limit_by(in_msg: TraceItemTableRequest) -> None:
         if column.WhichOneof("column") is None:
             # alias-only reference: it must name a selected column so ClickHouse
             # can resolve it.
-            if column.label not in selected_labels:
+            referenced = selected_by_label.get(column.label)
+            if referenced is None:
                 raise BadSnubaRPCRequestException(
                     f"limit_by column '{column.label}' is not a selected column"
                 )
+        else:
+            referenced = column
+
+        # array attributes expand into typed sub-columns and cannot be grouped on,
+        # same as order_by / group_by.
+        if referenced.HasField("key") and referenced.key.type in ARRAY_TYPES:
+            raise BadSnubaRPCRequestException(
+                f"limit_by is not supported on array attributes: {referenced.key.name}"
+            )
 
 
 def _transform_request(request: TraceItemTableRequest) -> TraceItemTableRequest:

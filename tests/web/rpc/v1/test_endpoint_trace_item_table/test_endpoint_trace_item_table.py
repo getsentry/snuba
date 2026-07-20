@@ -1,5 +1,6 @@
 import random
 import re
+from dataclasses import replace
 from datetime import datetime, timedelta
 from math import isclose
 from typing import Any
@@ -4572,11 +4573,15 @@ def test_build_query_with_limit_by() -> None:
 
     query = build_query(request)
     limitby = query.get_limitby()
+    # the alias is stripped so LIMIT BY emits the bare expression
     assert limitby == LimitBy(
         limit=10,
         columns=[
-            attribute_key_to_expression(
-                AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id")
+            replace(
+                attribute_key_to_expression(
+                    AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id")
+                ),
+                alias=None,
             )
         ],
     )
@@ -4598,8 +4603,11 @@ def test_build_query_limit_by_alias_reference() -> None:
     assert limitby == LimitBy(
         limit=10,
         columns=[
-            attribute_key_to_expression(
-                AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id")
+            replace(
+                attribute_key_to_expression(
+                    AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id")
+                ),
+                alias=None,
             )
         ],
     )
@@ -4663,6 +4671,27 @@ def test_validate_limit_by_rejects_aggregation() -> None:
     message = _apply_labels_to_columns(message)
     with pytest.raises(BadSnubaRPCRequestException, match="does not support aggregations"):
         _validate_limit_by(message)
+
+
+def test_validate_limit_by_rejects_array_attribute() -> None:
+    """limit_by cannot be an array attribute (arrays expand into typed sub-columns and
+    can't be grouped on), whether passed directly or as an alias reference."""
+    array_column = Column(
+        key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags"), label="tags"
+    )
+    direct = _limit_by_request(TraceItemTableRequest.LimitBy(columns=[array_column], limit=5))
+    direct.columns.append(array_column)
+    direct = _apply_labels_to_columns(direct)
+    with pytest.raises(BadSnubaRPCRequestException, match="array attributes"):
+        _validate_limit_by(direct)
+
+    alias = _limit_by_request(
+        TraceItemTableRequest.LimitBy(columns=[Column(label="tags")], limit=5)
+    )
+    alias.columns.append(array_column)
+    alias = _apply_labels_to_columns(alias)
+    with pytest.raises(BadSnubaRPCRequestException, match="array attributes"):
+        _validate_limit_by(alias)
 
 
 def test_validate_limit_by_alias_not_selected() -> None:

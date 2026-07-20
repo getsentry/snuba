@@ -375,7 +375,12 @@ def _convert_limit_by(
     Each column may be a column/transformation, converted the same way as a SELECT
     column, or an alias-only reference (a Column with just ``label`` set) that resolves
     to the expression selected under that label. Returns ``None`` when no ``limit_by``
-    is set. Aggregations are rejected upstream in ``_validate_limit_by``.
+    is set. Aggregations and array attributes are rejected upstream in
+    ``_validate_limit_by``.
+
+    The alias is stripped from each expression so the clause emits the bare expression
+    (``LIMIT n BY expr``); keeping the alias would emit ``expr AS alias``, which is
+    invalid in a LIMIT BY when the alias is not already declared in the SELECT.
     """
     if not limit_by.columns:
         return None
@@ -390,7 +395,7 @@ def _convert_limit_by(
                 )
         else:
             expression = _column_to_expression(column, request_meta)
-        columns.append(expression)
+        columns.append(replace(expression, alias=None))
     return LimitBy(limit=limit_by.limit, columns=columns)
 
 
