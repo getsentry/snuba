@@ -64,7 +64,7 @@ from snuba.consumers.dlq import (
     store_instruction,
 )
 from snuba.datasets.factory import InvalidDatasetError, get_enabled_dataset_names
-from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.manual_jobs import Job, JobSpec
 from snuba.manual_jobs.runner import (
