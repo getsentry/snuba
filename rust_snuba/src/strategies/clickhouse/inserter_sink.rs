@@ -5,10 +5,10 @@
 //! A long-lived actor task owns one [`Inserter`], configured with our batch
 //! settings, and writes each row on arrival. Durability barrier: a window's
 //! Kafka offsets are pushed downstream only after `commit()` reports its rows
-//! flushed. On a flush error the retained window is replayed through a fresh
-//! inserter with backoff; if retries are exhausted the actor fail-stops, offsets
-//! are never pushed, and the batch replays on restart. Wire format is plain
-//! `RowBinary` with validation off (see `build_client`).
+//! flushed. On a write/commit error the actor fail-stops (no in-process retry):
+//! the window's offsets are never pushed, so the consumer restarts and replays
+//! it from the last committed offset. Wire format is plain `RowBinary` with
+//! validation off (see `build_client`).
 
 use std::collections::BTreeMap;
 use std::time::{Duration, SystemTime};
@@ -23,8 +23,6 @@ use sentry_arroyo::utils::timing::Deadline;
 use sentry_arroyo::{counter, timer};
 use tokio::sync::mpsc;
 
-use clickhouse::inserter::Quantities;
-
 use crate::config::{BatchSizeCalculation, ClickhouseConfig};
 use crate::options::{get_load_balancing_config, get_max_insert_block_size};
 use crate::types::BytesInsertBatch;
@@ -32,9 +30,6 @@ use crate::types::BytesInsertBatch;
 /// Bound on rows in flight between `submit` and the actor; when full, `submit`
 /// returns `MessageRejected` and arroyo back-pressures upstream.
 const WORK_CHANNEL_CAPACITY: usize = 1024;
-
-const MAX_INSERT_RETRIES: usize = 4;
-const INITIAL_RETRY_BACKOFF_MS: u64 = 500;
 
 /// Work handed from the strategy (sync) to the actor (async), in arrival order.
 enum WorkItem<R> {
@@ -68,26 +63,18 @@ enum FlushOutcome {
     Err(String),
 }
 
-/// The current unflushed window: rows retained (bounded by `max_batch_size`) for
-/// retry, plus the offsets/metadata they'll commit once flushed.
-struct Acc<R> {
-    rows: Vec<R>,
+/// The current unflushed window: the offsets/metadata to commit once the
+/// inserter flushes, plus a count of rows written since the last flush (used for
+/// the flush-count safety check in `emit_ready`). We don't retain the rows
+/// themselves — on a write/commit error we fail-stop and let Kafka replay.
+#[derive(Default)]
+struct Acc {
+    pending_rows: u64,
     committable: BTreeMap<Partition, u64>,
     meta: BytesInsertBatch<()>,
 }
 
-// Hand-written so the impl doesn't require `R: Default`.
-impl<R> Default for Acc<R> {
-    fn default() -> Self {
-        Self {
-            rows: Vec::new(),
-            committable: BTreeMap::new(),
-            meta: BytesInsertBatch::default(),
-        }
-    }
-}
-
-impl<R> Acc<R> {
+impl Acc {
     fn merge(&mut self, committable: Vec<(Partition, u64)>, meta: BytesInsertBatch<()>) {
         for (partition, offset) in committable {
             let entry = self.committable.entry(partition).or_insert(offset);
@@ -103,31 +90,30 @@ impl<R> Acc<R> {
 
 /// Push the accumulated window downstream and reset the accumulator. Returns
 /// `false` (after sending `FlushOutcome::Err`) if the flush count doesn't match
-/// the retained window; the caller must then stop the actor.
+/// the rows written since the last flush; the caller must then stop the actor.
 ///
-/// Enforcing `rows == acc.rows.len()` at runtime (not just `debug_assert!`)
+/// Enforcing `rows == acc.pending_rows` at runtime (not just `debug_assert!`)
 /// guards against committing offsets for rows that aren't durable: we only emit
 /// offsets for a window the inserter actually flushed. It holds by construction
 /// today (we `commit()` after every `write()`, and a flush ends the whole
 /// INSERT), but a future change could break it and silently lose data.
 #[must_use]
-fn emit_ready<R>(
+fn emit_ready(
     out_tx: &mpsc::UnboundedSender<FlushOutcome>,
-    acc: &mut Acc<R>,
+    acc: &mut Acc,
     bytes: u64,
     rows: u64,
     elapsed: Duration,
 ) -> bool {
-    if rows as usize != acc.rows.len() {
+    if rows != acc.pending_rows {
         let _ = out_tx.send(FlushOutcome::Err(format!(
-            "flush count ({}) != retained window ({}); refusing to commit \
+            "flush count ({}) != rows written ({}); refusing to commit \
              offsets for rows that may not be durable",
-            rows,
-            acc.rows.len(),
+            rows, acc.pending_rows,
         )));
         return false;
     }
-    acc.rows.clear();
+    acc.pending_rows = 0;
     let committable = std::mem::take(&mut acc.committable);
     let meta = std::mem::take(&mut acc.meta);
     let _ = out_tx.send(FlushOutcome::Ready(Box::new(ReadyFlush {
@@ -180,80 +166,6 @@ fn make_inserter<R: clickhouse::Row>(
     inserter
 }
 
-/// Durably insert `rows` as a single INSERT, retrying transient failures with
-/// jittered exponential backoff. Used to recover a window after the long-lived
-/// inserter hit a write/commit error (which poisons it). Returns the inserted
-/// `Quantities` on success, or the last error string after exhausting retries.
-#[allow(clippy::too_many_arguments)]
-async fn flush_window_with_retry<R>(
-    client: &clickhouse::Client,
-    table: &str,
-    storage_name: &str,
-    max_rows: u64,
-    max_bytes: u64,
-    max_batch_time: Duration,
-    rows: &[R],
-) -> Result<Quantities, String>
-where
-    R: clickhouse::RowOwned + serde::Serialize + Send + Sync,
-{
-    if rows.is_empty() {
-        return Ok(Quantities::ZERO);
-    }
-    let mut backoff = Duration::from_millis(INITIAL_RETRY_BACKOFF_MS);
-    let mut last_err = String::from("unknown error");
-    for attempt in 0..=MAX_INSERT_RETRIES {
-        // Fresh inserter each attempt; end() flushes the whole window as one INSERT.
-        let mut inserter = make_inserter::<R>(
-            client,
-            table,
-            storage_name,
-            max_rows,
-            max_bytes,
-            max_batch_time,
-        );
-        let mut write_err: Option<String> = None;
-        for row in rows {
-            if let Err(e) = inserter.write(row).await {
-                write_err = Some(e.to_string());
-                break;
-            }
-        }
-        match write_err {
-            None => match inserter.end().await {
-                Ok(quantities) => return Ok(quantities),
-                Err(e) => last_err = e.to_string(),
-            },
-            Some(e) => last_err = e,
-        }
-        if attempt < MAX_INSERT_RETRIES {
-            counter!(
-                "rust_consumer.clickhouse_insert_error",
-                1,
-                "status" => "insert_error",
-                "retried" => "true"
-            );
-            tracing::warn!(
-                "ClickHouse insert failed (attempt {}/{}): {}",
-                attempt + 1,
-                MAX_INSERT_RETRIES + 1,
-                last_err
-            );
-            // ±10% jitter so consumers don't retry in lockstep.
-            let jitter = 1.0 + (rand::random::<f64>() * 0.2 - 0.1);
-            tokio::time::sleep(backoff.mul_f64(jitter)).await;
-            backoff = backoff.saturating_mul(2);
-        }
-    }
-    counter!(
-        "rust_consumer.clickhouse_insert_error",
-        1,
-        "status" => "insert_error",
-        "retried" => "false"
-    );
-    Err(last_err)
-}
-
 #[allow(clippy::too_many_arguments)]
 async fn run_inserter_actor<R>(
     config: ClickhouseConfig,
@@ -289,52 +201,6 @@ async fn run_inserter_actor<R>(
     // Bounds how often a skip-only window pushes offsets.
     let mut skip_deadline = Deadline::new(max_batch_time);
 
-    // A write/commit error poisons the inserter: replay the retained window
-    // through a fresh one with backoff, then carry on. If retries are exhausted,
-    // fail-stop (return) rather than consume later rows — inserting them with
-    // uncommitted offsets would duplicate on replay.
-    macro_rules! recover_or_fail {
-        ($start:expr) => {{
-            match flush_window_with_retry(
-                &client,
-                &table,
-                &storage_name,
-                max_rows,
-                max_bytes,
-                max_batch_time,
-                &acc.rows,
-            )
-            .await
-            {
-                Ok(quantities) => {
-                    inserter = make_inserter::<R>(
-                        &client,
-                        &table,
-                        &storage_name,
-                        max_rows,
-                        max_bytes,
-                        max_batch_time,
-                    );
-                    let elapsed = $start.elapsed().unwrap_or_default();
-                    if !emit_ready(
-                        &out_tx,
-                        &mut acc,
-                        quantities.bytes,
-                        quantities.rows,
-                        elapsed,
-                    ) {
-                        return;
-                    }
-                    skip_deadline = Deadline::new(max_batch_time);
-                }
-                Err(e) => {
-                    let _ = out_tx.send(FlushOutcome::Err(e));
-                    return;
-                }
-            }
-        }};
-    }
-
     loop {
         tokio::select! {
             maybe = work_rx.recv() => match maybe {
@@ -343,13 +209,12 @@ async fn run_inserter_actor<R>(
                     if skip_write {
                         continue;
                     }
-                    // Retain for retry, then write from the buffer.
-                    acc.rows.push(*row);
                     let start = SystemTime::now();
-                    if inserter.write(acc.rows.last().unwrap()).await.is_err() {
-                        recover_or_fail!(start);
-                        continue;
+                    if let Err(e) = inserter.write(&*row).await {
+                        let _ = out_tx.send(FlushOutcome::Err(e.to_string()));
+                        return;
                     }
+                    acc.pending_rows += 1;
                     match inserter.commit().await {
                         Ok(q) if q.rows > 0 => {
                             let elapsed = start.elapsed().unwrap_or_default();
@@ -359,7 +224,10 @@ async fn run_inserter_actor<R>(
                             skip_deadline = Deadline::new(max_batch_time);
                         }
                         Ok(_) => {}
-                        Err(_) => recover_or_fail!(start),
+                        Err(e) => {
+                            let _ = out_tx.send(FlushOutcome::Err(e.to_string()));
+                            return;
+                        }
                     }
                 }
                 Some(WorkItem::Skip { committable, meta }) => acc.merge(committable, meta),
@@ -386,22 +254,26 @@ async fn run_inserter_actor<R>(
                     }
                     Ok(_) => {
                         // Advance offsets for a skip-only window. Guard on
-                        // `rows.is_empty()`: emitting while real rows are buffered
+                        // `pending_rows == 0`: emitting while real rows are buffered
                         // would commit past their (lower) offsets and lose data.
-                        if acc.has_offsets() && acc.rows.is_empty() && skip_deadline.has_elapsed() {
+                        if acc.has_offsets() && acc.pending_rows == 0 && skip_deadline.has_elapsed()
+                        {
                             if !emit_ready(&out_tx, &mut acc, 0, 0, Duration::ZERO) {
                                 return;
                             }
                             skip_deadline = Deadline::new(max_batch_time);
                         }
                     }
-                    Err(_) => recover_or_fail!(start),
+                    Err(e) => {
+                        let _ = out_tx.send(FlushOutcome::Err(e.to_string()));
+                        return;
+                    }
                 }
             }
         }
     }
 
-    // Finalize: flush the last partial window (with the same retry on error).
+    // Finalize: flush the last partial window via `end()`.
     if skip_write {
         if acc.has_offsets() {
             // Returning next regardless, so ignore the bool (Err already sent).
@@ -410,22 +282,7 @@ async fn run_inserter_actor<R>(
         return;
     }
     let start = SystemTime::now();
-    let final_result = match inserter.end().await {
-        Ok(quantities) => Ok(quantities),
-        Err(_) => {
-            flush_window_with_retry(
-                &client,
-                &table,
-                &storage_name,
-                max_rows,
-                max_bytes,
-                max_batch_time,
-                &acc.rows,
-            )
-            .await
-        }
-    };
-    match final_result {
+    match inserter.end().await {
         Ok(quantities) => {
             if acc.has_offsets() {
                 let elapsed = start.elapsed().unwrap_or_default();
@@ -440,7 +297,7 @@ async fn run_inserter_actor<R>(
             }
         }
         Err(e) => {
-            let _ = out_tx.send(FlushOutcome::Err(e));
+            let _ = out_tx.send(FlushOutcome::Err(e.to_string()));
         }
     }
 }
@@ -547,8 +404,11 @@ where
                     }
                 }
                 Ok(FlushOutcome::Err(e)) => {
-                    // Metric already emitted in `flush_window_with_retry`; don't
-                    // re-emit (would double-count). Just log and fail-stop.
+                    counter!(
+                        "rust_consumer.clickhouse_insert_error",
+                        1,
+                        "status" => "insert_error"
+                    );
                     tracing::error!("ClickHouse inserter flush failed: {}", e);
                     return Err(StrategyError::Other(e.into()));
                 }
