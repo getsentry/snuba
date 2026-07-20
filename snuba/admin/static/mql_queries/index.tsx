@@ -22,7 +22,7 @@ import {
   Textarea,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { CSV } from "../cardinality_analyzer/CSV";
+import { CSV } from "../utils/CSV";
 import QueryResultCopier from "SnubaAdmin/utils/query_result_copier";
 
 const MQLQueryExample = `(sum(d:transactions/duration@millisecond{status_code: 200}) by transaction + sum(d:transactions/duration@millisecond) by transaction) * 100.0`;

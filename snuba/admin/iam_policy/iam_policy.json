@@ -34,16 +34,6 @@
     },
     {
       "members": [
-          "group:team-ingest@sentry.io",
-          "group:team-visibility@sentry.io",
-          "group:team-performance@sentry.io",
-          "group:team-eng-managers@sentry.io",
-          "group:team-telemetry-experience@sentry.io"
-      ],
-      "role": "roles/CardinalityAnalyzer"
-    },
-    {
-      "members": [
         "group:team-ops@sentry.io",
         "group:team-events-analytics-platform@sentry.io"
       ],

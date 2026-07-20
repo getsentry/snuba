@@ -20,7 +20,7 @@ import {
 } from "@mantine/core";
 import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 import { useDisclosure } from "@mantine/hooks";
-import { CSV } from "SnubaAdmin/cardinality_analyzer/CSV";
+import { CSV } from "SnubaAdmin/utils/CSV";
 import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
 import QueryResultCopier from "SnubaAdmin/utils/query_result_copier";
 

@@ -1,4 +1,4 @@
-import { CSV } from "../../cardinality_analyzer/CSV";
+import { CSV } from "../../utils/CSV";
 
 describe("CSV.sheet", () => {
   it("Should return a CSV value of a grid of values", () => {

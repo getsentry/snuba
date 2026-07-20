@@ -21,18 +21,11 @@ from snuba import settings, state
 from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
-from snuba.admin.cardinality_analyzer.cardinality_analyzer import run_metrics_query
-from snuba.admin.clickhouse.capacity_management import (
-    get_storages_with_allocation_policies,
-)
 from snuba.admin.clickhouse.common import InvalidCustomQuery, InvalidNodeError
 from snuba.admin.clickhouse.copy_tables import copy_tables
 from snuba.admin.clickhouse.database_clusters import get_node_info, get_system_settings
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
-from snuba.admin.clickhouse.predefined_cardinality_analyzer_queries import (
-    CardinalityQuery,
-)
 from snuba.admin.clickhouse.predefined_querylog_queries import QuerylogQuery
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
 from snuba.admin.clickhouse.profile_events import gather_profile_events
@@ -100,9 +93,6 @@ from snuba.web.delete_query import (
     deletes_are_enabled,
 )
 from snuba.web.rpc import RPCEndpoint, list_all_endpoint_names, run_rpc_handler
-from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
-    BaseRoutingStrategy,
-)
 from snuba.web.views import dataset_query
 
 logger = structlog.get_logger().bind(module=__name__)
@@ -395,13 +385,6 @@ def clickhouse_queries() -> Response:
 @check_tool_perms(tools=[AdminTools.QUERYLOG])
 def querylog_queries() -> Response:
     res = [q.to_json() for q in QuerylogQuery.all_classes()]
-    return make_response(jsonify(res), 200)
-
-
-@application.route("/cardinality_queries")
-@check_tool_perms(tools=[AdminTools.CARDINALITY_ANALYZER])
-def cardinality_queries() -> Response:
-    res = [q.to_json() for q in CardinalityQuery.all_classes()]
     return make_response(jsonify(res), 200)
 
 
@@ -1039,134 +1022,6 @@ def snuba_debug() -> Response:
         )
     finally:
         explain_cleanup()
-
-
-@application.route("/routing_strategies")
-@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
-def routing_strategies() -> Response:
-    return Response(
-        json.dumps(BaseRoutingStrategy.all_names()),
-        200,
-        {"Content-Type": "application/json"},
-    )
-
-
-@application.route("/storages_with_allocation_policies")
-@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
-def storages_with_allocation_policies() -> Response:
-    return Response(
-        json.dumps(get_storages_with_allocation_policies()),
-        200,
-        {"Content-Type": "application/json"},
-    )
-
-
-@application.route("/routing_strategy_configs/<path:strategy_name>", methods=["GET"])
-@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
-def get_routing_strategy_configs(strategy_name: str) -> Response:
-    strategy = BaseRoutingStrategy.get_from_name(strategy_name)()
-
-    return Response(
-        json.dumps(strategy.to_dict()),
-        200,
-        {"Content-Type": "application/json"},
-    )
-
-
-@application.route("/allocation_policy_configs/<path:storage_key>", methods=["GET"])
-@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
-def get_allocation_policy_configs(storage_key: str) -> Response:
-    storage = get_storage(StorageKey(storage_key))
-    policies = storage.get_allocation_policies() + storage.get_delete_allocation_policies()
-
-    return Response(
-        json.dumps([policy.to_dict() for policy in policies]),
-        200,
-        {"Content-Type": "application/json"},
-    )
-
-
-@application.route("/set_configurable_component_configuration", methods=["POST", "DELETE"])
-@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
-def set_configuration() -> Response:
-    # ConfigurableComponent config (allocation policy / storage-routing strategy)
-    # is now read-only at runtime and managed centrally in sentry-options-automator.
-    # snuba-admin no longer writes it; reject with a clear message rather than a
-    # bare 404 for the Capacity Management save/delete actions.
-    return Response(
-        json.dumps(
-            {
-                "error": (
-                    "Configurable component overrides are now managed in "
-                    "sentry-options-automator via the "
-                    "`configurable_component_overrides` option and can no longer "
-                    "be set or deleted from snuba-admin."
-                )
-            }
-        ),
-        405,
-        {"Content-Type": "application/json"},
-    )
-
-
-@application.route("/cardinality_query", methods=["POST"])
-@check_tool_perms(tools=[AdminTools.CARDINALITY_ANALYZER])
-def cardinality_analyzer_query() -> Response:
-    # HACK (Volo):
-    # mostly copypasta from querylog, should not stick around for too long
-    # when production query tool gets made this should not be necessary
-    user = request.headers.get(USER_HEADER_KEY, "unknown")
-    if user == "unknown" and settings.ADMIN_AUTH_PROVIDER != "NOOP":
-        return Response(
-            json.dumps({"error": "Unauthorized"}),
-            401,
-            {"Content-Type": "application/json"},
-        )
-    req = json.loads(request.data)
-    try:
-        raw_sql = req["sql"]
-    except KeyError as e:
-        return make_response(
-            jsonify(
-                {
-                    "error": {
-                        "type": "request",
-                        "message": f"Invalid request, missing key {e.args[0]}",
-                    }
-                }
-            ),
-            400,
-        )
-    try:
-        result = run_metrics_query(raw_sql, user)
-        rows, columns = result.results, result.meta
-        if columns:
-            return make_response(
-                jsonify({"column_names": [name for name, _ in columns], "rows": rows}),
-                200,
-            )
-        return make_response(
-            jsonify({"error": {"type": "unknown", "message": "no columns"}}),
-            500,
-        )
-    except ClickhouseError as err:
-        details = {
-            "type": "clickhouse",
-            "message": str(err),
-            "code": err.code,
-        }
-        return make_response(jsonify({"error": details}), 400)
-    except InvalidCustomQuery as err:
-        return Response(
-            json.dumps({"error": {"message": str(err)}}, indent=4),
-            400,
-            {"Content-Type": "application/json"},
-        )
-    except Exception as err:
-        return make_response(
-            jsonify({"error": {"type": "unknown", "message": str(err)}}),
-            500,
-        )
 
 
 @application.route("/dead_letter_queue", methods=["GET"])

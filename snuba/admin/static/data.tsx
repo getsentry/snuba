@@ -9,10 +9,7 @@ import SQLShellPage, { SystemShellPage } from "SnubaAdmin/sql_shell";
 import SnQLToSQL from "SnubaAdmin/snql_to_sql";
 import Kafka from "SnubaAdmin/kafka";
 import QuerylogQueries from "SnubaAdmin/querylog";
-import CapacityManagement from "SnubaAdmin/capacity_management";
-import CapacityBasedRoutingSystem from "SnubaAdmin/cbrs";
 import DeadLetterQueue from "SnubaAdmin/dead_letter_queue";
-import CardinalityAnalyzer from "SnubaAdmin/cardinality_analyzer";
 import ProductionQueries from "SnubaAdmin/production_queries";
 import MQLQueries from "SnubaAdmin/mql_queries";
 import SnubaExplain from "SnubaAdmin/snuba_explain";
@@ -29,16 +26,6 @@ const NAV_ITEMS = [
     id: "auto-replacements-bypass-projects",
     display: "👻 Replacements",
     component: AutoReplacementsBypassProjects,
-  },
-  {
-    id: "capacity-management",
-    display: "🪫 Capacity Management",
-    component: CapacityManagement,
-  },
-  {
-    id: "capacity-based-routing-system",
-    display: "🔄 Capacity Based Routing System",
-    component: CapacityBasedRoutingSystem,
   },
   {
     id: "snql-to-sql",
@@ -104,11 +91,6 @@ const NAV_ITEMS = [
     id: "dlq",
     display: "♻️ Dead Letter Queue",
     component: DeadLetterQueue,
-  },
-  {
-    id: "cardinality-analyzer",
-    display: "🔢 Cardinality Analyzer!!!",
-    component: CardinalityAnalyzer,
   },
   {
     id: "production-queries",
