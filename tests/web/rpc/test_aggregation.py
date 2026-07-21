@@ -1,4 +1,3 @@
-import functools
 from typing import Any
 
 import pytest
@@ -108,7 +107,7 @@ def test_get_confidence_interval_column_for_non_extrapolatable_column() -> None:
                 label="min(test)",
                 extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
             ),
-            functools.partial(attribute_key_to_expression, organization_id=1),
+            attribute_key_to_expression,
             organization_id=1,
         )
         is None
@@ -350,7 +349,7 @@ def test_aggregation_to_expression_uniq_typed_array() -> None:
     )
     expr = aggregation_to_expression(
         agg,
-        functools.partial(attribute_key_to_expression, organization_id=1),
+        attribute_key_to_expression,
         organization_id=1,
     )
     assert isinstance(expr, FunctionCall)
@@ -376,7 +375,7 @@ def test_aggregation_to_expression_uniq_deprecated_type_array() -> None:
     )
     expr = aggregation_to_expression(
         agg,
-        functools.partial(attribute_key_to_expression, organization_id=1),
+        attribute_key_to_expression,
         organization_id=1,
     )
     assert isinstance(expr, FunctionCall)
@@ -399,7 +398,7 @@ def test_aggregation_to_expression_sum_type_array_raises() -> None:
     with pytest.raises(BadSnubaRPCRequestException, match="not supported for array attribute"):
         aggregation_to_expression(
             agg,
-            functools.partial(attribute_key_to_expression, organization_id=1),
+            attribute_key_to_expression,
             organization_id=1,
         )
 
@@ -485,7 +484,7 @@ def test_conditional_aggregation_uses_has_for_in_sets() -> None:
 
     expr = aggregation_to_expression(
         agg,
-        functools.partial(attribute_key_to_expression, organization_id=1),
+        attribute_key_to_expression,
         organization_id=1,
     )
 
@@ -540,7 +539,7 @@ def test_conditional_aggregation_array_filter_uses_typed_columns() -> None:
     cols = _aggregation_column_names(
         aggregation_to_expression(
             agg,
-            functools.partial(attribute_key_to_expression, organization_id=1),
+            attribute_key_to_expression,
             organization_id=1,
         )
     )

@@ -1,4 +1,3 @@
-import functools
 import uuid
 from collections import defaultdict
 from collections.abc import Generator
@@ -959,7 +958,7 @@ def test_filter_membership_as_has_for_select_clause() -> None:
     # Default (WHERE) form keeps the prepared IN-set over the constant array.
     where_expr = trace_item_filters_to_expression(
         proto_filter,
-        functools.partial(attribute_key_to_expression, organization_id=1),
+        attribute_key_to_expression,
         organization_id=1,
     )
     assert _in_calls_over_arrays(where_expr), (
@@ -969,7 +968,7 @@ def test_filter_membership_as_has_for_select_clause() -> None:
     # SELECT-clause form (membership_as_has=True) builds has(array, x) and no IN-set.
     select_expr = trace_item_filters_to_expression(
         proto_filter,
-        functools.partial(attribute_key_to_expression, organization_id=1),
+        attribute_key_to_expression,
         membership_as_has=True,
         organization_id=1,
     )

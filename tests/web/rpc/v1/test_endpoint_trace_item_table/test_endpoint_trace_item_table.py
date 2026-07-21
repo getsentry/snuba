@@ -1,4 +1,3 @@
-import functools
 import random
 import re
 from dataclasses import replace
@@ -5174,7 +5173,7 @@ class TestArrayOperationsRejected:
                     key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags"),
                     label="count(tags)",
                 ),
-                functools.partial(attribute_key_to_expression, organization_id=1),
+                attribute_key_to_expression,
                 organization_id=1,
             )
 

@@ -133,8 +133,9 @@ def semver_sort_key(expr: Expression, alias: str | None = None) -> Expression:
 
 
 def _trace_item_filter_key_expression(
-    attr_to_key_expression_callable: Callable[[AttributeKey], Expression],
+    attr_to_key_expression_callable: Callable[[AttributeKey, int], Expression],
     key: AttributeKey,
+    organization_id: int,
 ) -> Expression:
     """Array predicates read a per-element array so ``arrayExists`` can compare each
     element (different from the SELECT expression). An element-typed array key reads its
@@ -150,7 +151,7 @@ def _trace_item_filter_key_expression(
             return type_array_to_membership_array_expression_from_typed_columns(key)
         except MalformedAttributeException as e:
             raise BadSnubaRPCRequestException(str(e)) from e
-    return attr_to_key_expression_callable(key)
+    return attr_to_key_expression_callable(key, organization_id)
 
 
 Tin = TypeVar("Tin", bound=ProtobufMessage)
@@ -979,7 +980,7 @@ def use_indexed_name_for_request(meta: RequestMeta) -> bool:
 def trace_item_filters_to_expression(
     item_type: TraceItemType.ValueType,
     item_filter: TraceItemFilter,
-    attribute_key_to_expression: Callable[[AttributeKey], Expression],
+    attribute_key_to_expression: Callable[[AttributeKey, int], Expression],
     membership_as_has: bool = False,
     use_indexed_name: bool = False,
     *,
@@ -1095,6 +1096,7 @@ def trace_item_filters_to_expression(
         k_expression = _trace_item_filter_key_expression(
             attr_to_key_expression_callable=attribute_key_to_expression,
             key=k,
+            organization_id=organization_id,
         )
 
         value_type = v.WhichOneof("value")
@@ -1382,6 +1384,7 @@ def trace_item_filters_to_expression(
             _trace_item_filter_key_expression(
                 attr_to_key_expression_callable=attribute_key_to_expression,
                 key=item_filter.exists_filter.key,
+                organization_id=organization_id,
             )
         )
 
