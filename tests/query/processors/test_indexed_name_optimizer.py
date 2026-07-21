@@ -36,6 +36,7 @@ SPAN = TraceItemType.TRACE_ITEM_TYPE_SPAN
 METRIC = TraceItemType.TRACE_ITEM_TYPE_METRIC
 LOG = TraceItemType.TRACE_ITEM_TYPE_LOG
 ORG_ID = 42
+OPTION = IndexedNameOptimizer.ORGANIZATION_IDS_OPTION
 
 
 def _attr_arr(key: str) -> FunctionCall:
@@ -64,56 +65,42 @@ def _query(
     )
 
 
+def _org(org_id: int = ORG_ID) -> FunctionCall:
+    return equals(column("organization_id"), literal(org_id))
+
+
+def _cond(item_type: int, filter_expr: Expression, org_id: int = ORG_ID) -> Expression:
+    """A binary-nested ``and(item_type, and(organization_id, filter))`` condition
+    as the EAP resolvers build it (post ``treeify_or_and_conditions``). The org
+    scoping is what enables the rewrite."""
+    return and_cond(
+        equals(column("item_type"), literal(item_type)),
+        and_cond(_org(org_id), filter_expr),
+    )
+
+
+# Each case runs with ORG_ID enabled (see the parametrized test). They cover the
+# rewrite shapes and the item-type scoping; org-gating has its own tests below.
 test_data = [
     pytest.param(
-        _query(
-            and_cond(
-                equals(column("item_type"), literal(SPAN)),
-                equals(_attr_arr("sentry.op"), literal("db.query")),
-            )
-        ),
-        _query(
-            and_cond(
-                equals(column("item_type"), literal(SPAN)),
-                equals(column("indexed_name"), literal("db.query")),
-            )
-        ),
+        _query(_cond(SPAN, equals(_attr_arr("sentry.op"), literal("db.query")))),
+        _query(_cond(SPAN, equals(column("indexed_name"), literal("db.query")))),
         id="span sentry.op (arrayElement) rewritten to indexed_name",
     ),
     pytest.param(
-        _query(
-            and_cond(
-                equals(column("item_type"), literal(SPAN)),
-                equals(_attr_str("sentry.op"), literal("db.query")),
-            )
-        ),
-        _query(
-            and_cond(
-                equals(column("item_type"), literal(SPAN)),
-                equals(column("indexed_name"), literal("db.query")),
-            )
-        ),
+        _query(_cond(SPAN, equals(_attr_str("sentry.op"), literal("db.query")))),
+        _query(_cond(SPAN, equals(column("indexed_name"), literal("db.query")))),
         id="span sentry.op (SubscriptableReference) rewritten to indexed_name",
     ),
     pytest.param(
-        _query(
-            and_cond(
-                equals(column("item_type"), literal(METRIC)),
-                equals(_attr_arr("sentry.metric.name"), literal("my.metric")),
-            )
-        ),
-        _query(
-            and_cond(
-                equals(column("item_type"), literal(METRIC)),
-                equals(column("indexed_name"), literal("my.metric")),
-            )
-        ),
+        _query(_cond(METRIC, equals(_attr_arr("sentry.metric.name"), literal("my.metric")))),
+        _query(_cond(METRIC, equals(column("indexed_name"), literal("my.metric")))),
         id="metric sentry.metric.name rewritten to indexed_name",
     ),
     pytest.param(
         _query(
-            and_cond(
-                equals(column("item_type"), literal(SPAN)),
+            _cond(
+                SPAN,
                 in_cond(
                     _attr_arr("sentry.op"),
                     literals_array(None, [literal("db.query"), literal("http.client")]),
@@ -121,8 +108,8 @@ test_data = [
             )
         ),
         _query(
-            and_cond(
-                equals(column("item_type"), literal(SPAN)),
+            _cond(
+                SPAN,
                 in_cond(
                     column("indexed_name"),
                     literals_array(None, [literal("db.query"), literal("http.client")]),
@@ -132,85 +119,48 @@ test_data = [
         id="span sentry.op IN rewritten to indexed_name",
     ),
     pytest.param(
-        # The rewrite is a value substitution, so it applies to any operator the
-        # access appears under (the index only helps equals/in, but substituting
-        # is always correct once indexed_name is populated).
+        # The rewrite is a value substitution, so it applies under any operator.
         _query(
-            and_cond(
-                equals(column("item_type"), literal(SPAN)),
-                FunctionCall(None, "notEquals", (_attr_arr("sentry.op"), literal("db.query"))),
+            _cond(
+                SPAN, FunctionCall(None, "notEquals", (_attr_arr("sentry.op"), literal("db.query")))
             )
         ),
         _query(
-            and_cond(
-                equals(column("item_type"), literal(SPAN)),
-                FunctionCall(None, "notEquals", (column("indexed_name"), literal("db.query"))),
+            _cond(
+                SPAN, FunctionCall(None, "notEquals", (column("indexed_name"), literal("db.query")))
             )
         ),
         id="any operator on the access is rewritten (notEquals)",
     ),
     pytest.param(
-        _query(
-            and_cond(
-                equals(column("item_type"), literal(SPAN)),
-                equals(_attr_arr("sentry.metric.name"), literal("my.metric")),
-            )
-        ),
-        _query(
-            and_cond(
-                equals(column("item_type"), literal(SPAN)),
-                equals(_attr_arr("sentry.metric.name"), literal("my.metric")),
-            )
-        ),
+        _query(_cond(SPAN, equals(_attr_arr("sentry.metric.name"), literal("my.metric")))),
+        _query(_cond(SPAN, equals(_attr_arr("sentry.metric.name"), literal("my.metric")))),
         id="span query with metric key is left untouched",
     ),
     pytest.param(
-        _query(
-            and_cond(
-                equals(column("item_type"), literal(SPAN)),
-                equals(_attr_arr("foo"), literal("bar")),
-            )
-        ),
-        _query(
-            and_cond(
-                equals(column("item_type"), literal(SPAN)),
-                equals(_attr_arr("foo"), literal("bar")),
-            )
-        ),
+        _query(_cond(SPAN, equals(_attr_arr("foo"), literal("bar")))),
+        _query(_cond(SPAN, equals(_attr_arr("foo"), literal("bar")))),
         id="non-indexed attribute is left untouched",
     ),
     pytest.param(
-        _query(equals(_attr_arr("sentry.op"), literal("db.query"))),
-        _query(equals(_attr_arr("sentry.op"), literal("db.query"))),
+        _query(_cond(LOG, equals(_attr_arr("sentry.op"), literal("db.query")))),
+        _query(_cond(LOG, equals(_attr_arr("sentry.op"), literal("db.query")))),
+        id="unsupported item_type leaves bucket lookup",
+    ),
+    pytest.param(
+        # org-scoped (so enabled) but no item_type condition -> not rewritten.
+        _query(and_cond(_org(), equals(_attr_arr("sentry.op"), literal("db.query")))),
+        _query(and_cond(_org(), equals(_attr_arr("sentry.op"), literal("db.query")))),
         id="no item_type condition leaves bucket lookup",
     ),
     pytest.param(
         _query(
-            and_cond(
-                equals(column("item_type"), literal(LOG)),
-                equals(_attr_arr("sentry.op"), literal("db.query")),
-            )
+            condition=and_cond(equals(column("item_type"), literal(SPAN)), _org()),
+            selected_columns=[SelectedExpression("op", _attr_str("sentry.op", alias="op"))],
         ),
         _query(
-            and_cond(
-                equals(column("item_type"), literal(LOG)),
-                equals(_attr_arr("sentry.op"), literal("db.query")),
-            )
-        ),
-        id="unsupported item_type leaves bucket lookup",
-    ),
-    pytest.param(
-        _query(
-            condition=equals(column("item_type"), literal(SPAN)),
-            selected_columns=[
-                SelectedExpression("op", _attr_str("sentry.op", alias="op")),
-            ],
-        ),
-        _query(
-            condition=equals(column("item_type"), literal(SPAN)),
-            selected_columns=[
-                SelectedExpression("op", Column("op", None, "indexed_name")),
-            ],
+            condition=and_cond(equals(column("item_type"), literal(SPAN)), _org()),
+            selected_columns=[SelectedExpression("op", Column("op", None, "indexed_name"))],
         ),
         id="select preserves alias on rewrite",
     ),
@@ -219,14 +169,35 @@ test_data = [
 
 @pytest.mark.parametrize("pre_format, expected_query", test_data)
 def test_indexed_name_optimizer(pre_format: Query, expected_query: Query) -> None:
-    with override_options("snuba", {IndexedNameOptimizer.CONFIG_KEY: True}):
+    with override_options("snuba", {OPTION: [ORG_ID]}):
         copy = deepcopy(pre_format)
         IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
         assert copy.get_selected_columns() == expected_query.get_selected_columns()
         assert copy.get_condition() == expected_query.get_condition()
 
 
-def test_disabled_by_default_leaves_query_untouched() -> None:
+def test_org_not_in_list_leaves_query_untouched() -> None:
+    # ORG_ID is enabled, but this query is scoped to a different org.
+    query = _query(
+        _cond(SPAN, equals(_attr_arr("sentry.op"), literal("db.query")), org_id=ORG_ID + 1)
+    )
+    copy = deepcopy(query)
+    with override_options("snuba", {OPTION: [ORG_ID]}):
+        IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
+    assert copy.get_condition() == query.get_condition()
+
+
+def test_empty_org_list_leaves_query_untouched() -> None:
+    # The default: no org enabled anywhere.
+    query = _query(_cond(SPAN, equals(_attr_arr("sentry.op"), literal("db.query"))))
+    copy = deepcopy(query)
+    with override_options("snuba", {OPTION: []}):
+        IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
+    assert copy.get_condition() == query.get_condition()
+
+
+def test_no_org_condition_leaves_query_untouched() -> None:
+    # Even with the org enabled, a query not scoped to an org can't be matched.
     query = _query(
         and_cond(
             equals(column("item_type"), literal(SPAN)),
@@ -234,84 +205,24 @@ def test_disabled_by_default_leaves_query_untouched() -> None:
         )
     )
     copy = deepcopy(query)
-    with override_options(
-        "snuba",
-        {
-            IndexedNameOptimizer.CONFIG_KEY: False,
-            IndexedNameOptimizer.ORGANIZATION_CONFIG_KEY: 0,
-        },
-    ):
-        IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
-    assert copy.get_condition() == query.get_condition()
-    assert copy.get_selected_columns() == query.get_selected_columns()
-
-
-def _org_scoped_query(org_id: int) -> Query:
-    """A span query scoped to ``org_id`` (as the EAP resolvers build it) with a
-    ``sentry.op`` filter the optimizer can rewrite. The AND is binary-nested, as
-    ``treeify_or_and_conditions`` leaves it before the processors run."""
-    return _query(
-        and_cond(
-            equals(column("item_type"), literal(SPAN)),
-            and_cond(
-                equals(column("organization_id"), literal(org_id)),
-                equals(_attr_arr("sentry.op"), literal("db.query")),
-            ),
-        )
-    )
-
-
-def _org_scoped_expected(org_id: int) -> Query:
-    return _query(
-        and_cond(
-            equals(column("item_type"), literal(SPAN)),
-            and_cond(
-                equals(column("organization_id"), literal(org_id)),
-                equals(column("indexed_name"), literal("db.query")),
-            ),
-        )
-    )
-
-
-def test_org_gate_enables_rewrite_for_matching_org() -> None:
-    # Global option off, but the org-specific gate names this query's org.
-    copy = deepcopy(_org_scoped_query(ORG_ID))
-    with override_options(
-        "snuba",
-        {
-            IndexedNameOptimizer.CONFIG_KEY: False,
-            IndexedNameOptimizer.ORGANIZATION_CONFIG_KEY: ORG_ID,
-        },
-    ):
-        IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
-    assert copy.get_condition() == _org_scoped_expected(ORG_ID).get_condition()
-
-
-def test_org_gate_skips_non_matching_org() -> None:
-    # The org gate names ORG_ID, but the query is scoped to a different org.
-    query = _org_scoped_query(ORG_ID + 1)
-    copy = deepcopy(query)
-    with override_options(
-        "snuba",
-        {
-            IndexedNameOptimizer.CONFIG_KEY: False,
-            IndexedNameOptimizer.ORGANIZATION_CONFIG_KEY: ORG_ID,
-        },
-    ):
+    with override_options("snuba", {OPTION: [ORG_ID]}):
         IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
     assert copy.get_condition() == query.get_condition()
 
 
-def test_both_gates_off_leaves_org_scoped_query_untouched() -> None:
-    query = _org_scoped_query(ORG_ID)
+def test_ambiguous_org_ids_left_untouched() -> None:
+    # Two distinct organization_id conditions -> ambiguous scope -> no rewrite.
+    query = _query(
+        and_cond(
+            equals(column("item_type"), literal(SPAN)),
+            and_cond(
+                _org(ORG_ID),
+                and_cond(_org(ORG_ID + 1), equals(_attr_arr("sentry.op"), literal("db.query"))),
+            ),
+        )
+    )
     copy = deepcopy(query)
-    with override_options(
-        "snuba",
-        {
-            IndexedNameOptimizer.CONFIG_KEY: False,
-            IndexedNameOptimizer.ORGANIZATION_CONFIG_KEY: 0,
-        },
-    ):
+    with override_options("snuba", {OPTION: [ORG_ID, ORG_ID + 1]}):
         IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
     assert copy.get_condition() == query.get_condition()
 
@@ -321,13 +232,16 @@ def test_contradictory_item_types_left_untouched() -> None:
         and_cond(
             equals(column("item_type"), literal(SPAN)),
             and_cond(
-                equals(column("item_type"), literal(METRIC)),
-                equals(_attr_arr("sentry.op"), literal("db.query")),
+                _org(),
+                and_cond(
+                    equals(column("item_type"), literal(METRIC)),
+                    equals(_attr_arr("sentry.op"), literal("db.query")),
+                ),
             ),
         )
     )
     copy = deepcopy(query)
-    with override_options("snuba", {IndexedNameOptimizer.CONFIG_KEY: True}):
+    with override_options("snuba", {OPTION: [ORG_ID]}):
         IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
     # ambiguous item_type -> no rewrite; no indexed_name reference is introduced.
     condition = copy.get_condition()

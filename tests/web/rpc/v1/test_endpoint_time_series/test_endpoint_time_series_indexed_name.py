@@ -109,7 +109,8 @@ class TestTimeSeriesIndexedName(BaseApiTest):
         optimizer rewrites the name filter onto the indexed_name column."""
         _store_metrics()
 
-        with override_options("snuba", {IndexedNameOptimizer.CONFIG_KEY: True}):
+        # The request is scoped to organization_id=1 (see _request).
+        with override_options("snuba", {IndexedNameOptimizer.ORGANIZATION_IDS_OPTION: [1]}):
             response = EndpointTimeSeries().execute(_request())
 
         # Only the my.metric items (value=1.0 each) match; other.metric is excluded.
@@ -117,13 +118,13 @@ class TestTimeSeriesIndexedName(BaseApiTest):
 
     def test_indexed_name_rewrite_is_result_preserving(self) -> None:
         """The rewrite must not change results: the same request returns the same
-        time series with the option off (bucket lookup) and on (indexed_name)."""
+        time series with the org disabled (bucket lookup) and enabled (indexed_name)."""
         _store_metrics()
 
-        with override_options("snuba", {IndexedNameOptimizer.CONFIG_KEY: False}):
+        with override_options("snuba", {IndexedNameOptimizer.ORGANIZATION_IDS_OPTION: []}):
             disabled = EndpointTimeSeries().execute(_request())
 
-        with override_options("snuba", {IndexedNameOptimizer.CONFIG_KEY: True}):
+        with override_options("snuba", {IndexedNameOptimizer.ORGANIZATION_IDS_OPTION: [1]}):
             enabled = EndpointTimeSeries().execute(_request())
 
         assert _total(disabled) == float(MATCHING_COUNT)
