@@ -2887,15 +2887,21 @@ class TestTraceItemTable(BaseApiTest):
                     ]
                 }
             },
+            # Sort by an aggregate column (most animals first); trace_id breaks ties so the
+            # ordering is deterministic.
             "orderBy": [
                 {
                     "column": {
-                        "key": {
-                            "type": "TYPE_STRING",
-                            "name": "sentry.trace_id",
+                        "aggregation": {
+                            "aggregate": "FUNCTION_COUNT",
+                            "key": {"type": "TYPE_STRING", "name": "animal_type"},
+                            "label": "count(animal_type)",
+                            "extrapolationMode": "EXTRAPOLATION_MODE_NONE",
                         }
-                    }
-                }
+                    },
+                    "descending": True,
+                },
+                {"column": {"key": {"type": "TYPE_STRING", "name": "sentry.trace_id"}}},
             ],
             "limit": 50,
         }
@@ -2936,7 +2942,8 @@ class TestTraceItemTable(BaseApiTest):
         # max(bark.db) / min(bark.db): each trace has exactly one bark.db span, so max == min:
         # trace_1=100 (hyena), trace_2=20 (cat), trace_3=100 (dog).
         # any(server_name): every span carries the same default server_name -> SERVER_NAME.
-        # Groups ordered by trace_id. Tuple fields:
+        # Groups ordered by count(animal_type) desc, then trace_id asc (matching order_by).
+        # Tuple fields:
         # (trace_id, animal_count, cool_count, wing_sum_bark, wing_sum_gt2, uniq_traces,
         #  max_bark, min_bark, any_server)
         expected = sorted(
@@ -2944,7 +2951,8 @@ class TestTraceItemTable(BaseApiTest):
                 (trace_1, 2, 0, None, None, 1, 100, 100, SERVER_NAME),
                 (trace_2, 2, 1, None, 5, 1, 20, 20, SERVER_NAME),
                 (trace_3, 1, 0, None, None, 1, 100, 100, SERVER_NAME),
-            ]
+            ],
+            key=lambda row: (-row[1], row[0]),
         )
         expected_columns = [
             TraceItemColumnValues(
