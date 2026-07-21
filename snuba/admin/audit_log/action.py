@@ -3,9 +3,6 @@ from enum import Enum
 
 class AuditLogAction(Enum):
     # action.resource
-    ADDED_OPTION = "added.option"
-    REMOVED_OPTION = "removed.option"
-    UPDATED_OPTION = "updated.option"
     RAN_QUERY = "ran.query"
     RAN_MIGRATION_STARTED = "ran.migration.started"
     REVERSED_MIGRATION_STARTED = "reversed.migration.started"
@@ -17,12 +14,6 @@ class AuditLogAction(Enum):
     RAN_SUDO_SYSTEM_QUERY = "ran.sudo.system.query"
     RAN_CLUSTERLESS_SYSTEM_QUERY = "ran.clusterless.system.query"
 
-
-RUNTIME_CONFIG_ACTIONS = [
-    AuditLogAction.ADDED_OPTION,
-    AuditLogAction.REMOVED_OPTION,
-    AuditLogAction.UPDATED_OPTION,
-]
 
 MIGRATION_ACTIONS = [
     AuditLogAction.RAN_MIGRATION_STARTED,

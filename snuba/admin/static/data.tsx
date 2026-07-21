@@ -1,4 +1,3 @@
-import RuntimeConfig from "SnubaAdmin/runtime_config";
 import AutoReplacementsBypassProjects from "SnubaAdmin/auto_replacements_bypass_projects";
 import AuditLog from "SnubaAdmin/runtime_config/auditlog";
 import ClickhouseMigrations from "SnubaAdmin/clickhouse_migrations";
@@ -16,7 +15,6 @@ import RpcEndpoints from "SnubaAdmin/rpc_endpoints";
 
 const NAV_ITEMS = [
   { id: "overview", display: "🤿 Snuba Admin", component: Welcome },
-  { id: "config", display: "⚙️ Runtime Config", component: RuntimeConfig },
   {
     id: "auto-replacements-bypass-projects",
     display: "👻 Replacements",
