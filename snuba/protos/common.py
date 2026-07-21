@@ -65,11 +65,13 @@ _NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, NormalizedColumn]] = {
 }
 
 # These columns are newly normalized: their dedicated columns are populated going forward,
-# but historical rows have NOT been backfilled. Reading them as real columns is gated per
+# but historical rows were never backfilled. Reading them as real columns is gated per
 # organization, so it's opt-in for orgs that are fine with the missing historical data.
 # For everyone else they fall through to the attributes_* map path (which does cover the
 # historical rows).
-_UNBACKFILLED_NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, NormalizedColumn]] = {
+# This should mostly remain empty, and shoudl be only used in scenarios where we add a new index
+# column, and need to wait for the population to happen.
+_UNPOPULATED_NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, NormalizedColumn]] = {
     sentry_column("session_id"): NormalizedColumn("session_id", [AttributeKey.Type.TYPE_STRING]),
     "gen_ai.conversation.id": NormalizedColumn(
         "ai_conversation_id", [AttributeKey.Type.TYPE_STRING]
@@ -78,21 +80,21 @@ _UNBACKFILLED_NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, NormalizedColumn]
 
 _ALL_NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, NormalizedColumn]] = {
     **_NORMALIZED_COLUMNS_EAP_ITEMS,
-    **_UNBACKFILLED_NORMALIZED_COLUMNS_EAP_ITEMS,
+    **_UNPOPULATED_NORMALIZED_COLUMNS_EAP_ITEMS,
 }
 
 # Comma-separated org-id allowlist (sentry-option). Orgs in this list read the not-yet-
-# backfilled normalized columns above as real columns; everyone else falls through to the
+# populated normalized columns above as real columns; everyone else falls through to the
 # attributes_* map path. Unlike org_ids_delete_allowlist, empty (the default) means NO orgs
 # are opted in -- this feature is off until an org is explicitly added.
-UNBACKFILLED_NORMALIZED_COLUMNS_ORG_ALLOWLIST_OPTION = (
-    "eap_items_unbackfilled_normalized_columns_org_allowlist"
+UNPOPULATED_NORMALIZED_COLUMNS_ORG_ALLOWLIST_OPTION = (
+    "eap_items_unpopulated_normalized_columns_org_allowlist"
 )
 
 
-def _org_allowed_unbackfilled_columns(organization_id: int | None) -> bool:
+def _org_allowed_unpopulated_columns(organization_id: int | None) -> bool:
     # No org in context (e.g. a delete that isn't scoped to one) => opted out.
-    allowlist = get_option(UNBACKFILLED_NORMALIZED_COLUMNS_ORG_ALLOWLIST_OPTION, "")
+    allowlist = get_option(UNPOPULATED_NORMALIZED_COLUMNS_ORG_ALLOWLIST_OPTION, "")
     if not allowlist or organization_id is None:
         return False
     try:
@@ -101,7 +103,7 @@ def _org_allowed_unbackfilled_columns(organization_id: int | None) -> bool:
         # A malformed allowlist (e.g. a stray comma or a non-numeric entry) must not break
         # every EAP query -- treat the org as opted out.
         logger.warning(
-            f"Malformed {UNBACKFILLED_NORMALIZED_COLUMNS_ORG_ALLOWLIST_OPTION} "
+            f"Malformed {UNPOPULATED_NORMALIZED_COLUMNS_ORG_ALLOWLIST_OPTION} "
             f"sentry-option: {allowlist!r}; treating org as opted out"
         )
         return False
@@ -110,10 +112,10 @@ def _org_allowed_unbackfilled_columns(organization_id: int | None) -> bool:
 def get_normalized_columns_eap_items(
     organization_id: int | None,
 ) -> Mapping[str, NormalizedColumn]:
-    """The normalized EAP-item columns. Includes the not-yet-backfilled columns only for
-    organizations in the ``eap_items_unbackfilled_normalized_columns_org_allowlist``
+    """The normalized EAP-item columns. Includes the not-yet-populated columns only for
+    organizations in the ``eap_items_unpopulated_normalized_columns_org_allowlist``
     sentry-option. ``organization_id`` is ``None`` when there is no org in context."""
-    if _org_allowed_unbackfilled_columns(organization_id):
+    if _org_allowed_unpopulated_columns(organization_id):
         return _ALL_NORMALIZED_COLUMNS_EAP_ITEMS
     return _NORMALIZED_COLUMNS_EAP_ITEMS
 

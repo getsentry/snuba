@@ -81,7 +81,7 @@ class TestIndexedColumnSkipIndex:
         # org 1 is opted in, so session_id / ai_conversation_id resolve to their real
         # (indexed) columns instead of falling through to the attributes_* map.
         with override_options(
-            "snuba", {"eap_items_unbackfilled_normalized_columns_org_allowlist": "1"}
+            "snuba", {"eap_items_unpopulated_normalized_columns_org_allowlist": "1"}
         ):
             yield
 
@@ -235,7 +235,7 @@ class TestIndexedColumnSkipIndex:
         # therefore not applied, and since the consumer writes these values only to the
         # dedicated columns (never the map), the map lookup matches nothing.
         with override_options(
-            "snuba", {"eap_items_unbackfilled_normalized_columns_org_allowlist": "999"}
+            "snuba", {"eap_items_unpopulated_normalized_columns_org_allowlist": "999"}
         ):
             sql, colors = self._execute(
                 TraceItemFilter(
