@@ -35,6 +35,7 @@ from snuba.state import set_config
 SPAN = TraceItemType.TRACE_ITEM_TYPE_SPAN
 METRIC = TraceItemType.TRACE_ITEM_TYPE_METRIC
 LOG = TraceItemType.TRACE_ITEM_TYPE_LOG
+ORG_ID = 42
 
 
 def _attr_arr(key: str) -> FunctionCall:
@@ -229,6 +230,7 @@ def test_indexed_name_optimizer(pre_format: Query, expected_query: Query) -> Non
 @pytest.mark.redis_db
 def test_disabled_by_default_leaves_query_untouched() -> None:
     set_config(IndexedNameOptimizer.CONFIG_KEY, 0)
+    set_config(IndexedNameOptimizer.ORGANIZATION_CONFIG_KEY, 0)
     query = _query(
         and_cond(
             equals(column("item_type"), literal(SPAN)),
@@ -239,6 +241,64 @@ def test_disabled_by_default_leaves_query_untouched() -> None:
     IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
     assert copy.get_condition() == query.get_condition()
     assert copy.get_selected_columns() == query.get_selected_columns()
+
+
+def _org_scoped_query(org_id: int) -> Query:
+    """A span query scoped to ``org_id`` (as the EAP resolvers build it) with a
+    ``sentry.op`` filter the optimizer can rewrite. The AND is binary-nested, as
+    ``treeify_or_and_conditions`` leaves it before the processors run."""
+    return _query(
+        and_cond(
+            equals(column("item_type"), literal(SPAN)),
+            and_cond(
+                equals(column("organization_id"), literal(org_id)),
+                equals(_attr_arr("sentry.op"), literal("db.query")),
+            ),
+        )
+    )
+
+
+def _org_scoped_expected(org_id: int) -> Query:
+    return _query(
+        and_cond(
+            equals(column("item_type"), literal(SPAN)),
+            and_cond(
+                equals(column("organization_id"), literal(org_id)),
+                equals(column("indexed_name"), literal("db.query")),
+            ),
+        )
+    )
+
+
+@pytest.mark.redis_db
+def test_org_gate_enables_rewrite_for_matching_org() -> None:
+    # Global flag off, but the org-specific gate names this query's org.
+    set_config(IndexedNameOptimizer.CONFIG_KEY, 0)
+    set_config(IndexedNameOptimizer.ORGANIZATION_CONFIG_KEY, ORG_ID)
+    copy = deepcopy(_org_scoped_query(ORG_ID))
+    IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
+    assert copy.get_condition() == _org_scoped_expected(ORG_ID).get_condition()
+
+
+@pytest.mark.redis_db
+def test_org_gate_skips_non_matching_org() -> None:
+    # The org gate names ORG_ID, but the query is scoped to a different org.
+    set_config(IndexedNameOptimizer.CONFIG_KEY, 0)
+    set_config(IndexedNameOptimizer.ORGANIZATION_CONFIG_KEY, ORG_ID)
+    query = _org_scoped_query(ORG_ID + 1)
+    copy = deepcopy(query)
+    IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
+    assert copy.get_condition() == query.get_condition()
+
+
+@pytest.mark.redis_db
+def test_both_gates_off_leaves_org_scoped_query_untouched() -> None:
+    set_config(IndexedNameOptimizer.CONFIG_KEY, 0)
+    set_config(IndexedNameOptimizer.ORGANIZATION_CONFIG_KEY, 0)
+    query = _org_scoped_query(ORG_ID)
+    copy = deepcopy(query)
+    IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
+    assert copy.get_condition() == query.get_condition()
 
 
 @pytest.mark.redis_db

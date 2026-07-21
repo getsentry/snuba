@@ -46,9 +46,15 @@ class IndexedNameOptimizer(LogicalQueryProcessor):
     or before the value started being populated — have an empty ``indexed_name``
     while still carrying the value in ``attributes_string``. Reading
     ``indexed_name`` for those rows would silently drop them, so the rewrite is
-    gated behind the ``CONFIG_KEY`` runtime flag (default off) and must only be
-    enabled once ``indexed_name`` is fully populated for the live retention
-    window.
+    gated and must only be enabled once ``indexed_name`` is fully populated for
+    the queried data. There are two independent gates (either one enables it):
+
+    - ``CONFIG_KEY`` (default off): a global on/off flag.
+    - ``ORGANIZATION_CONFIG_KEY`` (default 0): a single ``organization_id`` to
+      enable the rewrite for, so it can be rolled out to one org first. It
+      applies only when the query is scoped to exactly that org via an
+      ``organization_id`` equality condition (which the EAP resolvers always
+      inject).
 
     The promotion is item-type specific, so the rewrite is only applied when the
     query is unambiguously scoped (via an ``item_type`` equality condition) to
@@ -56,10 +62,14 @@ class IndexedNameOptimizer(LogicalQueryProcessor):
     falls back to the bucket lookup.
     """
 
-    # Runtime flag gating the rewrite. Off (0) until ``indexed_name`` has been
-    # backfilled across the retention window; flipping it on lets the bloom
+    # Global runtime flag gating the rewrite. Off (0) until ``indexed_name`` has
+    # been backfilled across the retention window; flipping it on lets the bloom
     # filter index serve ``sentry.op`` / ``sentry.metric.name`` filters.
     CONFIG_KEY = "eap_items_use_indexed_name"
+
+    # A single organization_id to enable the rewrite for (0 = none). Lets the
+    # rewrite be rolled out to one org before the global flag is flipped on.
+    ORGANIZATION_CONFIG_KEY = "eap_items_use_indexed_name_organization_id"
 
     # item_type proto enum value -> attribute promoted into ``indexed_name``
     INDEXED_NAME_KEY_BY_ITEM_TYPE: dict[int, str] = {
@@ -70,30 +80,50 @@ class IndexedNameOptimizer(LogicalQueryProcessor):
     INDEXED_NAME_COLUMN = "indexed_name"
     ATTRIBUTES_STRING_COLUMN = "attributes_string"
 
-    def _indexed_name_key(self, query: Query) -> Optional[str]:
-        """Return the attribute name promoted into ``indexed_name`` for this
-        query, or ``None`` if the query is not unambiguously scoped to a single
-        supported item type."""
+    def _single_equals_int(self, query: Query, column_name: str) -> Optional[int]:
+        """Return the integer value from a single ``equals(<column_name>, N)``
+        top-level condition, or ``None`` if the query is not unambiguously scoped
+        by exactly one such condition."""
         condition = query.get_condition()
         if condition is None:
             return None
 
-        item_types: set[int] = set()
+        values: set[int] = set()
         for cond in get_first_level_and_conditions(condition):
             if not isinstance(cond, FunctionCall) or cond.function_name != ConditionFunctions.EQ:
                 continue
             if len(cond.parameters) != 2:
                 continue
             lhs, rhs = cond.parameters
-            if not isinstance(lhs, Column) or lhs.column_name != "item_type":
+            if not isinstance(lhs, Column) or lhs.column_name != column_name:
                 continue
             if not isinstance(rhs, Literal) or not isinstance(rhs.value, int):
                 continue
-            item_types.add(rhs.value)
+            values.add(rhs.value)
 
-        if len(item_types) != 1:
+        if len(values) != 1:
             return None
-        return self.INDEXED_NAME_KEY_BY_ITEM_TYPE.get(item_types.pop())
+        return values.pop()
+
+    def _is_enabled(self, query: Query) -> bool:
+        """The rewrite is enabled by the global flag, or for the single
+        organization named by ``ORGANIZATION_CONFIG_KEY`` when the query is
+        scoped to it."""
+        if state.get_int_config(self.CONFIG_KEY, 0):
+            return True
+        organization_id = state.get_int_config(self.ORGANIZATION_CONFIG_KEY, 0)
+        return bool(organization_id) and (
+            self._single_equals_int(query, "organization_id") == organization_id
+        )
+
+    def _indexed_name_key(self, query: Query) -> Optional[str]:
+        """Return the attribute name promoted into ``indexed_name`` for this
+        query, or ``None`` if the query is not unambiguously scoped to a single
+        supported item type."""
+        item_type = self._single_equals_int(query, "item_type")
+        if item_type is None:
+            return None
+        return self.INDEXED_NAME_KEY_BY_ITEM_TYPE.get(item_type)
 
     def _indexed_name_ref(self, exp: Expression, key: str) -> Optional[Column]:
         """If ``exp`` is an ``attributes_string[key]`` access — either the
@@ -123,7 +153,7 @@ class IndexedNameOptimizer(LogicalQueryProcessor):
         return None
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
-        if state.get_int_config(self.CONFIG_KEY, 0) == 0:
+        if not self._is_enabled(query):
             return
 
         key = self._indexed_name_key(query)
