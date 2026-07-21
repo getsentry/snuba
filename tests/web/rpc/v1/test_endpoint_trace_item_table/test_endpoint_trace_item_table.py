@@ -4658,14 +4658,14 @@ def test_build_query_without_limit_by() -> None:
     assert query.get_limitby() is None
 
 
-def test_validate_limit_by_and_limit_mutually_exclusive() -> None:
-    """A request cannot set both the top-level `limit` and `limit_by`."""
+def test_validate_limit_by_with_top_level_limit_allowed() -> None:
+    """The top-level `limit` may be combined with `limit_by`: it caps the overall result
+    while limit_by bounds rows per group."""
     message = _limit_by_request(
         TraceItemTableRequest.LimitBy(columns=[_project_id_limit_by_column()], limit=5), limit=10
     )
     message = _apply_labels_to_columns(message)
-    with pytest.raises(BadSnubaRPCRequestException, match="both limit and limit_by"):
-        _validate_limit_by(message)
+    _validate_limit_by(message)  # does not raise
 
 
 def test_validate_limit_by_rejected_with_flextime() -> None:

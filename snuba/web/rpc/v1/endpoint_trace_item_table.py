@@ -110,17 +110,12 @@ def _validate_limit_by(in_msg: TraceItemTableRequest) -> None:
     if not in_msg.HasField("limit_by"):
         return
 
-    if in_msg.limit > 0:
-        raise BadSnubaRPCRequestException(
-            "Cannot specify both limit and limit_by; use one or the other"
-        )
-
     if (
         in_msg.meta.downsampled_storage_config.mode
         == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
     ):
-        # flextime routing paginates on limit, which limit_by forces to 0, so the
-        # two cannot be combined (see _get_page_token / flextime enforcement).
+        # flextime splits the scan across time windows and paginates per window, so a
+        # LIMIT BY would apply per window rather than globally; the two can't be combined.
         raise BadSnubaRPCRequestException("limit_by is not supported with flextime routing")
 
     limit_by = in_msg.limit_by
