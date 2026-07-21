@@ -1,3 +1,4 @@
+import logging
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from typing import Final, NamedTuple
@@ -15,6 +16,8 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.state.sentry_options import get_option
+
+logger = logging.getLogger(__name__)
 
 
 class MalformedAttributeException(Exception):
@@ -92,7 +95,16 @@ def _org_allowed_unbackfilled_columns(organization_id: int | None) -> bool:
     allowlist = get_option(UNBACKFILLED_NORMALIZED_COLUMNS_ORG_ALLOWLIST_OPTION, "")
     if not allowlist or organization_id is None:
         return False
-    return organization_id in {int(org_id) for org_id in allowlist.split(",")}
+    try:
+        return organization_id in {int(org_id) for org_id in allowlist.split(",")}
+    except Exception:
+        # A malformed allowlist (e.g. a stray comma or a non-numeric entry) must not break
+        # every EAP query -- treat the org as opted out.
+        logger.warning(
+            f"Malformed {UNBACKFILLED_NORMALIZED_COLUMNS_ORG_ALLOWLIST_OPTION} "
+            f"sentry-option: {allowlist!r}; treating org as opted out"
+        )
+        return False
 
 
 def get_normalized_columns_eap_items(

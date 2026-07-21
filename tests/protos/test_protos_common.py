@@ -1,12 +1,15 @@
 import pytest
 from sentry_conventions.attributes import ATTRIBUTE_METADATA
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.protos.common import (
     ATTRIBUTES_TO_COALESCE,
+    UNBACKFILLED_NORMALIZED_COLUMNS_ORG_ALLOWLIST_OPTION,
     MalformedAttributeException,
     _resolve_canonical,
     attribute_key_to_expression,
+    get_normalized_columns_eap_items,
 )
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import arrayElement, column, literal
@@ -168,3 +171,37 @@ class TestAttributeKeyToExpression:
                 AttributeKey(type=AttributeKey.TYPE_BOOLEAN, name="sentry.trace_id"), 1
             )
         assert "must be one of" in str(exc_info.value)
+
+
+# An unbackfilled normalized column key; present in the resolved column set only when the
+# org is opted into the allowlist (see get_normalized_columns_eap_items).
+_UNBACKFILLED_KEY = "gen_ai.conversation.id"
+
+
+class TestGetNormalizedColumnsEapItems:
+    @pytest.mark.parametrize(
+        "allowlist,organization_id,expected_unbackfilled",
+        [
+            # opted in: the org appears in a well-formed allowlist
+            ("1,2,3", 2, True),
+            (" 1 , 2 ", 2, True),  # surrounding whitespace is tolerated
+            # opted out: org absent, no org in context, or feature off (empty allowlist)
+            ("1,2,3", 5, False),
+            ("1", None, False),
+            ("", 1, False),
+            # malformed allowlist must not raise -> org falls back to opted out, even when
+            # the numeric id would otherwise match
+            ("1,2,", 1, False),  # trailing comma -> empty token
+            ("1,abc", 1, False),  # non-numeric entry
+        ],
+    )
+    def test_unbackfilled_columns_gate(
+        self, allowlist: str, organization_id: int | None, expected_unbackfilled: bool
+    ) -> None:
+        with override_options(
+            "snuba", {UNBACKFILLED_NORMALIZED_COLUMNS_ORG_ALLOWLIST_OPTION: allowlist}
+        ):
+            columns = get_normalized_columns_eap_items(organization_id)
+        assert (_UNBACKFILLED_KEY in columns) is expected_unbackfilled
+        # backfilled normalized columns are always present regardless of the gate
+        assert "sentry.trace_id" in columns
