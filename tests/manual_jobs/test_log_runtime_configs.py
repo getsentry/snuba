@@ -72,8 +72,6 @@ def test_only_reads_known_config_keys() -> None:
 
     allowed = {
         "snuba-config",
-        "snuba-config-description",
-        "snuba-config-changes",
         "capman",
         "cbrs",
     }

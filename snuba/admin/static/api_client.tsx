@@ -1,7 +1,5 @@
 import { AllowedTools, Settings } from "SnubaAdmin/types";
 
-import { ConfigChange } from "SnubaAdmin/runtime_config/types";
-
 import {
   ClickhouseNodeData,
   QueryRequest,
@@ -33,7 +31,6 @@ interface Client {
   getAutoReplacementsBypassProjects: () => Promise<
     AutoReplacementsBypassProjectsData[]
   >;
-  getAuditlog: () => Promise<ConfigChange[]>;
   getClickhouseNodes: () => Promise<[ClickhouseNodeData]>;
   getSnubaDatasetNames: () => Promise<SnubaDatasetName[]>;
   getAllowedProjects: () => Promise<string[]>;
@@ -76,10 +73,6 @@ function Client(): Client {
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
       }).then((resp) => resp.json());
-    },
-    getAuditlog: () => {
-      const url = baseUrl + "config_auditlog";
-      return fetch(url).then((resp) => resp.json());
     },
     getClickhouseNodes: () => {
       const url = baseUrl + "clickhouse_nodes";

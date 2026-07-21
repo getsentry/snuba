@@ -25,7 +25,6 @@ class AdminTools(Enum):
     MIGRATIONS = "clickhouse-migrations"
     QUERY_TRACING = "tracing"
     QUERYLOG = "querylog"
-    AUDIT_LOG = "audit-log"
     PRODUCTION_QUERIES = "production-queries"
     SNUBA_EXPLAIN = "snuba-explain"
     MANUAL_JOBS = "view-jobs"

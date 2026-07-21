@@ -35,18 +35,6 @@ class TestState:
         assert all(all_configs[k] == v for k, v in [("foo", 1), ("bar", "quux"), ("baz", 3)])
 
     @pytest.mark.redis_db
-    def test_config_desc(self) -> None:
-        state.set_config_description("foo", "Does foo")
-        assert state.get_config_description("foo") == "Does foo"
-        state.set_config_description("bar", "bars something")
-        assert all(
-            state.get_all_config_descriptions()[k] == d
-            for k, d in [("foo", "Does foo"), ("bar", "bars something")]
-        )
-        state.delete_config_description("foo")
-        assert state.get_config_description("foo") is None
-
-    @pytest.mark.redis_db
     def test_config_types(self) -> None:
         # Tests for ints
         state.set_config("test_int", 1)

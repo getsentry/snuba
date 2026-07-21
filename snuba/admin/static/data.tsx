@@ -1,5 +1,4 @@
 import AutoReplacementsBypassProjects from "SnubaAdmin/auto_replacements_bypass_projects";
-import AuditLog from "SnubaAdmin/runtime_config/auditlog";
 import ClickhouseMigrations from "SnubaAdmin/clickhouse_migrations";
 import ClickhouseQueries from "SnubaAdmin/clickhouse_queries";
 import CopyTables from "SnubaAdmin/copy_tables";
@@ -69,11 +68,6 @@ const NAV_ITEMS = [
     id: "querylog",
     display: "🔍 ClickHouse Querylog",
     component: QuerylogQueries,
-  },
-  {
-    id: "auditlog",
-    display: "📝 Audit Log",
-    component: AuditLog,
   },
   {
     id: "production-queries",
