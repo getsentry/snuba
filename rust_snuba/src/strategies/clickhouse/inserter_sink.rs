@@ -422,6 +422,16 @@ where
                 Err(mpsc::error::TryRecvError::Empty) => break,
                 Err(mpsc::error::TryRecvError::Disconnected) => {
                     self.actor_done = true;
+                    // The actor's sender dropped. If we didn't initiate shutdown
+                    // (work_tx still present), the actor exited without sending an
+                    // Err — e.g. a panic. Surface an error so the consumer restarts
+                    // and respawns it, rather than silently wedging with submit()
+                    // rejecting every message on the now-closed work channel.
+                    if self.work_tx.is_some() {
+                        return Err(StrategyError::Other(
+                            "inserter actor exited unexpectedly without reporting an error".into(),
+                        ));
+                    }
                     break;
                 }
             }
