@@ -109,6 +109,7 @@ storage_selector:
   selector: EAPItemsStorageSelector
 
 query_processors:
+  - processor: IndexedNameOptimizer
   - processor: HashBucketFunctionTransformer
     args:
       hash_bucket_names:
