@@ -33,6 +33,7 @@ from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     base_conditions_and,
+    indexed_name_key_for_request,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
@@ -124,6 +125,7 @@ class HeatmapBuilder:
         filter_expression = trace_item_filters_to_expression(
             filter,
             (attribute_key_to_expression),
+            indexed_name_key=indexed_name_key_for_request(in_msg.meta),
         )
         condition = base_conditions_and(in_msg.meta, filter_expression)
         min_max_query = Query(
@@ -214,6 +216,7 @@ class HeatmapBuilder:
         filter_expression = trace_item_filters_to_expression(
             filter,
             (attribute_key_to_expression),
+            indexed_name_key=indexed_name_key_for_request(self.in_msg.meta),
         )
         condition = base_conditions_and(self.in_msg.meta, filter_expression)
         bucket_index_y = f.least(

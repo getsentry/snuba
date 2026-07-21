@@ -39,6 +39,7 @@ from snuba.web.rpc.common.common import (
     BUCKET_COUNT,
     attribute_key_to_expression,
     base_conditions_and,
+    indexed_name_key_for_request,
     merge_typed_array_maps,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
@@ -346,6 +347,7 @@ def _build_query(
             trace_item_filters_to_expression(
                 in_msg.filter,
                 attribute_key_to_expression,
+                indexed_name_key=indexed_name_key_for_request(meta),
             ),
             *page_token_filter,
             *item_type_filter,

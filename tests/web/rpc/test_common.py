@@ -53,11 +53,14 @@ from snuba.query.expressions import (
 )
 from snuba.query.logical import Query
 from snuba.web.rpc.common.common import (
+    USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION,
     _any_attribute_filter_to_expression,
     _comparison_can_match_column_default,
     add_existence_check_to_map_attribute_reads,
     attribute_key_to_expression,
     dedupe_and_conditions,
+    indexed_name_key,
+    indexed_name_key_for_request,
     next_monday,
     prev_monday,
     semver_sort_key,
@@ -1551,3 +1554,92 @@ class TestAnyAttributeFilterOption:
             result = trace_item_filters_to_expression(self._filter(), attribute_key_to_expression)
         assert isinstance(result, Literal)
         assert result.value is True
+
+
+class TestIndexedNameRedirect:
+    """The eap_items primary-name filter (``sentry.op`` for spans,
+    ``sentry.metric.name`` for metrics) is redirected onto the
+    bloom-filter-indexed ``indexed_name`` column for organizations listed in the
+    ``eap_items_use_indexed_name_organization_ids`` option, instead of the
+    unindexed ``attributes_string`` bucket lookup."""
+
+    @staticmethod
+    def _column_names(expr: Expression) -> set[str]:
+        names: set[str] = set()
+
+        def visit(node: Expression) -> Expression:
+            if isinstance(node, ColumnExpr):
+                names.add(node.column_name)
+            return node
+
+        expr.transform(visit)
+        return names
+
+    @staticmethod
+    def _function_names(expr: Expression) -> set[str]:
+        names: set[str] = set()
+
+        def visit(node: Expression) -> Expression:
+            if isinstance(node, FunctionCall):
+                names.add(node.function_name)
+            return node
+
+        expr.transform(visit)
+        return names
+
+    def _op_filter(self, name: str = "sentry.op") -> TraceItemFilter:
+        return TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_STRING, name=name),
+                op=ComparisonFilter.OP_EQUALS,
+                value=AttributeValue(val_str="db.query"),
+            )
+        )
+
+    @pytest.mark.redis_db
+    def test_indexed_name_key_for_request(self) -> None:
+        span_meta = RequestMeta(
+            organization_id=42, trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN
+        )
+        metric_meta = RequestMeta(
+            organization_id=42, trace_item_type=TraceItemType.TRACE_ITEM_TYPE_METRIC
+        )
+        log_meta = RequestMeta(
+            organization_id=42, trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG
+        )
+        with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [42]}):
+            assert indexed_name_key_for_request(span_meta) == "sentry.op"
+            assert indexed_name_key_for_request(metric_meta) == "sentry.metric.name"
+            # unsupported item type has no promoted name
+            assert indexed_name_key_for_request(log_meta) is None
+            # org not in the list
+            assert indexed_name_key(7, TraceItemType.TRACE_ITEM_TYPE_SPAN) is None
+        # option unset -> disabled everywhere
+        with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: []}):
+            assert indexed_name_key_for_request(span_meta) is None
+
+    def test_filter_redirected_to_indexed_name(self) -> None:
+        expr = trace_item_filters_to_expression(
+            self._op_filter(),
+            attribute_key_to_expression,
+            indexed_name_key="sentry.op",
+        )
+        # reads the indexed_name column, not the attributes_string bucket map.
+        assert "indexed_name" in self._column_names(expr)
+        assert "arrayElement" not in self._function_names(expr)
+
+    def test_filter_not_redirected_when_disabled(self) -> None:
+        # indexed_name_key=None (the default) -> keep the bucket lookup.
+        expr = trace_item_filters_to_expression(self._op_filter(), attribute_key_to_expression)
+        assert "indexed_name" not in self._column_names(expr)
+        assert "arrayElement" in self._function_names(expr)
+
+    def test_filter_not_redirected_for_other_key(self) -> None:
+        # Only the configured key is redirected; other attributes keep the bucket.
+        expr = trace_item_filters_to_expression(
+            self._op_filter(name="sentry.metric.name"),
+            attribute_key_to_expression,
+            indexed_name_key="sentry.op",
+        )
+        assert "indexed_name" not in self._column_names(expr)
+        assert "arrayElement" in self._function_names(expr)

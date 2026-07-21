@@ -62,6 +62,7 @@ from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     base_conditions_and,
     get_field_existence_expression,
+    indexed_name_key_for_request,
     semver_sort_key,
     timestamp_in_range_condition,
     trace_item_filters_to_expression,
@@ -720,6 +721,7 @@ def build_query(
             trace_item_filters_to_expression(
                 request.filter,
                 attribute_key_to_expression,
+                indexed_name_key=indexed_name_key_for_request(request.meta),
             ),
             valid_sampling_factor_conditions(),
             *item_type_conds,

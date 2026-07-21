@@ -44,6 +44,7 @@ from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     base_conditions_and,
+    indexed_name_key_for_request,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
@@ -234,6 +235,7 @@ def _build_attr_distribution_query(
     trace_item_filters_expression = trace_item_filters_to_expression(
         in_msg.filter,
         (attribute_key_to_expression),
+        indexed_name_key=indexed_name_key_for_request(in_msg.meta),
     )
     item_type_filter = f.equals(column("item_type"), in_msg.meta.trace_item_type)
     query = Query(

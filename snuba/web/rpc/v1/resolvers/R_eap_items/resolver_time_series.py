@@ -44,6 +44,7 @@ from snuba.web.rpc.common.common import (
     add_existence_check_to_map_attribute_reads,
     attribute_key_to_expression,
     base_conditions_and,
+    indexed_name_key_for_request,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
     use_sampling_factor,
@@ -422,6 +423,7 @@ def build_query(
             trace_item_filters_to_expression(
                 request.filter,
                 _get_attribute_key_to_expression_function(request.meta),
+                indexed_name_key=indexed_name_key_for_request(request.meta),
             ),
             valid_sampling_factor_conditions(),
             *item_type_conds,

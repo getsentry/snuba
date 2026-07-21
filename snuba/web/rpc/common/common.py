@@ -2,10 +2,10 @@ import math
 from collections.abc import Callable, Iterable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 from google.protobuf.message import Message as ProtobufMessage
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     AnyAttributeFilter,
@@ -875,10 +875,52 @@ def _any_attribute_filter_to_expression(
     return positive_expr
 
 
+# Per-item-type primary name attribute promoted to the dedicated
+# ``indexed_name`` String column (bloom filter index). Mirrors
+# ``rust_snuba/src/processors/eap_items.rs`` and migration
+# ``0057_add_name_column_and_index``: ``sentry.op`` for spans and
+# ``sentry.metric.name`` for metrics.
+_INDEXED_NAME_KEY_BY_ITEM_TYPE: dict[int, str] = {
+    TraceItemType.TRACE_ITEM_TYPE_SPAN: "sentry.op",
+    TraceItemType.TRACE_ITEM_TYPE_METRIC: "sentry.metric.name",
+}
+
+# Sentry option (``snuba`` namespace): list of organization_ids the indexed_name
+# redirect is enabled for. An org should only be added once ``indexed_name`` is
+# backfilled across its queried retention window.
+USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION = "eap_items_use_indexed_name_organization_ids"
+
+
+def indexed_name_key(organization_id: int, item_type: int) -> str | None:
+    """Return the attribute name whose eap_items filter should be redirected to
+    the bloom-filter-indexed ``indexed_name`` column for ``organization_id`` /
+    ``item_type``, or ``None`` to leave the unindexed ``attributes_string``
+    bucket lookup.
+
+    Reading org id and item type straight off the request avoids having to
+    recover them from the query conditions. The redirect is enabled per
+    organization via the ``eap_items_use_indexed_name_organization_ids`` option;
+    the redirected attribute is the per-item-type primary name (``sentry.op`` for
+    spans, ``sentry.metric.name`` for metrics), which ingestion writes into
+    ``indexed_name``.
+    """
+    org_ids = cast("list[int]", get_option(USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION, []))
+    if organization_id not in org_ids:
+        return None
+    return _INDEXED_NAME_KEY_BY_ITEM_TYPE.get(item_type)
+
+
+def indexed_name_key_for_request(meta: RequestMeta) -> str | None:
+    """``indexed_name_key`` for a single-item-type request, keyed off
+    ``RequestMeta.organization_id`` / ``RequestMeta.trace_item_type``."""
+    return indexed_name_key(meta.organization_id, meta.trace_item_type)
+
+
 def trace_item_filters_to_expression(
     item_filter: TraceItemFilter,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
     membership_as_has: bool = False,
+    indexed_name_key: str | None = None,
 ) -> Expression:
     """
     Trace Item Filters are things like (span.id=12345 AND start_timestamp >= "june 4th, 2024")
@@ -905,6 +947,7 @@ def trace_item_filters_to_expression(
                 filters[0],
                 attribute_key_to_expression,
                 membership_as_has,
+                indexed_name_key,
             )
         return and_cond(
             *(
@@ -912,6 +955,7 @@ def trace_item_filters_to_expression(
                     x,
                     attribute_key_to_expression,
                     membership_as_has,
+                    indexed_name_key,
                 )
                 for x in filters
             )
@@ -926,6 +970,7 @@ def trace_item_filters_to_expression(
                 filters[0],
                 attribute_key_to_expression,
                 membership_as_has,
+                indexed_name_key,
             )
         return or_cond(
             *(
@@ -933,6 +978,7 @@ def trace_item_filters_to_expression(
                     x,
                     attribute_key_to_expression,
                     membership_as_has,
+                    indexed_name_key,
                 )
                 for x in filters
             )
@@ -948,6 +994,7 @@ def trace_item_filters_to_expression(
                     filters[0],
                     attribute_key_to_expression,
                     membership_as_has,
+                    indexed_name_key,
                 )
             )
         return not_cond(
@@ -957,6 +1004,7 @@ def trace_item_filters_to_expression(
                         x,
                         attribute_key_to_expression,
                         membership_as_has,
+                        indexed_name_key,
                     )
                     for x in filters
                 )
@@ -975,6 +1023,20 @@ def trace_item_filters_to_expression(
             attr_to_key_expression_callable=attribute_key_to_expression,
             key=k,
         )
+
+        # Redirect the promoted per-item-type name attribute to the
+        # bloom-filter-indexed ``indexed_name`` column (see
+        # indexed_name_key_for_request) instead of the unindexed
+        # ``attributes_string`` bucket lookup. Same rationale as the
+        # ``sentry.timestamp`` special-case below: filtering a raw indexed column
+        # is granule-prunable. It's a plain String column, so the normal
+        # (non-map-backed) comparison path below handles every operator.
+        if (
+            indexed_name_key is not None
+            and k.name == indexed_name_key
+            and k.type == AttributeKey.Type.TYPE_STRING
+        ):
+            k_expression = column("indexed_name")
 
         value_type = v.WhichOneof("value")
         if value_type is None:

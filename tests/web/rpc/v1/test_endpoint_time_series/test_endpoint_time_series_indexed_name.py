@@ -23,7 +23,7 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.query.processors.logical.indexed_name_optimizer import IndexedNameOptimizer
+from snuba.web.rpc.common.common import USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION
 from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -46,8 +46,8 @@ def _store_metrics() -> None:
     """Write METRIC items: ``MATCHING_COUNT`` named ``my.metric`` plus
     ``NON_MATCHING_COUNT`` named ``other.metric``. The rust processor promotes
     ``sentry.metric.name`` into the ``indexed_name`` column (see
-    ``rust_snuba/src/processors/eap_items.rs``), which is what the optimizer
-    rewrites the name filter onto."""
+    ``rust_snuba/src/processors/eap_items.rs``), which is what the RPC filter
+    builder redirects the name filter onto."""
     messages: list[bytes] = []
     for name, count in (("my.metric", MATCHING_COUNT), ("other.metric", NON_MATCHING_COUNT)):
         for _ in range(count):
@@ -67,7 +67,7 @@ def _store_metrics() -> None:
 
 def _request() -> TimeSeriesRequest:
     """SUM(value) over metrics named ``my.metric``. The name filter is what the
-    IndexedNameOptimizer rewrites onto the indexed_name column for metrics."""
+    RPC filter builder redirects onto the indexed_name column for metrics."""
     return TimeSeriesRequest(
         meta=RequestMeta(
             project_ids=[1],
@@ -105,12 +105,12 @@ def _total(response: TimeSeriesResponse) -> float:
 @pytest.mark.redis_db
 class TestTimeSeriesIndexedName(BaseApiTest):
     def test_metric_name_filter_with_indexed_name_enabled(self) -> None:
-        """A metric-name-filtered time series returns the right rows when the
-        optimizer rewrites the name filter onto the indexed_name column."""
+        """A metric-name-filtered time series returns the right rows when the RPC
+        filter builder redirects the name filter onto the indexed_name column."""
         _store_metrics()
 
         # The request is scoped to organization_id=1 (see _request).
-        with override_options("snuba", {IndexedNameOptimizer.ORGANIZATION_IDS_OPTION: [1]}):
+        with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [1]}):
             response = EndpointTimeSeries().execute(_request())
 
         # Only the my.metric items (value=1.0 each) match; other.metric is excluded.
@@ -121,10 +121,10 @@ class TestTimeSeriesIndexedName(BaseApiTest):
         time series with the org disabled (bucket lookup) and enabled (indexed_name)."""
         _store_metrics()
 
-        with override_options("snuba", {IndexedNameOptimizer.ORGANIZATION_IDS_OPTION: []}):
+        with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: []}):
             disabled = EndpointTimeSeries().execute(_request())
 
-        with override_options("snuba", {IndexedNameOptimizer.ORGANIZATION_IDS_OPTION: [1]}):
+        with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [1]}):
             enabled = EndpointTimeSeries().execute(_request())
 
         assert _total(disabled) == float(MATCHING_COUNT)

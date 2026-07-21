@@ -31,6 +31,7 @@ from snuba.web.rpc.common.common import (
     add_existence_check_to_map_attribute_reads,
     attribute_key_to_expression,
     base_conditions_and,
+    indexed_name_key_for_request,
     merge_typed_array_maps,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
@@ -105,6 +106,7 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
             trace_item_filters_to_expression(
                 request.filter,
                 attribute_key_to_expression,
+                indexed_name_key=indexed_name_key_for_request(request.meta),
             ),
         ),
         limit=1,
