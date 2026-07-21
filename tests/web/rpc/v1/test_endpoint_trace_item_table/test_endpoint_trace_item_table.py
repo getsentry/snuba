@@ -1459,9 +1459,7 @@ class TestTraceItemTable(BaseApiTest):
         with pytest.raises(BadSnubaRPCRequestException):
             EndpointTraceItemTable().execute(message)
 
-    def test_aggregation_filter_without_aggregation_or_group_by(
-        self, setup_teardown: Any
-    ) -> None:
+    def test_aggregation_filter_without_aggregation_or_group_by(self, setup_teardown: Any) -> None:
         """An aggregation_filter (HAVING) with no aggregate column and no group_by must be
         rejected in validation rather than reaching ClickHouse (Code 215). SNUBA-BNG."""
         message = TraceItemTableRequest(
