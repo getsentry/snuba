@@ -1,4 +1,3 @@
-import functools
 import uuid
 from collections.abc import Iterable
 from datetime import datetime
@@ -259,7 +258,6 @@ def _build_query(
     # are unpopulated.
     meta = query_meta if query_meta is not None else in_msg.meta
     organization_id = in_msg.meta.organization_id
-    attr_expr = functools.partial(attribute_key_to_expression, organization_id=organization_id)
     selected_columns = [
         SelectedExpression("timestamp", f.toUnixTimestamp(column("timestamp"), alias="timestamp")),
         SelectedExpression(
@@ -350,7 +348,7 @@ def _build_query(
             meta,
             trace_item_filters_to_expression(
                 in_msg.filter,
-                attr_expr,
+                attribute_key_to_expression,
                 organization_id=organization_id,
             ),
             *page_token_filter,

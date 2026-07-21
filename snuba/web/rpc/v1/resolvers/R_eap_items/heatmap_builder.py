@@ -1,4 +1,3 @@
-import functools
 import uuid
 from collections import defaultdict
 
@@ -111,7 +110,6 @@ class HeatmapBuilder:
         in_msg = self.in_msg
         timer = self.timer
         organization_id = in_msg.meta.organization_id
-        attr_expr = functools.partial(attribute_key_to_expression, organization_id=organization_id)
         x_attribute = heatmap.x_attribute
         y_attribute = heatmap.y_attribute
         y_attribute_val = attribute_key_to_expression(y_attribute, organization_id)
@@ -126,7 +124,7 @@ class HeatmapBuilder:
         )
         filter_expression = trace_item_filters_to_expression(
             filter,
-            attr_expr,
+            attribute_key_to_expression,
             organization_id=organization_id,
         )
         condition = base_conditions_and(in_msg.meta, filter_expression)
@@ -203,7 +201,6 @@ class HeatmapBuilder:
         and since theres no data for the buckets 2 or 3, the count() for those buckets is 0.
         """
         organization_id = self.in_msg.meta.organization_id
-        attr_expr = functools.partial(attribute_key_to_expression, organization_id=organization_id)
         x_attribute = self.heatmap.x_attribute
         y_attribute = self.heatmap.y_attribute
         x_attribute_val = attribute_key_to_expression(x_attribute, organization_id)
@@ -219,7 +216,7 @@ class HeatmapBuilder:
         )
         filter_expression = trace_item_filters_to_expression(
             filter,
-            attr_expr,
+            attribute_key_to_expression,
             organization_id=organization_id,
         )
         condition = base_conditions_and(self.in_msg.meta, filter_expression)

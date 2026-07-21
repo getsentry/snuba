@@ -1,4 +1,3 @@
-import functools
 import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import replace
@@ -248,14 +247,10 @@ def aggregation_filter_to_expression(
                     _formula_to_expression(agg_filter.comparison_filter.formula, request_meta),
                     agg_filter.comparison_filter.val,
                 )
-            attr_expr = functools.partial(
-                attribute_key_to_expression,
-                organization_id=request_meta.organization_id,
-            )
             return op_expr(
                 aggregation_to_expression(
                     agg_filter.comparison_filter.conditional_aggregation,
-                    attr_expr,
+                    attribute_key_to_expression,
                     use_sampling_factor(request_meta),
                     organization_id=request_meta.organization_id,
                 ),
@@ -360,16 +355,12 @@ def _convert_order_by(
                 )
             )
         elif x.column.HasField("conditional_aggregation"):
-            attr_expr = functools.partial(
-                attribute_key_to_expression,
-                organization_id=request_meta.organization_id,
-            )
             res.append(
                 OrderBy(
                     direction=direction,
                     expression=aggregation_to_expression(
                         x.column.conditional_aggregation,
-                        attr_expr,
+                        attribute_key_to_expression,
                         use_sampling_factor(request_meta),
                         organization_id=request_meta.organization_id,
                     ),
@@ -446,13 +437,9 @@ def _get_reliability_context_columns(
         ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY,
     ]:
         context_columns = []
-        attr_expr = functools.partial(
-            attribute_key_to_expression,
-            organization_id=request_meta.organization_id,
-        )
         confidence_interval_column = get_confidence_interval_column(
             column.conditional_aggregation,
-            attr_expr,
+            attribute_key_to_expression,
             organization_id=request_meta.organization_id,
         )
         if confidence_interval_column is not None:
@@ -465,7 +452,7 @@ def _get_reliability_context_columns(
 
         average_sample_rate_column = get_average_sample_rate_column(
             column.conditional_aggregation,
-            attr_expr,
+            attribute_key_to_expression,
             organization_id=request_meta.organization_id,
         )
         context_columns.append(
@@ -477,7 +464,7 @@ def _get_reliability_context_columns(
 
         count_column = get_count_column(
             column.conditional_aggregation,
-            attr_expr,
+            attribute_key_to_expression,
             organization_id=request_meta.organization_id,
         )
         context_columns.append(SelectedExpression(name=count_column.alias, expression=count_column))
@@ -555,13 +542,9 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
     if column.HasField("key"):
         return attribute_key_to_expression(column.key, request_meta.organization_id)
     if column.HasField("conditional_aggregation"):
-        attr_expr = functools.partial(
-            attribute_key_to_expression,
-            organization_id=request_meta.organization_id,
-        )
         function_expr = aggregation_to_expression(
             column.conditional_aggregation,
-            attr_expr,
+            attribute_key_to_expression,
             use_sampling_factor(request_meta),
             organization_id=request_meta.organization_id,
         )
@@ -698,10 +681,7 @@ def build_query(
             request.meta,
             trace_item_filters_to_expression(
                 request.filter,
-                functools.partial(
-                    attribute_key_to_expression,
-                    organization_id=request.meta.organization_id,
-                ),
+                attribute_key_to_expression,
                 organization_id=request.meta.organization_id,
             ),
             valid_sampling_factor_conditions(),

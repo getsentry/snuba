@@ -1,4 +1,3 @@
-import functools
 import uuid
 from collections.abc import Iterable
 from typing import Any
@@ -49,9 +48,6 @@ from snuba.web.rpc.v1.endpoint_get_trace import convert_to_attribute_value
 
 
 def _build_query(request: TraceItemDetailsRequest) -> Query:
-    attr_expr = functools.partial(
-        attribute_key_to_expression, organization_id=request.meta.organization_id
-    )
     entity = Entity(
         key=EntityKey("eap_items"),
         schema=get_entity(EntityKey("eap_items")).get_data_model(),
@@ -108,7 +104,7 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
             ),
             trace_item_filters_to_expression(
                 request.filter,
-                attr_expr,
+                attribute_key_to_expression,
                 organization_id=request.meta.organization_id,
             ),
         ),

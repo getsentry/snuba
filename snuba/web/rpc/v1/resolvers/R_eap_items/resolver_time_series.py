@@ -1,7 +1,6 @@
-import functools
 import uuid
 from collections import defaultdict
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from dataclasses import replace
 from datetime import datetime
 from typing import Any
@@ -20,7 +19,6 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
 )
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
-    AttributeKey,
     ExtrapolationMode,
 )
 
@@ -81,14 +79,6 @@ OP_TO_EXPR = {
     ProtoExpression.BinaryFormula.OP_MULTIPLY: f.multiply,
     ProtoExpression.BinaryFormula.OP_DIVIDE: f.divide,
 }
-
-
-def _get_attribute_key_to_expression_function(
-    request_meta: RequestMeta,
-) -> Callable[[AttributeKey], Expression]:
-    return functools.partial(
-        attribute_key_to_expression, organization_id=request_meta.organization_id
-    )
 
 
 def _convert_result_timeseries(
@@ -253,7 +243,7 @@ def _get_reliability_context_columns(
         ]:
             confidence_interval_column = get_confidence_interval_column(
                 aggregation,
-                _get_attribute_key_to_expression_function(request_meta),
+                attribute_key_to_expression,
                 organization_id=request_meta.organization_id,
             )
             if confidence_interval_column is not None:
@@ -266,7 +256,7 @@ def _get_reliability_context_columns(
 
             average_sample_rate_column = get_average_sample_rate_column(
                 aggregation,
-                _get_attribute_key_to_expression_function(request_meta),
+                attribute_key_to_expression,
                 organization_id=request_meta.organization_id,
             )
             additional_context_columns.append(
@@ -277,7 +267,7 @@ def _get_reliability_context_columns(
             )
         count_column = get_count_column(
             aggregation,
-            _get_attribute_key_to_expression_function(request_meta),
+            attribute_key_to_expression,
             organization_id=request_meta.organization_id,
         )
         additional_context_columns.append(
@@ -306,7 +296,7 @@ def _proto_expression_to_ast_expression(
         case "conditional_aggregation":
             aggregate_expr = aggregation_to_expression(
                 expr.conditional_aggregation,
-                _get_attribute_key_to_expression_function(request_meta),
+                attribute_key_to_expression,
                 use_sampling_factor(request_meta),
                 organization_id=request_meta.organization_id,
             )
@@ -375,7 +365,7 @@ def build_query(
     groupby_columns = [
         SelectedExpression(
             name=attr_key.name,
-            expression=_get_attribute_key_to_expression_function(request.meta)(attr_key),
+            expression=attribute_key_to_expression(attr_key, request.meta.organization_id),
         )
         for attr_key in request.group_by
     ]
@@ -428,7 +418,7 @@ def build_query(
             request.meta,
             trace_item_filters_to_expression(
                 request.filter,
-                _get_attribute_key_to_expression_function(request.meta),
+                attribute_key_to_expression,
                 organization_id=request.meta.organization_id,
             ),
             valid_sampling_factor_conditions(),
@@ -438,7 +428,7 @@ def build_query(
         groupby=[
             column("time_slot"),
             *[
-                _get_attribute_key_to_expression_function(request.meta)(attr_key)
+                attribute_key_to_expression(attr_key, request.meta.organization_id)
                 for attr_key in request.group_by
             ],
         ],

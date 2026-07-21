@@ -1,4 +1,3 @@
-import functools
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -125,7 +124,7 @@ class TestTraceItemFiltersArrayLike:
         item_filter = self._make_like_filter("my_tags", AttributeKey.Type.TYPE_ARRAY, "%error%")
         result = trace_item_filters_to_expression(
             item_filter,
-            functools.partial(attribute_key_to_expression, organization_id=1),
+            attribute_key_to_expression,
             organization_id=1,
         )
         assert isinstance(result, FunctionCall)
@@ -145,7 +144,7 @@ class TestTraceItemFiltersArrayLike:
         )
         result = trace_item_filters_to_expression(
             item_filter,
-            functools.partial(attribute_key_to_expression, organization_id=1),
+            attribute_key_to_expression,
             organization_id=1,
         )
         assert isinstance(result, FunctionCall)
@@ -164,7 +163,7 @@ class TestTraceItemFiltersArrayLike:
         )
         result = trace_item_filters_to_expression(
             item_filter,
-            functools.partial(attribute_key_to_expression, organization_id=1),
+            attribute_key_to_expression,
             organization_id=1,
         )
         # Result should be NOT(arrayExists(...))
@@ -188,7 +187,7 @@ class TestTraceItemFiltersArrayLike:
         )
         result = trace_item_filters_to_expression(
             item_filter,
-            functools.partial(attribute_key_to_expression, organization_id=1),
+            attribute_key_to_expression,
             organization_id=1,
         )
         assert isinstance(result, FunctionCall)
@@ -215,7 +214,7 @@ class TestTraceItemFiltersArrayLike:
         ):
             trace_item_filters_to_expression(
                 item_filter,
-                functools.partial(attribute_key_to_expression, organization_id=1),
+                attribute_key_to_expression,
                 organization_id=1,
             )
 
@@ -233,7 +232,7 @@ class TestTraceItemFiltersArrayLike:
         ):
             trace_item_filters_to_expression(
                 item_filter,
-                functools.partial(attribute_key_to_expression, organization_id=1),
+                attribute_key_to_expression,
                 organization_id=1,
             )
 
@@ -245,7 +244,7 @@ class TestTraceItemFiltersArrayLike:
         ):
             trace_item_filters_to_expression(
                 item_filter,
-                functools.partial(attribute_key_to_expression, organization_id=1),
+                attribute_key_to_expression,
                 organization_id=1,
             )
 
@@ -262,7 +261,7 @@ class TestTraceItemFiltersArrayLike:
         ):
             trace_item_filters_to_expression(
                 item_filter,
-                functools.partial(attribute_key_to_expression, organization_id=1),
+                attribute_key_to_expression,
                 organization_id=1,
             )
 
@@ -342,7 +341,7 @@ class TestTraceItemFiltersArrayMapColumns:
                 AttributeValue(val_str="%error%"),
                 AttributeKey.Type.TYPE_ARRAY_STRING,
             ),
-            functools.partial(attribute_key_to_expression, organization_id=1),
+            attribute_key_to_expression,
             organization_id=1,
         )
         assert isinstance(result, FunctionCall)
@@ -359,7 +358,7 @@ class TestTraceItemFiltersArrayMapColumns:
                 AttributeValue(val_str="error"),
                 AttributeKey.Type.TYPE_ARRAY_STRING,
             ),
-            functools.partial(attribute_key_to_expression, organization_id=1),
+            attribute_key_to_expression,
             organization_id=1,
         )
         assert isinstance(result, FunctionCall)
@@ -377,7 +376,7 @@ class TestTraceItemFiltersArrayMapColumns:
                 AttributeValue(val_str="12"),
                 AttributeKey.Type.TYPE_ARRAY_INT,
             ),
-            functools.partial(attribute_key_to_expression, organization_id=1),
+            attribute_key_to_expression,
             organization_id=1,
         )
         assert isinstance(result, FunctionCall)
@@ -392,7 +391,7 @@ class TestTraceItemFiltersArrayMapColumns:
                 AttributeValue(val_str="true"),
                 AttributeKey.Type.TYPE_ARRAY_BOOL,
             ),
-            functools.partial(attribute_key_to_expression, organization_id=1),
+            attribute_key_to_expression,
             organization_id=1,
         )
         assert isinstance(result, FunctionCall)
@@ -408,7 +407,7 @@ class TestTraceItemFiltersArrayMapColumns:
         )
         result = trace_item_filters_to_expression(
             item_filter,
-            functools.partial(attribute_key_to_expression, organization_id=1),
+            attribute_key_to_expression,
             organization_id=1,
         )
         # Existence is notEmpty(arrayElement(attributes_array_int, 'my_tags')).
@@ -423,7 +422,7 @@ class TestTraceItemFiltersArrayMapColumns:
         # a float, so it searches both numeric columns plus the string column natively.
         result = trace_item_filters_to_expression(
             self._array_filter(ComparisonFilter.OP_EQUALS, AttributeValue(val_str="12")),
-            functools.partial(attribute_key_to_expression, organization_id=1),
+            attribute_key_to_expression,
             organization_id=1,
         )
         assert isinstance(result, FunctionCall)
@@ -444,7 +443,7 @@ class TestTraceItemFiltersArrayMapColumns:
     ) -> None:
         result = trace_item_filters_to_expression(
             self._array_filter(ComparisonFilter.OP_NOT_EQUALS, AttributeValue(val_str="12")),
-            functools.partial(attribute_key_to_expression, organization_id=1),
+            attribute_key_to_expression,
             organization_id=1,
         )
         assert isinstance(result, FunctionCall)
@@ -466,7 +465,7 @@ class TestTraceItemFiltersArrayMapColumns:
         )
         result = trace_item_filters_to_expression(
             item_filter,
-            functools.partial(attribute_key_to_expression, organization_id=1),
+            attribute_key_to_expression,
             organization_id=1,
         )
         # Existence is notEmpty(arrayConcat(...)) over the four typed columns.
@@ -517,7 +516,7 @@ class TestExistsFilterCoalesced:
         )
         expr = trace_item_filters_to_expression(
             item_filter,
-            functools.partial(attribute_key_to_expression, organization_id=1),
+            attribute_key_to_expression,
             organization_id=1,
         )
         assert isinstance(expr, FunctionCall)
@@ -535,7 +534,7 @@ class TestExistsFilterCoalesced:
         )
         expr = trace_item_filters_to_expression(
             item_filter,
-            functools.partial(attribute_key_to_expression, organization_id=1),
+            attribute_key_to_expression,
             organization_id=1,
         )
         assert isinstance(expr, FunctionCall)
@@ -570,7 +569,7 @@ class TestSentryTimestampFilter:
     ) -> None:
         expr = trace_item_filters_to_expression(
             self._range_filter(op),
-            functools.partial(attribute_key_to_expression, organization_id=1),
+            attribute_key_to_expression,
             organization_id=1,
         )
         assert isinstance(expr, FunctionCall)
@@ -613,7 +612,7 @@ class TestSentryTimestampFilter:
         )
         expr = trace_item_filters_to_expression(
             fractional,
-            functools.partial(attribute_key_to_expression, organization_id=1),
+            attribute_key_to_expression,
             organization_id=1,
         )
         assert isinstance(expr, FunctionCall)
@@ -629,7 +628,7 @@ class TestSentryTimestampFilter:
         """Non-range comparisons keep the existing CAST-based behavior."""
         expr = trace_item_filters_to_expression(
             self._range_filter(ComparisonFilter.OP_EQUALS),
-            functools.partial(attribute_key_to_expression, organization_id=1),
+            attribute_key_to_expression,
             organization_id=1,
         )
         # equals path wraps in the null-aware OR; the LHS of the equals is still the CAST.
@@ -745,7 +744,7 @@ class TestAnalyzerSafeFilters:
         )
         return trace_item_filters_to_expression(
             item_filter,
-            functools.partial(attribute_key_to_expression, organization_id=1),
+            attribute_key_to_expression,
             organization_id=1,
         )
 
@@ -896,7 +895,7 @@ class TestBooleanAttributeFilters:
         )
         return trace_item_filters_to_expression(
             item_filter,
-            functools.partial(attribute_key_to_expression, organization_id=1),
+            attribute_key_to_expression,
             organization_id=1,
         )
 
@@ -948,7 +947,7 @@ class TestNormalizedColumnsNotMapBacked:
         )
         return trace_item_filters_to_expression(
             item_filter,
-            functools.partial(attribute_key_to_expression, organization_id=1),
+            attribute_key_to_expression,
             organization_id=1,
         )
 
@@ -1530,7 +1529,7 @@ class TestAnyAttributeFilterOption:
         # Schema default is true: the filter is translated, not short-circuited.
         result = trace_item_filters_to_expression(
             self._filter(),
-            functools.partial(attribute_key_to_expression, organization_id=1),
+            attribute_key_to_expression,
             organization_id=1,
         )
         assert isinstance(result, FunctionCall)
@@ -1540,7 +1539,7 @@ class TestAnyAttributeFilterOption:
         with override_options("snuba", {"enable_any_attribute_filter": False}):
             result = trace_item_filters_to_expression(
                 self._filter(),
-                functools.partial(attribute_key_to_expression, organization_id=1),
+                attribute_key_to_expression,
                 organization_id=1,
             )
         assert isinstance(result, Literal)
