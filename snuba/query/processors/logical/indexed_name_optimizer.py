@@ -1,4 +1,3 @@
-
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
 from snuba import state
