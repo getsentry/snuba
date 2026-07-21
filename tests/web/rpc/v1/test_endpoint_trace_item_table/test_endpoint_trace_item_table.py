@@ -63,6 +63,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import LimitBy, OrderBy, OrderByDirection
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column as snuba_column
+from snuba.query.expressions import Expression
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import attribute_key_to_expression
@@ -4639,8 +4640,13 @@ def test_build_query_limit_by_virtual_column_has_no_alias() -> None:
     assert limitby is not None
     # every node in the LIMIT BY expression must be alias-free
     aliases: list[str | None] = []
+
+    def _collect_alias(e: Expression) -> Expression:
+        aliases.append(e.alias)
+        return e
+
     for column in limitby.columns:
-        column.transform(lambda e: (aliases.append(e.alias), e)[1])
+        column.transform(_collect_alias)
     assert all(alias is None for alias in aliases)
 
 
@@ -4704,6 +4710,20 @@ def test_validate_limit_by_rejects_array_key() -> None:
     alias = _apply_labels_to_columns(alias)
     with pytest.raises(BadSnubaRPCRequestException, match="array attributes"):
         _validate_limit_by(alias)
+
+
+def test_validate_limit_by_key_not_in_group_by() -> None:
+    """In an aggregation query, a key-based limit_by must be one of the group_by columns
+    (ClickHouse applies LIMIT BY after GROUP BY)."""
+    message = _limit_by_request(
+        TraceItemTableRequest.LimitBy(
+            columns=[_LimitByColumn(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="release"))],
+            limit=5,
+        )
+    )
+    message = _apply_labels_to_columns(message)
+    with pytest.raises(BadSnubaRPCRequestException, match="must be in group_by"):
+        _validate_limit_by(message)
 
 
 def test_validate_limit_by_label_to_aggregate_rejected() -> None:

@@ -131,6 +131,7 @@ def _validate_limit_by(in_msg: TraceItemTableRequest) -> None:
     # (which may be a transformation). The proto cannot express an aggregation
     # directly, but a label can still point at a selected aggregate, so resolve
     # labels and reject aggregate/array targets.
+    group_by_names = {c.name for c in in_msg.group_by}
     selected_by_label = {c.label: c for c in in_msg.columns if c.label}
     for limit_by_column in limit_by.columns:
         which = limit_by_column.WhichOneof("column")
@@ -151,7 +152,7 @@ def _validate_limit_by(in_msg: TraceItemTableRequest) -> None:
             if contains_aggregate_visitor.contains_aggregate:
                 raise BadSnubaRPCRequestException("limit_by does not support aggregations")
             if not referenced.HasField("key"):
-                # a non-key selected column (e.g. formula) has no array concern
+                # a non-key selected column (e.g. formula) has no array/group_by concern
                 continue
             key = referenced.key
         else:
@@ -162,6 +163,14 @@ def _validate_limit_by(in_msg: TraceItemTableRequest) -> None:
         if key.type in ARRAY_TYPES:
             raise BadSnubaRPCRequestException(
                 f"limit_by is not supported on array attributes: {key.name}"
+            )
+
+        # ClickHouse applies LIMIT BY after GROUP BY, so in an aggregation query a
+        # limit_by key must be one of the group_by columns; otherwise it is not
+        # available post-aggregation. Non-aggregation queries (no group_by) are free.
+        if group_by_names and key.name not in group_by_names:
+            raise BadSnubaRPCRequestException(
+                f"limit_by column '{key.name}' must be in group_by"
             )
 
 
