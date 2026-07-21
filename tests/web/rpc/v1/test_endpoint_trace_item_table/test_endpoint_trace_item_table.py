@@ -4729,9 +4729,7 @@ def test_validate_limit_by_label_not_selected() -> None:
 
 def test_validate_limit_by_empty_column() -> None:
     """A `limit_by` column must set either a key or a label."""
-    message = _limit_by_request(
-        TraceItemTableRequest.LimitBy(columns=[_LimitByColumn()], limit=5)
-    )
+    message = _limit_by_request(TraceItemTableRequest.LimitBy(columns=[_LimitByColumn()], limit=5))
     message = _apply_labels_to_columns(message)
     with pytest.raises(BadSnubaRPCRequestException, match="must specify a key or a label"):
         _validate_limit_by(message)
