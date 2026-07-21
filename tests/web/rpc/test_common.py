@@ -1557,11 +1557,8 @@ class TestAnyAttributeFilterOption:
 
 
 class TestIndexedNameRedirect:
-    """The eap_items primary-name filter (``sentry.op`` for spans,
-    ``sentry.metric.name`` for metrics) is redirected onto the
-    bloom-filter-indexed ``indexed_name`` column for organizations listed in the
-    ``eap_items_use_indexed_name_organization_ids`` option, instead of the
-    unindexed ``attributes_string`` bucket lookup."""
+    """The primary-name filter is redirected onto the indexed_name column for
+    orgs in the eap_items_use_indexed_name_organization_ids option."""
 
     @staticmethod
     def _column_names(expr: Expression) -> set[str]:

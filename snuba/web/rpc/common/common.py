@@ -875,35 +875,21 @@ def _any_attribute_filter_to_expression(
     return positive_expr
 
 
-# Per-item-type primary name attribute promoted to the dedicated
-# ``indexed_name`` String column (bloom filter index). Mirrors
-# ``rust_snuba/src/processors/eap_items.rs`` and migration
-# ``0057_add_name_column_and_index``: ``sentry.op`` for spans and
-# ``sentry.metric.name`` for metrics.
+# Per-item-type primary name promoted to the indexed_name column on ingestion
+# (rust_snuba/src/processors/eap_items.rs, migration 0057).
 _INDEXED_NAME_KEY_BY_ITEM_TYPE: dict[int, str] = {
     TraceItemType.TRACE_ITEM_TYPE_SPAN: "sentry.op",
     TraceItemType.TRACE_ITEM_TYPE_METRIC: "sentry.metric.name",
 }
 
-# Sentry option (``snuba`` namespace): list of organization_ids the indexed_name
-# redirect is enabled for. An org should only be added once ``indexed_name`` is
-# backfilled across its queried retention window.
+# Organization_ids the indexed_name redirect is enabled for. Only add an org once
+# indexed_name is backfilled for its queried retention window.
 USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION = "eap_items_use_indexed_name_organization_ids"
 
 
 def indexed_name_key(organization_id: int, item_type: int) -> str | None:
-    """Return the attribute name whose eap_items filter should be redirected to
-    the bloom-filter-indexed ``indexed_name`` column for ``organization_id`` /
-    ``item_type``, or ``None`` to leave the unindexed ``attributes_string``
-    bucket lookup.
-
-    Reading org id and item type straight off the request avoids having to
-    recover them from the query conditions. The redirect is enabled per
-    organization via the ``eap_items_use_indexed_name_organization_ids`` option;
-    the redirected attribute is the per-item-type primary name (``sentry.op`` for
-    spans, ``sentry.metric.name`` for metrics), which ingestion writes into
-    ``indexed_name``.
-    """
+    """The attribute whose eap_items filter should read the indexed ``indexed_name``
+    column, or ``None`` to keep the unindexed ``attributes_string`` bucket lookup."""
     org_ids = cast("list[int]", get_option(USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION, []))
     if organization_id not in org_ids:
         return None
@@ -911,8 +897,6 @@ def indexed_name_key(organization_id: int, item_type: int) -> str | None:
 
 
 def indexed_name_key_for_request(meta: RequestMeta) -> str | None:
-    """``indexed_name_key`` for a single-item-type request, keyed off
-    ``RequestMeta.organization_id`` / ``RequestMeta.trace_item_type``."""
     return indexed_name_key(meta.organization_id, meta.trace_item_type)
 
 
@@ -1024,20 +1008,6 @@ def trace_item_filters_to_expression(
             key=k,
         )
 
-        # Redirect the promoted per-item-type name attribute to the
-        # bloom-filter-indexed ``indexed_name`` column (see
-        # indexed_name_key_for_request) instead of the unindexed
-        # ``attributes_string`` bucket lookup. Same rationale as the
-        # ``sentry.timestamp`` special-case below: filtering a raw indexed column
-        # is granule-prunable. It's a plain String column, so the normal
-        # (non-map-backed) comparison path below handles every operator.
-        if (
-            indexed_name_key is not None
-            and k.name == indexed_name_key
-            and k.type == AttributeKey.Type.TYPE_STRING
-        ):
-            k_expression = column("indexed_name")
-
         value_type = v.WhichOneof("value")
         if value_type is None:
             raise BadSnubaRPCRequestException("comparison does not have a right hand side")
@@ -1047,6 +1017,21 @@ def trace_item_filters_to_expression(
             v_expression: Expression = literal(None)
         else:
             v_expression = _attribute_value_to_expression(v)
+
+        # Redirect the promoted name filter to the bloom-filter-indexed indexed_name
+        # column (cf. the sentry.timestamp special-case below) so it's granule-prunable.
+        # Only for a plain non-null, non-default value: indexed_name can't tell an absent
+        # key from an empty one, so those cases keep the exists-guarded bucket lookup.
+        redirect_to_indexed_name = (
+            indexed_name_key is not None
+            and k.name == indexed_name_key
+            and k.type == AttributeKey.Type.TYPE_STRING
+            and not v_is_null
+            and not _comparison_can_match_column_default(v, value_type)
+        )
+        if redirect_to_indexed_name:
+            k_expression = column("indexed_name")
+        map_backed = _is_map_backed_key(k) and not redirect_to_indexed_name
 
         # `sentry.timestamp` is a normalized column that `attribute_key_to_expression`
         # maps to `CAST(timestamp, 'Float64')`. Wrapping the primary-key/partition
@@ -1100,7 +1085,7 @@ def trace_item_filters_to_expression(
                 return _typed_array_includes_scalar_expression(
                     k, v, item_filter.comparison_filter.ignore_case
                 )
-            if _is_map_backed_key(k):
+            if map_backed:
                 # Map-backed: NULL-free (exists, value) form (see _map_backed_operands).
                 value, exists = _map_backed_operands(k)
                 if v_is_null:  # `attr = null` <=> key absent
@@ -1132,7 +1117,7 @@ def trace_item_filters_to_expression(
                         k, v, item_filter.comparison_filter.ignore_case
                     )
                 )
-            if _is_map_backed_key(k):
+            if map_backed:
                 # Negation of OP_EQUALS; an absent key is "not equal".
                 value, exists = _map_backed_operands(k)
                 if v_is_null:  # `attr != null` <=> key present
@@ -1164,7 +1149,7 @@ def trace_item_filters_to_expression(
                     "the LIKE comparison is only supported on string and array keys"
                 )
             comparison_function = f.ilike if item_filter.comparison_filter.ignore_case else f.like
-            if _is_map_backed_key(k):
+            if map_backed:
                 value, exists = _map_backed_operands(k)
                 return and_cond(exists, comparison_function(value, v_expression))
             return comparison_function(k_expression, v_expression)
@@ -1179,7 +1164,7 @@ def trace_item_filters_to_expression(
                 raise BadSnubaRPCRequestException(
                     "the NOT LIKE comparison is only supported on string and array keys"
                 )
-            if _is_map_backed_key(k):
+            if map_backed:
                 # Negation of OP_LIKE; an absent key is "not like".
                 like_fn = f.ilike if item_filter.comparison_filter.ignore_case else f.like
                 value, exists = _map_backed_operands(k)
@@ -1217,7 +1202,7 @@ def trace_item_filters_to_expression(
             # note: v_expression must be an array
             # we redefine the way in works for nulls
             # now null in ['hi', null] is true
-            if _is_map_backed_key(k):
+            if map_backed:
                 # Map-backed: keep the existence if(...) out of in() (see helper).
                 return _analyzer_safe_in_expression(
                     k,
@@ -1252,7 +1237,7 @@ def trace_item_filters_to_expression(
             # note: v_expression must be an array
             # we redefine the way not in works for nulls
             # now null not in ['hi'] is true
-            if _is_map_backed_key(k):
+            if map_backed:
                 # Map-backed: keep the existence if(...) out of in() (see helper).
                 return _analyzer_safe_in_expression(
                     k,

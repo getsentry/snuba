@@ -43,11 +43,8 @@ NON_MATCHING_COUNT = 4
 
 
 def _store_metrics() -> None:
-    """Write METRIC items: ``MATCHING_COUNT`` named ``my.metric`` plus
-    ``NON_MATCHING_COUNT`` named ``other.metric``. The rust processor promotes
-    ``sentry.metric.name`` into the ``indexed_name`` column (see
-    ``rust_snuba/src/processors/eap_items.rs``), which is what the RPC filter
-    builder redirects the name filter onto."""
+    """Write MATCHING_COUNT my.metric + NON_MATCHING_COUNT other.metric items.
+    Ingestion promotes sentry.metric.name into indexed_name."""
     messages: list[bytes] = []
     for name, count in (("my.metric", MATCHING_COUNT), ("other.metric", NON_MATCHING_COUNT)):
         for _ in range(count):
@@ -66,8 +63,7 @@ def _store_metrics() -> None:
 
 
 def _request() -> TimeSeriesRequest:
-    """SUM(value) over metrics named ``my.metric``. The name filter is what the
-    RPC filter builder redirects onto the indexed_name column for metrics."""
+    """SUM(value) over metrics named ``my.metric`` (scoped to organization_id=1)."""
     return TimeSeriesRequest(
         meta=RequestMeta(
             project_ids=[1],
@@ -105,11 +101,9 @@ def _total(response: TimeSeriesResponse) -> float:
 @pytest.mark.redis_db
 class TestTimeSeriesIndexedName(BaseApiTest):
     def test_metric_name_filter_with_indexed_name_enabled(self) -> None:
-        """A metric-name-filtered time series returns the right rows when the RPC
-        filter builder redirects the name filter onto the indexed_name column."""
+        """A metric-name-filtered time series returns the right rows with the org enabled."""
         _store_metrics()
 
-        # The request is scoped to organization_id=1 (see _request).
         with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [1]}):
             response = EndpointTimeSeries().execute(_request())
 
@@ -117,8 +111,7 @@ class TestTimeSeriesIndexedName(BaseApiTest):
         assert _total(response) == float(MATCHING_COUNT)
 
     def test_indexed_name_rewrite_is_result_preserving(self) -> None:
-        """The rewrite must not change results: the same request returns the same
-        time series with the org disabled (bucket lookup) and enabled (indexed_name)."""
+        """Results are identical with the org disabled (bucket) and enabled (indexed_name)."""
         _store_metrics()
 
         with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: []}):
