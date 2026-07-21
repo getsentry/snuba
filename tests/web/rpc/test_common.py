@@ -122,7 +122,11 @@ class TestTraceItemFiltersArrayLike:
 
     def test_like_on_array_key(self) -> None:
         item_filter = self._make_like_filter("my_tags", AttributeKey.Type.TYPE_ARRAY, "%error%")
-        result = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        result = trace_item_filters_to_expression(
+            item_filter,
+            attribute_key_to_expression,
+            organization_id=1,
+        )
         assert isinstance(result, FunctionCall)
         assert result.function_name == "arrayExists"
         # First param is a Lambda with like
@@ -138,7 +142,11 @@ class TestTraceItemFiltersArrayLike:
         item_filter = self._make_like_filter(
             "my_tags", AttributeKey.Type.TYPE_ARRAY, "%error%", ignore_case=True
         )
-        result = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        result = trace_item_filters_to_expression(
+            item_filter,
+            attribute_key_to_expression,
+            organization_id=1,
+        )
         assert isinstance(result, FunctionCall)
         assert result.function_name == "arrayExists"
         lam = result.parameters[0]
@@ -153,7 +161,11 @@ class TestTraceItemFiltersArrayLike:
             "%error%",
             op=ComparisonFilter.OP_NOT_LIKE,
         )
-        result = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        result = trace_item_filters_to_expression(
+            item_filter,
+            attribute_key_to_expression,
+            organization_id=1,
+        )
         # Result should be NOT(arrayExists(...))
         assert isinstance(result, FunctionCall)
         assert result.function_name == "not"
@@ -173,7 +185,11 @@ class TestTraceItemFiltersArrayLike:
             op=ComparisonFilter.OP_NOT_LIKE,
             ignore_case=True,
         )
-        result = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        result = trace_item_filters_to_expression(
+            item_filter,
+            attribute_key_to_expression,
+            organization_id=1,
+        )
         assert isinstance(result, FunctionCall)
         assert result.function_name == "not"
         inner = result.parameters[0]
@@ -196,7 +212,11 @@ class TestTraceItemFiltersArrayLike:
             BadSnubaRPCRequestException,
             match="LIKE/NOT_LIKE on array keys requires a string pattern",
         ):
-            trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+            trace_item_filters_to_expression(
+                item_filter,
+                attribute_key_to_expression,
+                organization_id=1,
+            )
 
     def test_equals_on_array_key_with_str_array_value_raises(self) -> None:
         item_filter = TraceItemFilter(
@@ -210,7 +230,11 @@ class TestTraceItemFiltersArrayLike:
             BadSnubaRPCRequestException,
             match="OP_EQUALS/OP_NOT_EQUALS on array keys require a scalar value",
         ):
-            trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+            trace_item_filters_to_expression(
+                item_filter,
+                attribute_key_to_expression,
+                organization_id=1,
+            )
 
     def test_like_on_int_key_raises(self) -> None:
         item_filter = self._make_like_filter("my_int", AttributeKey.Type.TYPE_INT, "%something%")
@@ -218,7 +242,11 @@ class TestTraceItemFiltersArrayLike:
             BadSnubaRPCRequestException,
             match="LIKE comparison is only supported on string and array keys",
         ):
-            trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+            trace_item_filters_to_expression(
+                item_filter,
+                attribute_key_to_expression,
+                organization_id=1,
+            )
 
     def test_not_like_on_int_key_raises(self) -> None:
         item_filter = self._make_like_filter(
@@ -231,7 +259,11 @@ class TestTraceItemFiltersArrayLike:
             BadSnubaRPCRequestException,
             match="NOT LIKE comparison is only supported on string and array keys",
         ):
-            trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+            trace_item_filters_to_expression(
+                item_filter,
+                attribute_key_to_expression,
+                organization_id=1,
+            )
 
 
 def _collect_column_names(expr: Expression) -> set[str]:
@@ -310,6 +342,7 @@ class TestTraceItemFiltersArrayMapColumns:
                 AttributeKey.Type.TYPE_ARRAY_STRING,
             ),
             attribute_key_to_expression,
+            organization_id=1,
         )
         assert isinstance(result, FunctionCall)
         assert result.function_name == "arrayExists"
@@ -326,6 +359,7 @@ class TestTraceItemFiltersArrayMapColumns:
                 AttributeKey.Type.TYPE_ARRAY_STRING,
             ),
             attribute_key_to_expression,
+            organization_id=1,
         )
         assert isinstance(result, FunctionCall)
         assert result.function_name == "arrayExists"
@@ -343,6 +377,7 @@ class TestTraceItemFiltersArrayMapColumns:
                 AttributeKey.Type.TYPE_ARRAY_INT,
             ),
             attribute_key_to_expression,
+            organization_id=1,
         )
         assert isinstance(result, FunctionCall)
         assert result.function_name == "arrayExists"
@@ -357,6 +392,7 @@ class TestTraceItemFiltersArrayMapColumns:
                 AttributeKey.Type.TYPE_ARRAY_BOOL,
             ),
             attribute_key_to_expression,
+            organization_id=1,
         )
         assert isinstance(result, FunctionCall)
         assert result.function_name == "arrayExists"
@@ -369,7 +405,11 @@ class TestTraceItemFiltersArrayMapColumns:
                 key=AttributeKey(type=AttributeKey.Type.TYPE_ARRAY_INT, name="my_tags")
             )
         )
-        result = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        result = trace_item_filters_to_expression(
+            item_filter,
+            attribute_key_to_expression,
+            organization_id=1,
+        )
         # Existence is notEmpty(arrayElement(attributes_array_int, 'my_tags')).
         assert isinstance(result, FunctionCall)
         assert result.function_name == "notEmpty"
@@ -383,6 +423,7 @@ class TestTraceItemFiltersArrayMapColumns:
         result = trace_item_filters_to_expression(
             self._array_filter(ComparisonFilter.OP_EQUALS, AttributeValue(val_str="12")),
             attribute_key_to_expression,
+            organization_id=1,
         )
         assert isinstance(result, FunctionCall)
         assert result.function_name == "or"
@@ -403,6 +444,7 @@ class TestTraceItemFiltersArrayMapColumns:
         result = trace_item_filters_to_expression(
             self._array_filter(ComparisonFilter.OP_NOT_EQUALS, AttributeValue(val_str="12")),
             attribute_key_to_expression,
+            organization_id=1,
         )
         assert isinstance(result, FunctionCall)
         assert result.function_name == "not"
@@ -421,7 +463,11 @@ class TestTraceItemFiltersArrayMapColumns:
                 key=AttributeKey(type=AttributeKey.Type.TYPE_ARRAY, name="my_tags")
             )
         )
-        result = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        result = trace_item_filters_to_expression(
+            item_filter,
+            attribute_key_to_expression,
+            organization_id=1,
+        )
         # Existence is notEmpty(arrayConcat(...)) over the four typed columns.
         assert isinstance(result, FunctionCall)
         assert result.function_name == "notEmpty"
@@ -468,7 +514,11 @@ class TestExistsFilterCoalesced:
                 key=AttributeKey(type=AttributeKey.Type.TYPE_STRING, name=canonical)
             )
         )
-        expr = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        expr = trace_item_filters_to_expression(
+            item_filter,
+            attribute_key_to_expression,
+            organization_id=1,
+        )
         assert isinstance(expr, FunctionCall)
         assert expr.function_name == "or"
         checked_keys = self._collect_existence_keys(expr)
@@ -482,7 +532,11 @@ class TestExistsFilterCoalesced:
                 key=AttributeKey(type=AttributeKey.Type.TYPE_STRING, name="some.custom.tag")
             )
         )
-        expr = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        expr = trace_item_filters_to_expression(
+            item_filter,
+            attribute_key_to_expression,
+            organization_id=1,
+        )
         assert isinstance(expr, FunctionCall)
         assert expr.function_name == "has"
 
@@ -513,7 +567,11 @@ class TestSentryTimestampFilter:
     def test_range_filter_uses_raw_timestamp_column(
         self, op: "ComparisonFilter.Op.ValueType", expected_function: str
     ) -> None:
-        expr = trace_item_filters_to_expression(self._range_filter(op), attribute_key_to_expression)
+        expr = trace_item_filters_to_expression(
+            self._range_filter(op),
+            attribute_key_to_expression,
+            organization_id=1,
+        )
         assert isinstance(expr, FunctionCall)
         assert expr.function_name == expected_function
 
@@ -552,7 +610,11 @@ class TestSentryTimestampFilter:
                 value=AttributeValue(val_double=1781040732.7),
             )
         )
-        expr = trace_item_filters_to_expression(fractional, attribute_key_to_expression)
+        expr = trace_item_filters_to_expression(
+            fractional,
+            attribute_key_to_expression,
+            organization_id=1,
+        )
         assert isinstance(expr, FunctionCall)
         rhs = expr.parameters[1]
         assert isinstance(rhs, FunctionCall)
@@ -565,7 +627,9 @@ class TestSentryTimestampFilter:
     def test_equals_filter_unchanged(self) -> None:
         """Non-range comparisons keep the existing CAST-based behavior."""
         expr = trace_item_filters_to_expression(
-            self._range_filter(ComparisonFilter.OP_EQUALS), attribute_key_to_expression
+            self._range_filter(ComparisonFilter.OP_EQUALS),
+            attribute_key_to_expression,
+            organization_id=1,
         )
         # equals path wraps in the null-aware OR; the LHS of the equals is still the CAST.
         assert isinstance(expr, FunctionCall)
@@ -678,7 +742,11 @@ class TestAnalyzerSafeFilters:
                 ignore_case=ignore_case,
             )
         )
-        return trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        return trace_item_filters_to_expression(
+            item_filter,
+            attribute_key_to_expression,
+            organization_id=1,
+        )
 
     # --- pruned forms: literal != column default, so no existence guard ---
 
@@ -825,7 +893,11 @@ class TestBooleanAttributeFilters:
                 value=value,
             )
         )
-        return trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        return trace_item_filters_to_expression(
+            item_filter,
+            attribute_key_to_expression,
+            organization_id=1,
+        )
 
     def test_equals_false_keeps_existence_guard(self) -> None:
         expr = self._build(ComparisonFilter.OP_EQUALS, value=AttributeValue(val_bool=False))
@@ -873,7 +945,11 @@ class TestNormalizedColumnsNotMapBacked:
                 value=AttributeValue(val_str="abc"),
             )
         )
-        return trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        return trace_item_filters_to_expression(
+            item_filter,
+            attribute_key_to_expression,
+            organization_id=1,
+        )
 
     def test_normalized_string_column_bypasses_map_backed_path(self) -> None:
         expr = self._build("sentry.trace_id")
@@ -1451,12 +1527,20 @@ class TestAnyAttributeFilterOption:
 
     def test_enabled_by_default_translates_filter(self) -> None:
         # Schema default is true: the filter is translated, not short-circuited.
-        result = trace_item_filters_to_expression(self._filter(), attribute_key_to_expression)
+        result = trace_item_filters_to_expression(
+            self._filter(),
+            attribute_key_to_expression,
+            organization_id=1,
+        )
         assert isinstance(result, FunctionCall)
         assert result.function_name == "arrayExists"
 
     def test_disabled_returns_always_true(self) -> None:
         with override_options("snuba", {"enable_any_attribute_filter": False}):
-            result = trace_item_filters_to_expression(self._filter(), attribute_key_to_expression)
+            result = trace_item_filters_to_expression(
+                self._filter(),
+                attribute_key_to_expression,
+                organization_id=1,
+            )
         assert isinstance(result, Literal)
         assert result.value is True

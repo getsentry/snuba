@@ -407,6 +407,11 @@
       "default": "",
       "description": "Comma-separated org ids allowed to issue EAP-items lightweight deletes; empty means all orgs are allowed."
     },
+    "eap_items_unpopulated_normalized_columns_org_allowlist": {
+      "type": "string",
+      "default": "",
+      "description": "Comma-separated org ids that read the not-yet-populated EAP-items normalized columns (session_id, ai_conversation_id) as real columns; empty (default) means no orgs are opted in and everyone falls through to the attributes_* map path."
+    },
     "max_parts_mutating_for_delete": {
       "type": "integer",
       "default": 20,

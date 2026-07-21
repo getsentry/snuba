@@ -1,12 +1,15 @@
 import pytest
 from sentry_conventions.attributes import ATTRIBUTE_METADATA
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.protos.common import (
     ATTRIBUTES_TO_COALESCE,
+    UNPOPULATED_NORMALIZED_COLUMNS_ORG_ALLOWLIST_OPTION,
     MalformedAttributeException,
     _resolve_canonical,
     attribute_key_to_expression,
+    get_normalized_columns_eap_items,
 )
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import arrayElement, column, literal
@@ -20,11 +23,13 @@ class TestAttributeKeyToExpression:
                 type=AttributeKey.TYPE_STRING,
                 name="sentry.trace_id",
             ),
+            1,
         ) == f.cast(column("trace_id"), "String", alias="sentry.trace_id_TYPE_STRING")
 
     def test_attributes(self) -> None:
         assert attribute_key_to_expression(
             AttributeKey(type=AttributeKey.TYPE_STRING, name="derp"),
+            1,
         ) == SubscriptableReference(
             alias="derp_TYPE_STRING",
             column=column("attributes_string"),
@@ -33,6 +38,7 @@ class TestAttributeKeyToExpression:
 
         assert attribute_key_to_expression(
             AttributeKey(type=AttributeKey.TYPE_FLOAT, name="derp"),
+            1,
         ) == SubscriptableReference(
             alias="derp_TYPE_FLOAT",
             column=column("attributes_float"),
@@ -41,6 +47,7 @@ class TestAttributeKeyToExpression:
 
         assert attribute_key_to_expression(
             AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="derp"),
+            1,
         ) == SubscriptableReference(
             alias="derp_TYPE_DOUBLE",
             column=column("attributes_float"),
@@ -49,6 +56,7 @@ class TestAttributeKeyToExpression:
 
         assert attribute_key_to_expression(
             AttributeKey(type=AttributeKey.TYPE_INT, name="derp"),
+            1,
         ) == f.cast(
             SubscriptableReference(
                 alias=None,
@@ -61,6 +69,7 @@ class TestAttributeKeyToExpression:
 
         assert attribute_key_to_expression(
             AttributeKey(type=AttributeKey.TYPE_BOOLEAN, name="derp"),
+            1,
         ) == f.cast(
             arrayElement(
                 None,
@@ -88,6 +97,7 @@ class TestAttributeKeyToExpression:
                 type=AttributeKey.TYPE_STRING,
                 name=new_attribute,
             ),
+            1,
         ) == f.coalesce(
             SubscriptableReference(
                 alias=None,
@@ -102,6 +112,7 @@ class TestAttributeKeyToExpression:
         for name in ATTRIBUTES_TO_COALESCE:
             result = attribute_key_to_expression(
                 AttributeKey(type=AttributeKey.TYPE_STRING, name=name),
+                1,
             )
             assert isinstance(result, FunctionCall)
             assert result.function_name == "coalesce"
@@ -150,13 +161,47 @@ class TestAttributeKeyToExpression:
     def test_unspecified_type_raises_exception(self) -> None:
         with pytest.raises(MalformedAttributeException) as exc_info:
             attribute_key_to_expression(
-                AttributeKey(type=AttributeKey.TYPE_UNSPECIFIED, name="test_attr")
+                AttributeKey(type=AttributeKey.TYPE_UNSPECIFIED, name="test_attr"), 1
             )
         assert "must have a type specified" in str(exc_info.value)
 
     def test_invalid_type_for_normalized_column_raises_exception(self) -> None:
         with pytest.raises(MalformedAttributeException) as exc_info:
             attribute_key_to_expression(
-                AttributeKey(type=AttributeKey.TYPE_BOOLEAN, name="sentry.trace_id")
+                AttributeKey(type=AttributeKey.TYPE_BOOLEAN, name="sentry.trace_id"), 1
             )
         assert "must be one of" in str(exc_info.value)
+
+
+# An unpopulated normalized column key; present in the resolved column set only when the
+# org is opted into the allowlist (see get_normalized_columns_eap_items).
+_UNPOPULATED_KEY = "gen_ai.conversation.id"
+
+
+class TestGetNormalizedColumnsEapItems:
+    @pytest.mark.parametrize(
+        "allowlist,organization_id,expected_unpopulated",
+        [
+            # opted in: the org appears in a well-formed allowlist
+            ("1,2,3", 2, True),
+            (" 1 , 2 ", 2, True),  # surrounding whitespace is tolerated
+            # opted out: org absent, no org in context, or feature off (empty allowlist)
+            ("1,2,3", 5, False),
+            ("1", None, False),
+            ("", 1, False),
+            # malformed allowlist must not raise -> org falls back to opted out, even when
+            # the numeric id would otherwise match
+            ("1,2,", 1, False),  # trailing comma -> empty token
+            ("1,abc", 1, False),  # non-numeric entry
+        ],
+    )
+    def test_unpopulated_columns_gate(
+        self, allowlist: str, organization_id: int | None, expected_unpopulated: bool
+    ) -> None:
+        with override_options(
+            "snuba", {UNPOPULATED_NORMALIZED_COLUMNS_ORG_ALLOWLIST_OPTION: allowlist}
+        ):
+            columns = get_normalized_columns_eap_items(organization_id)
+        assert (_UNPOPULATED_KEY in columns) is expected_unpopulated
+        # populated normalized columns are always present regardless of the gate
+        assert "sentry.trace_id" in columns

@@ -257,13 +257,15 @@ def _build_query(
     # request window, or the SELECT could read typed columns from a window where they
     # are unpopulated.
     meta = query_meta if query_meta is not None else in_msg.meta
+    organization_id = in_msg.meta.organization_id
     selected_columns = [
         SelectedExpression("timestamp", f.toUnixTimestamp(column("timestamp"), alias="timestamp")),
         SelectedExpression(
             name="id",
             expression=(
                 attribute_key_to_expression(
-                    AttributeKey(name="sentry.item_id", type=AttributeKey.Type.TYPE_STRING)
+                    AttributeKey(name="sentry.item_id", type=AttributeKey.Type.TYPE_STRING),
+                    organization_id,
                 )
             ),
         ),
@@ -271,7 +273,8 @@ def _build_query(
             "trace_id",
             expression=(
                 attribute_key_to_expression(
-                    AttributeKey(name="sentry.trace_id", type=AttributeKey.Type.TYPE_STRING)
+                    AttributeKey(name="sentry.trace_id", type=AttributeKey.Type.TYPE_STRING),
+                    organization_id,
                 )
             ),
         ),
@@ -346,6 +349,7 @@ def _build_query(
             trace_item_filters_to_expression(
                 in_msg.filter,
                 attribute_key_to_expression,
+                organization_id=organization_id,
             ),
             *page_token_filter,
             *item_type_filter,
