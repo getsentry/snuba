@@ -2748,6 +2748,38 @@ class TestTraceItemTable(BaseApiTest):
                         },
                     }
                 },
+                # sumIf(wing.count, bark.db > 50): sum wing.count over spans whose bark.db > 50.
+                {
+                    "conditionalAggregation": {
+                        "aggregate": "FUNCTION_SUM",
+                        "key": {"type": "TYPE_DOUBLE", "name": "wing.count"},
+                        "label": "sumIf(wing.count, bark.db > 50)",
+                        "extrapolationMode": "EXTRAPOLATION_MODE_NONE",
+                        "filter": {
+                            "comparisonFilter": {
+                                "key": {"type": "TYPE_DOUBLE", "name": "bark.db"},
+                                "op": "OP_GREATER_THAN",
+                                "value": {"valDouble": 50},
+                            }
+                        },
+                    }
+                },
+                # sumIf(wing.count, wing.count > 2): sum wing.count over spans whose wing.count > 2.
+                {
+                    "conditionalAggregation": {
+                        "aggregate": "FUNCTION_SUM",
+                        "key": {"type": "TYPE_DOUBLE", "name": "wing.count"},
+                        "label": "sumIf(wing.count, wing.count > 2)",
+                        "extrapolationMode": "EXTRAPOLATION_MODE_NONE",
+                        "filter": {
+                            "comparisonFilter": {
+                                "key": {"type": "TYPE_DOUBLE", "name": "wing.count"},
+                                "op": "OP_GREATER_THAN",
+                                "value": {"valDouble": 2},
+                            }
+                        },
+                    }
+                },
             ],
             "groupBy": [{"type": "TYPE_STRING", "name": "sentry.trace_id"}],
             "aggregationFilter": {
@@ -2815,7 +2847,16 @@ class TestTraceItemTable(BaseApiTest):
                     ]
                 }
             },
-            "orderBy": [{"column": {"key": {"type": "TYPE_STRING", "name": "sentry.trace_id"}}}],
+            "orderBy": [
+                {
+                    "column": {
+                        "key": {
+                            "type": "TYPE_STRING",
+                            "name": "sentry.trace_id",
+                        }
+                    }
+                }
+            ],
             "limit": 50,
         }
 
@@ -2833,36 +2874,66 @@ class TestTraceItemTable(BaseApiTest):
         write_eap_item(span_ts, {"animal_type": "hyena", "bark.db": 100}, 1, trace_id=trace_1)
 
         trace_2 = uuid.uuid4().hex
-        write_eap_item(span_ts, {"animal_type": "emu", "wing.count": 0}, 1, trace_id=trace_2)
-        write_eap_item(span_ts, {"animal_type": "cat"}, 1, trace_id=trace_2)
+        write_eap_item(span_ts, {"animal_type": "emu", "wing.count": 5}, 1, trace_id=trace_2)
+        write_eap_item(
+            span_ts, {"animal_type": "cat", "is_cool": True, "bark.db": 20}, 1, trace_id=trace_2
+        )
 
         trace_3 = uuid.uuid4().hex
         write_eap_item(span_ts, {"animal_type": "dog", "bark.db": 100}, 1, trace_id=trace_3)
 
         message = ParseDict(self._demo_having_payload(), TraceItemTableRequest())
         response = EndpointTraceItemTable().execute(message)
-        # All three traces satisfy the HAVING: trace_2 and trace_3 have no hyena, and
-        # trace_1 has a matching span (bird, wing.count=2). count(animal_type) is over
-        # every span in the trace (no row filter now): trace_1=2, trace_2=2, trace_3=1.
-        # countIf(project_id, is_cool = True): counts project_ids over is_cool spans, which
-        # equals the is_cool span count (project_id is always present). Only trace_2's cat
-        # is cool -> trace_2=1, others 0.
-        # Groups come back ordered by trace_id. Tuples: (trace_id, animal_count, cool_count)
-        expected = sorted([(trace_1, 2, 0), (trace_2, 2, 1), (trace_3, 1, 0)])
+        # All three traces satisfy the HAVING (no hyena OR a matching span).
+        # count(animal_type): every span in the trace -> trace_1=2, trace_2=2, trace_3=1.
+        # countIf(project_id, is_cool = True): only trace_2's cat is cool -> trace_2=1, others 0.
+        # sumIf(wing.count, bark.db > 50): the only spans with bark.db > 50 (hyena, dog) have
+        # no wing.count, so this sum is null for every trace.
+        # sumIf(wing.count, wing.count > 2): only emu (trace_2, wing.count=5) qualifies -> 5;
+        # bird's wing.count is 2 (not > 2), so trace_1 and trace_3 are null.
+        # Groups ordered by trace_id.
+        # Tuples: (trace_id, animal_count, cool_count, wing_sum_bark, wing_sum_gt2)
+        expected = sorted(
+            [
+                (trace_1, 2, 0, None, None),
+                (trace_2, 2, 1, None, 5),
+                (trace_3, 1, 0, None, None),
+            ]
+        )
         expected_columns = [
             TraceItemColumnValues(
                 attribute_name="sentry.trace_id",
-                results=[AttributeValue(val_str=tid) for tid, _, _ in expected],
+                results=[AttributeValue(val_str=tid) for tid, _, _, _, _ in expected],
             ),
             TraceItemColumnValues(
                 attribute_name="count(animal_type)",
                 results=[
-                    AttributeValue(val_double=animal_count) for _, animal_count, _ in expected
+                    AttributeValue(val_double=animal_count) for _, animal_count, _, _, _ in expected
                 ],
             ),
             TraceItemColumnValues(
                 attribute_name="countIf(project_id, is_cool = True)",
-                results=[AttributeValue(val_double=cool_count) for _, _, cool_count in expected],
+                results=[
+                    AttributeValue(val_double=cool_count) for _, _, cool_count, _, _ in expected
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="sumIf(wing.count, bark.db > 50)",
+                results=[
+                    AttributeValue(is_null=True)
+                    if wing_sum is None
+                    else AttributeValue(val_double=wing_sum)
+                    for _, _, _, wing_sum, _ in expected
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="sumIf(wing.count, wing.count > 2)",
+                results=[
+                    AttributeValue(is_null=True)
+                    if wing_sum_gt2 is None
+                    else AttributeValue(val_double=wing_sum_gt2)
+                    for _, _, _, _, wing_sum_gt2 in expected
+                ],
             ),
         ]
         assert response.column_values == expected_columns
