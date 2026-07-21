@@ -2909,9 +2909,18 @@ class TestTraceItemTable(BaseApiTest):
     @pytest.mark.foo
     def test_filter_on_multiple_attributes(self) -> None:
         """
-        Seeds spans across three traces, groups by trace_id, and uses an
-        aggregation_filter (HAVING) built from conditional counts to keep traces
-        where no span is a hyena OR some span has wing.count > 1 / bark.db > 50.
+        End-to-end demo of the group-aggregation features the explore platform needs.
+        Seeds spans across three traces and groups by trace_id, then exercises:
+          - aggregation_filter (HAVING) built from conditional counts: keep traces where
+            no span is a hyena OR some span has wing.count > 1 / bark.db > 50 (the two
+            conditions may live on different spans);
+          - plain + conditional aggregates as columns: count, countIf, sumIf, count_unique
+            (uniqIf), max/min, and any;
+          - sorting by an aggregate column (count(animal_type) desc, trace_id as tiebreak).
+
+        Not covered (current platform gaps):
+            - returning the array of unique values (only a uniq count exists)
+            - first/last-value by sort condition.
         """
         span_ts = BASE_TIME - timedelta(minutes=1)
 
