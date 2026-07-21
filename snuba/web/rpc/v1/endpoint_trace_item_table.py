@@ -169,9 +169,7 @@ def _validate_limit_by(in_msg: TraceItemTableRequest) -> None:
         # limit_by key must be one of the group_by columns; otherwise it is not
         # available post-aggregation. Non-aggregation queries (no group_by) are free.
         if group_by_names and key.name not in group_by_names:
-            raise BadSnubaRPCRequestException(
-                f"limit_by column '{key.name}' must be in group_by"
-            )
+            raise BadSnubaRPCRequestException(f"limit_by column '{key.name}' must be in group_by")
 
 
 def _transform_request(request: TraceItemTableRequest) -> TraceItemTableRequest:

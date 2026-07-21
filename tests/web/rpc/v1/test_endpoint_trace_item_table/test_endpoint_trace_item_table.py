@@ -4717,7 +4717,9 @@ def test_validate_limit_by_key_not_in_group_by() -> None:
     (ClickHouse applies LIMIT BY after GROUP BY)."""
     message = _limit_by_request(
         TraceItemTableRequest.LimitBy(
-            columns=[_LimitByColumn(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="release"))],
+            columns=[
+                _LimitByColumn(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="release"))
+            ],
             limit=5,
         )
     )
