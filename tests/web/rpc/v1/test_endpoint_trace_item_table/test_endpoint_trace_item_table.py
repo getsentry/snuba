@@ -4553,10 +4553,10 @@ def _limit_by_request(
     )
 
 
-_LimitByColumn = TraceItemTableRequest.LimitBy.LimitByColumn
+_LimitByColumn = TraceItemTableRequest.LimitBy.Column
 
 
-def _project_id_limit_by_column() -> "TraceItemTableRequest.LimitBy.LimitByColumn":
+def _project_id_limit_by_column() -> "TraceItemTableRequest.LimitBy.Column":
     return _LimitByColumn(key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id"))
 
 
