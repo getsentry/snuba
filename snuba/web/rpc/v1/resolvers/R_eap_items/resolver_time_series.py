@@ -1,3 +1,4 @@
+import functools
 import uuid
 from collections import defaultdict
 from collections.abc import Callable, Iterable
@@ -86,7 +87,9 @@ OP_TO_EXPR = {
 def _get_attribute_key_to_expression_function(
     request_meta: RequestMeta,
 ) -> Callable[[AttributeKey], Expression]:
-    return attribute_key_to_expression
+    return functools.partial(
+        attribute_key_to_expression, organization_id=request_meta.organization_id
+    )
 
 
 def _convert_result_timeseries(
@@ -252,6 +255,7 @@ def _get_reliability_context_columns(
             confidence_interval_column = get_confidence_interval_column(
                 aggregation,
                 _get_attribute_key_to_expression_function(request_meta),
+                organization_id=request_meta.organization_id,
             )
             if confidence_interval_column is not None:
                 additional_context_columns.append(
@@ -264,6 +268,7 @@ def _get_reliability_context_columns(
             average_sample_rate_column = get_average_sample_rate_column(
                 aggregation,
                 _get_attribute_key_to_expression_function(request_meta),
+                organization_id=request_meta.organization_id,
             )
             additional_context_columns.append(
                 SelectedExpression(
@@ -274,6 +279,7 @@ def _get_reliability_context_columns(
         count_column = get_count_column(
             aggregation,
             _get_attribute_key_to_expression_function(request_meta),
+            organization_id=request_meta.organization_id,
         )
         additional_context_columns.append(
             SelectedExpression(name=count_column.alias, expression=count_column)
@@ -301,8 +307,9 @@ def _proto_expression_to_ast_expression(
         case "conditional_aggregation":
             aggregate_expr = aggregation_to_expression(
                 expr.conditional_aggregation,
-                (attribute_key_to_expression),
+                _get_attribute_key_to_expression_function(request_meta),
                 use_sampling_factor(request_meta),
+                organization_id=request_meta.organization_id,
             )
             match expr.conditional_aggregation.WhichOneof("default_value"):
                 case None:
@@ -424,7 +431,7 @@ def build_query(
                 request.meta.trace_item_type,
                 request.filter,
                 _get_attribute_key_to_expression_function(request.meta),
-                use_indexed_name=use_indexed_name_for_request(request.meta),
+                organization_id=request.meta.organization_id,
             ),
             valid_sampling_factor_conditions(),
             *item_type_conds,

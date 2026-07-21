@@ -1,3 +1,4 @@
+import functools
 import uuid
 
 from google.protobuf.json_format import MessageToDict
@@ -133,6 +134,8 @@ def get_trace_ids_sql_for_cross_item_query(
     # (a SELECT-clause aggregate), where the membership must be has(array, x) so its
     # result-block column name is stable across mixed-version ClickHouse nodes
     # (membership_as_has, see common._in_or_has).
+    organization_id = request_meta.organization_id
+    attr_expr = functools.partial(attribute_key_to_expression, organization_id=organization_id)
     filter_expressions = []
     having_filter_expressions = []
     if trace_filters:
@@ -154,8 +157,8 @@ def get_trace_ids_sql_for_cross_item_query(
                     trace_item_filters_to_expression(
                         trace_filter.item_type,
                         trace_filter.filter,
-                        attribute_key_to_expression,
-                        use_indexed_name=use_indexed_name,
+                        attr_expr,
+                        organization_id=organization_id,
                     ),
                 )
             )
@@ -165,9 +168,9 @@ def get_trace_ids_sql_for_cross_item_query(
                     trace_item_filters_to_expression(
                         trace_filter.item_type,
                         trace_filter.filter,
-                        attribute_key_to_expression,
+                        attr_expr,
                         membership_as_has=True,
-                        use_indexed_name=use_indexed_name,
+                        organization_id=organization_id,
                     ),
                 )
             )

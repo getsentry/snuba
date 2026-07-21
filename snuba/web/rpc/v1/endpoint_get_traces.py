@@ -1,3 +1,4 @@
+import functools
 import uuid
 from collections import defaultdict
 from collections.abc import Callable, Iterable
@@ -157,7 +158,10 @@ def _get_attribute_expression(
     attribute_type: AttributeKey.Type.ValueType,
     request_meta: RequestMeta,
 ) -> Expression:
-    return attribute_key_to_expression(AttributeKey(name=attribute_name, type=attribute_type))
+    return attribute_key_to_expression(
+        AttributeKey(name=attribute_name, type=attribute_type),
+        request_meta.organization_id,
+    )
 
 
 def _attribute_to_expression(
@@ -576,6 +580,8 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             list
         )
         filter_expressions_by_item_type: dict[TraceItemType.ValueType, Expression] = {}
+        organization_id = request_meta.organization_id
+        attr_expr = functools.partial(attribute_key_to_expression, organization_id=organization_id)
         for trace_filter in filters:
             filters_by_item_type[trace_filter.item_type].append(trace_filter.filter)
 
@@ -590,9 +596,9 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                             filters=filters_by_item_type[item_type],
                         ),
                     ),
-                    attribute_key_to_expression,
+                    attr_expr,
                     membership_as_has=True,
-                    use_indexed_name=use_indexed_name,
+                    organization_id=organization_id,
                 ),
             )
 
@@ -609,6 +615,8 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         else:
             item_type = TraceItemType.TRACE_ITEM_TYPE_SPAN
 
+        organization_id = request.meta.organization_id
+        attr_expr = functools.partial(attribute_key_to_expression, organization_id=organization_id)
         trace_item_filters_expression = trace_item_filters_to_expression(
             item_type,
             TraceItemFilter(
@@ -616,8 +624,8 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                     filters=[f.filter for f in request.filters],
                 ),
             ),
-            attribute_key_to_expression,
-            use_indexed_name=use_indexed_name_for_request(request.meta),
+            attr_expr,
+            organization_id=organization_id,
         )
         selected_columns: list[SelectedExpression] = [
             SelectedExpression(
