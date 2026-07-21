@@ -2793,6 +2793,23 @@ class TestTraceItemTable(BaseApiTest):
                         },
                     }
                 },
+                # max(bark.db) / min(bark.db): loudest and quietest bark in the trace.
+                {
+                    "aggregation": {
+                        "aggregate": "FUNCTION_MAX",
+                        "key": {"type": "TYPE_DOUBLE", "name": "bark.db"},
+                        "label": "max(bark.db)",
+                        "extrapolationMode": "EXTRAPOLATION_MODE_NONE",
+                    }
+                },
+                {
+                    "aggregation": {
+                        "aggregate": "FUNCTION_MIN",
+                        "key": {"type": "TYPE_DOUBLE", "name": "bark.db"},
+                        "label": "min(bark.db)",
+                        "extrapolationMode": "EXTRAPOLATION_MODE_NONE",
+                    }
+                },
             ],
             "groupBy": [{"type": "TYPE_STRING", "name": "sentry.trace_id"}],
             "aggregationFilter": {
@@ -2906,52 +2923,55 @@ class TestTraceItemTable(BaseApiTest):
         # bird's wing.count is 2 (not > 2), so trace_1 and trace_3 are null.
         # uniqIf(trace_id, bark.db exists): every trace has a bark.db span (hyena/cat/dog), and
         # grouping is by trace_id, so the distinct trace_id count is 1 for each group.
-        # Groups ordered by trace_id. Tuples:
-        # (trace_id, animal_count, cool_count, wing_sum_bark, wing_sum_gt2, uniq_traces)
+        # max(bark.db) / min(bark.db): each trace has exactly one bark.db span, so max == min:
+        # trace_1=100 (hyena), trace_2=20 (cat), trace_3=100 (dog).
+        # Groups ordered by trace_id. Tuple fields:
+        # (trace_id, animal_count, cool_count, wing_sum_bark, wing_sum_gt2, uniq_traces,
+        #  max_bark, min_bark)
         expected = sorted(
             [
-                (trace_1, 2, 0, None, None, 1),
-                (trace_2, 2, 1, None, 5, 1),
-                (trace_3, 1, 0, None, None, 1),
+                (trace_1, 2, 0, None, None, 1, 100, 100),
+                (trace_2, 2, 1, None, 5, 1, 20, 20),
+                (trace_3, 1, 0, None, None, 1, 100, 100),
             ]
         )
         expected_columns = [
             TraceItemColumnValues(
                 attribute_name="sentry.trace_id",
-                results=[AttributeValue(val_str=tid) for tid, _, _, _, _, _ in expected],
+                results=[AttributeValue(val_str=row[0]) for row in expected],
             ),
             TraceItemColumnValues(
                 attribute_name="count(animal_type)",
-                results=[
-                    AttributeValue(val_double=animal_count)
-                    for _, animal_count, _, _, _, _ in expected
-                ],
+                results=[AttributeValue(val_double=row[1]) for row in expected],
             ),
             TraceItemColumnValues(
                 attribute_name="countIf(project_id, is_cool = True)",
-                results=[
-                    AttributeValue(val_double=cool_count) for _, _, cool_count, _, _, _ in expected
-                ],
+                results=[AttributeValue(val_double=row[2]) for row in expected],
             ),
             TraceItemColumnValues(
                 attribute_name="sumIf(wing.count, bark.db > 50)",
-                results=[AttributeValue(is_null=True) for _, _, _, wing_sum, _, _ in expected],
+                results=[AttributeValue(is_null=True) for row in expected],
             ),
             TraceItemColumnValues(
                 attribute_name="sumIf(wing.count, wing.count > 2)",
                 results=[
                     AttributeValue(is_null=True)
-                    if wing_sum_gt2 is None
-                    else AttributeValue(val_double=wing_sum_gt2)
-                    for _, _, _, _, wing_sum_gt2, _ in expected
+                    if row[4] is None
+                    else AttributeValue(val_double=row[4])
+                    for row in expected
                 ],
             ),
             TraceItemColumnValues(
                 attribute_name="uniqIf(trace_id, bark.db exists)",
-                results=[
-                    AttributeValue(val_double=uniq_traces)
-                    for _, _, _, _, _, uniq_traces in expected
-                ],
+                results=[AttributeValue(val_double=row[5]) for row in expected],
+            ),
+            TraceItemColumnValues(
+                attribute_name="max(bark.db)",
+                results=[AttributeValue(val_double=row[6]) for row in expected],
+            ),
+            TraceItemColumnValues(
+                attribute_name="min(bark.db)",
+                results=[AttributeValue(val_double=row[7]) for row in expected],
             ),
         ]
         assert response.column_values == expected_columns
