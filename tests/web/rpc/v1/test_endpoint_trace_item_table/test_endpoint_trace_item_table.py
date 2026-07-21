@@ -4553,18 +4553,18 @@ def _limit_by_request(
     )
 
 
-def _project_id_column() -> Column:
-    return Column(
-        key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id"),
-        label="project_id",
-    )
+_LimitByColumn = TraceItemTableRequest.LimitBy.LimitByColumn
+
+
+def _project_id_limit_by_column() -> "TraceItemTableRequest.LimitBy.LimitByColumn":
+    return _LimitByColumn(key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id"))
 
 
 def test_build_query_with_limit_by() -> None:
-    """A `limit_by` on a column produces a `LIMIT n BY ...` clause using that column's
-    expression."""
+    """A `limit_by` on a column key produces a `LIMIT n BY ...` clause using that
+    column's expression."""
     request = _limit_by_request(
-        TraceItemTableRequest.LimitBy(columns=[_project_id_column()], limit=10)
+        TraceItemTableRequest.LimitBy(columns=[_project_id_limit_by_column()], limit=10)
     )
 
     wrapper = TraceItemTableRequestWrapper(request)
@@ -4584,11 +4584,11 @@ def test_build_query_with_limit_by() -> None:
     )
 
 
-def test_build_query_limit_by_alias_reference() -> None:
-    """An alias-only `limit_by` column (only `label` set) resolves to the expression
+def test_build_query_limit_by_label_reference() -> None:
+    """A `limit_by` referencing a selected column by label resolves to the expression
     selected under that label."""
     request = _limit_by_request(
-        TraceItemTableRequest.LimitBy(columns=[Column(label="project_id")], limit=10)
+        TraceItemTableRequest.LimitBy(columns=[_LimitByColumn(label="project_id")], limit=10)
     )
 
     wrapper = TraceItemTableRequestWrapper(request)
@@ -4628,10 +4628,7 @@ def test_build_query_limit_by_virtual_column_has_no_alias() -> None:
         ],
         limit_by=TraceItemTableRequest.LimitBy(
             columns=[
-                Column(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="project_name"),
-                    label="project_name",
-                )
+                _LimitByColumn(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="project_name"))
             ],
             limit=5,
         ),
@@ -4664,7 +4661,7 @@ def test_build_query_without_limit_by() -> None:
 def test_validate_limit_by_and_limit_mutually_exclusive() -> None:
     """A request cannot set both the top-level `limit` and `limit_by`."""
     message = _limit_by_request(
-        TraceItemTableRequest.LimitBy(columns=[_project_id_column()], limit=5), limit=10
+        TraceItemTableRequest.LimitBy(columns=[_project_id_limit_by_column()], limit=5), limit=10
     )
     message = _apply_labels_to_columns(message)
     with pytest.raises(BadSnubaRPCRequestException, match="both limit and limit_by"):
@@ -4675,7 +4672,7 @@ def test_validate_limit_by_rejected_with_flextime() -> None:
     """limit_by cannot be combined with flextime routing (flextime paginates on the
     top-level limit, which limit_by forces to 0)."""
     message = _limit_by_request(
-        TraceItemTableRequest.LimitBy(columns=[_project_id_column()], limit=5),
+        TraceItemTableRequest.LimitBy(columns=[_project_id_limit_by_column()], limit=5),
         downsampled_storage_config=DownsampledStorageConfig(
             mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
         ),
@@ -4685,40 +4682,23 @@ def test_validate_limit_by_rejected_with_flextime() -> None:
         _validate_limit_by(message)
 
 
-def test_validate_limit_by_rejects_aggregation() -> None:
-    """limit_by cannot be an aggregation (ClickHouse cannot LIMIT BY an aggregate)."""
-    message = _limit_by_request(
+def test_validate_limit_by_rejects_array_key() -> None:
+    """limit_by cannot be an array attribute (arrays expand into typed sub-columns and
+    can't be grouped on), whether passed as a key or referenced by label."""
+    array_column = Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags"), label="tags")
+
+    direct = _limit_by_request(
         TraceItemTableRequest.LimitBy(
-            columns=[
-                Column(
-                    aggregation=AttributeAggregation(
-                        aggregate=Function.FUNCTION_COUNT,
-                        key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id"),
-                        label="count()",
-                    ),
-                    label="count()",
-                )
-            ],
+            columns=[_LimitByColumn(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags"))],
             limit=5,
         )
     )
-    message = _apply_labels_to_columns(message)
-    with pytest.raises(BadSnubaRPCRequestException, match="does not support aggregations"):
-        _validate_limit_by(message)
-
-
-def test_validate_limit_by_rejects_array_attribute() -> None:
-    """limit_by cannot be an array attribute (arrays expand into typed sub-columns and
-    can't be grouped on), whether passed directly or as an alias reference."""
-    array_column = Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags"), label="tags")
-    direct = _limit_by_request(TraceItemTableRequest.LimitBy(columns=[array_column], limit=5))
-    direct.columns.append(array_column)
     direct = _apply_labels_to_columns(direct)
     with pytest.raises(BadSnubaRPCRequestException, match="array attributes"):
         _validate_limit_by(direct)
 
     alias = _limit_by_request(
-        TraceItemTableRequest.LimitBy(columns=[Column(label="tags")], limit=5)
+        TraceItemTableRequest.LimitBy(columns=[_LimitByColumn(label="tags")], limit=5)
     )
     alias.columns.append(array_column)
     alias = _apply_labels_to_columns(alias)
@@ -4726,31 +4706,41 @@ def test_validate_limit_by_rejects_array_attribute() -> None:
         _validate_limit_by(alias)
 
 
-def test_validate_limit_by_alias_to_aggregate_rejected() -> None:
-    """An alias-only `limit_by` pointing at a selected aggregate is rejected (the
-    aggregate lives on the resolved column, not the alias)."""
+def test_validate_limit_by_label_to_aggregate_rejected() -> None:
+    """A `limit_by` label pointing at a selected aggregate is rejected (the aggregate
+    lives on the resolved column, and ClickHouse cannot LIMIT BY it)."""
     message = _limit_by_request(
-        TraceItemTableRequest.LimitBy(columns=[Column(label="count()")], limit=5)
+        TraceItemTableRequest.LimitBy(columns=[_LimitByColumn(label="count()")], limit=5)
     )
     message = _apply_labels_to_columns(message)
     with pytest.raises(BadSnubaRPCRequestException, match="does not support aggregations"):
         _validate_limit_by(message)
 
 
-def test_validate_limit_by_alias_not_selected() -> None:
-    """An alias-only `limit_by` column must reference a selected column."""
+def test_validate_limit_by_label_not_selected() -> None:
+    """A `limit_by` label must reference a selected column."""
     message = _limit_by_request(
-        TraceItemTableRequest.LimitBy(columns=[Column(label="not_a_column")], limit=5)
+        TraceItemTableRequest.LimitBy(columns=[_LimitByColumn(label="not_a_column")], limit=5)
     )
     message = _apply_labels_to_columns(message)
     with pytest.raises(BadSnubaRPCRequestException, match="is not a selected column"):
         _validate_limit_by(message)
 
 
+def test_validate_limit_by_empty_column() -> None:
+    """A `limit_by` column must set either a key or a label."""
+    message = _limit_by_request(
+        TraceItemTableRequest.LimitBy(columns=[_LimitByColumn()], limit=5)
+    )
+    message = _apply_labels_to_columns(message)
+    with pytest.raises(BadSnubaRPCRequestException, match="must specify a key or a label"):
+        _validate_limit_by(message)
+
+
 def test_validate_limit_by_zero_limit() -> None:
     """A `limit_by` with columns set but a non-positive limit is rejected."""
     message = _limit_by_request(
-        TraceItemTableRequest.LimitBy(columns=[_project_id_column()], limit=0)
+        TraceItemTableRequest.LimitBy(columns=[_project_id_limit_by_column()], limit=0)
     )
     message = _apply_labels_to_columns(message)
     with pytest.raises(BadSnubaRPCRequestException, match="greater than 0"):

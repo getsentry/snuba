@@ -132,37 +132,41 @@ def _validate_limit_by(in_msg: TraceItemTableRequest) -> None:
             f"limit_by.limit must be greater than 0, got {limit_by.limit}"
         )
 
-    # A limit_by column may be a column, an alias of a selected column (a Column
-    # with only `label` set), or a non-aggregate transformation. Resolve alias-only
-    # references to the selected column first, then apply the checks to the resolved
-    # column so an alias pointing at an aggregate/array is caught too.
+    # A limit_by column is either a column key or the label of a selected column
+    # (which may be a transformation). The proto cannot express an aggregation
+    # directly, but a label can still point at a selected aggregate, so resolve
+    # labels and reject aggregate/array targets.
     selected_by_label = {c.label: c for c in in_msg.columns if c.label}
-    for column in limit_by.columns:
-        if column.WhichOneof("column") is None:
-            # alias-only reference: it must name a selected column so ClickHouse
-            # can resolve it.
-            referenced = selected_by_label.get(column.label)
+    for limit_by_column in limit_by.columns:
+        which = limit_by_column.WhichOneof("column")
+        if which == "key":
+            key = limit_by_column.key
+        elif which == "label":
+            referenced = selected_by_label.get(limit_by_column.label)
             if referenced is None:
                 raise BadSnubaRPCRequestException(
-                    f"limit_by column '{column.label}' is not a selected column"
+                    f"limit_by column '{limit_by_column.label}' is not a selected column"
                 )
+            # a label can reference a selected aggregate; ClickHouse cannot LIMIT BY
+            # one (including aggregates nested in a formula), so reject it.
+            wrapper = ColumnWrapper(referenced)
+            wrapper.accept(AggregationToConditionalAggregationVisitor())
+            contains_aggregate_visitor = ContainsAggregateVisitor()
+            wrapper.accept(contains_aggregate_visitor)
+            if contains_aggregate_visitor.contains_aggregate:
+                raise BadSnubaRPCRequestException("limit_by does not support aggregations")
+            if not referenced.HasField("key"):
+                # a non-key selected column (e.g. formula) has no array concern
+                continue
+            key = referenced.key
         else:
-            referenced = column
-
-        # ClickHouse cannot LIMIT BY an aggregate, so reject those (including
-        # aggregates nested in a formula).
-        wrapper = ColumnWrapper(referenced)
-        wrapper.accept(AggregationToConditionalAggregationVisitor())
-        contains_aggregate_visitor = ContainsAggregateVisitor()
-        wrapper.accept(contains_aggregate_visitor)
-        if contains_aggregate_visitor.contains_aggregate:
-            raise BadSnubaRPCRequestException("limit_by does not support aggregations")
+            raise BadSnubaRPCRequestException("limit_by column must specify a key or a label")
 
         # array attributes expand into typed sub-columns and cannot be grouped on,
         # same as order_by / group_by.
-        if referenced.HasField("key") and referenced.key.type in ARRAY_TYPES:
+        if key.type in ARRAY_TYPES:
             raise BadSnubaRPCRequestException(
-                f"limit_by is not supported on array attributes: {referenced.key.name}"
+                f"limit_by is not supported on array attributes: {key.name}"
             )
 
 

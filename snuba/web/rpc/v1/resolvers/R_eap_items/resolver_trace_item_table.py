@@ -376,15 +376,13 @@ def _strip_aliases(expression: Expression) -> Expression:
 def _convert_limit_by(
     limit_by: TraceItemTableRequest.LimitBy,
     selected_columns: Sequence[SelectedExpression],
-    request_meta: RequestMeta,
 ) -> LimitBy | None:
     """Translates the request's ``limit_by`` into a ``LimitBy`` (ClickHouse ``LIMIT n BY``).
 
-    Each column may be a column/transformation, converted the same way as a SELECT
-    column, or an alias-only reference (a Column with just ``label`` set) that resolves
-    to the expression selected under that label. Returns ``None`` when no ``limit_by``
-    is set. Aggregations and array attributes are rejected upstream in
-    ``_validate_limit_by``.
+    Each entry is either a column key, converted to its attribute expression, or the
+    label of a selected column, resolved to the expression selected under that label.
+    Returns ``None`` when no ``limit_by`` is set. Aggregations and array attributes are
+    rejected upstream in ``_validate_limit_by``.
 
     The alias is stripped from each expression so the clause emits the bare expression
     (``LIMIT n BY expr``); keeping the alias would emit ``expr AS alias``, which is
@@ -394,15 +392,18 @@ def _convert_limit_by(
         return None
     label_to_expression = {c.name: c.expression for c in selected_columns}
     columns: list[Expression] = []
-    for column in limit_by.columns:
-        if column.WhichOneof("column") is None:
-            expression = label_to_expression.get(column.label)
+    for limit_by_column in limit_by.columns:
+        which = limit_by_column.WhichOneof("column")
+        if which == "key":
+            expression = attribute_key_to_expression(limit_by_column.key)
+        elif which == "label":
+            expression = label_to_expression.get(limit_by_column.label)
             if expression is None:
                 raise BadSnubaRPCRequestException(
-                    f"limit_by column '{column.label}' is not a selected column"
+                    f"limit_by column '{limit_by_column.label}' is not a selected column"
                 )
         else:
-            expression = _column_to_expression(column, request_meta)
+            raise BadSnubaRPCRequestException("limit_by column must specify a key or a label")
         columns.append(_strip_aliases(expression))
     return LimitBy(limit=limit_by.limit, columns=columns)
 
@@ -716,7 +717,7 @@ def build_query(
             request.order_by,
             request.meta,
         ),
-        limitby=_convert_limit_by(request.limit_by, selected_columns, request.meta),
+        limitby=_convert_limit_by(request.limit_by, selected_columns),
         groupby=groupby,
         # Only support offset page tokens for now
         offset=_get_offset_from_page_token(request.page_token),
