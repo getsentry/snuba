@@ -3397,6 +3397,7 @@ dependencies = [
  "md5",
  "metrics",
  "metrics-exporter-dogstatsd",
+ "metrics-util",
  "once_cell",
  "parking_lot",
  "procspawn",

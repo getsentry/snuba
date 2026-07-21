@@ -76,6 +76,7 @@ bytes = "1.11"
 
 
 [dev-dependencies]
+metrics-util = "0.20"
 scopeguard = "1.2.0"
 criterion = "0.5.1"
 httpmock = "0.7.0"
