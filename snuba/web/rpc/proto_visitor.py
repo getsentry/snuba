@@ -247,13 +247,8 @@ class ContainsAggregateVisitor(ProtoVisitor):
     def visit_AggregationComparisonFilterWrapper(
         self, aggregation_comparison_filter_wrapper: AggregationComparisonFilterWrapper
     ) -> None:
-        # An aggregation_filter becomes a HAVING clause, which makes the whole query an
-        # aggregating query even when no aggregate appears in the SELECT columns. The
-        # aggregate lives in the filter's conditional_aggregation (or in a formula, whose
-        # operands are traversed as ColumnWrappers and picked up by visit_ColumnWrapper),
-        # so flag it here. Without this, a request with an aggregation_filter but no
-        # aggregate columns and no group_by would pass validation and emit an invalid
-        # HAVING-without-GROUP-BY query that ClickHouse rejects (Code 215).
+        # An aggregation_filter becomes a HAVING clause, so an aggregate here makes the
+        # query aggregating even when no aggregate appears in the SELECT columns.
         if aggregation_comparison_filter_wrapper.underlying_proto.HasField(
             "conditional_aggregation"
         ):

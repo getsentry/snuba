@@ -1462,12 +1462,8 @@ class TestTraceItemTable(BaseApiTest):
     def test_aggregation_filter_without_aggregation_or_group_by(
         self, setup_teardown: Any
     ) -> None:
-        """An aggregation_filter becomes a HAVING clause, turning the query into an
-        aggregating query. With no aggregate in the SELECT columns and no group_by,
-        the non-aggregated columns are neither grouped nor aggregated, which ClickHouse
-        rejects (Code 215). Validation must reject it up front with a clear error rather
-        than letting the malformed query reach the database. Regression test for SNUBA-BNG.
-        """
+        """An aggregation_filter (HAVING) with no aggregate column and no group_by must be
+        rejected in validation rather than reaching ClickHouse (Code 215). SNUBA-BNG."""
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
