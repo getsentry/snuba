@@ -1,3 +1,4 @@
+import functools
 import random
 import re
 from datetime import datetime, timedelta
@@ -4205,7 +4206,8 @@ class TestArrayOperationsRejected:
                     key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags"),
                     label="count(tags)",
                 ),
-                attribute_key_to_expression,
+                functools.partial(attribute_key_to_expression, organization_id=1),
+                organization_id=1,
             )
 
 

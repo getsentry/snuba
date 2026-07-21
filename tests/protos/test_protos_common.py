@@ -20,11 +20,13 @@ class TestAttributeKeyToExpression:
                 type=AttributeKey.TYPE_STRING,
                 name="sentry.trace_id",
             ),
+            1,
         ) == f.cast(column("trace_id"), "String", alias="sentry.trace_id_TYPE_STRING")
 
     def test_attributes(self) -> None:
         assert attribute_key_to_expression(
             AttributeKey(type=AttributeKey.TYPE_STRING, name="derp"),
+            1,
         ) == SubscriptableReference(
             alias="derp_TYPE_STRING",
             column=column("attributes_string"),
@@ -33,6 +35,7 @@ class TestAttributeKeyToExpression:
 
         assert attribute_key_to_expression(
             AttributeKey(type=AttributeKey.TYPE_FLOAT, name="derp"),
+            1,
         ) == SubscriptableReference(
             alias="derp_TYPE_FLOAT",
             column=column("attributes_float"),
@@ -41,6 +44,7 @@ class TestAttributeKeyToExpression:
 
         assert attribute_key_to_expression(
             AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="derp"),
+            1,
         ) == SubscriptableReference(
             alias="derp_TYPE_DOUBLE",
             column=column("attributes_float"),
@@ -49,6 +53,7 @@ class TestAttributeKeyToExpression:
 
         assert attribute_key_to_expression(
             AttributeKey(type=AttributeKey.TYPE_INT, name="derp"),
+            1,
         ) == f.cast(
             SubscriptableReference(
                 alias=None,
@@ -61,6 +66,7 @@ class TestAttributeKeyToExpression:
 
         assert attribute_key_to_expression(
             AttributeKey(type=AttributeKey.TYPE_BOOLEAN, name="derp"),
+            1,
         ) == f.cast(
             arrayElement(
                 None,
@@ -88,6 +94,7 @@ class TestAttributeKeyToExpression:
                 type=AttributeKey.TYPE_STRING,
                 name=new_attribute,
             ),
+            1,
         ) == f.coalesce(
             SubscriptableReference(
                 alias=None,
@@ -102,6 +109,7 @@ class TestAttributeKeyToExpression:
         for name in ATTRIBUTES_TO_COALESCE:
             result = attribute_key_to_expression(
                 AttributeKey(type=AttributeKey.TYPE_STRING, name=name),
+                1,
             )
             assert isinstance(result, FunctionCall)
             assert result.function_name == "coalesce"
@@ -150,13 +158,13 @@ class TestAttributeKeyToExpression:
     def test_unspecified_type_raises_exception(self) -> None:
         with pytest.raises(MalformedAttributeException) as exc_info:
             attribute_key_to_expression(
-                AttributeKey(type=AttributeKey.TYPE_UNSPECIFIED, name="test_attr")
+                AttributeKey(type=AttributeKey.TYPE_UNSPECIFIED, name="test_attr"), 1
             )
         assert "must have a type specified" in str(exc_info.value)
 
     def test_invalid_type_for_normalized_column_raises_exception(self) -> None:
         with pytest.raises(MalformedAttributeException) as exc_info:
             attribute_key_to_expression(
-                AttributeKey(type=AttributeKey.TYPE_BOOLEAN, name="sentry.trace_id")
+                AttributeKey(type=AttributeKey.TYPE_BOOLEAN, name="sentry.trace_id"), 1
             )
         assert "must be one of" in str(exc_info.value)

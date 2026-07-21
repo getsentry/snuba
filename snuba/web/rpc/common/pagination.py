@@ -180,7 +180,7 @@ class FlexibleTimeWindowPageWithFilters:
                         for selected_column in in_msg.columns:
                             if selected_column.label == order_by_clause.column.label:
                                 attribute_expression = attribute_key_to_expression(
-                                    selected_column.key
+                                    selected_column.key, in_msg.meta.organization_id
                                 )
                                 break
                         if attribute_expression is None:

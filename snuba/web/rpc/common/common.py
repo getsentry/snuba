@@ -18,12 +18,12 @@ from snuba.protos.common import (
     ARRAY_TYPES,
     ATTRIBUTES_TO_COALESCE,
     EMPTY_STRING_DEFAULT_COLUMNS,
-    NORMALIZED_COLUMNS_EAP_ITEMS,
     PROTO_TYPE_TO_ATTRIBUTE_COLUMN,
     PROTO_TYPE_TO_CLICKHOUSE_TYPE,
     TYPED_ARRAY_MAP_COLUMNS,
     MalformedAttributeException,
     array_element_column,
+    get_normalized_columns_eap_items,
     sentry_column,
     type_array_to_membership_array_expression_from_typed_columns,
     type_array_typed_column_native_array,
@@ -76,18 +76,19 @@ def _in_or_has(value: Expression, array: Expression, *, as_has: bool) -> Functio
     return in_cond(value, array)
 
 
-def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
+def attribute_key_to_expression(attr_key: AttributeKey, organization_id: int) -> Expression:
     """Convert an AttributeKey proto to a Snuba Expression.
 
     This is a wrapper around the proto-layer function that converts
     MalformedAttributeException to BadSnubaRPCRequestException for
-    HTTP-aware code paths.
+    HTTP-aware code paths. ``organization_id`` selects the per-org normalized-column
+    set (see ``get_normalized_columns_eap_items``).
 
     Raises:
         BadSnubaRPCRequestException: If the attribute key is invalid or malformed.
     """
     try:
-        return _attribute_key_to_expression(attr_key)
+        return _attribute_key_to_expression(attr_key, organization_id)
     except MalformedAttributeException as e:
         raise BadSnubaRPCRequestException(str(e)) from e
 
@@ -336,13 +337,14 @@ def add_existence_check_to_subscriptable_references(query: Query) -> None:
     query.transform_expressions(transform)
 
 
-def _is_map_backed_key(k: AttributeKey) -> bool:
+def _is_map_backed_key(k: AttributeKey, organization_id: int) -> bool:
     """True when ``k`` is a custom attribute stored in an ``attributes_*`` map column, so
     its filters take the ``(value, exists)`` path (see ``_map_backed_operands``). Excludes
-    ``attr_key`` and normalized columns, which are real columns, not map lookups."""
+    ``attr_key`` and normalized columns, which are real columns, not map lookups. The
+    normalized-column set is per-org (see ``get_normalized_columns_eap_items``)."""
     return (
         k.name != "attr_key"
-        and k.name not in NORMALIZED_COLUMNS_EAP_ITEMS
+        and k.name not in get_normalized_columns_eap_items(organization_id)
         and k.type in PROTO_TYPE_TO_ATTRIBUTE_COLUMN
     )
 
@@ -806,6 +808,8 @@ def trace_item_filters_to_expression(
     item_filter: TraceItemFilter,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
     membership_as_has: bool = False,
+    *,
+    organization_id: int,
 ) -> Expression:
     """
     Trace Item Filters are things like (span.id=12345 AND start_timestamp >= "june 4th, 2024")
@@ -832,6 +836,7 @@ def trace_item_filters_to_expression(
                 filters[0],
                 attribute_key_to_expression,
                 membership_as_has,
+                organization_id=organization_id,
             )
         return and_cond(
             *(
@@ -839,6 +844,7 @@ def trace_item_filters_to_expression(
                     x,
                     attribute_key_to_expression,
                     membership_as_has,
+                    organization_id=organization_id,
                 )
                 for x in filters
             )
@@ -853,6 +859,7 @@ def trace_item_filters_to_expression(
                 filters[0],
                 attribute_key_to_expression,
                 membership_as_has,
+                organization_id=organization_id,
             )
         return or_cond(
             *(
@@ -860,6 +867,7 @@ def trace_item_filters_to_expression(
                     x,
                     attribute_key_to_expression,
                     membership_as_has,
+                    organization_id=organization_id,
                 )
                 for x in filters
             )
@@ -875,6 +883,7 @@ def trace_item_filters_to_expression(
                     filters[0],
                     attribute_key_to_expression,
                     membership_as_has,
+                    organization_id=organization_id,
                 )
             )
         return not_cond(
@@ -884,6 +893,7 @@ def trace_item_filters_to_expression(
                         x,
                         attribute_key_to_expression,
                         membership_as_has,
+                        organization_id=organization_id,
                     )
                     for x in filters
                 )
@@ -965,7 +975,7 @@ def trace_item_filters_to_expression(
                 return _typed_array_includes_scalar_expression(
                     k, v, item_filter.comparison_filter.ignore_case
                 )
-            if _is_map_backed_key(k):
+            if _is_map_backed_key(k, organization_id):
                 # Map-backed: NULL-free (exists, value) form (see _map_backed_operands).
                 value, exists = _map_backed_operands(k)
                 if v_is_null:  # `attr = null` <=> key absent
@@ -997,7 +1007,7 @@ def trace_item_filters_to_expression(
                         k, v, item_filter.comparison_filter.ignore_case
                     )
                 )
-            if _is_map_backed_key(k):
+            if _is_map_backed_key(k, organization_id):
                 # Negation of OP_EQUALS; an absent key is "not equal".
                 value, exists = _map_backed_operands(k)
                 if v_is_null:  # `attr != null` <=> key present
@@ -1029,7 +1039,7 @@ def trace_item_filters_to_expression(
                     "the LIKE comparison is only supported on string and array keys"
                 )
             comparison_function = f.ilike if item_filter.comparison_filter.ignore_case else f.like
-            if _is_map_backed_key(k):
+            if _is_map_backed_key(k, organization_id):
                 value, exists = _map_backed_operands(k)
                 return and_cond(exists, comparison_function(value, v_expression))
             return comparison_function(k_expression, v_expression)
@@ -1044,7 +1054,7 @@ def trace_item_filters_to_expression(
                 raise BadSnubaRPCRequestException(
                     "the NOT LIKE comparison is only supported on string and array keys"
                 )
-            if _is_map_backed_key(k):
+            if _is_map_backed_key(k, organization_id):
                 # Negation of OP_LIKE; an absent key is "not like".
                 like_fn = f.ilike if item_filter.comparison_filter.ignore_case else f.like
                 value, exists = _map_backed_operands(k)
@@ -1082,7 +1092,7 @@ def trace_item_filters_to_expression(
             # note: v_expression must be an array
             # we redefine the way in works for nulls
             # now null in ['hi', null] is true
-            if _is_map_backed_key(k):
+            if _is_map_backed_key(k, organization_id):
                 # Map-backed: keep the existence if(...) out of in() (see helper).
                 return _analyzer_safe_in_expression(
                     k,
@@ -1117,7 +1127,7 @@ def trace_item_filters_to_expression(
             # note: v_expression must be an array
             # we redefine the way not in works for nulls
             # now null not in ['hi'] is true
-            if _is_map_backed_key(k):
+            if _is_map_backed_key(k, organization_id):
                 # Map-backed: keep the existence if(...) out of in() (see helper).
                 return _analyzer_safe_in_expression(
                     k,

@@ -57,7 +57,7 @@ _ATTRIBUTE_TYPE_TO_COLUMN: dict["AttributeKey.Type.ValueType", str] = {
 
 
 def _build_conditions(request: TraceItemAttributeValuesRequest) -> Expression:
-    attribute_key = attribute_key_to_expression(request.key)
+    attribute_key = attribute_key_to_expression(request.key, request.meta.organization_id)
 
     try:
         attributes_column = _ATTRIBUTE_TYPE_TO_COLUMN[request.key.type]
@@ -125,7 +125,7 @@ def _build_query(
         schema=get_entity(entity_key).get_data_model(),
         sample=None,
     )
-    attr_value = attribute_key_to_expression(request.key)
+    attr_value = attribute_key_to_expression(request.key, request.meta.organization_id)
     assert attr_value.alias
     inner_query = Query(
         from_clause=entity,

@@ -185,7 +185,8 @@ def _build_query(
             name="id",
             expression=(
                 attribute_key_to_expression(
-                    AttributeKey(name="sentry.item_id", type=AttributeKey.Type.TYPE_STRING)
+                    AttributeKey(name="sentry.item_id", type=AttributeKey.Type.TYPE_STRING),
+                    request.meta.organization_id,
                 )
             ),
         ),
@@ -199,7 +200,8 @@ def _build_query(
                                 item.item_type, "sentry.timestamp"
                             ),
                             type=AttributeKey.Type.TYPE_DOUBLE,
-                        )
+                        ),
+                        request.meta.organization_id,
                     )
                 ),
                 "Float64",
@@ -228,7 +230,9 @@ def _build_query(
                 selected_columns.append(
                     SelectedExpression(
                         name=attribute_key.name,
-                        expression=attribute_key_to_expression(attribute_key),
+                        expression=attribute_key_to_expression(
+                            attribute_key, request.meta.organization_id
+                        ),
                     )
                 )
     else:

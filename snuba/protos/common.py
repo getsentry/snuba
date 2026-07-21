@@ -14,6 +14,7 @@ from snuba.query.expressions import (
     Lambda,
     SubscriptableReference,
 )
+from snuba.state.sentry_options import get_option
 
 
 class MalformedAttributeException(Exception):
@@ -35,7 +36,7 @@ def sentry_column(column_name: str) -> str:
     return f"sentry.{column_name}"
 
 
-NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, NormalizedColumn]] = {
+_NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, NormalizedColumn]] = {
     sentry_column("organization_id"): NormalizedColumn(
         "organization_id", [AttributeKey.Type.TYPE_INT]
     ),
@@ -58,11 +59,44 @@ NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, NormalizedColumn]] = {
     sentry_column("sampling_factor"): NormalizedColumn(
         "sampling_factor", [AttributeKey.Type.TYPE_DOUBLE]
     ),
+}
+
+# These columns are newly normalized: their dedicated columns are populated going forward,
+# but historical rows have NOT been backfilled. Reading them as real columns is gated per
+# organization, so it's opt-in for orgs that are fine with the missing historical data.
+# For everyone else they fall through to the attributes_* map path (which does cover the
+# historical rows).
+_UNBACKFILLED_NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, NormalizedColumn]] = {
     sentry_column("session_id"): NormalizedColumn("session_id", [AttributeKey.Type.TYPE_STRING]),
     "gen_ai.conversation.id": NormalizedColumn(
         "ai_conversation_id", [AttributeKey.Type.TYPE_STRING]
     ),
 }
+
+# Comma-separated org-id allowlist (sentry-option). Orgs in this list read the not-yet-
+# backfilled normalized columns above as real columns; everyone else falls through to the
+# attributes_* map path. Unlike org_ids_delete_allowlist, empty (the default) means NO orgs
+# are opted in -- this feature is off until an org is explicitly added.
+UNBACKFILLED_NORMALIZED_COLUMNS_ORG_ALLOWLIST_OPTION = (
+    "eap_items_unbackfilled_normalized_columns_org_allowlist"
+)
+
+
+def _org_allowed_unbackfilled_columns(organization_id: int) -> bool:
+    allowlist = get_option(UNBACKFILLED_NORMALIZED_COLUMNS_ORG_ALLOWLIST_OPTION, "")
+    if not allowlist:
+        return False
+    return organization_id in {int(org_id) for org_id in allowlist.split(",")}
+
+
+def get_normalized_columns_eap_items(organization_id: int) -> Mapping[str, NormalizedColumn]:
+    """The normalized EAP-item columns. Includes the not-yet-backfilled columns only for
+    organizations in the ``eap_items_unbackfilled_normalized_columns_org_allowlist``
+    sentry-option."""
+    if _org_allowed_unbackfilled_columns(organization_id):
+        return {**_NORMALIZED_COLUMNS_EAP_ITEMS, **_UNBACKFILLED_NORMALIZED_COLUMNS_EAP_ITEMS}
+    return _NORMALIZED_COLUMNS_EAP_ITEMS
+
 
 PROTO_TYPE_TO_CLICKHOUSE_TYPE: Final[Mapping[AttributeKey.Type.ValueType, str]] = {
     AttributeKey.Type.TYPE_INT: "Int64",
@@ -305,8 +339,11 @@ def type_array_typed_element_column_native_array(attr_key: AttributeKey) -> Func
     return arrayElement(alias, column(col), literal(attr_key.name))
 
 
-def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
+def attribute_key_to_expression(attr_key: AttributeKey, organization_id: int) -> Expression:
     """Convert an AttributeKey proto to a Snuba Expression.
+
+    ``organization_id`` selects the per-org normalized-column set (see
+    ``get_normalized_columns_eap_items``).
 
     Raises:
         MalformedAttributeException: If the attribute key is invalid or malformed.
@@ -321,8 +358,9 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
     if attr_key.name == "attr_key":
         return column("attr_key")
 
-    if attr_key.name in NORMALIZED_COLUMNS_EAP_ITEMS:
-        normalized_column = NORMALIZED_COLUMNS_EAP_ITEMS[attr_key.name]
+    normalized_columns = get_normalized_columns_eap_items(organization_id)
+    if attr_key.name in normalized_columns:
+        normalized_column = normalized_columns[attr_key.name]
         if attr_key.type not in normalized_column.types:
             formatted_attribute_types = ", ".join(
                 map(

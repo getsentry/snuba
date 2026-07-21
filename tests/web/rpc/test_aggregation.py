@@ -1,3 +1,4 @@
+import functools
 from typing import Any
 
 import pytest
@@ -106,7 +107,8 @@ def test_get_confidence_interval_column_for_non_extrapolatable_column() -> None:
                 label="min(test)",
                 extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
             ),
-            attribute_key_to_expression,
+            functools.partial(attribute_key_to_expression, organization_id=1),
+            organization_id=1,
         )
         is None
     )
@@ -274,7 +276,7 @@ def test_attribute_key_to_expression_typed_array() -> None:
 
     # An element-typed array key reads its single typed column natively.
     attr_key = AttributeKey(type=AttributeKey.TYPE_ARRAY_INT, name="user_ids")
-    expr = attribute_key_to_expression(attr_key)
+    expr = attribute_key_to_expression(attr_key, 1)
     assert isinstance(expr, FunctionCall)
     assert expr.function_name == "arrayElement"
     assert expr.alias == "user_ids_TYPE_ARRAY_INT"
@@ -287,7 +289,7 @@ def test_attribute_key_to_expression_deprecated_type_array() -> None:
     # The deprecated untyped TYPE_ARRAY concatenates all four typed columns (normalized to
     # Array(String)); no read of the legacy attributes_array JSON column.
     attr_key = AttributeKey(type=AttributeKey.TYPE_ARRAY, name="user_ids")
-    expr = attribute_key_to_expression(attr_key)
+    expr = attribute_key_to_expression(attr_key, 1)
     assert isinstance(expr, FunctionCall)
     assert expr.function_name == "arrayConcat"
     columns = _collect_column_names(expr)
@@ -345,7 +347,11 @@ def test_aggregation_to_expression_uniq_typed_array() -> None:
         label="uniq_users",
         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
     )
-    expr = aggregation_to_expression(agg, attribute_key_to_expression)
+    expr = aggregation_to_expression(
+        agg,
+        functools.partial(attribute_key_to_expression, organization_id=1),
+        organization_id=1,
+    )
     assert isinstance(expr, FunctionCall)
     assert expr.function_name == "round"
     assert expr.alias == "uniq_users"
@@ -367,7 +373,11 @@ def test_aggregation_to_expression_uniq_deprecated_type_array() -> None:
         label="uniq_users",
         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
     )
-    expr = aggregation_to_expression(agg, attribute_key_to_expression)
+    expr = aggregation_to_expression(
+        agg,
+        functools.partial(attribute_key_to_expression, organization_id=1),
+        organization_id=1,
+    )
     assert isinstance(expr, FunctionCall)
     inner = expr.parameters[0]
     assert isinstance(inner, FunctionCall)
@@ -386,7 +396,11 @@ def test_aggregation_to_expression_sum_type_array_raises() -> None:
         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
     )
     with pytest.raises(BadSnubaRPCRequestException, match="not supported for array attribute"):
-        aggregation_to_expression(agg, attribute_key_to_expression)
+        aggregation_to_expression(
+            agg,
+            functools.partial(attribute_key_to_expression, organization_id=1),
+            organization_id=1,
+        )
 
 
 def test_conditional_aggregation_uses_has_for_in_sets() -> None:
@@ -414,7 +428,11 @@ def test_conditional_aggregation_uses_has_for_in_sets() -> None:
         ),
     )
 
-    expr = aggregation_to_expression(agg, attribute_key_to_expression)
+    expr = aggregation_to_expression(
+        agg,
+        functools.partial(attribute_key_to_expression, organization_id=1),
+        organization_id=1,
+    )
 
     # No in() over a constant array may survive (it would reintroduce the __set_* id).
     in_over_arrays = [
@@ -464,7 +482,13 @@ def test_conditional_aggregation_array_filter_uses_typed_columns() -> None:
         ),
     )
 
-    cols = _aggregation_column_names(aggregation_to_expression(agg, attribute_key_to_expression))
+    cols = _aggregation_column_names(
+        aggregation_to_expression(
+            agg,
+            functools.partial(attribute_key_to_expression, organization_id=1),
+            organization_id=1,
+        )
+    )
     # A LIKE pattern on a string array reads just the typed string array column — not the
     # other typed columns nor the legacy JSON column.
     assert "attributes_array_string" in cols
