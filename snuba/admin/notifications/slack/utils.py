@@ -47,7 +47,7 @@ def build_migration_run_text(data: Any, action: AuditLogAction) -> str | None:
 def build_context(
     user: str, timestamp: str, action: AuditLogAction
 ) -> dict[str, str | list[dict[str, str]]]:
-    url = f"{settings.ADMIN_URL}/#auditlog"
+    url = settings.ADMIN_URL
     environ = os.environ.get("SENTRY_ENVIRONMENT") or "unknown environment"
     return {
         "type": "context",
