@@ -2810,6 +2810,16 @@ class TestTraceItemTable(BaseApiTest):
                         "extrapolationMode": "EXTRAPOLATION_MODE_NONE",
                     }
                 },
+                # any(server_name): an arbitrary non-null value from the group. Deterministic
+                # here only because every span shares the same default server_name.
+                {
+                    "aggregation": {
+                        "aggregate": "FUNCTION_ANY",
+                        "key": {"type": "TYPE_STRING", "name": "server_name"},
+                        "label": "any(server_name)",
+                        "extrapolationMode": "EXTRAPOLATION_MODE_NONE",
+                    }
+                },
             ],
             "groupBy": [{"type": "TYPE_STRING", "name": "sentry.trace_id"}],
             "aggregationFilter": {
@@ -2925,14 +2935,15 @@ class TestTraceItemTable(BaseApiTest):
         # grouping is by trace_id, so the distinct trace_id count is 1 for each group.
         # max(bark.db) / min(bark.db): each trace has exactly one bark.db span, so max == min:
         # trace_1=100 (hyena), trace_2=20 (cat), trace_3=100 (dog).
+        # any(server_name): every span carries the same default server_name -> SERVER_NAME.
         # Groups ordered by trace_id. Tuple fields:
         # (trace_id, animal_count, cool_count, wing_sum_bark, wing_sum_gt2, uniq_traces,
-        #  max_bark, min_bark)
+        #  max_bark, min_bark, any_server)
         expected = sorted(
             [
-                (trace_1, 2, 0, None, None, 1, 100, 100),
-                (trace_2, 2, 1, None, 5, 1, 20, 20),
-                (trace_3, 1, 0, None, None, 1, 100, 100),
+                (trace_1, 2, 0, None, None, 1, 100, 100, SERVER_NAME),
+                (trace_2, 2, 1, None, 5, 1, 20, 20, SERVER_NAME),
+                (trace_3, 1, 0, None, None, 1, 100, 100, SERVER_NAME),
             ]
         )
         expected_columns = [
@@ -2972,6 +2983,10 @@ class TestTraceItemTable(BaseApiTest):
             TraceItemColumnValues(
                 attribute_name="min(bark.db)",
                 results=[AttributeValue(val_double=row[7]) for row in expected],
+            ),
+            TraceItemColumnValues(
+                attribute_name="any(server_name)",
+                results=[AttributeValue(val_str=row[8]) for row in expected],
             ),
         ]
         assert response.column_values == expected_columns
