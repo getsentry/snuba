@@ -73,6 +73,11 @@ _UNBACKFILLED_NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, NormalizedColumn]
     ),
 }
 
+_ALL_NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, NormalizedColumn]] = {
+    **_NORMALIZED_COLUMNS_EAP_ITEMS,
+    **_UNBACKFILLED_NORMALIZED_COLUMNS_EAP_ITEMS,
+}
+
 # Comma-separated org-id allowlist (sentry-option). Orgs in this list read the not-yet-
 # backfilled normalized columns above as real columns; everyone else falls through to the
 # attributes_* map path. Unlike org_ids_delete_allowlist, empty (the default) means NO orgs
@@ -84,10 +89,8 @@ UNBACKFILLED_NORMALIZED_COLUMNS_ORG_ALLOWLIST_OPTION = (
 
 def _org_allowed_unbackfilled_columns(organization_id: int | None) -> bool:
     # No org in context (e.g. a delete that isn't scoped to one) => opted out.
-    if organization_id is None:
-        return False
     allowlist = get_option(UNBACKFILLED_NORMALIZED_COLUMNS_ORG_ALLOWLIST_OPTION, "")
-    if not allowlist:
+    if not allowlist or organization_id is None:
         return False
     return organization_id in {int(org_id) for org_id in allowlist.split(",")}
 
@@ -99,7 +102,7 @@ def get_normalized_columns_eap_items(
     organizations in the ``eap_items_unbackfilled_normalized_columns_org_allowlist``
     sentry-option. ``organization_id`` is ``None`` when there is no org in context."""
     if _org_allowed_unbackfilled_columns(organization_id):
-        return {**_NORMALIZED_COLUMNS_EAP_ITEMS, **_UNBACKFILLED_NORMALIZED_COLUMNS_EAP_ITEMS}
+        return _ALL_NORMALIZED_COLUMNS_EAP_ITEMS
     return _NORMALIZED_COLUMNS_EAP_ITEMS
 
 
