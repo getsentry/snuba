@@ -117,10 +117,10 @@ def write_eap_item(
     def convert_attribute_value(value: Any) -> AnyValue:
         if isinstance(value, str):
             return AnyValue(string_value=value)
-        if isinstance(value, int):
-            return AnyValue(int_value=value)
         if isinstance(value, bool):
             return AnyValue(bool_value=value)
+        if isinstance(value, int):
+            return AnyValue(int_value=value)
         if isinstance(value, float):
             return AnyValue(double_value=value)
         if isinstance(value, list):

@@ -2780,6 +2780,19 @@ class TestTraceItemTable(BaseApiTest):
                         },
                     }
                 },
+                # uniqIf(trace_id, bark.db exists): count of distinct trace_ids across spans
+                # in the group that have a bark.db attribute.
+                {
+                    "conditionalAggregation": {
+                        "aggregate": "FUNCTION_UNIQ",
+                        "key": {"type": "TYPE_STRING", "name": "sentry.trace_id"},
+                        "label": "uniqIf(trace_id, bark.db exists)",
+                        "extrapolationMode": "EXTRAPOLATION_MODE_NONE",
+                        "filter": {
+                            "existsFilter": {"key": {"type": "TYPE_DOUBLE", "name": "bark.db"}}
+                        },
+                    }
+                },
             ],
             "groupBy": [{"type": "TYPE_STRING", "name": "sentry.trace_id"}],
             "aggregationFilter": {
@@ -2891,30 +2904,33 @@ class TestTraceItemTable(BaseApiTest):
         # no wing.count, so this sum is null for every trace.
         # sumIf(wing.count, wing.count > 2): only emu (trace_2, wing.count=5) qualifies -> 5;
         # bird's wing.count is 2 (not > 2), so trace_1 and trace_3 are null.
-        # Groups ordered by trace_id.
-        # Tuples: (trace_id, animal_count, cool_count, wing_sum_bark, wing_sum_gt2)
+        # uniqIf(trace_id, bark.db exists): every trace has a bark.db span (hyena/cat/dog), and
+        # grouping is by trace_id, so the distinct trace_id count is 1 for each group.
+        # Groups ordered by trace_id. Tuples:
+        # (trace_id, animal_count, cool_count, wing_sum_bark, wing_sum_gt2, uniq_traces)
         expected = sorted(
             [
-                (trace_1, 2, 0, None, None),
-                (trace_2, 2, 1, None, 5),
-                (trace_3, 1, 0, None, None),
+                (trace_1, 2, 0, None, None, 1),
+                (trace_2, 2, 1, None, 5, 1),
+                (trace_3, 1, 0, None, None, 1),
             ]
         )
         expected_columns = [
             TraceItemColumnValues(
                 attribute_name="sentry.trace_id",
-                results=[AttributeValue(val_str=tid) for tid, _, _, _, _ in expected],
+                results=[AttributeValue(val_str=tid) for tid, _, _, _, _, _ in expected],
             ),
             TraceItemColumnValues(
                 attribute_name="count(animal_type)",
                 results=[
-                    AttributeValue(val_double=animal_count) for _, animal_count, _, _, _ in expected
+                    AttributeValue(val_double=animal_count)
+                    for _, animal_count, _, _, _, _ in expected
                 ],
             ),
             TraceItemColumnValues(
                 attribute_name="countIf(project_id, is_cool = True)",
                 results=[
-                    AttributeValue(val_double=cool_count) for _, _, cool_count, _, _ in expected
+                    AttributeValue(val_double=cool_count) for _, _, cool_count, _, _, _ in expected
                 ],
             ),
             TraceItemColumnValues(
@@ -2923,7 +2939,7 @@ class TestTraceItemTable(BaseApiTest):
                     AttributeValue(is_null=True)
                     if wing_sum is None
                     else AttributeValue(val_double=wing_sum)
-                    for _, _, _, wing_sum, _ in expected
+                    for _, _, _, wing_sum, _, _ in expected
                 ],
             ),
             TraceItemColumnValues(
@@ -2932,10 +2948,18 @@ class TestTraceItemTable(BaseApiTest):
                     AttributeValue(is_null=True)
                     if wing_sum_gt2 is None
                     else AttributeValue(val_double=wing_sum_gt2)
-                    for _, _, _, _, wing_sum_gt2 in expected
+                    for _, _, _, _, wing_sum_gt2, _ in expected
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="uniqIf(trace_id, bark.db exists)",
+                results=[
+                    AttributeValue(val_double=uniq_traces)
+                    for _, _, _, _, _, uniq_traces in expected
                 ],
             ),
         ]
+        breakpoint()
         assert response.column_values == expected_columns
 
     def test_agg_formula(self, setup_teardown: Any) -> None:
