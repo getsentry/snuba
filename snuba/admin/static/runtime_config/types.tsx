@@ -12,4 +12,4 @@ type ConfigChange = {
   afterType: ConfigType | null;
 };
 
-export { ConfigKey, ConfigValue, ConfigType, ConfigChange };
+export { ConfigValue, ConfigType, ConfigChange };
