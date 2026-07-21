@@ -1,0 +1,30 @@
+---
+source: src/processors/mod.rs
+description: "{\n  \"timestamp\": \"2026-06-30T22:15:30.123456Z\",\n  \"org_id\": 1,\n  \"project_id\": 42,\n  \"feature\": \"autofix\",\n  \"model\": \"claude-sonnet-4-6\",\n  \"region\": \"us-east5\",\n  \"call_type\": \"chat.completion\",\n  \"prompt_tokens\": 15000,\n  \"completion_tokens\": 2500,\n  \"cache_read_tokens\": 8000,\n  \"cache_write_tokens\": 3000,\n  \"total_cost_usd\": 0.0385,\n  \"input_cost_usd\": 0.015,\n  \"output_cost_usd\": 0.0125,\n  \"cache_read_cost_usd\": 0.004,\n  \"cache_write_cost_usd\": 0.003,\n  \"litellm_cost_usd\": 0.035,\n  \"is_long_context\": 0,\n  \"is_regional\": 1,\n  \"response_time_ms\": 4523.7,\n  \"litellm_call_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\"\n}\n"
+expression: snapshot_payload
+---
+[
+  {
+    "cache_read_cost_usd": 0.004,
+    "cache_read_tokens": 8000,
+    "cache_write_cost_usd": 0.003,
+    "cache_write_tokens": 3000,
+    "call_type": "chat.completion",
+    "completion_tokens": 2500,
+    "feature": "autofix",
+    "input_cost_usd": 0.015,
+    "is_long_context": 0,
+    "is_regional": 1,
+    "litellm_call_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "litellm_cost_usd": 0.035,
+    "model": "claude-sonnet-4-6",
+    "org_id": 1,
+    "output_cost_usd": 0.0125,
+    "project_id": 42,
+    "prompt_tokens": 15000,
+    "region": "us-east5",
+    "response_time_ms": 4523.7,
+    "timestamp": 1782857730,
+    "total_cost_usd": 0.0385
+  }
+]

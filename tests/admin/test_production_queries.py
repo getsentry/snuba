@@ -13,7 +13,6 @@ def test_validate_projects_with_subquery() -> None:
     prod_queries._validate_projects_in_query(
         body={"query": query, "dataset": "events"},
         dataset=get_dataset("events"),
-        is_mql=False,
     )
 
 
@@ -24,7 +23,6 @@ def test_disallowed_project_ids() -> None:
         prod_queries._validate_projects_in_query(
             body={"query": query, "dataset": "events"},
             dataset=get_dataset("events"),
-            is_mql=False,
         )
 
 
@@ -33,7 +31,6 @@ def test_with_joins() -> None:
     prod_queries._validate_projects_in_query(
         body={"query": query, "dataset": "events"},
         dataset=get_dataset("events"),
-        is_mql=False,
     )
 
 
@@ -43,5 +40,4 @@ def test_fail_with_joins() -> None:
         prod_queries._validate_projects_in_query(
             body={"query": query, "dataset": "events"},
             dataset=get_dataset("events"),
-            is_mql=False,
         )

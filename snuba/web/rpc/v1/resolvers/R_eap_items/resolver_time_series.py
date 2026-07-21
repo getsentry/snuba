@@ -32,8 +32,8 @@ from snuba.downsampled_storage_tiers import Tier
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column, in_cond, literal
-from snuba.query.expressions import DangerousRawSQL, Expression
+from snuba.query.dsl import column, literal
+from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -41,12 +41,11 @@ from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
-    add_existence_check_to_subscriptable_references,
+    add_existence_check_to_map_attribute_reads,
     attribute_key_to_expression,
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
-    use_array_map_columns,
     use_sampling_factor,
     valid_sampling_factor_conditions,
 )
@@ -67,7 +66,9 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_count_column,
 )
 from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
+    apply_cross_item_outer_query_settings,
     get_trace_ids_sql_for_cross_item_query,
+    trace_id_in_subquery_condition,
 )
 from snuba.web.rpc.v1.resolvers.common.formula_reliability import (
     FormulaReliabilityCalculator,
@@ -166,7 +167,7 @@ def _convert_result_timeseries(
 
         group_by_key = "|".join([f"{k},{v}" for k, v in group_by_map.items()])
         for col_name in aggregation_labels:
-            if not result_timeseries.get((group_by_key, col_name), None):
+            if not result_timeseries.get((group_by_key, col_name)):
                 result_timeseries[(group_by_key, col_name)] = TimeSeries(
                     group_by_attributes=group_by_map,
                     label=col_name,
@@ -250,7 +251,6 @@ def _get_reliability_context_columns(
             confidence_interval_column = get_confidence_interval_column(
                 aggregation,
                 _get_attribute_key_to_expression_function(request_meta),
-                use_array_map_columns=use_array_map_columns(request_meta),
             )
             if confidence_interval_column is not None:
                 additional_context_columns.append(
@@ -263,7 +263,6 @@ def _get_reliability_context_columns(
             average_sample_rate_column = get_average_sample_rate_column(
                 aggregation,
                 _get_attribute_key_to_expression_function(request_meta),
-                use_array_map_columns=use_array_map_columns(request_meta),
             )
             additional_context_columns.append(
                 SelectedExpression(
@@ -274,7 +273,6 @@ def _get_reliability_context_columns(
         count_column = get_count_column(
             aggregation,
             _get_attribute_key_to_expression_function(request_meta),
-            use_array_map_columns=use_array_map_columns(request_meta),
         )
         additional_context_columns.append(
             SelectedExpression(name=count_column.alias, expression=count_column)
@@ -304,7 +302,6 @@ def _proto_expression_to_ast_expression(
                 expr.conditional_aggregation,
                 (attribute_key_to_expression),
                 use_sampling_factor(request_meta),
-                use_array_map_columns(request_meta),
             )
             match expr.conditional_aggregation.WhichOneof("default_value"):
                 case None:
@@ -383,12 +380,7 @@ def build_query(
         trace_ids_sql, _ = get_trace_ids_sql_for_cross_item_query(
             request, request.meta, list(request.trace_filters), sampling_tier, timer
         )
-        additional_conditions.append(
-            in_cond(
-                column("trace_id"),
-                DangerousRawSQL(None, f"({trace_ids_sql})"),
-            )
-        )
+        additional_conditions.append(trace_id_in_subquery_condition(trace_ids_sql))
 
     res = Query(
         from_clause=entity,
@@ -430,7 +422,6 @@ def build_query(
             trace_item_filters_to_expression(
                 request.filter,
                 _get_attribute_key_to_expression_function(request.meta),
-                use_array_map_columns=use_array_map_columns(request.meta),
             ),
             valid_sampling_factor_conditions(),
             *item_type_conds,
@@ -446,7 +437,7 @@ def build_query(
         order_by=[OrderBy(expression=column("time_slot"), direction=OrderByDirection.ASC)],
     )
     treeify_or_and_conditions(res)
-    add_existence_check_to_subscriptable_references(res)
+    add_existence_check_to_map_attribute_reads(res)
     return res
 
 
@@ -509,13 +500,9 @@ class ResolverTimeSeriesEAPItems(ResolverTimeSeries):
         query_settings = setup_trace_query_settings() if in_msg.meta.debug else HTTPQuerySettings()
         try:
             routing_decision.strategy.merge_clickhouse_settings(routing_decision, query_settings)
-            # When trace_filters are present and the feature is enabled, don't use sampling on the outer query
-            # The inner query (getting trace IDs) will use sampling
-            cross_item_queries_no_sample_outer = get_option(
-                "cross_item_queries_no_sample_outer", True
+            apply_cross_item_outer_query_settings(
+                query_settings, bool(in_msg.trace_filters), routing_decision.tier
             )
-            if not (in_msg.trace_filters and cross_item_queries_no_sample_outer):
-                query_settings.set_sampling_tier(routing_decision.tier)
         except Exception as e:
             sentry_sdk.capture_message(f"Error merging clickhouse settings: {e}")
 

@@ -9,7 +9,6 @@ import pytest
 from clickhouse_driver.errors import ServerException
 from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.timestamp_pb2 import Timestamp
-from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
     AttributeConditionalAggregation,
 )
@@ -81,6 +80,7 @@ from snuba.web.rpc.v1.endpoint_trace_item_table import (
     _validate_select_and_groupby,
 )
 from snuba.web.rpc.v1.resolvers.common.aggregation import aggregation_to_expression
+from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_table import build_query
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -4124,18 +4124,10 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
 
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
-    @pytest.mark.parametrize(
-        "read_from_typed_columns",
-        [True, False],
-        ids=["after_cutoff_typed_columns", "before_cutoff_json_column"],
-    )
-    def test_select_array_column_before_and_after_cutoff(
-        self, read_from_typed_columns: bool
-    ) -> None:
-        """A homogeneous array attribute decodes to the same val_array whether the query
-        window is on/after the typed-column cutoff (read from the typed attributes_array_*
-        columns) or before it (read from the legacy attributes_array JSON column). The
-        data is double-written to both column families, so the two read paths agree."""
+    def test_select_array_column_reads_typed_columns(self) -> None:
+        """A homogeneous array attribute decodes to a val_array read from the typed
+        attributes_array_* columns. Element-typed keys read one column; the deprecated
+        untyped TYPE_ARRAY reads all four and merges."""
         span_ts = BASE_TIME - timedelta(minutes=1)
         items_storage = get_storage(StorageKey("eap_items"))
         write_raw_unprocessed_events(
@@ -4147,29 +4139,23 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
                 ),
             ],
         )
-        # 0 disables the typed-column read path (forces the legacy JSON column); a low
-        # value enables it for the (recent) request window.
-        with override_options(
-            "snuba",
-            {"use_array_map_columns_timestamp_seconds": 10 if read_from_typed_columns else 0},
-        ):
-            message = TraceItemTableRequest(
-                meta=RequestMeta(
-                    project_ids=[1, 2, 3],
-                    organization_id=1,
-                    cogs_category="something",
-                    referrer="something",
-                    start_timestamp=START_TIMESTAMP,
-                    end_timestamp=END_TIMESTAMP,
-                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                ),
-                columns=[
-                    Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
-                    Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags")),
-                    Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="cols")),
-                ],
-            )
-            response = EndpointTraceItemTable().execute(message)
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY_STRING, name="tags")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY_INT, name="cols")),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
         by_name = {cv.attribute_name: cv for cv in response.column_values}
         assert by_name["tags"].results[0].WhichOneof("value") == "val_array"
         assert [e.val_str for e in by_name["tags"].results[0].val_array.values] == ["alpha", "beta"]
@@ -4511,9 +4497,9 @@ def test_order_by_bug() -> None:
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 class TestSemverSorting:
-    """ORDER BY with the SORT_NATURAL option applies the semver key so versions
+    """ORDER BY with the SORT_SEMVER option applies the semver key so versions
     sort numerically (1.2.9 before 1.2.10) with pre-releases before their
-    corresponding stable release. Without SORT_NATURAL the ordering stays
+    corresponding stable release. Without SORT_SEMVER the ordering stays
     lexicographic (there is no hardcoded per-attribute behavior).
     """
 
@@ -4540,10 +4526,10 @@ class TestSemverSorting:
                 raw_attributes={"sentry.release": release, "semver_test_marker": "1"},
             )
 
-    def _query_releases(self, descending: bool = False, natural: bool = True) -> list[str]:
+    def _query_releases(self, descending: bool = False, semver: bool = True) -> list[str]:
         sort = (
-            TraceItemTableRequest.OrderBy.SORT_NATURAL
-            if natural
+            TraceItemTableRequest.OrderBy.SORT_SEMVER
+            if semver
             else TraceItemTableRequest.OrderBy.SORT_UNSPECIFIED
         )
         message = TraceItemTableRequest(
@@ -4585,11 +4571,11 @@ class TestSemverSorting:
         )
 
     def test_default_sort_is_lexicographic(self) -> None:
-        # Without SORT_NATURAL there is no semver behavior (no hardcoded
+        # Without SORT_SEMVER there is no semver behavior (no hardcoded
         # attributes), so plain lexicographic order applies: "1.2.10" < "1.2.9".
-        releases = self._query_releases(natural=False)
+        releases = self._query_releases(semver=False)
         assert releases.index("1.2.10") < releases.index("1.2.9"), (
-            "without SORT_NATURAL, ordering is lexicographic"
+            "without SORT_SEMVER, ordering is lexicographic"
         )
 
     def test_prerelease_before_stable(self) -> None:
@@ -4635,3 +4621,19 @@ class TestSemverSorting:
         asc = self._query_releases(descending=False)
         desc = self._query_releases(descending=True)
         assert asc == list(reversed(desc))
+
+
+def test_convert_results_empty_typed_array_is_null() -> None:
+    """An absent/empty element-typed array reads as an empty native list; convert_results
+    surfaces it as NULL (like a missing scalar), not an empty val_array. A populated array
+    still decodes to a val_array."""
+    request = TraceItemTableRequest(
+        columns=[
+            Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY_STRING, name="tags"), label="tags")
+        ]
+    )
+    result = convert_results(request, [{"tags": []}, {"tags": ["a", "b"]}])
+    (tags,) = result
+    assert tags.attribute_name == "tags"
+    assert tags.results[0].is_null is True
+    assert [e.val_str for e in tags.results[1].val_array.values] == ["a", "b"]

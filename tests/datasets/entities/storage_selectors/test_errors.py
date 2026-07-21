@@ -1,6 +1,6 @@
 import pytest
+from sentry_options.testing import override_options
 
-from snuba import state
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
     ColumnToIPAddress,
@@ -107,15 +107,14 @@ def test_query_storage_selector(
     use_readable: bool,
     expected_storage: Storage,
 ) -> None:
-    state.set_config("enable_events_readonly_table", use_readable)
+    with override_options("snuba", {"enable_events_readonly_table": use_readable}):
+        query = parse_snql_query(str(snql_query), dataset)
+        assert isinstance(query, Query)
 
-    query = parse_snql_query(str(snql_query), dataset)
-    assert isinstance(query, Query)
-
-    selected_storage = selector.select_storage(
-        query, HTTPQuerySettings(referrer="r"), storage_connections
-    )
-    assert selected_storage.storage == expected_storage
+        selected_storage = selector.select_storage(
+            query, HTTPQuerySettings(referrer="r"), storage_connections
+        )
+        assert selected_storage.storage == expected_storage
 
 
 def test_assert_raises() -> None:

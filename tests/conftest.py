@@ -1,3 +1,4 @@
+import contextlib
 import hashlib
 import json
 import os
@@ -190,6 +191,24 @@ def redis_db(request: pytest.FixtureRequest) -> Generator[None]:
     state.get_raw_configs.clear()  # type: ignore[attr-defined]
 
     yield
+
+
+@pytest.fixture(autouse=True)
+def _clear_component_config_option_overrides() -> Generator[None]:
+    """Isolate ConfigurableComponent config overrides between tests.
+
+    ConfigurableComponent config is read-only at runtime, sourced from the
+    ``configurable_component_overrides`` sentry-option. Tests set overrides in
+    that option via ``tests/configs/component_config.py``; those overrides are
+    thread-local and persist, so clear the option after every test to stop them
+    leaking across tests.
+    """
+    yield
+
+    from tests.configs.component_config import clear_component_config_overrides
+
+    with contextlib.suppress(Exception):
+        clear_component_config_overrides()
 
 
 def _build_db_cache(cache_key: CacheKey) -> None:

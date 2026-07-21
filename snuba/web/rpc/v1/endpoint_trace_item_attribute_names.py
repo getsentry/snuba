@@ -83,9 +83,9 @@ def _order_by_name_descending(request: TraceItemAttributeNamesRequest) -> bool:
     )
 
 
-def _order_by_natural(request: TraceItemAttributeNamesRequest) -> bool:
-    """Whether the caller requested SORT_NATURAL (semver) ordering of names."""
-    return request.order_by.sort == TraceItemAttributeNamesRequest.OrderBy.SORT_NATURAL
+def _order_by_semver(request: TraceItemAttributeNamesRequest) -> bool:
+    """Whether the caller requested SORT_SEMVER (semver) ordering of names."""
+    return request.order_by.sort == TraceItemAttributeNamesRequest.OrderBy.SORT_SEMVER
 
 
 _SEMVER_NUMERIC_RE = re.compile(r"^[0-9]+(\.[0-9]+)*$")
@@ -110,13 +110,13 @@ def _semver_sort_key_py(name: str) -> tuple[tuple[int, int, int, int], int, str]
     )
 
 
-def _name_order_by_expression(natural: bool) -> Expression:
+def _name_order_by_expression(semver: bool) -> Expression:
     """ClickHouse ORDER BY expression for the attribute name.
 
-    Default orders by the raw (type, name) tuple; SORT_NATURAL orders by the
+    Default orders by the raw (type, name) tuple; SORT_SEMVER orders by the
     semver key of the name part so versions sort numerically.
     """
-    if natural:
+    if semver:
         return semver_sort_key(f.tupleElement(column("attr_key"), 2))
     return column("attr_key")
 
@@ -386,7 +386,7 @@ def get_co_occurring_attributes(
         alias="attr_key",
     )
 
-    natural = _order_by_natural(request)
+    semver = _order_by_semver(request)
     if _order_by_count(request):
         # Opt-in frequency ordering: group by key and count how many rows
         # (co-occurring attribute sets) contain each key.
@@ -403,8 +403,8 @@ def get_co_occurring_attributes(
                 expression=column("count"),
             ),
             # stable tiebreak for keys with the same frequency (semver key when
-            # SORT_NATURAL was requested)
-            OrderBy(direction=OrderByDirection.ASC, expression=_name_order_by_expression(natural)),
+            # SORT_SEMVER was requested)
+            OrderBy(direction=OrderByDirection.ASC, expression=_name_order_by_expression(semver)),
         ]
     else:
         # Default (order_by unset or COLUMN_NAME): distinct keys ordered by name.
@@ -418,7 +418,7 @@ def get_co_occurring_attributes(
         order_by = [
             OrderBy(
                 direction=OrderByDirection.DESC if name_descending else OrderByDirection.ASC,
-                expression=_name_order_by_expression(natural),
+                expression=_name_order_by_expression(semver),
             ),
         ]
 
@@ -473,13 +473,13 @@ def convert_co_occurring_results_to_attributes(
         return attribute
 
     # Name-ordering key that mirrors the ClickHouse ORDER BY: the raw (type, name)
-    # tuple by default, or the semver key of the name under SORT_NATURAL.
-    natural = _order_by_natural(request)
+    # tuple by default, or the semver key of the name under SORT_SEMVER.
+    semver = _order_by_semver(request)
 
     def _name_key(row: Mapping[str, Any]) -> Any:
         attr_key = row.get("attr_key", ("TYPE_STRING", ""))
         attr_type, attr_name = attr_key[0], attr_key[1]
-        if natural:
+        if semver:
             return _semver_sort_key_py(attr_name)
         return (attr_type, attr_name)
 

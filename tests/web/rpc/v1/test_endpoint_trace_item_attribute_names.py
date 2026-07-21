@@ -99,9 +99,9 @@ class TestTraceItemAttributeNames(BaseApiTest):
             )
         assert res.attributes == expected
 
-    def test_natural_sort(self) -> None:
+    def test_semver_sort(self) -> None:
         # Version-like attribute names: lexicographically "1.2.10" < "1.2.2" <
-        # "1.2.9"; with SORT_NATURAL (semver) they order "1.2.2" < "1.2.9" < "1.2.10".
+        # "1.2.9"; with SORT_SEMVER (semver) they order "1.2.2" < "1.2.9" < "1.2.10".
         items_storage = get_writable_storage(StorageKey("eap_items"))
         write_raw_unprocessed_events(
             items_storage,
@@ -126,7 +126,7 @@ class TestTraceItemAttributeNames(BaseApiTest):
             type=AttributeKey.Type.TYPE_STRING,
             value_substring_match="1.2",
             order_by=TraceItemAttributeNamesRequest.OrderBy(
-                sort=TraceItemAttributeNamesRequest.OrderBy.SORT_NATURAL,
+                sort=TraceItemAttributeNamesRequest.OrderBy.SORT_SEMVER,
             ),
         )
         res = EndpointTraceItemAttributeNames().execute(req)

@@ -1,15 +1,6 @@
 import { AllowedTools, Settings } from "SnubaAdmin/types";
 
 import {
-  Config,
-  ConfigKey,
-  ConfigValue,
-  ConfigChange,
-  ConfigDescription,
-  ConfigDescriptions,
-} from "SnubaAdmin/runtime_config/types";
-
-import {
   ClickhouseNodeData,
   QueryRequest,
   QueryResult,
@@ -25,104 +16,47 @@ import {
   RunMigrationResult,
 } from "SnubaAdmin/clickhouse_migrations/types";
 import { TracingRequest, TracingResult } from "SnubaAdmin/tracing/types";
-import { MQLRequest } from "SnubaAdmin/mql_queries/types";
 import {
   SnQLRequest,
   SnQLResult,
   SnubaDatasetName,
 } from "SnubaAdmin/snql_to_sql/types";
 
-import { KafkaTopicData } from "SnubaAdmin/kafka/types";
 import { QuerylogRequest, QuerylogResult } from "SnubaAdmin/querylog/types";
-import {
-  CardinalityQueryRequest,
-  CardinalityQueryResult,
-} from "SnubaAdmin/cardinality_analyzer/types";
 
-import { AllocationPolicy, StrategyData } from "SnubaAdmin/configurable_component/types";
-
-import { ReplayInstruction, Topic } from "SnubaAdmin/dead_letter_queue/types";
 import { AutoReplacementsBypassProjectsData } from "SnubaAdmin/auto_replacements_bypass_projects/types";
-import { ClickhouseNodeInfo, ClickhouseSystemSetting } from "SnubaAdmin/database_clusters/types";
 
 interface Client {
   getSettings: () => Promise<Settings>;
-  getConfigs: () => Promise<Config[]>;
   getAutoReplacementsBypassProjects: () => Promise<
     AutoReplacementsBypassProjectsData[]
   >;
-  createNewConfig: (
-    key: ConfigKey,
-    value: ConfigValue,
-    description: ConfigDescription,
-  ) => Promise<Config>;
-  deleteConfig: (key: ConfigKey, keepDescription: boolean) => Promise<void>;
-  editConfig: (
-    key: ConfigKey,
-    value: ConfigValue,
-    description: ConfigDescription,
-  ) => Promise<Config>;
-  getDescriptions: () => Promise<ConfigDescriptions>;
-  getAuditlog: () => Promise<ConfigChange[]>;
   getClickhouseNodes: () => Promise<[ClickhouseNodeData]>;
-  getClickhouseNodeInfo: () => Promise<[ClickhouseNodeInfo]>;
   getSnubaDatasetNames: () => Promise<SnubaDatasetName[]>;
   getAllowedProjects: () => Promise<string[]>;
   executeSnQLQuery: (query: SnQLRequest) => Promise<any>;
-  executeMQLQuery: (query: MQLRequest) => Promise<any>;
   debugSnQLQuery: (query: SnQLRequest) => Promise<SnQLResult>;
   getPredefinedQueryOptions: () => Promise<[PredefinedQuery]>;
   executeSystemQuery: (req: QueryRequest) => Promise<QueryResult>;
   executeCopyTable: (req: CopyTableRequest) => Promise<any>;
   executeTracingQuery: (req: TracingRequest) => Promise<TracingResult>;
-  getKafkaData: () => Promise<KafkaTopicData[]>;
   getRpcEndpoints: () => Promise<Array<[string, string]>>;
   executeRpcEndpoint: (endpointName: string, version: string, requestBody: any, signal?: AbortSignal) => Promise<any>;
   getPredefinedQuerylogOptions: () => Promise<[PredefinedQuery]>;
   getQuerylogSchema: () => Promise<QuerylogResult>;
   executeQuerylogQuery: (req: QuerylogRequest) => Promise<QuerylogResult>;
-  getPredefinedCardinalityQueryOptions: () => Promise<[PredefinedQuery]>;
-  executeCardinalityQuery: (
-    req: CardinalityQueryRequest,
-  ) => Promise<CardinalityQueryResult>;
   getAllMigrationGroups: () => Promise<MigrationGroupResult[]>;
   runMigration: (req: RunMigrationRequest) => Promise<RunMigrationResult>;
   getAllowedTools: () => Promise<AllowedTools>;
-  getStoragesWithAllocationPolicies: () => Promise<string[]>;
-  getRoutingStrategies: () => Promise<string[]>,
-  getAllocationPolicies: (storage: string) => Promise<AllocationPolicy[]>;
-  getRoutingStrategyConfigs: (strategy_name: string) => Promise<StrategyData>;
-  setConfigurableComponentConfiguration: (
-    configurable_component_namespace: string,
-    configurable_component_class_name: string,
-    resource_name: string,
-    key: string,
-    value: string,
-    params: object,
-  ) => Promise<void>;
-  deleteConfigurableComponentConfiguration: (
-    configurable_component_namespace: string,
-    configurable_component_class_name: string,
-    resource_name: string,
-    key: string,
-    params: object,
-  ) => Promise<void>;
-  getDlqTopics: () => Promise<Topic[]>;
-  getDlqInstruction: () => Promise<ReplayInstruction | null>;
-  setDlqInstruction: (
-    topic: Topic,
-    instruction: ReplayInstruction,
-  ) => Promise<ReplayInstruction | null>;
-  clearDlqInstruction: () => Promise<ReplayInstruction | null>;
   getAdminRegions: () => Promise<string[]>;
-  runLightweightDelete: (
-    storage_name: string,
-    column_conditions: object,
-  ) => Promise<Response>;
   listJobSpecs: () => Promise<JobSpecMap>;
   runJob(job_id: string): Promise<String>;
+  listJobTypes: () => Promise<string[]>;
+  runJobByType(
+    job_type: string,
+    params: { [key: string]: any },
+  ): Promise<{ job_id: string; status: string }>;
   getJobLogs(job_id: string): Promise<string[]>;
-  getClickhouseSystemSettings: (host: string, port: number, storage: string) => Promise<ClickhouseSystemSetting[]>;
   summarizeTraceWithProfile: (traceLogs: string, spanType: string, signal?: AbortSignal) => Promise<any>;
 }
 
@@ -134,81 +68,11 @@ function Client(): Client {
       const url = baseUrl + "settings";
       return fetch(url).then((resp) => resp.json());
     },
-    getConfigs: () => {
-      const url = baseUrl + "configs";
-      return fetch(url).then((resp) => resp.json());
-    },
     getAutoReplacementsBypassProjects: () => {
       const url = baseUrl + "auto-replacements-bypass-projects";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
       }).then((resp) => resp.json());
-    },
-    createNewConfig: (
-      key: ConfigKey,
-      value: ConfigValue,
-      description: ConfigDescription,
-    ) => {
-      const url = baseUrl + "configs";
-      const params = { key, value, description };
-
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-        body: JSON.stringify(params),
-      }).then((res) => {
-        if (res.ok) {
-          return Promise.resolve(res.json());
-        } else {
-          return res.json().then((err) => {
-            let errMsg = err?.error || "Could not create config";
-            throw new Error(errMsg);
-          });
-        }
-      });
-    },
-    deleteConfig: (key: ConfigKey, keepDescription: boolean) => {
-      const url =
-        baseUrl +
-        "configs/" +
-        encodeURIComponent(key) +
-        (keepDescription ? "?keepDescription=true" : "");
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-        method: "DELETE",
-      }).then((res) => {
-        if (res.ok) {
-          return;
-        } else {
-          throw new Error("Could not delete config");
-        }
-      });
-    },
-    editConfig: (
-      key: ConfigKey,
-      value: ConfigValue,
-      description: ConfigDescription,
-    ) => {
-      const url = baseUrl + "configs/" + encodeURIComponent(key);
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-        method: "PUT",
-        body: JSON.stringify({ value, description }),
-      }).then((res) => {
-        if (res.ok) {
-          return Promise.resolve(res.json());
-        } else {
-          throw new Error("Could not edit config");
-        }
-      });
-    },
-    getDescriptions: () => {
-      const url = baseUrl + "all_config_descriptions";
-      return fetch(url).then((resp) => resp.json());
-    },
-    getAuditlog: () => {
-      const url = baseUrl + "config_auditlog";
-      return fetch(url).then((resp) => resp.json());
     },
     getClickhouseNodes: () => {
       const url = baseUrl + "clickhouse_nodes";
@@ -222,11 +86,6 @@ function Client(): Client {
               storage.query_node,
           );
         });
-    },
-
-    getClickhouseNodeInfo: () => {
-      const url = baseUrl + "clickhouse_node_info";
-      return fetch(url).then((resp) => resp.json());
     },
 
     getSnubaDatasetNames: () => {
@@ -264,25 +123,6 @@ function Client(): Client {
 
     executeSnQLQuery: (query: SnQLRequest) => {
       const url = baseUrl + "production_snql_query";
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-        body: JSON.stringify(query),
-      }).then((res) => {
-        if (res.ok) {
-          return Promise.resolve(res.json());
-        } else {
-          return res.json().then((err) => {
-            let errMsg = err?.error.message || "Could not execute SnQL";
-            throw new Error(errMsg);
-          });
-        }
-      });
-    },
-
-    executeMQLQuery: (query: MQLRequest) => {
-      const url = baseUrl + "production_mql_query";
-      query.dataset = "generic_metrics";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "POST",
@@ -345,13 +185,6 @@ function Client(): Client {
         }
       });
     },
-    getKafkaData: () => {
-      const url = baseUrl + "kafka";
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-      }).then((resp) => resp.json());
-    },
-
     getRpcEndpoints: () => {
       const url = baseUrl + "rpc_endpoints";
       return fetch(url, {
@@ -416,24 +249,6 @@ function Client(): Client {
         }
       });
     },
-    getPredefinedCardinalityQueryOptions: () => {
-      const url = baseUrl + "cardinality_queries";
-      return fetch(url).then((resp) => resp.json());
-    },
-    executeCardinalityQuery: (query: CardinalityQueryRequest) => {
-      const url = baseUrl + "cardinality_query";
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-        body: JSON.stringify(query),
-      }).then((resp) => {
-        if (resp.ok) {
-          return resp.json();
-        } else {
-          return resp.json().then(Promise.reject.bind(Promise));
-        }
-      });
-    },
     getAllMigrationGroups: () => {
       const url = baseUrl + "migrations/groups";
       return fetch(url, {
@@ -468,134 +283,6 @@ function Client(): Client {
       }).then((resp) => resp.json());
     },
 
-    getStoragesWithAllocationPolicies: () => {
-      const url = baseUrl + "storages_with_allocation_policies";
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-      }).then((resp) => resp.json());
-    },
-    getRoutingStrategies: () => {
-      const url = baseUrl + "routing_strategies";
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-      }).then((resp) => resp.json());
-    },
-    getAllocationPolicies: (storage: string) => {
-      const url =
-        baseUrl + "allocation_policy_configs/" + encodeURIComponent(storage);
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-      }).then((resp) => resp.json());
-    },
-    getRoutingStrategyConfigs: (strategy_name: string) => {
-      const url = baseUrl + "routing_strategy_configs/" + strategy_name;
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-      }).then((resp) => resp.json());
-    },
-    setConfigurableComponentConfiguration: (
-      configurable_component_namespace: string,
-      configurable_component_class_name: string,
-      resource_name: string,
-      key: string,
-      value: string,
-      params: object,
-    ) => {
-      const url = baseUrl + "set_configurable_component_configuration";
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-        body: JSON.stringify({ configurable_component_namespace, configurable_component_class_name, resource_name, key, value, params }),
-      }).then((res) => {
-        if (res.ok) {
-          return;
-        } else {
-          return res.json().then((err) => {
-            let errMsg = err?.error || "Could not set config";
-            throw new Error(errMsg);
-          });
-        }
-      });
-    },
-    deleteConfigurableComponentConfiguration: (
-      configurable_component_namespace: string,
-      configurable_component_class_name: string,
-      resource_name: string,
-      key: string,
-      params: object,
-    ) => {
-      const url = baseUrl + "set_configurable_component_configuration";
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-        method: "DELETE",
-        body: JSON.stringify({ configurable_component_namespace, configurable_component_class_name, resource_name, key, params }),
-      }).then((res) => {
-        if (res.ok) {
-          return;
-        } else {
-          return res.json().then((err) => {
-            let errMsg = err?.error || "Could not delete config";
-            throw new Error(errMsg);
-          });
-        }
-      });
-    },
-    getDlqTopics: () => {
-      const url = baseUrl + "dead_letter_queue";
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-      }).then((resp) => resp.json());
-    },
-    getDlqInstruction: () => {
-      const url = baseUrl + "dead_letter_queue/replay";
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-      }).then((resp) => resp.json());
-    },
-    setDlqInstruction: (topic: Topic, instruction: ReplayInstruction) => {
-      const url = baseUrl + "dead_letter_queue/replay";
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-        body: JSON.stringify({
-          logicalName: topic.logicalName,
-          physicalName: topic.physicalName,
-          storage: topic.storage,
-          slice: topic.slice,
-          maxMessages: instruction.messagesToProcess,
-          policy: instruction.policy,
-        }),
-      }).then((res) => {
-        if (res.ok) {
-          return res.json();
-        } else {
-          return res.json().then((err) => {
-            let errMsg = err?.error || "Could not replay";
-            throw new Error(errMsg);
-          });
-        }
-      });
-    },
-    clearDlqInstruction: () => {
-      const url = baseUrl + "dead_letter_queue/replay";
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-        method: "DELETE",
-      }).then((resp) => resp.json());
-    },
-    runLightweightDelete: (storage_name: string, column_conditions: object) => {
-      const url = baseUrl + "delete";
-      return fetch(url, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          storage: storage_name,
-          query: { columns: column_conditions },
-        }),
-      });
-    },
     listJobSpecs: () => {
       const url = baseUrl + "job-specs";
       return fetch(url, {
@@ -610,28 +297,36 @@ function Client(): Client {
         method: "POST",
       }).then((resp) => resp.text());
     },
+    listJobTypes: () => {
+      const url = baseUrl + "job-types";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "GET",
+      }).then((resp) => resp.json());
+    },
+    runJobByType: (job_type: string, params: { [key: string]: any }) => {
+      const url = baseUrl + "job-types/" + job_type + "/run";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        body: JSON.stringify({ params }),
+      }).then((resp) => {
+        if (resp.ok) {
+          return resp.json();
+        }
+        return resp.json().then((err) => {
+          const error = new Error(err?.error || "Could not run job");
+          (error as any).jobId = err?.job_id;
+          throw error;
+        });
+      });
+    },
     getJobLogs: (job_id: string) => {
       const url = baseUrl + "job-specs/" + job_id + "/logs";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "GET",
       }).then((resp) => resp.json());
-    },
-    getClickhouseSystemSettings: (host: string, port: number, storage: string) => {
-      const url = `${baseUrl}clickhouse_system_settings?host=${encodeURIComponent(host)}&port=${encodeURIComponent(port)}&storage=${encodeURIComponent(storage)}`;
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-        method: "GET",
-      }).then((resp) => {
-        if (resp.ok) {
-          return resp.json();
-        } else {
-          return resp.json().then((err) => {
-            let errMsg = err?.error || "Could not get Clickhouse system settings";
-            throw new Error(errMsg);
-          });
-        }
-      });
     },
     summarizeTraceWithProfile: (traceLogs: string, storage: string, signal?: AbortSignal) => {
       const url = baseUrl + "rpc_summarize_trace_with_profile";

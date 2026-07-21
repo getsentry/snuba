@@ -19,22 +19,15 @@ class AdminTools(Enum):
     """
 
     ALL = "all"
-    CONFIGURATION = "configuration"
     AUTO_REPLACEMENTS_BYPASS_PROJECTS = "auto-replacements-bypass-projects"
     SNQL_TO_SQL = "snql-to-sql"
     SYSTEM_QUERIES = "system-queries"
     MIGRATIONS = "clickhouse-migrations"
     QUERY_TRACING = "tracing"
     QUERYLOG = "querylog"
-    AUDIT_LOG = "audit-log"
-    KAFKA = "kafka"
-    CAPACITY_MANAGEMENT = "capacity-management"
     PRODUCTION_QUERIES = "production-queries"
-    CARDINALITY_ANALYZER = "cardinality-analyzer"
     SNUBA_EXPLAIN = "snuba-explain"
-    DELETE_TOOL = "delete_tool"
     MANUAL_JOBS = "view-jobs"
-    DATABASE_CLUSTERS = "database-clusters"
     RPC_ENDPOINTS = "rpc-endpoints"
 
 

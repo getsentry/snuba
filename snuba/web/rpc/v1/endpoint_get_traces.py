@@ -35,7 +35,7 @@ from snuba.query.dsl import (
     literals_array,
     or_cond,
 )
-from snuba.query.expressions import DangerousRawSQL, Expression
+from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.request import Request as SnubaRequest
@@ -47,7 +47,6 @@ from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
-    use_array_map_columns,
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
@@ -55,8 +54,11 @@ from snuba.web.rpc.common.debug_info import (
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
+    CROSS_ITEM_DISTRIBUTED_PRODUCT_MODE,
     convert_trace_filters_to_trace_item_filter_with_type,
     get_trace_ids_sql_for_cross_item_query,
+    trace_id_in_subquery_condition,
+    use_local_join_for_cross_item_queries,
 )
 
 _DEFAULT_ROW_LIMIT = 10_000
@@ -587,7 +589,6 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                     ),
                     attribute_key_to_expression,
                     membership_as_has=True,
-                    use_array_map_columns=use_array_map_columns(request_meta),
                 ),
             )
 
@@ -611,7 +612,6 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                 ),
             ),
             attribute_key_to_expression,
-            use_array_map_columns=use_array_map_columns(request.meta),
         )
         selected_columns: list[SelectedExpression] = [
             SelectedExpression(
@@ -847,23 +847,19 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             sample=None,
         )
 
-        # Use DangerousRawSQL to embed the subquery instead of materializing trace IDs
+        # Embed the subquery as a bare `trace_id IN (...)` predicate so the bf_trace_id
+        # bloom-filter index is used (UUIDColumnProcessor would otherwise wrap the column
+        # and defeat the index — see trace_id_in_subquery_condition).
         if item_type:
             condition = base_conditions_and(
                 request.meta,
-                in_cond(
-                    column("trace_id"),
-                    DangerousRawSQL(None, f"({trace_ids_sql})"),
-                ),
+                trace_id_in_subquery_condition(trace_ids_sql),
                 f.equals(column("item_type"), item_type),
             )
         else:
             condition = base_conditions_and(
                 request.meta,
-                in_cond(
-                    column("trace_id"),
-                    DangerousRawSQL(None, f"({trace_ids_sql})"),
-                ),
+                trace_id_in_subquery_condition(trace_ids_sql),
             )
 
         query = Query(
@@ -889,9 +885,14 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
 
         treeify_or_and_conditions(query)
 
+        clickhouse_settings = (
+            {"distributed_product_mode": CROSS_ITEM_DISTRIBUTED_PRODUCT_MODE}
+            if use_local_join_for_cross_item_queries()
+            else None
+        )
         results = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
-            request=_build_snuba_request(request, query),
+            request=_build_snuba_request(request, query, clickhouse_settings=clickhouse_settings),
             timer=self._timer,
         )
 

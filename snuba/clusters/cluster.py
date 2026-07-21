@@ -12,7 +12,7 @@ from typing import (
 
 import structlog
 
-from snuba import settings, state
+from snuba import settings
 from snuba.clickhouse.http import HTTPBatchWriter, InsertStatement, JSONRow
 from snuba.clickhouse.native import (
     ClickhouseNativePool,
@@ -25,6 +25,7 @@ from snuba.clusters.storage_sets import (
     register_storage_set_key,
 )
 from snuba.reader import Reader
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.serializable_exception import SerializableException
 from snuba.writer import BatchWriter
@@ -35,6 +36,11 @@ logger = structlog.get_logger().bind(module=__name__)
 # tools) that only know a node's native address and have no cluster config to
 # read an http_port from.
 DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
+# User-facing read queries get a 25s timeout, leaving headroom under a ~30s
+# frontend request budget to still return a response. Migrations, DDL and
+# other long-running operations keep their own (default or longer) timeouts
+# above/below.
+_DEFAULT_USER_FACING_TIMEOUT = 25
 
 
 class ClickhouseClientSettingsType(NamedTuple):
@@ -68,11 +74,11 @@ class ClickhouseClientSettings(Enum):
     )
     DELETE = ClickhouseClientSettingsType({"mutations_sync": 1}, None)
     OPTIMIZE = ClickhouseClientSettingsType({}, settings.OPTIMIZE_QUERY_TIMEOUT)
-    # User-facing read queries get a 25s timeout, leaving headroom under a ~30s
-    # frontend request budget to still return a response. Migrations, DDL and
-    # other long-running operations keep their own (default or longer) timeouts
-    # above/below.
-    QUERY = ClickhouseClientSettingsType({}, 25)
+    QUERY = ClickhouseClientSettingsType({}, _DEFAULT_USER_FACING_TIMEOUT)
+    TRACING = ClickhouseClientSettingsType(
+        {"readonly": 2, "max_execution_time": _DEFAULT_USER_FACING_TIMEOUT},
+        _DEFAULT_USER_FACING_TIMEOUT,
+    )
     # Internal/maintenance queries that are NOT user-facing reads and must not
     # inherit QUERY's 25s cap: cluster topology discovery (system.clusters),
     # storage-routing load lookups, delete-throttling system-table checks, the
@@ -80,7 +86,6 @@ class ClickhouseClientSettings(Enum):
     # so they stay unbounded (their behavior before QUERY got a read timeout).
     INTERNAL = ClickhouseClientSettingsType({}, None)
     QUERYLOG = ClickhouseClientSettingsType({}, None)
-    TRACING = ClickhouseClientSettingsType({"readonly": 2}, None)
     REPLACE = ClickhouseClientSettingsType(
         {
             # Replacing existing rows requires reconstructing the entire tuple
@@ -94,20 +99,6 @@ class ClickhouseClientSettings(Enum):
             "max_memory_usage": settings.REPLACER_MAX_MEMORY_USAGE,
             # Don't use up production cache for the count() queries.
             "use_uncompressed_cache": 0,
-        },
-        None,
-    )
-    CARDINALITY_ANALYZER = ClickhouseClientSettingsType(
-        {
-            # Allow reading data and changing settings.
-            "readonly": 2,
-            # Allow more threads for faster processing since cardinality queries
-            # need more resources.
-            "max_threads": 10,
-            # Don't use up production cache for cardinality analyzer queries.
-            "use_uncompressed_cache": 0,
-            # Allow longer running queries.
-            "max_execution_time": 60,
         },
         None,
     )
@@ -189,12 +180,12 @@ def use_clickhouse_connect_driver() -> bool:
     Whether the read path should use the clickhouse-connect (HTTP) driver
     instead of the native protocol.
 
-    Controlled by a runtime config flag (defaulting to the
-    ``USE_CLICKHOUSE_CONNECT_DRIVER`` setting) so the migration can be rolled
-    out and rolled back without a deploy.
+    Controlled by the ``use_clickhouse_connect_driver`` sentry-option (schema
+    default ``false``), so the migration can be rolled out and rolled back
+    without a deploy. The literal here is only the fallback for when the
+    options store is unavailable; the effective default is the schema default.
     """
-    default = 1 if settings.USE_CLICKHOUSE_CONNECT_DRIVER else 0
-    return bool(state.get_int_config("use_clickhouse_connect_driver", default))
+    return get_option("use_clickhouse_connect_driver", False)
 
 
 # The driver discriminator is part of the cache key so that the native and the
@@ -233,7 +224,7 @@ class ConnectionCache:
         """
         Return a cached connection pool for the node, typed as the abstract
         :class:`ClickhousePool`. The driver is decided here, from the
-        ``use_clickhouse_connect_driver`` runtime config: when it is enabled the
+        ``use_clickhouse_connect_driver`` sentry-option: when it is enabled the
         clickhouse-connect (HTTP) pool is built (connecting on the node's
         ``http_port``), otherwise the native one (connecting on the node's
         ``native_port``). Both variants are cached side by side (the driver is
@@ -401,7 +392,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         connection.
 
         The driver is selected inside ``ConnectionCache.get_node_connection``
-        from the ``use_clickhouse_connect_driver`` runtime config (HTTP pool
+        from the ``use_clickhouse_connect_driver`` sentry-option (HTTP pool
         when enabled, native otherwise). The choice applies to every caller
         (reads, migrations, replacer, optimize, ...), not just the read path.
         """
@@ -435,7 +426,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         """
         Return a reader for the query node. The driver-agnostic ClickhouseReader
         wraps whichever pool (native or HTTP) get_query_connection selects from
-        the ``use_clickhouse_connect_driver`` runtime config, so the driver can
+        the ``use_clickhouse_connect_driver`` sentry-option, so the driver can
         be switched at runtime.
         """
         return ClickhouseReader(
@@ -519,16 +510,19 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         )
 
     def __get_cluster_nodes(self, cluster_name: str) -> Sequence[ClickhouseNode]:
-        # system.clusters only reports the native port; every node in the
-        # cluster shares the cluster's configured HTTP port, so stamp it on each
-        # discovered node so it is self-describing for the HTTP driver.
+        # system.clusters only reports the native port. The cluster's configured
+        # HTTP port is an Envoy intercept port that only fronts the cluster
+        # endpoint (the query node); individual nodes discovered here are
+        # addressed directly, bypassing Envoy, and serve HTTP on the well-known
+        # default port. Stamp that on each node so the HTTP driver connects to a
+        # port the node actually listens on.
         return [
             ClickhouseNode(
                 host_name=host[0],
                 native_port=host[1],
                 shard=host[2],
                 replica=host[3],
-                http_port=self.__http_port,
+                http_port=DEFAULT_CLICKHOUSE_HTTP_PORT,
             )
             for host in self.get_query_connection(ClickhouseClientSettings.INTERNAL)
             .execute(

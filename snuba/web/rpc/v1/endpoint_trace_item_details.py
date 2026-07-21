@@ -28,16 +28,13 @@ from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     BUCKET_COUNT,
-    add_existence_check_to_subscriptable_references,
+    add_existence_check_to_map_attribute_reads,
     attribute_key_to_expression,
-    attributes_array_selected_expressions,
     base_conditions_and,
-    decode_attributes_array_value,
     merge_typed_array_maps,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
     typed_array_map_selected_expressions,
-    use_array_map_columns,
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
@@ -56,14 +53,8 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
         schema=get_entity(EntityKey("eap_items")).get_data_model(),
         sample=None,
     )
-    # Past the cutoff, read every array attribute from the typed array map columns
-    # instead of the legacy attributes_array JSON-column allowlist.
-    read_typed_arrays = use_array_map_columns(request.meta)
-    array_selected_expressions = (
-        typed_array_map_selected_expressions()
-        if read_typed_arrays
-        else attributes_array_selected_expressions()
-    )
+    # Read every array attribute from the typed array map columns.
+    array_selected_expressions = typed_array_map_selected_expressions()
     res = Query(
         from_clause=entity,
         selected_columns=[
@@ -114,13 +105,12 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
             trace_item_filters_to_expression(
                 request.filter,
                 attribute_key_to_expression,
-                use_array_map_columns=use_array_map_columns(request.meta),
             ),
         ),
         limit=1,
     )
     treeify_or_and_conditions(res)
-    add_existence_check_to_subscriptable_references(res)
+    add_existence_check_to_map_attribute_reads(res)
     return res
 
 
@@ -148,7 +138,6 @@ def _build_snuba_request(request: TraceItemDetailsRequest) -> SnubaRequest:
 
 def _convert_results(
     data: Iterable[dict[str, Any]],
-    read_typed_arrays: bool,
 ) -> tuple[str, Timestamp, list[TraceItemDetailsAttribute]]:
     row = next(iter(data))
     item_id = row.pop("hex_item_id")
@@ -200,23 +189,11 @@ def _convert_results(
             continue
         attrs.append(TraceItemDetailsAttribute(name=k, value=AttributeValue(val_double=v)))
 
-    if read_typed_arrays:
-        # Every array attribute, merged from the four typed array map columns.
-        for name, values in merge_typed_array_maps(row):
-            if not values:
-                continue
-            attrs.append(
-                TraceItemDetailsAttribute(name=name, value=convert_to_attribute_value(values))
-            )
-    else:
-        # Everything popped above; whatever's left is an allowlisted attributes_array column.
-        for key, raw in row.items():
-            decoded = decode_attributes_array_value(key, raw)
-            if decoded is None or (isinstance(decoded, list) and not decoded):
-                continue
-            attrs.append(
-                TraceItemDetailsAttribute(name=key, value=convert_to_attribute_value(decoded))
-            )
+    # Every array attribute, merged from the four typed array map columns.
+    for name, values in merge_typed_array_maps(row):
+        if not values:
+            continue
+        attrs.append(TraceItemDetailsAttribute(name=name, value=convert_to_attribute_value(values)))
 
     return item_id, timestamp, attrs
 
@@ -259,7 +236,6 @@ class EndpointTraceItemDetails(RPCEndpoint[TraceItemDetailsRequest, TraceItemDet
         try:
             item_id, timestamp, attributes = _convert_results(
                 res.result.get("data", []),
-                read_typed_arrays=use_array_map_columns(in_msg.meta),
             )
         except StopIteration as e:
             raise RPCRequestException(

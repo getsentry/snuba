@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Generator
 from datetime import datetime, timedelta
 from hashlib import md5
 from typing import Any
@@ -8,8 +9,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import simplejson as json
+from sentry_options.testing import override_options
 
-from snuba import state
 from snuba.configs.configuration import Configuration, ResourceIdentifier
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -27,7 +28,7 @@ from snuba.query.validation.validators import ColumnValidationMode
 from snuba.querylog.query_metadata import QueryStatus
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from tests.base import BaseApiTest
-from tests.conftest import SnubaSetConfig
+from tests.configs.component_config import set_component_config
 from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import override_entity_column_validator, write_unprocessed_events
 
@@ -287,7 +288,7 @@ class TestSnQLApi(BaseApiTest):
             p for p in policies if p.class_name() == "ConcurrentRateLimitAllocationPolicy"
         ]
         for p in concurrent_rate_limit_policies:
-            p.set_config_value("project_override", 0, {"project_id": self.project_id})
+            set_component_config(p, "project_override", 0, {"project_id": self.project_id})
 
         response = self.post(
             "/events/snql",
@@ -384,8 +385,8 @@ class TestSnQLApi(BaseApiTest):
         metadata = record_query_mock.call_args[0][0]
         assert metadata["query_list"][0]["stats"]["error_code"] == 1123
 
+    @override_options("snuba", {"snuba_api_cogs_probability": 1.0})
     def test_record_queries_cogs(self) -> None:
-        state.set_config("snuba_api_cogs_probability", 1.0)
         with patch("snuba.querylog._record_cogs") as record_cogs_mock:
             result = json.loads(
                 self.post(
@@ -1574,5 +1575,6 @@ class TestSnQLApiErrorsRO(TestSnQLApi):
     """
 
     @pytest.fixture(autouse=True)
-    def use_readonly_table(self, snuba_set_config: SnubaSetConfig) -> None:
-        snuba_set_config("enable_events_readonly_table", 1)
+    def use_readonly_table(self) -> Generator[None]:
+        with override_options("snuba", {"enable_events_readonly_table": True}):
+            yield

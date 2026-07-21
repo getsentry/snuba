@@ -30,9 +30,9 @@ class FlexibleTimeWindowPageWithFilters:
     _TIME_WINDOW_START_KEY = f"{_TIME_WINDOW_PREFIX}.start_timestamp"
     _TIME_WINDOW_END_KEY = f"{_TIME_WINDOW_PREFIX}.end_timestamp"
     _FILTER_PREFIX = "sentry__filter"
-    # Marks a page-boundary column whose ORDER BY used SORT_NATURAL (semver), so
+    # Marks a page-boundary column whose ORDER BY used SORT_SEMVER (semver), so
     # get_filters applies the same semver key on both sides of the comparison.
-    _NATURAL_FILTER_PREFIX = "sentry__natural_filter"
+    _SEMVER_FILTER_PREFIX = "sentry__semver_filter"
 
     def __init__(self, page_token: PageToken):
         self._page_token = page_token
@@ -77,21 +77,21 @@ class FlexibleTimeWindowPageWithFilters:
         column_names: list[str] = []
         column_values: list[Expression] = []
         # Parallel to column_names: True when that column's ORDER BY used
-        # SORT_NATURAL, so the boundary comparison must use the semver key too.
-        column_is_natural: list[bool] = []
+        # SORT_SEMVER, so the boundary comparison must use the semver key too.
+        column_is_semver: list[bool] = []
 
         for filter in self.page_token.filter_offset.and_filter.filters:
             if not filter.HasField("comparison_filter"):
                 continue
             key_name = filter.comparison_filter.key.name
-            is_natural = key_name.startswith(f"{self._NATURAL_FILTER_PREFIX}.")
+            is_semver = key_name.startswith(f"{self._SEMVER_FILTER_PREFIX}.")
             is_regular = key_name.startswith(f"{self._FILTER_PREFIX}.")
-            if not (is_natural or is_regular):
+            if not (is_semver or is_regular):
                 continue
 
             if key_name == f"{self._FILTER_PREFIX}.timestamp":
                 column_names.append("timestamp")
-                column_is_natural.append(False)
+                column_is_semver.append(False)
                 if filter.comparison_filter.value.HasField("val_str"):
                     column_values.append(f.toDateTime(filter.comparison_filter.value.val_str))
                 elif filter.comparison_filter.value.HasField("val_double"):
@@ -100,9 +100,9 @@ class FlexibleTimeWindowPageWithFilters:
                     column_values.append(literal(filter.comparison_filter.value.val_int))
             else:
                 # strip the matching prefix (and the dot) to recover the alias
-                prefix = self._NATURAL_FILTER_PREFIX if is_natural else self._FILTER_PREFIX
+                prefix = self._SEMVER_FILTER_PREFIX if is_semver else self._FILTER_PREFIX
                 column_names.append(key_name[len(prefix) + 1 :])
-                column_is_natural.append(is_natural)
+                column_is_semver.append(is_semver)
                 column_values.append(
                     literal(
                         getattr(
@@ -115,12 +115,12 @@ class FlexibleTimeWindowPageWithFilters:
         if column_names:
             col_exprs = []
             val_exprs = []
-            for c_name, c_value, is_natural in zip(
-                column_names, column_values, column_is_natural, strict=True
+            for c_name, c_value, is_semver in zip(
+                column_names, column_values, column_is_semver, strict=True
             ):
-                # For SORT_NATURAL columns, apply the same semver key on both sides
+                # For SORT_SEMVER columns, apply the same semver key on both sides
                 # so the page-boundary comparison uses the same ordering as ORDER BY.
-                if is_natural:
+                if is_semver:
                     col_exprs.append(semver_sort_key(column(c_name)))
                     val_exprs.append(semver_sort_key(c_value))
                 else:
@@ -215,16 +215,16 @@ class FlexibleTimeWindowPageWithFilters:
                                 f"No attribute expression found for column: {order_by_clause.column.label}"
                             )
 
-                        # Mark the column as SORT_NATURAL (semver) when the request
+                        # Mark the column as SORT_SEMVER (semver) when the request
                         # ordered it that way, so get_filters wraps both sides in the
                         # semver key and the page boundary matches the ORDER BY. Mirror
                         # the resolver's guard: only string columns get the semver key.
-                        is_natural = (
-                            order_by_clause.sort == TraceItemTableRequest.OrderBy.SORT_NATURAL
+                        is_semver = (
+                            order_by_clause.sort == TraceItemTableRequest.OrderBy.SORT_SEMVER
                             and selected_key is not None
                             and selected_key.type == AttributeKey.TYPE_STRING
                         )
-                        prefix = cls._NATURAL_FILTER_PREFIX if is_natural else cls._FILTER_PREFIX
+                        prefix = cls._SEMVER_FILTER_PREFIX if is_semver else cls._FILTER_PREFIX
 
                         filters.append(
                             TraceItemFilter(

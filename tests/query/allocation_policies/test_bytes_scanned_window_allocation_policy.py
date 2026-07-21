@@ -9,6 +9,7 @@ from snuba.query.allocation_policies.bytes_scanned_window_policy import (
     BytesScannedWindowAllocationPolicy,
 )
 from snuba.web import QueryResult
+from tests.configs.component_config import set_component_config
 
 ORG_SCAN_LIMIT = 1000
 THROTTLED_THREAD_NUMBER = 1
@@ -29,11 +30,11 @@ def policy() -> AllocationPolicy:
 
 
 def _configure_policy(policy: AllocationPolicy) -> None:
-    policy.set_config_value("is_active", 1)
-    policy.set_config_value("is_enforced", 1)
-    policy.set_config_value("max_threads", MAX_THREAD_NUMBER)
-    policy.set_config_value("org_limit_bytes_scanned", ORG_SCAN_LIMIT)
-    policy.set_config_value("throttled_thread_number", THROTTLED_THREAD_NUMBER)
+    set_component_config(policy, "is_active", 1)
+    set_component_config(policy, "is_enforced", 1)
+    set_component_config(policy, "max_threads", MAX_THREAD_NUMBER)
+    set_component_config(policy, "org_limit_bytes_scanned", ORG_SCAN_LIMIT)
+    set_component_config(policy, "throttled_thread_number", THROTTLED_THREAD_NUMBER)
 
 
 @pytest.mark.redis_db
@@ -100,7 +101,7 @@ def test_org_isolation(policy: AllocationPolicy) -> None:
 @pytest.mark.redis_db
 def test_killswitch(policy: AllocationPolicy) -> None:
     _configure_policy(policy)
-    policy.set_config_value("is_active", 0)
+    set_component_config(policy, "is_active", 0)
     tenant_ids: dict[str, int | str] = {
         "organization_id": 123,
         "referrer": "some_referrer",
@@ -139,7 +140,7 @@ def test_enforcement_switch(policy: AllocationPolicy) -> None:
             error=None,
         ),
     )
-    policy.set_config_value("is_enforced", 0)
+    set_component_config(policy, "is_enforced", 0)
     allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
     # policy not enforced
     assert allowance.max_threads == MAX_THREAD_NUMBER
@@ -187,7 +188,7 @@ def test_simple_config_values(policy: AllocationPolicy) -> None:
         "max_threads",
     }
     assert policy.get_config_value("org_limit_bytes_scanned") == ORG_SCAN_LIMIT
-    policy.set_config_value("org_limit_bytes_scanned", 100)
+    set_component_config(policy, "org_limit_bytes_scanned", 100)
     assert policy.get_config_value("org_limit_bytes_scanned") == 100
 
 

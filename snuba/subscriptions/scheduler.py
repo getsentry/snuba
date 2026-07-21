@@ -4,13 +4,14 @@ from collections.abc import Iterator, Mapping, MutableMapping, MutableSequence, 
 from datetime import datetime, timedelta
 from enum import Enum
 
-from snuba import settings, state
+from snuba import settings
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.slicing import (
     map_logical_partition_to_slice,
     map_org_id_to_logical_partition,
 )
+from snuba.state.sentry_options import get_option
 from snuba.subscriptions.data import (
     PartitionId,
     ScheduledSubscriptionTask,
@@ -180,7 +181,7 @@ class TaskBuilderModeState:
 
     def get_current_mode(self, subscription: Subscription, timestamp: int) -> TaskBuilderMode:
         general_mode = TaskBuilderMode(
-            state.get_config("subscription_primary_task_builder", TaskBuilderMode.JITTERED)
+            get_option("subscription_primary_task_builder", TaskBuilderMode.JITTERED.value)
         )
 
         if general_mode == TaskBuilderMode.IMMEDIATE or general_mode == TaskBuilderMode.JITTERED:
@@ -324,7 +325,7 @@ class SubscriptionScheduler(SubscriptionSchedulerBase):
         This function is called for every tick.
         """
         general_mode = TaskBuilderMode(
-            state.get_config("subscription_primary_task_builder", TaskBuilderMode.JITTERED)
+            get_option("subscription_primary_task_builder", TaskBuilderMode.JITTERED.value)
         )
         if general_mode == TaskBuilderMode.JITTERED:
             self.__builder: TaskBuilder = self.__jittered_builder

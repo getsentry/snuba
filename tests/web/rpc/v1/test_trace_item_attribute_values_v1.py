@@ -165,8 +165,8 @@ class TestTraceItemAttributes(BaseApiTest):
             ],
         )
 
-    def test_natural_sort(self, setup_teardown: Any) -> None:
-        # SORT_NATURAL applies the semver key, so version components sort
+    def test_semver_sort(self, setup_teardown: Any) -> None:
+        # SORT_SEMVER applies the semver key, so version components sort
         # numerically (1.2.2 < 1.2.9 < 1.2.10) regardless of the attribute.
         self._write_version_values()
         message = TraceItemAttributeValuesRequest(
@@ -175,7 +175,7 @@ class TestTraceItemAttributes(BaseApiTest):
             key=AttributeKey(name="natural_ver", type=AttributeKey.TYPE_STRING),
             order_by=TraceItemAttributeValuesRequest.OrderBy(
                 column=TraceItemAttributeValuesRequest.OrderBy.COLUMN_VALUE,
-                sort=TraceItemAttributeValuesRequest.OrderBy.SORT_NATURAL,
+                sort=TraceItemAttributeValuesRequest.OrderBy.SORT_SEMVER,
             ),
         )
         response = AttributeValuesRequest().execute(message)
@@ -194,7 +194,7 @@ class TestTraceItemAttributes(BaseApiTest):
         assert response.values == ["1.2.10", "1.2.2", "1.2.9"]
 
     def test_release_sort_is_semver_aware(self, setup_teardown: Any) -> None:
-        # SORT_NATURAL is the semver sort, so prerelease sorts before its stable
+        # SORT_SEMVER is the semver sort, so prerelease sorts before its stable
         # release and the "pkg@" prefix is stripped.
         items_storage = get_writable_storage(StorageKey("eap_items"))
         releases = ["1.2.3-beta.1", "1.2.3", "1.2.9", "1.2.10", "my-pkg@2.0.0"]
@@ -214,7 +214,7 @@ class TestTraceItemAttributes(BaseApiTest):
             key=AttributeKey(name="sentry.release", type=AttributeKey.TYPE_STRING),
             order_by=TraceItemAttributeValuesRequest.OrderBy(
                 column=TraceItemAttributeValuesRequest.OrderBy.COLUMN_VALUE,
-                sort=TraceItemAttributeValuesRequest.OrderBy.SORT_NATURAL,
+                sort=TraceItemAttributeValuesRequest.OrderBy.SORT_SEMVER,
             ),
         )
         response = AttributeValuesRequest().execute(message)

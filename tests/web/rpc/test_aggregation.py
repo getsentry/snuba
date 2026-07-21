@@ -14,7 +14,13 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import ComparisonFilter, TraceItemFilter
 
-from snuba.query.expressions import Column, FunctionCall, JsonPath, Literal, SubscriptableReference
+from snuba.query.expressions import (
+    Column,
+    Expression,
+    FunctionCall,
+    Literal,
+    SubscriptableReference,
+)
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     get_field_existence_expression,
@@ -28,6 +34,18 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     aggregation_to_expression,
     get_confidence_interval_column,
 )
+
+
+def _collect_column_names(expr: Expression) -> set[str]:
+    names: set[str] = set()
+
+    def visit(node: Expression) -> Expression:
+        if isinstance(node, Column):
+            names.add(node.column_name)
+        return node
+
+    expr.transform(visit)
+    return names
 
 
 def test_generate_custom_column_alias() -> None:
@@ -251,17 +269,35 @@ def test_get_closest_percentile_index(
     assert _get_closest_percentile_index(value, percentile, granularity, width) == expected_index
 
 
-def test_attribute_key_to_expression_type_array() -> None:
+def test_attribute_key_to_expression_typed_array() -> None:
     from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 
+    # An element-typed array key reads its single typed column natively.
+    attr_key = AttributeKey(type=AttributeKey.TYPE_ARRAY_INT, name="user_ids")
+    expr = attribute_key_to_expression(attr_key)
+    assert isinstance(expr, FunctionCall)
+    assert expr.function_name == "arrayElement"
+    assert expr.alias == "user_ids_TYPE_ARRAY_INT"
+    fmt = ClickhouseExpressionFormatter()
+    sql = expr.accept(fmt)
+    assert sql == "(arrayElement(attributes_array_int, 'user_ids') AS user_ids_TYPE_ARRAY_INT)"
+
+
+def test_attribute_key_to_expression_deprecated_type_array() -> None:
+    # The deprecated untyped TYPE_ARRAY concatenates all four typed columns (normalized to
+    # Array(String)); no read of the legacy attributes_array JSON column.
     attr_key = AttributeKey(type=AttributeKey.TYPE_ARRAY, name="user_ids")
     expr = attribute_key_to_expression(attr_key)
     assert isinstance(expr, FunctionCall)
-    assert expr.function_name == "toJSONString"
-    assert expr.alias == "user_ids_TYPE_ARRAY"
-    fmt = ClickhouseExpressionFormatter()
-    sql = expr.accept(fmt)
-    assert sql == "(toJSONString(attributes_array.`user_ids`::Array(JSON)) AS user_ids_TYPE_ARRAY)"
+    assert expr.function_name == "arrayConcat"
+    columns = _collect_column_names(expr)
+    assert columns == {
+        "attributes_array_string",
+        "attributes_array_int",
+        "attributes_array_float",
+        "attributes_array_bool",
+    }
+    assert "attributes_array" not in columns
 
 
 def test_get_field_existence_expression_array_map() -> None:
@@ -301,10 +337,11 @@ def test_get_field_existence_expression_coalesce() -> None:
     assert rhs.parameters[1] == Literal(alias=None, value="http.response_content_length")
 
 
-def test_aggregation_to_expression_uniq_type_array() -> None:
+def test_aggregation_to_expression_uniq_typed_array() -> None:
+    # uniq over an element-typed array reads its single typed column natively.
     agg = AttributeConditionalAggregation(
         aggregate=Function.FUNCTION_UNIQ,
-        key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="user_ids"),
+        key=AttributeKey(type=AttributeKey.TYPE_ARRAY_INT, name="user_ids"),
         label="uniq_users",
         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
     )
@@ -315,11 +352,30 @@ def test_aggregation_to_expression_uniq_type_array() -> None:
     inner = expr.parameters[0]
     assert isinstance(inner, FunctionCall)
     assert inner.function_name == "uniqArrayIfOrNull"
-    # Must be the stored Array(JSON) path, not toJSONString (String) from attribute_key_to_expression
-    first = inner.parameters[0]
-    assert isinstance(first, JsonPath)
-    assert first.path == "user_ids"
-    assert first.return_type == "Array(JSON)"
+    # Reads only the typed int column, never the legacy attributes_array JSON column.
+    field = inner.parameters[0]
+    assert isinstance(field, FunctionCall)
+    assert field.function_name == "arrayElement"
+    assert _collect_column_names(field) == {"attributes_array_int"}
+
+
+def test_aggregation_to_expression_uniq_deprecated_type_array() -> None:
+    # uniq over the deprecated untyped TYPE_ARRAY concatenates all four typed columns.
+    agg = AttributeConditionalAggregation(
+        aggregate=Function.FUNCTION_UNIQ,
+        key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="user_ids"),
+        label="uniq_users",
+        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+    )
+    expr = aggregation_to_expression(agg, attribute_key_to_expression)
+    assert isinstance(expr, FunctionCall)
+    inner = expr.parameters[0]
+    assert isinstance(inner, FunctionCall)
+    assert inner.function_name == "uniqArrayIfOrNull"
+    field = inner.parameters[0]
+    assert isinstance(field, FunctionCall)
+    assert field.function_name == "arrayConcat"
+    assert "attributes_array" not in _collect_column_names(field)
 
 
 def test_aggregation_to_expression_sum_type_array_raises() -> None:
@@ -392,9 +448,8 @@ def _aggregation_column_names(expr: Any) -> set[str]:
 
 
 def test_conditional_aggregation_array_filter_uses_typed_columns() -> None:
-    """A conditional aggregation whose filter is on an array attribute reads the
-    typed ``attributes_array_*`` columns when ``use_array_map_columns`` is set, and
-    the legacy ``attributes_array`` JSON column otherwise."""
+    """A conditional aggregation whose filter is on an array attribute reads the typed
+    ``attributes_array_*`` columns, never the legacy ``attributes_array`` JSON column."""
     agg = AttributeConditionalAggregation(
         aggregate=Function.FUNCTION_SUM,
         key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="my.field"),
@@ -402,26 +457,18 @@ def test_conditional_aggregation_array_filter_uses_typed_columns() -> None:
         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
         filter=TraceItemFilter(
             comparison_filter=ComparisonFilter(
-                key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="my_tags"),
+                key=AttributeKey(type=AttributeKey.TYPE_ARRAY_STRING, name="my_tags"),
                 op=ComparisonFilter.OP_LIKE,
                 value=AttributeValue(val_str="%error%"),
             )
         ),
     )
 
-    default_cols = _aggregation_column_names(
-        aggregation_to_expression(agg, attribute_key_to_expression)
-    )
-    assert "attributes_array" in default_cols
-    assert not any(c.startswith("attributes_array_") for c in default_cols)
-
-    typed_cols = _aggregation_column_names(
-        aggregation_to_expression(agg, attribute_key_to_expression, use_array_map_columns=True)
-    )
-    # A LIKE pattern can only match string elements, so the array filter reads just the
-    # typed string array column — not the other typed columns nor the legacy JSON column.
-    assert "attributes_array_string" in typed_cols
-    assert "attributes_array_int" not in typed_cols
-    assert "attributes_array_float" not in typed_cols
-    assert "attributes_array_bool" not in typed_cols
-    assert "attributes_array" not in typed_cols
+    cols = _aggregation_column_names(aggregation_to_expression(agg, attribute_key_to_expression))
+    # A LIKE pattern on a string array reads just the typed string array column — not the
+    # other typed columns nor the legacy JSON column.
+    assert "attributes_array_string" in cols
+    assert "attributes_array_int" not in cols
+    assert "attributes_array_float" not in cols
+    assert "attributes_array_bool" not in cols
+    assert "attributes_array" not in cols

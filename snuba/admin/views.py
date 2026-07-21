@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import sys
+import uuid
 from collections.abc import Mapping, Sequence
 from contextlib import redirect_stdout
 from dataclasses import asdict
@@ -14,23 +15,16 @@ import structlog
 from flask import Flask, Response, g, jsonify, make_response, request
 from google.protobuf.json_format import MessageToDict, Parse
 from structlog.contextvars import bind_contextvars, clear_contextvars
+from werkzeug.exceptions import HTTPException
 
-from snuba import settings, state
+from snuba import settings
 from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
-from snuba.admin.cardinality_analyzer.cardinality_analyzer import run_metrics_query
-from snuba.admin.clickhouse.capacity_management import (
-    get_storages_with_allocation_policies,
-)
 from snuba.admin.clickhouse.common import InvalidCustomQuery, InvalidNodeError
 from snuba.admin.clickhouse.copy_tables import copy_tables
-from snuba.admin.clickhouse.database_clusters import get_node_info, get_system_settings
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
-from snuba.admin.clickhouse.predefined_cardinality_analyzer_queries import (
-    CardinalityQuery,
-)
 from snuba.admin.clickhouse.predefined_querylog_queries import QuerylogQuery
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
 from snuba.admin.clickhouse.profile_events import gather_profile_events
@@ -41,37 +35,20 @@ from snuba.admin.clickhouse.system_queries import (
 )
 from snuba.admin.clickhouse.trace_log_parsing import summarize_trace_output
 from snuba.admin.clickhouse.tracing import TraceOutput, run_query_and_get_trace
-from snuba.admin.dead_letter_queue import get_dlq_topics
-from snuba.admin.kafka.topics import get_broker_data
 from snuba.admin.migrations_policies import (
     check_migration_perms,
     get_migration_group_policies,
 )
-from snuba.admin.production_queries.prod_queries import run_mql_query, run_snql_query
+from snuba.admin.production_queries.prod_queries import run_snql_query
 from snuba.admin.rpc.rpc_queries import validate_request_meta
-from snuba.admin.runtime_config import (
-    ConfigChange,
-    ConfigType,
-    get_config_type_from_value,
-)
 from snuba.admin.tool_policies import (
     AdminTools,
     check_tool_perms,
     get_user_allowed_tools,
 )
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.configs.configuration import ConfigurableComponent
-from snuba.consumers.dlq import (
-    DlqInstruction,
-    DlqInstructionStatus,
-    DlqReplayPolicy,
-    clear_instruction,
-    load_instruction,
-    store_instruction,
-)
 from snuba.datasets.factory import InvalidDatasetError, get_enabled_dataset_names
-from snuba.datasets.storages.factory import get_storage, get_writable_storage
-from snuba.datasets.storages.storage_key import StorageKey
+from snuba.manual_jobs import Job, JobSpec
 from snuba.manual_jobs.runner import (
     list_job_specs,
     list_job_specs_with_status,
@@ -83,24 +60,13 @@ from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 from snuba.query.exceptions import InvalidQueryException
-from snuba.query.query_settings import HTTPQuerySettings
 from snuba.replacers.replacements_and_expiry import (
     get_config_auto_replacements_bypass_projects,
 )
-from snuba.request.exceptions import InvalidJsonRequestException
-from snuba.request.schema import RequestSchema
 from snuba.state.explain_meta import explain_cleanup, get_explain_meta
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.registered_class import InvalidConfigKeyError
-from snuba.web.delete_query import (
-    DeletesNotEnabledError,
-    delete_from_storage,
-    deletes_are_enabled,
-)
 from snuba.web.rpc import RPCEndpoint, list_all_endpoint_names, run_rpc_handler
-from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
-    BaseRoutingStrategy,
-)
 from snuba.web.views import dataset_query
 
 logger = structlog.get_logger().bind(module=__name__)
@@ -132,6 +98,22 @@ def handle_invalid_dataset(exception: InvalidDatasetError) -> Response:
     )
 
 
+# passthrough needed so that we don't turn these into 500s
+@application.errorhandler(HTTPException)
+def handle_http_exception(exception: HTTPException) -> HTTPException:
+    return exception
+
+
+@application.errorhandler(Exception)
+def handle_uncaught_exception(exception: Exception) -> Response:
+    logger.error(exception, exc_info=True)
+    return Response(
+        json.dumps({"error": {"type": "unknown", "message": str(exception)}}),
+        500,
+        {"Content-Type": "application/json"},
+    )
+
+
 @application.before_request
 def set_logging_context() -> None:
     clear_contextvars()
@@ -140,10 +122,8 @@ def set_logging_context() -> None:
 
 @application.before_request
 def authorize() -> None:
-    logger.debug("authorize.entered")
     if request.endpoint != "health":
         user = authorize_request()
-        logger.info("authorize.finished", user=user)
         with sentry_sdk.push_scope() as scope:
             scope.user = {"email": user.email}
             g.user = user
@@ -380,19 +360,6 @@ def clickhouse_queries() -> Response:
 def querylog_queries() -> Response:
     res = [q.to_json() for q in QuerylogQuery.all_classes()]
     return make_response(jsonify(res), 200)
-
-
-@application.route("/cardinality_queries")
-@check_tool_perms(tools=[AdminTools.CARDINALITY_ANALYZER])
-def cardinality_queries() -> Response:
-    res = [q.to_json() for q in CardinalityQuery.all_classes()]
-    return make_response(jsonify(res), 200)
-
-
-@application.route("/kafka")
-@check_tool_perms(tools=[AdminTools.KAFKA])
-def kafka_topics() -> Response:
-    return make_response(jsonify(get_broker_data()), 200)
 
 
 @application.route("/auto-replacements-bypass-projects")
@@ -783,207 +750,6 @@ def clickhouse_querylog_schema() -> Response:
         )
 
 
-@application.route("/configs", methods=["GET", "POST"])
-@check_tool_perms(tools=[AdminTools.CONFIGURATION])
-def configs() -> Response:
-    if request.method == "POST":
-        data = json.loads(request.data)
-        try:
-            key, value, desc = data["key"], data["value"], data["description"]
-
-            assert isinstance(key, str), "Invalid key"
-            assert isinstance(value, str), "Invalid value"
-            assert key != "", "Key cannot be empty string"
-
-        except (KeyError, AssertionError) as exc:
-            return Response(
-                json.dumps({"error": f"Invalid config: {str(exc)}"}),
-                400,
-                {"Content-Type": "application/json"},
-            )
-
-        existing_config = state.get_uncached_config(key)
-        if existing_config is not None:
-            return Response(
-                json.dumps({"error": f"Config with key {key} exists"}),
-                400,
-                {"Content-Type": "application/json"},
-            )
-
-        user = request.headers.get(USER_HEADER_KEY)
-
-        state.set_config(key, value, user=user)
-        state.set_config_description(key, desc, user=user)
-
-        evaluated_value = state.get_uncached_config(key)
-        assert evaluated_value is not None
-        evaluated_type = get_config_type_from_value(evaluated_value)
-
-        config = {
-            "key": key,
-            "value": str(evaluated_value),
-            "description": state.get_config_description(key),
-            "type": evaluated_type,
-        }
-
-        audit_log.record(
-            user or "",
-            AuditLogAction.ADDED_OPTION,
-            {"option": key, "new": evaluated_value},
-            notify=True,
-        )
-
-        return Response(json.dumps(config), 200, {"Content-Type": "application/json"})
-
-    descriptions = state.get_all_config_descriptions()
-
-    raw_configs: Sequence[tuple[str, Any]] = state.get_raw_configs().items()
-
-    sorted_configs = sorted(raw_configs, key=lambda c: c[0])
-
-    config_data = [
-        {
-            "key": k,
-            "value": str(v) if v is not None else None,
-            "description": str(descriptions.get(k)) if k in descriptions else None,
-            "type": get_config_type_from_value(v),
-        }
-        for (k, v) in sorted_configs
-    ]
-
-    return Response(
-        json.dumps(config_data),
-        200,
-        {"Content-Type": "application/json"},
-    )
-
-
-@application.route("/all_config_descriptions", methods=["GET"])
-@check_tool_perms(tools=[AdminTools.CONFIGURATION])
-def all_config_descriptions() -> Response:
-    return Response(
-        json.dumps(state.get_all_config_descriptions()),
-        200,
-        {"Content-Type": "application/json"},
-    )
-
-
-@application.route("/configs/<path:config_key>", methods=["PUT", "DELETE"])
-@check_tool_perms(tools=[AdminTools.CONFIGURATION])
-def config(config_key: str) -> Response:
-    if request.method == "DELETE":
-        user = request.headers.get(USER_HEADER_KEY)
-
-        # Get the old value for notifications
-        old = state.get_uncached_config(config_key)
-
-        state.delete_config(config_key, user=user)
-
-        if request.args.get("keepDescription") is None:
-            state.delete_config_description(config_key, user=user)
-
-        audit_log.record(
-            user or "",
-            AuditLogAction.REMOVED_OPTION,
-            {"option": config_key, "old": old if old else str(old)},
-            notify=True,
-        )
-
-        return Response("", 200)
-
-    # PUT currently only supports editing existing config when old and
-    # new types match. Does not currently support passing force to
-    # set_config to override the type check.
-
-    user = request.headers.get(USER_HEADER_KEY)
-    data = json.loads(request.data)
-
-    # Get the previous value for notifications
-    old = state.get_uncached_config(config_key)
-
-    try:
-        new_value = data["value"]
-        new_desc = data["description"]
-
-        assert isinstance(config_key, str), "Invalid key"
-        assert isinstance(new_value, str), "Invalid value"
-        assert config_key != "", "Key cannot be empty string"
-
-        state.set_config(
-            config_key,
-            new_value,
-            user=user,
-        )
-        state.set_config_description(config_key, new_desc, user=user)
-
-    except (KeyError, AssertionError) as exc:
-        return Response(
-            json.dumps({"error": f"Invalid config: {str(exc)}"}),
-            400,
-            {"Content-Type": "application/json"},
-        )
-    except state.MismatchedTypeException:
-        return Response(
-            json.dumps({"error": "Mismatched type"}),
-            400,
-            {"Content-Type": "application/json"},
-        )
-
-    # Value was updated successfully, refetch and return it
-    evaluated_value = state.get_uncached_config(config_key)
-    assert evaluated_value is not None
-    evaluated_type = get_config_type_from_value(evaluated_value)
-
-    # Send notification
-    audit_log.record(
-        user or "",
-        AuditLogAction.UPDATED_OPTION,
-        {
-            "option": config_key,
-            "old": old if old else str(old),
-            "new": evaluated_value,
-        },
-        notify=True,
-    )
-
-    config = {
-        "key": config_key,
-        "value": str(evaluated_value),
-        "description": state.get_config_description(config_key),
-        "type": evaluated_type,
-    }
-
-    return Response(json.dumps(config), 200, {"Content-Type": "application/json"})
-
-
-@application.route("/config_auditlog")
-@check_tool_perms(tools=[AdminTools.AUDIT_LOG])
-def config_changes() -> Response:
-    def serialize(
-        key: str,
-        ts: float,
-        user: str | None,
-        before: ConfigType | None,
-        after: ConfigType | None,
-    ) -> ConfigChange:
-        return {
-            "key": key,
-            "timestamp": ts,
-            "user": user,
-            "before": str(before) if before is not None else None,
-            "beforeType": get_config_type_from_value(before),
-            "after": str(after) if after is not None else None,
-            "afterType": get_config_type_from_value(after),
-        }
-
-    data = [
-        serialize(key, ts, user, before, after)
-        for [key, ts, user, before, after] in state.get_config_changes()
-    ]
-
-    return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
-
-
 @application.route("/clickhouse_nodes")
 @check_tool_perms(tools=[AdminTools.SYSTEM_QUERIES, AdminTools.QUERY_TRACING])
 def clickhouse_nodes() -> Response:
@@ -1023,247 +789,6 @@ def snuba_debug() -> Response:
         )
     finally:
         explain_cleanup()
-
-
-@application.route("/routing_strategies")
-@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
-def routing_strategies() -> Response:
-    return Response(
-        json.dumps(BaseRoutingStrategy.all_names()),
-        200,
-        {"Content-Type": "application/json"},
-    )
-
-
-@application.route("/storages_with_allocation_policies")
-@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
-def storages_with_allocation_policies() -> Response:
-    return Response(
-        json.dumps(get_storages_with_allocation_policies()),
-        200,
-        {"Content-Type": "application/json"},
-    )
-
-
-@application.route("/routing_strategy_configs/<path:strategy_name>", methods=["GET"])
-@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
-def get_routing_strategy_configs(strategy_name: str) -> Response:
-    strategy = BaseRoutingStrategy.get_from_name(strategy_name)()
-
-    return Response(
-        json.dumps(strategy.to_dict()),
-        200,
-        {"Content-Type": "application/json"},
-    )
-
-
-@application.route("/allocation_policy_configs/<path:storage_key>", methods=["GET"])
-@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
-def get_allocation_policy_configs(storage_key: str) -> Response:
-    storage = get_storage(StorageKey(storage_key))
-    policies = storage.get_allocation_policies() + storage.get_delete_allocation_policies()
-
-    return Response(
-        json.dumps([policy.to_dict() for policy in policies]),
-        200,
-        {"Content-Type": "application/json"},
-    )
-
-
-@application.route("/set_configurable_component_configuration", methods=["POST", "DELETE"])
-@check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
-def set_configuration() -> Response:
-    data = json.loads(request.data)
-    user = request.headers.get(USER_HEADER_KEY)
-
-    try:
-        configurable_component_namespace = data["configurable_component_namespace"]
-        configurable_component_class_name = data["configurable_component_class_name"]
-        resource_name = data["resource_name"]
-        assert isinstance(configurable_component_namespace, str), (
-            f"Invalid configurable_component_namespace: {configurable_component_namespace}"
-        )
-        assert isinstance(configurable_component_class_name, str), (
-            f"Invalid configurable_component_class_name: {configurable_component_class_name}"
-        )
-        assert isinstance(resource_name, str), f"Invalid resource_name {resource_name}"
-        configurable_component = (
-            ConfigurableComponent.get_component_class(configurable_component_namespace)
-            .get_from_name(configurable_component_class_name)
-            .create_minimal_instance(resource_name)
-        )
-
-        key = data["key"]
-        params = data.get("params", {})
-        assert isinstance(key, str), "Invalid key"
-        assert isinstance(params, dict), "Invalid params"
-        assert key != "", "Key cannot be empty string"
-
-    except Exception as exc:
-        return Response(
-            json.dumps({"error": f"Invalid config: {str(exc)}"}),
-            400,
-            {"Content-Type": "application/json"},
-        )
-
-    if request.method == "DELETE":
-        configurable_component.delete_config_value(config_key=key, params=params, user=user)
-        audit_log.record(
-            user or "",
-            AuditLogAction.CONFIGURABLE_COMPONENT_DELETE,
-            {
-                "resource_identifier": resource_name,
-                "configurable_component_class_name": configurable_component.class_name(),
-                "key": key,
-            },
-            notify=True,
-        )
-        return Response("", 200)
-    if request.method == "POST":
-        try:
-            value = data["value"]
-            assert isinstance(value, str), "Invalid value"
-            configurable_component.set_config_value(
-                config_key=key, value=value, params=params, user=user
-            )
-            audit_log.record(
-                user or "",
-                AuditLogAction.CONFIGURABLE_COMPONENT_UPDATE,
-                {
-                    "resource_identifier": resource_name,
-                    "configurable_component_class_name": configurable_component.class_name(),
-                    "key": key,
-                    "value": value,
-                    "params": str(params),
-                },
-                notify=True,
-            )
-            return Response("", 200)
-        except (KeyError, AssertionError) as exc:
-            return Response(
-                json.dumps({"error": f"Invalid config: {str(exc)}"}),
-                400,
-                {"Content-Type": "application/json"},
-            )
-    else:
-        return Response(
-            json.dumps({"error": "Method not allowed"}),
-            405,
-            {"Content-Type": "application/json"},
-        )
-
-
-@application.route("/cardinality_query", methods=["POST"])
-@check_tool_perms(tools=[AdminTools.CARDINALITY_ANALYZER])
-def cardinality_analyzer_query() -> Response:
-    # HACK (Volo):
-    # mostly copypasta from querylog, should not stick around for too long
-    # when production query tool gets made this should not be necessary
-    user = request.headers.get(USER_HEADER_KEY, "unknown")
-    if user == "unknown" and settings.ADMIN_AUTH_PROVIDER != "NOOP":
-        return Response(
-            json.dumps({"error": "Unauthorized"}),
-            401,
-            {"Content-Type": "application/json"},
-        )
-    req = json.loads(request.data)
-    try:
-        raw_sql = req["sql"]
-    except KeyError as e:
-        return make_response(
-            jsonify(
-                {
-                    "error": {
-                        "type": "request",
-                        "message": f"Invalid request, missing key {e.args[0]}",
-                    }
-                }
-            ),
-            400,
-        )
-    try:
-        result = run_metrics_query(raw_sql, user)
-        rows, columns = result.results, result.meta
-        if columns:
-            return make_response(
-                jsonify({"column_names": [name for name, _ in columns], "rows": rows}),
-                200,
-            )
-        return make_response(
-            jsonify({"error": {"type": "unknown", "message": "no columns"}}),
-            500,
-        )
-    except ClickhouseError as err:
-        details = {
-            "type": "clickhouse",
-            "message": str(err),
-            "code": err.code,
-        }
-        return make_response(jsonify({"error": details}), 400)
-    except InvalidCustomQuery as err:
-        return Response(
-            json.dumps({"error": {"message": str(err)}}, indent=4),
-            400,
-            {"Content-Type": "application/json"},
-        )
-    except Exception as err:
-        return make_response(
-            jsonify({"error": {"type": "unknown", "message": str(err)}}),
-            500,
-        )
-
-
-@application.route("/dead_letter_queue", methods=["GET"])
-@check_tool_perms(tools=[AdminTools.KAFKA])
-def dlq_topics() -> Response:
-    return make_response(jsonify(get_dlq_topics()), 200)
-
-
-@application.route("/dead_letter_queue/replay", methods=["GET", "POST", "DELETE"])
-@check_tool_perms(tools=[AdminTools.KAFKA])
-def dlq_replay() -> Response:
-    if request.method == "POST":
-        req = request.get_json() or {}  # Required for typing
-
-        try:
-            policy = DlqReplayPolicy(req["policy"])
-            storage_key = StorageKey(req["storage"])
-            slice_id = req["slice"]
-            max_messages_to_process = req["maxMessages"]
-            assert max_messages_to_process > 0, "maxMessages must be greater than 1"
-        except (KeyError, AssertionError):
-            return make_response("Missing required fields", 400)
-
-        if load_instruction() is not None:
-            return make_response("Instruction exists", 400)
-
-        instruction = DlqInstruction(
-            policy,
-            DlqInstructionStatus.NOT_STARTED,
-            storage_key,
-            slice_id,
-            max_messages_to_process,
-        )
-
-        user = request.headers.get(USER_HEADER_KEY)
-
-        audit_log.record(
-            user or "",
-            AuditLogAction.DLQ_REPLAY,
-            {"instruction": str(instruction)},
-            notify=True,
-        )
-        store_instruction(instruction)
-
-    if request.method == "DELETE":
-        clear_instruction()
-
-    loaded_instruction = load_instruction()
-
-    if loaded_instruction is None:
-        return make_response(jsonify(None), 200)
-
-    return make_response(loaded_instruction.to_bytes().decode("utf-8"), 200)
 
 
 @application.route("/rpc_endpoints", methods=["GET"])
@@ -1324,21 +849,6 @@ def production_snql_query() -> Response:
         )
 
 
-@application.route("/production_mql_query", methods=["POST"])
-@check_tool_perms(tools=[AdminTools.PRODUCTION_QUERIES])
-def production_mql_query() -> Response:
-    body = json.loads(request.data)
-    body["tenant_ids"] = {"referrer": request.referrer, "organization_id": ORG_ID}
-    try:
-        return run_mql_query(body, g.user.email)
-    except InvalidQueryException as exception:
-        return Response(
-            json.dumps({"error": {"message": str(exception)}}, indent=4),
-            400,
-            {"Content-Type": "application/json"},
-        )
-
-
 @application.route("/allowed_projects", methods=["GET"])
 @check_tool_perms(tools=[AdminTools.PRODUCTION_QUERIES])
 def get_allowed_projects() -> Response:
@@ -1348,77 +858,6 @@ def get_allowed_projects() -> Response:
 @application.route("/admin_regions", methods=["GET"])
 def get_admin_regions() -> Response:
     return make_response(jsonify(settings.ADMIN_REGIONS), 200)
-
-
-@application.route(
-    "/delete",
-    methods=["DELETE"],
-)
-@check_tool_perms(tools=[AdminTools.DELETE_TOOL])
-def delete() -> Response:
-    """
-    Given a storage name and columns object, parses the input and calls
-    delete_from_storage with them.
-
-    Input:
-        an http DELETE request with a json body containing elements "storage" and "columns"
-        see delete_from_storage for definition of these inputs.
-    """
-    body = request.get_json()
-    assert isinstance(body, dict)
-    storage = body.pop("storage", None)
-    if storage is None:
-        return make_response(
-            jsonify(
-                {
-                    "error",
-                    "all required input 'storage' is not present in the request body",
-                }
-            ),
-            400,
-        )
-    try:
-        storage = get_writable_storage(StorageKey(storage))
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {
-                    "error": str(e),
-                }
-            ),
-            400,
-        )
-    try:
-        schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
-        request_parts = schema.validate(body)
-        delete_results = delete_from_storage(
-            storage,
-            request_parts.query["query"]["columns"],
-            request_parts.attribution_info,
-        )
-    except (InvalidJsonRequestException, DeletesNotEnabledError) as schema_error:
-        return make_response(
-            jsonify({"error": str(schema_error)}),
-            400,
-        )
-    except Exception as e:
-        if application.debug:
-            from traceback import format_exception
-
-            return make_response(jsonify({"error": format_exception(e)}), 500)
-        sentry_sdk.capture_exception(e)
-        return make_response(jsonify({"error": "unexpected internal error"}), 500)
-
-    return Response(json.dumps(delete_results), 200, {"Content-Type": "application/json"})
-
-
-@application.route(
-    "/deletes-enabled",
-    methods=["GET"],
-)
-@check_tool_perms(tools=[AdminTools.DELETE_TOOL])
-def deletes_enabled() -> Response:
-    return make_response(jsonify(deletes_are_enabled()), 200)
 
 
 @application.route("/job-specs", methods=["GET"])
@@ -1453,28 +892,56 @@ def get_job_logs(job_id: str) -> Response:
     return make_response(jsonify(view_job_logs(job_id)), 200)
 
 
-@application.route("/clickhouse_node_info")
-@check_tool_perms(tools=[AdminTools.DATABASE_CLUSTERS])
-def clickhouse_node_info() -> Response:
-    try:
-        node_info = get_node_info()
-        return make_response(jsonify(node_info), 200)
-    except Exception as e:
-        return make_response(jsonify({"error": str(e)}), 500)
+@application.route("/job-types", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.MANUAL_JOBS])
+def get_job_types() -> Response:
+    """Registered jobs that may be run ad-hoc without a manifest entry. Only
+    jobs that opt in via ``allow_adhoc_run`` (read-only / idempotent ones) are
+    listed; destructive jobs stay gated behind an explicit manifest entry."""
+    adhoc_job_types = sorted(
+        name for name in Job.all_names() if Job.class_from_name(name).allow_adhoc_run
+    )
+    return make_response(jsonify(adhoc_job_types), 200)
 
 
-@application.route("/clickhouse_system_settings")
-@check_tool_perms(tools=[AdminTools.DATABASE_CLUSTERS])
-def clickhouse_system_settings() -> Response:
-    host = request.args.get("host")
-    port = request.args.get("port")
-    storage = request.args.get("storage")
-    if not all([host, port, storage]):
-        return make_response(jsonify({"error": "Host, port, and storage are required"}), 400)
+@application.route("/job-types/<job_type>/run", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.MANUAL_JOBS])
+def run_job_by_type(job_type: str) -> Response:
+    """Run an ad-hoc-allowed job by its type without needing a manifest entry.
+    A fresh job id is generated on every call, so the same job can be run any
+    number of times, each run getting its own status and logs."""
     try:
-        # conversions for typing
-        settings = get_system_settings(str(host), int(str(port)), str(storage))
-        return make_response(jsonify(settings), 200)
+        job_class = Job.class_from_name(job_type)
+    except InvalidConfigKeyError:
+        job_class = None
+    if job_class is None or not job_class.allow_adhoc_run:
+        return make_response(
+            jsonify(
+                {
+                    "error": (
+                        f"Job type '{job_type}' cannot be run ad-hoc. "
+                        "Add a manifest entry to run it."
+                    )
+                }
+            ),
+            403,
+        )
+
+    try:
+        params: dict[Any, Any] = {}
+        if request.data:
+            body = json.loads(request.data)
+            params = body.get("params") or {}
+            assert isinstance(params, dict), "`params` must be an object"
     except Exception as e:
-        sentry_sdk.capture_exception(e)
-        return make_response(jsonify({"error": str(e)}), 500)
+        return make_response(jsonify({"error": str(e)}), 400)
+
+    job_id = f"{job_type}_{uuid.uuid4().hex}"
+    try:
+        job_status = run_job(JobSpec(job_id=job_id, job_type=job_type, params=params or None))
+    except Exception as e:
+        # The runner records status/logs under job_id before raising, so hand
+        # it back to let operators inspect the failed run's logs.
+        return make_response(jsonify({"error": str(e), "job_id": job_id}), 500)
+
+    return make_response(jsonify({"job_id": job_id, "status": job_status}), 200)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import MutableMapping, Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 
 from snuba.clickhouse.query import Expression
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
@@ -30,7 +30,6 @@ from snuba.query.expressions import (
     CurriedFunctionCall,
     DangerousRawSQL,
     FunctionCall,
-    JsonPath,
     Lambda,
     Literal,
     SubscriptableReference,
@@ -182,10 +181,6 @@ class SnubaClickhouseMappingTranslator(SnubaClickhouseStrictTranslator):
         # DangerousRawSQL is passed through unchanged during translation
         # since it contains pre-formatted SQL that should not be modified
         return exp
-
-    def visit_json_path(self, exp: JsonPath) -> Expression:
-        translated_base = exp.base.accept(self)
-        return replace(exp, base=translated_base)
 
     def translate_function_strict(self, exp: FunctionCall) -> FunctionCall:
         """

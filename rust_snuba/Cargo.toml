@@ -24,7 +24,6 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 adler = "1.0.2"
 anyhow = { version = "1.0.69", features = ["backtrace"] }
-cadence = "1.0.0"
 chrono = { version = "0.4.26", features = ["serde"] }
 cityhash-rs = "1.0.1"
 ctrlc = { version = "3.2.5", features = ["termination"] }
@@ -34,6 +33,8 @@ hyper = "1.2.0"
 json-schema-diff = "0.1.7"
 lz4_flex = "0.11"
 md5 = "0.7.0"
+metrics = "0.24.3"
+metrics-exporter-dogstatsd = "0.9.6"
 parking_lot = "0.12.1"
 procspawn = { version = "1.0.0", features = ["json"] }
 prost = "0.14"
@@ -54,17 +55,16 @@ sentry = { version = "0.41.0", default-features = false, features = [
     "tracing",
     "logs"
 ] }
-sentry-kafka-schemas = "2.1.36"
-sentry-options = "1.0.11"
+sentry-kafka-schemas = "2.1.39"
+sentry-options = "1.2.1"
 sentry_protos = "0.34.0"
 sentry_arroyo = { version = "2.40.0", features = ["ssl"] }
 sentry_usage_accountant = { version = "0.1.2", features = ["kafka"] }
 seq-macro = "0.3"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = { version = "1.0" }
+serde_json = { version = "1.0", features = ["raw_value"] }
 serde_path_to_error = "0.1.15"
 serde_with = "3.8.1"
-statsdproxy = { version = "0.4.1", features = ["cadence"] }
 thiserror = "1.0"
 tokio = { version = "1.38.2", features = ["full"] }
 tokio-stream = "0.1.15"
@@ -76,6 +76,7 @@ bytes = "1.11"
 
 
 [dev-dependencies]
+metrics-util = "0.20"
 scopeguard = "1.2.0"
 criterion = "0.5.1"
 httpmock = "0.7.0"

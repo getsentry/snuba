@@ -2,8 +2,8 @@ from collections.abc import Sequence
 from datetime import datetime, timedelta
 
 import pytest
+from sentry_options.testing import override_options
 
-from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.subscriptions.data import (
     ScheduledSubscriptionTask,
@@ -228,14 +228,14 @@ def test_sequences(
     subscriptions and validate the proper jitter is applied.
     state.
     """
-    state.set_config("subscription_primary_task_builder", primary_builder_config)
-    output = []
-    for timestamp, subscription in sequence_in:
-        ret = builder.get_task(
-            SubscriptionWithMetadata(EntityKey.EVENTS, subscription, 1), timestamp
-        )
-        if ret:
-            output.append((timestamp, ret))
+    with override_options("snuba", {"subscription_primary_task_builder": primary_builder_config}):
+        output = []
+        for timestamp, subscription in sequence_in:
+            ret = builder.get_task(
+                SubscriptionWithMetadata(EntityKey.EVENTS, subscription, 1), timestamp
+            )
+            if ret:
+                output.append((timestamp, ret))
 
-    assert output == task_sequence
-    assert builder.reset_metrics() == metrics
+        assert output == task_sequence
+        assert builder.reset_metrics() == metrics

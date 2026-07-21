@@ -1,4 +1,5 @@
 import pytest
+from sentry_options.testing import override_options
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.query.conditions import (
@@ -9,7 +10,6 @@ from snuba.query.conditions import (
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.processors.physical.mapping_optimizer import MappingOptimizer
 from snuba.query.query_settings import HTTPQuerySettings
-from snuba.state import set_config
 from tests.query.processors.query_builders import (
     build_query,
     column,
@@ -381,11 +381,11 @@ TEST_CASES = [
 
 @pytest.mark.parametrize("query, expected_condition", TEST_CASES)
 @pytest.mark.redis_db
+@override_options("snuba", {"tags_hash_map_enabled": True})
 def test_tags_hash_map(
     query: ClickhouseQuery,
     expected_condition: Expression,
 ) -> None:
-    set_config("tags_hash_map_enabled", 1)
     MappingOptimizer(
         column_name="tags",
         hash_map_name="_tags_hash_map",
