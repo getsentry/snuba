@@ -50,7 +50,6 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     VirtualColumnContext,
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
-    AndFilter,
     ComparisonFilter,
     ExistsFilter,
     NotFilter,
@@ -2708,9 +2707,9 @@ class TestTraceItemTable(BaseApiTest):
     @pytest.mark.foo
     def test_filter_on_multiple_attributes(self) -> None:
         """
-        Seeds spans across three traces, filters on multiple attributes
-        (animal_type != "hyena" AND (wing.count > 1 OR bark.db > 50)), groups the
-        surviving spans by trace_id, and counts the animal_types in each group.
+        Seeds spans across three traces, groups by trace_id, and uses an
+        aggregation_filter (HAVING) built from conditional counts to keep traces
+        where no span is a hyena OR some span has wing.count > 1 / bark.db > 50.
         """
         span_ts = BASE_TIME - timedelta(minutes=1)
 
@@ -2735,43 +2734,6 @@ class TestTraceItemTable(BaseApiTest):
                 end_timestamp=END_TIMESTAMP,
                 trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
-            filter=TraceItemFilter(
-                and_filter=AndFilter(
-                    filters=[
-                        TraceItemFilter(
-                            comparison_filter=ComparisonFilter(
-                                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="animal_type"),
-                                op=ComparisonFilter.OP_NOT_EQUALS,
-                                value=AttributeValue(val_str="hyena"),
-                            )
-                        ),
-                        TraceItemFilter(
-                            or_filter=OrFilter(
-                                filters=[
-                                    TraceItemFilter(
-                                        comparison_filter=ComparisonFilter(
-                                            key=AttributeKey(
-                                                type=AttributeKey.TYPE_DOUBLE, name="wing.count"
-                                            ),
-                                            op=ComparisonFilter.OP_GREATER_THAN,
-                                            value=AttributeValue(val_double=1),
-                                        )
-                                    ),
-                                    TraceItemFilter(
-                                        comparison_filter=ComparisonFilter(
-                                            key=AttributeKey(
-                                                type=AttributeKey.TYPE_DOUBLE, name="bark.db"
-                                            ),
-                                            op=ComparisonFilter.OP_GREATER_THAN,
-                                            value=AttributeValue(val_double=50),
-                                        )
-                                    ),
-                                ]
-                            )
-                        ),
-                    ]
-                )
-            ),
             columns=[
                 Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.trace_id")),
                 Column(
@@ -2784,6 +2746,78 @@ class TestTraceItemTable(BaseApiTest):
                 ),
             ],
             group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.trace_id")],
+            # HAVING over each trace: (no span is a hyena) OR (some span has
+            # wing.count > 1 or bark.db > 50). Each clause is a conditional count
+            # compared against 0, giving true group-level NOT-EXISTS / EXISTS.
+            aggregation_filter=AggregationFilter(
+                or_filter=AggregationOrFilter(
+                    filters=[
+                        AggregationFilter(
+                            comparison_filter=AggregationComparisonFilter(
+                                conditional_aggregation=AttributeConditionalAggregation(
+                                    aggregate=Function.FUNCTION_COUNT,
+                                    key=AttributeKey(
+                                        type=AttributeKey.TYPE_STRING, name="animal_type"
+                                    ),
+                                    label="hyena_count",
+                                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                                    filter=TraceItemFilter(
+                                        comparison_filter=ComparisonFilter(
+                                            key=AttributeKey(
+                                                type=AttributeKey.TYPE_STRING, name="animal_type"
+                                            ),
+                                            op=ComparisonFilter.OP_EQUALS,
+                                            value=AttributeValue(val_str="hyena"),
+                                        )
+                                    ),
+                                ),
+                                op=AggregationComparisonFilter.OP_EQUALS,
+                                val=0,
+                            )
+                        ),
+                        AggregationFilter(
+                            comparison_filter=AggregationComparisonFilter(
+                                conditional_aggregation=AttributeConditionalAggregation(
+                                    aggregate=Function.FUNCTION_COUNT,
+                                    key=AttributeKey(
+                                        type=AttributeKey.TYPE_STRING, name="animal_type"
+                                    ),
+                                    label="match_count",
+                                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                                    filter=TraceItemFilter(
+                                        or_filter=OrFilter(
+                                            filters=[
+                                                TraceItemFilter(
+                                                    comparison_filter=ComparisonFilter(
+                                                        key=AttributeKey(
+                                                            type=AttributeKey.TYPE_DOUBLE,
+                                                            name="wing.count",
+                                                        ),
+                                                        op=ComparisonFilter.OP_GREATER_THAN,
+                                                        value=AttributeValue(val_double=1),
+                                                    )
+                                                ),
+                                                TraceItemFilter(
+                                                    comparison_filter=ComparisonFilter(
+                                                        key=AttributeKey(
+                                                            type=AttributeKey.TYPE_DOUBLE,
+                                                            name="bark.db",
+                                                        ),
+                                                        op=ComparisonFilter.OP_GREATER_THAN,
+                                                        value=AttributeValue(val_double=50),
+                                                    )
+                                                ),
+                                            ]
+                                        )
+                                    ),
+                                ),
+                                op=AggregationComparisonFilter.OP_GREATER_THAN,
+                                val=0,
+                            )
+                        ),
+                    ]
+                )
+            ),
             order_by=[
                 TraceItemTableRequest.OrderBy(
                     column=Column(
@@ -2794,18 +2828,19 @@ class TestTraceItemTable(BaseApiTest):
             limit=50,
         )
         response = EndpointTraceItemTable().execute(message)
-        # Only bird (trace_1) and dog (trace_3) survive the filter; trace_2's spans
-        # (emu, cat) are all filtered out, so that trace is absent from the results.
+        # All three traces satisfy the HAVING: trace_2 and trace_3 have no hyena, and
+        # trace_1 has a matching span (bird, wing.count=2). count(animal_type) is over
+        # every span in the trace (no row filter now): trace_1=2, trace_2=2, trace_3=1.
         # Groups come back ordered by trace_id.
-        surviving_trace_ids = sorted([trace_1, trace_3])
+        expected = sorted([(trace_1, 2), (trace_2, 2), (trace_3, 1)])
         assert response.column_values == [
             TraceItemColumnValues(
                 attribute_name="sentry.trace_id",
-                results=[AttributeValue(val_str=tid) for tid in surviving_trace_ids],
+                results=[AttributeValue(val_str=tid) for tid, _ in expected],
             ),
             TraceItemColumnValues(
                 attribute_name="count(animal_type)",
-                results=[AttributeValue(val_double=1), AttributeValue(val_double=1)],
+                results=[AttributeValue(val_double=count) for _, count in expected],
             ),
         ]
 
