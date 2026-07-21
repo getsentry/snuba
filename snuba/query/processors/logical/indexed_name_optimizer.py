@@ -1,4 +1,3 @@
-from typing import Optional
 
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
@@ -80,7 +79,7 @@ class IndexedNameOptimizer(LogicalQueryProcessor):
     INDEXED_NAME_COLUMN = "indexed_name"
     ATTRIBUTES_STRING_COLUMN = "attributes_string"
 
-    def _single_equals_int(self, query: Query, column_name: str) -> Optional[int]:
+    def _single_equals_int(self, query: Query, column_name: str) -> int | None:
         """Return the integer value from a single ``equals(<column_name>, N)``
         top-level condition, or ``None`` if the query is not unambiguously scoped
         by exactly one such condition."""
@@ -116,7 +115,7 @@ class IndexedNameOptimizer(LogicalQueryProcessor):
             self._single_equals_int(query, "organization_id") == organization_id
         )
 
-    def _indexed_name_key(self, query: Query) -> Optional[str]:
+    def _indexed_name_key(self, query: Query) -> str | None:
         """Return the attribute name promoted into ``indexed_name`` for this
         query, or ``None`` if the query is not unambiguously scoped to a single
         supported item type."""
@@ -125,7 +124,7 @@ class IndexedNameOptimizer(LogicalQueryProcessor):
             return None
         return self.INDEXED_NAME_KEY_BY_ITEM_TYPE.get(item_type)
 
-    def _indexed_name_ref(self, exp: Expression, key: str) -> Optional[Column]:
+    def _indexed_name_ref(self, exp: Expression, key: str) -> Column | None:
         """If ``exp`` is an ``attributes_string[key]`` access — either the
         ``arrayElement(attributes_string, key)`` form emitted by the EAP RPC
         builder or the hand-written ``SubscriptableReference`` form — return the
