@@ -153,6 +153,11 @@ fn make_inserter<R: clickhouse::Row>(
     let lb = get_load_balancing_config(storage_name);
     let mut inserter = client
         .inserter::<R>(table)
+        // Bound each chunk-send and flush by the batch period. Without this the
+        // crate has no insert timeout, so a stalled ClickHouse or black-holed
+        // connection would block the actor indefinitely; the timeout instead
+        // surfaces as a write/commit error → fail-stop → Kafka replay.
+        .with_timeouts(Some(max_batch_time), Some(max_batch_time))
         .with_max_rows(max_rows)
         .with_max_bytes(max_bytes)
         .with_period(Some(max_batch_time))
