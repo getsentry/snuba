@@ -920,6 +920,7 @@ def _apply_allocation_policies_quota(
                 else "unknown"
             )
             span.set_data("policy", rejecting_policy)
+            span.set_data("action", "rejected")
             metrics.increment(
                 "rejected_query",
                 tags={
@@ -932,6 +933,7 @@ def _apply_allocation_policies_quota(
         if throttle_quota_and_policy is not None:
             throttling_policy = throttle_quota_and_policy.policy.class_name()
             span.set_data("policy", throttling_policy)
+            span.set_data("action", "throttled")
             metrics.increment(
                 "throttled_query",
                 tags={
