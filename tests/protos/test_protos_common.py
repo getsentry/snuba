@@ -5,7 +5,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.protos.common import (
     ATTRIBUTES_TO_COALESCE,
-    UNBACKFILLED_NORMALIZED_COLUMNS_ORG_ALLOWLIST_OPTION,
+    UNPOPULATED_NORMALIZED_COLUMNS_ORG_ALLOWLIST_OPTION,
     MalformedAttributeException,
     _resolve_canonical,
     attribute_key_to_expression,
@@ -173,14 +173,14 @@ class TestAttributeKeyToExpression:
         assert "must be one of" in str(exc_info.value)
 
 
-# An unbackfilled normalized column key; present in the resolved column set only when the
+# An unpopulated normalized column key; present in the resolved column set only when the
 # org is opted into the allowlist (see get_normalized_columns_eap_items).
-_UNBACKFILLED_KEY = "gen_ai.conversation.id"
+_UNPOPULATED_KEY = "gen_ai.conversation.id"
 
 
 class TestGetNormalizedColumnsEapItems:
     @pytest.mark.parametrize(
-        "allowlist,organization_id,expected_unbackfilled",
+        "allowlist,organization_id,expected_unpopulated",
         [
             # opted in: the org appears in a well-formed allowlist
             ("1,2,3", 2, True),
@@ -195,13 +195,13 @@ class TestGetNormalizedColumnsEapItems:
             ("1,abc", 1, False),  # non-numeric entry
         ],
     )
-    def test_unbackfilled_columns_gate(
-        self, allowlist: str, organization_id: int | None, expected_unbackfilled: bool
+    def test_unpopulated_columns_gate(
+        self, allowlist: str, organization_id: int | None, expected_unpopulated: bool
     ) -> None:
         with override_options(
-            "snuba", {UNBACKFILLED_NORMALIZED_COLUMNS_ORG_ALLOWLIST_OPTION: allowlist}
+            "snuba", {UNPOPULATED_NORMALIZED_COLUMNS_ORG_ALLOWLIST_OPTION: allowlist}
         ):
             columns = get_normalized_columns_eap_items(organization_id)
-        assert (_UNBACKFILLED_KEY in columns) is expected_unbackfilled
-        # backfilled normalized columns are always present regardless of the gate
+        assert (_UNPOPULATED_KEY in columns) is expected_unpopulated
+        # populated normalized columns are always present regardless of the gate
         assert "sentry.trace_id" in columns
