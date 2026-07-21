@@ -395,7 +395,7 @@ def _convert_limit_by(
     for limit_by_column in limit_by.columns:
         which = limit_by_column.WhichOneof("column")
         if which == "key":
-            expression = attribute_key_to_expression(limit_by_column.key)
+            expression: Expression | None = attribute_key_to_expression(limit_by_column.key)
         elif which == "label":
             expression = label_to_expression.get(limit_by_column.label)
             if expression is None:
