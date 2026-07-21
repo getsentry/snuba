@@ -1461,9 +1461,7 @@ class TestEmptyVsAbsentComparison:
 
 class TestSemverSortKey:
     def test_expression_structure(self) -> None:
-        from snuba.query.dsl import column as snuba_column
-
-        expr = semver_sort_key(snuba_column("release"))
+        expr = semver_sort_key(column("release"))
         assert isinstance(expr, FunctionCall)
         assert expr.function_name == "tuple"
         assert len(expr.parameters) == 3
@@ -1479,16 +1477,12 @@ class TestSemverSortKey:
         assert raw_str_expr.function_name == "ifNull"
 
     def test_alias_is_forwarded(self) -> None:
-        from snuba.query.dsl import column as snuba_column
-
-        expr = semver_sort_key(snuba_column("release"), alias="semver_key")
+        expr = semver_sort_key(column("release"), alias="semver_key")
         assert isinstance(expr, FunctionCall)
         assert expr.alias == "semver_key"
 
     def test_no_alias_by_default(self) -> None:
-        from snuba.query.dsl import column as snuba_column
-
-        expr = semver_sort_key(snuba_column("release"))
+        expr = semver_sort_key(column("release"))
         assert expr.alias is None
 
 

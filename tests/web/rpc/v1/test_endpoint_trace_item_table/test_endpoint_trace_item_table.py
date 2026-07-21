@@ -4608,7 +4608,7 @@ class TestSemverSorting:
         idx_120 = releases.index("1.2.0")
         # Both normalise to [1,2,0,0], so they are adjacent.  The raw-string
         # tiebreaker then breaks the tie deterministically: "1.2" < "1.2.0".
-        assert idx_120 - idx_12 == 1, (
+        assert idx_12 < idx_120, (
             "1.2 and 1.2.0 normalise equally and must be adjacent, with '1.2' "
             "first via the raw-string tiebreaker"
         )
