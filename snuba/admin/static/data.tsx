@@ -1,6 +1,4 @@
-import RuntimeConfig from "SnubaAdmin/runtime_config";
 import AutoReplacementsBypassProjects from "SnubaAdmin/auto_replacements_bypass_projects";
-import AuditLog from "SnubaAdmin/runtime_config/auditlog";
 import ClickhouseMigrations from "SnubaAdmin/clickhouse_migrations";
 import ClickhouseQueries from "SnubaAdmin/clickhouse_queries";
 import CopyTables from "SnubaAdmin/copy_tables";
@@ -16,7 +14,6 @@ import RpcEndpoints from "SnubaAdmin/rpc_endpoints";
 
 const NAV_ITEMS = [
   { id: "overview", display: "🤿 Snuba Admin", component: Welcome },
-  { id: "config", display: "⚙️ Runtime Config", component: RuntimeConfig },
   {
     id: "auto-replacements-bypass-projects",
     display: "👻 Replacements",
@@ -71,11 +68,6 @@ const NAV_ITEMS = [
     id: "querylog",
     display: "🔍 ClickHouse Querylog",
     component: QuerylogQueries,
-  },
-  {
-    id: "auditlog",
-    display: "📝 Audit Log",
-    component: AuditLog,
   },
   {
     id: "production-queries",

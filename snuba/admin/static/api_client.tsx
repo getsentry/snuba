@@ -1,15 +1,6 @@
 import { AllowedTools, Settings } from "SnubaAdmin/types";
 
 import {
-  Config,
-  ConfigKey,
-  ConfigValue,
-  ConfigChange,
-  ConfigDescription,
-  ConfigDescriptions,
-} from "SnubaAdmin/runtime_config/types";
-
-import {
   ClickhouseNodeData,
   QueryRequest,
   QueryResult,
@@ -37,23 +28,9 @@ import { AutoReplacementsBypassProjectsData } from "SnubaAdmin/auto_replacements
 
 interface Client {
   getSettings: () => Promise<Settings>;
-  getConfigs: () => Promise<Config[]>;
   getAutoReplacementsBypassProjects: () => Promise<
     AutoReplacementsBypassProjectsData[]
   >;
-  createNewConfig: (
-    key: ConfigKey,
-    value: ConfigValue,
-    description: ConfigDescription,
-  ) => Promise<Config>;
-  deleteConfig: (key: ConfigKey, keepDescription: boolean) => Promise<void>;
-  editConfig: (
-    key: ConfigKey,
-    value: ConfigValue,
-    description: ConfigDescription,
-  ) => Promise<Config>;
-  getDescriptions: () => Promise<ConfigDescriptions>;
-  getAuditlog: () => Promise<ConfigChange[]>;
   getClickhouseNodes: () => Promise<[ClickhouseNodeData]>;
   getSnubaDatasetNames: () => Promise<SnubaDatasetName[]>;
   getAllowedProjects: () => Promise<string[]>;
@@ -91,81 +68,11 @@ function Client(): Client {
       const url = baseUrl + "settings";
       return fetch(url).then((resp) => resp.json());
     },
-    getConfigs: () => {
-      const url = baseUrl + "configs";
-      return fetch(url).then((resp) => resp.json());
-    },
     getAutoReplacementsBypassProjects: () => {
       const url = baseUrl + "auto-replacements-bypass-projects";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
       }).then((resp) => resp.json());
-    },
-    createNewConfig: (
-      key: ConfigKey,
-      value: ConfigValue,
-      description: ConfigDescription,
-    ) => {
-      const url = baseUrl + "configs";
-      const params = { key, value, description };
-
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-        body: JSON.stringify(params),
-      }).then((res) => {
-        if (res.ok) {
-          return Promise.resolve(res.json());
-        } else {
-          return res.json().then((err) => {
-            let errMsg = err?.error || "Could not create config";
-            throw new Error(errMsg);
-          });
-        }
-      });
-    },
-    deleteConfig: (key: ConfigKey, keepDescription: boolean) => {
-      const url =
-        baseUrl +
-        "configs/" +
-        encodeURIComponent(key) +
-        (keepDescription ? "?keepDescription=true" : "");
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-        method: "DELETE",
-      }).then((res) => {
-        if (res.ok) {
-          return;
-        } else {
-          throw new Error("Could not delete config");
-        }
-      });
-    },
-    editConfig: (
-      key: ConfigKey,
-      value: ConfigValue,
-      description: ConfigDescription,
-    ) => {
-      const url = baseUrl + "configs/" + encodeURIComponent(key);
-      return fetch(url, {
-        headers: { "Content-Type": "application/json" },
-        method: "PUT",
-        body: JSON.stringify({ value, description }),
-      }).then((res) => {
-        if (res.ok) {
-          return Promise.resolve(res.json());
-        } else {
-          throw new Error("Could not edit config");
-        }
-      });
-    },
-    getDescriptions: () => {
-      const url = baseUrl + "all_config_descriptions";
-      return fetch(url).then((resp) => resp.json());
-    },
-    getAuditlog: () => {
-      const url = baseUrl + "config_auditlog";
-      return fetch(url).then((resp) => resp.json());
     },
     getClickhouseNodes: () => {
       const url = baseUrl + "clickhouse_nodes";
