@@ -132,6 +132,40 @@ class TestTraceItemAttributeNames(BaseApiTest):
         res = EndpointTraceItemAttributeNames().execute(req)
         assert [a.name for a in res.attributes] == ["1.2.2", "1.2.9", "1.2.10"]
 
+    def test_semver_sort_descending(self) -> None:
+        # descending applies to SORT_SEMVER name ordering even with column unset,
+        # so the result is the exact reverse of the ascending semver order.
+        items_storage = get_writable_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,
+            [
+                gen_item_message(
+                    start_timestamp=BASE_TIME,
+                    attributes={name: AnyValue(string_value="x")},
+                )
+                for name in ("1.2.9", "1.2.10", "1.2.2")
+            ],
+        )
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
+            ),
+            limit=100,
+            type=AttributeKey.Type.TYPE_STRING,
+            value_substring_match="1.2",
+            order_by=TraceItemAttributeNamesRequest.OrderBy(
+                sort=TraceItemAttributeNamesRequest.OrderBy.SORT_SEMVER,
+                descending=True,
+            ),
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+        assert [a.name for a in res.attributes] == ["1.2.10", "1.2.9", "1.2.2"]
+
     def test_simple_float_backward_compat(self) -> None:
         req = TraceItemAttributeNamesRequest(
             meta=RequestMeta(

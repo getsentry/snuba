@@ -71,21 +71,23 @@ def _order_by_count(request: TraceItemAttributeNamesRequest) -> bool:
     return request.order_by.column == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT
 
 
-def _order_by_name_descending(request: TraceItemAttributeNamesRequest) -> bool:
-    """Whether the caller explicitly requested name ordering in descending order.
-
-    Only ``COLUMN_NAME`` + ``descending`` flips the default; unset ordering stays
-    name-ascending for backwards compatibility.
-    """
-    return (
-        request.order_by.column == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_NAME
-        and request.order_by.descending
-    )
-
-
 def _order_by_semver(request: TraceItemAttributeNamesRequest) -> bool:
     """Whether the caller requested SORT_SEMVER (semver) ordering of names."""
     return request.order_by.sort == TraceItemAttributeNamesRequest.OrderBy.SORT_SEMVER
+
+
+def _order_by_name_descending(request: TraceItemAttributeNamesRequest) -> bool:
+    """Whether the caller requested name ordering in descending order.
+
+    Both an explicit ``COLUMN_NAME`` and ``SORT_SEMVER`` (which orders by the
+    semver key of the name, typically with ``column`` left unset) select name
+    ordering, so ``descending`` flips either. Unset ordering stays name-ascending
+    for backwards compatibility.
+    """
+    return request.order_by.descending and (
+        request.order_by.column == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_NAME
+        or _order_by_semver(request)
+    )
 
 
 _SEMVER_NUMERIC_RE = re.compile(r"^[0-9]+(\.[0-9]+)*$")
