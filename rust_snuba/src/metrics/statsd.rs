@@ -37,7 +37,7 @@ impl DogStatsDBackend {
             .expect("invalid DogStatsD address")
             .set_global_prefix(prefix)
             .with_global_labels(global_labels)
-            .send_histograms_as_distributions(false)
+            .send_histograms_as_distributions(true)
             .with_telemetry(true)
             .install()
             .expect("failed to install DogStatsD exporter");
@@ -148,10 +148,10 @@ impl Recorder for DogStatsDBackend {
             labels.push(Label::new(k, v));
         }
         let metadata = metrics::Metadata::new("snuba", metrics::Level::INFO, None);
-        let key = metrics::Key::from_parts(key, labels);
 
         match metric.ty {
             MetricType::Counter => {
+                let key = metrics::Key::from_parts(key, labels);
                 let value = match metric.value {
                     MetricValue::I64(v) => v as u64,
                     MetricValue::U64(v) => v,
@@ -164,6 +164,7 @@ impl Recorder for DogStatsDBackend {
                 });
             }
             MetricType::Gauge => {
+                let key = metrics::Key::from_parts(key, labels);
                 let value = match metric.value {
                     MetricValue::I64(v) => v as f64,
                     MetricValue::U64(v) => v as f64,
@@ -176,6 +177,7 @@ impl Recorder for DogStatsDBackend {
                 });
             }
             MetricType::Timer => {
+                let key = metrics::Key::from_parts(format!("{key}.distribution"), labels);
                 let value = match metric.value {
                     MetricValue::I64(v) => v as f64,
                     MetricValue::U64(v) => v as f64,
@@ -205,6 +207,35 @@ mod tests {
         backend.record_metric(metric!(Counter: "a", 1, "tag1" => "value1"));
         backend.record_metric(metric!(Gauge: "b", 20, "tag2" => "value2"));
         backend.record_metric(metric!(Timer: "c", 30, "tag3" => "value3"));
+    }
+
+    #[test]
+    fn timer_is_renamed_with_distribution_suffix() {
+        use metrics_util::debugging::DebuggingRecorder;
+
+        // Construct the backend directly (no exporter install), and capture emitted
+        // metrics via a thread-local recorder so we don't touch the global one.
+        let backend = DogStatsDBackend;
+        let recorder = DebuggingRecorder::new();
+        let snapshotter = recorder.snapshotter();
+
+        metrics::with_local_recorder(&recorder, || {
+            backend.record_metric(metric!(Timer: "insertions.batch_write_ms", 30));
+            backend.record_metric(metric!(Counter: "insertions.batch_write_msgs", 1));
+        });
+
+        let names: Vec<String> = snapshotter
+            .snapshot()
+            .into_vec()
+            .into_iter()
+            .map(|(ck, _, _, _)| ck.key().name().to_string())
+            .collect();
+
+        // Timer -> renamed to a ".distribution" metric (existing convention)
+        assert_eq!(names[0], "insertions.batch_write_ms.distribution");
+        // Counter -> name unchanged.
+        assert_eq!(names[1], "insertions.batch_write_msgs");
+        assert_eq!(names.len(), 2);
     }
 
     fn env_with(host: Option<&str>, port: Option<u16>, socket: Option<&str>) -> EnvConfig {
