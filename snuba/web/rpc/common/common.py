@@ -76,13 +76,13 @@ def _in_or_has(value: Expression, array: Expression, *, as_has: bool) -> Functio
     return in_cond(value, array)
 
 
-def attribute_key_to_expression(attr_key: AttributeKey, organization_id: int) -> Expression:
+def attribute_key_to_expression(attr_key: AttributeKey, organization_id: int | None) -> Expression:
     """Convert an AttributeKey proto to a Snuba Expression.
 
     This is a wrapper around the proto-layer function that converts
     MalformedAttributeException to BadSnubaRPCRequestException for
     HTTP-aware code paths. ``organization_id`` selects the per-org normalized-column
-    set (see ``get_normalized_columns_eap_items``).
+    set (see ``get_normalized_columns_eap_items``); ``None`` when there is no org in context.
 
     Raises:
         BadSnubaRPCRequestException: If the attribute key is invalid or malformed.

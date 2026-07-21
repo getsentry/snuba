@@ -82,17 +82,22 @@ UNBACKFILLED_NORMALIZED_COLUMNS_ORG_ALLOWLIST_OPTION = (
 )
 
 
-def _org_allowed_unbackfilled_columns(organization_id: int) -> bool:
+def _org_allowed_unbackfilled_columns(organization_id: int | None) -> bool:
+    # No org in context (e.g. a delete that isn't scoped to one) => opted out.
+    if organization_id is None:
+        return False
     allowlist = get_option(UNBACKFILLED_NORMALIZED_COLUMNS_ORG_ALLOWLIST_OPTION, "")
     if not allowlist:
         return False
     return organization_id in {int(org_id) for org_id in allowlist.split(",")}
 
 
-def get_normalized_columns_eap_items(organization_id: int) -> Mapping[str, NormalizedColumn]:
+def get_normalized_columns_eap_items(
+    organization_id: int | None,
+) -> Mapping[str, NormalizedColumn]:
     """The normalized EAP-item columns. Includes the not-yet-backfilled columns only for
     organizations in the ``eap_items_unbackfilled_normalized_columns_org_allowlist``
-    sentry-option."""
+    sentry-option. ``organization_id`` is ``None`` when there is no org in context."""
     if _org_allowed_unbackfilled_columns(organization_id):
         return {**_NORMALIZED_COLUMNS_EAP_ITEMS, **_UNBACKFILLED_NORMALIZED_COLUMNS_EAP_ITEMS}
     return _NORMALIZED_COLUMNS_EAP_ITEMS
@@ -339,11 +344,11 @@ def type_array_typed_element_column_native_array(attr_key: AttributeKey) -> Func
     return arrayElement(alias, column(col), literal(attr_key.name))
 
 
-def attribute_key_to_expression(attr_key: AttributeKey, organization_id: int) -> Expression:
+def attribute_key_to_expression(attr_key: AttributeKey, organization_id: int | None) -> Expression:
     """Convert an AttributeKey proto to a Snuba Expression.
 
     ``organization_id`` selects the per-org normalized-column set (see
-    ``get_normalized_columns_eap_items``).
+    ``get_normalized_columns_eap_items``); ``None`` when there is no org in context.
 
     Raises:
         MalformedAttributeException: If the attribute key is invalid or malformed.
