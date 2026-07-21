@@ -1,4 +1,5 @@
-from sentry_options import OptionValue
+from typing import cast
+
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
 from snuba.query.conditions import (
@@ -100,8 +101,9 @@ class IndexedNameOptimizer(LogicalQueryProcessor):
     def _is_enabled(self, query: Query) -> bool:
         """The rewrite is enabled when the query is scoped to an organization
         listed in ``ORGANIZATION_IDS_OPTION``."""
-        organization_ids: OptionValue = get_option(self.ORGANIZATION_IDS_OPTION, [])
-        if not isinstance(organization_ids, list) or not organization_ids:
+        # The option is schema-typed as an array of ints, so it's always a list.
+        organization_ids = cast("list[int]", get_option(self.ORGANIZATION_IDS_OPTION, []))
+        if not organization_ids:
             return False
         organization_id = self._single_equals_int(query, "organization_id")
         return organization_id is not None and organization_id in organization_ids
