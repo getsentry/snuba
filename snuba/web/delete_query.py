@@ -422,9 +422,9 @@ def _construct_condition(
 
     if attr_conditions:
         # Deletes are scoped to a single org; use it for the per-org normalized-column
-        # gate (see attribute_key_to_expression). Absent org => 0 => feature off.
+        # gate (see attribute_key_to_expression). Absent org => None => feature off.
         org_ids = columns.get("organization_id", [])
-        organization_id = int(org_ids[0]) if org_ids else 0
+        organization_id = int(org_ids[0]) if org_ids else None
         for attr_key, attr_values in attr_conditions.attributes.values():
             virtual_column = attribute_key_to_expression(attr_key, organization_id)
 
