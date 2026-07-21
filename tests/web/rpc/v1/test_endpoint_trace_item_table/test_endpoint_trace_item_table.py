@@ -4497,6 +4497,150 @@ def test_order_by_bug() -> None:
         _validate_order_by(message)
 
 
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+class TestSemverSorting:
+    """ORDER BY with the SORT_SEMVER option applies the semver key so versions
+    sort numerically (1.2.9 before 1.2.10) with pre-releases before their
+    corresponding stable release. Without SORT_SEMVER the ordering stays
+    lexicographic (there is no hardcoded per-attribute behavior).
+    """
+
+    _RELEASES = [
+        "1.2.9",
+        "1.2.10",
+        "1.2.3",
+        "1.2.3-beta.1",
+        "1.2.2",
+        "my-pkg@2.0.0",
+        "1.2",
+        "1.2.0",
+        # PEP 440 dot-style dev build (Sentry's own sentry.release format) and
+        # its GA release, to verify the dev build sorts before GA.
+        "24.7.0.dev0+abc123",
+        "24.7.0",
+        # SemVer build metadata must not affect precedence: "1.2.3+build456"
+        # sorts as the stable 1.2.3, not as a prerelease of 1.2.0.
+        "1.2.3+build456",
+    ]
+
+    @pytest.fixture(autouse=True)
+    def _setup(self, clickhouse_db: None, redis_db: None) -> None:
+        for i, release in enumerate(self._RELEASES):
+            write_eap_item(
+                start_timestamp=BASE_TIME + timedelta(minutes=i),
+                raw_attributes={"sentry.release": release, "semver_test_marker": "1"},
+            )
+
+    def _query_releases(self, descending: bool = False, semver: bool = True) -> list[str]:
+        sort = (
+            TraceItemTableRequest.OrderBy.SORT_SEMVER
+            if semver
+            else TraceItemTableRequest.OrderBy.SORT_UNSPECIFIED
+        )
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="semver_test_marker")
+                )
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.release"))
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.release")
+                    ),
+                    descending=descending,
+                    sort=sort,
+                )
+            ],
+            limit=len(self._RELEASES) + 10,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        return [v.val_str for v in response.column_values[0].results]
+
+    def test_numeric_ordering(self) -> None:
+        releases = self._query_releases()
+        assert releases.index("1.2.9") < releases.index("1.2.10"), (
+            "1.2.9 must sort before 1.2.10 (numeric, not lexicographic)"
+        )
+
+    def test_default_sort_is_lexicographic(self) -> None:
+        # Without SORT_SEMVER there is no semver behavior (no hardcoded
+        # attributes), so plain lexicographic order applies: "1.2.10" < "1.2.9".
+        releases = self._query_releases(semver=False)
+        assert releases.index("1.2.10") < releases.index("1.2.9"), (
+            "without SORT_SEMVER, ordering is lexicographic"
+        )
+
+    def test_prerelease_before_stable(self) -> None:
+        releases = self._query_releases()
+        assert releases.index("1.2.3-beta.1") < releases.index("1.2.3"), (
+            "prerelease 1.2.3-beta.1 must sort before stable 1.2.3"
+        )
+
+    def test_dot_dev_prerelease_before_stable(self) -> None:
+        releases = self._query_releases()
+        assert releases.index("24.7.0.dev0+abc123") < releases.index("24.7.0"), (
+            "PEP 440 dot-style dev build must sort before its GA release"
+        )
+
+    def test_prerelease_of_newer_after_older_stable(self) -> None:
+        releases = self._query_releases()
+        assert releases.index("1.2.3-beta.1") > releases.index("1.2.2"), (
+            "prerelease 1.2.3-beta.1 must sort after older stable 1.2.2"
+        )
+
+    def test_package_prefix_stripped(self) -> None:
+        releases = self._query_releases()
+        assert releases.index("my-pkg@2.0.0") > releases.index("1.2.10"), (
+            "my-pkg@2.0.0 should sort as version 2.0.0 (after 1.x)"
+        )
+
+    def test_build_metadata_ignored(self) -> None:
+        # Build metadata does not affect precedence: "1.2.3+build456" must sort
+        # as stable 1.2.3 (after 1.2.2 and after the 1.2.3-beta.1 prerelease),
+        # not as a prerelease of 1.2.0 (which would land before 1.2.2).
+        releases = self._query_releases()
+        assert releases.index("1.2.3+build456") > releases.index("1.2.2"), (
+            "1.2.3+build456 must sort as 1.2.3 (stable), after 1.2.2"
+        )
+        assert releases.index("1.2.3+build456") > releases.index("1.2.3-beta.1"), (
+            "build metadata is not a prerelease: 1.2.3+build456 sorts after 1.2.3-beta.1"
+        )
+
+    def test_length_normalisation(self) -> None:
+        releases = self._query_releases()
+        idx_12 = releases.index("1.2")
+        idx_120 = releases.index("1.2.0")
+        # Both normalise to [1,2,0,0], so they are adjacent.  The raw-string
+        # tiebreaker then breaks the tie deterministically: "1.2" < "1.2.0".
+        assert idx_12 < idx_120, (
+            "1.2 and 1.2.0 normalise equally and must be adjacent, with '1.2' "
+            "first via the raw-string tiebreaker"
+        )
+
+    def test_desc_is_reverse_of_asc(self) -> None:
+        # The raw-string tiebreaker in semver_sort_key gives distinct release
+        # strings a deterministic total order (e.g. "1.2" < "1.2.0"), so DESC is
+        # the exact reverse of ASC even for versions that share the same numeric
+        # key.
+        asc = self._query_releases(descending=False)
+        desc = self._query_releases(descending=True)
+        assert asc == list(reversed(desc))
+
+
 def test_convert_results_empty_typed_array_is_null() -> None:
     """An absent/empty element-typed array reads as an empty native list; convert_results
     surfaces it as NULL (like a missing scalar), not an empty val_array. A populated array

@@ -92,6 +92,41 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
         raise BadSnubaRPCRequestException(str(e)) from e
 
 
+_SEMVER_COMPONENT_COUNT = 4  # major.minor.patch.build
+
+
+def semver_sort_key(expr: Expression, alias: str | None = None) -> Expression:
+    """Return a Tuple(Array(UInt32), UInt8, String) semver sort key for ``SORT_SEMVER``.
+
+    Callers opt in per request (no hardcoded attribute list) and the key is
+    applied to whatever column they order by. Strips a 'package@' prefix and
+    '+build' metadata, maps the release part to 4 UInt32 components (so "1.2" ==
+    "1.2.0"), then adds a stability flag (0=prerelease, 1=stable) so prereleases
+    sort before their stable release, and the raw string as a tiebreaker for a
+    deterministic total order. Works on Altinity 25.3/25.8 (no naturalSortKey).
+    """
+    x = Argument(None, "x")
+    # sentry.release is coalesced, so Nullable(String); strip the nullable
+    # wrapper (ClickHouse forbids Nullable(Array(…))) before string→array funcs.
+    non_null = f.ifNull(expr, literal(""))
+    version_no_prefix = f.arrayElement(f.splitByChar(literal("@"), non_null), literal(-1))
+    # Drop build metadata (does not affect precedence); left attached it would
+    # zero the last component and fail the stability match.
+    version_no_build = f.arrayElement(f.splitByChar(literal("+"), version_no_prefix), literal(1))
+    release_part = f.arrayElement(f.splitByChar(literal("-"), version_no_build), literal(1))
+    numeric_key = f.arrayResize(
+        f.arrayMap(
+            Lambda(None, ("x",), f.toUInt32OrZero(x)),
+            f.splitByChar(literal("."), release_part),
+        ),
+        literal(_SEMVER_COMPONENT_COUNT),
+    )
+    # Stable only for plain dotted-numeric versions; anything else (SemVer
+    # "-beta.1" or PEP 440 dot-dev "24.7.0.dev0+<sha>") is a prerelease.
+    is_stable = f.match(version_no_build, literal(r"^[0-9]+(\.[0-9]+)*$"))
+    return FunctionCall(alias, "tuple", (numeric_key, is_stable, non_null))
+
+
 def _trace_item_filter_key_expression(
     attr_to_key_expression_callable: Callable[[AttributeKey], Expression],
     key: AttributeKey,

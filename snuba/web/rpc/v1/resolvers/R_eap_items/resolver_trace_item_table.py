@@ -62,6 +62,7 @@ from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     base_conditions_and,
     get_field_existence_expression,
+    semver_sort_key,
     timestamp_in_range_condition,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
@@ -283,6 +284,10 @@ def _groupby_order_by_expression(attr_key: AttributeKey) -> Expression:
     while keeping the cast valid as a function of the grouped column. TYPE_ARRAY keys are
     rejected upstream (see _validate_select_and_groupby / _validate_order_by), so they
     never reach here.
+
+    The SORT_SEMVER (semver) ordering is applied by `_convert_order_by`, not here, so
+    GROUP BY keeps the raw expression while ORDER BY can wrap it in the semver key.
+    ClickHouse accepts ORDER BY on a function of a GROUP BY key, so the two can differ.
     """
     if attr_key.name == "sentry.timestamp":
         return snuba_column("timestamp")
@@ -338,10 +343,18 @@ def _convert_order_by(
             # covers `sentry.timestamp` ordering anywhere else.) GROUP BY uses the same
             # expression so an aggregation query that orders by `sentry.timestamp` stays
             # valid.
+            expression = _groupby_order_by_expression(x.column.key)
+            # SORT_SEMVER: client-driven semver ordering, string columns only
+            # (numeric/timestamp columns already sort numerically).
+            if (
+                x.sort == TraceItemTableRequest.OrderBy.SORT_SEMVER
+                and x.column.key.type == AttributeKey.TYPE_STRING
+            ):
+                expression = semver_sort_key(expression)
             res.append(
                 OrderBy(
                     direction=direction,
-                    expression=_groupby_order_by_expression(x.column.key),
+                    expression=expression,
                 )
             )
         elif x.column.HasField("conditional_aggregation"):

@@ -30,6 +30,7 @@ from snuba.web.rpc.common.common import (
     add_existence_check_to_map_attribute_reads,
     attribute_key_to_expression,
     base_conditions_and,
+    semver_sort_key,
     treeify_or_and_conditions,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -136,6 +137,18 @@ def _build_query(
     )
     treeify_or_and_conditions(inner_query)
     add_existence_check_to_map_attribute_reads(inner_query)
+    # Under SORT_SEMVER, tiebreak equally-frequent values by the semver key
+    # instead of lexicographically (count() stays the primary ordering). Only
+    # string values: semver_sort_key uses string functions, so boolean keys
+    # (also enumerable here) keep plain ordering, like the table resolver's guard.
+    if (
+        request.order_by.sort == TraceItemAttributeValuesRequest.OrderBy.SORT_SEMVER
+        and request.key.type == AttributeKey.TYPE_STRING
+    ):
+        value_order_expression: Expression = semver_sort_key(column("attr_value"))
+    else:
+        value_order_expression = column("attr_value")
+
     res = CompositeQuery(
         from_clause=inner_query,
         selected_columns=[
@@ -154,7 +167,7 @@ def _build_query(
         ],
         order_by=[
             OrderBy(direction=OrderByDirection.DESC, expression=column("count()")),
-            OrderBy(direction=OrderByDirection.ASC, expression=column("attr_value")),
+            OrderBy(direction=OrderByDirection.ASC, expression=value_order_expression),
         ],
         groupby=[column("attr_value")],
         limit=request.limit,

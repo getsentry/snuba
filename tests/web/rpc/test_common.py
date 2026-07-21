@@ -11,6 +11,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
 )
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import (
+    PageToken,
     RequestMeta,
     TraceItemType,
 )
@@ -59,6 +60,7 @@ from snuba.web.rpc.common.common import (
     dedupe_and_conditions,
     next_monday,
     prev_monday,
+    semver_sort_key,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
     use_sampling_factor,
@@ -68,6 +70,7 @@ from snuba.web.rpc.common.exceptions import (
     RPCAllocationPolicyException,
     convert_rpc_exception_to_proto,
 )
+from snuba.web.rpc.common.pagination import FlexibleTimeWindowPageWithFilters
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
@@ -1456,6 +1459,70 @@ class TestEmptyVsAbsentComparison:
     def test_not_like_wildcard_matches_only_absent(self) -> None:
         # Present rows all `like '%'`, so only the absent key survives NOT LIKE.
         assert self._execute(ComparisonFilter.OP_NOT_LIKE, value="%") == ["green"]
+
+
+class TestSemverSortKey:
+    def test_expression_structure(self) -> None:
+        expr = semver_sort_key(column("release"))
+        assert isinstance(expr, FunctionCall)
+        assert expr.function_name == "tuple"
+        assert len(expr.parameters) == 3
+        numeric_key_expr, is_stable_expr, raw_str_expr = expr.parameters
+        assert isinstance(numeric_key_expr, FunctionCall)
+        assert numeric_key_expr.function_name == "arrayResize"
+        # Stability flag: match(version, '^[0-9]+(\\.[0-9]+)*$') — 1 for a plain
+        # dotted-numeric (stable) version, 0 for any prerelease form.
+        assert isinstance(is_stable_expr, FunctionCall)
+        assert is_stable_expr.function_name == "match"
+        # Third element is the raw (non-null) string tiebreaker: ifNull(expr, '').
+        assert isinstance(raw_str_expr, FunctionCall)
+        assert raw_str_expr.function_name == "ifNull"
+
+    def test_alias_is_forwarded(self) -> None:
+        expr = semver_sort_key(column("release"), alias="semver_key")
+        assert isinstance(expr, FunctionCall)
+        assert expr.alias == "semver_key"
+
+    def test_no_alias_by_default(self) -> None:
+        expr = semver_sort_key(column("release"))
+        assert expr.alias is None
+
+
+class TestFlexibleTimeWindowPageFilters:
+    def _timestamp_page_token(self, value: AttributeValue) -> PageToken:
+        prefix = FlexibleTimeWindowPageWithFilters._FILTER_PREFIX
+        return PageToken(
+            filter_offset=TraceItemFilter(
+                and_filter=AndFilter(
+                    filters=[
+                        TraceItemFilter(
+                            comparison_filter=ComparisonFilter(
+                                key=AttributeKey(name=f"{prefix}.timestamp"),
+                                op=ComparisonFilter.OP_LESS_THAN,
+                                value=value,
+                            )
+                        )
+                    ]
+                )
+            )
+        )
+
+    def test_get_filters_rejects_unsupported_timestamp_type(self) -> None:
+        # A client-supplied page token whose timestamp filter carries an
+        # unsupported value type must raise a clear error rather than desync the
+        # parallel column lists and crash the strict zip() with an opaque error.
+        pager = FlexibleTimeWindowPageWithFilters(
+            self._timestamp_page_token(AttributeValue(val_bool=True))
+        )
+        with pytest.raises(ValueError, match="not supported"):
+            pager.get_filters()
+
+    def test_get_filters_accepts_int_timestamp(self) -> None:
+        pager = FlexibleTimeWindowPageWithFilters(
+            self._timestamp_page_token(AttributeValue(val_int=1741910400))
+        )
+        # A supported value type builds the boundary filter without raising.
+        assert pager.get_filters() is not None
 
 
 class TestAnyAttributeFilterOption:
