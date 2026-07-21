@@ -49,6 +49,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     VirtualColumnContext,
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
+    AndFilter,
     ComparisonFilter,
     ExistsFilter,
     NotFilter,
@@ -2700,6 +2701,97 @@ class TestTraceItemTable(BaseApiTest):
                     AttributeValue(is_null=True),
                     AttributeValue(val_double=200),
                 ],
+            ),
+        ]
+
+    @pytest.mark.foo
+    def test_filter_on_multiple_attributes(self) -> None:
+        """
+        Seeds spans with different animal_types, then filters on two different
+        attributes at once (wing.count > 2 AND bark.db > 50) to make sure only
+        the spans matching both conditions show up.
+        """
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_item(span_ts, {"animal_type": "bird", "wing.count": 2}, 1)
+        write_eap_item(span_ts, {"animal_type": "emu", "wing.count": 0}, 1)
+        write_eap_item(span_ts, {"animal_type": "cat"}, 1)
+        write_eap_item(span_ts, {"animal_type": "dog", "bark.db": 100}, 1)
+        write_eap_item(span_ts, {"animal_type": "hyena", "bark.db": 100}, 1)
+
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                and_filter=AndFilter(
+                    filters=[
+                        TraceItemFilter(
+                            comparison_filter=ComparisonFilter(
+                                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="animal_type"),
+                                op=ComparisonFilter.OP_NOT_EQUALS,
+                                value=AttributeValue(val_str="hyena"),
+                            )
+                        ),
+                        TraceItemFilter(
+                            or_filter=OrFilter(
+                                filters=[
+                                    TraceItemFilter(
+                                        comparison_filter=ComparisonFilter(
+                                            key=AttributeKey(
+                                                type=AttributeKey.TYPE_DOUBLE, name="wing.count"
+                                            ),
+                                            op=ComparisonFilter.OP_GREATER_THAN,
+                                            value=AttributeValue(val_double=1),
+                                        )
+                                    ),
+                                    TraceItemFilter(
+                                        comparison_filter=ComparisonFilter(
+                                            key=AttributeKey(
+                                                type=AttributeKey.TYPE_DOUBLE, name="bark.db"
+                                            ),
+                                            op=ComparisonFilter.OP_GREATER_THAN,
+                                            value=AttributeValue(val_double=50),
+                                        )
+                                    ),
+                                ]
+                            )
+                        ),
+                    ]
+                )
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="animal_type")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="wing.count")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="bark.db")),
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="animal_type")
+                    )
+                ),
+            ],
+            limit=50,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="animal_type",
+                results=[AttributeValue(val_str="bird"), AttributeValue(val_str="dog")],
+            ),
+            TraceItemColumnValues(
+                attribute_name="wing.count",
+                results=[AttributeValue(val_double=2), AttributeValue(is_null=True)],
+            ),
+            TraceItemColumnValues(
+                attribute_name="bark.db",
+                results=[AttributeValue(is_null=True), AttributeValue(val_double=100)],
             ),
         ]
 
