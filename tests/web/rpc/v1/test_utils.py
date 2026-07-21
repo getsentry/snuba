@@ -97,6 +97,7 @@ def write_eap_item(
     count: int = 1,
     server_sample_rate: float = 1.0,
     item_id: bytes | None = None,
+    trace_id: str | None = None,
 ) -> None:
     """
     This is a helper function to write a single or multiple eap-spans to the database.
@@ -106,6 +107,8 @@ def write_eap_item(
         timestamp: The timestamp of the span to write.
         attributes: attributes to go on the span.
         count: the number of these spans to write.
+        item_id: the item_id to put on every span written by this call. Default(None)
+        trace_id: the trace_id to put on every span written by this call. Default(None)
     """
 
     if raw_attributes is None:
@@ -138,6 +141,7 @@ def write_eap_item(
                 attributes=attributes,
                 server_sample_rate=server_sample_rate,
                 item_id=item_id,
+                trace_id=trace_id,
             )
             for _ in range(count)
         ],

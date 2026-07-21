@@ -1,5 +1,6 @@
 import random
 import re
+import uuid
 from datetime import datetime, timedelta
 from math import isclose
 from typing import Any
@@ -2707,16 +2708,22 @@ class TestTraceItemTable(BaseApiTest):
     @pytest.mark.foo
     def test_filter_on_multiple_attributes(self) -> None:
         """
-        Seeds spans with different animal_types, then filters on two different
-        attributes at once (wing.count > 2 AND bark.db > 50) to make sure only
-        the spans matching both conditions show up.
+        Seeds spans across three traces, filters on multiple attributes
+        (animal_type != "hyena" AND (wing.count > 1 OR bark.db > 50)), groups the
+        surviving spans by trace_id, and counts the animal_types in each group.
         """
         span_ts = BASE_TIME - timedelta(minutes=1)
-        write_eap_item(span_ts, {"animal_type": "bird", "wing.count": 2}, 1)
-        write_eap_item(span_ts, {"animal_type": "emu", "wing.count": 0}, 1)
-        write_eap_item(span_ts, {"animal_type": "cat"}, 1)
-        write_eap_item(span_ts, {"animal_type": "dog", "bark.db": 100}, 1)
-        write_eap_item(span_ts, {"animal_type": "hyena", "bark.db": 100}, 1)
+
+        trace_1 = uuid.uuid4().hex
+        write_eap_item(span_ts, {"animal_type": "bird", "wing.count": 2}, 1, trace_id=trace_1)
+        write_eap_item(span_ts, {"animal_type": "hyena", "bark.db": 100}, 1, trace_id=trace_1)
+
+        trace_2 = uuid.uuid4().hex
+        write_eap_item(span_ts, {"animal_type": "emu", "wing.count": 0}, 1, trace_id=trace_2)
+        write_eap_item(span_ts, {"animal_type": "cat"}, 1, trace_id=trace_2)
+
+        trace_3 = uuid.uuid4().hex
+        write_eap_item(span_ts, {"animal_type": "dog", "bark.db": 100}, 1, trace_id=trace_3)
 
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -2766,32 +2773,39 @@ class TestTraceItemTable(BaseApiTest):
                 )
             ),
             columns=[
-                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="animal_type")),
-                Column(key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="wing.count")),
-                Column(key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="bark.db")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.trace_id")),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_COUNT,
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="animal_type"),
+                        label="count(animal_type)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
             ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.trace_id")],
             order_by=[
                 TraceItemTableRequest.OrderBy(
                     column=Column(
-                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="animal_type")
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.trace_id")
                     )
                 ),
             ],
             limit=50,
         )
         response = EndpointTraceItemTable().execute(message)
+        # Only bird (trace_1) and dog (trace_3) survive the filter; trace_2's spans
+        # (emu, cat) are all filtered out, so that trace is absent from the results.
+        # Groups come back ordered by trace_id.
+        surviving_trace_ids = sorted([trace_1, trace_3])
         assert response.column_values == [
             TraceItemColumnValues(
-                attribute_name="animal_type",
-                results=[AttributeValue(val_str="bird"), AttributeValue(val_str="dog")],
+                attribute_name="sentry.trace_id",
+                results=[AttributeValue(val_str=tid) for tid in surviving_trace_ids],
             ),
             TraceItemColumnValues(
-                attribute_name="wing.count",
-                results=[AttributeValue(val_double=2), AttributeValue(is_null=True)],
-            ),
-            TraceItemColumnValues(
-                attribute_name="bark.db",
-                results=[AttributeValue(is_null=True), AttributeValue(val_double=100)],
+                attribute_name="count(animal_type)",
+                results=[AttributeValue(val_double=1), AttributeValue(val_double=1)],
             ),
         ]
 
