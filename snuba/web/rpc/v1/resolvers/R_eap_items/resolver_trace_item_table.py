@@ -395,16 +395,16 @@ def _convert_limit_by(
     for limit_by_column in limit_by.columns:
         which = limit_by_column.WhichOneof("column")
         if which == "key":
-            expression: Expression | None = attribute_key_to_expression(limit_by_column.key)
+            columns.append(_strip_aliases(attribute_key_to_expression(limit_by_column.key)))
         elif which == "label":
             expression = label_to_expression.get(limit_by_column.label)
             if expression is None:
                 raise BadSnubaRPCRequestException(
                     f"limit_by column '{limit_by_column.label}' is not a selected column"
                 )
+            columns.append(_strip_aliases(expression))
         else:
             raise BadSnubaRPCRequestException("limit_by column must specify a key or a label")
-        columns.append(_strip_aliases(expression))
     return LimitBy(limit=limit_by.limit, columns=columns)
 
 
