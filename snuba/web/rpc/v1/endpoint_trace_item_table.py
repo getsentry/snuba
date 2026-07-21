@@ -5,6 +5,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.protos.common import ARRAY_TYPES
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
@@ -135,13 +136,18 @@ def _validate_limit_by(in_msg: TraceItemTableRequest) -> None:
     selected_by_label = {c.label: c for c in in_msg.columns if c.label}
     for limit_by_column in limit_by.columns:
         which = limit_by_column.WhichOneof("column")
+        # `key` is the attribute this entry groups on, or None when it references a
+        # selected non-key column (e.g. a formula).
+        key: AttributeKey | None
         if which == "key":
             key = limit_by_column.key
+            name = key.name
         elif which == "label":
-            referenced = selected_by_label.get(limit_by_column.label)
+            name = limit_by_column.label
+            referenced = selected_by_label.get(name)
             if referenced is None:
                 raise BadSnubaRPCRequestException(
-                    f"limit_by column '{limit_by_column.label}' is not a selected column"
+                    f"limit_by column '{name}' is not a selected column"
                 )
             # a label can reference a selected aggregate; ClickHouse cannot LIMIT BY
             # one (including aggregates nested in a formula), so reject it.
@@ -151,25 +157,23 @@ def _validate_limit_by(in_msg: TraceItemTableRequest) -> None:
             wrapper.accept(contains_aggregate_visitor)
             if contains_aggregate_visitor.contains_aggregate:
                 raise BadSnubaRPCRequestException("limit_by does not support aggregations")
-            if not referenced.HasField("key"):
-                # a non-key selected column (e.g. formula) has no array/group_by concern
-                continue
-            key = referenced.key
+            key = referenced.key if referenced.HasField("key") else None
         else:
             raise BadSnubaRPCRequestException("limit_by column must specify a key or a label")
 
         # array attributes expand into typed sub-columns and cannot be grouped on,
         # same as order_by / group_by.
-        if key.type in ARRAY_TYPES:
+        if key is not None and key.type in ARRAY_TYPES:
             raise BadSnubaRPCRequestException(
                 f"limit_by is not supported on array attributes: {key.name}"
             )
 
         # ClickHouse applies LIMIT BY after GROUP BY, so in an aggregation query a
-        # limit_by key must be one of the group_by columns; otherwise it is not
-        # available post-aggregation. Non-aggregation queries (no group_by) are free.
-        if group_by_names and key.name not in group_by_names:
-            raise BadSnubaRPCRequestException(f"limit_by column '{key.name}' must be in group_by")
+        # limit_by entry must be one of the group_by columns; otherwise it is not
+        # available post-aggregation. This rejects both ungrouped keys and non-key
+        # columns (e.g. formulas). Non-aggregation queries (no group_by) are free.
+        if group_by_names and (key is None or key.name not in group_by_names):
+            raise BadSnubaRPCRequestException(f"limit_by column '{name}' must be in group_by")
 
 
 def _transform_request(request: TraceItemTableRequest) -> TraceItemTableRequest:

@@ -4728,6 +4728,42 @@ def test_validate_limit_by_key_not_in_group_by() -> None:
         _validate_limit_by(message)
 
 
+def test_validate_limit_by_formula_label_in_aggregation_rejected() -> None:
+    """In an aggregation query a formula-referencing limit_by is rejected: a formula is
+    not a group_by column, so ClickHouse could not LIMIT BY it post-aggregation."""
+    formula_column = Column(
+        formula=Column.BinaryFormula(
+            op=Column.BinaryFormula.OP_DIVIDE,
+            left=Column(key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="a")),
+            right=Column(key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="b")),
+        ),
+        label="ratio",
+    )
+    message = TraceItemTableRequest(
+        meta=RequestMeta(project_ids=[1], trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN),
+        columns=[
+            Column(
+                key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id"),
+                label="project_id",
+            ),
+            formula_column,
+            Column(
+                aggregation=AttributeAggregation(
+                    aggregate=Function.FUNCTION_COUNT,
+                    key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id"),
+                    label="count()",
+                ),
+                label="count()",
+            ),
+        ],
+        group_by=[AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id")],
+        limit_by=TraceItemTableRequest.LimitBy(columns=[_LimitByColumn(label="ratio")], limit=5),
+    )
+    message = _apply_labels_to_columns(message)
+    with pytest.raises(BadSnubaRPCRequestException, match="must be in group_by"):
+        _validate_limit_by(message)
+
+
 def test_validate_limit_by_label_to_aggregate_rejected() -> None:
     """A `limit_by` label pointing at a selected aggregate is rejected (the aggregate
     lives on the resolved column, and ClickHouse cannot LIMIT BY it)."""
