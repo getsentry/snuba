@@ -137,15 +137,10 @@ def _build_query(
     )
     treeify_or_and_conditions(inner_query)
     add_existence_check_to_map_attribute_reads(inner_query)
-    # The value column normally orders lexicographically. When the caller opts
-    # into SORT_SEMVER, order it by the semver key so versions sort numerically
-    # ("1.2.9" before "1.2.10") with prereleases before their stable release.
-    # count() stays the primary ordering so the most common values still come
-    # first; the sort key only changes the tiebreak among equally frequent values.
-    # An unset/SORT_DEFAULT sort keeps the historical lexicographic order.
-    # semver_sort_key applies string functions (splitByChar, match, ...), so it
-    # only makes sense for string values; boolean keys (also enumerable here)
-    # keep plain ordering, mirroring the string-type guard in the table resolver.
+    # Under SORT_SEMVER, tiebreak equally-frequent values by the semver key
+    # instead of lexicographically (count() stays the primary ordering). Only
+    # string values: semver_sort_key uses string functions, so boolean keys
+    # (also enumerable here) keep plain ordering, like the table resolver's guard.
     if (
         request.order_by.sort == TraceItemAttributeValuesRequest.OrderBy.SORT_SEMVER
         and request.key.type == AttributeKey.TYPE_STRING

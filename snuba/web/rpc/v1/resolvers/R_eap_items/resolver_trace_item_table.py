@@ -344,9 +344,8 @@ def _convert_order_by(
             # expression so an aggregation query that orders by `sentry.timestamp` stays
             # valid.
             expression = _groupby_order_by_expression(x.column.key)
-            # SORT_SEMVER requests semver-aware ordering (client-driven, no hardcoded
-            # attribute list).  It only applies to string columns; numeric/timestamp
-            # columns already sort numerically, so leave them untouched.
+            # SORT_SEMVER: client-driven semver ordering, string columns only
+            # (numeric/timestamp columns already sort numerically).
             if (
                 x.sort == TraceItemTableRequest.OrderBy.SORT_SEMVER
                 and x.column.key.type == AttributeKey.TYPE_STRING

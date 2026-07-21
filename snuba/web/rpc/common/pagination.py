@@ -30,8 +30,8 @@ class FlexibleTimeWindowPageWithFilters:
     _TIME_WINDOW_START_KEY = f"{_TIME_WINDOW_PREFIX}.start_timestamp"
     _TIME_WINDOW_END_KEY = f"{_TIME_WINDOW_PREFIX}.end_timestamp"
     _FILTER_PREFIX = "sentry__filter"
-    # Marks a page-boundary column whose ORDER BY used SORT_SEMVER (semver), so
-    # get_filters applies the same semver key on both sides of the comparison.
+    # Marks a page-boundary column whose ORDER BY used SORT_SEMVER, so
+    # get_filters applies the semver key on both sides of the comparison.
     _SEMVER_FILTER_PREFIX = "sentry__semver_filter"
 
     def __init__(self, page_token: PageToken):
@@ -90,11 +90,9 @@ class FlexibleTimeWindowPageWithFilters:
                 continue
 
             if key_name == f"{self._FILTER_PREFIX}.timestamp":
-                # Resolve the value first and raise on an unsupported type (page
-                # tokens are client-supplied): otherwise column_values would fall
-                # out of sync with column_names/column_is_semver and the
-                # strict zip() below would crash with an opaque error. Mirrors the
-                # timestamp validation in create().
+                # Resolve the value first and raise on an unsupported type
+                # (tokens are client-supplied) so the parallel lists stay in
+                # sync and the strict zip() below can't crash. Mirrors create().
                 value = filter.comparison_filter.value
                 if value.HasField("val_str"):
                     column_values.append(f.toDateTime(value.val_str))
@@ -226,10 +224,9 @@ class FlexibleTimeWindowPageWithFilters:
                                 f"No attribute expression found for column: {order_by_clause.column.label}"
                             )
 
-                        # Mark the column as SORT_SEMVER (semver) when the request
-                        # ordered it that way, so get_filters wraps both sides in the
-                        # semver key and the page boundary matches the ORDER BY. Mirror
-                        # the resolver's guard: only string columns get the semver key.
+                        # Mark SORT_SEMVER string columns so get_filters wraps
+                        # both sides in the semver key (matching ORDER BY); mirrors
+                        # the resolver's string-only guard.
                         is_semver = (
                             order_by_clause.sort == TraceItemTableRequest.OrderBy.SORT_SEMVER
                             and selected_key is not None

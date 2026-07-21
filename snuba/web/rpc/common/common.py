@@ -96,36 +96,22 @@ _SEMVER_COMPONENT_COUNT = 4  # major.minor.patch.build
 
 
 def semver_sort_key(expr: Expression, alias: str | None = None) -> Expression:
-    """Return a Tuple(Array(UInt32), UInt8, String) sort key for semantic-version ORDER BY.
+    """Return a Tuple(Array(UInt32), UInt8, String) semver sort key for ``SORT_SEMVER``.
 
-    This is the sort applied for the ``SORT_SEMVER`` OrderBy option: callers opt
-    in per request (there is no hardcoded attribute list), and the key is applied
-    to whatever column they order by.
-
-    Strips a leading 'package@' prefix and any '+build' metadata (which per
-    SemVer does not affect precedence), isolates the release part (before '-'),
-    maps each dot-component to UInt32, pads to 4 elements so "1.2" == "1.2.0",
-    and adds a stability flag (0=prerelease, 1=stable) so prerelease versions sort
-    before their corresponding stable release.  Works on Altinity 25.3/25.8.
-
-    The third tuple element is the raw (non-null) string.  It is a tiebreaker:
-    distinct strings that map to the same numeric key + stability flag (e.g. "1.2"
-    and "1.2.0", or two prereleases of the same version) would otherwise compare
-    equal, which makes ordering non-deterministic and — more importantly — lets
-    the flextime pagination's strict `less` boundary filter skip rows tied with
-    the cursor.  Appending the raw string gives a deterministic total order over
-    distinct release strings and keeps the page-boundary comparison exact.  Both
-    ORDER BY and pagination call this function, so they stay consistent.
+    Callers opt in per request (no hardcoded attribute list) and the key is
+    applied to whatever column they order by. Strips a 'package@' prefix and
+    '+build' metadata, maps the release part to 4 UInt32 components (so "1.2" ==
+    "1.2.0"), then adds a stability flag (0=prerelease, 1=stable) so prereleases
+    sort before their stable release, and the raw string as a tiebreaker for a
+    deterministic total order. Works on Altinity 25.3/25.8 (no naturalSortKey).
     """
     x = Argument(None, "x")
-    # sentry.release is coalesced from multiple attribute columns and therefore
-    # returns Nullable(String).  ClickHouse forbids Nullable(Array(…)), so strip
-    # the nullable wrapper before applying any string → array functions.
+    # sentry.release is coalesced, so Nullable(String); strip the nullable
+    # wrapper (ClickHouse forbids Nullable(Array(…))) before string→array funcs.
     non_null = f.ifNull(expr, literal(""))
     version_no_prefix = f.arrayElement(f.splitByChar(literal("@"), non_null), literal(-1))
-    # Drop SemVer build metadata ("1.2.3+build") before parsing: it must not
-    # affect precedence, and left attached it would zero the last numeric
-    # component (toUInt32OrZero("3+build") == 0) and fail the stability match.
+    # Drop build metadata (does not affect precedence); left attached it would
+    # zero the last component and fail the stability match.
     version_no_build = f.arrayElement(f.splitByChar(literal("+"), version_no_prefix), literal(1))
     release_part = f.arrayElement(f.splitByChar(literal("-"), version_no_build), literal(1))
     numeric_key = f.arrayResize(
@@ -135,12 +121,8 @@ def semver_sort_key(expr: Expression, alias: str | None = None) -> Expression:
         ),
         literal(_SEMVER_COMPONENT_COUNT),
     )
-    # A release is "stable" only when the version is a plain dotted-numeric
-    # string ("1.2.3", "1.2").  Anything else is a prerelease and sorts before
-    # the matching stable release: SemVer prereleases ("1.2.3-beta.1") as well as
-    # PEP 440 dot-style dev/pre builds ("24.7.0.dev0+<sha>", the common form on
-    # sentry.release) — the latter has no '-', so a bare '-' check would wrongly
-    # tag it stable and sort the dev build after its GA release.
+    # Stable only for plain dotted-numeric versions; anything else (SemVer
+    # "-beta.1" or PEP 440 dot-dev "24.7.0.dev0+<sha>") is a prerelease.
     is_stable = f.match(version_no_build, literal(r"^[0-9]+(\.[0-9]+)*$"))
     return FunctionCall(alias, "tuple", (numeric_key, is_stable, non_null))
 

@@ -497,17 +497,15 @@ def convert_co_occurring_results_to_attributes(
         ]
         non_stored.sort(key=_name_key)
         if _order_by_count(request):
-            # Order the real (counted) rows to match ClickHouse: count in the
-            # requested direction, then name ASC (two stable passes). The synthetic
-            # non-stored attributes have no real count, so pin them first regardless
-            # of sort direction rather than relying on a sentinel value.
+            # Match ClickHouse: count in the requested direction, then name ASC
+            # (two stable passes). Synthetic non-stored keys have no count, so
+            # pin them first rather than relying on a sentinel.
             data.sort(key=_name_key)
             data.sort(key=lambda row: row.get("count", 0), reverse=request.order_by.descending)
             data = non_stored + data
         else:
-            # Default name ordering: merge the synthetic non-stored keys in and re-sort
-            # by name, honoring the requested direction so it matches the ClickHouse
-            # ORDER BY (a COLUMN_NAME descending request must stay descending here too).
+            # Merge synthetic non-stored keys in and re-sort by name in the
+            # requested direction, matching the ClickHouse ORDER BY.
             data.extend(non_stored)
             data.sort(
                 key=_name_key,
