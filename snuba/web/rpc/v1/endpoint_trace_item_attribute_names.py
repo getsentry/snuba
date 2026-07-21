@@ -96,13 +96,16 @@ def _semver_sort_key_py(name: str) -> tuple[tuple[int, int, int, int], int, str]
     the merged (ClickHouse + synthetic) result matches the ClickHouse ORDER BY."""
     non_null = name or ""
     version_no_prefix = non_null.split("@")[-1]
-    release_part = version_no_prefix.split("-")[0]
+    # Drop SemVer build metadata ("1.2.3+build") before parsing; it must not
+    # affect precedence (mirrors common.semver_sort_key).
+    version_no_build = version_no_prefix.split("+")[0]
+    release_part = version_no_build.split("-")[0]
     # Mirror ClickHouse toUInt32OrZero: only ASCII decimal parses, anything else
     # (including Unicode digits like "²", where str.isdigit() is True but int()
     # raises) maps to 0.
     components = [int(c) if (c.isascii() and c.isdigit()) else 0 for c in release_part.split(".")]
     components = (components + [0, 0, 0, 0])[:4]
-    is_stable = 1 if _SEMVER_NUMERIC_RE.match(version_no_prefix) else 0
+    is_stable = 1 if _SEMVER_NUMERIC_RE.match(version_no_build) else 0
     return (
         (components[0], components[1], components[2], components[3]),
         is_stable,

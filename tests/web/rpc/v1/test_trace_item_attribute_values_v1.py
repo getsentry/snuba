@@ -347,6 +347,22 @@ class TestTraceItemAttributes(BaseApiTest):
         assert response.values == ["true", "false"]
         assert response.counts == [8, 1]
 
+    def test_boolean_case_with_semver_sort_does_not_crash(self, setup_teardown: Any) -> None:
+        # SORT_SEMVER only applies the semver key to string values; a boolean key
+        # falls back to plain ordering instead of feeding a bool column into the
+        # string-only semver functions (which would fail at ClickHouse).
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=5,
+            key=AttributeKey(name="sentry.is_segment", type=AttributeKey.TYPE_BOOLEAN),
+            order_by=TraceItemAttributeValuesRequest.OrderBy(
+                sort=TraceItemAttributeValuesRequest.OrderBy.SORT_SEMVER,
+            ),
+        )
+        response = AttributeValuesRequest().execute(message)
+        assert response.values == ["true", "false"]
+        assert response.counts == [8, 1]
+
     def test_boolean_existence_check(self, setup_teardown: Any) -> None:
         # `custom_flag` is set on exactly two items (one True, one False); the
         # other items do not have the key. The existence check must exclude the

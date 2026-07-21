@@ -90,14 +90,25 @@ class FlexibleTimeWindowPageWithFilters:
                 continue
 
             if key_name == f"{self._FILTER_PREFIX}.timestamp":
+                # Resolve the value first and raise on an unsupported type (page
+                # tokens are client-supplied): otherwise column_values would fall
+                # out of sync with column_names/column_is_semver and the
+                # strict zip() below would crash with an opaque error. Mirrors the
+                # timestamp validation in create().
+                value = filter.comparison_filter.value
+                if value.HasField("val_str"):
+                    column_values.append(f.toDateTime(value.val_str))
+                elif value.HasField("val_double"):
+                    column_values.append(literal(value.val_double))
+                elif value.HasField("val_int"):
+                    column_values.append(literal(value.val_int))
+                else:
+                    raise ValueError(
+                        f"Timestamp value type {value.WhichOneof('value')} not supported "
+                        "in page token"
+                    )
                 column_names.append("timestamp")
                 column_is_semver.append(False)
-                if filter.comparison_filter.value.HasField("val_str"):
-                    column_values.append(f.toDateTime(filter.comparison_filter.value.val_str))
-                elif filter.comparison_filter.value.HasField("val_double"):
-                    column_values.append(literal(filter.comparison_filter.value.val_double))
-                elif filter.comparison_filter.value.HasField("val_int"):
-                    column_values.append(literal(filter.comparison_filter.value.val_int))
             else:
                 # strip the matching prefix (and the dot) to recover the alias
                 prefix = self._SEMVER_FILTER_PREFIX if is_semver else self._FILTER_PREFIX

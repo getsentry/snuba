@@ -4516,6 +4516,9 @@ class TestSemverSorting:
         # its GA release, to verify the dev build sorts before GA.
         "24.7.0.dev0+abc123",
         "24.7.0",
+        # SemVer build metadata must not affect precedence: "1.2.3+build456"
+        # sorts as the stable 1.2.3, not as a prerelease of 1.2.0.
+        "1.2.3+build456",
     ]
 
     @pytest.fixture(autouse=True)
@@ -4600,6 +4603,18 @@ class TestSemverSorting:
         releases = self._query_releases()
         assert releases.index("my-pkg@2.0.0") > releases.index("1.2.10"), (
             "my-pkg@2.0.0 should sort as version 2.0.0 (after 1.x)"
+        )
+
+    def test_build_metadata_ignored(self) -> None:
+        # Build metadata does not affect precedence: "1.2.3+build456" must sort
+        # as stable 1.2.3 (after 1.2.2 and after the 1.2.3-beta.1 prerelease),
+        # not as a prerelease of 1.2.0 (which would land before 1.2.2).
+        releases = self._query_releases()
+        assert releases.index("1.2.3+build456") > releases.index("1.2.2"), (
+            "1.2.3+build456 must sort as 1.2.3 (stable), after 1.2.2"
+        )
+        assert releases.index("1.2.3+build456") > releases.index("1.2.3-beta.1"), (
+            "build metadata is not a prerelease: 1.2.3+build456 sorts after 1.2.3-beta.1"
         )
 
     def test_length_normalisation(self) -> None:

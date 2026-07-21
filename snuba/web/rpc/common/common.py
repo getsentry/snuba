@@ -102,7 +102,8 @@ def semver_sort_key(expr: Expression, alias: str | None = None) -> Expression:
     in per request (there is no hardcoded attribute list), and the key is applied
     to whatever column they order by.
 
-    Strips a leading 'package@' prefix, isolates the release part (before '-'),
+    Strips a leading 'package@' prefix and any '+build' metadata (which per
+    SemVer does not affect precedence), isolates the release part (before '-'),
     maps each dot-component to UInt32, pads to 4 elements so "1.2" == "1.2.0",
     and adds a stability flag (0=prerelease, 1=stable) so prerelease versions sort
     before their corresponding stable release.  Works on Altinity 25.3/25.8.
@@ -122,7 +123,11 @@ def semver_sort_key(expr: Expression, alias: str | None = None) -> Expression:
     # the nullable wrapper before applying any string → array functions.
     non_null = f.ifNull(expr, literal(""))
     version_no_prefix = f.arrayElement(f.splitByChar(literal("@"), non_null), literal(-1))
-    release_part = f.arrayElement(f.splitByChar(literal("-"), version_no_prefix), literal(1))
+    # Drop SemVer build metadata ("1.2.3+build") before parsing: it must not
+    # affect precedence, and left attached it would zero the last numeric
+    # component (toUInt32OrZero("3+build") == 0) and fail the stability match.
+    version_no_build = f.arrayElement(f.splitByChar(literal("+"), version_no_prefix), literal(1))
+    release_part = f.arrayElement(f.splitByChar(literal("-"), version_no_build), literal(1))
     numeric_key = f.arrayResize(
         f.arrayMap(
             Lambda(None, ("x",), f.toUInt32OrZero(x)),
@@ -136,7 +141,7 @@ def semver_sort_key(expr: Expression, alias: str | None = None) -> Expression:
     # PEP 440 dot-style dev/pre builds ("24.7.0.dev0+<sha>", the common form on
     # sentry.release) — the latter has no '-', so a bare '-' check would wrongly
     # tag it stable and sort the dev build after its GA release.
-    is_stable = f.match(version_no_prefix, literal(r"^[0-9]+(\.[0-9]+)*$"))
+    is_stable = f.match(version_no_build, literal(r"^[0-9]+(\.[0-9]+)*$"))
     return FunctionCall(alias, "tuple", (numeric_key, is_stable, non_null))
 
 

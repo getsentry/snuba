@@ -143,7 +143,13 @@ def _build_query(
     # count() stays the primary ordering so the most common values still come
     # first; the sort key only changes the tiebreak among equally frequent values.
     # An unset/SORT_DEFAULT sort keeps the historical lexicographic order.
-    if request.order_by.sort == TraceItemAttributeValuesRequest.OrderBy.SORT_SEMVER:
+    # semver_sort_key applies string functions (splitByChar, match, ...), so it
+    # only makes sense for string values; boolean keys (also enumerable here)
+    # keep plain ordering, mirroring the string-type guard in the table resolver.
+    if (
+        request.order_by.sort == TraceItemAttributeValuesRequest.OrderBy.SORT_SEMVER
+        and request.key.type == AttributeKey.TYPE_STRING
+    ):
         value_order_expression: Expression = semver_sort_key(column("attr_value"))
     else:
         value_order_expression = column("attr_value")
