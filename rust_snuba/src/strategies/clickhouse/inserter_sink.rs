@@ -24,7 +24,7 @@ use sentry_arroyo::{counter, timer};
 use tokio::sync::mpsc;
 
 use crate::config::{BatchSizeCalculation, ClickhouseConfig};
-use crate::options::{get_load_balancing_config, get_max_insert_block_size};
+use crate::options::{get_insert_timeout, get_load_balancing_config, get_max_insert_block_size};
 use crate::types::BytesInsertBatch;
 
 /// Bound on rows in flight between `submit` and the actor; when full, `submit`
@@ -151,13 +151,15 @@ fn make_inserter<R: clickhouse::Row>(
     max_batch_time: Duration,
 ) -> clickhouse::inserter::Inserter<R> {
     let lb = get_load_balancing_config(storage_name);
+    // Insert timeout (send + end), tunable per storage via
+    // `clickhouse_insert_timeout_ms`; defaults to max_batch_time, 0 disables it.
+    // Without a timeout a stalled ClickHouse or black-holed connection would block
+    // the actor indefinitely; a timeout instead surfaces as a write/commit error
+    // → fail-stop → Kafka replay.
+    let insert_timeout = get_insert_timeout(storage_name, max_batch_time);
     let mut inserter = client
         .inserter::<R>(table)
-        // Bound each chunk-send and flush by the batch period. Without this the
-        // crate has no insert timeout, so a stalled ClickHouse or black-holed
-        // connection would block the actor indefinitely; the timeout instead
-        // surfaces as a write/commit error → fail-stop → Kafka replay.
-        .with_timeouts(Some(max_batch_time), Some(max_batch_time))
+        .with_timeouts(insert_timeout, insert_timeout)
         .with_max_rows(max_rows)
         .with_max_bytes(max_bytes)
         .with_period(Some(max_batch_time))
