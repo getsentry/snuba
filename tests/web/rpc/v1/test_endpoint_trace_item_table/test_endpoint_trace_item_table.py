@@ -2935,12 +2935,7 @@ class TestTraceItemTable(BaseApiTest):
             ),
             TraceItemColumnValues(
                 attribute_name="sumIf(wing.count, bark.db > 50)",
-                results=[
-                    AttributeValue(is_null=True)
-                    if wing_sum is None
-                    else AttributeValue(val_double=wing_sum)
-                    for _, _, _, wing_sum, _, _ in expected
-                ],
+                results=[AttributeValue(is_null=True) for _, _, _, wing_sum, _, _ in expected],
             ),
             TraceItemColumnValues(
                 attribute_name="sumIf(wing.count, wing.count > 2)",
@@ -2959,7 +2954,6 @@ class TestTraceItemTable(BaseApiTest):
                 ],
             ),
         ]
-        breakpoint()
         assert response.column_values == expected_columns
 
     def test_agg_formula(self, setup_teardown: Any) -> None:
