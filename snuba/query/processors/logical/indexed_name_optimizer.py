@@ -1,6 +1,5 @@
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
-from snuba import state
 from snuba.query.conditions import (
     ConditionFunctions,
     get_first_level_and_conditions,
@@ -15,6 +14,7 @@ from snuba.query.expressions import (
 from snuba.query.logical import Query
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.query_settings import QuerySettings
+from snuba.state.sentry_options import get_option
 
 
 class IndexedNameOptimizer(LogicalQueryProcessor):
@@ -44,10 +44,11 @@ class IndexedNameOptimizer(LogicalQueryProcessor):
     or before the value started being populated — have an empty ``indexed_name``
     while still carrying the value in ``attributes_string``. Reading
     ``indexed_name`` for those rows would silently drop them, so the rewrite is
-    gated and must only be enabled once ``indexed_name`` is fully populated for
-    the queried data. There are two independent gates (either one enables it):
+    gated behind two ``snuba``-namespace sentry options (either one enables it)
+    and must only be turned on once ``indexed_name`` is fully populated for the
+    queried data:
 
-    - ``CONFIG_KEY`` (default off): a global on/off flag.
+    - ``CONFIG_KEY`` (default off): a global on/off option.
     - ``ORGANIZATION_CONFIG_KEY`` (default 0): a single ``organization_id`` to
       enable the rewrite for, so it can be rolled out to one org first. It
       applies only when the query is scoped to exactly that org via an
@@ -60,13 +61,13 @@ class IndexedNameOptimizer(LogicalQueryProcessor):
     falls back to the bucket lookup.
     """
 
-    # Global runtime flag gating the rewrite. Off (0) until ``indexed_name`` has
-    # been backfilled across the retention window; flipping it on lets the bloom
+    # Global sentry option gating the rewrite. Off until ``indexed_name`` has
+    # been backfilled across the retention window; turning it on lets the bloom
     # filter index serve ``sentry.op`` / ``sentry.metric.name`` filters.
     CONFIG_KEY = "eap_items_use_indexed_name"
 
     # A single organization_id to enable the rewrite for (0 = none). Lets the
-    # rewrite be rolled out to one org before the global flag is flipped on.
+    # rewrite be rolled out to one org before the global option is turned on.
     ORGANIZATION_CONFIG_KEY = "eap_items_use_indexed_name_organization_id"
 
     # item_type proto enum value -> attribute promoted into ``indexed_name``
@@ -104,12 +105,12 @@ class IndexedNameOptimizer(LogicalQueryProcessor):
         return values.pop()
 
     def _is_enabled(self, query: Query) -> bool:
-        """The rewrite is enabled by the global flag, or for the single
+        """The rewrite is enabled by the global option, or for the single
         organization named by ``ORGANIZATION_CONFIG_KEY`` when the query is
         scoped to it."""
-        if state.get_int_config(self.CONFIG_KEY, 0):
+        if get_option(self.CONFIG_KEY, False):
             return True
-        organization_id = state.get_int_config(self.ORGANIZATION_CONFIG_KEY, 0)
+        organization_id = get_option(self.ORGANIZATION_CONFIG_KEY, 0)
         return bool(organization_id) and (
             self._single_equals_int(query, "organization_id") == organization_id
         )

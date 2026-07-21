@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     TimeSeriesRequest,
     TimeSeriesResponse,
@@ -23,7 +24,6 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.processors.logical.indexed_name_optimizer import IndexedNameOptimizer
-from snuba.state import set_config
 from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -108,23 +108,23 @@ class TestTimeSeriesIndexedName(BaseApiTest):
         """A metric-name-filtered time series returns the right rows when the
         optimizer rewrites the name filter onto the indexed_name column."""
         _store_metrics()
-        set_config(IndexedNameOptimizer.CONFIG_KEY, 1)
 
-        response = EndpointTimeSeries().execute(_request())
+        with override_options("snuba", {IndexedNameOptimizer.CONFIG_KEY: True}):
+            response = EndpointTimeSeries().execute(_request())
 
         # Only the my.metric items (value=1.0 each) match; other.metric is excluded.
         assert _total(response) == float(MATCHING_COUNT)
 
     def test_indexed_name_rewrite_is_result_preserving(self) -> None:
         """The rewrite must not change results: the same request returns the same
-        time series with the flag off (bucket lookup) and on (indexed_name)."""
+        time series with the option off (bucket lookup) and on (indexed_name)."""
         _store_metrics()
 
-        set_config(IndexedNameOptimizer.CONFIG_KEY, 0)
-        disabled = EndpointTimeSeries().execute(_request())
+        with override_options("snuba", {IndexedNameOptimizer.CONFIG_KEY: False}):
+            disabled = EndpointTimeSeries().execute(_request())
 
-        set_config(IndexedNameOptimizer.CONFIG_KEY, 1)
-        enabled = EndpointTimeSeries().execute(_request())
+        with override_options("snuba", {IndexedNameOptimizer.CONFIG_KEY: True}):
+            enabled = EndpointTimeSeries().execute(_request())
 
         assert _total(disabled) == float(MATCHING_COUNT)
         assert list(enabled.result_timeseries) == list(disabled.result_timeseries)

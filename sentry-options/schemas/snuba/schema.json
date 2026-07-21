@@ -595,6 +595,16 @@
       "type": "string",
       "default": "jittered",
       "description": "TaskBuilderMode for the subscription scheduler: one of immediate, jittered, transition_jitter, transition_immediate."
+    },
+    "eap_items_use_indexed_name": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the IndexedNameOptimizer rewrites sentry.op / sentry.metric.name filters on eap_items onto the bloom-filter-indexed indexed_name column instead of the unindexed attributes_string bucket lookup. Only enable once indexed_name is fully populated across the queried retention window, otherwise rows written before it was populated are silently dropped."
+    },
+    "eap_items_use_indexed_name_organization_id": {
+      "type": "integer",
+      "default": 0,
+      "description": "A single organization_id to enable the IndexedNameOptimizer rewrite for (0 = none), independent of eap_items_use_indexed_name, so it can be rolled out to one org first. Applies only when the query is scoped to exactly that org."
     }
   }
 }

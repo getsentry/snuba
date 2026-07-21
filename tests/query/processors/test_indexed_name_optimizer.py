@@ -1,6 +1,7 @@
 from copy import deepcopy
 
 import pytest
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
 from snuba.clickhouse.columns import ColumnSet
@@ -28,7 +29,6 @@ from snuba.query.processors.logical.indexed_name_optimizer import (
     IndexedNameOptimizer,
 )
 from snuba.query.query_settings import HTTPQuerySettings
-from snuba.state import set_config
 
 # Use the protobuf enum values directly so the tests stay in sync with the
 # production dependency the optimizer keys off of.
@@ -217,20 +217,16 @@ test_data = [
 ]
 
 
-@pytest.mark.redis_db
 @pytest.mark.parametrize("pre_format, expected_query", test_data)
 def test_indexed_name_optimizer(pre_format: Query, expected_query: Query) -> None:
-    set_config(IndexedNameOptimizer.CONFIG_KEY, 1)
-    copy = deepcopy(pre_format)
-    IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
-    assert copy.get_selected_columns() == expected_query.get_selected_columns()
-    assert copy.get_condition() == expected_query.get_condition()
+    with override_options("snuba", {IndexedNameOptimizer.CONFIG_KEY: True}):
+        copy = deepcopy(pre_format)
+        IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
+        assert copy.get_selected_columns() == expected_query.get_selected_columns()
+        assert copy.get_condition() == expected_query.get_condition()
 
 
-@pytest.mark.redis_db
 def test_disabled_by_default_leaves_query_untouched() -> None:
-    set_config(IndexedNameOptimizer.CONFIG_KEY, 0)
-    set_config(IndexedNameOptimizer.ORGANIZATION_CONFIG_KEY, 0)
     query = _query(
         and_cond(
             equals(column("item_type"), literal(SPAN)),
@@ -238,7 +234,14 @@ def test_disabled_by_default_leaves_query_untouched() -> None:
         )
     )
     copy = deepcopy(query)
-    IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
+    with override_options(
+        "snuba",
+        {
+            IndexedNameOptimizer.CONFIG_KEY: False,
+            IndexedNameOptimizer.ORGANIZATION_CONFIG_KEY: 0,
+        },
+    ):
+        IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
     assert copy.get_condition() == query.get_condition()
     assert copy.get_selected_columns() == query.get_selected_columns()
 
@@ -270,40 +273,50 @@ def _org_scoped_expected(org_id: int) -> Query:
     )
 
 
-@pytest.mark.redis_db
 def test_org_gate_enables_rewrite_for_matching_org() -> None:
-    # Global flag off, but the org-specific gate names this query's org.
-    set_config(IndexedNameOptimizer.CONFIG_KEY, 0)
-    set_config(IndexedNameOptimizer.ORGANIZATION_CONFIG_KEY, ORG_ID)
+    # Global option off, but the org-specific gate names this query's org.
     copy = deepcopy(_org_scoped_query(ORG_ID))
-    IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
+    with override_options(
+        "snuba",
+        {
+            IndexedNameOptimizer.CONFIG_KEY: False,
+            IndexedNameOptimizer.ORGANIZATION_CONFIG_KEY: ORG_ID,
+        },
+    ):
+        IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
     assert copy.get_condition() == _org_scoped_expected(ORG_ID).get_condition()
 
 
-@pytest.mark.redis_db
 def test_org_gate_skips_non_matching_org() -> None:
     # The org gate names ORG_ID, but the query is scoped to a different org.
-    set_config(IndexedNameOptimizer.CONFIG_KEY, 0)
-    set_config(IndexedNameOptimizer.ORGANIZATION_CONFIG_KEY, ORG_ID)
     query = _org_scoped_query(ORG_ID + 1)
     copy = deepcopy(query)
-    IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
+    with override_options(
+        "snuba",
+        {
+            IndexedNameOptimizer.CONFIG_KEY: False,
+            IndexedNameOptimizer.ORGANIZATION_CONFIG_KEY: ORG_ID,
+        },
+    ):
+        IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
     assert copy.get_condition() == query.get_condition()
 
 
-@pytest.mark.redis_db
 def test_both_gates_off_leaves_org_scoped_query_untouched() -> None:
-    set_config(IndexedNameOptimizer.CONFIG_KEY, 0)
-    set_config(IndexedNameOptimizer.ORGANIZATION_CONFIG_KEY, 0)
     query = _org_scoped_query(ORG_ID)
     copy = deepcopy(query)
-    IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
+    with override_options(
+        "snuba",
+        {
+            IndexedNameOptimizer.CONFIG_KEY: False,
+            IndexedNameOptimizer.ORGANIZATION_CONFIG_KEY: 0,
+        },
+    ):
+        IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
     assert copy.get_condition() == query.get_condition()
 
 
-@pytest.mark.redis_db
 def test_contradictory_item_types_left_untouched() -> None:
-    set_config(IndexedNameOptimizer.CONFIG_KEY, 1)
     query = _query(
         and_cond(
             equals(column("item_type"), literal(SPAN)),
@@ -314,7 +327,8 @@ def test_contradictory_item_types_left_untouched() -> None:
         )
     )
     copy = deepcopy(query)
-    IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
+    with override_options("snuba", {IndexedNameOptimizer.CONFIG_KEY: True}):
+        IndexedNameOptimizer().process_query(copy, HTTPQuerySettings())
     # ambiguous item_type -> no rewrite; no indexed_name reference is introduced.
     condition = copy.get_condition()
     assert condition is not None
