@@ -1,5 +1,5 @@
 import math
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from typing import Any, TypeVar
@@ -51,6 +51,7 @@ from snuba.query.expressions import (
     Expression,
     FunctionCall,
     Lambda,
+    Literal,
     SubscriptableReference,
 )
 from snuba.state.sentry_options import get_option
@@ -622,9 +623,28 @@ def _validate_comparison_filter_type_array(
                 "(e.g. val_str, val_int) or null (is_null / val_null) to match null elements"
             )
         return
+    if op in (ComparisonFilter.OP_IN, ComparisonFilter.OP_NOT_IN):
+        vt = v.WhichOneof("value")
+        if vt not in (
+            "val_array",
+            "val_str_array",
+            "val_int_array",
+            "val_float_array",
+            "val_double_array",
+        ):
+            raise BadSnubaRPCRequestException(
+                "OP_IN/OP_NOT_IN on array keys require an array value "
+                "(e.g. val_str_array, val_int_array, val_array)"
+            )
+        members = v.val_array.values if vt == "val_array" else getattr(v, vt).values
+        if len(members) == 0:
+            raise BadSnubaRPCRequestException(
+                "OP_IN/OP_NOT_IN on array keys require a non-empty array"
+            )
+        return
     raise BadSnubaRPCRequestException(
         f"{ComparisonFilter.Op.Name(op)} is not supported on array keys "
-        "(supported: LIKE, NOT_LIKE, OP_EQUALS, OP_NOT_EQUALS)"
+        "(supported: LIKE, NOT_LIKE, OP_EQUALS, OP_NOT_EQUALS, OP_IN, OP_NOT_IN)"
     )
 
 
@@ -740,6 +760,75 @@ def _typed_array_includes_scalar_expression(
         else:
             lam = Lambda(None, ("x",), f.equals(x, rhs))
         exprs.append(f.arrayExists(lam, array_expr))
+    if len(exprs) == 1:
+        return exprs[0]
+    return or_cond(exprs[0], exprs[1], *exprs[2:])
+
+
+def _iter_membership_values(v: AttributeValue) -> Iterator[AttributeValue]:
+    """Yield each element of an array-typed ``AttributeValue`` as a scalar
+    ``AttributeValue``, so the per-value coercion in
+    ``_typed_array_native_membership_candidates`` can be reused for every element of an
+    IN set. ``val_array`` elements are already ``AttributeValue``s; the deprecated
+    per-type arrays hold raw scalars, so wrap each in the matching scalar field."""
+    value_type = v.WhichOneof("value")
+    if value_type == "val_array":
+        yield from v.val_array.values
+    elif value_type == "val_str_array":
+        for s in v.val_str_array.values:
+            yield AttributeValue(val_str=s)
+    elif value_type == "val_int_array":
+        for i in v.val_int_array.values:
+            yield AttributeValue(val_int=i)
+    elif value_type == "val_float_array":
+        for fl in v.val_float_array.values:
+            yield AttributeValue(val_float=fl)
+    elif value_type == "val_double_array":
+        for d in v.val_double_array.values:
+            yield AttributeValue(val_double=d)
+    else:
+        raise BadSnubaRPCRequestException(
+            f"unsupported AttributeValue for array membership set: {value_type}"
+        )
+
+
+def _typed_array_includes_any_expression(
+    attr_key: AttributeKey,
+    v: AttributeValue,
+    ignore_case: bool,
+) -> Expression:
+    """Any element is in a value-set (the multi-value analog of
+    ``_typed_array_includes_scalar_expression``) against the typed
+    ``attributes_array_*`` columns: a native ``hasAny(<col>, [set])`` per candidate
+    column, OR-ed together. Each set element is coerced per column via
+    ``_typed_array_native_membership_candidates``, and native literals are grouped by
+    column (preserving column order).
+
+    Unlike scalar ``IN``, ``hasAny`` keeps its array literal inline (no prepared set), so
+    there is no unstable ``__set_*`` identifier to leak into a result-block column name —
+    the expression is safe in WHERE and SELECT/HAVING alike, with no ``membership_as_has``
+    switch needed (see ``_in_or_has``)."""
+    if v.WhichOneof("value") == "val_null" or v.is_null:
+        raise BadSnubaRPCRequestException("Arrays can't be NULL or cannot have NULL elements")
+    # Group the coerced literals by column, preserving first-seen column order.
+    grouped: dict[str, list[Literal]] = {}
+    for elem in _iter_membership_values(v):
+        if elem.WhichOneof("value") == "val_null" or elem.is_null:
+            raise BadSnubaRPCRequestException("Arrays can't be NULL or cannot have NULL elements")
+        for col, rhs in _typed_array_native_membership_candidates(attr_key, elem):
+            assert isinstance(rhs, Literal)
+            grouped.setdefault(col, []).append(rhs)
+
+    exprs: list[Expression] = []
+    for col, literals in grouped.items():
+        array_expr: Expression = type_array_typed_column_native_array(attr_key, col)
+        if ignore_case and col == "attributes_array_string":
+            # hasAny can't fold case, so lower both the stored elements and the set.
+            array_expr = f.arrayMap(Lambda(None, ("x",), f.lower(Argument(None, "x"))), array_expr)
+            set_expr = literals_array(None, [literal(str(lit.value).lower()) for lit in literals])
+        else:
+            set_expr = literals_array(None, literals)
+        exprs.append(f.hasAny(array_expr, set_expr))
     if len(exprs) == 1:
         return exprs[0]
     return or_cond(exprs[0], exprs[1], *exprs[2:])
@@ -1141,6 +1230,8 @@ def trace_item_filters_to_expression(
         if op == ComparisonFilter.OP_IN:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
             ignore_case = item_filter.comparison_filter.ignore_case
+            if k.type in ARRAY_TYPES:
+                return _typed_array_includes_any_expression(k, v, ignore_case)
             if ignore_case:
                 if value_type == "val_str_array":
                     v_expression = literals_array(
@@ -1176,6 +1267,8 @@ def trace_item_filters_to_expression(
         if op == ComparisonFilter.OP_NOT_IN:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
             ignore_case = item_filter.comparison_filter.ignore_case
+            if k.type in ARRAY_TYPES:
+                return not_cond(_typed_array_includes_any_expression(k, v, ignore_case))
             if ignore_case:
                 if value_type == "val_str_array":
                     v_expression = literals_array(
