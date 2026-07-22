@@ -1,24 +1,14 @@
-//! Arroyo strategy that inserts typed rows (`#[derive(Row)]`) through the
-//! official `clickhouse` crate, **one INSERT per arroyo batch**, wrapped in
-//! [`RunTaskInThreads`]. This mirrors the JSONEachRow [`ClickhouseWriterStep`]
-//! (`writer_v2`), but hands ClickHouse typed RowBinary rows instead of
-//! pre-encoded bytes; `eap_items` (`EAPItemRow`) is the first caller.
+//! Inserts typed `#[derive(Row)]` rows via the `clickhouse` crate, one INSERT
+//! per arroyo batch, wrapped in [`RunTaskInThreads`]. Like the JSONEachRow
+//! `writer_v2` but sends typed RowBinary; `eap_items` (`EAPItemRow`) is the
+//! first caller.
 //!
-//! Batching happens upstream in a [`Reduce`] that accumulates single processed
-//! rows into a `Vec<R>`; each completed batch becomes one task here.
-//! `RunTaskInThreads` runs up to `clickhouse_concurrency` inserts at once **but
-//! drains their results strictly in submission order** (it only pops the front
-//! of its handle queue), so Kafka offsets are committed in order and a batch's
-//! offsets never advance before an earlier batch is durable. That in-order
-//! completion barrier — not per-partition routing — is what keeps at-least-once
-//! delivery safe under concurrency, exactly as `writer_v2` does.
-//!
-//! On a write/insert error the task returns `RunTaskError::Other`, which
-//! `RunTaskInThreads` surfaces as a `StrategyError` (no in-process retry): the
-//! batch's offsets are never committed, so the consumer restarts and replays
-//! from the last committed offset. A panicked task is surfaced the same way via
-//! its `JoinHandle`. Wire format is plain `RowBinary` with validation off (see
-//! [`build_client`]).
+//! A [`Reduce`] batches rows upstream; each batch is one task here.
+//! `RunTaskInThreads` runs up to `clickhouse_concurrency` inserts at once but
+//! drains results in submission order, so offsets commit in order and never
+//! advance before an earlier batch is durable — the same barrier `writer_v2`
+//! relies on, so no per-partition routing is needed. Write errors and panics
+//! surface as `StrategyError` (fail-stop → Kafka replay).
 
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -44,15 +34,12 @@ fn build_client(cfg: &ClickhouseConfig, storage_name: &str) -> clickhouse::Clien
         .with_password(cfg.password.clone())
         .with_database(cfg.database.clone())
         // Validation off → plain `RowBinary`, so a `String` field can feed a
-        // native `JSON` column via `input_format_binary_read_json_as_string`
-        // (`RowBinaryWithNamesAndTypes` would reject the type). The crate still
-        // emits the column list from the `Row` derive, so mapping stays correct.
+        // native `JSON` column via `input_format_binary_read_json_as_string`.
         .with_validation(false)
         .with_setting("insert_distributed_sync", "1")
         .with_setting("input_format_binary_read_json_as_string", "1");
 
-    // Per-storage tuning, previously applied on the long-lived inserter; these
-    // are ClickHouse settings so they ride on every INSERT the client issues.
+    // Per-storage settings, applied to every INSERT the client issues.
     let lb = get_load_balancing_config(storage_name);
     client = client.with_setting("load_balancing", lb.load_balancing);
     if let Some(first_offset) = lb.first_offset {
@@ -88,17 +75,15 @@ where
             let num_bytes = empty_batch.num_bytes();
             let write_start = SystemTime::now();
 
-            // Reduce flushes empty batches so offsets still advance; skip the I/O
-            // for them (and when writes are disabled), mirroring writer_v2.
+            // Empty batches (all rows skipped) still advance offsets; skip the I/O.
             if rows.is_empty() {
                 tracing::debug!("skipping write of empty batch");
             } else if skip_write {
                 tracing::info!("skipping write of {} rows", num_rows);
             } else {
+                // Send + end timeout, tunable via `clickhouse_insert_timeout_ms`
+                // (0 disables); guards against a stalled/black-holed connection.
                 let insert_timeout = get_insert_timeout(&storage_name, max_batch_time);
-                // Send + end timeout, tunable per storage via
-                // `clickhouse_insert_timeout_ms` (0 disables); without it a stalled
-                // ClickHouse or black-holed connection would block the task forever.
                 let insert_result: anyhow::Result<()> = async {
                     let mut insert = client
                         .insert::<R>(&table)
@@ -242,10 +227,8 @@ mod tests {
         }
     }
 
-    /// With `skip_write` the task never touches ClickHouse, so this exercises the
-    /// full submit → RunTaskInThreads → drain → downstream path (and `offset + 1`
-    /// next-to-consume semantics) without a live cluster. Empty (skipped) batches
-    /// must still advance offsets, mirroring `flush_empty_batches`.
+    /// `skip_write` exercises the submit → RunTaskInThreads → drain → downstream
+    /// path without a live cluster; empty batches must still advance offsets.
     #[test]
     fn skipped_batches_advance_offsets_without_clickhouse() {
         crate::testutils::initialize_python();

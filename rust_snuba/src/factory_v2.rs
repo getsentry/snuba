@@ -154,8 +154,6 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
         let next_step: Box<dyn ProcessingStrategy<KafkaPayload>> = if use_eap_crate_path {
             use crate::processors::eap_items::EAPItemRow;
 
-            // One INSERT per batch, run concurrently but committed in order by
-            // RunTaskInThreads (see RowBinaryWriterStep docs).
             let writer = RowBinaryWriterStep::<EAPItemRow, _>::new(
                 next_step,
                 self.storage_config.clickhouse_cluster.clone(),
@@ -166,9 +164,8 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                 self.max_batch_time,
             );
 
-            // Accumulate the per-message typed rows into a Vec<EAPItemRow> batch,
-            // mirroring the JSONEachRow Reduce. A skipped row (None) contributes
-            // no row but still carries offsets/metadata forward.
+            // Accumulate per-message rows into a Vec<EAPItemRow> batch; a skipped
+            // row (None) still carries its offsets/metadata forward.
             let accumulator = Arc::new(
                 |mut batch: BytesInsertBatch<Vec<EAPItemRow>>,
                  message: Message<BytesInsertBatch<Option<EAPItemRow>>>| {
@@ -181,9 +178,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                 },
             );
 
-            // Reduce sizes the batch by summing this over incoming messages, so it
-            // runs on the single-row input: 1 per real row, 0 for a skip; bytes use
-            // the processor's per-message estimate.
+            // Summed over incoming messages: 1 per real row, 0 for a skip.
             let compute_batch_size: fn(&BytesInsertBatch<Option<EAPItemRow>>) -> usize =
                 match self.max_batch_size_calculation {
                     config::BatchSizeCalculation::Bytes => |batch| batch.num_bytes(),
