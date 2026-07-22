@@ -23,6 +23,12 @@ pub fn setup_logging() {
             Level::ERROR if metadata.target().starts_with("sentry_usage_accountant") => {
                 EventFilter::Log
             }
+            // The DogStatsD forwarder logs at ERROR on every undeliverable flush
+            // (e.g. "Connection refused"), which self-heals but floods Sentry when
+            // the target is unreachable. Keep it as logs only (SNUBA-BQ8).
+            Level::ERROR if metadata.target().starts_with("metrics_exporter_dogstatsd") => {
+                EventFilter::Log
+            }
             Level::ERROR => EventFilter::Event | EventFilter::Log,
             Level::WARN | Level::INFO => EventFilter::Log,
             Level::DEBUG | Level::TRACE => EventFilter::Ignore,

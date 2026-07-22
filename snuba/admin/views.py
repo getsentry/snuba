@@ -420,7 +420,14 @@ def clickhouse_system_query() -> Response:
         return make_response(jsonify({"error": err.message or "Invalid query"}), 400)
 
     except ClickhouseError as err:
-        logger.error(err, exc_info=True)
+        # A positive server code means ClickHouse rejected the query itself (e.g. 184
+        # ILLEGAL_AGGREGATION) -- a client error, logged at WARNING to stay out of
+        # Sentry. Transport/connection failures wrap with code -1; keep those at ERROR
+        # so infra faults still report.
+        if err.code > 0:
+            logger.warning(err, exc_info=True)
+        else:
+            logger.error(err, exc_info=True)
         return make_response(jsonify({"error": err.message or "Invalid query"}), 400)
 
     except InvalidNodeError as err:
