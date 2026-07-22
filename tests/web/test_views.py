@@ -4,11 +4,12 @@ from typing import Any
 
 import pytest
 import simplejson as json
+from flask import Response, jsonify
 from flask.testing import FlaskClient
 
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.parser.exceptions import ParsingException
-from snuba.web.views import dump_payload, handle_invalid_query
+from snuba.web.views import application, dump_payload, handle_invalid_query
 
 invalid_query_exception_test_cases = [
     pytest.param(
@@ -117,3 +118,38 @@ def test_health_always_ok(snuba_api: FlaskClient) -> None:
     response = snuba_api.get("/health?thorough=true")
     assert response.status_code == 200
     assert json.loads(response.data) == {"status": "ok"}
+
+
+COMPRESS_CASES = [
+    ({"Accept-Encoding": "zstd"}, "zstd"),
+    ({}, None),
+]
+
+
+@pytest.mark.parametrize("accept_header, expected_encoding", COMPRESS_CASES)
+def test_json_responses_are_compressed(
+    snuba_api: FlaskClient, accept_header: str, expected_encoding: str
+) -> None:
+    large_resp = snuba_api.get(test_route_large, headers=accept_header)
+    # large resps are compressed according to header
+    assert large_resp.headers.get("Content-Encoding") == expected_encoding
+    assert "Accept-Encoding" in large_resp.headers.get("Vary", "")
+
+    # small resps are not compressed regardless of header
+    small_resp = snuba_api.get(test_route_small, headers=accept_header)
+    assert small_resp.headers.get("Content-Encoding") is None
+
+
+# Compression test fixtures
+test_route_large = "/_test_data_large"
+test_route_small = "/_test_data_small"
+
+
+@application.route(test_route_large)
+def _test_data_large() -> Response:
+    return jsonify({"rows": [{"a": i, "b": "x" * 10} for i in range(100)]})
+
+
+@application.route(test_route_small)
+def _test_data_small() -> Response:
+    return jsonify({"rows": [{"a": i, "b": "x" * 10} for i in range(10)]})
