@@ -469,8 +469,15 @@ where
     /// partition forever, wedging the consumer. During normal operation actors
     /// loop until their sender is dropped, so any finished handle before shutdown
     /// (`work_txs` still present) means an unexpected exit; error out to restart.
+    ///
+    /// Skipped while a message is carried over: `drain_outcomes` doesn't read the
+    /// channel then, so an actor that finished after sending `FlushOutcome::Err`
+    /// still has that error queued. Reporting a generic exit here would mask the
+    /// real ClickHouse error text and its `clickhouse_insert_error` metric. Once
+    /// downstream unblocks, `drain_outcomes` surfaces the queued `Err`; a true
+    /// panic (nothing queued) is caught by this check on the next drained poll.
     fn check_actors_alive(&self) -> Result<(), StrategyError> {
-        if self.work_txs.is_none() {
+        if self.work_txs.is_none() || self.message_carried_over.is_some() {
             return Ok(());
         }
         if self.actors.iter().any(|h| h.is_finished()) {
@@ -514,16 +521,24 @@ where
         let committable: Vec<(Partition, u64)> = message.committable().collect();
 
         // Shard by Kafka partition so every offset of a partition is owned by one
-        // actor and committed in order. Splitting a partition across actors could
-        // let a higher offset flush (and commit) before a lower one is durable,
-        // losing the gap on restart. Upstream (`RunTaskInThreads`) is 1-in→1-out,
-        // so each message carries a single partition; the fold is just a safe
-        // routing key if that ever changes. Empty committable → shard 0.
+        // actor and committed in order. Splitting one partition's offsets across
+        // actors could let a higher offset flush (and commit) before a lower one
+        // is durable, losing the gap on restart.
+        //
+        // This is sound only because each message carries exactly one partition
+        // (upstream `RunTaskInThreads` is 1-in→1-out over single-partition broker
+        // messages): routing then maps a partition to the same actor every time.
+        // A multi-partition message has no single safe home — routing it by one of
+        // its partitions would send the others to the "wrong" actor and reopen the
+        // split-flush gap — so assert the invariant rather than silently mis-route.
+        // Empty committable → shard 0.
+        debug_assert!(
+            committable.windows(2).all(|w| w[0].0.index == w[1].0.index),
+            "inserter sink expects single-partition messages; got {committable:?}",
+        );
         let shard = committable
-            .iter()
-            .map(|(p, _)| p.index as usize)
-            .min()
-            .map_or(0, |idx| idx % work_txs.len());
+            .first()
+            .map_or(0, |(p, _)| p.index as usize % work_txs.len());
         let work_tx = &work_txs[shard];
 
         // Reserve first so we never destructure `message` on the reject path.
