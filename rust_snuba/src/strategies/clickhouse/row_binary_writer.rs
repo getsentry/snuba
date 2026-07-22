@@ -158,7 +158,13 @@ where
         let client = Arc::new(build_client(&cluster, &storage_name));
         let inner = RunTaskInThreads::new(
             next_step,
-            clickhouse_row_task_runner::<R>(client, table, storage_name, max_batch_time, skip_write),
+            clickhouse_row_task_runner::<R>(
+                client,
+                table,
+                storage_name,
+                max_batch_time,
+                skip_write,
+            ),
             concurrency,
             Some("clickhouse_row_binary"),
         );
@@ -264,7 +270,8 @@ mod tests {
         // Batches with next-to-consume offsets 5, 10, 15 (highest consumed 4/9/14).
         for offset in [5u64, 10, 15] {
             let batch = BytesInsertBatch::from_rows(Vec::<EAPItemRow>::new());
-            let message = Message::new_broker_message(batch, partition, offset - 1, chrono::Utc::now());
+            let message =
+                Message::new_broker_message(batch, partition, offset - 1, chrono::Utc::now());
             step.submit(message).unwrap();
             let _ = step.poll();
         }
