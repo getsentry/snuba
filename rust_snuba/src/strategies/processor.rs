@@ -19,10 +19,65 @@ use crate::config::ProcessorConfig;
 use crate::processors::utils::SilencedDLQMessage;
 use crate::processors::{ProcessingFunction, ProcessingFunctionWithReplacements};
 use crate::types::{
-    BytesInsertBatch, CommitLogEntry, CommitLogOffsets, InsertBatch, InsertOrReplacement,
-    KafkaMessageMetadata, RowData,
+    BytesInsertBatch, CogsData, CommitLogEntry, CommitLogOffsets, InsertBatch, InsertOrReplacement,
+    ItemTypeMetrics, KafkaMessageMetadata, RowData, TypedInsertBatch,
 };
 use tokio::time::Instant;
+
+/// Assemble the next-step message from a batch's `rows` plus the shared
+/// commit-log / latency / cogs / item-type-metrics wiring. `result_to_next_msg`
+/// and `typed_result_to_next_msg` differ only in how they obtain `rows` and
+/// `num_bytes` (encoded bytes vs a typed row), so they delegate the rest here.
+#[allow(clippy::too_many_arguments)]
+fn build_next_msg<T: Default>(
+    rows: T,
+    num_bytes: usize,
+    origin_timestamp: Option<DateTime<Utc>>,
+    sentry_received_timestamp: Option<DateTime<Utc>>,
+    item_type_metrics: Option<ItemTypeMetrics>,
+    cogs_data: Option<CogsData>,
+    partition: Partition,
+    offset: u64,
+    timestamp: DateTime<Utc>,
+    stop_at_timestamp: Option<i64>,
+) -> anyhow::Result<Message<BytesInsertBatch<T>>> {
+    // Don't process any more messages
+    if let Some(stop) = stop_at_timestamp {
+        if stop < timestamp.timestamp() {
+            let payload = BytesInsertBatch::default();
+            return Ok(Message::new_broker_message(
+                payload, partition, offset, timestamp,
+            ));
+        }
+    }
+
+    let mut payload = BytesInsertBatch::from_rows(rows)
+        .with_num_bytes(num_bytes)
+        .with_message_timestamp(timestamp)
+        .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
+            partition.index,
+            CommitLogEntry {
+                offset: offset + 1,
+                orig_message_ts: timestamp,
+                received_p99: origin_timestamp.into_iter().collect(),
+            },
+        )])))
+        .with_cogs_data(cogs_data.unwrap_or_default());
+
+    if let Some(ts) = origin_timestamp {
+        payload = payload.with_origin_timestamp(ts);
+    }
+    if let Some(ts) = sentry_received_timestamp {
+        payload = payload.with_sentry_received_timestamp(ts);
+    }
+    if let Some(metrics) = item_type_metrics {
+        payload = payload.with_item_type_metrics(metrics);
+    }
+
+    Ok(Message::new_broker_message(
+        payload, partition, offset, timestamp,
+    ))
+}
 
 pub fn make_rust_processor(
     next_step: impl ProcessingStrategy<BytesInsertBatch<RowData>> + 'static,
@@ -42,43 +97,19 @@ pub fn make_rust_processor(
         timestamp: DateTime<Utc>,
         stop_at_timestamp: Option<i64>,
     ) -> anyhow::Result<Message<BytesInsertBatch<RowData>>> {
-        // Don't process any more messages
-        if let Some(stop) = stop_at_timestamp {
-            if stop < timestamp.timestamp() {
-                let payload = BytesInsertBatch::default();
-                return Ok(Message::new_broker_message(
-                    payload, partition, offset, timestamp,
-                ));
-            }
-        }
-
         let num_bytes = transformed.rows.encoded_rows.len();
-        let mut payload = BytesInsertBatch::from_rows(transformed.rows)
-            .with_num_bytes(num_bytes)
-            .with_message_timestamp(timestamp)
-            .with_commit_log_offsets(CommitLogOffsets(BTreeMap::from([(
-                partition.index,
-                CommitLogEntry {
-                    offset: offset + 1,
-                    orig_message_ts: timestamp,
-                    received_p99: transformed.origin_timestamp.into_iter().collect(),
-                },
-            )])))
-            .with_cogs_data(transformed.cogs_data.unwrap_or_default());
-
-        if let Some(ts) = transformed.origin_timestamp {
-            payload = payload.with_origin_timestamp(ts);
-        }
-        if let Some(ts) = transformed.sentry_received_timestamp {
-            payload = payload.with_sentry_received_timestamp(ts);
-        }
-        if let Some(metrics) = transformed.item_type_metrics {
-            payload = payload.with_item_type_metrics(metrics);
-        }
-
-        Ok(Message::new_broker_message(
-            payload, partition, offset, timestamp,
-        ))
+        build_next_msg(
+            transformed.rows,
+            num_bytes,
+            transformed.origin_timestamp,
+            transformed.sentry_received_timestamp,
+            transformed.item_type_metrics,
+            transformed.cogs_data,
+            partition,
+            offset,
+            timestamp,
+            stop_at_timestamp,
+        )
     }
 
     let task_runner = MessageProcessor {
@@ -86,6 +117,69 @@ pub fn make_rust_processor(
         enforce_schema,
         func,
         result_to_next_msg,
+        processor_config,
+        stop_at_timestamp,
+    };
+
+    Box::new(RunTaskInThreads::new(
+        next_step,
+        task_runner,
+        concurrency,
+        Some("process_message"),
+    ))
+}
+
+/// Next-step message for a *typed*-row processor (the `clickhouse`-crate inserter
+/// path): carries the typed row downstream (as `Option<R>`; `None` == skip)
+/// instead of encoded bytes. Shares `build_next_msg`'s pipeline wiring.
+fn typed_result_to_next_msg<R>(
+    transformed: TypedInsertBatch<R>,
+    partition: Partition,
+    offset: u64,
+    timestamp: DateTime<Utc>,
+    stop_at_timestamp: Option<i64>,
+) -> anyhow::Result<Message<BytesInsertBatch<Option<R>>>> {
+    build_next_msg(
+        transformed.row,
+        transformed.num_bytes,
+        transformed.origin_timestamp,
+        transformed.sentry_received_timestamp,
+        transformed.item_type_metrics,
+        transformed.cogs_data,
+        partition,
+        offset,
+        timestamp,
+        stop_at_timestamp,
+    )
+}
+
+/// Like [`make_rust_processor`], but the processing function returns a typed
+/// row ([`TypedInsertBatch<R>`]) that is handed downstream verbatim (wrapped in
+/// `BytesInsertBatch<Option<R>>`) for a sink that serializes it itself — e.g.
+/// the `clickhouse`-crate inserter for `eap_items`.
+pub fn make_rust_processor_typed<R>(
+    next_step: impl ProcessingStrategy<BytesInsertBatch<Option<R>>> + 'static,
+    func: fn(
+        KafkaPayload,
+        KafkaMessageMetadata,
+        config: &ProcessorConfig,
+    ) -> anyhow::Result<TypedInsertBatch<R>>,
+    schema_name: &str,
+    enforce_schema: bool,
+    concurrency: &ConcurrencyConfig,
+    processor_config: ProcessorConfig,
+    stop_at_timestamp: Option<i64>,
+) -> Box<dyn ProcessingStrategy<KafkaPayload>>
+where
+    R: Clone + Send + Sync + 'static,
+{
+    let schema = get_schema(schema_name, enforce_schema);
+
+    let task_runner = MessageProcessor {
+        schema,
+        enforce_schema,
+        func,
+        result_to_next_msg: typed_result_to_next_msg::<R>,
         processor_config,
         stop_at_timestamp,
     };

@@ -62,6 +62,14 @@
       "default": {},
       "description": "Dict mapping storage name to a max_insert_block_size override for that storage's INSERTs. Values below ClickHouse's default (1048449) are ignored. Storages with no entry use the server default. Migrated from per-storage runtime config clickhouse_max_insert_block_size:<storage>."
     },
+    "clickhouse_insert_timeout_ms": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "default": {},
+      "description": "Dict mapping storage name to the insert timeout (milliseconds) for that storage's clickhouse-crate inserter (applied to the send and end timeouts). 0 disables the timeout. Storages with no entry default to the consumer's max_batch_time."
+    },
     "eap_items_dlq_grace_period_min": {
       "type": "object",
       "additionalProperties": {
