@@ -1459,6 +1459,43 @@ class TestTraceItemTable(BaseApiTest):
         with pytest.raises(BadSnubaRPCRequestException):
             EndpointTraceItemTable().execute(message)
 
+    def test_aggregation_filter_without_aggregation_or_group_by(self, setup_teardown: Any) -> None:
+        """An aggregation_filter (HAVING) with no aggregate column and no group_by must be
+        rejected in validation rather than reaching ClickHouse (Code 215). SNUBA-BNG."""
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")),
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location"))
+                ),
+            ],
+            aggregation_filter=AggregationFilter(
+                comparison_filter=AggregationComparisonFilter(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_COUNT,
+                        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="my.float.field"),
+                        label="count()",
+                    ),
+                    op=AggregationComparisonFilter.OP_EQUALS,
+                    val=644,
+                )
+            ),
+            limit=5,
+        )
+        with pytest.raises(BadSnubaRPCRequestException):
+            EndpointTraceItemTable().execute(message)
+
     def test_table_with_no_columns(self, setup_teardown: Any) -> None:
         """Test that a request with no columns raises a validation error."""
         message = TraceItemTableRequest(
