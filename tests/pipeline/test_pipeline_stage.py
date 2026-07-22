@@ -82,7 +82,6 @@ def test_process_error_reportable_logs_at_error(caplog: pytest.LogCaptureFixture
     )
     with caplog.at_level(logging.INFO):
         TestQueryPipelineStage().execute(input)
-    # A reportable error keeps the ERROR-level log (captured by Sentry).
     assert any(record.levelno == logging.ERROR for record in caplog.records)
 
 
@@ -97,8 +96,7 @@ def test_process_error_non_reportable_not_logged_at_error(
     )
     with caplog.at_level(logging.INFO):
         res = TestQueryPipelineStage().execute(input)
-    # should_report=False errors must not be logged at ERROR, otherwise the Sentry
-    # logging integration captures them as issues despite the opt-out.
+    # should_report=False must not log at ERROR (Sentry would capture it).
     assert not any(record.levelno == logging.ERROR for record in caplog.records)
     assert any(record.levelno == logging.INFO for record in caplog.records)
     assert res.error is input.error

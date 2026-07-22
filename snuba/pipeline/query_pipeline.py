@@ -50,12 +50,8 @@ class QueryPipelineStage(Generic[Tin, Tout]):
         """default behaviour is to just pass through to the next stage of the pipeline
         Can be overridden to do something else"""
         error = pipe_input.error
-        # Errors that opted out via ``should_report=False`` (e.g. an invalid client
-        # query like a malformed UUID filter) must not be surfaced in Sentry.
-        # ``logging.exception`` emits an ERROR-level record on the root logger, which
-        # the Sentry logging integration captures as an event -- bypassing the
-        # ``should_report`` handling in the RPC/HTTP layers. Log such expected errors
-        # below the Sentry capture threshold instead.
+        # logging.exception hits the root logger at ERROR, which Sentry captures as
+        # an event -- honor should_report so invalid client queries stay out of Sentry.
         if getattr(error, "should_report", True):
             logging.exception(error)
         else:

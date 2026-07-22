@@ -420,13 +420,8 @@ def clickhouse_system_query() -> Response:
         return make_response(jsonify({"error": err.message or "Invalid query"}), 400)
 
     except ClickhouseError as err:
-        # A ClickhouseError here is almost always an invalid user-submitted query
-        # (e.g. an aggregate used in a WHERE clause -> code 184 ILLEGAL_AGGREGATION),
-        # raised either while validating the query with EXPLAIN or while running it.
-        # It is a client error, not a Snuba fault, and we already surface the
-        # ClickHouse message to the user via the 400 below. Log it at WARNING so it
-        # stays out of Sentry rather than ``logger.error(..., exc_info=True)`` which
-        # the logging integration captures as an issue (SNUBA-3D6).
+        # Invalid user query (e.g. code 184 ILLEGAL_AGGREGATION), surfaced to the user
+        # via the 400 below. WARNING (not error) keeps this client error out of Sentry.
         logger.warning(err, exc_info=True)
         return make_response(jsonify({"error": err.message or "Invalid query"}), 400)
 
