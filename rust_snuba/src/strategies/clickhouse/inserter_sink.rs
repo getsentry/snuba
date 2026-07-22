@@ -2,13 +2,17 @@
 //! [`Inserter`]. Generic over the row type `R` (a `#[derive(Row)]` struct);
 //! `eap_items` (`EAPItemRow`) is the first caller.
 //!
-//! A long-lived actor task owns one [`Inserter`], configured with our batch
-//! settings, and writes each row on arrival. Durability barrier: a window's
-//! Kafka offsets are pushed downstream only after `commit()` reports its rows
-//! flushed. On a write/commit error the actor fail-stops (no in-process retry):
-//! the window's offsets are never pushed, so the consumer restarts and replays
-//! it from the last committed offset. Wire format is plain `RowBinary` with
-//! validation off (see `build_client`).
+//! A pool of long-lived actor tasks (one per `clickhouse_concurrency` slot) each
+//! own one [`Inserter`], configured with our batch settings, and write each row
+//! on arrival. `submit` shards rows to an actor by Kafka partition, so every
+//! partition's offsets are owned by exactly one actor and a single INSERT is
+//! never split across actors — running the pool restores the parallel-insert
+//! throughput a single serial inserter can't sustain. Durability barrier: a
+//! window's Kafka offsets are pushed downstream only after `commit()` reports
+//! its rows flushed. On a write/commit error the actor fail-stops (no in-process
+//! retry): the window's offsets are never pushed, so the consumer restarts and
+//! replays it from the last committed offset. Wire format is plain `RowBinary`
+//! with validation off (see `build_client`).
 
 use std::collections::BTreeMap;
 use std::time::{Duration, SystemTime};
@@ -27,8 +31,9 @@ use crate::config::{BatchSizeCalculation, ClickhouseConfig};
 use crate::options::{get_insert_timeout, get_load_balancing_config, get_max_insert_block_size};
 use crate::types::BytesInsertBatch;
 
-/// Bound on rows in flight between `submit` and the actor; when full, `submit`
-/// returns `MessageRejected` and arroyo back-pressures upstream.
+/// Bound on rows in flight between `submit` and each actor (per-actor); when the
+/// target actor's channel is full, `submit` returns `MessageRejected` and arroyo
+/// back-pressures upstream.
 const WORK_CHANNEL_CAPACITY: usize = 1024;
 
 /// Work handed from the strategy (sync) to the actor (async), in arrival order.
@@ -311,14 +316,18 @@ async fn run_inserter_actor<R>(
 
 pub struct RowBinaryInserterSink<R, N> {
     next_step: N,
-    /// `None` once the stream has been closed (in `join`/`terminate`).
-    work_tx: Option<mpsc::Sender<WorkItem<R>>>,
+    /// One work sender per actor, indexed by shard (partition % len). `None` once
+    /// the stream has been closed (in `join`/`terminate`), which drops every
+    /// sender and makes the actors finalize.
+    work_txs: Option<Vec<mpsc::Sender<WorkItem<R>>>>,
+    /// Shared by all actors (each holds a clone of the sender); disconnects only
+    /// once every actor has dropped its clone.
     out_rx: mpsc::UnboundedReceiver<FlushOutcome>,
-    actor: Option<tokio::task::JoinHandle<()>>,
+    actors: Vec<tokio::task::JoinHandle<()>>,
     /// A flushed message that the next step rejected; retried before pulling more.
     message_carried_over: Option<Message<BytesInsertBatch<()>>>,
     commit_request_carried_over: Option<CommitRequest>,
-    actor_done: bool,
+    actors_done: bool,
 }
 
 impl<R, N> RowBinaryInserterSink<R, N>
@@ -343,29 +352,44 @@ where
             BatchSizeCalculation::Bytes => (u64::MAX, max_batch_size as u64),
         };
 
-        let (work_tx, work_rx) = mpsc::channel::<WorkItem<R>>(WORK_CHANNEL_CAPACITY);
+        // One actor per concurrency slot. All inserts previously funneled through
+        // a single serial actor (one INSERT in flight at a time); a pool restores
+        // the parallel-insert throughput of the writer it replaced, since the
+        // runtime backing `concurrency` has that many worker threads.
+        let num_actors = concurrency.concurrency.max(1);
         let (out_tx, out_rx) = mpsc::unbounded_channel::<FlushOutcome>();
 
-        let actor = concurrency.handle().spawn(run_inserter_actor(
-            cluster,
-            table,
-            storage_name,
-            max_rows,
-            max_bytes,
-            max_batch_time,
-            skip_write,
-            work_rx,
-            out_tx,
-        ));
+        let mut work_txs = Vec::with_capacity(num_actors);
+        let mut actors = Vec::with_capacity(num_actors);
+        for _ in 0..num_actors {
+            let (work_tx, work_rx) = mpsc::channel::<WorkItem<R>>(WORK_CHANNEL_CAPACITY);
+            let actor = concurrency.handle().spawn(run_inserter_actor(
+                cluster.clone(),
+                table.clone(),
+                storage_name.clone(),
+                max_rows,
+                max_bytes,
+                max_batch_time,
+                skip_write,
+                work_rx,
+                out_tx.clone(),
+            ));
+            work_txs.push(work_tx);
+            actors.push(actor);
+        }
+        // Drop our own handle so `out_rx` disconnects exactly when the last actor
+        // exits (used to detect all-actors-done in `join`, and unexpected death
+        // in `drain_outcomes`).
+        drop(out_tx);
 
         Self {
             next_step,
-            work_tx: Some(work_tx),
+            work_txs: Some(work_txs),
             out_rx,
-            actor: Some(actor),
+            actors,
             message_carried_over: None,
             commit_request_carried_over: None,
-            actor_done: false,
+            actors_done: false,
         }
     }
 
@@ -421,20 +445,38 @@ where
                 }
                 Err(mpsc::error::TryRecvError::Empty) => break,
                 Err(mpsc::error::TryRecvError::Disconnected) => {
-                    self.actor_done = true;
-                    // The actor's sender dropped. If we didn't initiate shutdown
-                    // (work_tx still present), the actor exited without sending an
-                    // Err — e.g. a panic. Surface an error so the consumer restarts
-                    // and respawns it, rather than silently wedging with submit()
-                    // rejecting every message on the now-closed work channel.
-                    if self.work_tx.is_some() {
+                    self.actors_done = true;
+                    // Every actor's sender dropped. If we didn't initiate shutdown
+                    // (work_txs still present), the actors exited without sending
+                    // an Err — e.g. a panic. Surface an error so the consumer
+                    // restarts and respawns them, rather than silently wedging with
+                    // submit() rejecting every message on now-closed work channels.
+                    if self.work_txs.is_some() {
                         return Err(StrategyError::Other(
-                            "inserter actor exited unexpectedly without reporting an error".into(),
+                            "inserter actors exited unexpectedly without reporting an error".into(),
                         ));
                     }
                     break;
                 }
             }
+        }
+        Ok(())
+    }
+
+    /// Detect a *single* actor dying unexpectedly. `out_rx` only disconnects once
+    /// *all* actors drop their senders, so one panicked actor wouldn't be caught
+    /// there — but its closed work channel would make `submit` reject that
+    /// partition forever, wedging the consumer. During normal operation actors
+    /// loop until their sender is dropped, so any finished handle before shutdown
+    /// (`work_txs` still present) means an unexpected exit; error out to restart.
+    fn check_actors_alive(&self) -> Result<(), StrategyError> {
+        if self.work_txs.is_none() {
+            return Ok(());
+        }
+        if self.actors.iter().any(|h| h.is_finished()) {
+            return Err(StrategyError::Other(
+                "inserter actor exited unexpectedly without reporting an error".into(),
+            ));
         }
         Ok(())
     }
@@ -451,6 +493,9 @@ where
             merge_commit_request(self.commit_request_carried_over.take(), commit_request);
         self.submit_carried_over()?;
         self.drain_outcomes()?;
+        // After draining (so a real flush error surfaces first), catch a single
+        // actor that panicked without reporting an error.
+        self.check_actors_alive()?;
         Ok(self.commit_request_carried_over.take())
     }
 
@@ -462,9 +507,25 @@ where
         if self.message_carried_over.is_some() {
             return Err(SubmitError::MessageRejected(MessageRejected { message }));
         }
-        let Some(work_tx) = self.work_tx.as_ref() else {
+        let Some(work_txs) = self.work_txs.as_ref() else {
             return Err(SubmitError::MessageRejected(MessageRejected { message }));
         };
+
+        let committable: Vec<(Partition, u64)> = message.committable().collect();
+
+        // Shard by Kafka partition so every offset of a partition is owned by one
+        // actor and committed in order. Splitting a partition across actors could
+        // let a higher offset flush (and commit) before a lower one is durable,
+        // losing the gap on restart. Upstream (`RunTaskInThreads`) is 1-in→1-out,
+        // so each message carries a single partition; the fold is just a safe
+        // routing key if that ever changes. Empty committable → shard 0.
+        let shard = committable
+            .iter()
+            .map(|(p, _)| p.index as usize)
+            .min()
+            .map_or(0, |idx| idx % work_txs.len());
+        let work_tx = &work_txs[shard];
+
         // Reserve first so we never destructure `message` on the reject path.
         // `try_reserve` also fails if the actor closed the channel, so we never
         // accept a row it can't receive; a row lost to the reserve/send race just
@@ -473,7 +534,6 @@ where
             return Err(SubmitError::MessageRejected(MessageRejected { message }));
         };
 
-        let committable: Vec<(Partition, u64)> = message.committable().collect();
         let (row, meta) = message.into_payload().take();
         let item = match row {
             Some(row) => WorkItem::Row {
@@ -488,19 +548,19 @@ where
     }
 
     fn terminate(&mut self) {
-        // Abort the actor; the server discards its un-`end()`ed INSERT and
+        // Abort every actor; the server discards their un-`end()`ed INSERTs and
         // un-pushed offsets replay.
-        self.work_tx = None;
-        if let Some(handle) = self.actor.take() {
+        self.work_txs = None;
+        for handle in self.actors.drain(..) {
             handle.abort();
         }
         self.next_step.terminate();
     }
 
     fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
-        // Closing the sender makes the actor finalize (flush via `end()`), then
-        // drop `out_tx` so `out_rx` disconnects.
-        self.work_tx = None;
+        // Closing the senders makes every actor finalize (flush via `end()`), then
+        // drop its `out_tx` clone so `out_rx` disconnects once the last one exits.
+        self.work_txs = None;
         let deadline = timeout.map(Deadline::new);
 
         let mut timed_out = false;
@@ -511,7 +571,7 @@ where
             self.submit_carried_over()?;
             self.drain_outcomes()?;
 
-            if self.actor_done && self.message_carried_over.is_none() {
+            if self.actors_done && self.message_carried_over.is_none() {
                 break;
             }
             if let Some(deadline) = &deadline {
@@ -520,19 +580,19 @@ where
                     break;
                 }
             }
-            // Let the actor make progress on its runtime threads.
+            // Let the actors make progress on their runtime threads.
             std::thread::sleep(Duration::from_millis(1));
         }
 
         if timed_out {
-            // Abort so the actor can't flush a window whose offsets we'll never
+            // Abort so an actor can't flush a window whose offsets we'll never
             // observe: an un-landed INSERT is cancelled (that window replays); a
             // flush that already landed replays as a duplicate (at-least-once, as
             // before).
             tracing::warn!(
-                "inserter sink join timed out; aborting actor, partial batch will replay"
+                "inserter sink join timed out; aborting actors, partial batch will replay"
             );
-            if let Some(handle) = self.actor.take() {
+            for handle in self.actors.drain(..) {
                 handle.abort();
             }
         }
@@ -551,7 +611,7 @@ where
 impl<R, N> Drop for RowBinaryInserterSink<R, N> {
     fn drop(&mut self) {
         // Abort so a dropped sink never flushes a window behind our back.
-        if let Some(handle) = self.actor.take() {
+        for handle in self.actors.drain(..) {
             handle.abort();
         }
     }
@@ -651,5 +711,61 @@ mod tests {
             .expect("offsets should have been pushed downstream");
         // Highest consumed offset is 4 → next-to-consume committable is 5.
         assert_eq!(max_offset, 5);
+    }
+
+    /// With a pool of actors (`concurrency > 1`) and several partitions, every
+    /// partition's offsets must still be committed — each partition is sharded to
+    /// one actor by index, and all actors funnel their flushes into the shared
+    /// outcome channel. Uses `skip_write` so no live ClickHouse is needed.
+    #[test]
+    fn multiple_actors_advance_offsets_for_all_partitions() {
+        crate::testutils::initialize_python();
+
+        let recorded = Arc::new(Mutex::new(Vec::new()));
+        let next_step = RecordingStep {
+            committables: recorded.clone(),
+        };
+        // Three actors, four partitions → partitions 0 and 3 share an actor,
+        // exercising the shard-collision path.
+        let concurrency = ConcurrencyConfig::new(3);
+
+        let mut sink = RowBinaryInserterSink::<EAPItemRow, _>::new(
+            next_step,
+            test_cluster(),
+            "eap_items_1_local".to_string(),
+            "test_storage".to_string(),
+            &concurrency,
+            1000,
+            Duration::from_millis(50),
+            BatchSizeCalculation::Rows,
+            true, // skip_write
+        );
+
+        let topic = Topic::new("snuba-items");
+        let partitions: Vec<Partition> = (0..4).map(|i| Partition::new(topic, i)).collect();
+        for partition in &partitions {
+            for offset in 0..5u64 {
+                let message = Message::new_broker_message(
+                    BytesInsertBatch::<Option<EAPItemRow>>::default(),
+                    *partition,
+                    offset,
+                    chrono::Utc::now(),
+                );
+                sink.submit(message).unwrap();
+            }
+        }
+
+        sink.join(Some(Duration::from_secs(5))).unwrap();
+
+        let recorded = recorded.lock().unwrap();
+        for partition in &partitions {
+            let max_offset = recorded
+                .iter()
+                .filter_map(|c| c.get(partition).copied())
+                .max()
+                .unwrap_or_else(|| panic!("no offsets pushed for {partition:?}"));
+            // Highest consumed offset is 4 → next-to-consume committable is 5.
+            assert_eq!(max_offset, 5, "wrong committed offset for {partition:?}");
+        }
     }
 }
