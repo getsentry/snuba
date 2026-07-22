@@ -23,6 +23,15 @@ pub fn setup_logging() {
             Level::ERROR if metadata.target().starts_with("sentry_usage_accountant") => {
                 EventFilter::Log
             }
+            // The DogStatsD metrics forwarder logs "Failed to send payload." at
+            // ERROR on every flush it can't deliver (e.g. "Connection refused"
+            // when the agent/socket is unreachable). That's an operational
+            // metrics-pipeline concern, not a per-message ingestion failure, and
+            // an unreachable target produces thousands of identical errors. Keep
+            // them as logs rather than Sentry issues (SNUBA-BQ8).
+            Level::ERROR if metadata.target().starts_with("metrics_exporter_dogstatsd") => {
+                EventFilter::Log
+            }
             Level::ERROR => EventFilter::Event | EventFilter::Log,
             Level::WARN | Level::INFO => EventFilter::Log,
             Level::DEBUG | Level::TRACE => EventFilter::Ignore,
