@@ -25,7 +25,7 @@ use crate::metrics::global_tags::set_global_tag;
 use crate::processors::{self, get_cogs_label};
 use crate::strategies::accountant::RecordCogs;
 
-use crate::strategies::clickhouse::inserter_sink::RowBinaryInserterSink;
+use crate::strategies::clickhouse::row_binary_writer::RowBinaryWriterStep;
 use crate::strategies::clickhouse::writer_v2::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
 use crate::strategies::dlq_by_age::DlqByAge;
@@ -152,19 +152,57 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
         );
 
         let next_step: Box<dyn ProcessingStrategy<KafkaPayload>> = if use_eap_crate_path {
-            let sink = RowBinaryInserterSink::<crate::processors::eap_items::EAPItemRow, _>::new(
+            use crate::processors::eap_items::EAPItemRow;
+
+            // One INSERT per batch, run concurrently but committed in order by
+            // RunTaskInThreads (see RowBinaryWriterStep docs).
+            let writer = RowBinaryWriterStep::<EAPItemRow, _>::new(
                 next_step,
                 self.storage_config.clickhouse_cluster.clone(),
                 self.storage_config.clickhouse_table_name.clone(),
                 self.storage_config.name.clone(),
+                false,
                 &self.clickhouse_concurrency,
+                self.max_batch_time,
+            );
+
+            // Accumulate the per-message typed rows into a Vec<EAPItemRow> batch,
+            // mirroring the JSONEachRow Reduce. A skipped row (None) contributes
+            // no row but still carries offsets/metadata forward.
+            let accumulator = Arc::new(
+                |mut batch: BytesInsertBatch<Vec<EAPItemRow>>,
+                 message: Message<BytesInsertBatch<Option<EAPItemRow>>>| {
+                    let (row, meta) = message.into_payload().take();
+                    if let Some(row) = row {
+                        batch.rows.push(row);
+                    }
+                    batch.merge_metadata(meta);
+                    Ok(batch)
+                },
+            );
+
+            // Reduce sizes the batch by summing this over incoming messages, so it
+            // runs on the single-row input: 1 per real row, 0 for a skip; bytes use
+            // the processor's per-message estimate.
+            let compute_batch_size: fn(&BytesInsertBatch<Option<EAPItemRow>>) -> usize =
+                match self.max_batch_size_calculation {
+                    config::BatchSizeCalculation::Bytes => |batch| batch.num_bytes(),
+                    config::BatchSizeCalculation::Rows => |batch| batch.rows.is_some() as usize,
+                };
+
+            let reduce = Reduce::new(
+                writer,
+                accumulator,
+                Arc::new(|| BytesInsertBatch::<Vec<EAPItemRow>>::from_rows(Vec::new())),
                 self.max_batch_size,
                 self.max_batch_time,
-                self.max_batch_size_calculation,
-                false,
-            );
+                compute_batch_size,
+            )
+            // Commit offsets even for windows where every row was skipped.
+            .flush_empty_batches(true);
+
             make_rust_processor_typed(
-                sink,
+                reduce,
                 crate::processors::eap_items::process_message_eap_row,
                 &self.logical_topic_name,
                 self.enforce_schema,
