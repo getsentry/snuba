@@ -87,7 +87,7 @@ impl TaskRunner<AggregatedOutcomesBatch, AggregatedOutcomesBatch, anyhow::Error>
                 // Pace produces to avoid flooding the producer queue with a single
                 // large batch all at once.
                 produced_count += 1;
-                if produced_count.is_multiple_of(throttle_batch_size) {
+                if produced_count % throttle_batch_size == 0 {
                     tokio::time::sleep(throttle_sleep).await;
                 }
             }

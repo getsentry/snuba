@@ -250,39 +250,6 @@ impl InsertBatch {
     }
 }
 
-/// The return value of processors that hand a *typed* row to a downstream sink
-/// that serializes it itself (e.g. the `clickhouse`-crate inserter path for
-/// `eap_items`), instead of pre-encoding bytes like [`InsertBatch`].
-///
-/// `row == None` models a skip/stop: the message still carries offsets +
-/// metadata so they advance, but there is no row to insert.
-#[derive(Clone, Debug)]
-pub struct TypedInsertBatch<R> {
-    pub row: Option<R>,
-    pub origin_timestamp: Option<DateTime<Utc>>,
-    pub sentry_received_timestamp: Option<DateTime<Utc>>,
-    pub cogs_data: Option<CogsData>,
-    pub item_type_metrics: Option<ItemTypeMetrics>,
-    /// Best-effort encoded-size estimate used for byte-based batch sizing
-    /// before the row is serialized (the sink also has the exact size after a
-    /// flush). The eap_items processor uses the source proto's `payload.len()`.
-    pub num_bytes: usize,
-}
-
-impl<R> TypedInsertBatch<R> {
-    /// A skipped/empty message: no row, no metrics, zero bytes.
-    pub fn skip() -> Self {
-        Self {
-            row: None,
-            origin_timestamp: None,
-            sentry_received_timestamp: None,
-            cogs_data: None,
-            item_type_metrics: None,
-            num_bytes: 0,
-        }
-    }
-}
-
 #[derive(Clone, Debug, Default)]
 pub struct BytesInsertBatch<R> {
     pub rows: R,
@@ -447,22 +414,6 @@ impl<R> BytesInsertBatch<R> {
         };
 
         (self.rows, new)
-    }
-
-    /// Merge another batch's *metadata* (everything except `rows`) into this
-    /// one. Used by the inserter sink, which streams rows into a long-lived
-    /// `clickhouse::Inserter` and only needs to accumulate the metadata for the
-    /// flush boundary — mirrors the metadata half of
-    /// [`BytesInsertBatch::<RowData>::merge`].
-    pub fn merge_metadata(&mut self, other: BytesInsertBatch<()>) {
-        self.num_bytes += other.num_bytes;
-        self.commit_log_offsets.merge(other.commit_log_offsets);
-        self.message_timestamp.merge(other.message_timestamp);
-        self.origin_timestamp.merge(other.origin_timestamp);
-        self.sentry_received_timestamp
-            .merge(other.sentry_received_timestamp);
-        self.cogs_data.merge(other.cogs_data);
-        self.item_type_metrics.merge(other.item_type_metrics);
     }
 
     pub fn record_message_latency(&self) {

@@ -25,15 +25,13 @@ use crate::metrics::global_tags::set_global_tag;
 use crate::processors::{self, get_cogs_label};
 use crate::strategies::accountant::RecordCogs;
 
-use crate::strategies::clickhouse::inserter_sink::RowBinaryInserterSink;
-use crate::strategies::clickhouse::writer_v2::ClickhouseWriterStep;
+use crate::strategies::clickhouse::writer_v2::{ClickhouseWriterStep, InsertFormat};
 use crate::strategies::commit_log::ProduceCommitLog;
 use crate::strategies::dlq_by_age::DlqByAge;
 use crate::strategies::healthcheck::HealthCheck as SnubaHealthCheck;
 use crate::strategies::join_timeout::SetJoinTimeout;
 use crate::strategies::processor::{
-    get_schema, make_rust_processor, make_rust_processor_typed,
-    make_rust_processor_with_replacements, validate_schema,
+    get_schema, make_rust_processor, make_rust_processor_with_replacements, validate_schema,
 };
 use crate::strategies::python::PythonTransformStep;
 use crate::strategies::replacements::ProduceReplacements;
@@ -91,28 +89,32 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
         }
     }
 
-    // The Reduce accumulator closure returns Result<_, SubmitError<_>>, whose
-    // Err variant is large (it wraps a Message); that shape is dictated by
-    // arroyo's API, not us.
-    #[allow(clippy::result_large_err)]
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
-        // `use_row_binary` routes inserts through the clickhouse-crate sink
-        // instead of the JSONEachRow `Reduce` + `ClickhouseWriterStep` pair.
-        // Only wired for EAPItemsProcessor for now.
-        let use_eap_crate_path = self.use_row_binary;
-        if use_eap_crate_path {
+        let (insert_format, process_fn_override, insert_columns): (
+            InsertFormat,
+            Option<crate::processors::ProcessingFunction>,
+            Option<&'static [&'static str]>,
+        ) = if self.use_row_binary {
+            tracing::info!("Using RowBinary wire format");
             let processor_name = self
                 .storage_config
                 .message_processor
                 .python_class_name
                 .as_str();
-            assert_eq!(
-                processor_name, "EAPItemsProcessor",
-                "use_row_binary (clickhouse-crate inserter) is only supported for \
-                 EAPItemsProcessor, got {processor_name}",
-            );
-            tracing::info!("Using clickhouse-crate RowBinary inserter for eap_items");
-        }
+            let (func, columns): (
+                crate::processors::ProcessingFunction,
+                &'static [&'static str],
+            ) = match processor_name {
+                "EAPItemsProcessor" => (
+                    crate::processors::eap_items::process_message_row_binary,
+                    crate::processors::eap_items::EAPItemRow::COLUMN_NAMES,
+                ),
+                name => panic!("RowBinary not supported for processor: {name}"),
+            };
+            (InsertFormat::RowBinary, Some(func), Some(columns))
+        } else {
+            (InsertFormat::JsonEachRow, None, None)
+        };
 
         // Commit offsets
         let next_step = CommitOffsets::new(Duration::from_secs(1));
@@ -151,157 +153,137 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
         );
 
-        let next_step: Box<dyn ProcessingStrategy<KafkaPayload>> = if use_eap_crate_path {
-            let sink = RowBinaryInserterSink::<crate::processors::eap_items::EAPItemRow, _>::new(
-                next_step,
-                self.storage_config.clickhouse_cluster.clone(),
-                self.storage_config.clickhouse_table_name.clone(),
-                self.storage_config.name.clone(),
-                &self.clickhouse_concurrency,
-                self.max_batch_size,
-                self.max_batch_time,
-                self.max_batch_size_calculation,
-                false,
-            );
-            make_rust_processor_typed(
-                sink,
-                crate::processors::eap_items::process_message_eap_row,
-                &self.logical_topic_name,
-                self.enforce_schema,
-                &self.processing_concurrency,
-                config::ProcessorConfig {
-                    env_config: self.env_config.clone(),
-                    storage_name: self.storage_config.name.clone(),
-                },
-                self.stop_at_timestamp,
-            )
-        } else {
-            let next_step = ClickhouseWriterStep::new(
-                next_step,
-                self.storage_config.clickhouse_cluster.clone(),
-                self.storage_config.clickhouse_table_name.clone(),
-                false,
-                &self.clickhouse_concurrency,
-                self.storage_config.name.clone(),
-            );
+        let next_step = ClickhouseWriterStep::new(
+            next_step,
+            self.storage_config.clickhouse_cluster.clone(),
+            self.storage_config.clickhouse_table_name.clone(),
+            false,
+            &self.clickhouse_concurrency,
+            self.storage_config.name.clone(),
+            insert_format,
+            insert_columns,
+        );
 
-            #[allow(clippy::result_large_err)]
-            let accumulator = Arc::new(
-                |batch: BytesInsertBatch<RowData>,
-                 small_batch: Message<BytesInsertBatch<RowData>>| {
-                    Ok(batch.merge(small_batch.into_payload()))
-                },
-            );
+        #[allow(clippy::result_large_err)]
+        let accumulator = Arc::new(
+            |batch: BytesInsertBatch<RowData>, small_batch: Message<BytesInsertBatch<RowData>>| {
+                Ok(batch.merge(small_batch.into_payload()))
+            },
+        );
 
-            let compute_batch_size: fn(&BytesInsertBatch<RowData>) -> usize =
-                match self.max_batch_size_calculation {
-                    config::BatchSizeCalculation::Bytes => |batch| batch.num_bytes(),
-                    config::BatchSizeCalculation::Rows => |batch| batch.len(),
-                };
-
-            let next_step = Reduce::new(
-                next_step,
-                accumulator,
-                Arc::new(move || {
-                    BytesInsertBatch::<RowData>::new(
-                        RowData::default(),
-                        None,
-                        None,
-                        None,
-                        Default::default(),
-                        CogsData::default(),
-                    )
-                }),
-                self.max_batch_size,
-                self.max_batch_time,
-                compute_batch_size,
-                // we need to enable this to deal with storages where we skip 100% of values.
-                // we still need to commit there
-            )
-            .flush_empty_batches(true);
-
-            let use_rust_processor = self.use_rust_processor;
-
-            // Transform messages
-            let next_step = match (
-                use_rust_processor,
-                processors::get_processing_function(
-                    &self.storage_config.message_processor.python_class_name,
-                ),
-            ) {
-                (
-                    true,
-                    Some(processors::ProcessingFunctionType::ProcessingFunctionWithReplacements(
-                        func,
-                    )),
-                ) => {
-                    let (replacements_config, replacements_destination) =
-                        self.replacements_config.clone().unwrap();
-
-                    let producer = KafkaProducer::new(replacements_config);
-                    let replacements_step = ProduceReplacements::new(
-                        next_step,
-                        producer,
-                        replacements_destination,
-                        &self.replacements_concurrency,
-                        false,
-                    );
-
-                    make_rust_processor_with_replacements(
-                        replacements_step,
-                        func,
-                        &self.logical_topic_name,
-                        self.enforce_schema,
-                        &self.processing_concurrency,
-                        config::ProcessorConfig {
-                            env_config: self.env_config.clone(),
-                            storage_name: self.storage_config.name.clone(),
-                        },
-                        self.stop_at_timestamp,
-                    )
-                }
-                (true, Some(processors::ProcessingFunctionType::ProcessingFunction(func))) => {
-                    make_rust_processor(
-                        next_step,
-                        func,
-                        &self.logical_topic_name,
-                        self.enforce_schema,
-                        &self.processing_concurrency,
-                        config::ProcessorConfig {
-                            env_config: self.env_config.clone(),
-                            storage_name: self.storage_config.name.clone(),
-                        },
-                        self.stop_at_timestamp,
-                    )
-                }
-                (
-                    false,
-                    Some(processors::ProcessingFunctionType::ProcessingFunctionWithReplacements(_)),
-                ) => {
-                    panic!("Consumer with replacements cannot be run in hybrid-mode");
-                }
-                _ => {
-                    let schema = get_schema(&self.logical_topic_name, self.enforce_schema);
-
-                    Box::new(RunTaskInThreads::new(
-                        PythonTransformStep::new(
-                            next_step,
-                            self.storage_config.message_processor.clone(),
-                            self.processing_concurrency.concurrency,
-                            self.python_max_queue_depth,
-                        )
-                        .unwrap(),
-                        SchemaValidator {
-                            schema,
-                            enforce_schema: self.enforce_schema,
-                        },
-                        &self.processing_concurrency,
-                        Some("validate_schema"),
-                    ))
-                }
+        let compute_batch_size: fn(&BytesInsertBatch<RowData>) -> usize =
+            match self.max_batch_size_calculation {
+                config::BatchSizeCalculation::Bytes => |batch| batch.num_bytes(),
+                config::BatchSizeCalculation::Rows => |batch| batch.len(),
             };
 
-            next_step
+        let next_step = Reduce::new(
+            next_step,
+            accumulator,
+            Arc::new(move || {
+                BytesInsertBatch::<RowData>::new(
+                    RowData::default(),
+                    None,
+                    None,
+                    None,
+                    Default::default(),
+                    CogsData::default(),
+                )
+            }),
+            self.max_batch_size,
+            self.max_batch_time,
+            compute_batch_size,
+            // we need to enable this to deal with storages where we skip 100% of values.
+            // we still need to commit there
+        )
+        .flush_empty_batches(true);
+
+        // RowBinary can only be emitted by the Rust processor (the Python path
+        // always returns JSONEachRow bytes). If the storage opted into
+        // RowBinary, force the Rust processor branch — otherwise we'd POST
+        // JSON bytes under `FORMAT RowBinary` and ClickHouse would reject the
+        // batch. The previous early-return for RowBinary did this implicitly.
+        let use_rust_processor = self.use_rust_processor || self.use_row_binary;
+
+        // Transform messages
+        let next_step = match (
+            use_rust_processor,
+            processors::get_processing_function(
+                &self.storage_config.message_processor.python_class_name,
+            ),
+        ) {
+            (
+                true,
+                Some(processors::ProcessingFunctionType::ProcessingFunctionWithReplacements(func)),
+            ) => {
+                let (replacements_config, replacements_destination) =
+                    self.replacements_config.clone().unwrap();
+
+                let producer = KafkaProducer::new(replacements_config);
+                let replacements_step = ProduceReplacements::new(
+                    next_step,
+                    producer,
+                    replacements_destination,
+                    &self.replacements_concurrency,
+                    false,
+                );
+
+                make_rust_processor_with_replacements(
+                    replacements_step,
+                    func,
+                    &self.logical_topic_name,
+                    self.enforce_schema,
+                    &self.processing_concurrency,
+                    config::ProcessorConfig {
+                        env_config: self.env_config.clone(),
+                        storage_name: self.storage_config.name.clone(),
+                    },
+                    self.stop_at_timestamp,
+                )
+            }
+            (true, Some(processors::ProcessingFunctionType::ProcessingFunction(func))) => {
+                // For storages opted into RowBinary, swap the registered JSON
+                // processor for its RowBinary sibling. Same signature, same
+                // pipeline; only the encoding inside the processor differs.
+                let func = process_fn_override.unwrap_or(func);
+                make_rust_processor(
+                    next_step,
+                    func,
+                    &self.logical_topic_name,
+                    self.enforce_schema,
+                    &self.processing_concurrency,
+                    config::ProcessorConfig {
+                        env_config: self.env_config.clone(),
+                        storage_name: self.storage_config.name.clone(),
+                    },
+                    self.stop_at_timestamp,
+                )
+            }
+            (
+                false,
+                Some(processors::ProcessingFunctionType::ProcessingFunctionWithReplacements(_)),
+            ) => {
+                panic!("Consumer with replacements cannot be run in hybrid-mode");
+            }
+            _ => {
+                let schema = get_schema(&self.logical_topic_name, self.enforce_schema);
+
+                Box::new(RunTaskInThreads::new(
+                    PythonTransformStep::new(
+                        next_step,
+                        self.storage_config.message_processor.clone(),
+                        self.processing_concurrency.concurrency,
+                        self.python_max_queue_depth,
+                    )
+                    .unwrap(),
+                    SchemaValidator {
+                        schema,
+                        enforce_schema: self.enforce_schema,
+                    },
+                    &self.processing_concurrency,
+                    Some("validate_schema"),
+                ))
+            }
         };
 
         // force message processor to drop all in-flight messages, as it is not worth the time
@@ -432,7 +414,6 @@ mod tests {
         }
     }
 
-    #[allow(clippy::result_large_err)]
     fn build_reduce(
         next_step: RecordingStep,
         max_batch_size: usize,

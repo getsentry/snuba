@@ -74,10 +74,34 @@ pub struct ClickhouseWriterStep<N> {
     inner: RunTaskInThreads<BytesInsertBatch<RowData>, BytesInsertBatch<()>, anyhow::Error, N>,
 }
 
+/// Wire format the writer step posts to ClickHouse with. Picking the right
+/// value here is the only thing the consumer needs to know — the pipeline
+/// shape, batching, and retry behavior are identical across formats.
+#[derive(Clone, Copy, Debug)]
+pub enum InsertFormat {
+    JsonEachRow,
+    RowBinary,
+}
+
+impl InsertFormat {
+    fn as_str(self) -> &'static str {
+        match self {
+            InsertFormat::JsonEachRow => "JSONEachRow",
+            InsertFormat::RowBinary => "RowBinary",
+        }
+    }
+}
+
 impl<N> ClickhouseWriterStep<N>
 where
     N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
 {
+    /// `columns`: if `Some`, expand into the SQL as
+    /// `INSERT INTO {table} (col1, col2, ...) FORMAT ...`. Required for
+    /// `RowBinary`, which would otherwise fall back to the table's positional
+    /// column order — a footgun whenever wire order and table order diverge.
+    /// For `JSONEachRow`, pass `None` to preserve historical behavior.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         next_step: N,
         cluster_config: ClickhouseConfig,
@@ -85,6 +109,8 @@ where
         skip_write: bool,
         concurrency: &ConcurrencyConfig,
         storage_name: String,
+        format: InsertFormat,
+        columns: Option<&'static [&'static str]>,
     ) -> Self {
         let inner = RunTaskInThreads::new(
             next_step,
@@ -93,6 +119,8 @@ where
                     &cluster_config.clone(),
                     &table,
                     storage_name,
+                    format,
+                    columns,
                 )),
                 skip_write,
             ),
@@ -154,7 +182,13 @@ pub struct ClickhouseClient {
 }
 
 impl ClickhouseClient {
-    pub fn new(config: &ClickhouseConfig, table: &str, storage_name: String) -> ClickhouseClient {
+    pub fn new(
+        config: &ClickhouseConfig,
+        table: &str,
+        storage_name: String,
+        format: InsertFormat,
+        columns: Option<&[&str]>,
+    ) -> ClickhouseClient {
         let mut headers = HeaderMap::with_capacity(6);
         headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
         headers.insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip,deflate"));
@@ -180,8 +214,21 @@ impl ClickhouseClient {
         // the same wire format `clickhouse-rs` used and what
         // `clickhouse-compressor` produces. Distinct from HTTP-standard
         // `Content-Encoding: lz4`, which would need `enable_http_compression=1`.
-        let base_url = format!("{scheme}://{host}:{port}?insert_distributed_sync=1&decompress=1");
-        let query = format!("INSERT INTO {table} FORMAT JSONEachRow");
+        let mut base_url =
+            format!("{scheme}://{host}:{port}?insert_distributed_sync=1&decompress=1");
+        if matches!(format, InsertFormat::RowBinary) {
+            // RowBinary cannot represent JSON values natively; tell ClickHouse
+            // to treat any binary string targeting a JSON column as JSON text.
+            base_url.push_str("&input_format_binary_read_json_as_string=1");
+        }
+        let columns_clause = match columns {
+            Some(cols) => format!(" ({})", cols.join(", ")),
+            None => String::new(),
+        };
+        let query = format!(
+            "INSERT INTO {table}{columns_clause} FORMAT {fmt}",
+            fmt = format.as_str(),
+        );
 
         ClickhouseClient {
             client: Client::new(),
@@ -403,7 +450,13 @@ mod tests {
         crate::testutils::initialize_python();
         let config = make_test_config();
         println!("config: {config:?}");
-        let client = ClickhouseClient::new(&config, "querylog_local", "test_storage".to_string());
+        let client = ClickhouseClient::new(
+            &config,
+            "querylog_local",
+            "test_storage".to_string(),
+            InsertFormat::JsonEachRow,
+            None,
+        );
 
         let url = client.build_url();
         assert!(url.contains("load_balancing=in_order"));
@@ -420,7 +473,13 @@ mod tests {
         crate::testutils::initialize_python();
         init_options();
         let config = make_test_config();
-        let client = ClickhouseClient::new(&config, "test_table", "writer_v2_lb_test".to_string());
+        let client = ClickhouseClient::new(
+            &config,
+            "test_table",
+            "writer_v2_lb_test".to_string(),
+            InsertFormat::JsonEachRow,
+            None,
+        );
 
         // Default: in_order
         let url = client.build_url();
@@ -456,9 +515,16 @@ mod tests {
             &config,
             "test_table",
             "writer_v2_block_size_test".to_string(),
+            InsertFormat::JsonEachRow,
+            None,
         );
-        let other_client =
-            ClickhouseClient::new(&config, "test_table", "writer_v2_other_storage".to_string());
+        let other_client = ClickhouseClient::new(
+            &config,
+            "test_table",
+            "writer_v2_other_storage".to_string(),
+            InsertFormat::JsonEachRow,
+            None,
+        );
 
         // Default (key absent): no suffix.
         assert!(!client.build_url().contains("max_insert_block_size"));
@@ -597,7 +663,13 @@ mod tests {
             database: "default".to_string(),
         };
 
-        let client = ClickhouseClient::new(&config, "test_table", "test_storage".to_string());
+        let client = ClickhouseClient::new(
+            &config,
+            "test_table",
+            "test_storage".to_string(),
+            InsertFormat::JsonEachRow,
+            None,
+        );
 
         let start_time = Instant::now();
         let result = client
