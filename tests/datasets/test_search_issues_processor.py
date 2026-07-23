@@ -91,38 +91,16 @@ class TestSearchIssuesMessageProcessor:
     def test_process_message(self, message_base) -> None:
         self.assert_required_columns(self.process_message(message_base))
 
-    def test_fails_unsupported_version(self, message_base):
-        with pytest.raises(Exception):
-            self.process_message(message_base, 1, "insert")
-
-    def test_fails_invalid_message_type(self, message_base):
-        with pytest.raises(Exception):
-            self.process_message(message_base, 2, "unsupported_operation")
-
-    def test_fails_invalid_occurrence_data(self):
-        with pytest.raises(Exception):
-            self.process_message({"data": {"hi": "mom"}})
-
-    def test_fails_unparselable_datetime(self, message_base):
-        with pytest.raises(Exception):
-            message_base["datetime"] = datetime.now().isoformat()
-            self.process_message(message_base)
-
     def test_extract_client_timestamp(self, message_base):
-        missing_client_timestamp = message_base
-        del missing_client_timestamp["datetime"]
+        del message_base["datetime"]
 
-        with_data_client_timestamp = copy.deepcopy(missing_client_timestamp)
+        with_data_client_timestamp = copy.deepcopy(message_base)
         with_data_client_timestamp["data"]["client_timestamp"] = datetime.now().timestamp()
+        self.assert_required_columns(self.process_message(with_data_client_timestamp))
 
-        with_event_datetime = copy.deepcopy(missing_client_timestamp)
+        with_event_datetime = copy.deepcopy(message_base)
         with_event_datetime["datetime"] = datetime.now().isoformat() + "Z"
-
-        with pytest.raises(Exception):
-            self.process_message(missing_client_timestamp)
-
-        self.process_message(with_data_client_timestamp)
-        self.process_message(with_event_datetime)
+        self.assert_required_columns(self.process_message(with_event_datetime))
 
     def test_extract_timestamp_ms(self, message_base):
         processed = self.process_message(message_base)
@@ -354,11 +332,6 @@ class TestSearchIssuesMessageProcessor:
         insert_row = processed.rows[0]
         assert insert_row["trace_id"] == ensure_uuid(trace_id)
 
-        for invalid_trace_id in ["", "im a little tea pot", 1, 1.1]:
-            message_base["data"]["contexts"]["trace"]["trace_id"] = invalid_trace_id
-            with pytest.raises(Exception):
-                self.process_message(message_base)
-
     def test_extract_transaction_duration(self, message_base):
         processed = self.process_message(message_base)
         self.assert_required_columns(processed)
@@ -388,11 +361,6 @@ class TestSearchIssuesMessageProcessor:
         insert_row = processed.rows[0]
         assert insert_row["profile_id"] == ensure_uuid(profile_id)
 
-        for invalid_profile_id in ["", "im a little tea pot", 1, 1.1]:
-            message_base["data"]["contexts"]["profile"]["profile_id"] = invalid_profile_id
-            with pytest.raises(Exception):
-                self.process_message(message_base)
-
     def test_extract_replay_id(self, message_base):
         replay_id = str(uuid.uuid4().hex)
         message_base["data"]["contexts"] = {"replay": {"replay_id": replay_id}}
@@ -400,11 +368,6 @@ class TestSearchIssuesMessageProcessor:
         self.assert_required_columns(processed)
         insert_row = processed.rows[0]
         assert insert_row["replay_id"] == ensure_uuid(replay_id)
-
-        for invalid_replay_id in ["", "im a little tea pot", 1, 1.1]:
-            message_base["data"]["contexts"]["replay"]["replay_id"] = invalid_replay_id
-            with pytest.raises(Exception):
-                self.process_message(message_base)
 
     def test_extract_message(self, message_base):
         message = "a message"

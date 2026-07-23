@@ -15,13 +15,8 @@ use crate::config::{EnvConfig, ProcessorConfig};
 use crate::processors::utils::enforce_retention;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 
-/// Format used for the `datetime` / `group_first_seen` fields. Mirrors
-/// `snuba.settings.PAYLOAD_DATETIME_FORMAT` ("%Y-%m-%dT%H:%M:%S.%fZ"). chrono's
-/// `%.f` consumes the leading dot, so the literal dot is folded into it.
 const PAYLOAD_DATETIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.fZ";
 
-/// Matches `SearchIssuesMessageProcessor.FINGERPRINTS_HARD_LIMIT_SIZE`. Only the
-/// first `LIMIT - 1` fingerprints are kept.
 const FINGERPRINTS_HARD_LIMIT_SIZE: usize = 100;
 
 pub fn process_message(
@@ -48,10 +43,6 @@ pub fn process_message(
     InsertBatch::from_rows([row], None)
 }
 
-/// The kafka payload is a JSON array `[version, "insert", event, group_state?]`.
-/// We only need the first three elements; any trailing element (the post-process
-/// group state) is ignored, matching the Python processor which reads
-/// `message[0]`, `message[1]` and `message[2]`.
 #[derive(Debug)]
 struct Message {
     version: u8,
@@ -86,8 +77,6 @@ impl<'de> Deserialize<'de> for Message {
                 let event = seq
                     .next_element()?
                     .ok_or_else(|| de::Error::invalid_length(2, &self))?;
-                // Drain any trailing elements (e.g. the group-state object) so
-                // serde does not error on the extra items.
                 while seq.next_element::<IgnoredAny>()?.is_some() {}
                 Ok(Message {
                     version,
@@ -193,9 +182,6 @@ struct Request {
     headers: Option<MapOrPairs>,
 }
 
-/// A structure that can be sent either as a JSON object (`{"k": "v"}`) or as a
-/// list of `[key, value]` pairs (`[["k", "v"]]`). Mirrors Python's
-/// `_as_dict_safe`.
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum MapOrPairs {
@@ -204,23 +190,16 @@ enum MapOrPairs {
 }
 
 impl MapOrPairs {
-    /// Normalize to a sorted map, deduplicating list pairs with last-write-wins
-    /// and dropping null entries / null keys, exactly like `_as_dict_safe`
-    /// followed by `sorted(...)`.
-    fn into_dict_safe(self) -> BTreeMap<String, Value> {
+    fn into_map(self) -> BTreeMap<String, Value> {
         match self {
             MapOrPairs::Map(map) => map,
             MapOrPairs::Pairs(pairs) => {
                 let mut map = BTreeMap::new();
                 for pair in pairs.into_iter().flatten() {
-                    if pair.len() < 2 {
-                        continue;
-                    }
-                    if pair[0].is_null() {
-                        continue;
-                    }
-                    if let Some(key) = unicodify(&pair[0]) {
-                        map.insert(key, pair[1].clone());
+                    if let [key, value, ..] = pair.as_slice() {
+                        if let Some(key) = stringify_value(key) {
+                            map.insert(key, value.clone());
+                        }
                     }
                 }
                 map
@@ -229,8 +208,6 @@ impl MapOrPairs {
     }
 }
 
-/// Contexts map, preserving the insertion order of the outer keys as they
-/// appear in the payload (Python does not sort contexts).
 #[derive(Debug, Default)]
 struct Contexts(Vec<(String, ContextValue)>);
 
@@ -264,9 +241,6 @@ impl<'de> Deserialize<'de> for Contexts {
     }
 }
 
-/// A single context value. Only object contexts contribute to the output; other
-/// JSON types are recorded as `Other` and skipped, matching the Python
-/// `isinstance(ctx_obj, dict)` check.
 #[derive(Debug)]
 enum ContextValue {
     Map(Vec<(String, Value)>),
@@ -407,14 +381,11 @@ impl SearchIssuesRow {
         let receive_timestamp = seconds_from_timestamp(data.received);
         let retention_days = enforce_retention(event.retention_days, env_config);
 
-        // client_timestamp (a DateTime column, second precision) and
-        // timestamp_ms (a DateTime64(3) column, millisecond precision).
         let (client_timestamp, timestamp_ms) = match data.client_timestamp.filter(|c| *c != 0.0) {
-            Some(client_ts) => {
-                let (secs, micros) = py_utcfromtimestamp(client_ts);
-                let millis = secs * 1000 + (micros as i64) / 1000;
-                (clamp_u32(secs), millis.max(0) as u64)
-            }
+            Some(client_ts) => (
+                clamp_u32(client_ts as i64),
+                (client_ts * 1000.0).round().max(0.0) as u64,
+            ),
             None => {
                 let datetime_str = event
                     .datetime
@@ -453,15 +424,11 @@ impl SearchIssuesRow {
         let mut fingerprint = occ.fingerprint;
         fingerprint.truncate(FINGERPRINTS_HARD_LIMIT_SIZE - 1);
 
-        // --- Tags (sorted) + promoted tags ---
-        let tags_map = data
-            .tags
-            .map(MapOrPairs::into_dict_safe)
-            .unwrap_or_default();
+        let tags_map = data.tags.map(MapOrPairs::into_map).unwrap_or_default();
         let mut tags_key = Vec::with_capacity(tags_map.len());
         let mut tags_value = Vec::with_capacity(tags_map.len());
         for (key, value) in &tags_map {
-            if let Some(unicodified) = unicodify(value) {
+            if let Some(unicodified) = stringify_value(value) {
                 if !unicodified.is_empty() {
                     tags_key.push(key.clone());
                     tags_value.push(unicodified);
@@ -469,32 +436,28 @@ impl SearchIssuesRow {
             }
         }
 
-        let environment = if tags_map.contains_key("environment") {
-            unicodify(&tags_map["environment"])
-        } else {
-            data.environment.as_ref().and_then(unicodify)
+        let environment = match tags_map.get("environment") {
+            Some(value) => stringify_value(value),
+            None => data.environment.as_ref().and_then(stringify_value),
         };
-        let release = if tags_map.contains_key("sentry:release") {
-            unicodify(&tags_map["sentry:release"])
-        } else {
-            data.release.as_ref().and_then(unicodify)
+        let release = match tags_map.get("sentry:release") {
+            Some(value) => stringify_value(value),
+            None => data.release.as_ref().and_then(stringify_value),
         };
-        let user = tags_map.get("sentry:user").and_then(unicodify);
-        let dist = if tags_map.contains_key("sentry:dist") {
-            unicodify(&tags_map["sentry:dist"])
-        } else {
-            data.dist.as_ref().and_then(unicodify)
+        let user = tags_map.get("sentry:user").and_then(stringify_value);
+        let dist = match tags_map.get("sentry:dist") {
+            Some(value) => stringify_value(value),
+            None => data.dist.as_ref().and_then(stringify_value),
         };
 
-        // --- User ---
         let user_data = data.user.unwrap_or_default();
-        let user_id = user_data.id.as_ref().and_then(unicodify);
-        let user_name = user_data.username.as_ref().and_then(unicodify);
-        let user_email = user_data.email.as_ref().and_then(unicodify);
+        let user_id = user_data.id.as_ref().and_then(stringify_value);
+        let user_name = user_data.username.as_ref().and_then(stringify_value);
+        let user_email = user_data.email.as_ref().and_then(stringify_value);
         let (ip_address_v4, ip_address_v6) = match user_data
             .ip_address
             .as_ref()
-            .and_then(unicodify)
+            .and_then(stringify_value)
             .and_then(|s| s.parse::<IpAddr>().ok())
         {
             Some(IpAddr::V4(v4)) => (Some(v4), None),
@@ -502,21 +465,18 @@ impl SearchIssuesRow {
             None => (None, None),
         };
 
-        // --- SDK ---
         let sdk = data.sdk.unwrap_or_default();
-        let sdk_name = sdk.name.as_ref().and_then(unicodify);
-        let sdk_version = sdk.version.as_ref().and_then(unicodify);
+        let sdk_name = sdk.name.as_ref().and_then(stringify_value);
+        let sdk_version = sdk.version.as_ref().and_then(stringify_value);
 
-        // --- Request / HTTP ---
         let request = data.request.unwrap_or_default();
-        let http_method = request.method.as_ref().and_then(unicodify);
+        let http_method = request.method.as_ref().and_then(stringify_value);
         let headers_map = request
             .headers
-            .map(MapOrPairs::into_dict_safe)
+            .map(MapOrPairs::into_map)
             .unwrap_or_default();
-        let http_referer = headers_map.get("Referer").and_then(unicodify);
+        let http_referer = headers_map.get("Referer").and_then(stringify_value);
 
-        // --- Contexts (ordered) + promoted trace/profile/replay ids ---
         let contexts = data.contexts.unwrap_or_default();
         let mut contexts_key = Vec::new();
         let mut contexts_value = Vec::new();
@@ -526,7 +486,7 @@ impl SearchIssuesRow {
                     if inner_key == "type" {
                         continue;
                     }
-                    if let Some(stringified) = context_scalar_to_string(inner_value) {
+                    if let Some(stringified) = stringify_scalar(inner_value) {
                         contexts_key.push(format!("{name}.{inner_key}"));
                         contexts_value.push(stringified);
                     }
@@ -538,15 +498,12 @@ impl SearchIssuesRow {
         let profile_id = promote_uuid_context(&contexts, "profile", "profile_id")?;
         let replay_id = promote_uuid_context(&contexts, "replay", "replay_id")?;
 
-        // --- Transaction duration ---
         let transaction_duration = match (
             value_as_number(&data.start_timestamp),
             value_as_number(&data.timestamp),
         ) {
             (Some(start), Some(finish)) => {
-                let start_secs = extract_valid_timestamp(start);
-                let finish_secs = extract_valid_timestamp(finish);
-                ((finish_secs - start_secs) * 1000).max(0) as u32
+                ((finish - start) * 1000.0).clamp(0.0, u32::MAX as f64) as u32
             }
             _ => 0,
         };
@@ -556,11 +513,11 @@ impl SearchIssuesRow {
             project_id: event.project_id,
             group_id: event.group_id,
             group_first_seen,
-            event_id: ensure_uuid(&event.event_id)?,
+            event_id: parse_uuid(&event.event_id)?,
             search_title: occ.issue_title,
-            primary_hash: ensure_uuid(&event.primary_hash)?,
+            primary_hash: parse_uuid(&event.primary_hash)?,
             fingerprint,
-            occurrence_id: ensure_uuid(&occ.id)?,
+            occurrence_id: parse_uuid(&occ.id)?,
             occurrence_type_id: occ.type_id,
             detection_timestamp,
             resource_id: occ.resource_id,
@@ -601,9 +558,6 @@ impl SearchIssuesRow {
     }
 }
 
-/// Look up `contexts[context_name][key]`, and if present and non-null, coerce it
-/// to a UUID (raising an error on an invalid UUID, like Python's
-/// `ensure_uuid`).
 fn promote_uuid_context(
     contexts: &Contexts,
     context_name: &str,
@@ -616,8 +570,8 @@ fn promote_uuid_context(
         if let ContextValue::Map(inner) = value {
             for (inner_key, inner_value) in inner {
                 if inner_key == key && !inner_value.is_null() {
-                    if let Some(stringified) = unicodify(inner_value) {
-                        return Ok(Some(ensure_uuid(&stringified)?));
+                    if let Some(stringified) = stringify_value(inner_value) {
+                        return Ok(Some(parse_uuid(&stringified)?));
                     }
                 }
             }
@@ -626,46 +580,27 @@ fn promote_uuid_context(
     Ok(None)
 }
 
-/// Equivalent to Python's `str(uuid.UUID(value))`: parse the string as a UUID
-/// (accepting hyphenated or unhyphenated forms) and error otherwise.
-fn ensure_uuid(value: &str) -> anyhow::Result<Uuid> {
+fn parse_uuid(value: &str) -> anyhow::Result<Uuid> {
     Uuid::parse_str(value).map_err(|_| anyhow!("invalid UUID: {value}"))
 }
 
-/// Equivalent to Python's `_unicodify`: `None` for null, JSON-encoded string for
-/// arrays/objects, and the stringified scalar otherwise. Booleans use Python's
-/// `str(bool)` capitalization ("True"/"False").
-fn unicodify(value: &Value) -> Option<String> {
+fn stringify_value(value: &Value) -> Option<String> {
     match value {
         Value::Null => None,
-        Value::Bool(b) => Some(if *b { "True" } else { "False" }.to_owned()),
-        Value::Number(n) => Some(n.to_string()),
         Value::String(s) => Some(s.clone()),
-        Value::Array(_) | Value::Object(_) => serde_json::to_string(value).ok(),
+        other => Some(other.to_string()),
     }
 }
 
-/// Coerce a context inner value to a string only when it is a scalar type
-/// (str/number/bool), matching Python's `valid_types = (int, float, str)` check
-/// (bool is a subclass of int in Python) plus the truthiness filter that drops
-/// empty strings.
-fn context_scalar_to_string(value: &Value) -> Option<String> {
+fn stringify_scalar(value: &Value) -> Option<String> {
     match value {
-        Value::String(s) => {
-            if s.is_empty() {
-                None
-            } else {
-                Some(s.clone())
-            }
-        }
-        Value::Number(n) => Some(n.to_string()),
-        Value::Bool(b) => Some(if *b { "True" } else { "False" }.to_owned()),
+        Value::String(s) if !s.is_empty() => Some(s.clone()),
+        Value::String(_) => None,
+        Value::Number(_) | Value::Bool(_) => Some(value.to_string()),
         _ => None,
     }
 }
 
-/// Returns the float value only when the JSON value is a number, matching
-/// Python's `isinstance(x, numbers.Number)` gate for transaction duration.
 fn value_as_number(value: &Option<Value>) -> Option<f64> {
     match value {
         Some(Value::Number(n)) => n.as_f64(),
@@ -673,44 +608,12 @@ fn value_as_number(value: &Option<Value>) -> Option<f64> {
     }
 }
 
-/// Truncate a float timestamp toward zero (Python `int(...)`) and validate it is
-/// within the uint32 range, falling back to "now" for out-of-range values (as
-/// `_ensure_valid_date` does).
-fn extract_valid_timestamp(value: f64) -> i64 {
-    let secs = value.trunc() as i64;
-    if (0..=u32::MAX as i64).contains(&secs) {
-        secs
-    } else {
-        chrono::Utc::now().timestamp()
-    }
-}
-
-/// Truncate a float timestamp to whole seconds and clamp into the uint32 range,
-/// matching `datetime.utcfromtimestamp(...)` stored into a second-precision
-/// DateTime column.
 fn seconds_from_timestamp(value: f64) -> u32 {
     clamp_u32(value.trunc() as i64)
 }
 
 fn clamp_u32(value: i64) -> u32 {
     value.clamp(0, u32::MAX as i64) as u32
-}
-
-/// Replicates `datetime.utcfromtimestamp` rounding to microseconds, returning
-/// `(whole_seconds, microseconds)`.
-fn py_utcfromtimestamp(value: f64) -> (i64, u32) {
-    let whole = value.trunc();
-    let frac = value - whole;
-    let mut secs = whole as i64;
-    let mut micros = (frac * 1_000_000.0).round() as i64;
-    if micros >= 1_000_000 {
-        secs += 1;
-        micros -= 1_000_000;
-    } else if micros < 0 {
-        secs -= 1;
-        micros += 1_000_000;
-    }
-    (secs, micros as u32)
 }
 
 #[cfg(test)]
@@ -769,11 +672,6 @@ mod tests {
         rows.remove(0)
     }
 
-    /// Process a raw JSON event string. Unlike [`process`], this does not round
-    /// trip through the `json!` macro (whose object keys are sorted because
-    /// serde_json's `Map` is a `BTreeMap` without the `preserve_order` feature),
-    /// so it can be used to assert that the processor preserves the key order of
-    /// the on-the-wire payload.
     fn process_one_raw(event_json: &str) -> Value {
         let msg = format!("[2, \"insert\", {event_json}]");
         let payload = KafkaPayload::new(None, None, Some(msg.into_bytes()));
@@ -801,7 +699,6 @@ mod tests {
         assert_eq!(row["retention_days"], 90);
         assert_eq!(row["partition"], 0);
         assert_eq!(row["offset"], 1);
-        // UUIDs are hyphenated.
         assert_eq!(row["event_id"], "7f0e2b1a-4c5d-4e6f-8a9b-0c1d2e3f4a5b");
         assert_eq!(row["occurrence_id"], "cccccccc-cccc-cccc-cccc-cccccccccccc");
         assert_eq!(row["detection_timestamp"], 1687800000u32);
@@ -986,8 +883,6 @@ mod tests {
 
     #[test]
     fn test_extract_context_filters_non_dict_preserves_order() {
-        // Built from a raw string so the intended key order survives (see
-        // `process_one_raw`).
         let row = process_one_raw(
             r#"{
                 "project_id": 1,
@@ -1092,12 +987,20 @@ mod tests {
         let row = process_one(event);
         assert_eq!(row["transaction_duration"], 10_000);
 
-        // Non-numeric values fall back to 0.
         let mut event = base_event();
         event["data"]["start_timestamp"] = json!("not valid");
         event["data"]["timestamp"] = json!({"key": "val"});
         let row = process_one(event);
         assert_eq!(row["transaction_duration"], 0);
+    }
+
+    #[test]
+    fn test_transaction_duration_does_not_overflow() {
+        let mut event = base_event();
+        event["data"]["start_timestamp"] = json!(0i64);
+        event["data"]["timestamp"] = json!(u32::MAX as i64);
+        let row = process_one(event);
+        assert_eq!(row["transaction_duration"], u32::MAX);
     }
 
     #[test]
@@ -1143,5 +1046,12 @@ mod tests {
         let payload = KafkaPayload::new(None, None, Some(serde_json::to_vec(&msg).unwrap()));
         let batch = process_message(payload, kafka_meta(), &ProcessorConfig::default()).unwrap();
         assert_eq!(batch.rows.num_rows, 1);
+    }
+
+    #[test]
+    fn test_absurd_client_timestamp_does_not_panic() {
+        let mut event = base_event();
+        event["data"]["client_timestamp"] = json!(1e30);
+        let _ = process(event);
     }
 }
