@@ -25,7 +25,7 @@ use crate::metrics::global_tags::set_global_tag;
 use crate::processors::{self, get_cogs_label};
 use crate::strategies::accountant::RecordCogs;
 
-use crate::strategies::clickhouse::writer_v2::{ClickhouseWriterStep, InsertFormat};
+use crate::strategies::clickhouse::writer_v2::{JsonWriterStep, RowBinaryWriterStep};
 use crate::strategies::commit_log::ProduceCommitLog;
 use crate::strategies::dlq_by_age::DlqByAge;
 use crate::strategies::healthcheck::HealthCheck as SnubaHealthCheck;
@@ -90,8 +90,9 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
     }
 
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
-        let (insert_format, process_fn_override, insert_columns): (
-            InsertFormat,
+        // RowBinary storages: the processor swap (JSON → RowBinary sibling) and
+        // the column list the RowBinary writer needs, both used below.
+        let (process_fn_override, insert_columns): (
             Option<crate::processors::ProcessingFunction>,
             Option<&'static [&'static str]>,
         ) = if self.use_row_binary {
@@ -111,9 +112,9 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                 ),
                 name => panic!("RowBinary not supported for processor: {name}"),
             };
-            (InsertFormat::RowBinary, Some(func), Some(columns))
+            (Some(func), Some(columns))
         } else {
-            (InsertFormat::JsonEachRow, None, None)
+            (None, None)
         };
 
         // Commit offsets
@@ -153,16 +154,29 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
         );
 
-        let next_step = ClickhouseWriterStep::new(
-            next_step,
-            self.storage_config.clickhouse_cluster.clone(),
-            self.storage_config.clickhouse_table_name.clone(),
-            false,
-            &self.clickhouse_concurrency,
-            self.storage_config.name.clone(),
-            insert_format,
-            insert_columns,
-        );
+        // Pick the writer by wire format; RowBinary also needs the column list.
+        let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<RowData>>> =
+            if self.use_row_binary {
+                let columns = insert_columns.expect("use_row_binary resolves a column list above");
+                Box::new(RowBinaryWriterStep::new(
+                    next_step,
+                    self.storage_config.clickhouse_cluster.clone(),
+                    self.storage_config.clickhouse_table_name.clone(),
+                    false,
+                    &self.clickhouse_concurrency,
+                    self.storage_config.name.clone(),
+                    columns,
+                ))
+            } else {
+                Box::new(JsonWriterStep::new(
+                    next_step,
+                    self.storage_config.clickhouse_cluster.clone(),
+                    self.storage_config.clickhouse_table_name.clone(),
+                    false,
+                    &self.clickhouse_concurrency,
+                    self.storage_config.name.clone(),
+                ))
+            };
 
         #[allow(clippy::result_large_err)]
         let accumulator = Arc::new(

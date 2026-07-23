@@ -1982,7 +1982,6 @@ mod tests {
             .header("X-ClickHouse-Database", &database)
             .query(&[
                 ("query", insert_query.as_str()),
-                ("input_format_binary_read_json_as_string", "1"),
                 ("insert_deduplicate", "0"),
             ])
             .body(batch.rows.encoded_rows.clone())
