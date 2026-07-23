@@ -70,15 +70,12 @@ fn clickhouse_task_runner(
     }
 }
 
-pub struct ClickhouseWriterStep<N> {
-    inner: RunTaskInThreads<BytesInsertBatch<RowData>, BytesInsertBatch<()>, anyhow::Error, N>,
-}
-
-/// Wire format the writer step posts to ClickHouse with. Picking the right
-/// value here is the only thing the consumer needs to know — the pipeline
-/// shape, batching, and retry behavior are identical across formats.
+/// Wire format the writer posts to ClickHouse with. Internal to this module —
+/// consumers pick a format by choosing [`JsonWriterStep`] or
+/// [`RowBinaryWriterStep`], which share everything below except this token and
+/// whether an explicit column list is required.
 #[derive(Clone, Copy, Debug)]
-pub enum InsertFormat {
+pub(crate) enum InsertFormat {
     JsonEachRow,
     RowBinary,
 }
@@ -92,16 +89,86 @@ impl InsertFormat {
     }
 }
 
-impl<N> ClickhouseWriterStep<N>
+type WriterInner<N> =
+    RunTaskInThreads<BytesInsertBatch<RowData>, BytesInsertBatch<()>, anyhow::Error, N>;
+
+/// Shared construction for both writer entry points: wrap the ClickHouse HTTP
+/// client + task runner (compression, retry, batching) in a `RunTaskInThreads`.
+/// The format and column list are the only per-format inputs.
+#[allow(clippy::too_many_arguments)]
+fn build_writer_inner<N>(
+    next_step: N,
+    cluster_config: ClickhouseConfig,
+    table: String,
+    skip_write: bool,
+    concurrency: &ConcurrencyConfig,
+    storage_name: String,
+    format: InsertFormat,
+    columns: Option<&'static [&'static str]>,
+) -> WriterInner<N>
 where
     N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
 {
-    /// `columns`: if `Some`, expand into the SQL as
-    /// `INSERT INTO {table} (col1, col2, ...) FORMAT ...`. Required for
-    /// `RowBinary`, which would otherwise fall back to the table's positional
-    /// column order — a footgun whenever wire order and table order diverge.
-    /// For `JSONEachRow`, pass `None` to preserve historical behavior.
-    #[allow(clippy::too_many_arguments)]
+    RunTaskInThreads::new(
+        next_step,
+        clickhouse_task_runner(
+            Arc::new(ClickhouseClient::new(
+                &cluster_config,
+                &table,
+                storage_name,
+                format,
+                columns,
+            )),
+            skip_write,
+        ),
+        concurrency,
+        Some("clickhouse"),
+    )
+}
+
+/// Generate the `ProcessingStrategy` impl for a writer newtype that delegates to
+/// its shared `inner` `RunTaskInThreads`.
+macro_rules! impl_writer_delegate {
+    ($ty:ident) => {
+        impl<N> ProcessingStrategy<BytesInsertBatch<RowData>> for $ty<N>
+        where
+            N: ProcessingStrategy<BytesInsertBatch<()>>,
+        {
+            fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
+                self.inner.poll()
+            }
+
+            fn submit(
+                &mut self,
+                message: Message<BytesInsertBatch<RowData>>,
+            ) -> Result<(), SubmitError<BytesInsertBatch<RowData>>> {
+                self.inner.submit(message)
+            }
+
+            fn terminate(&mut self) {
+                self.inner.terminate();
+            }
+
+            fn join(
+                &mut self,
+                timeout: Option<Duration>,
+            ) -> Result<Option<CommitRequest>, StrategyError> {
+                self.inner.join(timeout)
+            }
+        }
+    };
+}
+
+/// Writer for the `JSONEachRow` wire format — the historical default, used by
+/// every storage that hasn't opted into RowBinary.
+pub struct JsonWriterStep<N> {
+    inner: WriterInner<N>,
+}
+
+impl<N> JsonWriterStep<N>
+where
+    N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
+{
     pub fn new(
         next_step: N,
         cluster_config: ClickhouseConfig,
@@ -109,52 +176,61 @@ where
         skip_write: bool,
         concurrency: &ConcurrencyConfig,
         storage_name: String,
-        format: InsertFormat,
-        columns: Option<&'static [&'static str]>,
     ) -> Self {
-        let inner = RunTaskInThreads::new(
-            next_step,
-            clickhouse_task_runner(
-                Arc::new(ClickhouseClient::new(
-                    &cluster_config.clone(),
-                    &table,
-                    storage_name,
-                    format,
-                    columns,
-                )),
+        JsonWriterStep {
+            inner: build_writer_inner(
+                next_step,
+                cluster_config,
+                table,
                 skip_write,
+                concurrency,
+                storage_name,
+                InsertFormat::JsonEachRow,
+                None,
             ),
-            concurrency,
-            Some("clickhouse"),
-        );
-
-        ClickhouseWriterStep { inner }
+        }
     }
 }
 
-impl<N> ProcessingStrategy<BytesInsertBatch<RowData>> for ClickhouseWriterStep<N>
+impl_writer_delegate!(JsonWriterStep);
+
+/// Writer for the `RowBinary` wire format. `columns` is REQUIRED: RowBinary is
+/// positional, so the explicit `(col1, col2, ...)` list is what maps wire order
+/// to the table's columns — without it ClickHouse falls back to the table's
+/// on-disk order and misreads bytes (see `EAPItemRow::COLUMN_NAMES`).
+pub struct RowBinaryWriterStep<N> {
+    inner: WriterInner<N>,
+}
+
+impl<N> RowBinaryWriterStep<N>
 where
-    N: ProcessingStrategy<BytesInsertBatch<()>>,
+    N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
 {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
-        self.inner.poll()
-    }
-
-    fn submit(
-        &mut self,
-        message: Message<BytesInsertBatch<RowData>>,
-    ) -> Result<(), SubmitError<BytesInsertBatch<RowData>>> {
-        self.inner.submit(message)
-    }
-
-    fn terminate(&mut self) {
-        self.inner.terminate();
-    }
-
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
-        self.inner.join(timeout)
+    pub fn new(
+        next_step: N,
+        cluster_config: ClickhouseConfig,
+        table: String,
+        skip_write: bool,
+        concurrency: &ConcurrencyConfig,
+        storage_name: String,
+        columns: &'static [&'static str],
+    ) -> Self {
+        RowBinaryWriterStep {
+            inner: build_writer_inner(
+                next_step,
+                cluster_config,
+                table,
+                skip_write,
+                concurrency,
+                storage_name,
+                InsertFormat::RowBinary,
+                Some(columns),
+            ),
+        }
     }
 }
+
+impl_writer_delegate!(RowBinaryWriterStep);
 
 pub struct RetryConfig {
     initial_backoff_ms: f64,
