@@ -1,5 +1,245 @@
 # Changelog
 
+## 26.7.1
+
+### New Features ✨
+
+#### Metrics
+
+- Enable DogStatsD client telemetry by @phacops in [#8186](https://github.com/getsentry/snuba/pull/8186)
+- Add runtime-switchable DogStatsD UDS support, migrate Rust to metrics-exporter-dogstatsd, and propagate runtime global tags by @phacops in [#7796](https://github.com/getsentry/snuba/pull/7796)
+
+#### Other
+
+- (consumer) Add a DLQ-by-age load-shedding lever by @onewland in [#8167](https://github.com/getsentry/snuba/pull/8167)
+- (eap) Semver-aware ordering via SORT_SEMVER across EAP endpoints by @phacops in [#8103](https://github.com/getsentry/snuba/pull/8103)
+- (gocd) Run distroless image in all SaaS regions by @oioki in [#8180](https://github.com/getsentry/snuba/pull/8180)
+- (manual_jobs) Add job to log all runtime configs by @phacops in [#8187](https://github.com/getsentry/snuba/pull/8187)
+- (rpc) Add LIMIT BY support to TraceItemTable queries by @phacops in [#8201](https://github.com/getsentry/snuba/pull/8201)
+- (web) Compress large JSON query responses with zstd by @tryangul in [#8214](https://github.com/getsentry/snuba/pull/8214)
+- Add llm-proxy-cost-consumer to GoCD deploy by @sehr-m in [#8192](https://github.com/getsentry/snuba/pull/8192)
+
+### Bug Fixes 🐛
+
+#### Rpc
+
+- Boolean attribute SELECT returns empty (not false) for items missing the attribute by @phacops in [#8194](https://github.com/getsentry/snuba/pull/8194)
+- Boolean attribute filters no longer match items missing the attribute by @phacops in [#8191](https://github.com/getsentry/snuba/pull/8191)
+
+#### Other
+
+- (clickhouse) Add an explicit insert() to the pool interface by @phacops in [#8184](https://github.com/getsentry/snuba/pull/8184)
+- (eap) Reject trace item table requests with aggregation_filter but no aggregation by @phacops in [#8210](https://github.com/getsentry/snuba/pull/8210)
+- Stop reporting expected client/infra errors to Sentry by @phacops in [#8211](https://github.com/getsentry/snuba/pull/8211)
+
+### Internal Changes 🔧
+
+#### Admin
+
+- Remove the Runtime Config tool from snuba-admin by @phacops in [#8202](https://github.com/getsentry/snuba/pull/8202)
+- Remove unused snuba-admin tools by @phacops in [#8200](https://github.com/getsentry/snuba/pull/8200)
+
+#### Deps
+
+- Bump getsentry/sentry-options/.github/workflows/validate-schema.yml from f8b8cdc11b73938dbdb44792c96b7b64a3600033 to aaebf80432ba287a2ccd7352dc314b676ff2438c by @dependabot in [#8198](https://github.com/getsentry/snuba/pull/8198)
+- Bump getsentry/self-hosted from 3db978e2659e1d34eb2cfb8516b563d72fec58f4 to 411a24321747e451d8747a2a5d3674ed7d9ad515 by @dependabot in [#8197](https://github.com/getsentry/snuba/pull/8197)
+- Bump actions/setup-node from 6.4.0 to 7.0.0 by @dependabot in [#8199](https://github.com/getsentry/snuba/pull/8199)
+- Bump serde_with from 3.8.1 to 3.21.0 in /rust_snuba by @dependabot in [#8188](https://github.com/getsentry/snuba/pull/8188)
+
+#### Other
+
+- (clickhouse) Split writer into JsonWriterStep and RowBinaryWriterStep by @phacops in [#8213](https://github.com/getsentry/snuba/pull/8213)
+- (consumer) Remove the BLQ (backlog-queue) mechanism by @onewland in [#8166](https://github.com/getsentry/snuba/pull/8166)
+- (metrics) Timer histogram metrics are now emitted as distributions… by @tryangul in [#8203](https://github.com/getsentry/snuba/pull/8203)
+- (options) Migrate allocation-policy config to sentry-options by @phacops in [#8168](https://github.com/getsentry/snuba/pull/8168)
+- Bump sentry-conventions to 0.17.0 by @getsentry-bot in [#8183](https://github.com/getsentry/snuba/pull/8183)
+- Bump new development version by @sentry-release-bot[bot] in [88ec71ec](https://github.com/getsentry/snuba/commit/88ec71ec55976ab23cab88e28295e4e0217786c4)
+
+### Other
+
+- Add rejecting/throttling policy to query metrics and span by @phacops in [#8196](https://github.com/getsentry/snuba/pull/8196)
+
+## 26.7.0
+
+### New Features ✨
+
+#### Eap
+
+- Speed up cross-item queries with local trace_id joins [EAP-377] by @phacops in [#8131](https://github.com/getsentry/snuba/pull/8131)
+- Read array attributes from typed columns via the typed array enum by @phacops in [#8178](https://github.com/getsentry/snuba/pull/8178)
+- Add support for filters on ExportTraceItemsRequest by @pbhandari in [#8152](https://github.com/getsentry/snuba/pull/8152)
+- Sort trace item attribute names by frequency by @phacops in [#8062](https://github.com/getsentry/snuba/pull/8062)
+
+#### Eap Items
+
+- Read and filter array attributes natively from typed columns by @phacops in [#8110](https://github.com/getsentry/snuba/pull/8110)
+- Ingest session_id and ai_conversation_id by @phacops in [#8100](https://github.com/getsentry/snuba/pull/8100)
+- Add ai_conversation_id column and index by @phacops in [#8102](https://github.com/getsentry/snuba/pull/8102)
+- Read array attributes from typed map columns for recent queries by @phacops in [#8101](https://github.com/getsentry/snuba/pull/8101)
+- Double-write arrays into typed map columns by @phacops in [#8079](https://github.com/getsentry/snuba/pull/8079)
+- Add conversation_id and session_id columns by @phacops in [#8053](https://github.com/getsentry/snuba/pull/8053)
+- Add typed map columns for array attributes by @phacops in [#8056](https://github.com/getsentry/snuba/pull/8056)
+- Populate name column from sentry.op and sentry.name by @phacops in [#8017](https://github.com/getsentry/snuba/pull/8017)
+- Make downsample tiers nested subsets by @phacops in [#7980](https://github.com/getsentry/snuba/pull/7980)
+- Add generic name column with bloom_filter index by @phacops in [#8016](https://github.com/getsentry/snuba/pull/8016)
+
+#### Gocd
+
+- Run distroless image in de region by @oioki in [#8090](https://github.com/getsentry/snuba/pull/8090)
+- Run distroless image in s4s2 for rust consumers by @oioki in [#8089](https://github.com/getsentry/snuba/pull/8089)
+
+#### Llm Proxy Cost
+
+- Add Rust message processor by @sehr-m in [#8143](https://github.com/getsentry/snuba/pull/8143)
+- Add ClickHouse migration + storage config by @sehr-m in [#8142](https://github.com/getsentry/snuba/pull/8142)
+
+#### Other
+
+- (attributes) Add filter mode by @wmak in [#8099](https://github.com/getsentry/snuba/pull/8099)
+- (clickhouse) Add clickhouse-connect (HTTP) driver behind a runtime config [EAP-497] by @phacops in [#8060](https://github.com/getsentry/snuba/pull/8060)
+- (deploy) Run the distroless snuba image in s4s2 by @oioki in [#8047](https://github.com/getsentry/snuba/pull/8047)
+- (image) Publish distroless image to Google AR by @oioki in [#8046](https://github.com/getsentry/snuba/pull/8046)
+- (outcomes) Add dedicated cross-org outcomes discovery entity by @armenzg in [#8107](https://github.com/getsentry/snuba/pull/8107)
+- (query) Reject non-datetime conditions on datetime columns by @phacops in [#8020](https://github.com/getsentry/snuba/pull/8020)
+- (replays) Add segment_names column by @mjq in [#8098](https://github.com/getsentry/snuba/pull/8098)
+
+### Bug Fixes 🐛
+
+#### Admin
+
+- Add a global exception handler that repackages all thrown errors as JSON by @pbhandari in [#8164](https://github.com/getsentry/snuba/pull/8164)
+- Use default HTTP port for by-host connections; don't crash tracing on empty trace by @phacops in [#8121](https://github.com/getsentry/snuba/pull/8121)
+
+#### Clickhouse
+
+- Recover empty-result meta and WITH TOTALS row on the connect driver by @phacops in [#8138](https://github.com/getsentry/snuba/pull/8138)
+- Enforce 25s max_execution_time on TRACING profile by @pbhandari in [#8163](https://github.com/getsentry/snuba/pull/8163)
+- Use default HTTP port for direct connections to cluster nodes by @phacops in [#8149](https://github.com/getsentry/snuba/pull/8149)
+- Route EXPLAIN through command() on the connect driver by @phacops in [#8137](https://github.com/getsentry/snuba/pull/8137)
+
+#### Eap
+
+- Convert deprecated aggregation nested in aggregation-filter formulas by @MeredithAnya in [#8093](https://github.com/getsentry/snuba/pull/8093)
+- Generate minimal NULL-free SQL for map-backed attribute filters by @phacops in [#8035](https://github.com/getsentry/snuba/pull/8035)
+- Emit typed NULL in attribute existence check for new analyzer by @phacops in [#8032](https://github.com/getsentry/snuba/pull/8032)
+
+#### Rpc
+
+- Keep trace_id bare in cross-item subqueries so the bloom filter index is used by @phacops in [#8130](https://github.com/getsentry/snuba/pull/8130)
+- Remove non-array attributes from json array allowlist by @shellmayr in [#7950](https://github.com/getsentry/snuba/pull/7950)
+- Honor should_report when capturing RPC exceptions by @phacops in [#8025](https://github.com/getsentry/snuba/pull/8025)
+
+#### Other
+
+- (attribute-values) Properly support boolean attributes by @wmak in [#8000](https://github.com/getsentry/snuba/pull/8000)
+- (ci) Point the deploy check gate at the sharded test_distributed checks by @mchen-sentry in [#8088](https://github.com/getsentry/snuba/pull/8088)
+- (deletions) Count EAP delete rows on read-only replicas by @phacops in [#8054](https://github.com/getsentry/snuba/pull/8054)
+- (eap-items) Group sentry.timestamp on the raw column to match ORDER BY by @phacops in [#8043](https://github.com/getsentry/snuba/pull/8043)
+- (export) Bind trace_id filter to the raw column in ExportTraceItems by @pbhandari in [#8171](https://github.com/getsentry/snuba/pull/8171)
+- (gocd) Remove s4s, mattrobenolt-kube references from pipelines and code by @mwarkentin in [#7875](https://github.com/getsentry/snuba/pull/7875)
+- (migrations) 0012 blocking=False by @MeredithAnya in [#8044](https://github.com/getsentry/snuba/pull/8044)
+- (options) Add schema copy step to dockerfile for python library by @kenzoengineer in [#8145](https://github.com/getsentry/snuba/pull/8145)
+- (querylog) Omit max_threads stat when unset instead of emitting null by @phacops in [#8172](https://github.com/getsentry/snuba/pull/8172)
+- (routing) Exempt outcomes routing query from allocation policies by @phacops in [#8064](https://github.com/getsentry/snuba/pull/8064)
+- (subscriptions) Skip non-retryable query exceptions in executor poll by @phacops in [#8039](https://github.com/getsentry/snuba/pull/8039)
+- Synchronize sentry-options version by @joshuarli in [#8153](https://github.com/getsentry/snuba/pull/8153)
+
+### Internal Changes 🔧
+
+#### Ci
+
+- Shard the test_distributed suite across two runners by @mchen-sentry in [#8067](https://github.com/getsentry/snuba/pull/8067)
+- Run sentry tests under xdist with per-worker snuba by @mchen-sentry in [#8068](https://github.com/getsentry/snuba/pull/8068)
+- Cache image builds via GHCR registry instead of type=gha by @mchen-sentry in [#8066](https://github.com/getsentry/snuba/pull/8066)
+
+#### Deps
+
+- Bump ws from 8.19.0 to 8.21.0 in /snuba/admin by @dependabot in [#8165](https://github.com/getsentry/snuba/pull/8165)
+- Bump getsentry/sentry-options/.github/workflows/validate-schema.yml from e01102e68e85b4742aee4349106591c9f0a84b71 to f8b8cdc11b73938dbdb44792c96b7b64a3600033 by @dependabot in [#8173](https://github.com/getsentry/snuba/pull/8173)
+- Bump astral-sh/setup-uv from 8.3.0 to 8.3.2 by @dependabot in [#8174](https://github.com/getsentry/snuba/pull/8174)
+- Bump getsentry/self-hosted from 985b6770a6399b3e3e01f880db4b633a076bdf6d to 3db978e2659e1d34eb2cfb8516b563d72fec58f4 by @dependabot in [#8175](https://github.com/getsentry/snuba/pull/8175)
+- Bump actions/labeler from 6.1.0 to 6.2.0 by @dependabot in [#8176](https://github.com/getsentry/snuba/pull/8176)
+- Bump astral-sh/setup-uv from 8.2.0 to 8.3.0 by @dependabot in [#8155](https://github.com/getsentry/snuba/pull/8155)
+- Bump getsentry/sentry-options/.github/workflows/validate-schema.yml from 20eae26f689d6f01185d0c82f39cc4222286c7a2 to e01102e68e85b4742aee4349106591c9f0a84b71 by @dependabot in [#8156](https://github.com/getsentry/snuba/pull/8156)
+- Bump getsentry/self-hosted from d6a84062bfe3abdc8be7dc1af1bfa7a8607bed95 to 985b6770a6399b3e3e01f880db4b633a076bdf6d by @dependabot in [#8157](https://github.com/getsentry/snuba/pull/8157)
+- Bump docker/setup-buildx-action from 4.1.0 to 4.2.0 by @dependabot in [#8158](https://github.com/getsentry/snuba/pull/8158)
+- Bump docker/build-push-action from 7.2.0 to 7.3.0 by @dependabot in [#8159](https://github.com/getsentry/snuba/pull/8159)
+- Bump getsentry/craft from 2.26.13 to 2.26.14 by @dependabot in [#8160](https://github.com/getsentry/snuba/pull/8160)
+- Bump msgpack from 1.1.0 to 1.2.1 by @dependabot in [#8147](https://github.com/getsentry/snuba/pull/8147)
+- Bump pyjwt from 2.12.1 to 2.13.0 by @dependabot in [#8148](https://github.com/getsentry/snuba/pull/8148)
+- Bump js-yaml from 3.14.2 to 3.15.0 in /snuba/admin by @dependabot in [#8133](https://github.com/getsentry/snuba/pull/8133)
+- Use uv to set up Python in admin-sourcemaps (bump 3.8 → latest) by @dependabot in [#8123](https://github.com/getsentry/snuba/pull/8123)
+- Bump actions/cache from 5.0.5 to 6.1.0 by @dependabot in [#8126](https://github.com/getsentry/snuba/pull/8126)
+- Bump getsentry/sentry-options/.github/workflows/validate-schema.yml from b50bbb199c30b3d9f56aa5f06791d66a8ab89dae to 20eae26f689d6f01185d0c82f39cc4222286c7a2 by @dependabot in [#8127](https://github.com/getsentry/snuba/pull/8127)
+- Bump getsentry/craft from 2.26.10 to 2.26.13 by @dependabot in [#8128](https://github.com/getsentry/snuba/pull/8128)
+- Bump getsentry/self-hosted from d93e147eb9bfae821e1a740ec97bc89c8b8597a8 to d6a84062bfe3abdc8be7dc1af1bfa7a8607bed95 by @dependabot in [#8125](https://github.com/getsentry/snuba/pull/8125)
+- Bump actions/cache/save from 5.0.5 to 6.1.0 by @dependabot in [#8124](https://github.com/getsentry/snuba/pull/8124)
+- Bump actions/cache/restore from 5.0.5 to 6.1.0 by @dependabot in [#8122](https://github.com/getsentry/snuba/pull/8122)
+- Bump actions/checkout from 6.0.3 to 7.0.0 by @dependabot in [#8082](https://github.com/getsentry/snuba/pull/8082)
+- Bump getsentry/self-hosted from 6a649f98c41f1e758a2a623d69347d1302472fe9 to d93e147eb9bfae821e1a740ec97bc89c8b8597a8 by @dependabot in [#8083](https://github.com/getsentry/snuba/pull/8083)
+- Bump getsentry/sentry-options/.github/workflows/validate-schema.yml from 0b115be89b102d76beff8106bd4054365954282e to b50bbb199c30b3d9f56aa5f06791d66a8ab89dae by @dependabot in [#8081](https://github.com/getsentry/snuba/pull/8081)
+- Bump docker/setup-buildx-action from 3.12.0 to 4.1.0 by @dependabot in [#8080](https://github.com/getsentry/snuba/pull/8080)
+- Bump sentry-conventions to 0.12.0 by @constantinius in [#8045](https://github.com/getsentry/snuba/pull/8045)
+- Bump form-data from 4.0.4 to 4.0.6 in /snuba/admin by @dependabot in [#8034](https://github.com/getsentry/snuba/pull/8034)
+- Bump @babel/core from 7.21.0 to 7.29.7 in /snuba/admin by @dependabot in [#8033](https://github.com/getsentry/snuba/pull/8033)
+- Bump getsentry/self-hosted from 53b2a6fb5c032adb61945963d8051673f4d5d306 to 6a649f98c41f1e758a2a623d69347d1302472fe9 by @dependabot in [#8029](https://github.com/getsentry/snuba/pull/8029)
+- Bump getsentry/craft from 2.26.8 to 2.26.10 by @dependabot in [#8028](https://github.com/getsentry/snuba/pull/8028)
+- Bump getsentry/sentry-options/.github/workflows/validate-schema.yml from ceed9df987a4085bd3e662d188a55216d40a92d1 to 0b115be89b102d76beff8106bd4054365954282e by @dependabot in [#8027](https://github.com/getsentry/snuba/pull/8027)
+
+#### Generic Metrics
+
+- Remove serde(flatten) from metrics value parser by @cmanallen in [#8135](https://github.com/getsentry/snuba/pull/8135)
+- Decode UTF-8 in a batched pre-processing step by @cmanallen in [#8134](https://github.com/getsentry/snuba/pull/8134)
+- Skip eager killswitch deserialization by @cmanallen in [#8132](https://github.com/getsentry/snuba/pull/8132)
+
+#### Options
+
+- Migrate query-execution, cache & delete config to sentry-options by @phacops in [#8118](https://github.com/getsentry/snuba/pull/8118)
+- Migrate rate-limit runtime config to sentry-options by @phacops in [#8116](https://github.com/getsentry/snuba/pull/8116)
+- Migrate storage routing + ConfigurableComponent config to sentry-options by @phacops in [#8115](https://github.com/getsentry/snuba/pull/8115)
+- Migrate EAP/RPC query-path runtime config to sentry-options by @phacops in [#8114](https://github.com/getsentry/snuba/pull/8114)
+- Add Python sentry-options reader (infra) by @phacops in [#8113](https://github.com/getsentry/snuba/pull/8113)
+- Migrate Rust consumer runtime config to sentry-options by @phacops in [#8112](https://github.com/getsentry/snuba/pull/8112)
+
+#### Outcomes
+
+- Only use quantity64 for outcomes_raw by @MeredithAnya in [#8072](https://github.com/getsentry/snuba/pull/8072)
+- Use quantity64 in hourly, daily MVs by @MeredithAnya in [#8042](https://github.com/getsentry/snuba/pull/8042)
+- Add quantity64 in processor by @MeredithAnya in [#8036](https://github.com/getsentry/snuba/pull/8036)
+
+#### Other
+
+- (cache) Stop capturing non-actionable redis errors to Sentry by @phacops in [#8182](https://github.com/getsentry/snuba/pull/8182)
+- (deletes) Add option for lightweight_delete_mode by @MeredithAnya in [#8106](https://github.com/getsentry/snuba/pull/8106)
+- (deps-dev) Bump esbuild from 0.25.0 to 0.28.1 in /snuba/admin by @dependabot in [#8026](https://github.com/getsentry/snuba/pull/8026)
+- (eap-items) Index-prune, dedupe, and sort sentry.timestamp on the raw column by @phacops in [#8018](https://github.com/getsentry/snuba/pull/8018)
+- (migrations) Deflake test_reverse_idempotency_all by @phacops in [#8038](https://github.com/getsentry/snuba/pull/8038)
+- (sentry) Shard sentry tests over 16 runners by @phacops in [#8037](https://github.com/getsentry/snuba/pull/8037)
+- (telemetry) Remove low-value set_from_clause spans by @sentry in [#8084](https://github.com/getsentry/snuba/pull/8084)
+- Bump sentry-conventions to 0.16.0 by @getsentry-bot in [#8177](https://github.com/getsentry/snuba/pull/8177)
+- Bump sentry-conventions to 0.15.0 by @getsentry-bot in [#8139](https://github.com/getsentry/snuba/pull/8139)
+- Remove codecov from the repo by @phacops in [#8111](https://github.com/getsentry/snuba/pull/8111)
+- Modernize Python tooling (ruff, uv, mypy) by @phacops in [#8040](https://github.com/getsentry/snuba/pull/8040)
+- Reduce memory in the ClickHouse result + response path by @phacops in [#8109](https://github.com/getsentry/snuba/pull/8109)
+- Bump sentry-conventions to 0.13.0 by @getsentry-bot in [#8104](https://github.com/getsentry/snuba/pull/8104)
+- Stop arroyo ChildProcessTerminated from creating Sentry issues by @phacops in [#8094](https://github.com/getsentry/snuba/pull/8094)
+- Silence spurious google_auth_httplib2 per-request timeout warning (SNUBA-8P5) by @phacops in [#8087](https://github.com/getsentry/snuba/pull/8087)
+- Bump sentry-kafka-schemas to 2.1.36 by @tobias-wilfert in [#8092](https://github.com/getsentry/snuba/pull/8092)
+- Only forward ERROR-level logs to Sentry as issues (keep WARN as logs) by @phacops in [#8077](https://github.com/getsentry/snuba/pull/8077)
+- Bump sentry-protos to 0.32.0 by @getsentry-bot in [#8070](https://github.com/getsentry/snuba/pull/8070)
+- Bump sentry-kafka-schemas to 2.1.35 by @getsentry-bot in [#8061](https://github.com/getsentry/snuba/pull/8061)
+
+### Other
+
+- Stop writing to the attributes_array column in the EAP consumer by @phacops in [#8179](https://github.com/getsentry/snuba/pull/8179)
+- Remove debug/trace logs from snuba-admin by @phacops in [#8161](https://github.com/getsentry/snuba/pull/8161)
+- Bump granian to 2.7.9 by @gi0baro in [#8154](https://github.com/getsentry/snuba/pull/8154)
+- set max execution time of outcomes hourly to 10s by @volokluev in [#8097](https://github.com/getsentry/snuba/pull/8097)
+- Replays query tuning: max_execution_time, PREWHERE environment, and a HAVING→subquery optimizer by @phacops in [#8091](https://github.com/getsentry/snuba/pull/8091)
+- Inline constant IN-sets in SELECT-clause filters to fix mixed-version distributed reads (SNUBA-9W6) by @phacops in [#8074](https://github.com/getsentry/snuba/pull/8074)
+- Fix mixed-version distributed reads in co-occurring attributes query by @phacops in [#8073](https://github.com/getsentry/snuba/pull/8073)
+- Emit has(mapKeys(...)) for mapContains to survive mixed-version ClickHouse clusters by @phacops in [#8069](https://github.com/getsentry/snuba/pull/8069)
+
 ## 26.6.0
 
 ### New Features ✨

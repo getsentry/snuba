@@ -7,10 +7,12 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
+from snuba.protos.common import ARRAY_TYPES
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.proto_visitor import (
     AggregationToConditionalAggregationVisitor,
+    ColumnWrapper,
     ContainsAggregateVisitor,
     TraceItemTableRequestWrapper,
 )
@@ -54,9 +56,7 @@ def _validate_select_and_groupby(in_msg: TraceItemTableRequest) -> None:
     if not in_msg.columns:
         raise BadSnubaRPCRequestException("At least one column must be specified in the request")
 
-    array_group_by_columns = [
-        c.name for c in in_msg.group_by if c.type == AttributeKey.Type.TYPE_ARRAY
-    ]
+    array_group_by_columns = [c.name for c in in_msg.group_by if c.type in ARRAY_TYPES]
     if array_group_by_columns:
         raise BadSnubaRPCRequestException(
             f"group_by is not supported on array attributes: {', '.join(array_group_by_columns)}"
@@ -90,7 +90,7 @@ def _validate_order_by(in_msg: TraceItemTableRequest) -> None:
     array_order_by_columns = [
         ob.column.key.name
         for ob in in_msg.order_by
-        if ob.column.HasField("key") and ob.column.key.type == AttributeKey.Type.TYPE_ARRAY
+        if ob.column.HasField("key") and ob.column.key.type in ARRAY_TYPES
     ]
     if array_order_by_columns:
         raise BadSnubaRPCRequestException(
@@ -105,6 +105,75 @@ def _validate_order_by(in_msg: TraceItemTableRequest) -> None:
         raise BadSnubaRPCRequestException(
             f"Ordered by columns {sorted(order_by_cols)} not selected: {sorted(selected_columns)}"
         )
+
+
+def _validate_limit_by(in_msg: TraceItemTableRequest) -> None:
+    if not in_msg.HasField("limit_by"):
+        return
+
+    if (
+        in_msg.meta.downsampled_storage_config.mode
+        == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
+    ):
+        # flextime splits the scan across time windows and paginates per window, so a
+        # LIMIT BY would apply per window rather than globally; the two can't be combined.
+        raise BadSnubaRPCRequestException("limit_by is not supported with flextime routing")
+
+    limit_by = in_msg.limit_by
+    if not limit_by.columns:
+        raise BadSnubaRPCRequestException("limit_by must specify at least one column")
+
+    if limit_by.limit <= 0:
+        raise BadSnubaRPCRequestException(
+            f"limit_by.limit must be greater than 0, got {limit_by.limit}"
+        )
+
+    # A limit_by column is either a column key or the label of a selected column
+    # (which may be a transformation). The proto cannot express an aggregation
+    # directly, but a label can still point at a selected aggregate, so resolve
+    # labels and reject aggregate/array targets.
+    group_by_names = {c.name for c in in_msg.group_by}
+    selected_by_label = {c.label: c for c in in_msg.columns if c.label}
+    for limit_by_column in limit_by.columns:
+        which = limit_by_column.WhichOneof("column")
+        # `key` is the attribute this entry groups on, or None when it references a
+        # selected non-key column (e.g. a formula).
+        key: AttributeKey | None
+        if which == "key":
+            key = limit_by_column.key
+            name = key.name
+        elif which == "label":
+            name = limit_by_column.label
+            referenced = selected_by_label.get(name)
+            if referenced is None:
+                raise BadSnubaRPCRequestException(
+                    f"limit_by column '{name}' is not a selected column"
+                )
+            # a label can reference a selected aggregate; ClickHouse cannot LIMIT BY
+            # one (including aggregates nested in a formula), so reject it.
+            wrapper = ColumnWrapper(referenced)
+            wrapper.accept(AggregationToConditionalAggregationVisitor())
+            contains_aggregate_visitor = ContainsAggregateVisitor()
+            wrapper.accept(contains_aggregate_visitor)
+            if contains_aggregate_visitor.contains_aggregate:
+                raise BadSnubaRPCRequestException("limit_by does not support aggregations")
+            key = referenced.key if referenced.HasField("key") else None
+        else:
+            raise BadSnubaRPCRequestException("limit_by column must specify a key or a label")
+
+        # array attributes expand into typed sub-columns and cannot be grouped on,
+        # same as order_by / group_by.
+        if key is not None and key.type in ARRAY_TYPES:
+            raise BadSnubaRPCRequestException(
+                f"limit_by is not supported on array attributes: {key.name}"
+            )
+
+        # ClickHouse applies LIMIT BY after GROUP BY, so in an aggregation query a
+        # limit_by entry must be one of the group_by columns; otherwise it is not
+        # available post-aggregation. This rejects both ungrouped keys and non-key
+        # columns (e.g. formulas). Non-aggregation queries (no group_by) are free.
+        if group_by_names and (key is None or key.name not in group_by_names):
+            raise BadSnubaRPCRequestException(f"limit_by column '{name}' must be in group_by")
 
 
 def _transform_request(request: TraceItemTableRequest) -> TraceItemTableRequest:
@@ -189,6 +258,7 @@ class EndpointTraceItemTable(RPCEndpoint[TraceItemTableRequest, TraceItemTableRe
         in_msg = _apply_labels_to_columns(in_msg)
         _validate_select_and_groupby(in_msg)
         _validate_order_by(in_msg)
+        _validate_limit_by(in_msg)
         _enforce_flextime_routing_orders_by_timestamp_and_item_id(in_msg)
 
         RejectTimestampAsStringVisitor().visit(in_msg)

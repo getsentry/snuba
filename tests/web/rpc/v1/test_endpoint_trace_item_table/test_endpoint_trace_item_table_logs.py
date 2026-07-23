@@ -130,3 +130,114 @@ class TestTraceItemTableForLogs(BaseApiTest):
             ),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
+
+
+@pytest.fixture(autouse=False)
+def setup_bool_logs_in_db(eap: None, redis_db: None) -> None:
+    """Three log groups: ``hasCodeTag`` false, true, and absent (getsentry/sentry#119735)."""
+    logs_storage = get_writable_storage(StorageKey("eap_items"))
+    messages = []
+    for i in range(30):
+        timestamp = BASE_TIME - timedelta(minutes=i)
+        attributes = {"int_tag": AnyValue(int_value=i)}
+        if i < 10:
+            attributes["hasCodeTag"] = AnyValue(bool_value=False)
+        elif i < 20:
+            attributes["hasCodeTag"] = AnyValue(bool_value=True)
+        messages.append(
+            gen_item_message(
+                start_timestamp=timestamp,
+                remove_default_attributes=True,
+                type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+                attributes=attributes,
+            )
+        )
+    write_raw_unprocessed_events(logs_storage, messages)
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
+class TestBooleanAttributeFilteringForLogs(BaseApiTest):
+    def _query_hascodetag(self, val: bool) -> TraceItemTableResponse:
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+            ),
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_BOOLEAN, name="hasCodeTag"),
+                    value=AttributeValue(val_bool=val),
+                    op=ComparisonFilter.OP_EQUALS,
+                ),
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.Type.TYPE_INT, name="int_tag")),
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(key=AttributeKey(type=AttributeKey.TYPE_INT, name="int_tag"))
+                )
+            ],
+            limit=50,
+        )
+        return EndpointTraceItemTable().execute(message)
+
+    def test_equals_false_excludes_absent_attribute(self, setup_bool_logs_in_db: Any) -> None:
+        response = self._query_hascodetag(False)
+        (values,) = response.column_values
+        returned = sorted(v.val_int for v in values.results)
+        assert returned == list(range(10))
+
+    def test_equals_true_returns_only_true(self, setup_bool_logs_in_db: Any) -> None:
+        response = self._query_hascodetag(True)
+        (values,) = response.column_values
+        returned = sorted(v.val_int for v in values.results)
+        assert returned == list(range(10, 20))
+
+    def test_select_absent_attribute_is_null_not_false(self, setup_bool_logs_in_db: Any) -> None:
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.Type.TYPE_INT, name="int_tag"),
+                    label="int_tag",
+                ),
+                Column(
+                    key=AttributeKey(type=AttributeKey.Type.TYPE_BOOLEAN, name="hasCodeTag"),
+                    label="hasCodeTag",
+                ),
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(key=AttributeKey(type=AttributeKey.TYPE_INT, name="int_tag"))
+                )
+            ],
+            limit=50,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        by_label = {v.attribute_name: v for v in response.column_values}
+        int_values = [v.val_int for v in by_label["int_tag"].results]
+        by_int = dict(zip(int_values, by_label["hasCodeTag"].results, strict=True))
+
+        for i in range(10):
+            assert by_int[i].WhichOneof("value") == "val_bool" and by_int[i].val_bool is False
+        for i in range(10, 20):
+            assert by_int[i].WhichOneof("value") == "val_bool" and by_int[i].val_bool is True
+        for i in range(20, 30):
+            assert by_int[i].is_null is True and by_int[i].WhichOneof("value") != "val_bool"

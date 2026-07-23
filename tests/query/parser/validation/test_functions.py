@@ -4,9 +4,9 @@ from collections.abc import Mapping, Sequence
 from unittest.mock import MagicMock
 
 import pytest
+from sentry_options.testing import override_options
 
 import snuba.query.parser.validation.functions as functions
-from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -89,7 +89,7 @@ def test_functions(
     entity_return.return_value = entity_validators
     events_entity = get_entity(EntityKey.EVENTS)
     cached = events_entity.get_function_call_validators
-    events_entity.get_function_call_validators = entity_return
+    events_entity.get_function_call_validators = entity_return  # type: ignore[method-assign]
     data_source = QueryEntity(EntityKey.EVENTS, ColumnSet([]))
 
     expression = FunctionCall(
@@ -102,15 +102,15 @@ def test_functions(
             FunctionCallsValidator().validate(expression, data_source)
 
     # TODO: This should use fixture to do this
-    events_entity.get_function_call_validators = cached
+    events_entity.get_function_call_validators = cached  # type: ignore[method-assign]
     functions.default_validators = fn_cached
 
 
 @pytest.mark.parametrize("expression, should_raise", test_expressions[:1])
 @pytest.mark.redis_db
+@override_options("snuba", {"function-validator.enabled": True})
 def test_invalid_function_name(expression: FunctionCall, should_raise: bool) -> None:
     data_source = QueryEntity(EntityKey.EVENTS, ColumnSet([]))
-    state.set_config("function-validator.enabled", True)
 
     with pytest.raises(InvalidExpressionException):
         FunctionCallsValidator().validate(expression, data_source)
@@ -118,9 +118,9 @@ def test_invalid_function_name(expression: FunctionCall, should_raise: bool) -> 
 
 @pytest.mark.parametrize("expression, should_raise", test_expressions)
 @pytest.mark.redis_db
+@override_options("snuba", {"function-validator.enabled": True})
 def test_allowed_functions_validator(expression: FunctionCall, should_raise: bool) -> None:
     data_source = QueryEntity(EntityKey.EVENTS, ColumnSet([]))
-    state.set_config("function-validator.enabled", True)
 
     if should_raise:
         with pytest.raises(InvalidFunctionCall):

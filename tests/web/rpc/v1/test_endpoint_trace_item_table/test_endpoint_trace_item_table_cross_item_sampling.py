@@ -2,6 +2,7 @@ from datetime import datetime
 from unittest.mock import patch
 
 import pytest
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
     TraceItemTableRequest,
@@ -13,7 +14,6 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
-from snuba import state
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
 from snuba.web.rpc import RPCEndpoint
@@ -64,9 +64,6 @@ class TestTraceItemTableCrossItemSampling(BaseApiTest):
         - The inner query uses downsampled storage (TIER_8)
         - The outer query uses full storage (EAP_ITEMS)
         """
-        # Enable the feature flag
-        state.set_config("cross_item_queries_no_sample_outer", 1)
-
         trace_ids, all_items, start_time, end_time = create_cross_item_test_data()
         write_cross_item_data_to_storage(all_items)
 
@@ -83,7 +80,12 @@ class TestTraceItemTableCrossItemSampling(BaseApiTest):
 
         storage_keys, storage_tracker = track_storage_selections()
 
-        with storage_tracker, patch.object(RPCEndpoint, "_RPCEndpoint__before_execute"):
+        # Enable the feature flag for the duration of the query execution.
+        with (
+            override_options("snuba", {"cross_item_queries_no_sample_outer": True}),
+            storage_tracker,
+            patch.object(RPCEndpoint, "_RPCEndpoint__before_execute"),
+        ):
             message = create_trace_item_table_request(
                 start_time=start_time,
                 end_time=end_time,
@@ -120,9 +122,6 @@ class TestTraceItemTableCrossItemSampling(BaseApiTest):
         Test that when cross_item_queries_no_sample_outer is disabled (default):
         - Both queries use the same storage tier
         """
-        # Explicitly disable the feature flag
-        state.set_config("cross_item_queries_no_sample_outer", 0)
-
         trace_ids, all_items, start_time, end_time = create_cross_item_test_data()
         write_cross_item_data_to_storage(all_items)
 
@@ -135,7 +134,12 @@ class TestTraceItemTableCrossItemSampling(BaseApiTest):
 
         storage_keys, storage_tracker = track_storage_selections()
 
-        with storage_tracker, patch.object(RPCEndpoint, "_RPCEndpoint__before_execute"):
+        # Explicitly disable the feature flag for the duration of the query execution.
+        with (
+            override_options("snuba", {"cross_item_queries_no_sample_outer": False}),
+            storage_tracker,
+            patch.object(RPCEndpoint, "_RPCEndpoint__before_execute"),
+        ):
             message = create_trace_item_table_request(
                 start_time=start_time,
                 end_time=end_time,

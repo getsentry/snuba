@@ -25,9 +25,9 @@ use crate::metrics::global_tags::set_global_tag;
 use crate::processors::{self, get_cogs_label};
 use crate::strategies::accountant::RecordCogs;
 
-use crate::strategies::blq_router::BLQRouter;
-use crate::strategies::clickhouse::writer_v2::{ClickhouseWriterStep, InsertFormat};
+use crate::strategies::clickhouse::writer_v2::{JsonWriterStep, RowBinaryWriterStep};
 use crate::strategies::commit_log::ProduceCommitLog;
+use crate::strategies::dlq_by_age::DlqByAge;
 use crate::strategies::healthcheck::HealthCheck as SnubaHealthCheck;
 use crate::strategies::join_timeout::SetJoinTimeout;
 use crate::strategies::processor::{
@@ -63,8 +63,10 @@ pub struct ConsumerStrategyFactoryV2 {
     pub join_timeout_ms: Option<u64>,
     pub health_check: String,
     pub use_row_binary: bool,
-    pub blq_producer_config: Option<KafkaConfig>,
-    pub blq_topic: Option<Topic>,
+    // Whether this consumer has a DLQ topic configured. The DLQ-by-age strategy
+    // is only inserted when true, since without a DLQ policy an InvalidMessage
+    // is logged and silently dropped by arroyo (losing data).
+    pub dlq_configured: bool,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
@@ -88,8 +90,9 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
     }
 
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
-        let (insert_format, process_fn_override, insert_columns): (
-            InsertFormat,
+        // RowBinary storages: the processor swap (JSON → RowBinary sibling) and
+        // the column list the RowBinary writer needs, both used below.
+        let (process_fn_override, insert_columns): (
             Option<crate::processors::ProcessingFunction>,
             Option<&'static [&'static str]>,
         ) = if self.use_row_binary {
@@ -109,9 +112,9 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                 ),
                 name => panic!("RowBinary not supported for processor: {name}"),
             };
-            (InsertFormat::RowBinary, Some(func), Some(columns))
+            (Some(func), Some(columns))
         } else {
-            (InsertFormat::JsonEachRow, None, None)
+            (None, None)
         };
 
         // Commit offsets
@@ -151,17 +154,31 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
         );
 
-        let next_step = ClickhouseWriterStep::new(
-            next_step,
-            self.storage_config.clickhouse_cluster.clone(),
-            self.storage_config.clickhouse_table_name.clone(),
-            false,
-            &self.clickhouse_concurrency,
-            self.storage_config.name.clone(),
-            insert_format,
-            insert_columns,
-        );
+        // Pick the writer by wire format; RowBinary also needs the column list.
+        let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<RowData>>> =
+            if self.use_row_binary {
+                let columns = insert_columns.expect("use_row_binary resolves a column list above");
+                Box::new(RowBinaryWriterStep::new(
+                    next_step,
+                    self.storage_config.clickhouse_cluster.clone(),
+                    self.storage_config.clickhouse_table_name.clone(),
+                    false,
+                    &self.clickhouse_concurrency,
+                    self.storage_config.name.clone(),
+                    columns,
+                ))
+            } else {
+                Box::new(JsonWriterStep::new(
+                    next_step,
+                    self.storage_config.clickhouse_cluster.clone(),
+                    self.storage_config.clickhouse_table_name.clone(),
+                    false,
+                    &self.clickhouse_concurrency,
+                    self.storage_config.name.clone(),
+                ))
+            };
 
+        #[allow(clippy::result_large_err)]
         let accumulator = Arc::new(
             |batch: BytesInsertBatch<RowData>, small_batch: Message<BytesInsertBatch<RowData>>| {
                 Ok(batch.merge(small_batch.into_payload()))
@@ -291,24 +308,15 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
         );
 
-        let next_step: Box<dyn ProcessingStrategy<KafkaPayload>> =
-            if let (Some(blq_producer_config), Some(blq_topic)) =
-                (&self.blq_producer_config, self.blq_topic)
-            {
-                tracing::info!(
-                    "Routing stale messages to the backlog-queue topic {:?} \
-                     (thresholds configured via sentry-options)",
-                    self.blq_topic,
-                );
-                Box::new(BLQRouter::new(
-                    next_step,
-                    blq_producer_config.clone(),
-                    blq_topic,
-                ))
-            } else {
-                tracing::info!("Not using a backlog-queue",);
-                Box::new(next_step)
-            };
+        // Shed a configurable proportion of too-old messages to the DLQ so a
+        // backlogged consumer can catch up to fresh data. Only wired when a DLQ
+        // is configured (see DlqByAge docs / the `dlq_configured` field);
+        // disabled per-storage by default via sentry-options.
+        let next_step: Box<dyn ProcessingStrategy<KafkaPayload>> = if self.dlq_configured {
+            Box::new(DlqByAge::new(next_step, self.storage_config.name.clone()))
+        } else {
+            Box::new(next_step)
+        };
 
         if let Some(path) = &self.health_check_file {
             {

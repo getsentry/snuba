@@ -3,6 +3,7 @@ import pytest
 from snuba.query.allocation_policies import QueryResultOrError
 from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
 from snuba.web import QueryResult
+from tests.configs.component_config import set_component_config
 
 _RESULT_SUCCESS = QueryResultOrError(
     QueryResult(
@@ -23,7 +24,7 @@ class TestPerReferrerPolicy:
             }
         )
 
-        policy.set_config_value("default_concurrent_request_per_referrer", 2)
+        set_component_config(policy, "default_concurrent_request_per_referrer", 2)
         policy.get_quota_allowance(tenant_ids={"referrer": "statistical_detectors"}, query_id="1")
 
         policy.get_quota_allowance(tenant_ids={"referrer": "statistical_detectors"}, query_id="2")
@@ -57,9 +58,9 @@ class TestPerReferrerPolicy:
             }
         )
 
-        policy.set_config_value("default_concurrent_request_per_referrer", 4)
-        policy.set_config_value("requests_throttle_divider", 2)
-        policy.set_config_value("threads_throttle_divider", 2)
+        set_component_config(policy, "default_concurrent_request_per_referrer", 4)
+        set_component_config(policy, "requests_throttle_divider", 2)
+        set_component_config(policy, "threads_throttle_divider", 2)
         first_quota_allowance = policy.get_quota_allowance(
             tenant_ids={"referrer": "statistical_detectors"}, query_id="1"
         )
@@ -84,7 +85,8 @@ class TestPerReferrerPolicy:
                 "required_tenant_types": ["referrer"],
             }
         )
-        policy.set_config_value(
+        set_component_config(
+            policy,
             "referrer_max_threads_override",
             2,
             {"referrer": "statistical_detectors"},
@@ -100,7 +102,8 @@ class TestPerReferrerPolicy:
             query_id="1",
             result_or_error=_RESULT_SUCCESS,
         )
-        policy.set_config_value(
+        set_component_config(
+            policy,
             "referrer_concurrent_override",
             0,
             {"referrer": "statistical_detectors"},

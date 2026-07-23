@@ -76,14 +76,12 @@ class InteractToolAction(ToolAction):
 TOOL_RESOURCES = {
     "snql-to-sql": ToolResource("snql-to-sql"),
     "tracing": ToolResource("tracing"),
-    "cardinality-analyzer": ToolResource("cardinality-analyzer"),
     "production-queries": ToolResource("production-queries"),
     "system-queries": ToolResource("system-queries"),
     "sudo-system-queries": ToolResource("system-queries"),
     "clickhouse-migrations": ToolResource("clickhouse-migrations"),
     "snuba-explain": ToolResource("snuba-explain"),
     "querylog": ToolResource("querylog"),
-    "database-clusters": ToolResource("database-clusters"),
     "rpc-endpoints": ToolResource("rpc-endpoints"),
     "all": ToolResource("all"),
 }
@@ -168,15 +166,10 @@ ROLES = {
                     TOOL_RESOURCES["clickhouse-migrations"],
                     TOOL_RESOURCES["snuba-explain"],
                     TOOL_RESOURCES["querylog"],
-                    TOOL_RESOURCES["database-clusters"],
                     TOOL_RESOURCES["rpc-endpoints"],
                 ]
             )
         },
-    ),
-    "CardinalityAnalyzer": Role(
-        name="cardinality-analyzer",
-        actions={InteractToolAction([TOOL_RESOURCES["cardinality-analyzer"]])},
     ),
     "AllMigrationsExecutor": Role(
         name="AllMigrationsExecutor",

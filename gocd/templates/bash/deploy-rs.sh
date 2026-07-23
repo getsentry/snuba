@@ -2,10 +2,7 @@
 
 eval $(regions-project-env-vars --region="${SENTRY_REGION}")
 
-IMAGE_TAG="${GO_REVISION_SNUBA_REPO}"
-if [ "${SENTRY_REGION}" = "s4s2" ] || [ "${SENTRY_REGION}" = "de" ]; then
-  IMAGE_TAG="${GO_REVISION_SNUBA_REPO}-distroless"
-fi
+IMAGE_TAG="${GO_REVISION_SNUBA_REPO}-distroless"
 
 /devinfra/scripts/get-cluster-credentials \
 && k8s-deploy \
@@ -18,6 +15,7 @@ fi
   --container-name="generic-metrics-counters-consumer" \
   --container-name="generic-metrics-distributions-consumer" \
   --container-name="generic-metrics-sets-consumer" \
+  --container-name="llm-proxy-cost-consumer" \
   --container-name="loadbalancer-outcomes-consumer" \
   --container-name="metrics-consumer" \
   --container-name="outcomes-billing-consumer" \

@@ -25,7 +25,6 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     VirtualColumnContext,
 )
 
-from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
@@ -37,16 +36,15 @@ from snuba.protos.common import (
     TYPED_ARRAY_MAP_COLUMNS,
     type_array_typed_columns_select_expressions,
 )
-from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond, if_cond, in_cond, literal, literals_array, or_cond
+from snuba.query.dsl import and_cond, if_cond, literal, literals_array, or_cond
 from snuba.query.dsl import column as snuba_column
 from snuba.query.expressions import (
     Column as ColumnExpr,
 )
 from snuba.query.expressions import (
-    DangerousRawSQL,
     Expression,
     FunctionCall,
     SubscriptableReference,
@@ -60,15 +58,15 @@ from snuba.request import Request as SnubaRequest
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
-    add_existence_check_to_subscriptable_references,
+    add_existence_check_to_map_attribute_reads,
     attribute_key_to_expression,
     base_conditions_and,
     get_field_existence_expression,
+    semver_sort_key,
     timestamp_in_range_condition,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
     typed_array_select_subcolumn_name,
-    use_array_map_columns,
     use_sampling_factor,
     valid_sampling_factor_conditions,
 )
@@ -89,7 +87,9 @@ from snuba.web.rpc.v1.resolvers.common.aggregation import (
     get_count_column,
 )
 from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
+    apply_cross_item_outer_query_settings,
     get_trace_ids_sql_for_cross_item_query,
+    trace_id_in_subquery_condition,
 )
 from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 
@@ -246,7 +246,6 @@ def aggregation_filter_to_expression(
                     agg_filter.comparison_filter.conditional_aggregation,
                     attribute_key_to_expression,
                     use_sampling_factor(request_meta),
-                    use_array_map_columns(request_meta),
                 ),
                 agg_filter.comparison_filter.val,
             )
@@ -285,6 +284,10 @@ def _groupby_order_by_expression(attr_key: AttributeKey) -> Expression:
     while keeping the cast valid as a function of the grouped column. TYPE_ARRAY keys are
     rejected upstream (see _validate_select_and_groupby / _validate_order_by), so they
     never reach here.
+
+    The SORT_SEMVER (semver) ordering is applied by `_convert_order_by`, not here, so
+    GROUP BY keeps the raw expression while ORDER BY can wrap it in the semver key.
+    ClickHouse accepts ORDER BY on a function of a GROUP BY key, so the two can differ.
     """
     if attr_key.name == "sentry.timestamp":
         return snuba_column("timestamp")
@@ -340,10 +343,18 @@ def _convert_order_by(
             # covers `sentry.timestamp` ordering anywhere else.) GROUP BY uses the same
             # expression so an aggregation query that orders by `sentry.timestamp` stays
             # valid.
+            expression = _groupby_order_by_expression(x.column.key)
+            # SORT_SEMVER: client-driven semver ordering, string columns only
+            # (numeric/timestamp columns already sort numerically).
+            if (
+                x.sort == TraceItemTableRequest.OrderBy.SORT_SEMVER
+                and x.column.key.type == AttributeKey.TYPE_STRING
+            ):
+                expression = semver_sort_key(expression)
             res.append(
                 OrderBy(
                     direction=direction,
-                    expression=_groupby_order_by_expression(x.column.key),
+                    expression=expression,
                 )
             )
         elif x.column.HasField("conditional_aggregation"):
@@ -354,7 +365,6 @@ def _convert_order_by(
                         x.column.conditional_aggregation,
                         attribute_key_to_expression,
                         use_sampling_factor(request_meta),
-                        use_array_map_columns(request_meta),
                     ),
                 )
             )
@@ -366,6 +376,49 @@ def _convert_order_by(
                 )
             )
     return res
+
+
+def _strip_aliases(expression: Expression) -> Expression:
+    """Removes aliases from an expression tree (all nodes) so it is safe to use in a
+    ``LIMIT BY`` clause, where ``expr AS alias`` is only valid when the alias is declared
+    in the SELECT. Called after all query transforms since e.g. virtual-column rewriting
+    re-applies aliases."""
+    return expression.transform(lambda e: replace(e, alias=None))
+
+
+def _convert_limit_by(
+    limit_by: TraceItemTableRequest.LimitBy,
+    selected_columns: Sequence[SelectedExpression],
+) -> LimitBy | None:
+    """Translates the request's ``limit_by`` into a ``LimitBy`` (ClickHouse ``LIMIT n BY``).
+
+    Each entry is either a column key, converted to its attribute expression, or the
+    label of a selected column, resolved to the expression selected under that label.
+    Returns ``None`` when no ``limit_by`` is set. Aggregations and array attributes are
+    rejected upstream in ``_validate_limit_by``.
+
+    The alias is stripped from each expression so the clause emits the bare expression
+    (``LIMIT n BY expr``); keeping the alias would emit ``expr AS alias``, which is
+    invalid in a LIMIT BY when the alias is not already declared in the SELECT.
+    """
+    if not limit_by.columns:
+        return None
+    label_to_expression = {c.name: c.expression for c in selected_columns}
+    columns: list[Expression] = []
+    for limit_by_column in limit_by.columns:
+        which = limit_by_column.WhichOneof("column")
+        if which == "key":
+            columns.append(_strip_aliases(attribute_key_to_expression(limit_by_column.key)))
+        elif which == "label":
+            expression = label_to_expression.get(limit_by_column.label)
+            if expression is None:
+                raise BadSnubaRPCRequestException(
+                    f"limit_by column '{limit_by_column.label}' is not a selected column"
+                )
+            columns.append(_strip_aliases(expression))
+        else:
+            raise BadSnubaRPCRequestException("limit_by column must specify a key or a label")
+    return LimitBy(limit=limit_by.limit, columns=columns)
 
 
 def _get_reliability_context_columns(
@@ -432,7 +485,6 @@ def _get_reliability_context_columns(
         confidence_interval_column = get_confidence_interval_column(
             column.conditional_aggregation,
             attribute_key_to_expression,
-            use_array_map_columns=use_array_map_columns(request_meta),
         )
         if confidence_interval_column is not None:
             context_columns.append(
@@ -445,7 +497,6 @@ def _get_reliability_context_columns(
         average_sample_rate_column = get_average_sample_rate_column(
             column.conditional_aggregation,
             attribute_key_to_expression,
-            use_array_map_columns=use_array_map_columns(request_meta),
         )
         context_columns.append(
             SelectedExpression(
@@ -457,7 +508,6 @@ def _get_reliability_context_columns(
         count_column = get_count_column(
             column.conditional_aggregation,
             attribute_key_to_expression,
-            use_array_map_columns=use_array_map_columns(request_meta),
         )
         context_columns.append(SelectedExpression(name=count_column.alias, expression=count_column))
         return context_columns
@@ -538,7 +588,6 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
             column.conditional_aggregation,
             attribute_key_to_expression,
             use_sampling_factor(request_meta),
-            use_array_map_columns(request_meta),
         )
         match column.conditional_aggregation.WhichOneof("default_value"):
             case None:
@@ -578,19 +627,17 @@ def _column_to_expression(column: Column, request_meta: RequestMeta) -> Expressi
     )
 
 
-def _reads_typed_array_columns(column: Column, request_meta: RequestMeta) -> bool:
-    """True if ``column`` is a TYPE_ARRAY attribute read from the typed array map columns
-    (past the cutoff) rather than the legacy ``attributes_array`` JSON column."""
-    return (
-        column.HasField("key")
-        and column.key.type == AttributeKey.Type.TYPE_ARRAY
-        and use_array_map_columns(request_meta)
-    )
+def _reads_typed_array_columns(column: Column) -> bool:
+    """True if ``column`` is the deprecated untyped ``TYPE_ARRAY``, which has no element
+    type and so is read as four typed sub-columns merged back in ``convert_results``.
+    Element-typed array keys (TYPE_ARRAY_STRING/INT/DOUBLE/BOOL) read their single column
+    directly through ``attribute_key_to_expression``, like scalars."""
+    return column.HasField("key") and column.key.type == AttributeKey.Type.TYPE_ARRAY
 
 
 def _array_subcolumn_selected_expressions(column: Column) -> list[SelectedExpression]:
-    """Four native typed sub-columns for a TYPE_ARRAY column, named ``"<label>.<col>"`` so
-    ``convert_results`` merges them back into ``column.label``."""
+    """Four native typed sub-columns for a deprecated untyped ``TYPE_ARRAY`` column, named
+    ``"<label>.<col>"`` so ``convert_results`` merges them back into ``column.label``."""
     return [
         SelectedExpression(
             name=typed_array_select_subcolumn_name(column.label, typed_col),
@@ -629,8 +676,9 @@ def build_query(
         # The key_col expression alias may differ from the column label. That is okay
         # the attribute key name is used in the groupby, the column label is just the name of
         # the returned attribute value
-        if _reads_typed_array_columns(column, request.meta):
-            # Read as four typed sub-columns, merged back by convert_results.
+        if _reads_typed_array_columns(column):
+            # Deprecated untyped TYPE_ARRAY: read as four typed sub-columns, merged back
+            # by convert_results (element-typed array keys read one column, like scalars).
             selected_columns.extend(_array_subcolumn_selected_expressions(column))
         else:
             selected_columns.append(
@@ -649,9 +697,7 @@ def build_query(
         trace_ids_sql, _ = get_trace_ids_sql_for_cross_item_query(
             request, request.meta, list(request.trace_filters), sampling_tier, timer
         )
-        additional_conditions.append(
-            in_cond(snuba_column("trace_id"), DangerousRawSQL(None, f"({trace_ids_sql})"))
-        )
+        additional_conditions.append(trace_id_in_subquery_condition(trace_ids_sql))
     if time_window is not None:
         additional_conditions.append(
             timestamp_in_range_condition(
@@ -674,7 +720,6 @@ def build_query(
             trace_item_filters_to_expression(
                 request.filter,
                 attribute_key_to_expression,
-                use_array_map_columns=use_array_map_columns(request.meta),
             ),
             valid_sampling_factor_conditions(),
             *item_type_conds,
@@ -685,6 +730,7 @@ def build_query(
             request.order_by,
             request.meta,
         ),
+        limitby=_convert_limit_by(request.limit_by, selected_columns),
         groupby=groupby,
         # Only support offset page tokens for now
         offset=_get_offset_from_page_token(request.page_token),
@@ -700,7 +746,18 @@ def build_query(
     )
     treeify_or_and_conditions(res)
     _apply_virtual_columns(res, request.virtual_column_contexts)
-    add_existence_check_to_subscriptable_references(res)
+    add_existence_check_to_map_attribute_reads(res)
+    # The transforms above (notably virtual-column rewriting) can re-apply aliases to
+    # limit_by expressions; a LIMIT BY must stay alias-free unless the alias is declared
+    # in the SELECT, so strip any aliases they reintroduced.
+    limitby = res.get_limitby()
+    if limitby is not None:
+        res.set_limitby(
+            LimitBy(
+                limit=limitby.limit,
+                columns=[_strip_aliases(column) for column in limitby.columns],
+            )
+        )
     return res
 
 
@@ -788,13 +845,9 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
             )
         try:
             routing_decision.strategy.merge_clickhouse_settings(routing_decision, query_settings)
-            # When trace_filters are present and the feature is enabled, don't use sampling on the outer query
-            # The inner query (getting trace IDs) will use sampling
-            cross_item_queries_no_sample_outer = state.get_int_config(
-                "cross_item_queries_no_sample_outer", 1
+            apply_cross_item_outer_query_settings(
+                query_settings, bool(in_msg.trace_filters), routing_decision.tier
             )
-            if not (in_msg.trace_filters and cross_item_queries_no_sample_outer):
-                query_settings.set_sampling_tier(routing_decision.tier)
         except Exception as e:
             sentry_sdk.capture_message(f"Error merging clickhouse settings: {e}")
         original_time_window = TimeWindow(
@@ -810,12 +863,17 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
         )
         routing_decision.routing_context.query_result = res
         # we added 1 to the limit to know if there are more rows to fetch
-        # so we need to remove the last row
+        # so we need to remove the last row. When limit_by is set the top-level
+        # limit is unset (0), so fall back to the same default cap build_query
+        # applied, otherwise the sentinel +1 row would leak into the response.
+        effective_limit = in_msg.limit
+        if effective_limit <= 0 and in_msg.HasField("limit_by"):
+            effective_limit = _DEFAULT_ROW_LIMIT
         total_rows = len(res.result.get("data", []))
         data = iter(res.result.get("data", []))
 
-        if in_msg.limit > 0 and total_rows > in_msg.limit:
-            data = islice(data, in_msg.limit)
+        if effective_limit > 0 and total_rows > effective_limit:
+            data = islice(data, effective_limit)
         column_values = convert_results(in_msg, data)
         response_meta = extract_response_meta(
             in_msg.meta.request_id,

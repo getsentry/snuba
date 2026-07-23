@@ -244,6 +244,16 @@ class ContainsAggregateVisitor(ProtoVisitor):
         if column_wrapper.underlying_proto.HasField("conditional_aggregation"):
             self.contains_aggregate = True
 
+    def visit_AggregationComparisonFilterWrapper(
+        self, aggregation_comparison_filter_wrapper: AggregationComparisonFilterWrapper
+    ) -> None:
+        # An aggregation_filter becomes a HAVING clause, so an aggregate here makes the
+        # query aggregating even when no aggregate appears in the SELECT columns.
+        if aggregation_comparison_filter_wrapper.underlying_proto.HasField(
+            "conditional_aggregation"
+        ):
+            self.contains_aggregate = True
+
 
 class GetExpressionAggregationsVisitor(ProtoVisitor):
     """

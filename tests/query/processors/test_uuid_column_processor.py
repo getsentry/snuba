@@ -13,7 +13,13 @@ from snuba.query.conditions import (
     binary_condition,
 )
 from snuba.query.data_source.simple import Table
-from snuba.query.expressions import Column, Expression, FunctionCall, Literal
+from snuba.query.expressions import (
+    Column,
+    DangerousRawSQL,
+    Expression,
+    FunctionCall,
+    Literal,
+)
 from snuba.query.processors.physical.type_converters import ColumnTypeError
 from snuba.query.processors.physical.uuid_column_processor import UUIDColumnProcessor
 from snuba.query.query_settings import HTTPQuerySettings
@@ -336,3 +342,63 @@ def test_invalid_uuid(unprocessed: Expression) -> None:
         UUIDColumnProcessor({"column1", "column2"}).process_query(
             unprocessed_query, HTTPQuerySettings()
         )
+
+
+def _query_with_condition(condition: Expression) -> Query:
+    return Query(
+        Table("transactions", ColumnSet([]), storage_key=StorageKey("dontmatter")),
+        selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
+        condition=condition,
+    )
+
+
+def test_raw_sql_in_subquery_predicate_keeps_column_bare() -> None:
+    """A ``column IN (<subquery>)`` predicate emitted as ``DangerousRawSQL`` must survive
+    ``UUIDColumnProcessor`` untouched, so the bare column can use its bloom-filter skip
+    index.
+
+    The processor only keeps a UUID column bare for ``=``/``IN`` comparisons against
+    literal values. An ``in(column, <subquery>)`` term (the RHS is not a literal
+    array/tuple) is not recognized, so the processor falls back to wrapping the column in
+    ``replaceAll(toString(column), '-', '')`` -- which defeats the index. RPC cross-item
+    queries therefore build the whole predicate as raw SQL (see
+    ``cross_item_queries.trace_id_in_subquery_condition``).
+    """
+    subquery = "SELECT column1 FROM transactions"
+
+    # Fixed form: the entire predicate is raw SQL, so column1 stays bare and untouched.
+    raw_predicate = DangerousRawSQL(None, f"column1 IN ({subquery})")
+    raw_query = _query_with_condition(raw_predicate)
+    UUIDColumnProcessor({"column1", "column2"}).process_query(raw_query, HTTPQuerySettings())
+    assert raw_query.get_condition() == raw_predicate
+
+    # Regression guard: the previous form wraps column1, hiding it from the skip index.
+    wrapped_query = _query_with_condition(
+        binary_condition(
+            ConditionFunctions.IN,
+            Column(None, None, "column1"),
+            DangerousRawSQL(None, f"({subquery})"),
+        )
+    )
+    UUIDColumnProcessor({"column1", "column2"}).process_query(wrapped_query, HTTPQuerySettings())
+    wrapped_condition = wrapped_query.get_condition()
+    assert wrapped_condition is not None
+    formatted = wrapped_condition.accept(ClickhouseExpressionFormatter())
+    assert "replaceAll(toString(column1)" in formatted
+
+
+def test_raw_sql_select_column_is_not_rewritten() -> None:
+    """A ``DangerousRawSQL`` projection (used by the cross-item trace-id subquery so it
+    emits a real ``UUID`` instead of ``replaceAll(toString(trace_id), '-', '')``) must be
+    left untouched by ``UUIDColumnProcessor``."""
+    query = Query(
+        Table("transactions", ColumnSet([]), storage_key=StorageKey("dontmatter")),
+        selected_columns=[
+            SelectedExpression("column1", DangerousRawSQL(None, "column1")),
+        ],
+        condition=None,
+    )
+    UUIDColumnProcessor({"column1", "column2"}).process_query(query, HTTPQuerySettings())
+    assert query.get_selected_columns() == [
+        SelectedExpression("column1", DangerousRawSQL(None, "column1"))
+    ]

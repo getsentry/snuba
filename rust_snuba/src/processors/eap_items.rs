@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use sentry_arroyo::counter;
+use sentry_options::options;
 use sentry_protos::snuba::v1::any_value::Value;
 use sentry_protos::snuba::v1::{ArrayValue, TraceItem, TraceItemType};
 
@@ -18,7 +19,6 @@ use crate::processors::utils::{
     enforce_retention, get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs,
     record_invalid_timestamp_metric, SilencedDLQMessage,
 };
-use crate::runtime_config::get_str_config;
 use crate::strategies::clickhouse::rowbinary;
 use crate::types::CogsData;
 use crate::types::{item_type_name, InsertBatch, ItemTypeMetrics, KafkaMessageMetadata};
@@ -153,10 +153,10 @@ fn get_dlq_grace_period_min(storage_name: &str) -> Option<i64> {
     if storage_name.is_empty() {
         return None;
     }
-    get_str_config(&format!("{DLQ_GRACE_PERIOD_MIN_KEY}:{storage_name}"))
+    options("snuba")
         .ok()
-        .flatten()
-        .and_then(|s| s.parse::<i64>().ok())
+        .and_then(|o| o.get(DLQ_GRACE_PERIOD_MIN_KEY).ok())
+        .and_then(|v| v.get(storage_name).and_then(|n| n.as_i64()))
         .filter(|&n| n >= 0)
 }
 
@@ -415,14 +415,6 @@ macro_rules! seq_attrs {
     }
 }
 
-#[derive(Debug, Serialize, PartialEq)]
-enum EAPValue {
-    String(String),
-    Bool(bool),
-    Int(i64),
-    Double(f64),
-}
-
 seq_attrs! {
 #[derive(Debug, Default, Serialize)]
 struct AttributeMap {
@@ -432,13 +424,12 @@ struct AttributeMap {
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     attributes_int: HashMap<String, i64>,
 
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    attributes_array: HashMap<String, Vec<EAPValue>>,
-
     // Typed map columns for array-valued attributes (migration 0059). Arrays are
-    // double-written here, alongside the legacy `attributes_array` JSON column, on
-    // both the JSON and RowBinary paths so the read path can filter/aggregate on
-    // values and enumerate keys via `mapKeys(...)` like the scalar attribute maps.
+    // written to these `Map(String, Array(T))` columns on both the JSON and
+    // RowBinary paths so the read path can filter/aggregate on values and
+    // enumerate keys via `mapKeys(...)` like the scalar attribute maps. A
+    // homogeneous array (the common case) lands in a single typed column; mixed
+    // arrays are split across columns by element type.
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     attributes_array_string: HashMap<String, Vec<String>>,
 
@@ -498,40 +489,33 @@ impl AttributeMap {
 
     pub fn insert_array(&mut self, k: String, v: ArrayValue) {
         // Each element is appended to its typed `Map(String, Array(T))` column as
-        // it is read, and also to the legacy `attributes_array` JSON column. A
-        // homogeneous array (the common case) lands in a single typed column;
-        // mixed arrays are split across columns by element type.
-        let mut values: Vec<EAPValue> = Vec::default();
-
+        // it is read. A homogeneous array (the common case) lands in a single
+        // typed column; mixed arrays are split across columns by element type.
         for value in v.values {
             match value.value {
                 Some(Value::StringValue(string)) => {
                     self.attributes_array_string
                         .entry(k.clone())
                         .or_default()
-                        .push(string.clone());
-                    values.push(EAPValue::String(string));
+                        .push(string);
                 }
                 Some(Value::DoubleValue(double)) => {
                     self.attributes_array_float
                         .entry(k.clone())
                         .or_default()
                         .push(double);
-                    values.push(EAPValue::Double(double));
                 }
                 Some(Value::IntValue(int)) => {
                     self.attributes_array_int
                         .entry(k.clone())
                         .or_default()
                         .push(int);
-                    values.push(EAPValue::Int(int));
                 }
                 Some(Value::BoolValue(bool)) => {
                     self.attributes_array_bool
                         .entry(k.clone())
                         .or_default()
                         .push(bool);
-                    values.push(EAPValue::Bool(bool));
                 }
                 Some(Value::BytesValue(_)) => (),
                 Some(Value::KvlistValue(_)) => (),
@@ -539,8 +523,6 @@ impl AttributeMap {
                 None => (),
             }
         }
-
-        self.attributes_array.insert(k, values);
     }
 }
 
@@ -575,8 +557,6 @@ pub struct EAPItemRow {
     attributes_string_~N: Vec<(String, String)>,
     attributes_float_~N: Vec<(String, f64)>,
     )*
-
-    attributes_array: String,
 
     attributes_array_string: Vec<(String, Vec<String>)>,
     attributes_array_int: Vec<(String, Vec<i64>)>,
@@ -624,7 +604,6 @@ impl EAPItemRow {
         concat!("attributes_string_", stringify!(N)),
         concat!("attributes_float_", stringify!(N)),
         )*
-        "attributes_array",
         "attributes_array_string",
         "attributes_array_int",
         "attributes_array_float",
@@ -638,8 +617,6 @@ impl TryFrom<EAPItem> for EAPItemRow {
 
     #[allow(clippy::needless_return)]
     fn try_from(item: EAPItem) -> Result<Self, Self::Error> {
-        let attributes_array = serde_json::to_string(&item.attributes.attributes_array)?;
-
         // `return` is needed because `seq_attrs!` expands with a trailing semicolon,
         // which makes the struct expression a statement rather than a tail expression.
         seq_attrs! {
@@ -665,7 +642,6 @@ impl TryFrom<EAPItem> for EAPItemRow {
                 attributes_string_~N: item.attributes.attributes_string_~N.into_iter().collect(),
                 attributes_float_~N: item.attributes.attributes_float_~N.into_iter().collect(),
                 )*
-                attributes_array,
                 attributes_array_string: item
                     .attributes
                     .attributes_array_string
@@ -689,11 +665,19 @@ mod tests {
     use std::time::SystemTime;
 
     use prost_types::Timestamp;
+    use sentry_options::testing::override_options;
     use sentry_protos::snuba::v1::any_value::Value;
     use sentry_protos::snuba::v1::{AnyValue, ArrayValue, TraceItemType};
     use serde::Deserialize;
+    use serde_json::json;
+    use std::sync::Once;
 
     use super::*;
+
+    static INIT: Once = Once::new();
+    fn init_options() {
+        INIT.call_once(|| crate::init_sentry_options().unwrap());
+    }
 
     fn generate_trace_item(item_id: Uuid) -> TraceItem {
         TraceItem {
@@ -904,10 +888,10 @@ mod tests {
             eap_item
                 .unwrap()
                 .attributes
-                .attributes_array
+                .attributes_array_int
                 .get("arrays")
                 .unwrap()[0],
-            EAPValue::Int(1234567890)
+            1234567890
         );
     }
 
@@ -1099,9 +1083,8 @@ mod tests {
     fn test_column_names_match_struct_layout() {
         let names = EAPItemRow::COLUMN_NAMES;
         // 14 scalars (incl. session_id + ai_conversation_id) + indexed_name +
-        // attributes_bool + attributes_int + 80 buckets + attributes_array +
-        // 4 typed array maps
-        assert_eq!(names.len(), 102);
+        // attributes_bool + attributes_int + 80 buckets + 4 typed array maps
+        assert_eq!(names.len(), 101);
         assert_eq!(names[0], "organization_id");
         assert_eq!(names[4], "trace_id");
         assert_eq!(names[5], "session_id");
@@ -1119,12 +1102,11 @@ mod tests {
         assert_eq!(names[19], "attributes_string_1");
         assert_eq!(names[95], "attributes_string_39");
         assert_eq!(names[96], "attributes_float_39");
-        assert_eq!(names[97], "attributes_array");
-        // Typed array map columns follow the JSON column.
-        assert_eq!(names[98], "attributes_array_string");
-        assert_eq!(names[99], "attributes_array_int");
-        assert_eq!(names[100], "attributes_array_float");
-        assert_eq!(names[101], "attributes_array_bool");
+        // Typed array map columns follow the attribute buckets.
+        assert_eq!(names[97], "attributes_array_string");
+        assert_eq!(names[98], "attributes_array_int");
+        assert_eq!(names[99], "attributes_array_float");
+        assert_eq!(names[100], "attributes_array_bool");
     }
 
     #[test]
@@ -1154,8 +1136,36 @@ mod tests {
 
     #[test]
     fn test_get_dlq_grace_period_min_unset_storage_returns_none() {
-        // Empty storage_name short-circuits to None without hitting Python.
+        // Empty storage_name short-circuits to None without reading options.
         assert_eq!(get_dlq_grace_period_min(""), None);
+    }
+
+    #[test]
+    fn test_get_dlq_grace_period_min_reads_dict_option() {
+        init_options();
+        {
+            let _guard = override_options(&[(
+                "snuba",
+                "eap_items_dlq_grace_period_min",
+                json!({ "eap_items_dlq_test": 45 }),
+            )])
+            .unwrap();
+            // Reads the per-storage entry out of the dict option (the nested get
+            // on the serde_json::Value returned by options(...).get(...)).
+            assert_eq!(get_dlq_grace_period_min("eap_items_dlq_test"), Some(45));
+            // A storage with no entry in the dict falls back to None.
+            assert_eq!(get_dlq_grace_period_min("eap_items_dlq_other"), None);
+        }
+        {
+            // Negative values are rejected.
+            let _guard = override_options(&[(
+                "snuba",
+                "eap_items_dlq_grace_period_min",
+                json!({ "eap_items_dlq_test": -1 }),
+            )])
+            .unwrap();
+            assert_eq!(get_dlq_grace_period_min("eap_items_dlq_test"), None);
+        }
     }
 
     #[test]
@@ -1416,11 +1426,7 @@ mod tests {
             .iter()
             .any(|(k, v)| k == "my_bool" && *v));
 
-        // Array attributes are serialized as JSON string in the attributes_array column
-        assert!(row.attributes_array.contains("my_array"));
-        assert!(row.attributes_array.contains("elem"));
-
-        // ...and double-written to the typed `attributes_array_string` column.
+        // Array attributes are written to the typed `attributes_array_string` column.
         assert!(row
             .attributes_array_string
             .iter()
@@ -1428,7 +1434,7 @@ mod tests {
     }
 
     #[test]
-    fn test_array_typed_columns_double_write() {
+    fn test_array_typed_columns() {
         let item_id = Uuid::new_v4();
         let mut trace_item = generate_trace_item(item_id);
 
@@ -1504,10 +1510,6 @@ mod tests {
         // Typed maps are not cross-populated across element types.
         assert_eq!(attrs.attributes_array_int.get("strs"), None);
         assert_eq!(attrs.attributes_array_bool.get("ints"), None);
-
-        // The legacy JSON column is still populated (double write).
-        assert!(attrs.attributes_array.contains_key("strs"));
-        assert!(attrs.attributes_array.contains_key("ints"));
     }
 
     #[test]
@@ -1858,19 +1860,7 @@ mod tests {
             "float_attr mismatch in JSON"
         );
 
-        // Compare attributes_array
-        // In JSON: serialized as {"array_attr": [{"String": "a"}, {"Int": 1}]}
-        // In RowBinary: serialized as a JSON string in the attributes_array field
-        if let Some(json_arrays) = json_row.get("attributes_array") {
-            let rb_arrays: serde_json::Value =
-                serde_json::from_str(&rb_row.attributes_array).unwrap_or_default();
-            assert_eq!(
-                json_arrays, &rb_arrays,
-                "attributes_array mismatch between JSON and RowBinary"
-            );
-        }
-
-        // Compare the typed array columns. Both paths double-write them, and
+        // Compare the typed array columns. Both paths write them, and
         // array_attr = [String "a", Int 1] splits across the string and int maps.
         let json_arr_string: HashMap<String, Vec<String>> = json_row
             .get("attributes_array_string")
@@ -1992,7 +1982,6 @@ mod tests {
             .header("X-ClickHouse-Database", &database)
             .query(&[
                 ("query", insert_query.as_str()),
-                ("input_format_binary_read_json_as_string", "1"),
                 ("insert_deduplicate", "0"),
             ])
             .body(batch.rows.encoded_rows.clone())

@@ -7,6 +7,7 @@ from unittest.mock import patch
 import pytest
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.endpoint_get_trace_pb2 import (
     GetTraceRequest,
     GetTraceResponse,
@@ -28,10 +29,10 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, TraceItem
 
-from snuba import state
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.settings import ENABLE_TRACE_PAGINATION_DEFAULT
+from snuba.state.sentry_options import get_option
 from snuba.web.rpc.v1.endpoint_get_trace import (
     APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
     EndpointGetTrace,
@@ -228,7 +229,7 @@ class TestGetTrace(BaseApiTest):
             ],
             page_token=(
                 PageToken(end_pagination=True)
-                if state.get_int_config("enable_trace_pagination", ENABLE_TRACE_PAGINATION_DEFAULT)
+                if get_option("enable_trace_pagination", bool(ENABLE_TRACE_PAGINATION_DEFAULT))
                 else None
             ),
         )
@@ -323,7 +324,7 @@ class TestGetTrace(BaseApiTest):
             ],
             page_token=(
                 PageToken(end_pagination=True)
-                if state.get_int_config("enable_trace_pagination", ENABLE_TRACE_PAGINATION_DEFAULT)
+                if get_option("enable_trace_pagination", bool(ENABLE_TRACE_PAGINATION_DEFAULT))
                 else None
             ),
         )
@@ -360,23 +361,13 @@ class TestGetTrace(BaseApiTest):
             items=[item],
         )
 
-        state.set_config(
-            APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
-            1.0,
-        )
+        with override_options("snuba", {APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY: 1.0}):
+            query = _build_query(message, item)
+            assert query.get_final()
 
-        query = _build_query(message, item)
-
-        assert query.get_final()
-
-        state.set_config(
-            APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
-            0.0,
-        )
-
-        query = _build_query(message, item)
-
-        assert not query.get_final()
+        with override_options("snuba", {APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY: 0.0}):
+            query = _build_query(message, item)
+            assert not query.get_final()
 
     def test_with_logs(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
@@ -445,7 +436,7 @@ class TestGetTrace(BaseApiTest):
             ],
             page_token=(
                 PageToken(end_pagination=True)
-                if state.get_int_config("enable_trace_pagination", ENABLE_TRACE_PAGINATION_DEFAULT)
+                if get_option("enable_trace_pagination", bool(ENABLE_TRACE_PAGINATION_DEFAULT))
                 else None
             ),
         )
@@ -597,7 +588,6 @@ def test_process_results_merges_typed_array_subcolumns(
     type is preserved (no JSON, no tuple)."""
     processed_results = _process_results(
         [{"id": "abc123", "timestamp": 1778785776.0, **subcolumns}],
-        read_typed_arrays=True,
         array_attribute_names=["my_tags"],
     )
     item = processed_results.items[0]
@@ -621,11 +611,26 @@ def test_process_results_skips_empty_typed_array_subcolumns() -> None:
                 "my_tags.attributes_array_bool": [],
             }
         ],
-        read_typed_arrays=True,
         array_attribute_names=["my_tags"],
     )
     item = processed_results.items[0]
     assert all(attr.key.name != "my_tags" for attr in item.attributes)
+
+
+def test_process_results_element_typed_array_empty_is_omitted() -> None:
+    """A per-attribute element-typed array read as an empty native list (absent or
+    stored-empty) is omitted, not surfaced as an empty val_array; a populated one is
+    returned."""
+    processed_results = _process_results(
+        [
+            {"id": "empty", "timestamp": 1778785776.0, "my_tags": []},
+            {"id": "full", "timestamp": 1778785776.0, "my_tags": ["a", "b"]},
+        ],
+    )
+    empty_item, full_item = processed_results.items
+    assert all(attr.key.name != "my_tags" for attr in empty_item.attributes)
+    my_tags = next(attr for attr in full_item.attributes if attr.key.name == "my_tags")
+    assert [e.val_str for e in my_tags.value.val_array.values] == ["a", "b"]
 
 
 def test_process_results_keeps_empty_string_attribute() -> None:
@@ -650,7 +655,6 @@ def test_process_results_keeps_empty_string_attribute() -> None:
 class TestGetTracePagination(BaseApiTest):
     def test_pagination_with_user_limit(self, setup_teardown: Any) -> None:
         """Test that pagination respects user-provided limit"""
-        state.set_config("enable_trace_pagination", 1)
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
         three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
         mylimit = 10
@@ -712,7 +716,6 @@ class TestGetTracePagination(BaseApiTest):
         with patch(
             "snuba.web.rpc.v1.endpoint_get_trace.ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS", configmax
         ):
-            state.set_config("enable_trace_pagination", 1)
             """
             import snuba.web.rpc.v1.endpoint_get_trace as endpoint_get_trace
 

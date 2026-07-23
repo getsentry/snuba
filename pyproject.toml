@@ -1,6 +1,6 @@
 [project]
 name = "snuba"
-version = "26.7.0.dev0"
+version = "26.8.0.dev0"
 dependencies = [
     "blinker>=1.9",
     "click>=8.1.7",
@@ -11,6 +11,7 @@ dependencies = [
     "devservices>=1.2.1",
     "fastjsonschema>=2.16.2",
     "flask>=3.1.0",
+    "flask-compress>=1.15",
     "freezegun>=1.5.5",
     "google-api-core>=2.19.1",
     "google-api-python-client>=2.88.0",
@@ -30,9 +31,10 @@ dependencies = [
     "pyyaml>=6.0",
     "redis>=4.5.4",
     "sentry-arroyo>=2.39.2",
-    "sentry-conventions>=0.13.0",
-    "sentry-kafka-schemas>=2.1.36",
-    "sentry-protos>=0.35.0",
+    "sentry-conventions>=0.17.0",
+    "sentry-kafka-schemas>=2.1.39",
+    "sentry-options>=1.2.1",
+    "sentry-protos>=0.47.0",
     "sentry-redis-tools>=0.5.1",
     "sentry-relay>=0.9.25",
     "sentry-sdk>=2.35.0",
@@ -55,8 +57,17 @@ rust_snuba = { workspace = true }
 members = ["rust_snuba"]
 
 [tool.uv]
-environments = ["sys_platform == 'darwin'", "sys_platform == 'linux'"]
-required-environments = ["sys_platform == 'darwin'", "sys_platform == 'linux'"]
+# snuba is CPython-only (prod Docker image + .python-version), so constrain the
+# resolver to CPython. This skips PyPy-only deps that aren't on our internal mirror
+# (e.g. flask-compress requires brotlicffi under PyPy, which we don't stock).
+environments = [
+    "sys_platform == 'darwin' and platform_python_implementation == 'CPython'",
+    "sys_platform == 'linux' and platform_python_implementation == 'CPython'",
+]
+required-environments = [
+    "sys_platform == 'darwin' and platform_python_implementation == 'CPython'",
+    "sys_platform == 'linux' and platform_python_implementation == 'CPython'",
+]
 
 
 [[tool.uv.index]]

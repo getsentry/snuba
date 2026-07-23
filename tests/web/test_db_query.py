@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping, MutableMapping
 from typing import Any
 from unittest import mock
 
 import pytest
+from sentry_options.testing import override_options
 
-from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.query import format_query
@@ -39,6 +40,7 @@ from snuba.web.db_query import (
     _apply_allocation_policies_quota,
     _get_query_settings_from_config,
     db_query,
+    execute_query,
 )
 
 test_data = [
@@ -194,8 +196,40 @@ test_data = [
 ]
 
 
+def _query_config_to_overrides(query_config: Mapping[str, Any]) -> dict[str, Any]:
+    """Translate the legacy flat runtime-config keys used by these test cases
+    into the sentry-options dict shape _get_query_settings_from_config now reads.
+    Values are stringified to match the string-typed option dicts; the
+    per-prefix/per-referrer second level is JSON-encoded."""
+    base: dict[str, str] = {}
+    async_settings: dict[str, str] = {}
+    by_prefix: dict[str, dict[str, str]] = {}
+    by_referrer: dict[str, dict[str, str]] = {}
+    for key, value in query_config.items():
+        sval = str(value)
+        if key.startswith("query_settings/"):
+            base[key.split("/", 1)[1]] = sval
+        elif key.startswith("async_query_settings/"):
+            async_settings[key.split("/", 1)[1]] = sval
+        elif key.startswith("referrer/"):
+            _, ref, _, setting = key.split("/", 3)
+            by_referrer.setdefault(ref, {})[setting] = sval
+        else:
+            prefix, _, setting = key.split("/", 2)
+            by_prefix.setdefault(prefix, {})[setting] = sval
+    overrides: dict[str, Any] = {}
+    if base:
+        overrides["query_settings"] = base
+    if async_settings:
+        overrides["async_query_settings"] = async_settings
+    if by_prefix:
+        overrides["query_settings_by_prefix"] = {p: json.dumps(s) for p, s in by_prefix.items()}
+    if by_referrer:
+        overrides["query_settings_by_referrer"] = {r: json.dumps(s) for r, s in by_referrer.items()}
+    return overrides
+
+
 @pytest.mark.parametrize("query_config,expected,query_prefix,async_override,referrer", test_data)
-@pytest.mark.redis_db
 def test_query_settings_from_config(
     query_config: Mapping[str, Any],
     expected: MutableMapping[str, Any],
@@ -203,11 +237,11 @@ def test_query_settings_from_config(
     async_override: bool,
     referrer: str,
 ) -> None:
-    for k, v in query_config.items():
-        state.set_config(k, v)
-    assert (
-        _get_query_settings_from_config(query_prefix, async_override, referrer=referrer) == expected
-    )
+    with override_options("snuba", _query_config_to_overrides(query_config)):
+        result = _get_query_settings_from_config(query_prefix, async_override, referrer=referrer)
+    # Values come back as strings (the option dicts are string-typed); ClickHouse
+    # HTTP settings are strings on the wire regardless.
+    assert result == {k: str(v) for k, v in expected.items()}
 
 
 def _build_test_query(
@@ -242,6 +276,192 @@ def _build_test_query(
             parent_api=None,
         ),
     )
+
+
+def test_empty_result_meta_synthesized_from_query() -> None:
+    # The connect (HTTP) reader returns empty meta for a zero-row result; execute_query
+    # synthesizes the columns from the query (no second scan) so callers that validate
+    # columns (Sentry, else "got set()") still see them. No-op on the native driver.
+    from snuba.reader import Reader, Result
+
+    query, _storage, _attribution_info = _build_test_query("count(distinct(project_id))")
+
+    class _EmptyMetaReader(Reader):
+        def __init__(self) -> None:
+            super().__init__(cache_partition_id=None, query_settings_prefix=None)
+
+        def execute(self, *args: Any, **kwargs: Any) -> Result:
+            # Mirror what the connect pool returns for an empty result set.
+            return {"data": [], "meta": [], "profile": None, "trace_output": ""}
+
+    stats: dict[str, Any] = {}
+    result = execute_query(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        formatted_query=format_query(query),
+        reader=_EmptyMetaReader(),
+        timer=Timer("test"),
+        stats=stats,
+        clickhouse_query_settings={},
+        robust=False,
+    )
+
+    assert result["data"] == []
+    # The single selected column ("some_alias") is recovered from the query.
+    assert result["meta"] == [{"name": "some_alias", "type": ""}]
+    assert stats["result_cols"] == 1
+
+
+def test_empty_result_meta_falls_back_to_expression_alias() -> None:
+    # SelectedExpression.name is nullable; the result column name is the expression's
+    # alias. When name is None, synthesis falls back to the alias, not dropping the column.
+    from snuba.query import SelectedExpression
+    from snuba.query.expressions import Column as ColumnExpr
+    from snuba.reader import Reader, Result
+
+    query, _storage, _attribution_info = _build_test_query("count(distinct(project_id))")
+    query.set_ast_selected_columns(
+        [
+            SelectedExpression(
+                name=None,
+                expression=ColumnExpr(
+                    alias="aliased_col", table_name=None, column_name="project_id"
+                ),
+            )
+        ]
+    )
+
+    class _EmptyMetaReader(Reader):
+        def __init__(self) -> None:
+            super().__init__(cache_partition_id=None, query_settings_prefix=None)
+
+        def execute(self, *args: Any, **kwargs: Any) -> Result:
+            return {"data": [], "meta": [], "profile": None, "trace_output": ""}
+
+    stats: dict[str, Any] = {}
+    result = execute_query(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        formatted_query=format_query(query),
+        reader=_EmptyMetaReader(),
+        timer=Timer("test"),
+        stats=stats,
+        clickhouse_query_settings={},
+        robust=False,
+    )
+
+    # Recovered from the expression alias even though name is None.
+    assert result["meta"] == [{"name": "aliased_col", "type": ""}]
+    assert stats["result_cols"] == 1
+
+
+def test_empty_result_meta_uses_column_name_for_bare_column() -> None:
+    # A bare column with no name/alias is echoed under its own column name
+    # (SELECT project_id -> "project_id"), so synthesis uses that, not a placeholder.
+    from snuba.query import SelectedExpression
+    from snuba.query.expressions import Column as ColumnExpr
+    from snuba.reader import Reader, Result
+
+    query, _storage, _attribution_info = _build_test_query("count(distinct(project_id))")
+    query.set_ast_selected_columns(
+        [
+            SelectedExpression(
+                name=None,
+                expression=ColumnExpr(alias=None, table_name=None, column_name="project_id"),
+            )
+        ]
+    )
+
+    class _EmptyMetaReader(Reader):
+        def __init__(self) -> None:
+            super().__init__(cache_partition_id=None, query_settings_prefix=None)
+
+        def execute(self, *args: Any, **kwargs: Any) -> Result:
+            return {"data": [], "meta": [], "profile": None, "trace_output": ""}
+
+    result = execute_query(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        formatted_query=format_query(query),
+        reader=_EmptyMetaReader(),
+        timer=Timer("test"),
+        stats={},
+        clickhouse_query_settings={},
+        robust=False,
+    )
+    assert result["meta"] == [{"name": "project_id", "type": ""}]
+
+
+def test_empty_result_meta_placeholder_for_unnamed_non_column() -> None:
+    # A non-column expression with no name/alias still emits a column (never dropped),
+    # using the `_invalid_alias_{index}` placeholder Query.get_columns() uses.
+    from snuba.query import SelectedExpression
+    from snuba.query.expressions import FunctionCall
+    from snuba.reader import Reader, Result
+
+    query, _storage, _attribution_info = _build_test_query("count(distinct(project_id))")
+    query.set_ast_selected_columns(
+        [SelectedExpression(name=None, expression=FunctionCall(None, "now", ()))]
+    )
+
+    class _EmptyMetaReader(Reader):
+        def __init__(self) -> None:
+            super().__init__(cache_partition_id=None, query_settings_prefix=None)
+
+        def execute(self, *args: Any, **kwargs: Any) -> Result:
+            return {"data": [], "meta": [], "profile": None, "trace_output": ""}
+
+    result = execute_query(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        formatted_query=format_query(query),
+        reader=_EmptyMetaReader(),
+        timer=Timer("test"),
+        stats={},
+        clickhouse_query_settings={},
+        robust=False,
+    )
+    assert result["meta"] == [{"name": "_invalid_alias_0", "type": ""}]
+
+
+def test_empty_result_meta_prefers_alias_over_name() -> None:
+    # ClickHouse names the column by the SQL alias, not SelectedExpression.name. When
+    # they differ (MQL: name "time" vs alias "events.time"), synthesis uses the alias.
+    from snuba.query import SelectedExpression
+    from snuba.query.expressions import Column as ColumnExpr
+    from snuba.reader import Reader, Result
+
+    query, _storage, _attribution_info = _build_test_query("count(distinct(project_id))")
+    query.set_ast_selected_columns(
+        [
+            SelectedExpression(
+                name="time",
+                expression=ColumnExpr(alias="events.time", table_name="events", column_name="time"),
+            )
+        ]
+    )
+
+    class _EmptyMetaReader(Reader):
+        def __init__(self) -> None:
+            super().__init__(cache_partition_id=None, query_settings_prefix=None)
+
+        def execute(self, *args: Any, **kwargs: Any) -> Result:
+            return {"data": [], "meta": [], "profile": None, "trace_output": ""}
+
+    stats: dict[str, Any] = {}
+    result = execute_query(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        formatted_query=format_query(query),
+        reader=_EmptyMetaReader(),
+        timer=Timer("test"),
+        stats=stats,
+        clickhouse_query_settings={},
+        robust=False,
+    )
+
+    # Alias wins over the differing name -- matches what ClickHouse would return.
+    assert result["meta"] == [{"name": "events.time", "type": ""}]
 
 
 @pytest.mark.events_db
@@ -402,8 +622,6 @@ def test_bypass_cache_referrer() -> None:
     query_metadata_list: list[ClickhouseQueryMetadata] = []
     stats: dict[str, Any] = {"clickhouse_table": "errors_local"}
 
-    state.set_config("enable_bypass_cache_referrers", 1)
-
     attribution_info = AttributionInfo(
         app_id=AppID(key="key"),
         tenant_ids={
@@ -419,6 +637,7 @@ def test_bypass_cache_referrer() -> None:
     # cache should not be used for "some_bypass_cache_referrer" so if the
     # bypass does not work, the test will try to use a bad cache
     with (
+        override_options("snuba", {"enable_bypass_cache_referrers": True}),
         mock.patch("snuba.settings.BYPASS_CACHE_REFERRERS", ["some_bypass_cache_referrer"]),
         mock.patch("snuba.web.db_query._get_cache_partition"),
     ):
@@ -472,8 +691,10 @@ def test_db_query_fail() -> None:
 
     assert len(query_metadata_list) == 1
     assert query_metadata_list[0].status.value == "error"
-    assert excinfo.value.extra["stats"] == stats
-    assert excinfo.value.extra["sql"] is not None
+    err = excinfo.value
+    assert isinstance(err, QueryException)
+    assert err.extra["stats"] == stats
+    assert err.extra["sql"] is not None
 
 
 class MockThrottleAllocationPolicy(AllocationPolicy):
@@ -606,6 +827,12 @@ def test_apply_allocation_policies_quota_sets_throttle_policy() -> None:
             },
         }
     }
+    throttled_metrics = get_recorded_metric_calls("increment", "db_query.throttled_query")
+    assert throttled_metrics
+    assert throttled_metrics[0].tags == {
+        "storage_key": "doesntmatter",
+        "policy": "ThrottleAllocationPolicy1",
+    }
 
 
 def test_db_query_with_rejecting_allocation_policy() -> None:
@@ -714,19 +941,27 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
             },
         }
         # extra data contains policy failure information
+        err = excinfo.value
+        assert isinstance(err, QueryException)
         assert (
-            excinfo.value.extra["stats"]["quota_allowance"]["details"]["RejectAllocationPolicy"][
+            err.extra["stats"]["quota_allowance"]["details"]["RejectAllocationPolicy"][
                 "explanation"
             ]["reason"]
             == "policy rejects all queries"
         )
         assert query_metadata_list[0].request_status.status.value == "rate-limited"
-        cause = excinfo.value.__cause__
+        cause = err.__cause__
         assert isinstance(cause, AllocationPolicyViolations)
         assert "RejectAllocationPolicy" in cause.violations
         assert update_called, (
             "update_quota_balance should have been called even though the query was rejected but was not"
         )
+        rejected_metrics = get_recorded_metric_calls("increment", "db_query.rejected_query")
+        assert rejected_metrics
+        assert rejected_metrics[0].tags == {
+            "storage_key": "doesntmatter",
+            "policy": "RejectAllocationPolicy",
+        }
 
 
 @pytest.mark.events_db
@@ -922,7 +1157,9 @@ def test_allocation_policy_updates_quota() -> None:
     with pytest.raises(QueryException) as e:
         _run_query()
 
-    assert e.value.extra["stats"]["quota_allowance"] == {
+    err = e.value
+    assert isinstance(err, QueryException)
+    assert err.extra["stats"]["quota_allowance"] == {
         "summary": {
             "threads_used": 0,
             "is_successful": False,
@@ -958,7 +1195,7 @@ def test_allocation_policy_updates_quota() -> None:
             },
         },
     }
-    cause = e.value.__cause__
+    cause = err.__cause__
     assert isinstance(cause, AllocationPolicyViolations)
     assert "CountQueryPolicy" in cause.violations
     assert "CountQueryPolicyDuplicate" not in cause.violations
@@ -1010,9 +1247,9 @@ def test_clickhouse_settings_applied_to_query() -> None:
 
 @pytest.mark.events_db
 @pytest.mark.redis_db
+@override_options("snuba", {"ignore_consistent_queries_sample_rate": {"events": 1.0}})
 def test_db_query_ignore_consistent() -> None:
     query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
-    state.set_config("events_ignore_consistent_queries_sample_rate", 1)
 
     query_metadata_list: list[ClickhouseQueryMetadata] = []
     stats: dict[str, Any] = {}

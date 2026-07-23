@@ -12,20 +12,589 @@
       "default": false,
       "description": "true to emit a tracing log each time a duplicate trace item is detected in the accepted-outcomes aggregator"
     },
-    "consumer.blq_enabled": {
+    "consumer.dlq_by_age_sample_rate_by_storage": {
+      "type": "object",
+      "additionalProperties": { "type": "number" },
+      "default": {},
+      "description": "Dict mapping storage name to the fraction of messages older than consumer.dlq_by_age_threshold_seconds (by Kafka broker timestamp) to route to the DLQ, so a backlogged consumer can catch up to fresh data. 0.0 means route none (disabled); 1.0 means route every too-old message; 0.25 means route ~25% of too-old messages and forward the rest. Storages with no entry default to 0.0 (disabled)."
+    },
+    "consumer.dlq_by_age_threshold_seconds": {
+      "type": "integer",
+      "default": 600,
+      "description": "Age threshold in seconds for consumer.dlq_by_age_sample_rate_by_storage. Messages whose Kafka broker timestamp is older than this are candidates for being routed to the DLQ."
+    },
+    "eap_items_drop_invalid_timestamps": {
       "type": "boolean",
       "default": false,
-      "description": "enable backlog queue in snuba consumers"
+      "description": "When true, the eap-items consumer skips messages whose event timestamp is more than one week in the future or more than thirty days in the past."
     },
-    "consumer.blq_stale_threshold_seconds": {
-      "type": "integer",
-      "default": 1800,
-      "description": "BLQ stale threshold in seconds. Messages older than this are routed to the backlog queue."
+    "experimental_healthcheck": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the consumer healthcheck strategy treats commit requests (progress) as healthy and touches the healthcheck file accordingly."
     },
-    "consumer.blq_static_friction_seconds": {
+    "generic_metrics_use_case_killswitch": {
+      "type": "string",
+      "default": "",
+      "description": "Substring-matched list of generic-metrics use case ids to drop in the consumer; a message is skipped when its use_case_id appears in this string."
+    },
+    "clickhouse_load_balancing": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Dict mapping storage name to the ClickHouse load_balancing mode (e.g. \"in_order\", \"first_or_random\") used by that storage's consumer writer. Storages with no entry default to \"in_order\". Migrated from per-storage runtime config clickhouse_load_balancing:<storage>."
+    },
+    "clickhouse_load_balancing_first_offset": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Dict mapping storage name to the first_offset used with the first_or_random load_balancing mode. Storages with no entry have no first_offset. Migrated from per-storage runtime config clickhouse_load_balancing_first_offset:<storage>."
+    },
+    "clickhouse_max_insert_block_size": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "default": {},
+      "description": "Dict mapping storage name to a max_insert_block_size override for that storage's INSERTs. Values below ClickHouse's default (1048449) are ignored. Storages with no entry use the server default. Migrated from per-storage runtime config clickhouse_max_insert_block_size:<storage>."
+    },
+    "eap_items_dlq_grace_period_min": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "default": {},
+      "description": "Dict mapping storage name to a grace period in minutes; eap-items messages from before the current partition older than this are routed to the DLQ. Storages with no entry have no grace-period dropping. Migrated from per-storage runtime config eap_items_dlq_grace_period_min:<storage>."
+    },
+    "quantized_rebalance_consumer_group_delay_secs": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "default": {},
+      "description": "Dict mapping consumer group name to a quantized rebalance delay in seconds. Consumer groups with no entry use no delay. Migrated from per-group runtime config quantized_rebalance_consumer_group_delay_secs__<consumer_group>."
+    },
+    "enable_any_attribute_filter": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable translating any_attribute_filter trace-item filters into ClickHouse predicates. When false, an any_attribute_filter is treated as always-true (no filtering applied)."
+    },
+    "aggregation_deprecation_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable the deprecation check that rejects deprecated aggregation expressions in EAP time-series requests. When false, the check is skipped."
+    },
+    "default_tier": {
       "type": "integer",
-      "default": 120,
-      "description": "BLQ hysteresis in seconds. Once routing stale, keep routing messages at least (stale_threshold - static_friction) old. Set to 0 to disable friction."
+      "default": 1,
+      "description": "Default storage routing tier for EAP queries when no other tier is selected. Maps to a Tier enum value (e.g. 1, 8, 64, 512)."
+    },
+    "export_trace_items_default_page_size": {
+      "type": "integer",
+      "default": 10000,
+      "description": "Default page size used by the ExportTraceItems RPC when the request does not specify one."
+    },
+    "rpc_logging_sample_rate": {
+      "type": "number",
+      "default": 0.0,
+      "description": "Sample rate (0.0-1.0) for logging RPC requests. 0 disables RPC request logging."
+    },
+    "ExecutionStage.disable_max_query_size_check_for_clusters": {
+      "type": "string",
+      "default": "",
+      "description": "Comma-separated list of ClickHouse cluster names for which the max-query-size check is disabled. Empty means the check applies to all clusters."
+    },
+    "lw_deletes_split_by_partition": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "default": {},
+      "description": "Dict mapping storage name to a flag; a non-zero value enables splitting that storage's lightweight deletes by partition. Storages with no entry are not split. Migrated from per-storage runtime config lw_deletes_split_by_partition_<storage>."
+    },
+    "lw_deletes_killswitch": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Dict mapping storage name to a string of project ids; a lightweight delete is dropped when its project id appears in that storage's entry. Storages with no entry are not killswitched. Migrated from per-storage runtime config lw_deletes_killswitch_<storage>."
+    },
+    "validate_schema_sample_rate": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number"
+      },
+      "default": {},
+      "description": "Dict mapping snuba logical topic name to a [0,1] sample rate for JSON-schema validation of consumed messages. Topics with no entry default to 1.0 (always validate). Migrated from per-topic runtime config validate_schema_<topic>."
+    },
+    "snql_disabled_dataset": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "boolean"
+      },
+      "default": {},
+      "description": "Dict mapping dataset name to a flag; when true, SnQL queries against that dataset are rejected. Datasets with no entry default to membership in settings.SNQL_DISABLED_DATASETS. Migrated from per-dataset runtime config snql_disabled_dataset__<dataset>."
+    },
+    "enable_trace_pagination": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable pagination (page tokens / limit) in the EndpointGetTrace RPC. When false, the endpoint returns the full trace without pagination."
+    },
+    "cross_item_queries_no_sample_outer": {
+      "type": "boolean",
+      "default": true,
+      "description": "For cross-item EAP queries with trace filters, skip sampling on the outer query (the inner trace-id query still samples). When false, the outer query samples at the routing tier."
+    },
+    "use_sampling_factor_timestamp_seconds": {
+      "type": "integer",
+      "default": 1744131600,
+      "description": "Unix timestamp (seconds) cutoff controlling when the sampling-factor codepath applies for EAP queries."
+    },
+    "EndpointGetTrace.apply_final_rollout_percentage": {
+      "type": "number",
+      "default": 0.0,
+      "description": "Rollout percentage (0.0-1.0) for applying the FINAL keyword in EndpointGetTrace queries."
+    },
+    "rpc_logging_flush_logs": {
+      "type": "number",
+      "default": 0.0,
+      "description": "When greater than 0, flush buffered RPC logs. 0 disables flushing."
+    },
+    "ExecutionStage.max_query_size_bytes": {
+      "type": "integer",
+      "default": 131072,
+      "description": "Maximum allowed serialized ClickHouse query size in bytes before the execution stage rejects it."
+    },
+    "eap.reject_string_timestamp_filters": {
+      "type": "boolean",
+      "default": true,
+      "description": "When true, reject EAP time-series filters comparing sentry.timestamp to a TYPE_STRING value."
+    },
+    "trace_ids_cross_item_query_limit": {
+      "type": "integer",
+      "default": 50000000,
+      "description": "Maximum number of trace ids fetched by the cross-item-query trace-id lookup when no explicit limit is supplied."
+    },
+    "enable_eap_readonly_table": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, non-consistent EAP-items queries are routed to the read-only table replica."
+    },
+    "use_cross_item_path_for_single_item_queries": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, GetTraces uses the cross-item query path for single-item queries as well as cross-item queries."
+    },
+    "use_local_join_for_cross_item_queries": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, cross-item EAP queries set distributed_product_mode='local' so the trace_id IN (subquery) join runs locally on each shard (eap_items is sharded by trace_id) rather than as a distributed join. The bare-trace_id predicate that makes the bloom-filter index usable is always applied; this flag only controls the local join."
+    },
+    "storage_routing.enable_get_cluster_loadinfo": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the storage routing strategy fetches ClickHouse cluster load info to inform routing decisions."
+    },
+    "enable_long_term_retention_downsampling": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, EAP queries older than 31 days (for non-full-retention item types) are routed to the most-downsampled tier."
+    },
+    "storage_routing_config_override": {
+      "type": "string",
+      "default": "{}",
+      "description": "JSON object mapping organization_id to a per-org StorageRoutingConfig override."
+    },
+    "default_storage_routing_config": {
+      "type": "string",
+      "default": "{}",
+      "description": "JSON-encoded default StorageRoutingConfig used when no per-org override applies."
+    },
+    "configurable_component_overrides": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number"
+      },
+      "default": {},
+      "description": "Override values for ConfigurableComponent (allocation policy and storage-routing strategy) configs, keyed by the fully-qualified config key '{resource}.{ClassName}.{config}' (parameterized configs append '|{param}:{value}|...', params sorted). Values are numbers cast to each config's declared numeric type (int/float) on read. All current ConfigurableComponent configs are numeric; a non-numeric config would require widening this type. Authoritative source for these configs; a key absent here falls back to the code default. Read-only at runtime and managed in sentry-options-automator. Migrated from the per-component runtime config of the same key."
+    },
+    "storage_routing_sampled_too_low_threshold": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "default": {},
+      "description": "Dict mapping a storage-routing strategy class name to its sampled-too-low threshold; the special key 'StorageRouting' sets the global default applied when a strategy has no entry. Strategies with neither entry use 1000. Migrated from per-strategy runtime config <ClassName>.sampled_too_low_threshold."
+    },
+    "storage_routing_time_budget_ms": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "default": {},
+      "description": "Dict mapping a storage-routing strategy class name to its query time budget in milliseconds; the special key 'StorageRouting' sets the global default applied when a strategy has no entry. Strategies with neither entry use 8000. Migrated from per-strategy runtime config <ClassName>.time_budget_ms."
+    },
+    "storage_routing_max_items_before_downsampling": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "default": {},
+      "description": "Dict mapping an outcomes-based routing strategy class name to the global max number of items before downsampling (the per-org override goes through configurable_component_overrides). Strategies with no entry use 1000000000. Migrated from per-strategy runtime config <ClassName>.max_items_before_downsampling."
+    },
+    "storage_routing_min_timerange_to_query_outcomes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "default": {},
+      "description": "Dict mapping an outcomes-based routing strategy class name to the minimum query time range in seconds for which outcomes are queried. Strategies with no entry use 14400 (4 hours). Migrated from per-strategy runtime config <ClassName>.min_timerange_to_query_outcomes."
+    },
+    "project_quota_time_percentage": {
+      "type": "number",
+      "default": 1.0,
+      "description": "Fraction of the counter window a project may spend on replacements before it is reported as exceeding the time limit."
+    },
+    "counter_window_size_minutes": {
+      "type": "integer",
+      "default": 10,
+      "description": "Size in minutes of the rolling window the replacement bucket timer uses to track per-project processing time."
+    },
+    "allows_skipping_single_project_replacements": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, a single project that exceeds the replacement time limit can be skipped (otherwise only multi-project groups are skipped)."
+    },
+    "mem_rate_limit_per_sec": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number"
+      },
+      "default": {},
+      "description": "Dict mapping in-process rate-limit bucket name to a maximum operations-per-second. Buckets with no entry are unlimited (rate limiter off). Migrated from per-bucket runtime config mem_rate_limit_per_sec_<bucket>."
+    },
+    "bypass_rate_limit": {
+      "type": "integer",
+      "default": 0,
+      "description": "When set to 1, all Redis-backed rate limits are bypassed (no limiting applied). Migrated from runtime config bypass_rate_limit."
+    },
+    "rate_history_sec": {
+      "type": "integer",
+      "default": 3600,
+      "description": "Number of seconds the rate limiter keeps per-request timestamps in its Redis sorted set. Migrated from runtime config rate_history_sec."
+    },
+    "rate_limit_shard_factor": {
+      "type": "integer",
+      "default": 1,
+      "description": "Number of shards each rate-limit Redis set is split into. Increasing it multiplies the number of Redis keys and reduces the size of each set. Migrated from runtime config rate_limit_shard_factor."
+    },
+    "mandatory_condition_enforce": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, queries missing mandatory condition columns raise an assertion; otherwise the omission is only logged."
+    },
+    "skip_final_subscriptions_projects": {
+      "type": "string",
+      "default": "[]",
+      "description": "Bracketed comma-separated list of project ids for which subscription queries skip the FINAL keyword."
+    },
+    "post_replacement_consistency_projects_denylist": {
+      "type": "string",
+      "default": "[]",
+      "description": "Bracketed comma-separated list of project ids that are forced to FINAL after a replacement."
+    },
+    "max_group_ids_exclude": {
+      "type": "integer",
+      "default": 256,
+      "description": "Maximum number of group ids excluded from a query before it falls back to FINAL instead of an exclusion set."
+    },
+    "skip_seen_offsets": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the replacer skips replacement messages whose offset has already been seen."
+    },
+    "consumer_groups_to_reset_offset_check": {
+      "type": "string",
+      "default": "[]",
+      "description": "Bracketed comma-separated list of consumer groups whose replacer offset-seen check should be reset."
+    },
+    "write_node_replacements_global": {
+      "type": "number",
+      "default": 1.0,
+      "description": "Probability [0,1] that a replacement is written to every storage node rather than only the distributed table."
+    },
+    "replacements_bypass_projects": {
+      "type": "string",
+      "default": "[]",
+      "description": "JSON array of project ids for which error replacements are skipped."
+    },
+    "replacements_expiry_window_minutes": {
+      "type": "integer",
+      "default": 5,
+      "description": "Window in minutes for which a project that recently received replacements is kept in the auto-replacements bypass set. Migrated from runtime config replacements_expiry_window_minutes."
+    },
+    "use.low.cardinality.processor": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable the low-cardinality query processor that hints ClickHouse to treat certain columns as low cardinality. When false, the processor is a no-op."
+    },
+    "enable_cache_partitioning": {
+      "type": "boolean",
+      "default": true,
+      "description": "When true, query results use the per-storage cache partition; when false they fall back to the default cache partition."
+    },
+    "randomize_query_id": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, assign a random ClickHouse query_id per execution instead of the deterministic content-based id."
+    },
+    "retry_duplicate_query_id": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, retry a query that ClickHouse rejected because another query with the same id is already running."
+    },
+    "enable_bypass_cache_referrers": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, referrers in settings.BYPASS_CACHE_REFERRERS skip the read-through query cache."
+    },
+    "debug_buffer_size_bytes": {
+      "type": "integer",
+      "default": 0,
+      "description": "Size in bytes of the prefix of an INSERT stream kept in memory so a failing row can be attached to the Sentry error. 0 disables the debug buffer."
+    },
+    "throw_on_uniq_select_and_having": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, raise MismatchedAggregationException if a uniq aggregation appears in HAVING but not SELECT instead of only logging it."
+    },
+    "function-validator.enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, invalid function names raise InvalidFunctionCall; otherwise only an invalid_funcs metric is emitted."
+    },
+    "enable_events_readonly_table": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, non-consistent errors/events queries are routed to the read-only table replica."
+    },
+    "snuba_api_cogs_probability": {
+      "type": "number",
+      "default": 0.0,
+      "description": "Sampling probability [0,1] for recording per-query COGS (cost-of-goods) accounting from the querylog."
+    },
+    "cache_expiry_sec": {
+      "type": "integer",
+      "default": 1,
+      "description": "TTL in seconds applied to query-result cache entries written to Redis."
+    },
+    "read_through_cache.short_circuit": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, bypass the read-through query cache entirely and call the underlying function directly (escape hatch for Redis issues)."
+    },
+    "lw_deletions_offpeak_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, lightweight deletes are only processed during the configured off-peak window."
+    },
+    "lw_deletions_offpeak_start": {
+      "type": "integer",
+      "default": 0,
+      "description": "UTC hour (0-24) at which the lightweight-deletes off-peak window starts."
+    },
+    "lw_deletions_offpeak_end": {
+      "type": "integer",
+      "default": 24,
+      "description": "UTC hour (0-24) at which the lightweight-deletes off-peak window ends."
+    },
+    "org_ids_delete_allowlist": {
+      "type": "string",
+      "default": "",
+      "description": "Comma-separated org ids allowed to issue EAP-items lightweight deletes; empty means all orgs are allowed."
+    },
+    "max_parts_mutating_for_delete": {
+      "type": "integer",
+      "default": 20,
+      "description": "Maximum number of parts that may be mutating before a lightweight delete is deferred."
+    },
+    "permit_delete_by_attribute": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, delete-by-attribute requests are permitted; otherwise they are ignored."
+    },
+    "MAX_ONGOING_MUTATIONS_FOR_DELETE": {
+      "type": "integer",
+      "default": 5,
+      "description": "Maximum number of ongoing mutations allowed before a delete is rejected."
+    },
+    "storage_deletes_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Master switch for storage delete (DELETE FROM) support; when false all delete requests are rejected."
+    },
+    "enforce_max_rows_to_delete": {
+      "type": "boolean",
+      "default": true,
+      "description": "When true, reject deletes whose estimated row count exceeds the storage's max_rows_to_delete."
+    },
+    "ignore_clickhouse_settings_override": {
+      "type": "string",
+      "default": "",
+      "description": "Comma/space-delimited ClickHouse setting names to strip from a query's settings override; empty keeps all."
+    },
+    "consistent_override": {
+      "type": "string",
+      "default": "",
+      "description": "Semicolon-delimited referrer=probability pairs; for a matching referrer, consistency is dropped with the given probability. Empty means no override."
+    },
+    "ignore_consistent_queries_sample_rate": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number"
+      },
+      "default": {},
+      "description": "Dict mapping dataset name to a [0,1] probability of dropping consistency for an otherwise-consistent query. Datasets with no entry default to 0 (never drop consistency). Migrated from per-dataset runtime config <dataset>_ignore_consistent_queries_sample_rate."
+    },
+    "slicing_mega_cluster_partitions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Dict mapping sliced storage-set name to a bracketed list of logical partitions that must query the mega cluster (e.g. \"[1, 2]\"). Storage sets with no entry never use the mega cluster. Migrated from per-storage-set runtime config slicing_mega_cluster_partitions_<storage_set>."
+    },
+    "tags_hash_map_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Killswitch for the MappingOptimizer tags-hashmap query optimization (transactions, search_issues, discover, replays storages). When false the optimizer is a no-op for those storages."
+    },
+    "query_settings": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Dict of base ClickHouse query settings (setting name -> value as a string) applied to all queries. Migrated from per-setting runtime config query_settings/<setting>."
+    },
+    "async_query_settings": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Dict of ClickHouse query settings (setting name -> value as a string) applied additionally when the async override is active. Migrated from per-setting runtime config async_query_settings/<setting>."
+    },
+    "query_settings_by_prefix": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Dict mapping a query prefix to a JSON-object string of ClickHouse query settings ({\"setting\": \"value\"}) applied for that prefix, overriding the base query_settings. Migrated from per-setting runtime config <prefix>/query_settings/<setting>."
+    },
+    "query_settings_by_referrer": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Dict mapping a referrer to a JSON-object string of ClickHouse query settings ({\"setting\": \"value\"}) applied for that referrer, taking precedence over prefix and base settings. Migrated from per-setting runtime config referrer/<referrer>/query_settings/<setting>."
+    },
+    "optimize_parallel_threads": {
+      "type": "integer",
+      "default": 0,
+      "description": "Number of parallel threads the table-optimize cron uses when running OPTIMIZE. 0 (the default) means unset: the optimize command's --parallel flag is used instead. Migrated from runtime config optimize_parallel_threads."
+    },
+    "http_batch_join_timeout": {
+      "type": "integer",
+      "default": 0,
+      "description": "Timeout in seconds the ClickHouse HTTP batch writer waits when joining the upload thread. 0 (the default) means unset: settings.BATCH_JOIN_TIMEOUT is used instead. Migrated from runtime config http_batch_join_timeout."
+    },
+    "simultaneous_queries_sleep_seconds": {
+      "type": "integer",
+      "default": 0,
+      "description": "Base sleep in seconds used when retrying a ClickHouse query rejected with TOO_MANY_SIMULTANEOUS_QUERIES. 0 disables the native-driver retry (it re-raises immediately); the robust-execute path always uses at least 1 second. Migrated from runtime config simultaneous_queries_sleep_seconds."
+    },
+    "max_days": {
+      "type": "integer",
+      "default": 0,
+      "description": "Maximum number of days a query time range may span before the lower bound is clamped. 0 means no limit (the time range is left unchanged). Migrated from runtime config max_days."
+    },
+    "date_align_seconds": {
+      "type": "integer",
+      "default": 1,
+      "description": "Granularity in seconds to which query time-range bounds are aligned (truncated). Must be non-zero. Migrated from runtime config date_align_seconds."
+    },
+    "lightweight_deletes_sync": {
+      "type": "integer",
+      "default": -1,
+      "description": "Value for the ClickHouse lightweight_deletes_sync setting applied to lightweight-delete queries. -1 (the default) means unset: ClickHouse's own default (2 since 24.4) is left in place. Migrated from runtime config lightweight_deletes_sync."
+    },
+    "lightweight_delete_mode": {
+      "type": "string",
+      "default": "",
+      "description": "ClickHouse lightweight_delete_mode applied to lightweight-delete queries. Empty (the default) leaves the setting unset. One of: alter_update (heavyweight ALTER UPDATE mutation), lightweight_update (lightweight if possible, else ALTER UPDATE), lightweight_update_force (lightweight if possible, else throw); any other non-empty value is treated as lightweight_update. Migrated from runtime config lightweight_delete_mode."
+    },
+    "events_tags_hash_map_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Killswitch for the MappingOptimizer tags-hashmap query optimization on the errors/errors_ro storages. When false the optimizer is a no-op."
+    },
+    "events_flags_hash_map_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Killswitch for the MappingOptimizer flags-hashmap query optimization on the errors/errors_ro storages. When false the optimizer is a no-op."
+    },
+    "generic_metrics/tags_hash_map_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Killswitch for the MappingOptimizer tags-hashmap query optimization on generic-metrics storages (distributions, gauges). When false the optimizer is a no-op."
+    },
+    "use_sentry_metrics": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the dual-write metrics backend also emits to the Sentry metrics backend (sampled by settings.DDM_METRICS_SAMPLE_RATE)."
+    },
+    "use_dogstatsd_uds": {
+      "type": "boolean",
+      "default": false,
+      "description": "Selects the preferred DogStatsD transport for snuba's Python and Rust metrics backends. When true and a socket path (DOGSTATSD_SOCKET_PATH) is configured, metrics are sent over the Unix domain socket; otherwise they use UDP (host/port). A deployment configured with only one transport uses that one regardless of the flag (socket-only sends over UDS, host/port-only over UDP), so the flag is authoritative only when both are configured, keeping host/port as the UDP rollback target. Read at metrics-backend creation, so flipping it takes effect on the next process restart -- no redeploy required."
+    },
+    "use_clickhouse_connect_driver": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the ClickHouse read path uses the clickhouse-connect (HTTP) driver instead of the native protocol. Lets the driver migration roll out and roll back without a deploy. Migrated from the runtime config of the same name."
+    },
+    "ondemand_profiler_hostnames": {
+      "type": "string",
+      "default": "",
+      "description": "Comma-separated list of hostnames for which the on-demand profiler should capture a profile."
+    },
+    "max_spans_per_transaction": {
+      "type": "integer",
+      "default": 2000,
+      "description": "Maximum number of spans processed per transaction by the transactions consumer."
+    },
+    "admin.querylog_threads": {
+      "type": "integer",
+      "default": 4,
+      "description": "max_threads ClickHouse setting used by the admin querylog query; clamped to a hard maximum of 4."
+    },
+    "executor_queue_size_factor": {
+      "type": "integer",
+      "default": 10,
+      "description": "Multiplier applied to max_concurrent_queries to size the subscription executor's pending-future queue before backpressure."
+    },
+    "subscription_primary_task_builder": {
+      "type": "string",
+      "default": "jittered",
+      "description": "TaskBuilderMode for the subscription scheduler: one of immediate, jittered, transition_jitter, transition_immediate."
     }
   }
 }

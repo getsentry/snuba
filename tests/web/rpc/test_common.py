@@ -4,12 +4,14 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from google.protobuf import json_format, struct_pb2
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
     TraceItemTableRequest,
 )
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import (
+    PageToken,
     RequestMeta,
     TraceItemType,
 )
@@ -36,6 +38,7 @@ from snuba.protos.common import (
     MalformedAttributeException,
     type_array_to_membership_array_expression_from_typed_columns,
 )
+from snuba.query import SelectedExpression
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column
 from snuba.query.expressions import (
@@ -51,13 +54,15 @@ from snuba.query.expressions import (
 from snuba.query.logical import Query
 from snuba.web.rpc.common.common import (
     _any_attribute_filter_to_expression,
+    _comparison_can_match_column_default,
+    add_existence_check_to_map_attribute_reads,
     attribute_key_to_expression,
     dedupe_and_conditions,
     next_monday,
     prev_monday,
+    semver_sort_key,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
-    use_array_map_columns,
     use_sampling_factor,
 )
 from snuba.web.rpc.common.exceptions import (
@@ -65,6 +70,7 @@ from snuba.web.rpc.common.exceptions import (
     RPCAllocationPolicyException,
     convert_rpc_exception_to_proto,
 )
+from snuba.web.rpc.common.pagination import FlexibleTimeWindowPageWithFilters
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
@@ -96,30 +102,9 @@ class TestCommon:
                 )
             )
         )
-        snuba_set_config("use_sampling_factor_timestamp_seconds", 10)
-        assert use_sampling_factor(RequestMeta(start_timestamp=Timestamp(seconds=10)))
-        assert not use_sampling_factor(RequestMeta(start_timestamp=Timestamp(seconds=9)))
-
-    @pytest.mark.redis_db
-    def test_use_array_map_columns(self, snuba_set_config: SnubaSetConfig) -> None:
-        assert use_array_map_columns(
-            RequestMeta(
-                start_timestamp=Timestamp(seconds=settings.USE_ARRAY_MAP_COLUMNS_TIMESTAMP_SECONDS)
-            )
-        )
-        assert not use_array_map_columns(
-            RequestMeta(
-                start_timestamp=Timestamp(
-                    seconds=settings.USE_ARRAY_MAP_COLUMNS_TIMESTAMP_SECONDS - 1
-                )
-            )
-        )
-        # A config value of 0 disables the typed-column read path entirely.
-        snuba_set_config("use_array_map_columns_timestamp_seconds", 0)
-        assert not use_array_map_columns(RequestMeta(start_timestamp=Timestamp(seconds=2**31)))
-        snuba_set_config("use_array_map_columns_timestamp_seconds", 10)
-        assert use_array_map_columns(RequestMeta(start_timestamp=Timestamp(seconds=10)))
-        assert not use_array_map_columns(RequestMeta(start_timestamp=Timestamp(seconds=9)))
+        with override_options("snuba", {"use_sampling_factor_timestamp_seconds": 10}):
+            assert use_sampling_factor(RequestMeta(start_timestamp=Timestamp(seconds=10)))
+            assert not use_sampling_factor(RequestMeta(start_timestamp=Timestamp(seconds=9)))
 
 
 class TestTraceItemFiltersArrayLike:
@@ -299,45 +284,37 @@ _TYPED_ARRAY_COLUMNS = {
 
 
 class TestTraceItemFiltersArrayMapColumns:
-    """Array predicates read the typed ``attributes_array_*`` map columns when
-    ``use_array_map_columns`` is set, and the legacy ``attributes_array`` JSON column
-    otherwise. Sentry always sends the membership value as ``val_str``, so on the typed
-    path the string is coerced to each native type it parses as and matched natively
-    against that column (no string conversion of stored elements): a plain string only
-    searches the string column, a numeric string the int and float columns too, and
-    ``true``/``false`` the bool column. A value-less exists filter reads all four."""
+    """Array predicates always read the typed ``attributes_array_*`` map columns. An
+    element-typed array key (TYPE_ARRAY_STRING/INT/DOUBLE/BOOL) resolves to its single
+    column and compares natively; the deprecated untyped ``TYPE_ARRAY`` has no element
+    type, so a ``val_str`` is coerced to each native type it parses as and matched against
+    every column it could live in (a numeric string searches int and float too, a
+    ``true``/``false`` string the bool column). A value-less exists filter over a
+    deprecated key reads all four."""
 
     def _array_filter(
         self,
         op: ComparisonFilter.Op.ValueType,
         value: AttributeValue,
+        key_type: AttributeKey.Type.ValueType = AttributeKey.Type.TYPE_ARRAY,
     ) -> TraceItemFilter:
         return TraceItemFilter(
             comparison_filter=ComparisonFilter(
-                key=AttributeKey(type=AttributeKey.Type.TYPE_ARRAY, name="my_tags"),
+                key=AttributeKey(type=key_type, name="my_tags"),
                 op=op,
                 value=value,
             )
         )
 
-    def test_like_on_array_key_uses_json_column_by_default(self) -> None:
-        result = trace_item_filters_to_expression(
-            self._array_filter(ComparisonFilter.OP_LIKE, AttributeValue(val_str="%error%")),
-            attribute_key_to_expression,
-        )
-        assert isinstance(result, FunctionCall)
-        assert result.function_name == "arrayExists"
-        membership = result.parameters[1]
-        assert isinstance(membership, FunctionCall)
-        assert membership.function_name == "arrayMap"
-        assert _collect_column_names(membership) == {"attributes_array"}
-
-    def test_like_on_array_key_uses_only_string_typed_column(self) -> None:
+    def test_like_on_string_array_key_uses_only_string_typed_column(self) -> None:
         # A LIKE pattern can only match string elements.
         result = trace_item_filters_to_expression(
-            self._array_filter(ComparisonFilter.OP_LIKE, AttributeValue(val_str="%error%")),
+            self._array_filter(
+                ComparisonFilter.OP_LIKE,
+                AttributeValue(val_str="%error%"),
+                AttributeKey.Type.TYPE_ARRAY_STRING,
+            ),
             attribute_key_to_expression,
-            use_array_map_columns=True,
         )
         assert isinstance(result, FunctionCall)
         assert result.function_name == "arrayExists"
@@ -346,11 +323,14 @@ class TestTraceItemFiltersArrayMapColumns:
         # No stringify-everything normalization of the stored elements.
         assert {"arrayConcat", "arrayMap", "toString"}.isdisjoint(_collect_function_names(result))
 
-    def test_equals_string_on_array_key_uses_only_string_typed_column(self) -> None:
+    def test_equals_on_string_array_key_uses_only_string_typed_column(self) -> None:
         result = trace_item_filters_to_expression(
-            self._array_filter(ComparisonFilter.OP_EQUALS, AttributeValue(val_str="error")),
+            self._array_filter(
+                ComparisonFilter.OP_EQUALS,
+                AttributeValue(val_str="error"),
+                AttributeKey.Type.TYPE_ARRAY_STRING,
+            ),
             attribute_key_to_expression,
-            use_array_map_columns=True,
         )
         assert isinstance(result, FunctionCall)
         assert result.function_name == "arrayExists"
@@ -358,13 +338,56 @@ class TestTraceItemFiltersArrayMapColumns:
         assert "error" in _collect_literal_values(result)
         assert {"arrayConcat", "arrayMap", "toString"}.isdisjoint(_collect_function_names(result))
 
-    def test_equals_numeric_string_matches_int_and_float_columns_natively(self) -> None:
-        # "12" parses as an int and a float, so it searches both numeric columns (the
-        # value could be stored in either) plus the string column, comparing natively.
+    def test_equals_on_int_array_key_uses_only_int_typed_column_natively(self) -> None:
+        # An element-typed int array names its column exactly, so a val_str "12" is
+        # coerced to a native int and matched only against attributes_array_int.
+        result = trace_item_filters_to_expression(
+            self._array_filter(
+                ComparisonFilter.OP_EQUALS,
+                AttributeValue(val_str="12"),
+                AttributeKey.Type.TYPE_ARRAY_INT,
+            ),
+            attribute_key_to_expression,
+        )
+        assert isinstance(result, FunctionCall)
+        assert result.function_name == "arrayExists"
+        assert _collect_column_names(result) == {"attributes_array_int"}
+        assert any(type(x) is int and x == 12 for x in _collect_literal_values(result))
+
+    def test_equals_on_bool_array_key_uses_only_bool_typed_column_natively(self) -> None:
+        result = trace_item_filters_to_expression(
+            self._array_filter(
+                ComparisonFilter.OP_EQUALS,
+                AttributeValue(val_str="true"),
+                AttributeKey.Type.TYPE_ARRAY_BOOL,
+            ),
+            attribute_key_to_expression,
+        )
+        assert isinstance(result, FunctionCall)
+        assert result.function_name == "arrayExists"
+        assert _collect_column_names(result) == {"attributes_array_bool"}
+        assert any(type(x) is bool and x is True for x in _collect_literal_values(result))
+
+    def test_exists_filter_on_int_array_key_uses_only_int_column(self) -> None:
+        item_filter = TraceItemFilter(
+            exists_filter=ExistsFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_ARRAY_INT, name="my_tags")
+            )
+        )
+        result = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        # Existence is notEmpty(arrayElement(attributes_array_int, 'my_tags')).
+        assert isinstance(result, FunctionCall)
+        assert result.function_name == "notEmpty"
+        assert _collect_column_names(result) == {"attributes_array_int"}
+
+    def test_equals_numeric_string_on_deprecated_array_matches_int_and_float_natively(
+        self,
+    ) -> None:
+        # The deprecated untyped TYPE_ARRAY has no element type: "12" parses as an int and
+        # a float, so it searches both numeric columns plus the string column natively.
         result = trace_item_filters_to_expression(
             self._array_filter(ComparisonFilter.OP_EQUALS, AttributeValue(val_str="12")),
             attribute_key_to_expression,
-            use_array_map_columns=True,
         )
         assert isinstance(result, FunctionCall)
         assert result.function_name == "or"
@@ -379,28 +402,12 @@ class TestTraceItemFiltersArrayMapColumns:
         assert any(type(x) is float and x == 12.0 for x in values)  # float column, native float
         assert {"arrayConcat", "arrayMap", "toString"}.isdisjoint(_collect_function_names(result))
 
-    def test_equals_bool_string_matches_bool_column_natively(self) -> None:
-        result = trace_item_filters_to_expression(
-            self._array_filter(ComparisonFilter.OP_EQUALS, AttributeValue(val_str="true")),
-            attribute_key_to_expression,
-            use_array_map_columns=True,
-        )
-        assert isinstance(result, FunctionCall)
-        assert result.function_name == "or"
-        assert _collect_column_names(result) == {
-            "attributes_array_string",
-            "attributes_array_bool",
-        }
-        values = _collect_literal_values(result)
-        assert "true" in values  # string column, raw string
-        assert any(type(x) is bool and x is True for x in values)  # bool column, native bool
-        assert {"arrayConcat", "arrayMap", "toString"}.isdisjoint(_collect_function_names(result))
-
-    def test_not_equals_numeric_string_negates_native_membership(self) -> None:
+    def test_not_equals_numeric_string_on_deprecated_array_negates_native_membership(
+        self,
+    ) -> None:
         result = trace_item_filters_to_expression(
             self._array_filter(ComparisonFilter.OP_NOT_EQUALS, AttributeValue(val_str="12")),
             attribute_key_to_expression,
-            use_array_map_columns=True,
         )
         assert isinstance(result, FunctionCall)
         assert result.function_name == "not"
@@ -413,36 +420,20 @@ class TestTraceItemFiltersArrayMapColumns:
             "attributes_array_float",
         }
 
-    def test_exists_filter_on_array_key_uses_typed_columns_when_enabled(self) -> None:
-        item_filter = TraceItemFilter(
-            exists_filter=ExistsFilter(
-                key=AttributeKey(type=AttributeKey.Type.TYPE_ARRAY, name="my_tags")
-            )
-        )
-        result = trace_item_filters_to_expression(
-            item_filter, attribute_key_to_expression, use_array_map_columns=True
-        )
-        # Existence is notEmpty(arrayConcat(...)) over the typed columns.
-        assert isinstance(result, FunctionCall)
-        assert result.function_name == "notEmpty"
-        inner = result.parameters[0]
-        assert isinstance(inner, FunctionCall)
-        assert inner.function_name == "arrayConcat"
-        assert _collect_column_names(inner) == _TYPED_ARRAY_COLUMNS
-
-    def test_exists_filter_on_array_key_uses_json_column_by_default(self) -> None:
+    def test_exists_filter_on_deprecated_array_key_reads_all_typed_columns(self) -> None:
         item_filter = TraceItemFilter(
             exists_filter=ExistsFilter(
                 key=AttributeKey(type=AttributeKey.Type.TYPE_ARRAY, name="my_tags")
             )
         )
         result = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+        # Existence is notEmpty(arrayConcat(...)) over the four typed columns.
         assert isinstance(result, FunctionCall)
         assert result.function_name == "notEmpty"
         inner = result.parameters[0]
         assert isinstance(inner, FunctionCall)
-        assert inner.function_name == "arrayMap"
-        assert _collect_column_names(inner) == {"attributes_array"}
+        assert inner.function_name == "arrayConcat"
+        assert _collect_column_names(inner) == _TYPED_ARRAY_COLUMNS
 
     def test_typed_membership_function_rejects_non_array(self) -> None:
         with pytest.raises(MalformedAttributeException):
@@ -803,6 +794,168 @@ class TestAnalyzerSafeFilters:
         assert "notLike" not in names  # positive like under the negation
         ilike = self._build(ComparisonFilter.OP_NOT_LIKE, value="%ok%", ignore_case=True)
         assert "ilike" in self._fn_names(ilike) and "notILike" not in self._fn_names(ilike)
+
+
+class TestBooleanAttributeFilters:
+    """Booleans are map-backed, so they need an existence guard — otherwise a missing key
+    reads as the ``false`` default. In a filter (``attr:false``) that wrongly matches items
+    lacking the attribute; in a SELECT it wrongly renders as ``false`` instead of empty
+    (getsentry/sentry#119735 and its follow-up).
+    """
+
+    @staticmethod
+    def _walk(expr: Expression) -> list[Expression]:
+        nodes: list[Expression] = []
+
+        def visit(node: Expression) -> Expression:
+            nodes.append(node)
+            return node
+
+        expr.transform(visit)
+        return nodes
+
+    def _fn_names(self, expr: Expression) -> set[str]:
+        return {n.function_name for n in self._walk(expr) if isinstance(n, FunctionCall)}
+
+    def _build(
+        self,
+        op: ComparisonFilter.Op.ValueType,
+        *,
+        value: AttributeValue,
+        name: str = "hasCodeTag",
+    ) -> Expression:
+        item_filter = TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_BOOLEAN, name=name),
+                op=op,
+                value=value,
+            )
+        )
+        return trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+
+    def test_equals_false_keeps_existence_guard(self) -> None:
+        expr = self._build(ComparisonFilter.OP_EQUALS, value=AttributeValue(val_bool=False))
+        assert isinstance(expr, FunctionCall) and expr.function_name == "and"
+        assert {"and", "has", "mapKeys", "equals", "arrayElement"} <= self._fn_names(expr)
+
+    def test_equals_true_needs_no_guard(self) -> None:
+        expr = self._build(ComparisonFilter.OP_EQUALS, value=AttributeValue(val_bool=True))
+        assert isinstance(expr, FunctionCall) and expr.function_name == "equals"
+        assert "mapKeys" not in self._fn_names(expr)
+
+    def test_not_equals_false_negates_guarded_equality(self) -> None:
+        expr = self._build(ComparisonFilter.OP_NOT_EQUALS, value=AttributeValue(val_bool=False))
+        assert isinstance(expr, FunctionCall) and expr.function_name == "not"
+        assert {"not", "and", "has", "mapKeys", "equals", "arrayElement"} <= self._fn_names(expr)
+
+    def test_uses_attributes_bool_column(self) -> None:
+        expr = self._build(ComparisonFilter.OP_EQUALS, value=AttributeValue(val_bool=False))
+        columns = {n.column_name for n in self._walk(expr) if isinstance(n, ColumnExpr)}
+        assert columns == {"attributes_bool"}
+
+    def _bool_select_after_transform(self, name: str = "hasCodeTag") -> Expression:
+        key = AttributeKey(type=AttributeKey.Type.TYPE_BOOLEAN, name=name)
+        query = Query(
+            from_clause=None,
+            selected_columns=[SelectedExpression(name, attribute_key_to_expression(key))],
+        )
+        add_existence_check_to_map_attribute_reads(query)
+        return query.get_selected_columns()[0].expression
+
+    def test_select_guards_missing_key_as_null(self) -> None:
+        expr = self._bool_select_after_transform()
+        assert isinstance(expr, FunctionCall) and expr.function_name == "if"
+        assert {"if", "has", "mapKeys", "arrayElement"} <= self._fn_names(expr)
+        _, value, otherwise = expr.parameters
+        assert isinstance(otherwise, FunctionCall) and otherwise.function_name == "cast"
+        assert otherwise.parameters[0] == Literal(None, None)
+        columns = {n.column_name for n in self._walk(expr) if isinstance(n, ColumnExpr)}
+        assert columns == {"attributes_bool"}
+        assert expr.alias == "hasCodeTag_TYPE_BOOLEAN"
+        assert value.alias is None
+
+
+class TestNormalizedColumnsNotMapBacked:
+    """Normalized columns share a map-eligible type (e.g. ``sentry.trace_id`` is
+    TYPE_STRING) but are real columns, so ``_is_map_backed_key``'s
+    ``NORMALIZED_COLUMNS_EAP_ITEMS`` exclusion must keep them off the map path.
+    """
+
+    @staticmethod
+    def _walk(expr: Expression) -> list[Expression]:
+        nodes: list[Expression] = []
+
+        def visit(node: Expression) -> Expression:
+            nodes.append(node)
+            return node
+
+        expr.transform(visit)
+        return nodes
+
+    def _build(self, name: str) -> Expression:
+        item_filter = TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_STRING, name=name),
+                op=ComparisonFilter.OP_EQUALS,
+                value=AttributeValue(val_str="abc"),
+            )
+        )
+        return trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+
+    def test_normalized_string_column_bypasses_map_backed_path(self) -> None:
+        expr = self._build("sentry.trace_id")
+        fn_names = {n.function_name for n in self._walk(expr) if isinstance(n, FunctionCall)}
+        assert "mapKeys" not in fn_names and "arrayElement" not in fn_names
+        columns = {n.column_name for n in self._walk(expr) if isinstance(n, ColumnExpr)}
+        assert "attributes_string" not in columns
+
+    def test_custom_string_column_is_map_backed(self) -> None:
+        expr = self._build("some.custom.tag")
+        columns = {n.column_name for n in self._walk(expr) if isinstance(n, ColumnExpr)}
+        assert columns == {"attributes_string"}
+
+
+class TestComparisonCanMatchColumnDefault:
+    """Flags when a compared literal equals the column default an absent key reads as —
+    the type's falsy value ('' / 0 / 0.0 / false). Null is not a default match.
+    """
+
+    @pytest.mark.parametrize(
+        "value,expected",
+        [
+            (AttributeValue(val_str=""), True),
+            (AttributeValue(val_str="x"), False),
+            (AttributeValue(val_int=0), True),
+            (AttributeValue(val_int=5), False),
+            (AttributeValue(val_float=0.0), True),
+            (AttributeValue(val_float=1.5), False),
+            (AttributeValue(val_double=0.0), True),
+            (AttributeValue(val_double=2.5), False),
+            (AttributeValue(val_bool=False), True),
+            (AttributeValue(val_bool=True), False),
+            (AttributeValue(val_null=True), False),
+        ],
+    )
+    def test_scalar(self, value: AttributeValue, expected: bool) -> None:
+        value_type = value.WhichOneof("value")
+        assert value_type is not None
+        assert _comparison_can_match_column_default(value, value_type) is expected
+
+    def test_val_array_matches_when_any_element_is_default(self) -> None:
+        present = AttributeValue(
+            val_array=Array(values=[AttributeValue(val_int=5), AttributeValue(val_int=0)])
+        )
+        absent = AttributeValue(
+            val_array=Array(values=[AttributeValue(val_int=5), AttributeValue(val_int=7)])
+        )
+        assert _comparison_can_match_column_default(present, "val_array") is True
+        assert _comparison_can_match_column_default(absent, "val_array") is False
+
+    def test_typed_array_matches_when_any_element_is_default(self) -> None:
+        present = AttributeValue(val_str_array=StrArray(values=["x", ""]))
+        absent = AttributeValue(val_str_array=StrArray(values=["a", "b"]))
+        assert _comparison_can_match_column_default(present, "val_str_array") is True
+        assert _comparison_can_match_column_default(absent, "val_str_array") is False
 
 
 @pytest.mark.redis_db
@@ -1306,3 +1459,95 @@ class TestEmptyVsAbsentComparison:
     def test_not_like_wildcard_matches_only_absent(self) -> None:
         # Present rows all `like '%'`, so only the absent key survives NOT LIKE.
         assert self._execute(ComparisonFilter.OP_NOT_LIKE, value="%") == ["green"]
+
+
+class TestSemverSortKey:
+    def test_expression_structure(self) -> None:
+        expr = semver_sort_key(column("release"))
+        assert isinstance(expr, FunctionCall)
+        assert expr.function_name == "tuple"
+        assert len(expr.parameters) == 3
+        numeric_key_expr, is_stable_expr, raw_str_expr = expr.parameters
+        assert isinstance(numeric_key_expr, FunctionCall)
+        assert numeric_key_expr.function_name == "arrayResize"
+        # Stability flag: match(version, '^[0-9]+(\\.[0-9]+)*$') — 1 for a plain
+        # dotted-numeric (stable) version, 0 for any prerelease form.
+        assert isinstance(is_stable_expr, FunctionCall)
+        assert is_stable_expr.function_name == "match"
+        # Third element is the raw (non-null) string tiebreaker: ifNull(expr, '').
+        assert isinstance(raw_str_expr, FunctionCall)
+        assert raw_str_expr.function_name == "ifNull"
+
+    def test_alias_is_forwarded(self) -> None:
+        expr = semver_sort_key(column("release"), alias="semver_key")
+        assert isinstance(expr, FunctionCall)
+        assert expr.alias == "semver_key"
+
+    def test_no_alias_by_default(self) -> None:
+        expr = semver_sort_key(column("release"))
+        assert expr.alias is None
+
+
+class TestFlexibleTimeWindowPageFilters:
+    def _timestamp_page_token(self, value: AttributeValue) -> PageToken:
+        prefix = FlexibleTimeWindowPageWithFilters._FILTER_PREFIX
+        return PageToken(
+            filter_offset=TraceItemFilter(
+                and_filter=AndFilter(
+                    filters=[
+                        TraceItemFilter(
+                            comparison_filter=ComparisonFilter(
+                                key=AttributeKey(name=f"{prefix}.timestamp"),
+                                op=ComparisonFilter.OP_LESS_THAN,
+                                value=value,
+                            )
+                        )
+                    ]
+                )
+            )
+        )
+
+    def test_get_filters_rejects_unsupported_timestamp_type(self) -> None:
+        # A client-supplied page token whose timestamp filter carries an
+        # unsupported value type must raise a clear error rather than desync the
+        # parallel column lists and crash the strict zip() with an opaque error.
+        pager = FlexibleTimeWindowPageWithFilters(
+            self._timestamp_page_token(AttributeValue(val_bool=True))
+        )
+        with pytest.raises(ValueError, match="not supported"):
+            pager.get_filters()
+
+    def test_get_filters_accepts_int_timestamp(self) -> None:
+        pager = FlexibleTimeWindowPageWithFilters(
+            self._timestamp_page_token(AttributeValue(val_int=1741910400))
+        )
+        # A supported value type builds the boundary filter without raising.
+        assert pager.get_filters() is not None
+
+
+class TestAnyAttributeFilterOption:
+    """The `enable_any_attribute_filter` sentry-option gates whether
+    any_attribute_filter is translated into a predicate or treated as
+    always-true. It replaces the former `enable_any_attribute_filter`
+    runtime config."""
+
+    @staticmethod
+    def _filter() -> TraceItemFilter:
+        return TraceItemFilter(
+            any_attribute_filter=AnyAttributeFilter(
+                op=AnyAttributeFilter.OP_EQUALS,
+                value=AttributeValue(val_str="foo"),
+            )
+        )
+
+    def test_enabled_by_default_translates_filter(self) -> None:
+        # Schema default is true: the filter is translated, not short-circuited.
+        result = trace_item_filters_to_expression(self._filter(), attribute_key_to_expression)
+        assert isinstance(result, FunctionCall)
+        assert result.function_name == "arrayExists"
+
+    def test_disabled_returns_always_true(self) -> None:
+        with override_options("snuba", {"enable_any_attribute_filter": False}):
+            result = trace_item_filters_to_expression(self._filter(), attribute_key_to_expression)
+        assert isinstance(result, Literal)
+        assert result.value is True

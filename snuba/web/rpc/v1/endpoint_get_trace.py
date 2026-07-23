@@ -24,7 +24,6 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     TraceItemFilter,
 )
 
-from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
@@ -46,13 +45,12 @@ from snuba.settings import (
     ENABLE_TRACE_PAGINATION_DEFAULT,
     ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS,
 )
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.util import with_span
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
-    attributes_array_selected_expressions,
-    decode_attributes_array_value,
     merge_typed_array_maps,
     merge_typed_array_subcolumns,
     project_id_and_org_conditions,
@@ -60,7 +58,6 @@ from snuba.web.rpc.common.common import (
     treeify_or_and_conditions,
     typed_array_map_selected_expressions,
     typed_array_select_subcolumn_name,
-    use_array_map_columns,
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
@@ -211,11 +208,11 @@ def _build_query(
         ),
     ]
 
-    read_typed_arrays = use_array_map_columns(request.meta)
     if len(item.attributes) > 0:
         for attribute_key in item.attributes:
-            if read_typed_arrays and attribute_key.type == AttributeKey.Type.TYPE_ARRAY:
-                # Read as four typed sub-columns, merged back in _process_results.
+            if attribute_key.type == AttributeKey.Type.TYPE_ARRAY:
+                # Deprecated untyped array: read as four typed sub-columns, merged back in
+                # _process_results. Element-typed array keys read one native column below.
                 for typed_col, expression in zip(
                     TYPED_ARRAY_MAP_COLUMNS,
                     type_array_typed_columns_select_expressions(attribute_key),
@@ -252,13 +249,8 @@ def _build_query(
                     tuple(column(f"attributes_float_{i}") for i in range(40)),
                 ),
             ),
-            # Past the cutoff, read every array attribute from the typed array map
-            # columns instead of the legacy attributes_array JSON-column allowlist.
-            *(
-                typed_array_map_selected_expressions()
-                if read_typed_arrays
-                else attributes_array_selected_expressions()
-            ),
+            # Read every array attribute from the typed array map columns.
+            *typed_array_map_selected_expressions(),
         ]
         selected_columns.extend(
             SelectedExpression(
@@ -326,7 +318,7 @@ def _build_query(
             expression=column("item_id"),
         ),
     ]
-    if state.get_int_config("enable_trace_pagination", ENABLE_TRACE_PAGINATION_DEFAULT):
+    if get_option("enable_trace_pagination", bool(ENABLE_TRACE_PAGINATION_DEFAULT)):
         order_by = new_order_by
     else:
         order_by = old_order_by
@@ -366,7 +358,7 @@ def _build_query(
 
 def _get_apply_final_rollout_percentage() -> float:
     return (
-        state.get_float_config(
+        get_option(
             APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
             0.0,
         )
@@ -489,7 +481,6 @@ class ProcessedResults(NamedTuple):
 @with_span(op="function")
 def _process_results(
     data: Iterable[dict[str, Any]],
-    read_typed_arrays: bool = False,
     array_attribute_names: Iterable[str] = (),
 ) -> ProcessedResults:
     """
@@ -532,15 +523,16 @@ def _process_results(
                     value=attribute_value,
                 )
 
-            if read_typed_arrays:
-                # Bulk mode: every array attribute, merged from the typed array map
-                # columns (no-op for the per-attribute mode, where they aren't selected).
-                for name, values in merge_typed_array_maps(row):
-                    if values:
-                        add_attribute(name, values)
+            # Bulk mode: every array attribute, merged from the four whole typed array map
+            # columns (no-op in per-attribute mode, where they aren't selected).
+            for name, values in merge_typed_array_maps(row):
+                if values:
+                    add_attribute(name, values)
 
             if array_attribute_names:
-                # Per-attribute mode: merge each array's four typed sub-columns by name.
+                # Per-attribute deprecated untyped TYPE_ARRAY: merge each array's four typed
+                # sub-columns by name. Element-typed array keys arrive as a native list
+                # under their own key and are added by the generic loop below.
                 for name, values in merge_typed_array_subcolumns(row, array_attribute_names):
                     if values:
                         add_attribute(name, values)
@@ -551,11 +543,13 @@ def _process_results(
                 if isinstance(row_value, dict):
                     for column_key, column_value in row_value.items():
                         add_attribute(column_key, column_value)
-                elif isinstance(row_value, str):
-                    decoded = decode_attributes_array_value(row_key, row_value)
-                    if decoded is None or (isinstance(decoded, list) and not decoded):
-                        continue
-                    add_attribute(row_key, decoded)
+                elif isinstance(row_value, (list, tuple)):
+                    # A per-attribute element-typed array reads as a native list; an absent
+                    # or stored-empty attribute reads as [], which we drop (missing and
+                    # stored-empty arrays are indistinguishable in the typed columns) to
+                    # match every other read path rather than emit an empty val_array.
+                    if row_value:
+                        add_attribute(row_key, list(row_value))
                 else:
                     add_attribute(row_key, row_value)
 
@@ -634,8 +628,8 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
             "eap_trace_request_without_limit", 1, tags={"referrer": in_msg.meta.referrer}
         )
 
-        enable_pagination = state.get_int_config(
-            "enable_trace_pagination", ENABLE_TRACE_PAGINATION_DEFAULT
+        enable_pagination = get_option(
+            "enable_trace_pagination", bool(ENABLE_TRACE_PAGINATION_DEFAULT)
         )
         if enable_pagination:
             limit = _get_pagination_limit(in_msg.limit)
@@ -702,19 +696,13 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
             request=_build_snuba_request(in_msg, item, limit, page_token),
             timer=self._timer,
         )
-        read_typed_arrays = use_array_map_columns(in_msg.meta)
         processed_results = _process_results(
             results.result.get("data", []),
-            read_typed_arrays=read_typed_arrays,
-            array_attribute_names=(
-                [
-                    attribute_key.name
-                    for attribute_key in item.attributes
-                    if attribute_key.type == AttributeKey.Type.TYPE_ARRAY
-                ]
-                if read_typed_arrays
-                else []
-            ),
+            array_attribute_names=[
+                attribute_key.name
+                for attribute_key in item.attributes
+                if attribute_key.type == AttributeKey.Type.TYPE_ARRAY
+            ],
         )
         items = processed_results.items
         last_seen_timestamp_precise = processed_results.last_seen_timestamp_precise

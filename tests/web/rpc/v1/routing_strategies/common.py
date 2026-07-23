@@ -5,6 +5,10 @@ from sentry_relay.consts import DataCategory
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.storage_routing.routing_strategies.common import Outcome
+
+# Re-exported so routing-strategy tests can keep importing it from here; the
+# canonical implementation lives in tests/configs/component_config.py.
+from tests.configs.component_config import override_component_config
 from tests.helpers import write_raw_unprocessed_events
 
 
@@ -97,6 +101,7 @@ __all__ = [
     "store_outcomes_data",
     "gen_ingest_outcome",
     "gen_span_ingest_outcome",
+    "override_component_config",
     "DataCategory",
     "Outcome",
 ]
