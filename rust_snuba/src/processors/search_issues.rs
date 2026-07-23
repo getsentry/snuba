@@ -503,7 +503,7 @@ impl SearchIssuesRow {
             value_as_number(&data.timestamp),
         ) {
             (Some(start), Some(finish)) => {
-                ((finish - start) * 1000.0).clamp(0.0, u32::MAX as f64) as u32
+                ((finish.trunc() - start.trunc()) * 1000.0).clamp(0.0, u32::MAX as f64) as u32
             }
             _ => 0,
         };
@@ -587,6 +587,7 @@ fn parse_uuid(value: &str) -> anyhow::Result<Uuid> {
 fn stringify_value(value: &Value) -> Option<String> {
     match value {
         Value::Null => None,
+        Value::Bool(b) => Some(python_bool(*b)),
         Value::String(s) => Some(s.clone()),
         other => Some(other.to_string()),
     }
@@ -596,9 +597,14 @@ fn stringify_scalar(value: &Value) -> Option<String> {
     match value {
         Value::String(s) if !s.is_empty() => Some(s.clone()),
         Value::String(_) => None,
-        Value::Number(_) | Value::Bool(_) => Some(value.to_string()),
+        Value::Bool(b) => Some(python_bool(*b)),
+        Value::Number(n) => Some(n.to_string()),
         _ => None,
     }
+}
+
+fn python_bool(value: bool) -> String {
+    if value { "True" } else { "False" }.to_owned()
 }
 
 fn value_as_number(value: &Option<Value>) -> Option<f64> {
@@ -1015,6 +1021,33 @@ mod tests {
         assert_eq!(row["culprit"], "the culprit");
         assert_eq!(row["level"], "info");
         assert_eq!(row["resource_id"], "resource-123");
+    }
+
+    #[test]
+    fn test_transaction_duration_truncates_to_whole_seconds() {
+        let mut event = base_event();
+        event["data"]["start_timestamp"] = json!(100.0);
+        event["data"]["timestamp"] = json!(100.5);
+        let row = process_one(event);
+        assert_eq!(row["transaction_duration"], 0);
+    }
+
+    #[test]
+    fn test_bool_context_uses_capitalized_string() {
+        let mut event = base_event();
+        event["data"]["contexts"] = json!({ "scalar": {"flag": true, "off": false} });
+        let row = process_one(event);
+        assert_eq!(row["contexts.key"], json!(["scalar.flag", "scalar.off"]));
+        assert_eq!(row["contexts.value"], json!(["True", "False"]));
+    }
+
+    #[test]
+    fn test_bool_tag_uses_capitalized_string() {
+        let mut event = base_event();
+        event["data"]["tags"] = json!({ "is_test": true });
+        let row = process_one(event);
+        assert_eq!(row["tags.key"], json!(["is_test"]));
+        assert_eq!(row["tags.value"], json!(["True"]));
     }
 
     #[test]
