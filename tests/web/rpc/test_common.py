@@ -204,7 +204,9 @@ class TestTraceItemFiltersArrayLike:
         ):
             trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
 
-    def test_equals_on_array_key_with_str_array_value_raises(self) -> None:
+    def test_equals_on_untyped_array_key_with_str_array_value_raises(self) -> None:
+        # Exact array equality (array RHS) is element-typed-array only; the deprecated
+        # untyped TYPE_ARRAY has no single native column, so it is rejected.
         item_filter = TraceItemFilter(
             comparison_filter=ComparisonFilter(
                 key=AttributeKey(type=AttributeKey.Type.TYPE_ARRAY, name="my_tags"),
@@ -214,7 +216,7 @@ class TestTraceItemFiltersArrayLike:
         )
         with pytest.raises(
             BadSnubaRPCRequestException,
-            match="OP_EQUALS/OP_NOT_EQUALS on array keys require a scalar value",
+            match="exact array equality .* is only supported on element-typed array keys",
         ):
             trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
 
@@ -436,30 +438,69 @@ class TestTraceItemFiltersArrayMapColumns:
         assert inner.function_name == "arrayConcat"
         assert _collect_column_names(inner) == _TYPED_ARRAY_COLUMNS
 
-    def test_in_on_string_array_key_uses_only_string_typed_column(self) -> None:
+    @pytest.mark.parametrize("op", [ComparisonFilter.OP_IN, ComparisonFilter.OP_NOT_IN])
+    def test_in_not_in_on_array_key_rejected_directs_to_has_any_all(
+        self, op: "ComparisonFilter.Op.ValueType"
+    ) -> None:
+        # IN/NOT_IN on an array key is redundant with OP_HAS_ANY, so it is rejected and
+        # the error points the user to the dedicated array operators.
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="use OP_HAS_ANY .* or OP_HAS_ALL",
+        ):
+            trace_item_filters_to_expression(
+                self._array_filter(
+                    op,
+                    AttributeValue(val_str_array=StrArray(values=["a", "b"])),
+                    AttributeKey.Type.TYPE_ARRAY_STRING,
+                ),
+                attribute_key_to_expression,
+            )
+
+    def test_typed_membership_function_rejects_non_array(self) -> None:
+        with pytest.raises(MalformedAttributeException):
+            type_array_to_membership_array_expression_from_typed_columns(
+                AttributeKey(type=AttributeKey.Type.TYPE_STRING, name="my_tags")
+            )
+
+    # --- OP_HAS_ANY / OP_HAS_ALL and exact-array OP_EQUALS ---
+
+    def test_has_any_on_string_array_key(self) -> None:
         result = trace_item_filters_to_expression(
             self._array_filter(
-                ComparisonFilter.OP_IN,
+                ComparisonFilter.OP_HAS_ANY,
                 AttributeValue(val_str_array=StrArray(values=["a", "b"])),
                 AttributeKey.Type.TYPE_ARRAY_STRING,
             ),
             attribute_key_to_expression,
         )
+        # hasAny(arrayElement(attributes_array_string, 'my_tags'), ['a', 'b'])
         assert isinstance(result, FunctionCall)
-        # Membership is hasAny(<string array>, ('a', 'b')).
         assert result.function_name == "hasAny"
         assert _collect_column_names(result) == {"attributes_array_string"}
-        values = _collect_literal_values(result)
-        assert "a" in values and "b" in values
+        assert {"a", "b"}.issubset(_collect_literal_values(result))
         assert {"arrayConcat", "arrayMap", "toString"}.isdisjoint(_collect_function_names(result))
 
-    def test_in_on_int_array_key_uses_only_int_typed_column_natively(self) -> None:
-        # An element-typed int array coerces each val_str to a native int and matches only
-        # attributes_array_int.
+    def test_has_all_on_string_array_key(self) -> None:
         result = trace_item_filters_to_expression(
             self._array_filter(
-                ComparisonFilter.OP_IN,
-                AttributeValue(val_str_array=StrArray(values=["1", "2"])),
+                ComparisonFilter.OP_HAS_ALL,
+                AttributeValue(val_str_array=StrArray(values=["a", "b"])),
+                AttributeKey.Type.TYPE_ARRAY_STRING,
+            ),
+            attribute_key_to_expression,
+        )
+        # hasAll(arrayElement(attributes_array_string, 'my_tags'), ['a', 'b'])
+        assert isinstance(result, FunctionCall)
+        assert result.function_name == "hasAll"
+        assert _collect_column_names(result) == {"attributes_array_string"}
+        assert {"a", "b"}.issubset(_collect_literal_values(result))
+
+    def test_has_any_on_int_array_key_uses_native_ints(self) -> None:
+        result = trace_item_filters_to_expression(
+            self._array_filter(
+                ComparisonFilter.OP_HAS_ANY,
+                AttributeValue(val_int_array=IntArray(values=[1, 2])),
                 AttributeKey.Type.TYPE_ARRAY_INT,
             ),
             attribute_key_to_expression,
@@ -471,50 +512,28 @@ class TestTraceItemFiltersArrayMapColumns:
         assert any(type(x) is int and x == 1 for x in values)
         assert any(type(x) is int and x == 2 for x in values)
 
-    def test_in_on_int_array_key_accepts_native_int_array(self) -> None:
+    def test_equals_with_array_value_is_exact_array_equality(self) -> None:
+        # OP_EQUALS with an array RHS -> exact ordered array equality (not element membership).
         result = trace_item_filters_to_expression(
             self._array_filter(
-                ComparisonFilter.OP_IN,
-                AttributeValue(val_int_array=IntArray(values=[1, 2])),
-                AttributeKey.Type.TYPE_ARRAY_INT,
+                ComparisonFilter.OP_EQUALS,
+                AttributeValue(val_str_array=StrArray(values=["a", "b"])),
+                AttributeKey.Type.TYPE_ARRAY_STRING,
             ),
             attribute_key_to_expression,
         )
+        # equals(arrayElement(attributes_array_string, 'my_tags'), ['a', 'b'])
         assert isinstance(result, FunctionCall)
-        assert result.function_name == "hasAny"
-        assert _collect_column_names(result) == {"attributes_array_int"}
-        values = _collect_literal_values(result)
-        assert any(type(x) is int and x == 1 for x in values)
+        assert result.function_name == "equals"
+        assert _collect_column_names(result) == {"attributes_array_string"}
+        assert {"a", "b"}.issubset(_collect_literal_values(result))
+        # Exact equality, not the arrayExists element-membership form.
+        assert "arrayExists" not in _collect_function_names(result)
 
-    def test_in_numeric_string_on_deprecated_array_matches_int_and_float_natively(
-        self,
-    ) -> None:
-        # The deprecated untyped TYPE_ARRAY has no element type: each numeric string parses
-        # as an int and a float, so the set searches string + int + float columns.
+    def test_not_equals_with_array_value_negates_exact_equality(self) -> None:
         result = trace_item_filters_to_expression(
             self._array_filter(
-                ComparisonFilter.OP_IN,
-                AttributeValue(val_str_array=StrArray(values=["12", "13"])),
-            ),
-            attribute_key_to_expression,
-        )
-        assert isinstance(result, FunctionCall)
-        assert result.function_name == "or"
-        assert _collect_column_names(result) == {
-            "attributes_array_string",
-            "attributes_array_int",
-            "attributes_array_float",
-        }
-        values = _collect_literal_values(result)
-        assert "12" in values  # string column, raw string
-        assert any(type(x) is int and x == 12 for x in values)  # int column, native int
-        assert any(type(x) is float and x == 12.0 for x in values)  # float column, native float
-        assert {"arrayConcat", "arrayMap", "toString"}.isdisjoint(_collect_function_names(result))
-
-    def test_not_in_on_string_array_key_negates_membership(self) -> None:
-        result = trace_item_filters_to_expression(
-            self._array_filter(
-                ComparisonFilter.OP_NOT_IN,
+                ComparisonFilter.OP_NOT_EQUALS,
                 AttributeValue(val_str_array=StrArray(values=["a", "b"])),
                 AttributeKey.Type.TYPE_ARRAY_STRING,
             ),
@@ -524,55 +543,76 @@ class TestTraceItemFiltersArrayMapColumns:
         assert result.function_name == "not"
         inner = result.parameters[0]
         assert isinstance(inner, FunctionCall)
-        assert inner.function_name == "hasAny"
-        assert _collect_column_names(inner) == {"attributes_array_string"}
+        assert inner.function_name == "equals"
+        assert "arrayExists" not in _collect_function_names(inner)
 
-    def test_in_ignore_case_on_string_array_key_lowers_set_and_elements(self) -> None:
+    def test_equals_with_scalar_value_still_element_membership(self) -> None:
+        # OP_EQUALS with a scalar RHS keeps the "any element equals scalar" behavior.
+        result = trace_item_filters_to_expression(
+            self._array_filter(
+                ComparisonFilter.OP_EQUALS,
+                AttributeValue(val_str="error"),
+                AttributeKey.Type.TYPE_ARRAY_STRING,
+            ),
+            attribute_key_to_expression,
+        )
+        assert isinstance(result, FunctionCall)
+        assert result.function_name == "arrayExists"
+
+    def test_has_any_on_non_array_key_raises(self) -> None:
         item_filter = TraceItemFilter(
             comparison_filter=ComparisonFilter(
-                key=AttributeKey(type=AttributeKey.Type.TYPE_ARRAY_STRING, name="my_tags"),
-                op=ComparisonFilter.OP_IN,
-                value=AttributeValue(val_str_array=StrArray(values=["Error", "WARN"])),
-                ignore_case=True,
+                key=AttributeKey(type=AttributeKey.Type.TYPE_STRING, name="my_tags"),
+                op=ComparisonFilter.OP_HAS_ANY,
+                value=AttributeValue(val_str_array=StrArray(values=["a", "b"])),
             )
         )
-        result = trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
-        assert isinstance(result, FunctionCall)
-        assert result.function_name == "hasAny"
-        assert _collect_column_names(result) == {"attributes_array_string"}
-        # Stored elements are lowered via arrayMap(lower) so hasAny compares case-folded.
-        fn_names = _collect_function_names(result)
-        assert "lower" in fn_names
-        assert "arrayMap" in fn_names
-        values = _collect_literal_values(result)
-        assert "error" in values and "warn" in values
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="OP_HAS_ANY/OP_HAS_ALL are only supported on array keys",
+        ):
+            trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
 
-    def test_in_on_array_key_requires_non_empty_array(self) -> None:
-        with pytest.raises(BadSnubaRPCRequestException):
+    def test_has_any_on_untyped_array_key_raises(self) -> None:
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="only supported on element-typed array keys",
+        ):
             trace_item_filters_to_expression(
                 self._array_filter(
-                    ComparisonFilter.OP_IN,
-                    AttributeValue(val_str_array=StrArray(values=[])),
-                    AttributeKey.Type.TYPE_ARRAY_STRING,
+                    ComparisonFilter.OP_HAS_ANY,
+                    AttributeValue(val_str_array=StrArray(values=["a", "b"])),
+                    AttributeKey.Type.TYPE_ARRAY,
                 ),
                 attribute_key_to_expression,
             )
 
-    def test_in_on_array_key_rejects_scalar_value(self) -> None:
-        with pytest.raises(BadSnubaRPCRequestException):
+    def test_has_any_requires_array_value(self) -> None:
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="OP_HAS_ANY/OP_HAS_ALL require an array value",
+        ):
             trace_item_filters_to_expression(
                 self._array_filter(
-                    ComparisonFilter.OP_IN,
+                    ComparisonFilter.OP_HAS_ANY,
                     AttributeValue(val_str="a"),
                     AttributeKey.Type.TYPE_ARRAY_STRING,
                 ),
                 attribute_key_to_expression,
             )
 
-    def test_typed_membership_function_rejects_non_array(self) -> None:
-        with pytest.raises(MalformedAttributeException):
-            type_array_to_membership_array_expression_from_typed_columns(
-                AttributeKey(type=AttributeKey.Type.TYPE_STRING, name="my_tags")
+    def test_has_any_rejects_empty_array(self) -> None:
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="OP_HAS_ANY/OP_HAS_ALL require a non-empty array",
+        ):
+            trace_item_filters_to_expression(
+                self._array_filter(
+                    ComparisonFilter.OP_HAS_ANY,
+                    AttributeValue(val_str_array=StrArray(values=[])),
+                    AttributeKey.Type.TYPE_ARRAY_STRING,
+                ),
+                attribute_key_to_expression,
             )
 
 
