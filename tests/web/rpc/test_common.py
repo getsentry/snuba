@@ -1640,3 +1640,50 @@ class TestIndexedNameRedirect:
         )
         assert "indexed_name" not in self._column_names(expr)
         assert "arrayElement" in self._function_names(expr)
+
+    def test_in_filter_redirected_to_indexed_name(self) -> None:
+        # IN is served by the bloom filter, so it is redirected like OP_EQUALS.
+        in_filter = TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_STRING, name="sentry.op"),
+                op=ComparisonFilter.OP_IN,
+                value=AttributeValue(val_str_array=StrArray(values=["db.query", "http.client"])),
+            )
+        )
+        expr = trace_item_filters_to_expression(
+            in_filter, attribute_key_to_expression, indexed_name_key="sentry.op"
+        )
+        assert "indexed_name" in self._column_names(expr)
+        assert "arrayElement" not in self._function_names(expr)
+
+    def test_like_filter_not_redirected(self) -> None:
+        # LIKE is not served by the bloom filter and needs the map's existence guard
+        # (a `%` pattern would otherwise match rows missing the key), so keep the bucket.
+        like_filter = TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_STRING, name="sentry.op"),
+                op=ComparisonFilter.OP_LIKE,
+                value=AttributeValue(val_str="db.%"),
+            )
+        )
+        expr = trace_item_filters_to_expression(
+            like_filter, attribute_key_to_expression, indexed_name_key="sentry.op"
+        )
+        assert "indexed_name" not in self._column_names(expr)
+        assert "arrayElement" in self._function_names(expr)
+
+    def test_not_equals_filter_not_redirected(self) -> None:
+        # `!=` isn't served by the bloom filter and needs the existence guard, so
+        # keep the bucket lookup.
+        not_equals_filter = TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=AttributeKey.Type.TYPE_STRING, name="sentry.op"),
+                op=ComparisonFilter.OP_NOT_EQUALS,
+                value=AttributeValue(val_str="db.query"),
+            )
+        )
+        expr = trace_item_filters_to_expression(
+            not_equals_filter, attribute_key_to_expression, indexed_name_key="sentry.op"
+        )
+        assert "indexed_name" not in self._column_names(expr)
+        assert "arrayElement" in self._function_names(expr)

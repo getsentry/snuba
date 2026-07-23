@@ -1024,12 +1024,14 @@ def trace_item_filters_to_expression(
         # indexed_name_key is set only when this request's org is enabled for the
         # redirect (see indexed_name_key_for_request); None means not enabled.
         org_enabled_for_indexed_name = indexed_name_key is not None
-        # When enabled and this filter targets that attribute with a value indexed_name
-        # can represent (non-null, non-default: it can't tell an absent key from an empty
-        # one), read the bloom-filter-indexed indexed_name column so the filter is
-        # granule-prunable (cf. the sentry.timestamp special-case below).
+        # When enabled, redirect a filter on that attribute to the bloom-filter-indexed
+        # indexed_name column so it's granule-prunable (cf. the sentry.timestamp
+        # special-case below). Only for `=` / `IN` (the ops the bloom filter serves) and a
+        # non-null, non-default value: indexed_name can't tell an absent key from an empty
+        # one, so anything relying on the map's existence guard keeps the bucket lookup.
         use_indexed_name = (
             org_enabled_for_indexed_name
+            and op in (ComparisonFilter.OP_EQUALS, ComparisonFilter.OP_IN)
             and k.name == indexed_name_key
             and k.type == AttributeKey.Type.TYPE_STRING
             and not v_is_null
