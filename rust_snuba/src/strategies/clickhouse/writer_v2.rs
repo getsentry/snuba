@@ -290,13 +290,7 @@ impl ClickhouseClient {
         // the same wire format `clickhouse-rs` used and what
         // `clickhouse-compressor` produces. Distinct from HTTP-standard
         // `Content-Encoding: lz4`, which would need `enable_http_compression=1`.
-        let mut base_url =
-            format!("{scheme}://{host}:{port}?insert_distributed_sync=1&decompress=1");
-        if matches!(format, InsertFormat::RowBinary) {
-            // RowBinary cannot represent JSON values natively; tell ClickHouse
-            // to treat any binary string targeting a JSON column as JSON text.
-            base_url.push_str("&input_format_binary_read_json_as_string=1");
-        }
+        let base_url = format!("{scheme}://{host}:{port}?insert_distributed_sync=1&decompress=1");
         let columns_clause = match columns {
             Some(cols) => format!(" ({})", cols.join(", ")),
             None => String::new(),
