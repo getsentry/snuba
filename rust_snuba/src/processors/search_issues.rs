@@ -382,10 +382,10 @@ impl SearchIssuesRow {
         let retention_days = enforce_retention(event.retention_days, env_config);
 
         let (client_timestamp, timestamp_ms) = match data.client_timestamp.filter(|c| *c != 0.0) {
-            Some(client_ts) => (
-                clamp_u32(client_ts as i64),
-                (client_ts * 1000.0).round().max(0.0) as u64,
-            ),
+            Some(client_ts) => {
+                let timestamp_ms = (client_ts * 1000.0).round().max(0.0) as u64;
+                (clamp_u32((timestamp_ms / 1000) as i64), timestamp_ms)
+            }
             None => {
                 let datetime_str = event
                     .datetime
@@ -728,6 +728,17 @@ mod tests {
         let row = process_one(event);
         assert_eq!(row["client_timestamp"], 1_677_512_412u32);
         assert_eq!(row["timestamp_ms"], 1_677_512_412_223u64);
+    }
+
+    #[test]
+    fn test_client_timestamp_aligned_with_timestamp_ms_at_boundary() {
+        let mut event = base_event();
+        event["data"]["client_timestamp"] = json!(1_699_999_999.9996);
+        let row = process_one(event);
+        let client_timestamp = row["client_timestamp"].as_u64().unwrap();
+        let timestamp_ms = row["timestamp_ms"].as_u64().unwrap();
+        assert_eq!(timestamp_ms / 1000, client_timestamp);
+        assert_eq!(client_timestamp, 1_700_000_000);
     }
 
     #[test]
