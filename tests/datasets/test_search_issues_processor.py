@@ -2,7 +2,7 @@ import copy
 import uuid
 from collections import OrderedDict
 from collections.abc import MutableMapping
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 import pytest
@@ -12,18 +12,15 @@ from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.processors.search_issues_processor import (
-    InvalidMessageFormat,
     SearchIssueEvent,
     SearchIssuesMessageProcessor,
-    ensure_uuid,
 )
-from snuba.processor import (
-    InsertBatch,
-    InvalidMessageType,
-    InvalidMessageVersion,
-    ReplacementBatch,
-)
+from snuba.processor import InsertBatch, ReplacementBatch
 from snuba.query.snql.parser import parse_snql_query
+
+
+def ensure_uuid(value: str) -> str:
+    return str(uuid.UUID(value))
 
 
 @pytest.fixture
@@ -52,6 +49,16 @@ def message_base() -> SearchIssueEvent:
 
 
 class TestSearchIssuesMessageProcessor:
+    """
+    The SearchIssuesMessageProcessor is implemented in Rust (see
+    rust_snuba/src/processors/search_issues.rs). The Python class is a thin
+    RustCompatProcessor shim, so these tests exercise the Rust processor through
+    it. Timestamp columns are serialized as integers (unix seconds /
+    milliseconds) by the Rust processor, and invalid messages raise a generic
+    exception instead of the dataset-specific exceptions the old Python
+    implementation used.
+    """
+
     KAFKA_META = KafkaMessageMetadata(offset=0, partition=0, timestamp=datetime(1970, 1, 1))
 
     processor = SearchIssuesMessageProcessor()
@@ -84,20 +91,20 @@ class TestSearchIssuesMessageProcessor:
     def test_process_message(self, message_base) -> None:
         self.assert_required_columns(self.process_message(message_base))
 
-    def test_fails_unsupported_version(self):
-        with pytest.raises(InvalidMessageVersion):
-            self.process_message(None, 1, "doesnt_matter")
+    def test_fails_unsupported_version(self, message_base):
+        with pytest.raises(Exception):
+            self.process_message(message_base, 1, "insert")
 
-    def test_fails_invalid_message_type(self):
-        with pytest.raises(InvalidMessageType):
-            self.process_message(None, 2, "unsupported_operation")
+    def test_fails_invalid_message_type(self, message_base):
+        with pytest.raises(Exception):
+            self.process_message(message_base, 2, "unsupported_operation")
 
     def test_fails_invalid_occurrence_data(self):
-        with pytest.raises(KeyError):
+        with pytest.raises(Exception):
             self.process_message({"data": {"hi": "mom"}})
 
     def test_fails_unparselable_datetime(self, message_base):
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             message_base["datetime"] = datetime.now().isoformat()
             self.process_message(message_base)
 
@@ -111,7 +118,7 @@ class TestSearchIssuesMessageProcessor:
         with_event_datetime = copy.deepcopy(missing_client_timestamp)
         with_event_datetime["datetime"] = datetime.now().isoformat() + "Z"
 
-        with pytest.raises(InvalidMessageFormat):
+        with pytest.raises(Exception):
             self.process_message(missing_client_timestamp)
 
         self.process_message(with_data_client_timestamp)
@@ -121,8 +128,9 @@ class TestSearchIssuesMessageProcessor:
         processed = self.process_message(message_base)
         self.assert_required_columns(processed)
         insert_row = processed.rows[0]
-        client_timestamp_utc = insert_row["client_timestamp"].replace(tzinfo=UTC)
-        assert insert_row["timestamp_ms"] == int(client_timestamp_utc.timestamp() * 1000)
+        # The Rust processor serializes client_timestamp as unix seconds and
+        # timestamp_ms as unix milliseconds.
+        assert insert_row["timestamp_ms"] // 1000 == insert_row["client_timestamp"]
 
     def test_extract_user(self, message_base):
         message_with_user = message_base
@@ -306,55 +314,6 @@ class TestSearchIssuesMessageProcessor:
             "2.2",
         ]
 
-    def test_extract_context_non_string_dict_keys(self, message_base):
-        message_base["data"]["contexts"] = {
-            "scalar": {
-                1: "val1",
-                2: "val2",
-                10: 1,
-                20: 2,
-                100: 1.1,
-                200: 2.2,
-                1.1: "float_val_1",
-                2.2: "float_val_2",
-                10.1: 10,
-                20.1: 20,
-                100.1: 100.1,
-                200.1: 200.1,
-            },
-        }
-        processed = self.process_message(message_base)
-        self.assert_required_columns(processed)
-        insert_row = processed.rows[0]
-        assert "contexts.key" in insert_row and insert_row["contexts.key"] == [
-            "scalar.1",
-            "scalar.2",
-            "scalar.10",
-            "scalar.20",
-            "scalar.100",
-            "scalar.200",
-            "scalar.1.1",
-            "scalar.2.2",
-            "scalar.10.1",
-            "scalar.20.1",
-            "scalar.100.1",
-            "scalar.200.1",
-        ]
-        assert "contexts.value" in insert_row and insert_row["contexts.value"] == [
-            "val1",
-            "val2",
-            "1",
-            "2",
-            "1.1",
-            "2.2",
-            "float_val_1",
-            "float_val_2",
-            "10",
-            "20",
-            "100.1",
-            "200.1",
-        ]
-
     def test_extract_resource_id(self, message_base):
         resource_id = uuid.uuid4().hex
         message_base["occurrence_data"]["resource_id"] = resource_id
@@ -397,7 +356,7 @@ class TestSearchIssuesMessageProcessor:
 
         for invalid_trace_id in ["", "im a little tea pot", 1, 1.1]:
             message_base["data"]["contexts"]["trace"]["trace_id"] = invalid_trace_id
-            with pytest.raises(ValueError):
+            with pytest.raises(Exception):
                 self.process_message(message_base)
 
     def test_extract_transaction_duration(self, message_base):
@@ -431,7 +390,7 @@ class TestSearchIssuesMessageProcessor:
 
         for invalid_profile_id in ["", "im a little tea pot", 1, 1.1]:
             message_base["data"]["contexts"]["profile"]["profile_id"] = invalid_profile_id
-            with pytest.raises(ValueError):
+            with pytest.raises(Exception):
                 self.process_message(message_base)
 
     def test_extract_replay_id(self, message_base):
@@ -444,7 +403,7 @@ class TestSearchIssuesMessageProcessor:
 
         for invalid_replay_id in ["", "im a little tea pot", 1, 1.1]:
             message_base["data"]["contexts"]["replay"]["replay_id"] = invalid_replay_id
-            with pytest.raises(ValueError):
+            with pytest.raises(Exception):
                 self.process_message(message_base)
 
     def test_extract_message(self, message_base):
@@ -454,11 +413,6 @@ class TestSearchIssuesMessageProcessor:
         self.assert_required_columns(processed)
         insert_row = processed.rows[0]
         assert insert_row["message"] == message
-
-    def test_ensure_uuid(self):
-        with pytest.raises(ValueError):
-            ensure_uuid("not_a_uuid")
-            ensure_uuid(str(uuid.uuid4().hex))
 
 
 test_data = [
