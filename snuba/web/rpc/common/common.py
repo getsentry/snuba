@@ -888,10 +888,13 @@ USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION = "eap_items_use_indexed_name_organizat
 
 
 def indexed_name_key(organization_id: int, item_type: int) -> str | None:
-    """The attribute whose eap_items filter should read the indexed ``indexed_name``
-    column, or ``None`` to keep the unindexed ``attributes_string`` bucket lookup."""
-    org_ids = cast("list[int]", get_option(USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION, []))
-    if organization_id not in org_ids:
+    """The promoted attribute (``sentry.op`` / ``sentry.metric.name``) to redirect to the
+    indexed ``indexed_name`` column when ``organization_id`` is enabled for it, or
+    ``None`` when the org is not enabled (keep the ``attributes_string`` bucket lookup)."""
+    enabled_organization_ids = cast(
+        "list[int]", get_option(USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION, [])
+    )
+    if organization_id not in enabled_organization_ids:
         return None
     return _INDEXED_NAME_KEY_BY_ITEM_TYPE.get(item_type)
 
@@ -1018,20 +1021,23 @@ def trace_item_filters_to_expression(
         else:
             v_expression = _attribute_value_to_expression(v)
 
-        # Redirect the promoted name filter to the bloom-filter-indexed indexed_name
-        # column (cf. the sentry.timestamp special-case below) so it's granule-prunable.
-        # Only for a plain non-null, non-default value: indexed_name can't tell an absent
-        # key from an empty one, so those cases keep the exists-guarded bucket lookup.
-        redirect_to_indexed_name = (
-            indexed_name_key is not None
+        # indexed_name_key is set only when this request's org is enabled for the
+        # redirect (see indexed_name_key_for_request); None means not enabled.
+        org_enabled_for_indexed_name = indexed_name_key is not None
+        # When enabled and this filter targets that attribute with a value indexed_name
+        # can represent (non-null, non-default: it can't tell an absent key from an empty
+        # one), read the bloom-filter-indexed indexed_name column so the filter is
+        # granule-prunable (cf. the sentry.timestamp special-case below).
+        use_indexed_name = (
+            org_enabled_for_indexed_name
             and k.name == indexed_name_key
             and k.type == AttributeKey.Type.TYPE_STRING
             and not v_is_null
             and not _comparison_can_match_column_default(v, value_type)
         )
-        if redirect_to_indexed_name:
+        if use_indexed_name:
             k_expression = column("indexed_name")
-        map_backed = _is_map_backed_key(k) and not redirect_to_indexed_name
+        map_backed = _is_map_backed_key(k) and not use_indexed_name
 
         # `sentry.timestamp` is a normalized column that `attribute_key_to_expression`
         # maps to `CAST(timestamp, 'Float64')`. Wrapping the primary-key/partition
