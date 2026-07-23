@@ -1,4 +1,5 @@
 import math
+import re
 from collections.abc import Callable, Iterable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -554,6 +555,10 @@ def _attribute_value_to_expression(v: AttributeValue) -> Expression:
             )
 
 
+# A valid ClickHouse LIKE escape sequence (``\%``, ``\_`` or ``\\``) or a lone backslash.
+_LIKE_ESCAPE_RE = re.compile(r"\\[%_\\]|\\")
+
+
 def _escape_dangling_like_backslashes(pattern: str) -> str:
     """Escape backslashes that do not begin a valid ClickHouse LIKE escape sequence.
 
@@ -565,24 +570,9 @@ def _escape_dangling_like_backslashes(pattern: str) -> str:
     backslash to ``\\\\`` so ClickHouse matches a literal backslash instead of erroring.
     Well-formed escape sequences are left untouched.
     """
-    result: list[str] = []
-    i = 0
-    n = len(pattern)
-    while i < n:
-        char = pattern[i]
-        if char == "\\":
-            nxt = pattern[i + 1] if i + 1 < n else None
-            if nxt in ("%", "_", "\\"):
-                result.append(char)
-                result.append(nxt)  # type: ignore[arg-type]
-                i += 2
-                continue
-            result.append("\\\\")
-            i += 1
-            continue
-        result.append(char)
-        i += 1
-    return "".join(result)
+    return _LIKE_ESCAPE_RE.sub(
+        lambda m: m.group(0) if len(m.group(0)) == 2 else "\\\\", pattern
+    )
 
 
 def _sanitize_like_pattern_expression(expr: Expression) -> Expression:
