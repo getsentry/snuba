@@ -573,12 +573,10 @@ def _escape_dangling_like_backslashes(pattern: str) -> str:
         if char == "\\":
             nxt = pattern[i + 1] if i + 1 < n else None
             if nxt in ("%", "_", "\\"):
-                # Valid escape sequence, keep both characters as-is.
                 result.append(char)
                 result.append(nxt)  # type: ignore[arg-type]
                 i += 2
                 continue
-            # Dangling backslash: escape it so it matches a literal backslash.
             result.append("\\\\")
             i += 1
             continue

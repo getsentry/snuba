@@ -252,12 +252,12 @@ class TestLikePatternEscaping:
             ("%Background\\", "%Background\\\\"),
             ("%Received\\", "%Received\\\\"),
             ("\\", "\\\\"),
-            ("a\\b", "a\\\\b"),  # dangling backslash before a normal char
-            ("job%", "job%"),  # no backslash, unchanged
-            ("%failed%", "%failed%"),  # no backslash, unchanged
-            ("a\\%b", "a\\%b"),  # valid escape of a wildcard, unchanged
-            ("a\\_b", "a\\_b"),  # valid escape of a wildcard, unchanged
-            ("a\\\\b", "a\\\\b"),  # already-escaped backslash, unchanged
+            ("a\\b", "a\\\\b"),
+            ("job%", "job%"),
+            ("%failed%", "%failed%"),
+            ("a\\%b", "a\\%b"),
+            ("a\\_b", "a\\_b"),
+            ("a\\\\b", "a\\\\b"),
             ("", ""),
         ],
     )
