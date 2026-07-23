@@ -55,6 +55,7 @@ from snuba.query.logical import Query
 from snuba.web.rpc.common.common import (
     _any_attribute_filter_to_expression,
     _comparison_can_match_column_default,
+    _escape_dangling_like_backslashes,
     add_existence_check_to_map_attribute_reads,
     attribute_key_to_expression,
     dedupe_and_conditions,
@@ -237,6 +238,75 @@ class TestTraceItemFiltersArrayLike:
             match="NOT LIKE comparison is only supported on string and array keys",
         ):
             trace_item_filters_to_expression(item_filter, attribute_key_to_expression)
+
+
+class TestLikePatternEscaping:
+    """A user-supplied LIKE pattern may contain a backslash that is not part of a valid
+    ClickHouse escape sequence (``\\%``, ``\\_``, ``\\\\``) — most commonly a trailing
+    backslash. ClickHouse rejects those with ``CANNOT_PARSE_ESCAPE_SEQUENCE``, so we
+    escape each dangling backslash to a literal ``\\\\`` before building the expression."""
+
+    @pytest.mark.parametrize(
+        "pattern,expected",
+        [
+            ("%Background\\", "%Background\\\\"),
+            ("%Received\\", "%Received\\\\"),
+            ("\\", "\\\\"),
+            ("a\\b", "a\\\\b"),
+            ("job%", "job%"),
+            ("%failed%", "%failed%"),
+            ("a\\%b", "a\\%b"),
+            ("a\\_b", "a\\_b"),
+            ("a\\\\b", "a\\\\b"),
+            ("", ""),
+        ],
+    )
+    def test_escape_dangling_like_backslashes(self, pattern: str, expected: str) -> None:
+        assert _escape_dangling_like_backslashes(pattern) == expected
+
+    def _like_filter(
+        self,
+        pattern: str,
+        op: ComparisonFilter.Op.ValueType = ComparisonFilter.OP_LIKE,
+        key_type: AttributeKey.Type.ValueType = AttributeKey.Type.TYPE_STRING,
+    ) -> TraceItemFilter:
+        return TraceItemFilter(
+            comparison_filter=ComparisonFilter(
+                key=AttributeKey(type=key_type, name="sentry.body"),
+                op=op,
+                value=AttributeValue(val_str=pattern),
+            )
+        )
+
+    def test_like_on_string_key_sanitizes_trailing_backslash(self) -> None:
+        result = trace_item_filters_to_expression(
+            self._like_filter("%Background\\"), attribute_key_to_expression
+        )
+        assert "%Background\\\\" in _collect_literal_values(result)
+        assert "%Background\\" not in _collect_literal_values(result)
+
+    def test_not_like_on_string_key_sanitizes_trailing_backslash(self) -> None:
+        result = trace_item_filters_to_expression(
+            self._like_filter("%Received\\", op=ComparisonFilter.OP_NOT_LIKE),
+            attribute_key_to_expression,
+        )
+        assert "%Received\\\\" in _collect_literal_values(result)
+
+    def test_like_on_array_key_sanitizes_trailing_backslash(self) -> None:
+        result = trace_item_filters_to_expression(
+            self._like_filter("%Background\\", key_type=AttributeKey.Type.TYPE_ARRAY_STRING),
+            attribute_key_to_expression,
+        )
+        assert "%Background\\\\" in _collect_literal_values(result)
+
+    def test_any_attribute_like_sanitizes_trailing_backslash(self) -> None:
+        result = _any_attribute_filter_to_expression(
+            AnyAttributeFilter(
+                op=AnyAttributeFilter.OP_LIKE,
+                value=AttributeValue(val_str="%Background\\"),
+            )
+        )
+        assert "%Background\\\\" in _collect_literal_values(result)
 
 
 def _collect_column_names(expr: Expression) -> set[str]:

@@ -1,4 +1,5 @@
 import math
+import re
 from collections.abc import Callable, Iterable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -51,6 +52,7 @@ from snuba.query.expressions import (
     Expression,
     FunctionCall,
     Lambda,
+    Literal,
     SubscriptableReference,
 )
 from snuba.state.sentry_options import get_option
@@ -553,6 +555,32 @@ def _attribute_value_to_expression(v: AttributeValue) -> Expression:
             )
 
 
+# A valid ClickHouse LIKE escape sequence (``\%``, ``\_`` or ``\\``) or a lone backslash.
+_LIKE_ESCAPE_RE = re.compile(r"\\[%_\\]|\\")
+
+
+def _escape_dangling_like_backslashes(pattern: str) -> str:
+    """Escape backslashes that do not begin a valid ClickHouse LIKE escape sequence.
+
+    ClickHouse uses ``\\`` as the escape character in LIKE patterns and only accepts
+    ``\\%``, ``\\_`` and ``\\\\`` as escape sequences. Any other backslash — most
+    commonly a trailing backslash at the end of the pattern — is rejected with
+    ``CANNOT_PARSE_ESCAPE_SEQUENCE``. Sentry forwards user-supplied text as a LIKE
+    pattern, so those backslashes are meant literally; we escape each dangling
+    backslash to ``\\\\`` so ClickHouse matches a literal backslash instead of erroring.
+    Well-formed escape sequences are left untouched.
+    """
+    return _LIKE_ESCAPE_RE.sub(lambda m: m.group(0) if len(m.group(0)) == 2 else "\\\\", pattern)
+
+
+def _sanitize_like_pattern_expression(expr: Expression) -> Expression:
+    """Sanitize a string LIKE-pattern literal so ClickHouse does not reject it with
+    ``CANNOT_PARSE_ESCAPE_SEQUENCE``. Non-string literals pass through unchanged."""
+    if isinstance(expr, Literal) and isinstance(expr.value, str):
+        return literal(_escape_dangling_like_backslashes(expr.value))
+    return expr
+
+
 _NEGATIVE_OPS = {
     AnyAttributeFilter.OP_NOT_EQUALS,
     AnyAttributeFilter.OP_NOT_LIKE,
@@ -843,10 +871,11 @@ def _any_attribute_filter_to_expression(
         else:
             comparison = f.equals(x, v_expression)
     elif effective_op == AnyAttributeFilter.OP_LIKE:
+        like_pattern = _sanitize_like_pattern_expression(v_expression)
         if filt.ignore_case:
-            comparison = f.ilike(x, v_expression)
+            comparison = f.ilike(x, like_pattern)
         else:
-            comparison = f.like(x, v_expression)
+            comparison = f.like(x, like_pattern)
     elif effective_op == AnyAttributeFilter.OP_IN:
         if filt.ignore_case:
             if value_type == "val_str_array":
@@ -1093,9 +1122,10 @@ def trace_item_filters_to_expression(
             expr_with_null = or_cond(expr, f.xor(f.isNull(k_expression), f.isNull(v_expression)))
             return expr_with_null
         if op == ComparisonFilter.OP_LIKE:
+            like_pattern = _sanitize_like_pattern_expression(v_expression)
             if k.type in ARRAY_TYPES:
                 return _typed_array_like_expression(
-                    k, v_expression, item_filter.comparison_filter.ignore_case
+                    k, like_pattern, item_filter.comparison_filter.ignore_case
                 )
             if k.type != AttributeKey.Type.TYPE_STRING:
                 raise BadSnubaRPCRequestException(
@@ -1104,13 +1134,14 @@ def trace_item_filters_to_expression(
             comparison_function = f.ilike if item_filter.comparison_filter.ignore_case else f.like
             if _is_map_backed_key(k):
                 value, exists = _map_backed_operands(k)
-                return and_cond(exists, comparison_function(value, v_expression))
-            return comparison_function(k_expression, v_expression)
+                return and_cond(exists, comparison_function(value, like_pattern))
+            return comparison_function(k_expression, like_pattern)
         if op == ComparisonFilter.OP_NOT_LIKE:
+            like_pattern = _sanitize_like_pattern_expression(v_expression)
             if k.type in ARRAY_TYPES:
                 return not_cond(
                     _typed_array_like_expression(
-                        k, v_expression, item_filter.comparison_filter.ignore_case
+                        k, like_pattern, item_filter.comparison_filter.ignore_case
                     )
                 )
             if k.type != AttributeKey.Type.TYPE_STRING:
@@ -1121,11 +1152,11 @@ def trace_item_filters_to_expression(
                 # Negation of OP_LIKE; an absent key is "not like".
                 like_fn = f.ilike if item_filter.comparison_filter.ignore_case else f.like
                 value, exists = _map_backed_operands(k)
-                return not_cond(and_cond(exists, like_fn(value, v_expression)))
+                return not_cond(and_cond(exists, like_fn(value, like_pattern)))
             comparison_function = (
                 f.notILike if item_filter.comparison_filter.ignore_case else f.notLike
             )
-            expr = comparison_function(k_expression, v_expression)
+            expr = comparison_function(k_expression, like_pattern)
             # we redefine the way not like works for nulls
             # now null not like "%anything%" is true
             expr_with_null = or_cond(expr, f.isNull(k_expression))
