@@ -70,10 +70,8 @@ fn clickhouse_task_runner(
     }
 }
 
-/// Wire format the writer posts to ClickHouse with. Internal to this module —
-/// consumers pick a format by choosing [`JsonWriterStep`] or
-/// [`RowBinaryWriterStep`], which share everything below except this token and
-/// whether an explicit column list is required.
+/// Wire format for the INSERT. Module-internal: callers pick [`JsonWriterStep`]
+/// or [`RowBinaryWriterStep`].
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum InsertFormat {
     JsonEachRow,
@@ -92,9 +90,8 @@ impl InsertFormat {
 type WriterInner<N> =
     RunTaskInThreads<BytesInsertBatch<RowData>, BytesInsertBatch<()>, anyhow::Error, N>;
 
-/// Shared construction for both writer entry points: wrap the ClickHouse HTTP
-/// client + task runner (compression, retry, batching) in a `RunTaskInThreads`.
-/// The format and column list are the only per-format inputs.
+/// Shared core for both writers: ClickHouse client + task runner in a
+/// `RunTaskInThreads`; format and columns are the only per-format inputs.
 #[allow(clippy::too_many_arguments)]
 fn build_writer_inner<N>(
     next_step: N,
@@ -126,8 +123,7 @@ where
     )
 }
 
-/// Generate the `ProcessingStrategy` impl for a writer newtype that delegates to
-/// its shared `inner` `RunTaskInThreads`.
+/// `ProcessingStrategy` impl delegating to the inner `RunTaskInThreads`.
 macro_rules! impl_writer_delegate {
     ($ty:ident) => {
         impl<N> ProcessingStrategy<BytesInsertBatch<RowData>> for $ty<N>
@@ -159,8 +155,7 @@ macro_rules! impl_writer_delegate {
     };
 }
 
-/// Writer for the `JSONEachRow` wire format — the historical default, used by
-/// every storage that hasn't opted into RowBinary.
+/// Writer for the `JSONEachRow` wire format (the historical default).
 pub struct JsonWriterStep<N> {
     inner: WriterInner<N>,
 }
@@ -194,10 +189,9 @@ where
 
 impl_writer_delegate!(JsonWriterStep);
 
-/// Writer for the `RowBinary` wire format. `columns` is REQUIRED: RowBinary is
-/// positional, so the explicit `(col1, col2, ...)` list is what maps wire order
-/// to the table's columns — without it ClickHouse falls back to the table's
-/// on-disk order and misreads bytes (see `EAPItemRow::COLUMN_NAMES`).
+/// Writer for the `RowBinary` wire format. `columns` is required: RowBinary is
+/// positional, so the explicit column list maps wire order to the table's
+/// columns (see `EAPItemRow::COLUMN_NAMES`).
 pub struct RowBinaryWriterStep<N> {
     inner: WriterInner<N>,
 }

@@ -90,9 +90,8 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
     }
 
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
-        // For RowBinary storages: the processor swap (JSON → RowBinary sibling)
-        // and the explicit column list required by `RowBinaryWriterStep`. Both
-        // are consumed under the `self.use_row_binary` branches below.
+        // RowBinary storages: the processor swap (JSON → RowBinary sibling) and
+        // the column list the RowBinary writer needs, both used below.
         let (process_fn_override, insert_columns): (
             Option<crate::processors::ProcessingFunction>,
             Option<&'static [&'static str]>,
@@ -155,9 +154,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             Some(Duration::from_millis(self.join_timeout_ms.unwrap_or(0))),
         );
 
-        // Pick the writer by wire format. Both share the same ClickHouse client,
-        // compression, retry, and batching; RowBinary additionally needs the
-        // explicit column list resolved above.
+        // Pick the writer by wire format; RowBinary also needs the column list.
         let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<RowData>>> =
             if self.use_row_binary {
                 let columns = insert_columns.expect("use_row_binary resolves a column list above");
