@@ -733,7 +733,7 @@ mod tests {
     #[test]
     fn test_client_timestamp_aligned_with_timestamp_ms_at_boundary() {
         let mut event = base_event();
-        event["data"]["client_timestamp"] = json!(1_699_999_999.9996);
+        event["data"]["client_timestamp"] = json!(1_699_999_999.999_6);
         let row = process_one(event);
         let client_timestamp = row["client_timestamp"].as_u64().unwrap();
         let timestamp_ms = row["timestamp_ms"].as_u64().unwrap();
