@@ -570,9 +570,7 @@ def _escape_dangling_like_backslashes(pattern: str) -> str:
     backslash to ``\\\\`` so ClickHouse matches a literal backslash instead of erroring.
     Well-formed escape sequences are left untouched.
     """
-    return _LIKE_ESCAPE_RE.sub(
-        lambda m: m.group(0) if len(m.group(0)) == 2 else "\\\\", pattern
-    )
+    return _LIKE_ESCAPE_RE.sub(lambda m: m.group(0) if len(m.group(0)) == 2 else "\\\\", pattern)
 
 
 def _sanitize_like_pattern_expression(expr: Expression) -> Expression:
