@@ -26,6 +26,11 @@ struct TraceItemOutcome {
     quantity: u64,
 }
 
+/// This consumer only ever processes the eap_items storage, so the per-storage
+/// `eap_items_drop_invalid_timestamps_by_storage` option is always resolved
+/// against this storage name.
+const STORAGE_NAME: &str = "eap_items";
+
 struct TraceItemOutcomes(Vec<TraceItemOutcome>);
 
 impl TraceItemOutcomes {
@@ -259,7 +264,9 @@ impl<TNext: ProcessingStrategy<AggregatedOutcomesBatch>> ProcessingStrategy<Kafk
             .and_then(|ts| DateTime::from_timestamp(ts.seconds, 0));
         if let Some(event_ts) = event_timestamp {
             let now = Utc::now();
-            if get_drop_invalid_timestamps_enabled() && out_of_valid_interval_secs(event_ts, now) {
+            if get_drop_invalid_timestamps_enabled(STORAGE_NAME)
+                && out_of_valid_interval_secs(event_ts, now)
+            {
                 let item_type = TraceItemType::try_from(trace_item.item_type)
                     .unwrap_or(TraceItemType::Unspecified);
                 let is_future = event_ts > now;

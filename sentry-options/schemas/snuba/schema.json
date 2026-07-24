@@ -26,7 +26,13 @@
     "eap_items_drop_invalid_timestamps": {
       "type": "boolean",
       "default": false,
-      "description": "When true, the eap-items consumer skips messages whose event timestamp is more than one week in the future or more than thirty days in the past."
+      "description": "When true, the eap-items consumer skips messages whose event timestamp is more than one week in the future or more than thirty days in the past. Global fallback; prefer eap_items_drop_invalid_timestamps_by_storage, which is checked first per storage."
+    },
+    "eap_items_drop_invalid_timestamps_by_storage": {
+      "type": "object",
+      "additionalProperties": { "type": "boolean" },
+      "default": {},
+      "description": "Dict mapping storage name (e.g. eap_items, eap_items_dlq_replay) to whether that storage's consumer skips messages whose event timestamp is more than one week in the future or more than thirty days in the past. Checked before eap_items_drop_invalid_timestamps; a storage with no entry falls back to that global value."
     },
     "experimental_healthcheck": {
       "type": "boolean",

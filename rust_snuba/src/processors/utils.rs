@@ -16,10 +16,21 @@ pub const INVALID_TIMESTAMP_FUTURE_INTERVAL_SECONDS: i64 = 7 * 24 * 60 * 60;
 /// timestamp dropping is enabled.
 pub const INVALID_TIMESTAMP_PAST_INTERVAL_SECONDS: i64 = 30 * 24 * 60 * 60;
 
-/// sentry-options key. When `true`, the eap-items consumer skips messages
-/// whose event `timestamp` is more than one week in the future or more than
-/// thirty days in the past (see `out_of_valid_interval_secs`).
+/// sentry-options key. A bool that, when `true`, makes the consumer skip
+/// messages whose event `timestamp` is more than one week in the future or
+/// more than thirty days in the past (see `out_of_valid_interval_secs`).
+/// Applies to every storage. This is the original, global killswitch; prefer
+/// the per-storage `DROP_INVALID_TIMESTAMPS_BY_STORAGE_KEY`, which is checked
+/// first and only falls back to this value when it has no entry for a storage.
 pub const DROP_INVALID_TIMESTAMPS_KEY: &str = "eap_items_drop_invalid_timestamps";
+
+/// sentry-options key. A dict mapping storage name to a bool, letting each
+/// storage be controlled independently (e.g. `eap_items` vs
+/// `eap_items_dlq_replay`). Checked before `DROP_INVALID_TIMESTAMPS_KEY`; a
+/// storage with an entry uses that value, and a storage with no entry falls
+/// back to the global `DROP_INVALID_TIMESTAMPS_KEY`.
+pub const DROP_INVALID_TIMESTAMPS_BY_STORAGE_KEY: &str =
+    "eap_items_drop_invalid_timestamps_by_storage";
 
 // Equivalent to "%Y-%m-%dT%H:%M:%S.%fZ" in python
 // Notice the differennce of .%fZ vs %.fZ, this comes from a difference in how rust's chrono handles the format
@@ -33,10 +44,26 @@ pub fn out_of_valid_interval_secs(ts: DateTime<Utc>, now: DateTime<Utc>) -> bool
         .contains(&offset_sec)
 }
 
-pub fn get_drop_invalid_timestamps_enabled() -> bool {
-    options("snuba")
+pub fn get_drop_invalid_timestamps_enabled(storage_name: &str) -> bool {
+    let opts = match options("snuba") {
+        Ok(opts) => opts,
+        Err(_) => return false,
+    };
+
+    // Per-storage option takes precedence; only fall back to the global option
+    // when this storage has no entry in the per-storage dict.
+    if !storage_name.is_empty() {
+        if let Some(enabled) = opts
+            .get(DROP_INVALID_TIMESTAMPS_BY_STORAGE_KEY)
+            .ok()
+            .and_then(|v| v.get(storage_name).and_then(|b| b.as_bool()))
+        {
+            return enabled;
+        }
+    }
+
+    opts.get(DROP_INVALID_TIMESTAMPS_KEY)
         .ok()
-        .and_then(|o| o.get(DROP_INVALID_TIMESTAMPS_KEY).ok())
         .and_then(|v| v.as_bool())
         .unwrap_or(false)
 }
@@ -119,6 +146,61 @@ pub struct SilencedDLQMessage;
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use sentry_options::testing::override_options;
+    use serde_json::json;
+    use std::sync::Once;
+
+    static INIT: Once = Once::new();
+    fn init_options() {
+        INIT.call_once(|| crate::init_sentry_options().unwrap());
+    }
+
+    #[test]
+    fn test_get_drop_invalid_timestamps_enabled_per_storage_takes_precedence() {
+        init_options();
+        let _guard = override_options(&[
+            (
+                "snuba",
+                DROP_INVALID_TIMESTAMPS_BY_STORAGE_KEY,
+                json!({ "eap_items": true, "eap_items_dlq_replay": false }),
+            ),
+            // Global says false, but the per-storage entry for eap_items wins.
+            ("snuba", DROP_INVALID_TIMESTAMPS_KEY, json!(false)),
+        ])
+        .unwrap();
+        assert!(get_drop_invalid_timestamps_enabled("eap_items"));
+        assert!(!get_drop_invalid_timestamps_enabled("eap_items_dlq_replay"));
+    }
+
+    #[test]
+    fn test_get_drop_invalid_timestamps_enabled_falls_back_to_global() {
+        init_options();
+        let _guard = override_options(&[
+            // Only eap_items has a per-storage entry; other storages fall back
+            // to the global option.
+            (
+                "snuba",
+                DROP_INVALID_TIMESTAMPS_BY_STORAGE_KEY,
+                json!({ "eap_items": false }),
+            ),
+            ("snuba", DROP_INVALID_TIMESTAMPS_KEY, json!(true)),
+        ])
+        .unwrap();
+        // Per-storage entry wins over the global true.
+        assert!(!get_drop_invalid_timestamps_enabled("eap_items"));
+        // No per-storage entry -> global true.
+        assert!(get_drop_invalid_timestamps_enabled("eap_items_dlq_replay"));
+    }
+
+    #[test]
+    fn test_get_drop_invalid_timestamps_enabled_defaults_false() {
+        init_options();
+        let _guard =
+            override_options(&[("snuba", DROP_INVALID_TIMESTAMPS_BY_STORAGE_KEY, json!({}))])
+                .unwrap();
+        // Neither the per-storage dict nor the (unset) global opt it in.
+        assert!(!get_drop_invalid_timestamps_enabled("eap_items"));
+    }
 
     #[test]
     fn test_out_of_valid_interval_secs_drops_messages_more_than_thirty_days_old() {
