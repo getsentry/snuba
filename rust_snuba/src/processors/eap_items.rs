@@ -71,7 +71,9 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
         let now = Utc::now();
 
         // should_skip=true will drop messages that are too old or too far in the future
-        if get_drop_invalid_timestamps_enabled() && out_of_valid_interval_secs(event_ts, now) {
+        if get_drop_invalid_timestamps_enabled(&config.storage_name)
+            && out_of_valid_interval_secs(event_ts, now)
+        {
             let is_future = event_ts > now;
             record_invalid_timestamp_metric("eap_items.messages", is_future, item_type);
             should_skip = true;
