@@ -102,16 +102,15 @@ def before_send(event: Event, hint: Hint) -> Event | None:
       ERROR-level they are not covered by the WARN->log policy, so filter them by
       type here. The underlying worker death is still observable via logs and
       arroyo's ``sigchld.detected`` metric.
-    - redis-cluster's own transient connectivity failure ("... cannot be
-      connected. Please provide at least one reachable node: ..."), raised as
-      a bare ``RedisClusterException``. It self-heals once the cluster is
-      reachable again, matching the transient-message convention already used
-      for cluster init in ``snuba/redis.py`` (``KNOWN_TRANSIENT_INIT_FAILURE_MESSAGE``),
-      so it isn't actionable as a Sentry issue (e.g. SNUBA-BQA, SNUBA-B6Z).
+    - ``RedisClusterException`` (only its "cannot be connected" message):
+      redis-cluster's own transient connectivity failure, which self-heals
+      once the cluster is reachable again, matching the transient-message
+      convention already used for cluster init in ``snuba/redis.py``
+      (``KNOWN_TRANSIENT_INIT_FAILURE_MESSAGE``) (e.g. SNUBA-BQA, SNUBA-B6Z).
       ``RedisClusterException`` is also raised by redis-py for unrelated,
       genuinely actionable programming errors (unsupported commands in
-      cluster mode, invalid arguments, etc.), so this matches on the specific
-      message rather than the exception type.
+      cluster mode, invalid arguments, etc.), so only this specific message
+      is matched rather than the whole exception type.
     """
     if "exc_info" not in hint:
         return event
