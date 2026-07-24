@@ -1,7 +1,9 @@
 from arroyo.processing.strategies.run_task_with_multiprocessing import (
     ChildProcessTerminated,
 )
+from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import RedisClusterException
+from redis.exceptions import TimeoutError as RedisTimeoutError
 from sentry_sdk.types import Event, Hint
 
 from snuba.environment import before_send
@@ -86,25 +88,44 @@ def test_before_send_drops_rpc_allocation_policy_exception() -> None:
 def test_before_send_drops_redis_cluster_connectivity_exception() -> None:
     event: Event = {"message": "redis unreachable"}
     try:
-        raise RedisClusterException(
-            "Redis Cluster cannot be connected. Please provide at least one "
-            "reachable node: Timeout connecting to server"
-        )
+        try:
+            raise RedisTimeoutError("Timeout connecting to server")
+        except RedisTimeoutError as cause:
+            raise RedisClusterException(
+                "Redis Cluster cannot be connected. Please provide at least "
+                f"one reachable node: {cause}"
+            ) from cause
     except RedisClusterException as err:
         assert before_send(event, _hint_for(err)) is None
 
 
 def test_before_send_keeps_unrelated_redis_cluster_exception() -> None:
-    """
-    ``RedisClusterException`` is also raised by redis-py for genuinely
-    actionable programming errors (e.g. calling an unsupported command in
-    cluster mode), so only the specific transient-connectivity message should
-    be dropped, not the whole exception type.
-    """
     event: Event = {"message": "redis programming error"}
     try:
         raise RedisClusterException("method eval() is not implemented")
     except RedisClusterException as err:
+        assert before_send(event, _hint_for(err)) is event
+
+
+def test_before_send_keeps_redis_cluster_misconfiguration_exception() -> None:
+    event: Event = {"message": "redis misconfigured"}
+    try:
+        try:
+            raise RedisClusterException("Cluster mode is not enabled on this node")
+        except RedisClusterException as cause:
+            raise RedisClusterException(
+                "Redis Cluster cannot be connected. Please provide at least "
+                f"one reachable node: {cause}"
+            ) from cause
+    except RedisClusterException as err:
+        assert before_send(event, _hint_for(err)) is event
+
+
+def test_before_send_keeps_redis_connection_error_outside_cluster_exception() -> None:
+    event: Event = {"message": "redis connection error"}
+    try:
+        raise RedisConnectionError("Error connecting to redis")
+    except RedisConnectionError as err:
         assert before_send(event, _hint_for(err)) is event
 
 

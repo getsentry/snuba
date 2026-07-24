@@ -334,8 +334,6 @@ pub fn validate_schema(
     };
 
     if _validate_schema(schema, enforce_schema, payload).is_err() {
-        // The failure itself (with the payload attached) is already logged
-        // inside `_validate_schema`; don't log it again here.
         return Err(maybe_err);
     };
 
@@ -362,11 +360,6 @@ fn _validate_schema(
 
     counter!("schema_validation.failed");
 
-    // Schema violations are almost always malformed data sent by a client SDK
-    // (e.g. out-of-range timestamps), not a Snuba bug, and are already tracked
-    // via the `schema_validation.failed` counter above. Log at WARN so it's
-    // still observable but doesn't create a Sentry issue for every bad
-    // message a client happens to send (SNUBA-B5G).
     sentry::with_scope(
         |scope| {
             let payload = String::from_utf8_lossy(payload).into();
