@@ -333,9 +333,7 @@ pub fn validate_schema(
         return Err(maybe_err);
     };
 
-    if let Err(error) = _validate_schema(schema, enforce_schema, payload) {
-        let error: &dyn std::error::Error = &error;
-        tracing::error!(error, "Failed schema validation");
+    if _validate_schema(schema, enforce_schema, payload).is_err() {
         return Err(maybe_err);
     };
 
@@ -369,7 +367,7 @@ fn _validate_schema(
         },
         || {
             let error: &dyn std::error::Error = &error;
-            tracing::error!(error, "Validation error");
+            tracing::warn!(error, "Validation error");
         },
     );
 
