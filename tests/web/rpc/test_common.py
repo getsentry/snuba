@@ -59,8 +59,6 @@ from snuba.web.rpc.common.common import (
     add_existence_check_to_map_attribute_reads,
     attribute_key_to_expression,
     dedupe_and_conditions,
-    indexed_name_key,
-    indexed_name_key_for_request,
     next_monday,
     prev_monday,
     semver_sort_key,
@@ -1557,8 +1555,11 @@ class TestAnyAttributeFilterOption:
 
 
 class TestIndexedNameRedirect:
-    """The primary-name filter is redirected onto the indexed_name column for
-    orgs in the eap_items_use_indexed_name_organization_ids option."""
+    """A `=` / `IN` filter on the item type's promoted name attribute reads the
+    indexed_name column for orgs in the eap_items_use_indexed_name_organization_ids
+    option. Everything else keeps the attributes_string bucket lookup."""
+
+    ORGANIZATION_ID = 42
 
     @staticmethod
     def _column_names(expr: Expression) -> set[str]:
@@ -1584,106 +1585,95 @@ class TestIndexedNameRedirect:
         expr.transform(visit)
         return names
 
-    def _op_filter(self, name: str = "sentry.op") -> TraceItemFilter:
+    def _filter(
+        self,
+        name: str = "sentry.op",
+        op: ComparisonFilter.Op.ValueType = ComparisonFilter.OP_EQUALS,
+        value: AttributeValue | None = None,
+        ignore_case: bool = False,
+    ) -> TraceItemFilter:
         return TraceItemFilter(
             comparison_filter=ComparisonFilter(
                 key=AttributeKey(type=AttributeKey.Type.TYPE_STRING, name=name),
-                op=ComparisonFilter.OP_EQUALS,
-                value=AttributeValue(val_str="db.query"),
+                op=op,
+                value=value if value is not None else AttributeValue(val_str="db.query"),
+                ignore_case=ignore_case,
             )
         )
 
-    @pytest.mark.redis_db
-    def test_indexed_name_key_for_request(self) -> None:
-        span_meta = RequestMeta(
-            organization_id=42, trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN
+    def _expression(
+        self,
+        item_filter: TraceItemFilter,
+        enabled_organization_ids: list[int] | None = None,
+        item_type: TraceItemType.ValueType = TraceItemType.TRACE_ITEM_TYPE_SPAN,
+    ) -> Expression:
+        organization_ids = (
+            [self.ORGANIZATION_ID] if enabled_organization_ids is None else enabled_organization_ids
         )
-        metric_meta = RequestMeta(
-            organization_id=42, trace_item_type=TraceItemType.TRACE_ITEM_TYPE_METRIC
-        )
-        log_meta = RequestMeta(
-            organization_id=42, trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG
-        )
-        with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [42]}):
-            assert indexed_name_key_for_request(span_meta) == "sentry.op"
-            assert indexed_name_key_for_request(metric_meta) == "sentry.metric.name"
-            # unsupported item type has no promoted name
-            assert indexed_name_key_for_request(log_meta) is None
-            # org not in the list
-            assert indexed_name_key(7, TraceItemType.TRACE_ITEM_TYPE_SPAN) is None
-        # option unset -> disabled everywhere
-        with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: []}):
-            assert indexed_name_key_for_request(span_meta) is None
+        with override_options(
+            "snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: organization_ids}
+        ):
+            return trace_item_filters_to_expression(
+                item_filter,
+                attribute_key_to_expression,
+                organization_id=self.ORGANIZATION_ID,
+                item_type=item_type,
+            )
 
-    def test_filter_redirected_to_indexed_name(self) -> None:
-        expr = trace_item_filters_to_expression(
-            self._op_filter(),
-            attribute_key_to_expression,
-            indexed_name_key="sentry.op",
-        )
-        # reads the indexed_name column, not the attributes_string bucket map.
+    def _assert_reads_indexed_name(self, expr: Expression) -> None:
         assert "indexed_name" in self._column_names(expr)
         assert "arrayElement" not in self._function_names(expr)
 
-    def test_filter_not_redirected_when_disabled(self) -> None:
-        # indexed_name_key=None (the default) -> keep the bucket lookup.
-        expr = trace_item_filters_to_expression(self._op_filter(), attribute_key_to_expression)
+    def _assert_reads_bucket(self, expr: Expression) -> None:
         assert "indexed_name" not in self._column_names(expr)
         assert "arrayElement" in self._function_names(expr)
 
-    def test_filter_not_redirected_for_other_key(self) -> None:
-        # Only the configured key is redirected; other attributes keep the bucket.
-        expr = trace_item_filters_to_expression(
-            self._op_filter(name="sentry.metric.name"),
-            attribute_key_to_expression,
-            indexed_name_key="sentry.op",
+    def test_equals_redirected_for_enabled_org(self) -> None:
+        self._assert_reads_indexed_name(self._expression(self._filter()))
+
+    def test_in_redirected_for_enabled_org(self) -> None:
+        in_filter = self._filter(
+            op=ComparisonFilter.OP_IN,
+            value=AttributeValue(val_str_array=StrArray(values=["db.query", "http.client"])),
         )
-        assert "indexed_name" not in self._column_names(expr)
-        assert "arrayElement" in self._function_names(expr)
+        self._assert_reads_indexed_name(self._expression(in_filter))
 
-    def test_in_filter_redirected_to_indexed_name(self) -> None:
-        # IN is served by the bloom filter, so it is redirected like OP_EQUALS.
-        in_filter = TraceItemFilter(
-            comparison_filter=ComparisonFilter(
-                key=AttributeKey(type=AttributeKey.Type.TYPE_STRING, name="sentry.op"),
-                op=ComparisonFilter.OP_IN,
-                value=AttributeValue(val_str_array=StrArray(values=["db.query", "http.client"])),
+    def test_metric_name_redirected_for_metrics(self) -> None:
+        self._assert_reads_indexed_name(
+            self._expression(
+                self._filter(name="sentry.metric.name"),
+                item_type=TraceItemType.TRACE_ITEM_TYPE_METRIC,
             )
         )
-        expr = trace_item_filters_to_expression(
-            in_filter, attribute_key_to_expression, indexed_name_key="sentry.op"
-        )
-        assert "indexed_name" in self._column_names(expr)
-        assert "arrayElement" not in self._function_names(expr)
 
-    def test_like_filter_not_redirected(self) -> None:
-        # LIKE is not served by the bloom filter and needs the map's existence guard
-        # (a `%` pattern would otherwise match rows missing the key), so keep the bucket.
-        like_filter = TraceItemFilter(
-            comparison_filter=ComparisonFilter(
-                key=AttributeKey(type=AttributeKey.Type.TYPE_STRING, name="sentry.op"),
-                op=ComparisonFilter.OP_LIKE,
-                value=AttributeValue(val_str="db.%"),
-            )
-        )
-        expr = trace_item_filters_to_expression(
-            like_filter, attribute_key_to_expression, indexed_name_key="sentry.op"
-        )
-        assert "indexed_name" not in self._column_names(expr)
-        assert "arrayElement" in self._function_names(expr)
+    def test_not_redirected_for_disabled_org(self) -> None:
+        self._assert_reads_bucket(self._expression(self._filter(), enabled_organization_ids=[]))
 
-    def test_not_equals_filter_not_redirected(self) -> None:
-        # `!=` isn't served by the bloom filter and needs the existence guard, so
-        # keep the bucket lookup.
-        not_equals_filter = TraceItemFilter(
-            comparison_filter=ComparisonFilter(
-                key=AttributeKey(type=AttributeKey.Type.TYPE_STRING, name="sentry.op"),
-                op=ComparisonFilter.OP_NOT_EQUALS,
-                value=AttributeValue(val_str="db.query"),
-            )
+    def test_not_redirected_for_other_key(self) -> None:
+        # Only the item type's promoted name is redirected.
+        self._assert_reads_bucket(self._expression(self._filter(name="sentry.metric.name")))
+
+    def test_not_redirected_for_item_type_without_promoted_name(self) -> None:
+        self._assert_reads_bucket(
+            self._expression(self._filter(), item_type=TraceItemType.TRACE_ITEM_TYPE_LOG)
         )
-        expr = trace_item_filters_to_expression(
-            not_equals_filter, attribute_key_to_expression, indexed_name_key="sentry.op"
+
+    def test_like_not_redirected(self) -> None:
+        # LIKE isn't served by the bloom filter and needs the map's existence guard: a
+        # `%` pattern would otherwise match rows missing the key.
+        like_filter = self._filter(
+            op=ComparisonFilter.OP_LIKE, value=AttributeValue(val_str="db.%")
         )
-        assert "indexed_name" not in self._column_names(expr)
-        assert "arrayElement" in self._function_names(expr)
+        self._assert_reads_bucket(self._expression(like_filter))
+
+    def test_not_equals_not_redirected(self) -> None:
+        self._assert_reads_bucket(self._expression(self._filter(op=ComparisonFilter.OP_NOT_EQUALS)))
+
+    def test_ignore_case_not_redirected(self) -> None:
+        # lower() on the column would defeat the bloom filter index.
+        self._assert_reads_bucket(self._expression(self._filter(ignore_case=True)))
+
+    def test_empty_value_not_redirected(self) -> None:
+        # indexed_name reads as '' for an absent key, so the bucket's existence guard
+        # is what makes `= ''` mean "present and empty".
+        self._assert_reads_bucket(self._expression(self._filter(value=AttributeValue(val_str=""))))

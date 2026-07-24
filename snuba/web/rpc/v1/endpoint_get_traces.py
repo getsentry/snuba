@@ -45,7 +45,6 @@ from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     base_conditions_and,
-    indexed_name_key,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
@@ -590,7 +589,8 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                     ),
                     attribute_key_to_expression,
                     membership_as_has=True,
-                    indexed_name_key=indexed_name_key(request_meta.organization_id, item_type),
+                    organization_id=request_meta.organization_id,
+                    item_type=item_type,
                 ),
             )
 
@@ -614,7 +614,8 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                 ),
             ),
             attribute_key_to_expression,
-            indexed_name_key=indexed_name_key(request.meta.organization_id, item_type),
+            organization_id=request.meta.organization_id,
+            item_type=item_type,
         )
         selected_columns: list[SelectedExpression] = [
             SelectedExpression(

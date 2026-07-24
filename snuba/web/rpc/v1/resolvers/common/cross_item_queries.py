@@ -29,7 +29,6 @@ from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     base_conditions_and,
-    indexed_name_key,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
@@ -153,9 +152,8 @@ def get_trace_ids_sql_for_cross_item_query(
                     trace_item_filters_to_expression(
                         trace_filter.filter,
                         attribute_key_to_expression,
-                        indexed_name_key=indexed_name_key(
-                            request_meta.organization_id, trace_filter.item_type
-                        ),
+                        organization_id=request_meta.organization_id,
+                        item_type=trace_filter.item_type,
                     ),
                 )
             )
@@ -166,9 +164,8 @@ def get_trace_ids_sql_for_cross_item_query(
                         trace_filter.filter,
                         attribute_key_to_expression,
                         membership_as_has=True,
-                        indexed_name_key=indexed_name_key(
-                            request_meta.organization_id, trace_filter.item_type
-                        ),
+                        organization_id=request_meta.organization_id,
+                        item_type=trace_filter.item_type,
                     ),
                 )
             )
