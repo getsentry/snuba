@@ -34,6 +34,7 @@ from snuba.downsampled_storage_tiers import Tier
 from snuba.protos.common import (
     NORMALIZED_COLUMNS_EAP_ITEMS,
     TYPED_ARRAY_MAP_COLUMNS,
+    NormalizedColumn,
     type_array_typed_columns_select_expressions,
 )
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
@@ -190,13 +191,12 @@ def _apply_virtual_columns(
         if context is None:
             return expression
 
+        from_column_type = NORMALIZED_COLUMNS_EAP_ITEMS.get(
+            context.from_column_name,
+            NormalizedColumn(context.from_column_name, [AttributeKey.TYPE_STRING]),
+        ).types[0]
         from_column = attribute_key_to_expression(
-            AttributeKey(
-                name=context.from_column_name,
-                type=NORMALIZED_COLUMNS_EAP_ITEMS.get(
-                    context.from_column_name, [AttributeKey.TYPE_STRING]
-                )[0],
-            )
+            AttributeKey(name=context.from_column_name, type=from_column_type)
         )
         if is_existence:
             return get_field_existence_expression(from_column)

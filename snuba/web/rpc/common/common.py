@@ -18,13 +18,14 @@ from snuba.clickhouse import DATETIME_FORMAT
 from snuba.protos.common import (
     ARRAY_TYPES,
     ATTRIBUTES_TO_COALESCE,
-    COLUMN_PREFIX,
+    EMPTY_STRING_DEFAULT_COLUMNS,
     NORMALIZED_COLUMNS_EAP_ITEMS,
     PROTO_TYPE_TO_ATTRIBUTE_COLUMN,
     PROTO_TYPE_TO_CLICKHOUSE_TYPE,
     TYPED_ARRAY_MAP_COLUMNS,
     MalformedAttributeException,
     array_element_column,
+    sentry_column,
     type_array_to_membership_array_expression_from_typed_columns,
     type_array_typed_column_native_array,
 )
@@ -996,7 +997,7 @@ def trace_item_filters_to_expression(
         # index- and partition-prunable. We reuse timestamp_seconds_to_datetime_literal
         # so a bound equal to the mandatory range is byte-identical to it and gets
         # collapsed by dedupe_timestamp_conditions.
-        if k.name == f"{COLUMN_PREFIX}timestamp" and value_type in (
+        if k.name == sentry_column("timestamp") and value_type in (
             "val_int",
             "val_float",
             "val_double",
@@ -1330,6 +1331,7 @@ def get_field_existence_expression(field: Expression) -> Expression:
         # is the right existence check. Scalar map lookups still use map_key_exists.
         if isinstance(base, Column) and base.column_name in TYPED_ARRAY_MAP_COLUMNS:
             return f.notEmpty(field)
+
         return map_key_exists(field.parameters[0], field.parameters[1])
 
     if isinstance(field, FunctionCall) and field.function_name in ("arrayMap", "arrayConcat"):
@@ -1338,5 +1340,13 @@ def get_field_existence_expression(field: Expression) -> Expression:
         # membership expression (arrayConcat of the per-type map lookups, see
         # type_array_to_membership_array_expression_from_typed_columns).
         return f.notEmpty(field)
+
+    if isinstance(field, FunctionCall) and field.function_name == "cast":
+        # A normalized String column with an empty-string default (e.g. ai_conversation_id)
+        # is never NULL, so isNotNull would always be true. notEmpty distinguishes an unset
+        # (empty) value from a real one.
+        base = field.parameters[0]
+        if isinstance(base, Column) and base.column_name in EMPTY_STRING_DEFAULT_COLUMNS:
+            return f.notEmpty(field)
 
     return f.isNotNull(field)
