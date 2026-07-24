@@ -47,6 +47,7 @@ from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
+    use_indexed_name_for_request,
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
@@ -578,10 +579,12 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         for trace_filter in filters:
             filters_by_item_type[trace_filter.item_type].append(trace_filter.filter)
 
+        use_indexed_name = use_indexed_name_for_request(request_meta)
         for item_type in filters_by_item_type:
             filter_expressions_by_item_type[item_type] = and_cond(
                 f.equals(column("item_type"), item_type),
                 trace_item_filters_to_expression(
+                    item_type,
                     TraceItemFilter(
                         and_filter=AndFilter(
                             filters=filters_by_item_type[item_type],
@@ -589,6 +592,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                     ),
                     attribute_key_to_expression,
                     membership_as_has=True,
+                    use_indexed_name=use_indexed_name,
                 ),
             )
 
@@ -606,12 +610,14 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             item_type = TraceItemType.TRACE_ITEM_TYPE_SPAN
 
         trace_item_filters_expression = trace_item_filters_to_expression(
+            item_type,
             TraceItemFilter(
                 and_filter=AndFilter(
                     filters=[f.filter for f in request.filters],
                 ),
             ),
             attribute_key_to_expression,
+            use_indexed_name=use_indexed_name_for_request(request.meta),
         )
         selected_columns: list[SelectedExpression] = [
             SelectedExpression(

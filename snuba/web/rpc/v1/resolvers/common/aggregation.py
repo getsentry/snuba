@@ -11,6 +11,7 @@ from typing import Any
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
     AttributeConditionalAggregation,
 )
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     AttributeKey,
@@ -72,6 +73,7 @@ def _get_condition_in_aggregation(
         # result-block column name stable across mixed-version ClickHouse nodes on
         # distributed reads (membership_as_has, see common._in_or_has).
         condition_in_aggregation = trace_item_filters_to_expression(
+            TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED,
             aggregation.filter,
             attribute_key_to_expression,
             membership_as_has=True,

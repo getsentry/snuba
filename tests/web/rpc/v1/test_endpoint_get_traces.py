@@ -959,14 +959,19 @@ def test_filter_membership_as_has_for_select_clause() -> None:
     )
 
     # Default (WHERE) form keeps the prepared IN-set over the constant array.
-    where_expr = trace_item_filters_to_expression(proto_filter, attribute_key_to_expression)
+    where_expr = trace_item_filters_to_expression(
+        TraceItemType.TRACE_ITEM_TYPE_SPAN, proto_filter, attribute_key_to_expression
+    )
     assert _in_calls_over_arrays(where_expr), (
         "WHERE-form filters must keep in() over the constant array (needed for pruning)"
     )
 
     # SELECT-clause form (membership_as_has=True) builds has(array, x) and no IN-set.
     select_expr = trace_item_filters_to_expression(
-        proto_filter, attribute_key_to_expression, membership_as_has=True
+        TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        proto_filter,
+        attribute_key_to_expression,
+        membership_as_has=True,
     )
     assert not _in_calls_over_arrays(select_expr), (
         "membership_as_has must build has() instead of in() over a constant array "
