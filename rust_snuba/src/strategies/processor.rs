@@ -333,9 +333,9 @@ pub fn validate_schema(
         return Err(maybe_err);
     };
 
-    if let Err(error) = _validate_schema(schema, enforce_schema, payload) {
-        let error: &dyn std::error::Error = &error;
-        tracing::error!(error, "Failed schema validation");
+    if _validate_schema(schema, enforce_schema, payload).is_err() {
+        // The failure itself (with the payload attached) is already logged
+        // inside `_validate_schema`; don't log it again here.
         return Err(maybe_err);
     };
 
