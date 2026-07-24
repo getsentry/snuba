@@ -6,7 +6,7 @@ from sentry_conventions.attributes import ATTRIBUTE_METADATA
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import arrayElement, column, literal
+from snuba.query.dsl import arrayElement, column, literal, map_key_exists
 from snuba.query.expressions import (
     Argument,
     Expression,
@@ -160,6 +160,38 @@ def _generate_subscriptable_reference(
         key=literal(attribute_name),
         alias=alias,
     )
+
+
+def coalesced_attribute_names(attribute_name: str) -> list[str]:
+    """The candidate map keys for ``attribute_name``, in precedence order: the requested
+    name first, then its deprecated/replacement aliases (see ``ATTRIBUTES_TO_COALESCE``).
+    A name outside the deprecation graph yields just itself."""
+    return [attribute_name] + list(ATTRIBUTES_TO_COALESCE.get(attribute_name, ()))
+
+
+def key_existence_conditions(col_name: str, names: Sequence[str]) -> list[FunctionCall]:
+    """One ``has(mapKeys(<col>), <name>)`` existence check per candidate key."""
+    return [map_key_exists(column(col_name), literal(name)) for name in names]
+
+
+def first_present_value(
+    values: Sequence[Expression],
+    existences: Sequence[FunctionCall],
+    *,
+    alias: str | None = None,
+) -> Expression:
+    """Assemble the value of the first *present* key as
+    ``multiIf(exists1, value1, ..., exists_{n-1}, value_{n-1}, value_n)`` — the last value
+    is the else branch, reached only when every earlier key is absent. A single candidate
+    returns its lone value unchanged. ``existences`` and ``values`` must be in the same
+    precedence order; ``alias`` is applied if supplied."""
+    if len(values) == 1:
+        return values[0]
+    args: list[Expression] = []
+    for cond, val in zip(existences[:-1], values[:-1], strict=True):
+        args.extend((cond, val))
+    args.append(values[-1])
+    return f.multiIf(*args, alias=alias) if alias else f.multiIf(*args)
 
 
 # The typed array map columns (Map(String, Array(T))), in element-type order. Shared by
@@ -316,20 +348,11 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
 
     if attr_key.type in PROTO_TYPE_TO_ATTRIBUTE_COLUMN:
         if attr_key.name in ATTRIBUTES_TO_COALESCE:
-            expressions = [
-                _generate_subscriptable_reference(
-                    attribute_name,
-                    attr_key.type,
-                )
-                for attribute_name in [
-                    attr_key.name,
-                ]
-                + list(ATTRIBUTES_TO_COALESCE[attr_key.name])
-            ]
-            return f.coalesce(
-                *expressions,
-                alias=alias,
-            )
+            col_name = PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attr_key.type]
+            names = coalesced_attribute_names(attr_key.name)
+            values = [_generate_subscriptable_reference(name, attr_key.type) for name in names]
+            existences = key_existence_conditions(col_name, names)
+            return first_present_value(values, existences, alias=alias)
         return _generate_subscriptable_reference(
             attr_key.name,
             attr_key.type,

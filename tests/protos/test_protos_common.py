@@ -9,8 +9,8 @@ from snuba.protos.common import (
     attribute_key_to_expression,
 )
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import arrayElement, column, literal
-from snuba.query.expressions import FunctionCall, SubscriptableReference
+from snuba.query.dsl import arrayElement, column, literal, map_key_exists
+from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
 
 
 class TestAttributeKeyToExpression:
@@ -72,31 +72,36 @@ class TestAttributeKeyToExpression:
         )
 
     def test_coalesce(self) -> None:
+        # A coalesced key reads the value of the first *present* map key, not the first
+        # non-empty one: a missing key in a ClickHouse Map reads back as the column default
+        # ('' here), not NULL, so coalesce would keep the requested key's empty default and
+        # never fall through. The expression is therefore an existence-guarded multiIf, not
+        # a coalesce (see first_present_value in snuba.protos.common).
         new_attribute = list(ATTRIBUTES_TO_COALESCE.keys())[0]
         old_attributes = ATTRIBUTES_TO_COALESCE[new_attribute]
-        references = [
-            SubscriptableReference(
+        names = [new_attribute, *old_attributes]
+
+        def sub(name: str) -> SubscriptableReference:
+            return SubscriptableReference(
                 alias=None,
                 column=column("attributes_string"),
-                key=literal(old_attribute),
+                key=literal(name),
             )
-            for old_attribute in old_attributes
-        ]
+
+        # multiIf(has(k1), v1, ..., has(k_{n-1}), v_{n-1}, v_n): value operands at odd
+        # indices plus the trailing else, existence guards at the even indices before them.
+        multiif_args: list[Expression] = []
+        for name in names[:-1]:
+            multiif_args.append(map_key_exists(column("attributes_string"), literal(name)))
+            multiif_args.append(sub(name))
+        multiif_args.append(sub(names[-1]))
 
         assert attribute_key_to_expression(
             AttributeKey(
                 type=AttributeKey.TYPE_STRING,
                 name=new_attribute,
             ),
-        ) == f.coalesce(
-            SubscriptableReference(
-                alias=None,
-                column=column("attributes_string"),
-                key=literal(new_attribute),
-            ),
-            *references,
-            alias=f"{new_attribute}_TYPE_STRING",
-        )
+        ) == f.multiIf(*multiif_args, alias=f"{new_attribute}_TYPE_STRING")
 
     def test_coalesce_queried_attribute_is_first(self) -> None:
         for name in ATTRIBUTES_TO_COALESCE:
@@ -104,16 +109,17 @@ class TestAttributeKeyToExpression:
                 AttributeKey(type=AttributeKey.TYPE_STRING, name=name),
             )
             assert isinstance(result, FunctionCall)
-            assert result.function_name == "coalesce"
-            first_param = result.parameters[0]
+            assert result.function_name == "multiIf"
+            # Value operands are the odd-indexed params plus the trailing else; the
+            # requested key must be first so its value wins when it is present.
+            value_params = list(result.parameters[1::2]) + [result.parameters[-1]]
+            first_param = value_params[0]
             assert isinstance(first_param, SubscriptableReference)
             assert first_param.key.value == name, (
-                f"Expected {name} as first coalesce argument, got {first_param.key.value}"
+                f"Expected {name} as first coalesced value, got {first_param.key.value}"
             )
             remaining: list[str] = [
-                str(p.key.value)
-                for p in result.parameters[1:]
-                if isinstance(p, SubscriptableReference)
+                str(p.key.value) for p in value_params[1:] if isinstance(p, SubscriptableReference)
             ]
             meta = ATTRIBUTE_METADATA.get(name)
             is_deprecated = (
@@ -124,14 +130,14 @@ class TestAttributeKeyToExpression:
             if is_deprecated:
                 canonical = _resolve_canonical(name)
                 assert remaining[0] == canonical, (
-                    f"Expected canonical {canonical} as second coalesce argument for deprecated {name}, got {remaining[0]}"
+                    f"Expected canonical {canonical} as second coalesced value for deprecated {name}, got {remaining[0]}"
                 )
                 assert remaining[1:] == sorted(remaining[1:]), (
-                    f"Coalesce arguments after canonical for {name} are not sorted: {remaining[1:]}"
+                    f"Coalesced values after canonical for {name} are not sorted: {remaining[1:]}"
                 )
             else:
                 assert remaining == sorted(remaining), (
-                    f"Coalesce arguments after {name} are not sorted: {remaining}"
+                    f"Coalesced values after {name} are not sorted: {remaining}"
                 )
 
     def test_coalesce_bidirectional(self) -> None:
