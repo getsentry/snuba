@@ -21,7 +21,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.common.common import USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION
 from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
@@ -59,7 +59,7 @@ def _store_metrics() -> None:
                     },
                 )
             )
-    write_raw_unprocessed_events(get_storage(StorageKey("eap_items")), messages)  # type: ignore
+    write_raw_unprocessed_events(get_writable_storage(StorageKey("eap_items")), messages)
 
 
 def _request() -> TimeSeriesRequest:
@@ -100,18 +100,9 @@ def _total(response: TimeSeriesResponse) -> float:
 @pytest.mark.eap
 @pytest.mark.redis_db
 class TestTimeSeriesIndexedName(BaseApiTest):
-    def test_metric_name_filter_with_indexed_name_enabled(self) -> None:
-        """A metric-name-filtered time series returns the right rows with the org enabled."""
-        _store_metrics()
-
-        with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [1]}):
-            response = EndpointTimeSeries().execute(_request())
-
-        # Only the my.metric items (value=1.0 each) match; other.metric is excluded.
-        assert _total(response) == float(MATCHING_COUNT)
-
     def test_indexed_name_rewrite_is_result_preserving(self) -> None:
-        """Results are identical with the org disabled (bucket) and enabled (indexed_name)."""
+        """Only the my.metric items match, and the org-disabled (bucket) and org-enabled
+        (indexed_name) queries return identical results."""
         _store_metrics()
 
         with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: []}):

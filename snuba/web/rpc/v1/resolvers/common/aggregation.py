@@ -70,7 +70,10 @@ def _get_condition_in_aggregation(
         # This condition is embedded in SELECT-clause conditional aggregates (countIf,
         # sumIf, ...), so build any constant IN-set as has(array, x) to keep the
         # result-block column name stable across mixed-version ClickHouse nodes on
-        # distributed reads (membership_as_has, see common._in_or_has).
+        # distributed reads (membership_as_has, see common._in_or_has). No org/item type
+        # is passed either: a SELECT-clause condition can't prune granules, so a
+        # sentry.op / sentry.metric.name filter here deliberately keeps the
+        # attributes_string lookup rather than reading indexed_name.
         condition_in_aggregation = trace_item_filters_to_expression(
             aggregation.filter,
             attribute_key_to_expression,

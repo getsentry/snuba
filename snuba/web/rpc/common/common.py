@@ -877,13 +877,12 @@ def _any_attribute_filter_to_expression(
 
 # Per-item-type primary name promoted to the indexed_name column on ingestion
 # (rust_snuba/src/processors/eap_items.rs, migration 0057).
-_INDEXED_NAME_KEY_BY_ITEM_TYPE: dict[int, str] = {
+_INDEXED_NAME_KEY_BY_ITEM_TYPE: dict[TraceItemType.ValueType, str] = {
     TraceItemType.TRACE_ITEM_TYPE_SPAN: "sentry.op",
     TraceItemType.TRACE_ITEM_TYPE_METRIC: "sentry.metric.name",
 }
 
-# Organization_ids the indexed_name redirect is enabled for. Only add an org once
-# indexed_name is backfilled for its queried retention window.
+# See the option's description in sentry-options/schemas/snuba/schema.json.
 USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION = "eap_items_use_indexed_name_organization_ids"
 
 
@@ -892,7 +891,7 @@ def trace_item_filters_to_expression(
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
     membership_as_has: bool = False,
     organization_id: int = 0,
-    item_type: int = TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED,
+    item_type: TraceItemType.ValueType = TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED,
 ) -> Expression:
     """
     Trace Item Filters are things like (span.id=12345 AND start_timestamp >= "june 4th, 2024")
@@ -904,9 +903,9 @@ def trace_item_filters_to_expression(
         ``IN`` set leaks an unstable ``__set_*`` identifier into the result-block column
         name and breaks mixed-version distributed reads (see ``_in_or_has``). Leave the
         default for WHERE clauses, where the prepared ``IN`` set drives pruning.
-    :param organization_id: requesting org, and :param item_type: the item type being
-        queried; together they decide whether a filter on the promoted name attribute
-        reads the indexed ``indexed_name`` column (see below).
+    :param organization_id: requesting org, gated against the indexed_name option.
+    :param item_type: item type being queried, which decides the promoted name attribute
+        eligible for the ``indexed_name`` redirect (see below).
     :return:
 
     Array predicates always read the typed ``attributes_array_*`` map columns: an
@@ -1015,23 +1014,21 @@ def trace_item_filters_to_expression(
         else:
             v_expression = _attribute_value_to_expression(v)
 
-        # A filter on the item type's promoted name attribute can read the
-        # bloom-filter-indexed `indexed_name` column instead of the unindexed
-        # attributes_string bucket, so ClickHouse prunes granules (cf. the
-        # sentry.timestamp case below). Restricted to a plain-string `=` / `IN` — the ops
-        # the bloom filter serves, on a value the column can represent: `indexed_name`
-        # can't tell an absent key from an empty one and `lower()` would defeat the
-        # index, so everything else keeps the bucket lookup and its existence guard.
+        # `indexed_name` is the bloom-filter-indexed copy of the item type's promoted name
+        # attribute, so filtering on it lets ClickHouse prune granules. Only plain-string
+        # `=` / `IN`: the bloom filter serves nothing else, `lower()` would defeat the
+        # index, and the column reads '' for an absent key, so an empty or null
+        # comparison still needs the bucket's existence guard.
         if (
             k.type == AttributeKey.Type.TYPE_STRING
             and k.name == _INDEXED_NAME_KEY_BY_ITEM_TYPE.get(item_type)
-            and not item_filter.comparison_filter.ignore_case
-            and not v_is_null
-            and not _comparison_can_match_column_default(v, value_type)
             and (
                 (op == ComparisonFilter.OP_EQUALS and value_type == "val_str")
                 or (op == ComparisonFilter.OP_IN and value_type == "val_str_array")
             )
+            and not item_filter.comparison_filter.ignore_case
+            and not v_is_null
+            and not _comparison_can_match_column_default(v, value_type)
             and organization_id
             in cast("list[int]", get_option(USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION, []))
         ):

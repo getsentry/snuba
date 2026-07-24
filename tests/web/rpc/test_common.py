@@ -1561,30 +1561,6 @@ class TestIndexedNameRedirect:
 
     ORGANIZATION_ID = 42
 
-    @staticmethod
-    def _column_names(expr: Expression) -> set[str]:
-        names: set[str] = set()
-
-        def visit(node: Expression) -> Expression:
-            if isinstance(node, ColumnExpr):
-                names.add(node.column_name)
-            return node
-
-        expr.transform(visit)
-        return names
-
-    @staticmethod
-    def _function_names(expr: Expression) -> set[str]:
-        names: set[str] = set()
-
-        def visit(node: Expression) -> Expression:
-            if isinstance(node, FunctionCall):
-                names.add(node.function_name)
-            return node
-
-        expr.transform(visit)
-        return names
-
     def _filter(
         self,
         name: str = "sentry.op",
@@ -1601,79 +1577,70 @@ class TestIndexedNameRedirect:
             )
         )
 
-    def _expression(
+    def _reads_indexed_name(
         self,
         item_filter: TraceItemFilter,
-        enabled_organization_ids: list[int] | None = None,
+        enabled: bool = True,
         item_type: TraceItemType.ValueType = TraceItemType.TRACE_ITEM_TYPE_SPAN,
-    ) -> Expression:
-        organization_ids = (
-            [self.ORGANIZATION_ID] if enabled_organization_ids is None else enabled_organization_ids
-        )
+    ) -> bool:
         with override_options(
-            "snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: organization_ids}
+            "snuba",
+            {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: ([self.ORGANIZATION_ID] if enabled else [])},
         ):
-            return trace_item_filters_to_expression(
+            expr = trace_item_filters_to_expression(
                 item_filter,
                 attribute_key_to_expression,
                 organization_id=self.ORGANIZATION_ID,
                 item_type=item_type,
             )
-
-    def _assert_reads_indexed_name(self, expr: Expression) -> None:
-        assert "indexed_name" in self._column_names(expr)
-        assert "arrayElement" not in self._function_names(expr)
-
-    def _assert_reads_bucket(self, expr: Expression) -> None:
-        assert "indexed_name" not in self._column_names(expr)
-        assert "arrayElement" in self._function_names(expr)
+        reads_column = "indexed_name" in _collect_column_names(expr)
+        # Exactly one of the two paths: the indexed column, or the bucket map lookup.
+        assert reads_column != ("arrayElement" in _collect_function_names(expr))
+        return reads_column
 
     def test_equals_redirected_for_enabled_org(self) -> None:
-        self._assert_reads_indexed_name(self._expression(self._filter()))
+        assert self._reads_indexed_name(self._filter())
 
     def test_in_redirected_for_enabled_org(self) -> None:
-        in_filter = self._filter(
-            op=ComparisonFilter.OP_IN,
-            value=AttributeValue(val_str_array=StrArray(values=["db.query", "http.client"])),
-        )
-        self._assert_reads_indexed_name(self._expression(in_filter))
-
-    def test_metric_name_redirected_for_metrics(self) -> None:
-        self._assert_reads_indexed_name(
-            self._expression(
-                self._filter(name="sentry.metric.name"),
-                item_type=TraceItemType.TRACE_ITEM_TYPE_METRIC,
+        assert self._reads_indexed_name(
+            self._filter(
+                op=ComparisonFilter.OP_IN,
+                value=AttributeValue(val_str_array=StrArray(values=["db.query", "http.client"])),
             )
         )
 
+    def test_metric_name_redirected_for_metrics(self) -> None:
+        assert self._reads_indexed_name(
+            self._filter(name="sentry.metric.name"),
+            item_type=TraceItemType.TRACE_ITEM_TYPE_METRIC,
+        )
+
     def test_not_redirected_for_disabled_org(self) -> None:
-        self._assert_reads_bucket(self._expression(self._filter(), enabled_organization_ids=[]))
+        assert not self._reads_indexed_name(self._filter(), enabled=False)
 
     def test_not_redirected_for_other_key(self) -> None:
-        # Only the item type's promoted name is redirected.
-        self._assert_reads_bucket(self._expression(self._filter(name="sentry.metric.name")))
+        assert not self._reads_indexed_name(self._filter(name="sentry.metric.name"))
 
     def test_not_redirected_for_item_type_without_promoted_name(self) -> None:
-        self._assert_reads_bucket(
-            self._expression(self._filter(), item_type=TraceItemType.TRACE_ITEM_TYPE_LOG)
+        assert not self._reads_indexed_name(
+            self._filter(), item_type=TraceItemType.TRACE_ITEM_TYPE_LOG
         )
 
     def test_like_not_redirected(self) -> None:
         # LIKE isn't served by the bloom filter and needs the map's existence guard: a
         # `%` pattern would otherwise match rows missing the key.
-        like_filter = self._filter(
-            op=ComparisonFilter.OP_LIKE, value=AttributeValue(val_str="db.%")
+        assert not self._reads_indexed_name(
+            self._filter(op=ComparisonFilter.OP_LIKE, value=AttributeValue(val_str="db.%"))
         )
-        self._assert_reads_bucket(self._expression(like_filter))
 
     def test_not_equals_not_redirected(self) -> None:
-        self._assert_reads_bucket(self._expression(self._filter(op=ComparisonFilter.OP_NOT_EQUALS)))
+        assert not self._reads_indexed_name(self._filter(op=ComparisonFilter.OP_NOT_EQUALS))
 
     def test_ignore_case_not_redirected(self) -> None:
         # lower() on the column would defeat the bloom filter index.
-        self._assert_reads_bucket(self._expression(self._filter(ignore_case=True)))
+        assert not self._reads_indexed_name(self._filter(ignore_case=True))
 
     def test_empty_value_not_redirected(self) -> None:
         # indexed_name reads as '' for an absent key, so the bucket's existence guard
         # is what makes `= ''` mean "present and empty".
-        self._assert_reads_bucket(self._expression(self._filter(value=AttributeValue(val_str=""))))
+        assert not self._reads_indexed_name(self._filter(value=AttributeValue(val_str="")))
