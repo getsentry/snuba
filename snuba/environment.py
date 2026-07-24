@@ -134,6 +134,15 @@ def before_send(event: Event, hint: Hint) -> Event | None:
         ChildProcessTerminated,
     )
 
+    # redis-py doesn't give this failure its own exception subclass or an
+    # error code to match on -- it's raised as a bare `RedisClusterException`
+    # from a single call site (redis.cluster.NodesManager.initialize), with
+    # the underlying connection error interpolated into the message:
+    # "Redis Cluster cannot be connected. Please provide at least one
+    # reachable node: {exception}". Matching a substring of the fixed prefix
+    # is the only way to distinguish it from RedisClusterException's other,
+    # actionable uses (see docstring above) without pinning to the full
+    # dynamic message.
     redis_cluster_transient_message = "cannot be connected"
 
     # Walk the exception chain (the exception itself plus its __cause__ /
