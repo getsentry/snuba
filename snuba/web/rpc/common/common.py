@@ -1022,18 +1022,14 @@ def trace_item_filters_to_expression(
             use_indexed_name
             and k.type == AttributeKey.Type.TYPE_STRING
             and k.name == _INDEXED_NAME_KEY_BY_ITEM_TYPE.get(item_type)
-            and (
-                (op == ComparisonFilter.OP_EQUALS and value_type == "val_str")
-                or (op == ComparisonFilter.OP_IN and value_type == "val_str_array")
-            )
+            and not v.is_null
             and not item_filter.comparison_filter.ignore_case
-            and not v_is_null
-            and not _comparison_can_match_column_default(v, value_type)
         ):
-            indexed_name = column("indexed_name")
-            if op == ComparisonFilter.OP_EQUALS:
-                return f.equals(indexed_name, v_expression)
-            return _in_or_has(indexed_name, v_expression, as_has=membership_as_has)
+            if op == ComparisonFilter.OP_EQUALS and v.val_str:
+                return f.equals(column("indexed_name"), v_expression)
+            values = v.val_str_array.values
+            if op == ComparisonFilter.OP_IN and values and "" not in values:
+                return _in_or_has(column("indexed_name"), v_expression, as_has=membership_as_has)
 
         # `sentry.timestamp` is a normalized column that `attribute_key_to_expression`
         # maps to `CAST(timestamp, 'Float64')`. Wrapping the primary-key/partition
