@@ -51,6 +51,7 @@ from snuba.query.expressions import (
     Expression,
     FunctionCall,
     Lambda,
+    Literal,
     SubscriptableReference,
 )
 from snuba.state.sentry_options import get_option
@@ -606,25 +607,48 @@ def _validate_comparison_filter_type_array(
             )
         return
     if op in (ComparisonFilter.OP_EQUALS, ComparisonFilter.OP_NOT_EQUALS):
-        # Array can be empty or non-empty. It can never be null, or can never have null elements.
+        # Two modes, dispatched on the RHS type:
+        #  - scalar value -> "any element equals scalar" (includes), for all array key types.
+        #  - array value  -> exact ordered array equality, element-typed keys only.
+        # Arrays can be empty or non-empty, but never null or with null elements.
         vt = v.WhichOneof("value")
-        if vt in (
-            None,
-            "val_null",
-            "val_array",
-            "val_str_array",
-            "val_int_array",
-            "val_float_array",
-            "val_double_array",
-        ):
+        if vt in (None, "val_null"):
             raise BadSnubaRPCRequestException(
                 "OP_EQUALS/OP_NOT_EQUALS on array keys require a scalar value "
-                "(e.g. val_str, val_int) or null (is_null / val_null) to match null elements"
+                "(e.g. val_str, val_int) for element membership, or an array value "
+                "(e.g. val_str_array) for exact array equality"
+            )
+        if vt in _ARRAY_VALUE_TYPES and array_element_column(key) is None:
+            raise BadSnubaRPCRequestException(
+                "exact array equality (array value) is only supported on element-typed array "
+                f"keys (TYPE_ARRAY_STRING/INT/DOUBLE/BOOL), got {AttributeKey.Type.Name(key.type)}"
             )
         return
+    if op in (ComparisonFilter.OP_HAS_ANY, ComparisonFilter.OP_HAS_ALL):
+        if array_element_column(key) is None:
+            raise BadSnubaRPCRequestException(
+                "OP_HAS_ANY/OP_HAS_ALL are only supported on element-typed array keys "
+                f"(TYPE_ARRAY_STRING/INT/DOUBLE/BOOL), got {AttributeKey.Type.Name(key.type)}"
+            )
+        vt = v.WhichOneof("value")
+        if vt not in _ARRAY_VALUE_TYPES:
+            raise BadSnubaRPCRequestException(
+                "OP_HAS_ANY/OP_HAS_ALL require an array value (e.g. val_str_array)"
+            )
+        count = len(v.val_array.values) if vt == "val_array" else len(getattr(v, vt).values)
+        if count == 0:
+            raise BadSnubaRPCRequestException("OP_HAS_ANY/OP_HAS_ALL require a non-empty array")
+        return
+    if op in (ComparisonFilter.OP_IN, ComparisonFilter.OP_NOT_IN):
+        # IN/NOT_IN on an array key is the same as "shares any element", which the
+        # dedicated array operators express directly, so point the user there.
+        raise BadSnubaRPCRequestException(
+            "OP_IN/OP_NOT_IN are not supported on array keys; use OP_HAS_ANY "
+            "(match any element) or OP_HAS_ALL (match all elements) instead"
+        )
     raise BadSnubaRPCRequestException(
         f"{ComparisonFilter.Op.Name(op)} is not supported on array keys "
-        "(supported: LIKE, NOT_LIKE, OP_EQUALS, OP_NOT_EQUALS)"
+        "(supported: LIKE, NOT_LIKE, OP_EQUALS, OP_NOT_EQUALS, OP_HAS_ANY, OP_HAS_ALL)"
     )
 
 
@@ -642,7 +666,7 @@ def _coerce_float(s: str) -> float | None:
         return None
 
 
-def _native_literal_for_array_column(col: str, v: AttributeValue) -> Expression:
+def _native_literal_for_array_column(col: str, v: AttributeValue) -> Literal:
     """The filter value coerced to a single typed array column's native element type.
 
     An element-typed array key names its column exactly, so we coerce ``v`` to that
@@ -675,6 +699,32 @@ def _native_literal_for_array_column(col: str, v: AttributeValue) -> Expression:
             return literal(v.val_str.lower() == "true")
         raise BadSnubaRPCRequestException("bool array comparison requires a boolean value")
     raise BadSnubaRPCRequestException(f"unknown array column: {col}")
+
+
+def _native_literals_array_for_array_column(col: str, v: AttributeValue) -> Expression:
+    """The filter's array value coerced element-wise to a single typed array column's native
+    element type, as a ``literals_array``, for exact array equality / hasAny / hasAll.
+
+    Mirrors ``_native_literal_for_array_column`` per element: each element must match the
+    column's element type (or be a ``val_str`` that parses to it). Accepts the native array
+    fields (``val_str_array`` / ``val_int_array`` / ``val_float_array`` / ``val_double_array``)
+    and the generic ``val_array`` (whose elements are per-element ``AttributeValue``s)."""
+    value_type = v.WhichOneof("value")
+    if value_type == "val_array":
+        elems = list(v.val_array.values)
+    elif value_type == "val_str_array":
+        elems = [AttributeValue(val_str=s) for s in v.val_str_array.values]
+    elif value_type == "val_int_array":
+        elems = [AttributeValue(val_int=i) for i in v.val_int_array.values]
+    elif value_type == "val_float_array":
+        elems = [AttributeValue(val_float=x) for x in v.val_float_array.values]
+    elif value_type == "val_double_array":
+        elems = [AttributeValue(val_double=x) for x in v.val_double_array.values]
+    else:
+        raise BadSnubaRPCRequestException(
+            f"array comparison requires an array value, got {value_type}"
+        )
+    return literals_array(None, [_native_literal_for_array_column(col, e) for e in elems])
 
 
 def _typed_array_native_membership_candidates(
@@ -743,6 +793,31 @@ def _typed_array_includes_scalar_expression(
     if len(exprs) == 1:
         return exprs[0]
     return or_cond(exprs[0], exprs[1], *exprs[2:])
+
+
+def _typed_array_exact_equals_expression(attr_key: AttributeKey, v: AttributeValue) -> Expression:
+    """Exact ordered array equality against an element-typed array key's single native column:
+    ``arrayElement(attributes_array_<t>, 'key') = [<coerced elements>]``. Element-typed keys
+    only (validated by ``_validate_comparison_filter_type_array``)."""
+    col = array_element_column(attr_key)
+    assert col is not None  # element-typed array only (validated upstream)
+    array_expr = type_array_typed_column_native_array(attr_key, col)
+    rhs = _native_literals_array_for_array_column(col, v)
+    return f.equals(array_expr, rhs)
+
+
+def _typed_array_has_expression(
+    attr_key: AttributeKey, v: AttributeValue, function_name: str
+) -> Expression:
+    """``hasAny`` / ``hasAll`` of an element-typed array key's single native column against the
+    coerced filter set: ``hasAny(arrayElement(attributes_array_<t>, 'key'), [<elements>])``.
+    ``function_name`` is ``"hasAny"`` or ``"hasAll"``. Element-typed keys only (validated
+    upstream)."""
+    col = array_element_column(attr_key)
+    assert col is not None  # element-typed array only (validated upstream)
+    array_expr = type_array_typed_column_native_array(attr_key, col)
+    rhs = _native_literals_array_for_array_column(col, v)
+    return FunctionCall(None, function_name, (array_expr, rhs))
 
 
 def _typed_array_like_expression(
@@ -1035,6 +1110,14 @@ def trace_item_filters_to_expression(
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
 
             if k.type in ARRAY_TYPES:
+                # Array value -> exact ordered array equality (element-typed keys only);
+                # scalar value -> "any element equals scalar" (includes).
+                if value_type in _ARRAY_VALUE_TYPES:
+                    if item_filter.comparison_filter.ignore_case:
+                        raise BadSnubaRPCRequestException(
+                            "ignore_case is not supported for exact array equality"
+                        )
+                    return _typed_array_exact_equals_expression(k, v)
                 return _typed_array_includes_scalar_expression(
                     k, v, item_filter.comparison_filter.ignore_case
                 )
@@ -1065,6 +1148,12 @@ def trace_item_filters_to_expression(
         if op == ComparisonFilter.OP_NOT_EQUALS:
             _check_non_string_values_cannot_ignore_case(item_filter.comparison_filter)
             if k.type in ARRAY_TYPES:
+                if value_type in _ARRAY_VALUE_TYPES:
+                    if item_filter.comparison_filter.ignore_case:
+                        raise BadSnubaRPCRequestException(
+                            "ignore_case is not supported for exact array equality"
+                        )
+                    return not_cond(_typed_array_exact_equals_expression(k, v))
                 return not_cond(
                     _typed_array_includes_scalar_expression(
                         k, v, item_filter.comparison_filter.ignore_case
@@ -1211,6 +1300,19 @@ def trace_item_filters_to_expression(
                 ),
             )
             return expr_with_null
+        if op in (ComparisonFilter.OP_HAS_ANY, ComparisonFilter.OP_HAS_ALL):
+            # "array attribute_key type only" per the proto: reject non-array keys here;
+            # array-typed keys are validated above by _validate_comparison_filter_type_array.
+            if k.type not in ARRAY_TYPES:
+                raise BadSnubaRPCRequestException(
+                    "OP_HAS_ANY/OP_HAS_ALL are only supported on array keys"
+                )
+            if item_filter.comparison_filter.ignore_case:
+                raise BadSnubaRPCRequestException(
+                    "ignore_case is not supported for OP_HAS_ANY/OP_HAS_ALL"
+                )
+            function_name = "hasAny" if op == ComparisonFilter.OP_HAS_ANY else "hasAll"
+            return _typed_array_has_expression(k, v, function_name)
 
         raise BadSnubaRPCRequestException(
             f"Invalid string comparison, unknown op: {item_filter.comparison_filter}"
