@@ -66,9 +66,20 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
         let now = Utc::now();
 
         if let Some(grace_min) = get_dlq_grace_period_min(&config.storage_name) {
-            if should_dlq_for_prior_partition(event_ts, now, grace_min) {
+            let is_future = event_ts > now + chrono::Duration::days(5);
+            if should_dlq_for_prior_partition(event_ts, now, grace_min) || is_future {
                 let item_type_str = item_type_name(item_type);
-                counter!("eap_items.messages.dlqed_prior_partition", 1, "item_type" => item_type_str);
+                let reason = if is_future {
+                    "future_timestamp"
+                } else {
+                    "prior_partition"
+                };
+                counter!(
+                    "eap_items.messages.dlqed_prior_partition",
+                    1,
+                    "item_type" => item_type_str,
+                    "reason" => reason
+                );
                 anyhow::bail!(SilencedDLQMessage);
             }
         }
