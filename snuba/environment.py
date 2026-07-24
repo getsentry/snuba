@@ -102,6 +102,12 @@ def before_send(event: Event, hint: Hint) -> Event | None:
       ERROR-level they are not covered by the WARN->log policy, so filter them by
       type here. The underlying worker death is still observable via logs and
       arroyo's ``sigchld.detected`` metric.
+    - ``RedisClusterException``: the redis-cluster client's own transient
+      connectivity failure (e.g. "cannot be connected... Timeout connecting to
+      server"). It self-heals once the cluster is reachable again and is
+      already treated as an expected transient failure elsewhere in the
+      codebase (see ``snuba/redis.py``'s init retry logic), so it isn't
+      actionable as a Sentry issue (e.g. SNUBA-BQA, SNUBA-B6Z).
     """
     if "exc_info" not in hint:
         return event
@@ -113,6 +119,7 @@ def before_send(event: Event, hint: Hint) -> Event | None:
     from arroyo.processing.strategies.run_task_with_multiprocessing import (
         ChildProcessTerminated,
     )
+    from redis.exceptions import RedisClusterException
 
     from snuba.query.allocation_policies import AllocationPolicyViolations
     from snuba.web.rpc.common.exceptions import RPCAllocationPolicyException
@@ -121,6 +128,7 @@ def before_send(event: Event, hint: Hint) -> Event | None:
         RPCAllocationPolicyException,
         AllocationPolicyViolations,
         ChildProcessTerminated,
+        RedisClusterException,
     )
 
     # Walk the exception chain (the exception itself plus its __cause__ /

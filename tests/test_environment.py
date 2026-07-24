@@ -1,6 +1,7 @@
 from arroyo.processing.strategies.run_task_with_multiprocessing import (
     ChildProcessTerminated,
 )
+from redis.exceptions import RedisClusterException
 from sentry_sdk.types import Event, Hint
 
 from snuba.environment import before_send
@@ -79,6 +80,14 @@ def test_before_send_drops_rpc_allocation_policy_exception() -> None:
     try:
         raise RPCAllocationPolicyException("rejected", {})
     except RPCAllocationPolicyException as err:
+        assert before_send(event, _hint_for(err)) is None
+
+
+def test_before_send_drops_redis_cluster_exception() -> None:
+    event: Event = {"message": "redis unreachable"}
+    try:
+        raise RedisClusterException("Redis Cluster cannot be connected")
+    except RedisClusterException as err:
         assert before_send(event, _hint_for(err)) is None
 
 
