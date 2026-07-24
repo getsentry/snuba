@@ -426,7 +426,6 @@ jobs:
         with:
           repository: getsentry/sentry
           path: sentry
-          ref: "fix/seed-correct-ai_conversation_id-field"
 
       - name: Setup steps
         id: setup
