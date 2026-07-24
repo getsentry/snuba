@@ -144,9 +144,7 @@ def before_send(event: Event, hint: Hint) -> Event | None:
         seen.add(id(exc))
         if isinstance(exc, noise_types):
             return None  # Don't send to Sentry
-        if isinstance(
-            exc, RedisClusterException
-        ) and redis_cluster_transient_message in str(exc):
+        if isinstance(exc, RedisClusterException) and redis_cluster_transient_message in str(exc):
             return None  # Don't send to Sentry
         # Follow the chain the way Python itself displays it: an explicit cause
         # (`raise ... from other`) wins, otherwise the implicit context -- unless
