@@ -15,10 +15,7 @@ use sentry_protos::snuba::v1::any_value::Value;
 use sentry_protos::snuba::v1::{ArrayValue, TraceItem, TraceItemType};
 
 use crate::config::ProcessorConfig;
-use crate::processors::utils::{
-    enforce_retention, get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs,
-    record_invalid_timestamp_metric, SilencedDLQMessage,
-};
+use crate::processors::utils::{enforce_retention, SilencedDLQMessage};
 use crate::strategies::clickhouse::rowbinary;
 use crate::types::CogsData;
 use crate::types::{item_type_name, InsertBatch, ItemTypeMetrics, KafkaMessageMetadata};
@@ -48,7 +45,6 @@ struct ProcessedItem {
     origin_timestamp: Option<DateTime<Utc>>,
     item_type_metrics: ItemTypeMetrics,
     cogs_data: CogsData,
-    should_skip: bool,
 }
 
 fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Result<ProcessedItem> {
@@ -66,24 +62,14 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
     let item_type =
         TraceItemType::try_from(trace_item.item_type).unwrap_or(TraceItemType::Unspecified);
 
-    let mut should_skip = false;
     if let Some(event_ts) = event_timestamp {
         let now = Utc::now();
 
-        // should_skip=true will drop messages that are too old or too far in the future
-        if get_drop_invalid_timestamps_enabled() && out_of_valid_interval_secs(event_ts, now) {
-            let is_future = event_ts > now;
-            record_invalid_timestamp_metric("eap_items.messages", is_future, item_type);
-            should_skip = true;
-        }
-        // only DLQ messages that we don't want to drop (when should_skip=false)
-        if !should_skip {
-            if let Some(grace_min) = get_dlq_grace_period_min(&config.storage_name) {
-                if should_dlq_for_prior_partition(event_ts, now, grace_min) {
-                    let item_type_str = item_type_name(item_type);
-                    counter!("eap_items.messages.dlqed_prior_partition", 1, "item_type" => item_type_str);
-                    anyhow::bail!(SilencedDLQMessage);
-                }
+        if let Some(grace_min) = get_dlq_grace_period_min(&config.storage_name) {
+            if should_dlq_for_prior_partition(event_ts, now, grace_min) {
+                let item_type_str = item_type_name(item_type);
+                counter!("eap_items.messages.dlqed_prior_partition", 1, "item_type" => item_type_str);
+                anyhow::bail!(SilencedDLQMessage);
             }
         }
     }
@@ -145,7 +131,6 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
         origin_timestamp,
         item_type_metrics,
         cogs_data,
-        should_skip,
     })
 }
 
@@ -187,9 +172,6 @@ pub fn process_message(
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let processed = process_eap_item(msg, config)?;
-    if processed.should_skip {
-        return Ok(InsertBatch::skip());
-    }
     let mut batch = InsertBatch::from_rows([processed.eap_item], processed.origin_timestamp)?;
     batch.item_type_metrics = Some(processed.item_type_metrics);
     batch.cogs_data = Some(processed.cogs_data);
@@ -202,9 +184,6 @@ pub fn process_message_row_binary(
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let processed = process_eap_item(msg, config)?;
-    if processed.should_skip {
-        return Ok(InsertBatch::skip());
-    }
     let row = EAPItemRow::try_from(processed.eap_item)?;
 
     // Encode the row to RowBinary bytes inline so the wide typed struct (~80
@@ -238,13 +217,6 @@ pub(crate) fn process_message_row_binary_typed(
     config: &ProcessorConfig,
 ) -> anyhow::Result<EAPItemRowBatch> {
     let processed = process_eap_item(msg, config)?;
-    if processed.should_skip {
-        return Ok(EAPItemRowBatch {
-            rows: vec![],
-            cogs_data: None,
-            item_type_metrics: None,
-        });
-    }
     Ok(EAPItemRowBatch {
         rows: vec![EAPItemRow::try_from(processed.eap_item)?],
         cogs_data: Some(processed.cogs_data),

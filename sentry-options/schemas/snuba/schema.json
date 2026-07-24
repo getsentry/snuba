@@ -23,11 +23,6 @@
       "default": 600,
       "description": "Age threshold in seconds for consumer.dlq_by_age_sample_rate_by_storage. Messages whose Kafka broker timestamp is older than this are candidates for being routed to the DLQ."
     },
-    "eap_items_drop_invalid_timestamps": {
-      "type": "boolean",
-      "default": false,
-      "description": "When true, the eap-items consumer skips messages whose event timestamp is more than one week in the future or more than thirty days in the past."
-    },
     "experimental_healthcheck": {
       "type": "boolean",
       "default": false,
