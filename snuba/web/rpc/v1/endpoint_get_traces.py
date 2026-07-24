@@ -583,6 +583,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             filter_expressions_by_item_type[item_type] = and_cond(
                 f.equals(column("item_type"), item_type),
                 trace_item_filters_to_expression(
+                    item_type,
                     TraceItemFilter(
                         and_filter=AndFilter(
                             filters=filters_by_item_type[item_type],
@@ -593,7 +594,6 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                     use_indexed_name=use_indexed_name_for_organization(
                         request_meta.organization_id
                     ),
-                    item_type=item_type,
                 ),
             )
 
@@ -611,6 +611,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             item_type = TraceItemType.TRACE_ITEM_TYPE_SPAN
 
         trace_item_filters_expression = trace_item_filters_to_expression(
+            item_type,
             TraceItemFilter(
                 and_filter=AndFilter(
                     filters=[f.filter for f in request.filters],
@@ -618,7 +619,6 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             ),
             attribute_key_to_expression,
             use_indexed_name=use_indexed_name_for_organization(request.meta.organization_id),
-            item_type=item_type,
         )
         selected_columns: list[SelectedExpression] = [
             SelectedExpression(

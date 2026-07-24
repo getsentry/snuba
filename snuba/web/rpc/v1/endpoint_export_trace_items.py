@@ -345,10 +345,10 @@ def _build_query(
         condition=base_conditions_and(
             meta,
             trace_item_filters_to_expression(
+                meta.trace_item_type,
                 in_msg.filter,
                 attribute_key_to_expression,
                 use_indexed_name=use_indexed_name_for_organization(meta.organization_id),
-                item_type=meta.trace_item_type,
             ),
             *page_token_filter,
             *item_type_filter,

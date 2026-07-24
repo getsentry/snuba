@@ -233,10 +233,10 @@ def _build_attr_distribution_query(
     ]
 
     trace_item_filters_expression = trace_item_filters_to_expression(
+        in_msg.meta.trace_item_type,
         in_msg.filter,
         (attribute_key_to_expression),
         use_indexed_name=use_indexed_name_for_organization(in_msg.meta.organization_id),
-        item_type=in_msg.meta.trace_item_type,
     )
     item_type_filter = f.equals(column("item_type"), in_msg.meta.trace_item_type)
     query = Query(

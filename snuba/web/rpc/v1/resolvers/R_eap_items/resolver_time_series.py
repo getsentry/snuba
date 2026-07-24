@@ -421,10 +421,10 @@ def build_query(
         condition=base_conditions_and(
             request.meta,
             trace_item_filters_to_expression(
+                request.meta.trace_item_type,
                 request.filter,
                 _get_attribute_key_to_expression_function(request.meta),
                 use_indexed_name=use_indexed_name_for_organization(request.meta.organization_id),
-                item_type=request.meta.trace_item_type,
             ),
             valid_sampling_factor_conditions(),
             *item_type_conds,

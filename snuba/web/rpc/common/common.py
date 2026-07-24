@@ -895,15 +895,20 @@ def use_indexed_name_for_organization(organization_id: int) -> bool:
 
 
 def trace_item_filters_to_expression(
+    item_type: TraceItemType.ValueType,
     item_filter: TraceItemFilter,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
     membership_as_has: bool = False,
     use_indexed_name: bool = False,
-    item_type: TraceItemType.ValueType = TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED,
 ) -> Expression:
     """
     Trace Item Filters are things like (span.id=12345 AND start_timestamp >= "june 4th, 2024")
     This maps those filters into an expression which can be used in a WHERE clause
+    :param item_type: item type the filter applies to. Required because it decides how an
+        attribute resolves to physical columns — notably which promoted name attribute is
+        eligible for the ``indexed_name`` redirect below. A filter tree spanning several
+        item types must be built one call per item type, each AND-ed with its own
+        ``item_type =`` condition (see ``cross_item_queries``).
     :param item_filter:
     :param membership_as_has: build ``IN``/``NOT IN`` membership as ``has(array, x)``
         rather than ``x IN (array)``. Pass ``True`` only when the result lands in a
@@ -913,8 +918,6 @@ def trace_item_filters_to_expression(
         default for WHERE clauses, where the prepared ``IN`` set drives pruning.
     :param use_indexed_name: allow the ``indexed_name`` redirect below, for callers whose
         org is enabled for it (see ``use_indexed_name_for_organization``).
-    :param item_type: item type being queried, which decides the promoted name attribute
-        eligible for that redirect.
     :return:
 
     Array predicates always read the typed ``attributes_array_*`` map columns: an
@@ -927,20 +930,20 @@ def trace_item_filters_to_expression(
             return literal(True)
         if len(filters) == 1:
             return trace_item_filters_to_expression(
+                item_type,
                 filters[0],
                 attribute_key_to_expression,
                 membership_as_has,
                 use_indexed_name,
-                item_type,
             )
         return and_cond(
             *(
                 trace_item_filters_to_expression(
+                    item_type,
                     x,
                     attribute_key_to_expression,
                     membership_as_has,
                     use_indexed_name,
-                    item_type,
                 )
                 for x in filters
             )
@@ -952,20 +955,20 @@ def trace_item_filters_to_expression(
             raise BadSnubaRPCRequestException("Invalid trace item filter, empty 'or' clause")
         if len(filters) == 1:
             return trace_item_filters_to_expression(
+                item_type,
                 filters[0],
                 attribute_key_to_expression,
                 membership_as_has,
                 use_indexed_name,
-                item_type,
             )
         return or_cond(
             *(
                 trace_item_filters_to_expression(
+                    item_type,
                     x,
                     attribute_key_to_expression,
                     membership_as_has,
                     use_indexed_name,
-                    item_type,
                 )
                 for x in filters
             )
@@ -978,22 +981,22 @@ def trace_item_filters_to_expression(
         if len(filters) == 1:
             return not_cond(
                 trace_item_filters_to_expression(
+                    item_type,
                     filters[0],
                     attribute_key_to_expression,
                     membership_as_has,
                     use_indexed_name,
-                    item_type,
                 )
             )
         return not_cond(
             and_cond(
                 *(
                     trace_item_filters_to_expression(
+                        item_type,
                         x,
                         attribute_key_to_expression,
                         membership_as_has,
                         use_indexed_name,
-                        item_type,
                     )
                     for x in filters
                 )

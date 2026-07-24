@@ -151,12 +151,12 @@ def get_trace_ids_sql_for_cross_item_query(
                 and_cond(
                     item_type_cond,
                     trace_item_filters_to_expression(
+                        trace_filter.item_type,
                         trace_filter.filter,
                         attribute_key_to_expression,
                         use_indexed_name=use_indexed_name_for_organization(
                             request_meta.organization_id
                         ),
-                        item_type=trace_filter.item_type,
                     ),
                 )
             )
@@ -164,13 +164,13 @@ def get_trace_ids_sql_for_cross_item_query(
                 and_cond(
                     item_type_cond,
                     trace_item_filters_to_expression(
+                        trace_filter.item_type,
                         trace_filter.filter,
                         attribute_key_to_expression,
                         membership_as_has=True,
                         use_indexed_name=use_indexed_name_for_organization(
                             request_meta.organization_id
                         ),
-                        item_type=trace_filter.item_type,
                     ),
                 )
             )
