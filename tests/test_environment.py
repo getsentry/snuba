@@ -83,12 +83,29 @@ def test_before_send_drops_rpc_allocation_policy_exception() -> None:
         assert before_send(event, _hint_for(err)) is None
 
 
-def test_before_send_drops_redis_cluster_exception() -> None:
+def test_before_send_drops_redis_cluster_connectivity_exception() -> None:
     event: Event = {"message": "redis unreachable"}
     try:
-        raise RedisClusterException("Redis Cluster cannot be connected")
+        raise RedisClusterException(
+            "Redis Cluster cannot be connected. Please provide at least one "
+            "reachable node: Timeout connecting to server"
+        )
     except RedisClusterException as err:
         assert before_send(event, _hint_for(err)) is None
+
+
+def test_before_send_keeps_unrelated_redis_cluster_exception() -> None:
+    """
+    ``RedisClusterException`` is also raised by redis-py for genuinely
+    actionable programming errors (e.g. calling an unsupported command in
+    cluster mode), so only the specific transient-connectivity message should
+    be dropped, not the whole exception type.
+    """
+    event: Event = {"message": "redis programming error"}
+    try:
+        raise RedisClusterException("method eval() is not implemented")
+    except RedisClusterException as err:
+        assert before_send(event, _hint_for(err)) is event
 
 
 def test_before_send_handles_none_exc_value() -> None:
