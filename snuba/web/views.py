@@ -95,8 +95,19 @@ def truncate_dataset(dataset: Dataset) -> None:
                 clickhouse.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
 
 
+def _add_compression_attrs(response: Response) -> Response:
+    accept = http_request.headers.get("Accept-Encoding")
+    sentry_sdk.set_attribute("snuba.req_accept_encoding", accept)
+
+    encoding = response.headers.get("Content-Encoding")
+    sentry_sdk.set_attribute("snuba.resp_encoding", encoding)
+    return response
+
+
 def _configure_response_compression(app: Flask) -> None:
     """Compress large JSON query responses with zstd."""
+    # register BEFORE Compress so it runs *after* compression (after_request = reverse order)
+    app.after_request(_add_compression_attrs)
     app.config["COMPRESS_ALGORITHM"] = ["zstd"]
     app.config["COMPRESS_MIMETYPES"] = ["application/json"]  # only applies to json responses
     app.config["COMPRESS_MIN_SIZE"] = 1024  # skips compressions if response under this size
