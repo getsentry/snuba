@@ -67,6 +67,7 @@ from snuba.web.rpc.common.common import (
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
     typed_array_select_subcolumn_name,
+    use_indexed_name_for_organization,
     use_sampling_factor,
     valid_sampling_factor_conditions,
 )
@@ -720,7 +721,7 @@ def build_query(
             trace_item_filters_to_expression(
                 request.filter,
                 attribute_key_to_expression,
-                organization_id=request.meta.organization_id,
+                use_indexed_name=use_indexed_name_for_organization(request.meta.organization_id),
                 item_type=request.meta.trace_item_type,
             ),
             valid_sampling_factor_conditions(),

@@ -35,6 +35,7 @@ from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
+    use_indexed_name_for_organization,
 )
 from snuba.web.rpc.common.debug_info import setup_trace_query_settings
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -124,7 +125,7 @@ class HeatmapBuilder:
         filter_expression = trace_item_filters_to_expression(
             filter,
             (attribute_key_to_expression),
-            organization_id=in_msg.meta.organization_id,
+            use_indexed_name=use_indexed_name_for_organization(in_msg.meta.organization_id),
             item_type=in_msg.meta.trace_item_type,
         )
         condition = base_conditions_and(in_msg.meta, filter_expression)
@@ -216,7 +217,7 @@ class HeatmapBuilder:
         filter_expression = trace_item_filters_to_expression(
             filter,
             (attribute_key_to_expression),
-            organization_id=self.in_msg.meta.organization_id,
+            use_indexed_name=use_indexed_name_for_organization(self.in_msg.meta.organization_id),
             item_type=self.in_msg.meta.trace_item_type,
         )
         condition = base_conditions_and(self.in_msg.meta, filter_expression)

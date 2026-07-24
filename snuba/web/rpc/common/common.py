@@ -886,11 +886,19 @@ _INDEXED_NAME_KEY_BY_ITEM_TYPE: dict[TraceItemType.ValueType, str] = {
 USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION = "eap_items_use_indexed_name_organization_ids"
 
 
+def use_indexed_name_for_organization(organization_id: int) -> bool:
+    """Whether ``organization_id`` is enabled for the indexed_name redirect, to pass as
+    ``use_indexed_name`` when building a WHERE-clause filter expression."""
+    return organization_id in cast(
+        "list[int]", get_option(USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION, [])
+    )
+
+
 def trace_item_filters_to_expression(
     item_filter: TraceItemFilter,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
     membership_as_has: bool = False,
-    organization_id: int = 0,
+    use_indexed_name: bool = False,
     item_type: TraceItemType.ValueType = TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED,
 ) -> Expression:
     """
@@ -903,9 +911,10 @@ def trace_item_filters_to_expression(
         ``IN`` set leaks an unstable ``__set_*`` identifier into the result-block column
         name and breaks mixed-version distributed reads (see ``_in_or_has``). Leave the
         default for WHERE clauses, where the prepared ``IN`` set drives pruning.
-    :param organization_id: requesting org, gated against the indexed_name option.
+    :param use_indexed_name: allow the ``indexed_name`` redirect below, for callers whose
+        org is enabled for it (see ``use_indexed_name_for_organization``).
     :param item_type: item type being queried, which decides the promoted name attribute
-        eligible for the ``indexed_name`` redirect (see below).
+        eligible for that redirect.
     :return:
 
     Array predicates always read the typed ``attributes_array_*`` map columns: an
@@ -921,7 +930,7 @@ def trace_item_filters_to_expression(
                 filters[0],
                 attribute_key_to_expression,
                 membership_as_has,
-                organization_id,
+                use_indexed_name,
                 item_type,
             )
         return and_cond(
@@ -930,7 +939,7 @@ def trace_item_filters_to_expression(
                     x,
                     attribute_key_to_expression,
                     membership_as_has,
-                    organization_id,
+                    use_indexed_name,
                     item_type,
                 )
                 for x in filters
@@ -946,7 +955,7 @@ def trace_item_filters_to_expression(
                 filters[0],
                 attribute_key_to_expression,
                 membership_as_has,
-                organization_id,
+                use_indexed_name,
                 item_type,
             )
         return or_cond(
@@ -955,7 +964,7 @@ def trace_item_filters_to_expression(
                     x,
                     attribute_key_to_expression,
                     membership_as_has,
-                    organization_id,
+                    use_indexed_name,
                     item_type,
                 )
                 for x in filters
@@ -972,7 +981,7 @@ def trace_item_filters_to_expression(
                     filters[0],
                     attribute_key_to_expression,
                     membership_as_has,
-                    organization_id,
+                    use_indexed_name,
                     item_type,
                 )
             )
@@ -983,7 +992,7 @@ def trace_item_filters_to_expression(
                         x,
                         attribute_key_to_expression,
                         membership_as_has,
-                        organization_id,
+                        use_indexed_name,
                         item_type,
                     )
                     for x in filters
@@ -1020,7 +1029,8 @@ def trace_item_filters_to_expression(
         # index, and the column reads '' for an absent key, so an empty or null
         # comparison still needs the bucket's existence guard.
         if (
-            k.type == AttributeKey.Type.TYPE_STRING
+            use_indexed_name
+            and k.type == AttributeKey.Type.TYPE_STRING
             and k.name == _INDEXED_NAME_KEY_BY_ITEM_TYPE.get(item_type)
             and (
                 (op == ComparisonFilter.OP_EQUALS and value_type == "val_str")
@@ -1029,8 +1039,6 @@ def trace_item_filters_to_expression(
             and not item_filter.comparison_filter.ignore_case
             and not v_is_null
             and not _comparison_can_match_column_default(v, value_type)
-            and organization_id
-            in cast("list[int]", get_option(USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION, []))
         ):
             indexed_name = column("indexed_name")
             if op == ComparisonFilter.OP_EQUALS:

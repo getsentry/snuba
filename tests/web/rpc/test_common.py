@@ -64,6 +64,7 @@ from snuba.web.rpc.common.common import (
     semver_sort_key,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
+    use_indexed_name_for_organization,
     use_sampling_factor,
 )
 from snuba.web.rpc.common.exceptions import (
@@ -1555,11 +1556,20 @@ class TestAnyAttributeFilterOption:
 
 
 class TestIndexedNameRedirect:
-    """A `=` / `IN` filter on the item type's promoted name attribute reads the
-    indexed_name column for orgs in the eap_items_use_indexed_name_organization_ids
-    option. Everything else keeps the attributes_string bucket lookup."""
+    """With use_indexed_name set, a `=` / `IN` filter on the item type's promoted name
+    attribute reads the indexed_name column. Everything else keeps the attributes_string
+    bucket lookup."""
 
     ORGANIZATION_ID = 42
+
+    def test_organization_gate(self) -> None:
+        with override_options(
+            "snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [self.ORGANIZATION_ID]}
+        ):
+            assert use_indexed_name_for_organization(self.ORGANIZATION_ID)
+            assert not use_indexed_name_for_organization(self.ORGANIZATION_ID + 1)
+        with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: []}):
+            assert not use_indexed_name_for_organization(self.ORGANIZATION_ID)
 
     def _filter(
         self,
@@ -1583,16 +1593,12 @@ class TestIndexedNameRedirect:
         enabled: bool = True,
         item_type: TraceItemType.ValueType = TraceItemType.TRACE_ITEM_TYPE_SPAN,
     ) -> bool:
-        with override_options(
-            "snuba",
-            {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: ([self.ORGANIZATION_ID] if enabled else [])},
-        ):
-            expr = trace_item_filters_to_expression(
-                item_filter,
-                attribute_key_to_expression,
-                organization_id=self.ORGANIZATION_ID,
-                item_type=item_type,
-            )
+        expr = trace_item_filters_to_expression(
+            item_filter,
+            attribute_key_to_expression,
+            use_indexed_name=enabled,
+            item_type=item_type,
+        )
         reads_column = "indexed_name" in _collect_column_names(expr)
         # Exactly one of the two paths: the indexed column, or the bucket map lookup.
         assert reads_column != ("arrayElement" in _collect_function_names(expr))
@@ -1615,7 +1621,7 @@ class TestIndexedNameRedirect:
             item_type=TraceItemType.TRACE_ITEM_TYPE_METRIC,
         )
 
-    def test_not_redirected_for_disabled_org(self) -> None:
+    def test_not_redirected_when_not_enabled(self) -> None:
         assert not self._reads_indexed_name(self._filter(), enabled=False)
 
     def test_not_redirected_for_other_key(self) -> None:
