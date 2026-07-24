@@ -74,6 +74,8 @@ def _get_condition_in_aggregation(
         # distributed reads (membership_as_has, see common._in_or_has). The item type is
         # UNSPECIFIED because this call chain has no RequestMeta; that only forgoes the
         # indexed_name redirect, which a SELECT-clause condition can't prune with anyway.
+        # Today use_indexed_name defaulting to False is what opts out; when that flag goes
+        # away this call needs an explicit opt-out rather than a sentinel item type.
         condition_in_aggregation = trace_item_filters_to_expression(
             TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED,
             aggregation.filter,

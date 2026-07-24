@@ -46,7 +46,7 @@ from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
-    use_indexed_name_for_organization,
+    use_indexed_name_for_request,
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
@@ -236,7 +236,7 @@ def _build_attr_distribution_query(
         in_msg.meta.trace_item_type,
         in_msg.filter,
         (attribute_key_to_expression),
-        use_indexed_name=use_indexed_name_for_organization(in_msg.meta.organization_id),
+        use_indexed_name=use_indexed_name_for_request(in_msg.meta),
     )
     item_type_filter = f.equals(column("item_type"), in_msg.meta.trace_item_type)
     query = Query(

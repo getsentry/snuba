@@ -886,10 +886,11 @@ _INDEXED_NAME_KEY_BY_ITEM_TYPE: dict[TraceItemType.ValueType, str] = {
 USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION = "eap_items_use_indexed_name_organization_ids"
 
 
-def use_indexed_name_for_organization(organization_id: int) -> bool:
-    """Whether ``organization_id`` is enabled for the indexed_name redirect, to pass as
-    ``use_indexed_name`` when building a WHERE-clause filter expression."""
-    return organization_id in cast(
+def use_indexed_name_for_request(meta: RequestMeta) -> bool:
+    """Whether this request's org is enabled for the ``indexed_name`` redirect."""
+    # cast: get_option's TypeVar is bound to OptionValue, and list is invariant, so a
+    # list[int] default does not satisfy the bound.
+    return meta.organization_id in cast(
         "list[int]", get_option(USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION, [])
     )
 
@@ -904,11 +905,10 @@ def trace_item_filters_to_expression(
     """
     Trace Item Filters are things like (span.id=12345 AND start_timestamp >= "june 4th, 2024")
     This maps those filters into an expression which can be used in a WHERE clause
-    :param item_type: item type the filter applies to. Required because it decides how an
-        attribute resolves to physical columns — notably which promoted name attribute is
-        eligible for the ``indexed_name`` redirect below. A filter tree spanning several
-        item types must be built one call per item type, each AND-ed with its own
-        ``item_type =`` condition (see ``cross_item_queries``).
+    :param item_type: decides which promoted name attribute is eligible for the
+        ``indexed_name`` redirect below. A filter tree spanning several item types must be
+        built one call per item type, each AND-ed with its own ``item_type =`` condition
+        (see ``cross_item_queries``).
     :param item_filter:
     :param membership_as_has: build ``IN``/``NOT IN`` membership as ``has(array, x)``
         rather than ``x IN (array)``. Pass ``True`` only when the result lands in a
@@ -917,91 +917,42 @@ def trace_item_filters_to_expression(
         name and breaks mixed-version distributed reads (see ``_in_or_has``). Leave the
         default for WHERE clauses, where the prepared ``IN`` set drives pruning.
     :param use_indexed_name: allow the ``indexed_name`` redirect below, for callers whose
-        org is enabled for it (see ``use_indexed_name_for_organization``).
+        org is enabled for it (see ``use_indexed_name_for_request``).
     :return:
 
     Array predicates always read the typed ``attributes_array_*`` map columns: an
     element-typed array key (TYPE_ARRAY_STRING/INT/DOUBLE/BOOL) hits its single column
     natively, the deprecated untyped ``TYPE_ARRAY`` searches all four.
     """
+
+    def recurse(child: TraceItemFilter) -> Expression:
+        return trace_item_filters_to_expression(
+            item_type, child, attribute_key_to_expression, membership_as_has, use_indexed_name
+        )
+
     if item_filter.HasField("and_filter"):
         filters = item_filter.and_filter.filters
         if len(filters) == 0:
             return literal(True)
         if len(filters) == 1:
-            return trace_item_filters_to_expression(
-                item_type,
-                filters[0],
-                attribute_key_to_expression,
-                membership_as_has,
-                use_indexed_name,
-            )
-        return and_cond(
-            *(
-                trace_item_filters_to_expression(
-                    item_type,
-                    x,
-                    attribute_key_to_expression,
-                    membership_as_has,
-                    use_indexed_name,
-                )
-                for x in filters
-            )
-        )
+            return recurse(filters[0])
+        return and_cond(*(recurse(x) for x in filters))
 
     if item_filter.HasField("or_filter"):
         filters = item_filter.or_filter.filters
         if len(filters) == 0:
             raise BadSnubaRPCRequestException("Invalid trace item filter, empty 'or' clause")
         if len(filters) == 1:
-            return trace_item_filters_to_expression(
-                item_type,
-                filters[0],
-                attribute_key_to_expression,
-                membership_as_has,
-                use_indexed_name,
-            )
-        return or_cond(
-            *(
-                trace_item_filters_to_expression(
-                    item_type,
-                    x,
-                    attribute_key_to_expression,
-                    membership_as_has,
-                    use_indexed_name,
-                )
-                for x in filters
-            )
-        )
+            return recurse(filters[0])
+        return or_cond(*(recurse(x) for x in filters))
 
     if item_filter.HasField("not_filter"):
         filters = item_filter.not_filter.filters
         if len(filters) == 0:
             raise BadSnubaRPCRequestException("Invalid trace item filter, empty 'not' clause")
         if len(filters) == 1:
-            return not_cond(
-                trace_item_filters_to_expression(
-                    item_type,
-                    filters[0],
-                    attribute_key_to_expression,
-                    membership_as_has,
-                    use_indexed_name,
-                )
-            )
-        return not_cond(
-            and_cond(
-                *(
-                    trace_item_filters_to_expression(
-                        item_type,
-                        x,
-                        attribute_key_to_expression,
-                        membership_as_has,
-                        use_indexed_name,
-                    )
-                    for x in filters
-                )
-            )
-        )
+            return not_cond(recurse(filters[0]))
+        return not_cond(and_cond(*(recurse(x) for x in filters)))
 
     if item_filter.HasField("comparison_filter"):
         k = item_filter.comparison_filter.key
