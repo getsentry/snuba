@@ -1316,10 +1316,8 @@ def get_field_existence_expression(field: Expression) -> Expression:
         )
 
     if isinstance(field, FunctionCall) and field.function_name == "multiIf":
-        # Coalesced scalar read (see first_present_value in snuba.protos.common):
-        # multiIf(exists1, value1, ..., exists_{n-1}, value_{n-1}, value_n). The key
-        # exists when any candidate is present - value operands are at the odd
-        # indices plus the trailing else.
+        # multiIf(exists1, value1, ..., exists_{n-1}, value_{n-1}, value_n).
+        # (Value operands are at the odd indices plus the trailing else.)
         value_operands = list(field.parameters[1::2]) + [field.parameters[-1]]
         return combine_or_conditions(
             [get_field_existence_expression(param) for param in value_operands]

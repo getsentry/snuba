@@ -72,11 +72,6 @@ class TestAttributeKeyToExpression:
         )
 
     def test_coalesce(self) -> None:
-        # A coalesced key reads the value of the first *present* map key, not the first
-        # non-empty one: a missing key in a ClickHouse Map reads back as the column default
-        # ('' here), not NULL, so coalesce would keep the requested key's empty default and
-        # never fall through. The expression is therefore an existence-guarded multiIf, not
-        # a coalesce (see first_present_value in snuba.protos.common).
         new_attribute = list(ATTRIBUTES_TO_COALESCE.keys())[0]
         old_attributes = ATTRIBUTES_TO_COALESCE[new_attribute]
         names = [new_attribute, *old_attributes]
@@ -88,8 +83,6 @@ class TestAttributeKeyToExpression:
                 key=literal(name),
             )
 
-        # multiIf(has(k1), v1, ..., has(k_{n-1}), v_{n-1}, v_n): value operands at odd
-        # indices plus the trailing else, existence guards at the even indices before them.
         multiif_args: list[Expression] = []
         for name in names[:-1]:
             multiif_args.append(map_key_exists(column("attributes_string"), literal(name)))
@@ -110,8 +103,6 @@ class TestAttributeKeyToExpression:
             )
             assert isinstance(result, FunctionCall)
             assert result.function_name == "multiIf"
-            # Value operands are the odd-indexed params plus the trailing else; the
-            # requested key must be first so its value wins when it is present.
             value_params = list(result.parameters[1::2]) + [result.parameters[-1]]
             first_param = value_params[0]
             assert isinstance(first_param, SubscriptableReference)

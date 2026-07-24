@@ -182,9 +182,7 @@ def _generate_subscriptable_reference(
 
 
 def coalesced_attribute_names(attribute_name: str) -> list[str]:
-    """The candidate map keys for ``attribute_name``, in precedence order: the requested
-    name first, then its deprecated/replacement aliases (see ``ATTRIBUTES_TO_COALESCE``).
-    A name outside the deprecation graph yields just itself."""
+    """The attribute name, then its deprecated/replacement aliases."""
     return [attribute_name] + list(ATTRIBUTES_TO_COALESCE.get(attribute_name, ()))
 
 
@@ -199,11 +197,9 @@ def first_present_value(
     *,
     alias: str | None = None,
 ) -> Expression:
-    """Assemble the value of the first *present* key as
-    ``multiIf(exists1, value1, ..., exists_{n-1}, value_{n-1}, value_n)`` — the last value
-    is the else branch, reached only when every earlier key is absent. A single candidate
-    returns its lone value unchanged. ``existences`` and ``values`` must be in the same
-    precedence order; ``alias`` is applied if supplied."""
+    """``multiIf(exists1, value1, ..., exists_{n-1}, value_{n-1}, value_n)``.
+    ``existences`` and ``values`` must be in the same precedence order;
+    ``alias`` is applied if supplied."""
     if len(values) == 1:
         return values[0]
     args: list[Expression] = []

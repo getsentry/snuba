@@ -780,9 +780,7 @@ class TestGetTracePagination(BaseApiTest):
 
 
 _COALESCE_TRACE_ID = uuid.uuid4().hex
-# A span whose transaction name is stored under the deprecated attribute name
-# (`sentry.transaction`) only, rather than its canonical replacement
-# (`sentry.segment.name`).
+# Only `sentry.transaction` (deprecated) - no `sentry.segment.name`.
 _COALESCE_SPAN = gen_item_message(
     start_timestamp=_BASE_TIME,
     trace_id=_COALESCE_TRACE_ID,
