@@ -242,7 +242,6 @@ class TestTraceItemFiltersArrayLike:
 
 
 def _span_expression(item_filter: TraceItemFilter) -> Expression:
-    """Build a filter expression; item type is irrelevant to most tests, so SPAN."""
     return trace_item_filters_to_expression(
         TraceItemType.TRACE_ITEM_TYPE_SPAN, item_filter, attribute_key_to_expression
     )
@@ -1555,10 +1554,6 @@ class TestAnyAttributeFilterOption:
 
 
 class TestIndexedNameRedirect:
-    """With use_indexed_name set, a `=` / `IN` filter on the item type's promoted name
-    attribute reads the indexed_name column. Everything else keeps the attributes_string
-    bucket lookup."""
-
     def test_organization_gate(self) -> None:
         with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: [42]}):
             assert use_indexed_name_for_request(RequestMeta(organization_id=42))
@@ -1623,8 +1618,6 @@ class TestIndexedNameRedirect:
         )
 
     def test_like_not_redirected(self) -> None:
-        # LIKE isn't served by the bloom filter and needs the map's existence guard: a
-        # `%` pattern would otherwise match rows missing the key.
         assert not self._reads_indexed_name(
             self._filter(op=ComparisonFilter.OP_LIKE, value=AttributeValue(val_str="db.%"))
         )
@@ -1633,10 +1626,7 @@ class TestIndexedNameRedirect:
         assert not self._reads_indexed_name(self._filter(op=ComparisonFilter.OP_NOT_EQUALS))
 
     def test_ignore_case_not_redirected(self) -> None:
-        # lower() on the column would defeat the bloom filter index.
         assert not self._reads_indexed_name(self._filter(ignore_case=True))
 
     def test_empty_value_not_redirected(self) -> None:
-        # indexed_name reads as '' for an absent key, so the bucket's existence guard
-        # is what makes `= ''` mean "present and empty".
         assert not self._reads_indexed_name(self._filter(value=AttributeValue(val_str="")))

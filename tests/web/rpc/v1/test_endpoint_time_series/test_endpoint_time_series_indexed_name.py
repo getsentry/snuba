@@ -36,15 +36,11 @@ BASE_TIME = datetime.utcnow().replace(
 GRANULARITY_SECS = 300
 QUERY_DURATION = 3600
 
-# A matching metric is written this many times; each carries value=1.0, so a SUM
-# over the matching items totals MATCHING_COUNT.
 MATCHING_COUNT = 6
 NON_MATCHING_COUNT = 4
 
 
 def _store_metrics() -> None:
-    """Write MATCHING_COUNT my.metric + NON_MATCHING_COUNT other.metric items.
-    Ingestion promotes sentry.metric.name into indexed_name."""
     messages: list[bytes] = []
     for name, count in (("my.metric", MATCHING_COUNT), ("other.metric", NON_MATCHING_COUNT)):
         for _ in range(count):
@@ -63,7 +59,6 @@ def _store_metrics() -> None:
 
 
 def _request() -> TimeSeriesRequest:
-    """SUM(value) over metrics named ``my.metric`` (scoped to organization_id=1)."""
     return TimeSeriesRequest(
         meta=RequestMeta(
             project_ids=[1],
@@ -101,8 +96,6 @@ def _total(response: TimeSeriesResponse) -> float:
 @pytest.mark.redis_db
 class TestTimeSeriesIndexedName(BaseApiTest):
     def test_indexed_name_rewrite_is_result_preserving(self) -> None:
-        """Only the my.metric items match, and the org-disabled (bucket) and org-enabled
-        (indexed_name) queries return identical results."""
         _store_metrics()
 
         with override_options("snuba", {USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION: []}):
