@@ -777,3 +777,66 @@ class TestGetTracePagination(BaseApiTest):
                     break
                 message.page_token.CopyFrom(response.page_token)
             assert len(items_received) == len(_SPANS) + len(_LOGS)
+
+
+_COALESCE_TRACE_ID = uuid.uuid4().hex
+# A span whose transaction name is stored under the deprecated attribute name
+# (`sentry.transaction`) only, rather than its canonical replacement
+# (`sentry.segment.name`).
+_COALESCE_SPAN = gen_item_message(
+    start_timestamp=_BASE_TIME,
+    trace_id=_COALESCE_TRACE_ID,
+    item_id=int(uuid.uuid4().hex[:16], 16).to_bytes(16, byteorder="little", signed=False),
+    remove_default_attributes=True,
+    attributes={
+        "sentry.is_segment": AnyValue(bool_value=True),
+        "sentry.transaction": AnyValue(string_value="root"),
+    },
+)
+
+
+@pytest.fixture(autouse=False)
+def setup_teardown_coalesce(eap: None, redis_db: None) -> None:
+    items_storage = get_writable_storage(StorageKey("eap_items"))
+    write_raw_unprocessed_events(items_storage, [_COALESCE_SPAN])
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
+class TestGetTraceCoalescedAttribute(BaseApiTest):
+    def test_reads_deprecated_value_via_canonical_name(self, setup_teardown_coalesce: Any) -> None:
+        ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
+        three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
+        message = GetTraceRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=Timestamp(seconds=three_hours_later),
+                request_id=_REQUEST_ID,
+            ),
+            trace_id=_COALESCE_TRACE_ID,
+            items=[
+                GetTraceRequest.TraceItem(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    attributes=[
+                        AttributeKey(
+                            name="sentry.segment.name",
+                            type=AttributeKey.Type.TYPE_STRING,
+                        ),
+                    ],
+                )
+            ],
+        )
+        response = EndpointGetTrace().execute(message)
+
+        items = [item for group in response.item_groups for item in group.items]
+        assert len(items) == 1
+        segment_name = next(
+            attr.value.val_str
+            for attr in items[0].attributes
+            if attr.key.name == "sentry.segment.name"
+        )
+        assert segment_name == "root"

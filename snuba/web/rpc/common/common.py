@@ -17,7 +17,6 @@ from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.protos.common import (
     ARRAY_TYPES,
-    ATTRIBUTES_TO_COALESCE,
     EMPTY_STRING_DEFAULT_COLUMNS,
     NORMALIZED_COLUMNS_EAP_ITEMS,
     PROTO_TYPE_TO_ATTRIBUTE_COLUMN,
@@ -25,6 +24,9 @@ from snuba.protos.common import (
     TYPED_ARRAY_MAP_COLUMNS,
     MalformedAttributeException,
     array_element_column,
+    coalesced_attribute_names,
+    first_present_value,
+    key_existence_conditions,
     sentry_column,
     type_array_to_membership_array_expression_from_typed_columns,
     type_array_typed_column_native_array,
@@ -450,7 +452,7 @@ def _map_backed_operands(k: AttributeKey) -> tuple[Expression, Expression]:
     ``coalesce(...)`` representation untouched.
     """
     col_name = PROTO_TYPE_TO_ATTRIBUTE_COLUMN[k.type]
-    names = [k.name] + list(ATTRIBUTES_TO_COALESCE.get(k.name, ()))
+    names = coalesced_attribute_names(k.name)
 
     def _value(name: str) -> Expression:
         elem = arrayElement(None, column(col_name), literal(name))
@@ -460,17 +462,10 @@ def _map_backed_operands(k: AttributeKey) -> tuple[Expression, Expression]:
         return elem
 
     values = [_value(name) for name in names]
-    existences = [map_key_exists(column(col_name), literal(name)) for name in names]
+    existences = key_existence_conditions(col_name, names)
 
     exists = combine_or_conditions(existences) if len(existences) > 1 else existences[0]
-    if len(values) == 1:
-        value: Expression = values[0]
-    else:
-        args: list[Expression] = []
-        for cond, val in zip(existences[:-1], values[:-1], strict=True):
-            args.extend((cond, val))
-        args.append(values[-1])
-        value = f.multiIf(*args)
+    value = first_present_value(values, existences)
     return value, exists
 
 
@@ -1318,6 +1313,16 @@ def get_field_existence_expression(field: Expression) -> Expression:
     if isinstance(field, FunctionCall) and field.function_name == "coalesce":
         return combine_or_conditions(
             [get_field_existence_expression(param) for param in field.parameters]
+        )
+
+    if isinstance(field, FunctionCall) and field.function_name == "multiIf":
+        # Coalesced scalar read (see first_present_value in snuba.protos.common):
+        # multiIf(exists1, value1, ..., exists_{n-1}, value_{n-1}, value_n). The key
+        # exists when any candidate is present - value operands are at the odd
+        # indices plus the trailing else.
+        value_operands = list(field.parameters[1::2]) + [field.parameters[-1]]
+        return combine_or_conditions(
+            [get_field_existence_expression(param) for param in value_operands]
         )
 
     subscriptable_field = get_subscriptable_field(field)
