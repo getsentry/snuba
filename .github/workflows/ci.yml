@@ -498,6 +498,7 @@ jobs:
               tests/sentry/api/endpoints/test_organization_traces.py \
               tests/sentry/api/endpoints/test_organization_spans_fields.py \
               tests/sentry/sentry_metrics/querying \
+              tests/sentry/api/endpoints/test_organization_ai_conversations.py \
               -n "$XDIST_WORKERS" --dist=loadfile --reuse-db \
               -vv
 
