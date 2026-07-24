@@ -102,6 +102,16 @@ def before_send(event: Event, hint: Hint) -> Event | None:
       ERROR-level they are not covered by the WARN->log policy, so filter them by
       type here. The underlying worker death is still observable via logs and
       arroyo's ``sigchld.detected`` metric.
+    - redis-cluster's own transient connectivity failure ("... cannot be
+      connected. Please provide at least one reachable node: ..."), raised as
+      a bare ``RedisClusterException``. It self-heals once the cluster is
+      reachable again, matching the transient-message convention already used
+      for cluster init in ``snuba/redis.py`` (``KNOWN_TRANSIENT_INIT_FAILURE_MESSAGE``),
+      so it isn't actionable as a Sentry issue (e.g. SNUBA-BQA, SNUBA-B6Z).
+      ``RedisClusterException`` is also raised by redis-py for unrelated,
+      genuinely actionable programming errors (unsupported commands in
+      cluster mode, invalid arguments, etc.), so this matches on the specific
+      message rather than the exception type.
     """
     if "exc_info" not in hint:
         return event
@@ -113,6 +123,7 @@ def before_send(event: Event, hint: Hint) -> Event | None:
     from arroyo.processing.strategies.run_task_with_multiprocessing import (
         ChildProcessTerminated,
     )
+    from redis.exceptions import RedisClusterException
 
     from snuba.query.allocation_policies import AllocationPolicyViolations
     from snuba.web.rpc.common.exceptions import RPCAllocationPolicyException
@@ -123,6 +134,8 @@ def before_send(event: Event, hint: Hint) -> Event | None:
         ChildProcessTerminated,
     )
 
+    redis_cluster_transient_message = "cannot be connected"
+
     # Walk the exception chain (the exception itself plus its __cause__ /
     # __context__) and drop the event if any link is a known noise type.
     seen: set[int] = set()
@@ -130,6 +143,8 @@ def before_send(event: Event, hint: Hint) -> Event | None:
     while exc is not None and id(exc) not in seen:
         seen.add(id(exc))
         if isinstance(exc, noise_types):
+            return None  # Don't send to Sentry
+        if isinstance(exc, RedisClusterException) and redis_cluster_transient_message in str(exc):
             return None  # Don't send to Sentry
         # Follow the chain the way Python itself displays it: an explicit cause
         # (`raise ... from other`) wins, otherwise the implicit context -- unless
