@@ -55,9 +55,9 @@ class LogRuntimeConfigs(Job):
     Only the specific config keys are read (never a blind scan): the config
     client can be the shared default Redis, so scanning it would leak unrelated
     keys (cache, admin roles, job logs, ...) into the logs. The dumped keys are
-    the runtime config, its descriptions/changes, and the allocation-policy /
-    routing-strategy overrides (``capman`` / ``cbrs`` hashes, keyed exactly
-    like the ``configurable_component_overrides`` sentry-option).
+    the runtime config and the allocation-policy / routing-strategy overrides
+    (``capman`` / ``cbrs`` hashes, keyed exactly like the
+    ``configurable_component_overrides`` sentry-option).
 
     Run it repeatably straight from the CLI (no job manifest entry, no
     job-status guard) with ``snuba jobs dump_runtime_configs``.
@@ -70,19 +70,13 @@ class LogRuntimeConfigs(Job):
         # doesn't happen for every `snuba jobs` invocation -- snuba.manual_jobs
         # eagerly imports all job modules.
         from snuba.query.allocation_policies import CAPMAN_HASH
-        from snuba.state import (
-            config_changes_list,
-            config_description_hash,
-            config_hash,
-        )
+        from snuba.state import config_hash
         from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
             CBRS_HASH,
         )
 
         return [
             config_hash,
-            config_description_hash,
-            config_changes_list,
             CAPMAN_HASH,
             CBRS_HASH,
         ]

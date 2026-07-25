@@ -2,6 +2,7 @@ pub mod accepted_outcomes;
 pub mod accountant;
 pub mod clickhouse;
 pub mod commit_log;
+pub mod dlq_by_age;
 pub mod healthcheck;
 pub mod join_timeout;
 pub mod noop;

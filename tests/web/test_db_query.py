@@ -827,6 +827,12 @@ def test_apply_allocation_policies_quota_sets_throttle_policy() -> None:
             },
         }
     }
+    throttled_metrics = get_recorded_metric_calls("increment", "db_query.throttled_query")
+    assert throttled_metrics
+    assert throttled_metrics[0].tags == {
+        "storage_key": "doesntmatter",
+        "policy": "ThrottleAllocationPolicy1",
+    }
 
 
 def test_db_query_with_rejecting_allocation_policy() -> None:
@@ -950,6 +956,12 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
         assert update_called, (
             "update_quota_balance should have been called even though the query was rejected but was not"
         )
+        rejected_metrics = get_recorded_metric_calls("increment", "db_query.rejected_query")
+        assert rejected_metrics
+        assert rejected_metrics[0].tags == {
+            "storage_key": "doesntmatter",
+            "policy": "RejectAllocationPolicy",
+        }
 
 
 @pytest.mark.events_db

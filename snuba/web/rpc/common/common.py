@@ -1,10 +1,11 @@
 import math
 from collections.abc import Callable, Iterable
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 from google.protobuf.message import Message as ProtobufMessage
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     AnyAttributeFilter,
@@ -89,6 +90,41 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
         return _attribute_key_to_expression(attr_key)
     except MalformedAttributeException as e:
         raise BadSnubaRPCRequestException(str(e)) from e
+
+
+_SEMVER_COMPONENT_COUNT = 4  # major.minor.patch.build
+
+
+def semver_sort_key(expr: Expression, alias: str | None = None) -> Expression:
+    """Return a Tuple(Array(UInt32), UInt8, String) semver sort key for ``SORT_SEMVER``.
+
+    Callers opt in per request (no hardcoded attribute list) and the key is
+    applied to whatever column they order by. Strips a 'package@' prefix and
+    '+build' metadata, maps the release part to 4 UInt32 components (so "1.2" ==
+    "1.2.0"), then adds a stability flag (0=prerelease, 1=stable) so prereleases
+    sort before their stable release, and the raw string as a tiebreaker for a
+    deterministic total order. Works on Altinity 25.3/25.8 (no naturalSortKey).
+    """
+    x = Argument(None, "x")
+    # sentry.release is coalesced, so Nullable(String); strip the nullable
+    # wrapper (ClickHouse forbids Nullable(Array(…))) before string→array funcs.
+    non_null = f.ifNull(expr, literal(""))
+    version_no_prefix = f.arrayElement(f.splitByChar(literal("@"), non_null), literal(-1))
+    # Drop build metadata (does not affect precedence); left attached it would
+    # zero the last component and fail the stability match.
+    version_no_build = f.arrayElement(f.splitByChar(literal("+"), version_no_prefix), literal(1))
+    release_part = f.arrayElement(f.splitByChar(literal("-"), version_no_build), literal(1))
+    numeric_key = f.arrayResize(
+        f.arrayMap(
+            Lambda(None, ("x",), f.toUInt32OrZero(x)),
+            f.splitByChar(literal("."), release_part),
+        ),
+        literal(_SEMVER_COMPONENT_COUNT),
+    )
+    # Stable only for plain dotted-numeric versions; anything else (SemVer
+    # "-beta.1" or PEP 440 dot-dev "24.7.0.dev0+<sha>") is a prerelease.
+    is_stable = f.match(version_no_build, literal(r"^[0-9]+(\.[0-9]+)*$"))
+    return FunctionCall(alias, "tuple", (numeric_key, is_stable, non_null))
 
 
 def _trace_item_filter_key_expression(
@@ -307,6 +343,7 @@ def dedupe_and_conditions(query: Query) -> None:
 _MAP_COLUMN_NULL_TYPE = {
     "attributes_string": "Nullable(String)",
     "attributes_float": "Nullable(Float64)",
+    "attributes_bool": "Nullable(Boolean)",
 }
 
 
@@ -317,20 +354,57 @@ def _typed_null_for_map_column(column_name: str) -> Expression:
     return literal(None)
 
 
-def add_existence_check_to_subscriptable_references(query: Query) -> None:
-    def transform(exp: Expression) -> Expression:
-        if not isinstance(exp, SubscriptableReference):
-            return exp
+_NON_BUCKETED_SCALAR_ATTRIBUTE_MAP_COLUMNS: frozenset[str] = frozenset(
+    {PROTO_TYPE_TO_ATTRIBUTE_COLUMN[AttributeKey.Type.TYPE_BOOLEAN]}
+)
 
-        return FunctionCall(
-            alias=exp.alias,
-            function_name="if",
-            parameters=(
-                map_key_exists(exp.column, exp.key),
-                SubscriptableReference(None, exp.column, exp.key),
-                _typed_null_for_map_column(exp.column.column_name),
-            ),
-        )
+
+def _non_bucketed_scalar_map_read(exp: Expression) -> tuple[Column, Expression] | None:
+    if not (isinstance(exp, FunctionCall) and exp.function_name == "cast" and exp.parameters):
+        return None
+    inner = exp.parameters[0]
+    if not (
+        isinstance(inner, FunctionCall)
+        and inner.function_name == "arrayElement"
+        and len(inner.parameters) == 2
+    ):
+        return None
+    array_arg, key_arg = inner.parameters
+    if (
+        isinstance(array_arg, Column)
+        and array_arg.column_name in _NON_BUCKETED_SCALAR_ATTRIBUTE_MAP_COLUMNS
+    ):
+        return array_arg, key_arg
+    return None
+
+
+def add_existence_check_to_map_attribute_reads(query: Query) -> None:
+    def transform(exp: Expression) -> Expression:
+        if isinstance(exp, SubscriptableReference):
+            return FunctionCall(
+                alias=exp.alias,
+                function_name="if",
+                parameters=(
+                    map_key_exists(exp.column, exp.key),
+                    SubscriptableReference(None, exp.column, exp.key),
+                    _typed_null_for_map_column(exp.column.column_name),
+                ),
+            )
+
+        non_bucketed_read = _non_bucketed_scalar_map_read(exp)
+        if non_bucketed_read is not None:
+            map_column, key = non_bucketed_read
+            return FunctionCall(
+                alias=exp.alias,
+                function_name="if",
+                parameters=(
+                    map_key_exists(map_column, key),
+                    replace(exp, alias=None),
+                    _typed_null_for_map_column(map_column.column_name),
+                ),
+            )
+
+        return exp
 
     query.transform_expressions(transform)
 
@@ -801,14 +875,32 @@ def _any_attribute_filter_to_expression(
     return positive_expr
 
 
+_INDEXED_NAME_KEY_BY_ITEM_TYPE: dict[TraceItemType.ValueType, str] = {
+    TraceItemType.TRACE_ITEM_TYPE_SPAN: "sentry.op",
+    TraceItemType.TRACE_ITEM_TYPE_METRIC: "sentry.metric.name",
+}
+
+USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION = "eap_items_use_indexed_name_organization_ids"
+
+
+def use_indexed_name_for_request(meta: RequestMeta) -> bool:
+    return meta.organization_id in cast(
+        "list[int]", get_option(USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION, [])
+    )
+
+
 def trace_item_filters_to_expression(
+    item_type: TraceItemType.ValueType,
     item_filter: TraceItemFilter,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
     membership_as_has: bool = False,
+    use_indexed_name: bool = False,
 ) -> Expression:
     """
     Trace Item Filters are things like (span.id=12345 AND start_timestamp >= "june 4th, 2024")
     This maps those filters into an expression which can be used in a WHERE clause
+    :param item_type: build one call per item type, each AND-ed with its own
+        ``item_type =`` condition (see ``cross_item_queries``).
     :param item_filter:
     :param membership_as_has: build ``IN``/``NOT IN`` membership as ``has(array, x)``
         rather than ``x IN (array)``. Pass ``True`` only when the result lands in a
@@ -816,28 +908,34 @@ def trace_item_filters_to_expression(
         ``IN`` set leaks an unstable ``__set_*`` identifier into the result-block column
         name and breaks mixed-version distributed reads (see ``_in_or_has``). Leave the
         default for WHERE clauses, where the prepared ``IN`` set drives pruning.
+    :param use_indexed_name: see ``use_indexed_name_for_request``.
     :return:
 
     Array predicates always read the typed ``attributes_array_*`` map columns: an
     element-typed array key (TYPE_ARRAY_STRING/INT/DOUBLE/BOOL) hits its single column
     natively, the deprecated untyped ``TYPE_ARRAY`` searches all four.
     """
+
     if item_filter.HasField("and_filter"):
         filters = item_filter.and_filter.filters
         if len(filters) == 0:
             return literal(True)
         if len(filters) == 1:
             return trace_item_filters_to_expression(
+                item_type,
                 filters[0],
                 attribute_key_to_expression,
                 membership_as_has,
+                use_indexed_name,
             )
         return and_cond(
             *(
                 trace_item_filters_to_expression(
+                    item_type,
                     x,
                     attribute_key_to_expression,
                     membership_as_has,
+                    use_indexed_name,
                 )
                 for x in filters
             )
@@ -849,16 +947,20 @@ def trace_item_filters_to_expression(
             raise BadSnubaRPCRequestException("Invalid trace item filter, empty 'or' clause")
         if len(filters) == 1:
             return trace_item_filters_to_expression(
+                item_type,
                 filters[0],
                 attribute_key_to_expression,
                 membership_as_has,
+                use_indexed_name,
             )
         return or_cond(
             *(
                 trace_item_filters_to_expression(
+                    item_type,
                     x,
                     attribute_key_to_expression,
                     membership_as_has,
+                    use_indexed_name,
                 )
                 for x in filters
             )
@@ -871,18 +973,22 @@ def trace_item_filters_to_expression(
         if len(filters) == 1:
             return not_cond(
                 trace_item_filters_to_expression(
+                    item_type,
                     filters[0],
                     attribute_key_to_expression,
                     membership_as_has,
+                    use_indexed_name,
                 )
             )
         return not_cond(
             and_cond(
                 *(
                     trace_item_filters_to_expression(
+                        item_type,
                         x,
                         attribute_key_to_expression,
                         membership_as_has,
+                        use_indexed_name,
                     )
                     for x in filters
                 )
@@ -911,6 +1017,19 @@ def trace_item_filters_to_expression(
             v_expression: Expression = literal(None)
         else:
             v_expression = _attribute_value_to_expression(v)
+
+        if (
+            use_indexed_name
+            and k.type == AttributeKey.Type.TYPE_STRING
+            and k.name == _INDEXED_NAME_KEY_BY_ITEM_TYPE.get(item_type)
+            and not v.is_null
+            and not item_filter.comparison_filter.ignore_case
+        ):
+            if op == ComparisonFilter.OP_EQUALS and v.val_str:
+                return f.equals(column("indexed_name"), v_expression)
+            values = v.val_str_array.values
+            if op == ComparisonFilter.OP_IN and values and "" not in values:
+                return _in_or_has(column("indexed_name"), v_expression, as_has=membership_as_has)
 
         # `sentry.timestamp` is a normalized column that `attribute_key_to_expression`
         # maps to `CAST(timestamp, 'Float64')`. Wrapping the primary-key/partition

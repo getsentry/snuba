@@ -1,4 +1,7 @@
+import re
 import uuid
+from collections.abc import Mapping
+from typing import Any
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
@@ -33,6 +36,7 @@ from snuba.web.rpc.common.common import (
     next_monday,
     prev_monday,
     project_id_and_org_conditions,
+    semver_sort_key,
     treeify_or_and_conditions,
 )
 from snuba.web.rpc.common.debug_info import extract_response_meta
@@ -67,16 +71,59 @@ def _order_by_count(request: TraceItemAttributeNamesRequest) -> bool:
     return request.order_by.column == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT
 
 
-def _order_by_name_descending(request: TraceItemAttributeNamesRequest) -> bool:
-    """Whether the caller explicitly requested name ordering in descending order.
+def _order_by_semver(request: TraceItemAttributeNamesRequest) -> bool:
+    """Whether the caller requested SORT_SEMVER (semver) ordering of names."""
+    return request.order_by.sort == TraceItemAttributeNamesRequest.OrderBy.SORT_SEMVER
 
-    Only ``COLUMN_NAME`` + ``descending`` flips the default; unset ordering stays
-    name-ascending for backwards compatibility.
+
+def _order_by_name_descending(request: TraceItemAttributeNamesRequest) -> bool:
+    """Whether the caller requested name ordering in descending order.
+
+    Both an explicit ``COLUMN_NAME`` and ``SORT_SEMVER`` (which orders by the
+    semver key of the name, typically with ``column`` left unset) select name
+    ordering, so ``descending`` flips either. Unset ordering stays name-ascending
+    for backwards compatibility.
     """
-    return (
+    return request.order_by.descending and (
         request.order_by.column == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_NAME
-        and request.order_by.descending
+        or _order_by_semver(request)
     )
+
+
+_SEMVER_NUMERIC_RE = re.compile(r"^[0-9]+(\.[0-9]+)*$")
+
+
+def _semver_sort_key_py(name: str) -> tuple[tuple[int, int, int, int], int, str]:
+    """Python mirror of common.semver_sort_key, used to re-sort names in Python so
+    the merged (ClickHouse + synthetic) result matches the ClickHouse ORDER BY."""
+    non_null = name or ""
+    version_no_prefix = non_null.split("@")[-1]
+    # Drop SemVer build metadata ("1.2.3+build") before parsing; it must not
+    # affect precedence (mirrors common.semver_sort_key).
+    version_no_build = version_no_prefix.split("+")[0]
+    release_part = version_no_build.split("-")[0]
+    # Mirror ClickHouse toUInt32OrZero: only ASCII decimal parses, anything else
+    # (including Unicode digits like "²", where str.isdigit() is True but int()
+    # raises) maps to 0.
+    components = [int(c) if (c.isascii() and c.isdigit()) else 0 for c in release_part.split(".")]
+    components = (components + [0, 0, 0, 0])[:4]
+    is_stable = 1 if _SEMVER_NUMERIC_RE.match(version_no_build) else 0
+    return (
+        (components[0], components[1], components[2], components[3]),
+        is_stable,
+        non_null,
+    )
+
+
+def _name_order_by_expression(semver: bool) -> Expression:
+    """ClickHouse ORDER BY expression for the attribute name.
+
+    Default orders by the raw (type, name) tuple; SORT_SEMVER orders by the
+    semver key of the name part so versions sort numerically.
+    """
+    if semver:
+        return semver_sort_key(f.tupleElement(column("attr_key"), 2))
+    return column("attr_key")
 
 
 class AttributeKeyCollector(ProtoVisitor):
@@ -344,6 +391,7 @@ def get_co_occurring_attributes(
         alias="attr_key",
     )
 
+    semver = _order_by_semver(request)
     if _order_by_count(request):
         # Opt-in frequency ordering: group by key and count how many rows
         # (co-occurring attribute sets) contain each key.
@@ -359,8 +407,9 @@ def get_co_occurring_attributes(
                 ),
                 expression=column("count"),
             ),
-            # stable tiebreak for keys with the same frequency
-            OrderBy(direction=OrderByDirection.ASC, expression=column("attr_key")),
+            # stable tiebreak for keys with the same frequency (semver key when
+            # SORT_SEMVER was requested)
+            OrderBy(direction=OrderByDirection.ASC, expression=_name_order_by_expression(semver)),
         ]
     else:
         # Default (order_by unset or COLUMN_NAME): distinct keys ordered by name.
@@ -374,7 +423,7 @@ def get_co_occurring_attributes(
         order_by = [
             OrderBy(
                 direction=OrderByDirection.DESC if name_descending else OrderByDirection.ASC,
-                expression=column("attr_key"),
+                expression=_name_order_by_expression(semver),
             ),
         ]
 
@@ -428,6 +477,17 @@ def convert_co_occurring_results_to_attributes(
             attribute.count = int(count)
         return attribute
 
+    # Name-ordering key that mirrors the ClickHouse ORDER BY: the raw (type, name)
+    # tuple by default, or the semver key of the name under SORT_SEMVER.
+    semver = _order_by_semver(request)
+
+    def _name_key(row: Mapping[str, Any]) -> Any:
+        attr_key = row.get("attr_key", ("TYPE_STRING", ""))
+        attr_type, attr_name = attr_key[0], attr_key[1]
+        if semver:
+            return _semver_sort_key_py(attr_name)
+        return (attr_type, attr_name)
+
     data = query_res.result.get("data", [])
     if request.type in (AttributeKey.TYPE_UNSPECIFIED, AttributeKey.TYPE_STRING):
         non_stored = [
@@ -435,22 +495,20 @@ def convert_co_occurring_results_to_attributes(
             for key_name in NON_STORED_ATTRIBUTE_KEYS
             if request.value_substring_match in key_name
         ]
-        non_stored.sort(key=lambda row: tuple(row["attr_key"]))
+        non_stored.sort(key=_name_key)
         if _order_by_count(request):
-            # Order the real (counted) rows to match ClickHouse: count in the
-            # requested direction, then name ASC (two stable passes). The synthetic
-            # non-stored attributes have no real count, so pin them first regardless
-            # of sort direction rather than relying on a sentinel value.
-            data.sort(key=lambda row: tuple(row.get("attr_key", ("TYPE_STRING", ""))))
+            # Match ClickHouse: count in the requested direction, then name ASC
+            # (two stable passes). Synthetic non-stored keys have no count, so
+            # pin them first rather than relying on a sentinel.
+            data.sort(key=_name_key)
             data.sort(key=lambda row: row.get("count", 0), reverse=request.order_by.descending)
             data = non_stored + data
         else:
-            # Default name ordering: merge the synthetic non-stored keys in and re-sort
-            # by name, honoring the requested direction so it matches the ClickHouse
-            # ORDER BY (a COLUMN_NAME descending request must stay descending here too).
+            # Merge synthetic non-stored keys in and re-sort by name in the
+            # requested direction, matching the ClickHouse ORDER BY.
             data.extend(non_stored)
             data.sort(
-                key=lambda row: tuple(row.get("attr_key", ("TYPE_STRING", ""))),
+                key=_name_key,
                 reverse=_order_by_name_descending(request),
             )
 

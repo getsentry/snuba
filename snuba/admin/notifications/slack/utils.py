@@ -1,24 +1,13 @@
 import os
 from typing import Any
 
-import sentry_sdk
-
 from snuba import settings
-from snuba.admin.audit_log.action import (
-    CONFIGURABLE_COMPONENT_ACTIONS,
-    MIGRATION_ACTIONS,
-    RUNTIME_CONFIG_ACTIONS,
-    AuditLogAction,
-)
+from snuba.admin.audit_log.action import MIGRATION_ACTIONS, AuditLogAction
 
 
 def build_blocks(data: Any, action: AuditLogAction, timestamp: str, user: str) -> list[Any]:
-    if action in RUNTIME_CONFIG_ACTIONS:
-        text = build_runtime_config_text(data, action)
-    elif action in MIGRATION_ACTIONS:
+    if action in MIGRATION_ACTIONS:
         text = build_migration_run_text(data, action)
-    elif action in CONFIGURABLE_COMPONENT_ACTIONS:
-        text = build_configurable_component_changed_text(data, action)
     else:
         text = f"{action.value}: {data}"
 
@@ -28,38 +17,6 @@ def build_blocks(data: Any, action: AuditLogAction, timestamp: str, user: str) -
     }
 
     return [section, build_context(user, timestamp, action)]
-
-
-def build_configurable_component_changed_text(data: Any, action: AuditLogAction) -> str | None:
-    base = f"*Resource {data['resource_identifier']} Configurable Component {data['configurable_component_class_name']} Changed:*"
-
-    if action == AuditLogAction.CONFIGURABLE_COMPONENT_DELETE:
-        removed = f"~```'{data['configurable_component_class_name']}.{data['key']}({data.get('params', {})})'```~"
-        return f"{base} :put_litter_in_its_place:\n\n{removed}"
-    if action == AuditLogAction.CONFIGURABLE_COMPONENT_UPDATE:
-        updated = f"```'{data['configurable_component_class_name']}.{data['key']}({data.get('params', {})})' = '{data['value']}'```"
-        return f"{base} :up: :date:\n\n{updated}"
-    # todo: raise error, cause slack won't accept this
-    # if it is none
-    sentry_sdk.capture_message(f"Unknown action: {action.value} with data: {data}", level="error")
-    return f"{action.value}: {data}"
-
-
-def build_runtime_config_text(data: Any, action: AuditLogAction) -> str | None:
-    base = "*Runtime Config Option:*"
-    removed = f"~```{{'{data['option']}': {data.get('old')}}}```~"
-    added = f"```{{'{data['option']}': {data.get('new')}}}```"
-    updated = f"{removed} {added}"
-
-    if action == AuditLogAction.REMOVED_OPTION:
-        return f"{base} :put_litter_in_its_place:\n\n {removed}"
-    if action == AuditLogAction.ADDED_OPTION:
-        return f"{base} :new:\n\n {added}"
-    if action == AuditLogAction.UPDATED_OPTION:
-        return f"{base} :up: :date:\n\n {updated}"
-    # todo: raise error, cause slack won't accept this
-    # if it is none
-    return None
 
 
 def build_migration_run_text(data: Any, action: AuditLogAction) -> str | None:
@@ -90,7 +47,7 @@ def build_migration_run_text(data: Any, action: AuditLogAction) -> str | None:
 def build_context(
     user: str, timestamp: str, action: AuditLogAction
 ) -> dict[str, str | list[dict[str, str]]]:
-    url = f"{settings.ADMIN_URL}/#auditlog"
+    url = settings.ADMIN_URL
     environ = os.environ.get("SENTRY_ENVIRONMENT") or "unknown environment"
     return {
         "type": "context",

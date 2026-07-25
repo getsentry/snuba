@@ -1,5 +1,64 @@
 # Changelog
 
+## 26.7.1
+
+### New Features ✨
+
+#### Metrics
+
+- Enable DogStatsD client telemetry by @phacops in [#8186](https://github.com/getsentry/snuba/pull/8186)
+- Add runtime-switchable DogStatsD UDS support, migrate Rust to metrics-exporter-dogstatsd, and propagate runtime global tags by @phacops in [#7796](https://github.com/getsentry/snuba/pull/7796)
+
+#### Other
+
+- (consumer) Add a DLQ-by-age load-shedding lever by @onewland in [#8167](https://github.com/getsentry/snuba/pull/8167)
+- (eap) Semver-aware ordering via SORT_SEMVER across EAP endpoints by @phacops in [#8103](https://github.com/getsentry/snuba/pull/8103)
+- (gocd) Run distroless image in all SaaS regions by @oioki in [#8180](https://github.com/getsentry/snuba/pull/8180)
+- (manual_jobs) Add job to log all runtime configs by @phacops in [#8187](https://github.com/getsentry/snuba/pull/8187)
+- (rpc) Add LIMIT BY support to TraceItemTable queries by @phacops in [#8201](https://github.com/getsentry/snuba/pull/8201)
+- (web) Compress large JSON query responses with zstd by @tryangul in [#8214](https://github.com/getsentry/snuba/pull/8214)
+- Add llm-proxy-cost-consumer to GoCD deploy by @sehr-m in [#8192](https://github.com/getsentry/snuba/pull/8192)
+
+### Bug Fixes 🐛
+
+#### Rpc
+
+- Boolean attribute SELECT returns empty (not false) for items missing the attribute by @phacops in [#8194](https://github.com/getsentry/snuba/pull/8194)
+- Boolean attribute filters no longer match items missing the attribute by @phacops in [#8191](https://github.com/getsentry/snuba/pull/8191)
+
+#### Other
+
+- (clickhouse) Add an explicit insert() to the pool interface by @phacops in [#8184](https://github.com/getsentry/snuba/pull/8184)
+- (eap) Reject trace item table requests with aggregation_filter but no aggregation by @phacops in [#8210](https://github.com/getsentry/snuba/pull/8210)
+- Stop reporting expected client/infra errors to Sentry by @phacops in [#8211](https://github.com/getsentry/snuba/pull/8211)
+
+### Internal Changes 🔧
+
+#### Admin
+
+- Remove the Runtime Config tool from snuba-admin by @phacops in [#8202](https://github.com/getsentry/snuba/pull/8202)
+- Remove unused snuba-admin tools by @phacops in [#8200](https://github.com/getsentry/snuba/pull/8200)
+
+#### Deps
+
+- Bump getsentry/sentry-options/.github/workflows/validate-schema.yml from f8b8cdc11b73938dbdb44792c96b7b64a3600033 to aaebf80432ba287a2ccd7352dc314b676ff2438c by @dependabot in [#8198](https://github.com/getsentry/snuba/pull/8198)
+- Bump getsentry/self-hosted from 3db978e2659e1d34eb2cfb8516b563d72fec58f4 to 411a24321747e451d8747a2a5d3674ed7d9ad515 by @dependabot in [#8197](https://github.com/getsentry/snuba/pull/8197)
+- Bump actions/setup-node from 6.4.0 to 7.0.0 by @dependabot in [#8199](https://github.com/getsentry/snuba/pull/8199)
+- Bump serde_with from 3.8.1 to 3.21.0 in /rust_snuba by @dependabot in [#8188](https://github.com/getsentry/snuba/pull/8188)
+
+#### Other
+
+- (clickhouse) Split writer into JsonWriterStep and RowBinaryWriterStep by @phacops in [#8213](https://github.com/getsentry/snuba/pull/8213)
+- (consumer) Remove the BLQ (backlog-queue) mechanism by @onewland in [#8166](https://github.com/getsentry/snuba/pull/8166)
+- (metrics) Timer histogram metrics are now emitted as distributions… by @tryangul in [#8203](https://github.com/getsentry/snuba/pull/8203)
+- (options) Migrate allocation-policy config to sentry-options by @phacops in [#8168](https://github.com/getsentry/snuba/pull/8168)
+- Bump sentry-conventions to 0.17.0 by @getsentry-bot in [#8183](https://github.com/getsentry/snuba/pull/8183)
+- Bump new development version by @sentry-release-bot[bot] in [88ec71ec](https://github.com/getsentry/snuba/commit/88ec71ec55976ab23cab88e28295e4e0217786c4)
+
+### Other
+
+- Add rejecting/throttling policy to query metrics and span by @phacops in [#8196](https://github.com/getsentry/snuba/pull/8196)
+
 ## 26.7.0
 
 ### New Features ✨

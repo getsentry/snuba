@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use sentry::integrations::tracing::EventFilter;
 use sentry::protocol::Event;
 use sentry::ClientInitGuard;
@@ -42,6 +40,12 @@ pub fn setup_logging() {
             Level::ERROR if metadata.target().starts_with("sentry_usage_accountant") => {
                 EventFilter::Log
             }
+            // The DogStatsD forwarder logs at ERROR on every undeliverable flush
+            // (e.g. "Connection refused"), which self-heals but floods Sentry when
+            // the target is unreachable. Keep it as logs only (SNUBA-BQ8).
+            Level::ERROR if metadata.target().starts_with("metrics_exporter_dogstatsd") => {
+                EventFilter::Log
+            }
             Level::ERROR => EventFilter::Event | EventFilter::Log,
             Level::WARN | Level::INFO => EventFilter::Log,
             Level::DEBUG | Level::TRACE => EventFilter::Ignore,
@@ -58,14 +62,14 @@ pub fn setup_logging() {
 pub fn setup_sentry(sentry_dsn: &str) -> ClientInitGuard {
     sentry::init((
         sentry_dsn,
-        sentry::ClientOptions {
+        sentry::ClientOptions::new()
             // the value for release is also computed in python snuba, please keep the
             // logic in sync
-            release: std::env::var("SNUBA_RELEASE").ok().map(From::from),
-            enable_logs: true,
+            .maybe_release(std::env::var("SNUBA_RELEASE").ok())
+            .enable_logs(true)
             // Only recorded when a Sentry DSN is configured, and while ERROR
             // still maps to `EventFilter::Event` in `setup_logging`.
-            before_send: Some(Arc::new(|event| {
+            .before_send(|event| {
                 if is_broker_transport_failure_event(&event) {
                     counter!(
                         "rust_consumer.kafka_error",
@@ -76,9 +80,7 @@ pub fn setup_sentry(sentry_dsn: &str) -> ClientInitGuard {
                 } else {
                     Some(event)
                 }
-            })),
-            ..Default::default()
-        },
+            }),
     ))
 }
 

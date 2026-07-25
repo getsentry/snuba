@@ -117,7 +117,7 @@ def _build_validated_pool(
     # is correct *only* when we are connecting to that endpoint — i.e. the query
     # node, the same host the normal read path reaches on
     # cluster.get_http_port() (this is what get_ro_query_node_connection, and
-    # thus the tracing/querylog/cardinality tools, rely on). For any other host
+    # thus the tracing/querylog tools, rely on). For any other host
     # — a specific individual node selected by host in the admin tools — that
     # port does not apply: an individual node serves HTTP on the well-known
     # default port, so use that instead.
@@ -166,11 +166,7 @@ def get_ro_node_connection(
         ClickhouseClientSettings.QUERY,
         ClickhouseClientSettings.QUERYLOG,
         ClickhouseClientSettings.TRACING,
-        ClickhouseClientSettings.CARDINALITY_ANALYZER,
-    }, (
-        "admin can only use QUERY, QUERYLOG, TRACING or CARDINALITY_ANALYZER "
-        "ClickhouseClientSettings"
-    )
+    }, "admin can only use QUERY, QUERYLOG or TRACING ClickhouseClientSettings"
 
     if (
         client_settings == ClickhouseClientSettings.QUERY

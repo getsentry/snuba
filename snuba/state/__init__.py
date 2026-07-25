@@ -31,10 +31,6 @@ rds = get_redis_client(RedisClientKey.CONFIG)
 
 ratelimit_prefix = "snuba-ratelimit:"
 config_hash = "snuba-config"
-config_description_hash = "snuba-config-description"
-config_history_hash = "snuba-config-history"
-config_changes_list = "snuba-config-changes"
-config_changes_list_limit = 100
 rate_limit_config_key = "snuba-ratelimit-config:"
 
 # Rate Limiting and Deduplication
@@ -116,7 +112,6 @@ def get_typed_value(value: Any) -> Any:
 def set_config(
     key: str,
     value: Any | None,
-    user: str | None = None,
     force: bool = False,
     config_key: str = config_hash,
 ) -> None:
@@ -132,17 +127,10 @@ def set_config(
             if not force and type(value) is not type(original_value):
                 raise MismatchedTypeException(key, type(original_value), type(value))
 
-        change_record = (time.time(), user, enc_original_value, enc_value)
-        with rds.pipeline() as p:
-            if value is None:
-                p.hdel(config_key, key)
-                p.hdel(config_history_hash, key)
-            else:
-                p.hset(config_key, key, enc_value)
-                p.hset(config_history_hash, key, json.dumps(change_record))
-            p.lpush(config_changes_list, json.dumps((key, change_record)))
-            p.ltrim(config_changes_list, 0, config_changes_list_limit)
-            p.execute()
+        if value is None:
+            rds.hdel(config_key, key)
+        else:
+            rds.hset(config_key, key, enc_value)
         logger.info(f"Successfully changed option {key} to {value}")
     except MismatchedTypeException as exc:
         logger.exception(
@@ -155,12 +143,11 @@ def set_config(
 
 def set_configs(
     values: Mapping[str, Any | None],
-    user: str | None = None,
     force: bool = False,
     config_key: str = config_hash,
 ) -> None:
     for k, v in values.items():
-        set_config(k, v, user=user, force=force, config_key=config_key)
+        set_config(k, v, force=force, config_key=config_key)
 
 
 def get_int_config(
@@ -225,8 +212,8 @@ def get_raw_configs(config_key: str = config_hash) -> Mapping[str, Any | None]:
         return {}
 
 
-def delete_config(key: str, user: Any | None = None, config_key: str = config_hash) -> None:
-    set_config(key, None, user=user, config_key=config_key)
+def delete_config(key: str, config_key: str = config_hash) -> None:
+    set_config(key, None, config_key=config_key)
 
 
 def get_uncached_config(key: str, config_key: str = config_hash) -> Any | None:
@@ -234,77 +221,6 @@ def get_uncached_config(key: str, config_key: str = config_hash) -> Any | None:
     if value is not None:
         return get_typed_value(value.decode("utf-8"))
     return None
-
-
-def get_config_changes_legacy() -> Sequence[Any]:
-    return [json.loads(change) for change in rds.lrange(config_changes_list, 0, -1)]
-
-
-def get_config_changes() -> Sequence[tuple[str, float, str | None, Any, Any]]:
-    """
-    Like get_config_changes_legacy() but ensures that values are cast to their correct type
-    """
-    changes = get_config_changes_legacy()
-
-    return [
-        (key, ts, user, get_typed_value(before), get_typed_value(after))
-        for [key, [ts, user, before, after]] in changes
-    ]
-
-
-# Config descriptions for runtime config UI
-
-
-def set_config_description(
-    key: str, description: str | None = None, user: str | None = None
-) -> None:
-    enc_desc = f"{description}".encode() if description is not None else None
-
-    try:
-        enc_original_desc = rds.hget(config_description_hash, key)
-
-        if (
-            enc_original_desc is not None
-            and description is not None
-            and enc_original_desc.decode("utf-8") == description
-        ):
-            return
-
-        if description is None:
-            rds.hdel(config_description_hash, key)
-            logger.info(f"Successfully deleted config description for {key}")
-        else:
-            rds.hset(config_description_hash, key, enc_desc)
-            logger.info(f"Successfully changed config description for {key} to '{description}'")
-
-    except Exception as e:
-        logger.exception(e)
-
-
-def get_config_description(key: str) -> str | None:
-    try:
-        enc_desc = rds.hget(config_description_hash, key)
-        return enc_desc.decode("utf-8") if enc_desc is not None else None
-    except Exception as e:
-        logger.exception(e)
-        return None
-
-
-def get_all_config_descriptions() -> Mapping[str, str | None]:
-    try:
-        all_descriptions = rds.hgetall(config_description_hash)
-        return {
-            k.decode("utf-8"): d.decode("utf-8")
-            for k, d in all_descriptions.items()
-            if d is not None
-        }
-    except Exception as e:
-        logger.exception(e)
-        return {}
-
-
-def delete_config_description(key: str, user: str | None = None) -> None:
-    set_config_description(key, None, user=user)
 
 
 # Query Recording

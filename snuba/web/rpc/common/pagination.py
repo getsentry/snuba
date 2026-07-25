@@ -18,7 +18,10 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
 from snuba.query.expressions import Expression
-from snuba.web.rpc.common.common import attribute_key_to_expression
+from snuba.web.rpc.common.common import (
+    attribute_key_to_expression,
+    semver_sort_key,
+)
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import TimeWindow
 
 
@@ -27,6 +30,9 @@ class FlexibleTimeWindowPageWithFilters:
     _TIME_WINDOW_START_KEY = f"{_TIME_WINDOW_PREFIX}.start_timestamp"
     _TIME_WINDOW_END_KEY = f"{_TIME_WINDOW_PREFIX}.end_timestamp"
     _FILTER_PREFIX = "sentry__filter"
+    # Marks a page-boundary column whose ORDER BY used SORT_SEMVER, so
+    # get_filters applies the semver key on both sides of the comparison.
+    _SEMVER_FILTER_PREFIX = "sentry__semver_filter"
 
     def __init__(self, page_token: PageToken):
         self._page_token = page_token
@@ -70,38 +76,66 @@ class FlexibleTimeWindowPageWithFilters:
 
         column_names: list[str] = []
         column_values: list[Expression] = []
+        # Parallel to column_names: True when that column's ORDER BY used
+        # SORT_SEMVER, so the boundary comparison must use the semver key too.
+        column_is_semver: list[bool] = []
 
         for filter in self.page_token.filter_offset.and_filter.filters:
-            if filter.HasField(
-                "comparison_filter"
-            ) and filter.comparison_filter.key.name.startswith(self._FILTER_PREFIX):
-                if filter.comparison_filter.key.name == f"{self._FILTER_PREFIX}.timestamp":
-                    column_names.append("timestamp")
-                    if filter.comparison_filter.value.HasField("val_str"):
-                        column_values.append(f.toDateTime(filter.comparison_filter.value.val_str))
-                    elif filter.comparison_filter.value.HasField("val_double"):
-                        column_values.append(literal(filter.comparison_filter.value.val_double))
-                    elif filter.comparison_filter.value.HasField("val_int"):
-                        column_values.append(literal(filter.comparison_filter.value.val_int))
+            if not filter.HasField("comparison_filter"):
+                continue
+            key_name = filter.comparison_filter.key.name
+            is_semver = key_name.startswith(f"{self._SEMVER_FILTER_PREFIX}.")
+            is_regular = key_name.startswith(f"{self._FILTER_PREFIX}.")
+            if not (is_semver or is_regular):
+                continue
 
+            if key_name == f"{self._FILTER_PREFIX}.timestamp":
+                # Resolve the value first and raise on an unsupported type
+                # (tokens are client-supplied) so the parallel lists stay in
+                # sync and the strict zip() below can't crash. Mirrors create().
+                value = filter.comparison_filter.value
+                if value.HasField("val_str"):
+                    column_values.append(f.toDateTime(value.val_str))
+                elif value.HasField("val_double"):
+                    column_values.append(literal(value.val_double))
+                elif value.HasField("val_int"):
+                    column_values.append(literal(value.val_int))
                 else:
-                    # strip the _FILTER_PREFIX from the attribute key and the dot
-                    column_names.append(
-                        filter.comparison_filter.key.name[len(self._FILTER_PREFIX) + 1 :]
+                    raise ValueError(
+                        f"Timestamp value type {value.WhichOneof('value')} not supported "
+                        "in page token"
                     )
-                    column_values.append(
-                        literal(
-                            getattr(
-                                filter.comparison_filter.value,
-                                str(filter.comparison_filter.value.WhichOneof("value")),
-                            )
+                column_names.append("timestamp")
+                column_is_semver.append(False)
+            else:
+                # strip the matching prefix (and the dot) to recover the alias
+                prefix = self._SEMVER_FILTER_PREFIX if is_semver else self._FILTER_PREFIX
+                column_names.append(key_name[len(prefix) + 1 :])
+                column_is_semver.append(is_semver)
+                column_values.append(
+                    literal(
+                        getattr(
+                            filter.comparison_filter.value,
+                            str(filter.comparison_filter.value.WhichOneof("value")),
                         )
                     )
+                )
         # Assumes everything in the ORDER BY is ordered by DESC
         if column_names:
-            res = f.less(
-                f.tuple(*(column(c_name) for c_name in column_names)), f.tuple(*column_values)
-            )
+            col_exprs = []
+            val_exprs = []
+            for c_name, c_value, is_semver in zip(
+                column_names, column_values, column_is_semver, strict=True
+            ):
+                # For SORT_SEMVER columns, apply the same semver key on both sides
+                # so the page-boundary comparison uses the same ordering as ORDER BY.
+                if is_semver:
+                    col_exprs.append(semver_sort_key(column(c_name)))
+                    val_exprs.append(semver_sort_key(c_value))
+                else:
+                    col_exprs.append(column(c_name))
+                    val_exprs.append(c_value)
+            res = f.less(f.tuple(*col_exprs), f.tuple(*val_exprs))
             return res
         return None
 
@@ -177,22 +211,34 @@ class FlexibleTimeWindowPageWithFilters:
                         # find the attribute in the in_msg.columns attribute that has the same label as the `column` attribute in the order_by_clause
                         # call `attribute_key_to_expression` on it and us its alias as the  name of the AttributeKey in the ComparisonFilter
                         attribute_expression = None
+                        selected_key = None
                         for selected_column in in_msg.columns:
                             if selected_column.label == order_by_clause.column.label:
                                 attribute_expression = attribute_key_to_expression(
                                     selected_column.key
                                 )
+                                selected_key = selected_column.key
                                 break
                         if attribute_expression is None:
                             raise ValueError(
                                 f"No attribute expression found for column: {order_by_clause.column.label}"
                             )
 
+                        # Mark SORT_SEMVER string columns so get_filters wraps
+                        # both sides in the semver key (matching ORDER BY); mirrors
+                        # the resolver's string-only guard.
+                        is_semver = (
+                            order_by_clause.sort == TraceItemTableRequest.OrderBy.SORT_SEMVER
+                            and selected_key is not None
+                            and selected_key.type == AttributeKey.TYPE_STRING
+                        )
+                        prefix = cls._SEMVER_FILTER_PREFIX if is_semver else cls._FILTER_PREFIX
+
                         filters.append(
                             TraceItemFilter(
                                 comparison_filter=ComparisonFilter(
                                     key=AttributeKey(
-                                        name=f"{cls._FILTER_PREFIX}.{attribute_expression.alias}",
+                                        name=f"{prefix}.{attribute_expression.alias}",
                                     ),
                                     op=ComparisonFilter.OP_LESS_THAN,
                                     value=last_result_value,

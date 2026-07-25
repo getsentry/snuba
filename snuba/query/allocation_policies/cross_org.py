@@ -4,7 +4,7 @@ import logging
 import typing
 from typing import Any, cast
 
-from snuba.configs.configuration import Configuration, InvalidConfig, ResourceIdentifier
+from snuba.configs.configuration import Configuration, ResourceIdentifier
 from snuba.query.allocation_policies import (
     MAX_THRESHOLD,
     NO_SUGGESTION,
@@ -61,27 +61,6 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
     @property
     def rate_limit_name(self) -> str:
         return "cross_org_query_policy"
-
-    def set_config_value(
-        self,
-        config_key: str,
-        value: Any,
-        params: dict[str, Any] | None = None,
-        user: str | None = None,
-    ) -> None:
-        """makes sure only registered referrers can be overridden"""
-        if params is None:
-            params = {}
-        if config_key in (
-            "referrer_concurrent_override",
-            "referrer_max_threads_override",
-        ):
-            referrer = params.get("referrer")
-            if referrer is not None and not self._referrer_is_registered(referrer):
-                raise InvalidConfig(
-                    f"Referrer {referrer} is not registered in the the {self._resource_identifier.value} yaml. Register it first to be able to override its limits"
-                )
-        super().set_config_value(config_key, value, params, user)
 
     def _additional_config_definitions(self) -> list[Configuration]:
         return super()._additional_config_definitions() + [

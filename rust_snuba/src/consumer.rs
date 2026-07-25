@@ -16,8 +16,6 @@ use sentry_arroyo::types::Topic;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
-use sentry_options::init_with_schemas;
-
 use crate::config;
 use crate::factory_v2::ConsumerStrategyFactoryV2;
 use crate::logging::{setup_logging, setup_sentry};
@@ -95,8 +93,7 @@ pub fn consumer_impl(
     use_row_binary: bool,
 ) -> usize {
     setup_logging();
-    init_with_schemas(&[("snuba", crate::SNUBA_SCHEMA)])
-        .expect("failed to initialize sentry-options");
+    crate::init_sentry_options().expect("failed to initialize sentry-options");
 
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
     let max_batch_size = consumer_config.max_batch_size;
@@ -200,6 +197,10 @@ pub fn consumer_impl(
     // DLQ policy applies only if we are not skipping writes, otherwise we don't want to be
     // writing to the DLQ topics in prod.
 
+    // Whether a DLQ topic is configured. The DLQ-by-age strategy relies on the
+    // DLQ policy, so it is only wired into the factory when this is true.
+    let dlq_configured = consumer_config.dlq_topic.is_some();
+
     let dlq_policy = consumer_config.dlq_topic.map(|dlq_topic_config| {
         let producer = KafkaProducer::new(KafkaConfig::new_producer_config(
             vec![],
@@ -285,6 +286,7 @@ pub fn consumer_impl(
         join_timeout_ms,
         health_check: health_check.to_string(),
         use_row_binary,
+        dlq_configured,
     };
 
     let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);

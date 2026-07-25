@@ -36,7 +36,7 @@ from snuba.protos.common import (
     TYPED_ARRAY_MAP_COLUMNS,
     type_array_typed_columns_select_expressions,
 )
-from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, if_cond, literal, literals_array, or_cond
@@ -58,14 +58,16 @@ from snuba.request import Request as SnubaRequest
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
-    add_existence_check_to_subscriptable_references,
+    add_existence_check_to_map_attribute_reads,
     attribute_key_to_expression,
     base_conditions_and,
     get_field_existence_expression,
+    semver_sort_key,
     timestamp_in_range_condition,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
     typed_array_select_subcolumn_name,
+    use_indexed_name_for_request,
     use_sampling_factor,
     valid_sampling_factor_conditions,
 )
@@ -283,6 +285,10 @@ def _groupby_order_by_expression(attr_key: AttributeKey) -> Expression:
     while keeping the cast valid as a function of the grouped column. TYPE_ARRAY keys are
     rejected upstream (see _validate_select_and_groupby / _validate_order_by), so they
     never reach here.
+
+    The SORT_SEMVER (semver) ordering is applied by `_convert_order_by`, not here, so
+    GROUP BY keeps the raw expression while ORDER BY can wrap it in the semver key.
+    ClickHouse accepts ORDER BY on a function of a GROUP BY key, so the two can differ.
     """
     if attr_key.name == "sentry.timestamp":
         return snuba_column("timestamp")
@@ -338,10 +344,18 @@ def _convert_order_by(
             # covers `sentry.timestamp` ordering anywhere else.) GROUP BY uses the same
             # expression so an aggregation query that orders by `sentry.timestamp` stays
             # valid.
+            expression = _groupby_order_by_expression(x.column.key)
+            # SORT_SEMVER: client-driven semver ordering, string columns only
+            # (numeric/timestamp columns already sort numerically).
+            if (
+                x.sort == TraceItemTableRequest.OrderBy.SORT_SEMVER
+                and x.column.key.type == AttributeKey.TYPE_STRING
+            ):
+                expression = semver_sort_key(expression)
             res.append(
                 OrderBy(
                     direction=direction,
-                    expression=_groupby_order_by_expression(x.column.key),
+                    expression=expression,
                 )
             )
         elif x.column.HasField("conditional_aggregation"):
@@ -363,6 +377,49 @@ def _convert_order_by(
                 )
             )
     return res
+
+
+def _strip_aliases(expression: Expression) -> Expression:
+    """Removes aliases from an expression tree (all nodes) so it is safe to use in a
+    ``LIMIT BY`` clause, where ``expr AS alias`` is only valid when the alias is declared
+    in the SELECT. Called after all query transforms since e.g. virtual-column rewriting
+    re-applies aliases."""
+    return expression.transform(lambda e: replace(e, alias=None))
+
+
+def _convert_limit_by(
+    limit_by: TraceItemTableRequest.LimitBy,
+    selected_columns: Sequence[SelectedExpression],
+) -> LimitBy | None:
+    """Translates the request's ``limit_by`` into a ``LimitBy`` (ClickHouse ``LIMIT n BY``).
+
+    Each entry is either a column key, converted to its attribute expression, or the
+    label of a selected column, resolved to the expression selected under that label.
+    Returns ``None`` when no ``limit_by`` is set. Aggregations and array attributes are
+    rejected upstream in ``_validate_limit_by``.
+
+    The alias is stripped from each expression so the clause emits the bare expression
+    (``LIMIT n BY expr``); keeping the alias would emit ``expr AS alias``, which is
+    invalid in a LIMIT BY when the alias is not already declared in the SELECT.
+    """
+    if not limit_by.columns:
+        return None
+    label_to_expression = {c.name: c.expression for c in selected_columns}
+    columns: list[Expression] = []
+    for limit_by_column in limit_by.columns:
+        which = limit_by_column.WhichOneof("column")
+        if which == "key":
+            columns.append(_strip_aliases(attribute_key_to_expression(limit_by_column.key)))
+        elif which == "label":
+            expression = label_to_expression.get(limit_by_column.label)
+            if expression is None:
+                raise BadSnubaRPCRequestException(
+                    f"limit_by column '{limit_by_column.label}' is not a selected column"
+                )
+            columns.append(_strip_aliases(expression))
+        else:
+            raise BadSnubaRPCRequestException("limit_by column must specify a key or a label")
+    return LimitBy(limit=limit_by.limit, columns=columns)
 
 
 def _get_reliability_context_columns(
@@ -662,8 +719,10 @@ def build_query(
         condition=base_conditions_and(
             request.meta,
             trace_item_filters_to_expression(
+                request.meta.trace_item_type,
                 request.filter,
                 attribute_key_to_expression,
+                use_indexed_name=use_indexed_name_for_request(request.meta),
             ),
             valid_sampling_factor_conditions(),
             *item_type_conds,
@@ -674,6 +733,7 @@ def build_query(
             request.order_by,
             request.meta,
         ),
+        limitby=_convert_limit_by(request.limit_by, selected_columns),
         groupby=groupby,
         # Only support offset page tokens for now
         offset=_get_offset_from_page_token(request.page_token),
@@ -689,7 +749,18 @@ def build_query(
     )
     treeify_or_and_conditions(res)
     _apply_virtual_columns(res, request.virtual_column_contexts)
-    add_existence_check_to_subscriptable_references(res)
+    add_existence_check_to_map_attribute_reads(res)
+    # The transforms above (notably virtual-column rewriting) can re-apply aliases to
+    # limit_by expressions; a LIMIT BY must stay alias-free unless the alias is declared
+    # in the SELECT, so strip any aliases they reintroduced.
+    limitby = res.get_limitby()
+    if limitby is not None:
+        res.set_limitby(
+            LimitBy(
+                limit=limitby.limit,
+                columns=[_strip_aliases(column) for column in limitby.columns],
+            )
+        )
     return res
 
 
@@ -795,12 +866,17 @@ class ResolverTraceItemTableEAPItems(ResolverTraceItemTable):
         )
         routing_decision.routing_context.query_result = res
         # we added 1 to the limit to know if there are more rows to fetch
-        # so we need to remove the last row
+        # so we need to remove the last row. When limit_by is set the top-level
+        # limit is unset (0), so fall back to the same default cap build_query
+        # applied, otherwise the sentinel +1 row would leak into the response.
+        effective_limit = in_msg.limit
+        if effective_limit <= 0 and in_msg.HasField("limit_by"):
+            effective_limit = _DEFAULT_ROW_LIMIT
         total_rows = len(res.result.get("data", []))
         data = iter(res.result.get("data", []))
 
-        if in_msg.limit > 0 and total_rows > in_msg.limit:
-            data = islice(data, in_msg.limit)
+        if effective_limit > 0 and total_rows > effective_limit:
+            data = islice(data, effective_limit)
         column_values = convert_results(in_msg, data)
         response_meta = extract_response_meta(
             in_msg.meta.request_id,

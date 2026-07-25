@@ -1,15 +1,31 @@
 pub(crate) const SNUBA_SCHEMA: &str =
     include_str!("../../sentry-options/schemas/snuba/schema.json");
 
+/// Initialize the global sentry-options store with the snuba schema.
+///
+/// Idempotent: re-initialization is a no-op, matching the behavior of the
+/// (now deprecated) `sentry_options::init_with_schemas`. This keeps repeated
+/// calls -- e.g. across unit tests sharing one process -- from erroring with
+/// `AlreadyInitialized`.
+pub(crate) fn init_sentry_options() -> sentry_options::Result<()> {
+    match sentry_options::Options::builder()
+        .with_schemas(&[("snuba", SNUBA_SCHEMA)])
+        .init()
+    {
+        Err(sentry_options::OptionsError::AlreadyInitialized) => Ok(()),
+        other => other,
+    }
+}
+
 mod accepted_outcomes_consumer;
 mod config;
 mod consumer;
 mod factory_v2;
 mod logging;
 mod metrics;
+mod options;
 mod processors;
 mod rebalancing;
-mod runtime_config;
 mod strategies;
 mod types;
 

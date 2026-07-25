@@ -15,6 +15,7 @@ IMAGE_TAG="${GO_REVISION_SNUBA_REPO}-distroless"
   --container-name="generic-metrics-counters-consumer" \
   --container-name="generic-metrics-distributions-consumer" \
   --container-name="generic-metrics-sets-consumer" \
+  --container-name="llm-proxy-cost-consumer" \
   --container-name="loadbalancer-outcomes-consumer" \
   --container-name="metrics-consumer" \
   --container-name="outcomes-billing-consumer" \

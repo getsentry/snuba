@@ -148,6 +148,88 @@ class TestTraceItemAttributes(BaseApiTest):
         assert response.values == ["derpderp", "blah", "durp", "herp", "herpderp"]
         assert response.counts == [2, 1, 1, 1, 1]
 
+    def _write_version_values(self) -> None:
+        # Distinct version-like values (one occurrence each). Lexicographically
+        # "1.2.10" < "1.2.2" < "1.2.9"; naturally "1.2.2" < "1.2.9" < "1.2.10".
+        # Written per-test (not in the shared fixture) so the extra items don't
+        # perturb the count-based assertions in other tests.
+        items_storage = get_writable_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,
+            [
+                gen_item_message(
+                    start_timestamp=BASE_TIME,
+                    attributes={"natural_ver": AnyValue(string_value=v)},
+                )
+                for v in ("1.2.9", "1.2.10", "1.2.2")
+            ],
+        )
+
+    def test_semver_sort(self, setup_teardown: Any) -> None:
+        # SORT_SEMVER applies the semver key, so version components sort
+        # numerically (1.2.2 < 1.2.9 < 1.2.10) regardless of the attribute.
+        self._write_version_values()
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=10,
+            key=AttributeKey(name="natural_ver", type=AttributeKey.TYPE_STRING),
+            order_by=TraceItemAttributeValuesRequest.OrderBy(
+                column=TraceItemAttributeValuesRequest.OrderBy.COLUMN_VALUE,
+                sort=TraceItemAttributeValuesRequest.OrderBy.SORT_SEMVER,
+            ),
+        )
+        response = AttributeValuesRequest().execute(message)
+        assert response.values == ["1.2.2", "1.2.9", "1.2.10"]
+
+    def test_default_sort_is_lexicographic(self, setup_teardown: Any) -> None:
+        # Unset sort keeps the historical lexicographic ordering, where "1.2.10"
+        # sorts before "1.2.2" and "1.2.9".
+        self._write_version_values()
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=10,
+            key=AttributeKey(name="natural_ver", type=AttributeKey.TYPE_STRING),
+        )
+        response = AttributeValuesRequest().execute(message)
+        assert response.values == ["1.2.10", "1.2.2", "1.2.9"]
+
+    def test_release_sort_is_semver_aware(self, setup_teardown: Any) -> None:
+        # SORT_SEMVER is the semver sort, so prerelease sorts before its stable
+        # release and the "pkg@" prefix is stripped.
+        items_storage = get_writable_storage(StorageKey("eap_items"))
+        releases = ["1.2.3-beta.1", "1.2.3", "1.2.9", "1.2.10", "my-pkg@2.0.0"]
+        write_raw_unprocessed_events(
+            items_storage,
+            [
+                gen_item_message(
+                    start_timestamp=BASE_TIME,
+                    attributes={"sentry.release": AnyValue(string_value=r)},
+                )
+                for r in releases
+            ],
+        )
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=10,
+            key=AttributeKey(name="sentry.release", type=AttributeKey.TYPE_STRING),
+            order_by=TraceItemAttributeValuesRequest.OrderBy(
+                column=TraceItemAttributeValuesRequest.OrderBy.COLUMN_VALUE,
+                sort=TraceItemAttributeValuesRequest.OrderBy.SORT_SEMVER,
+            ),
+        )
+        response = AttributeValuesRequest().execute(message)
+        # gen_item_message stamps a default sentry.release on every fixture item,
+        # so other release values may appear; assert only the relative order of
+        # the releases we wrote, which must follow semver ordering.
+        ordered = [v for v in response.values if v in set(releases)]
+        assert ordered == [
+            "1.2.3-beta.1",
+            "1.2.3",
+            "1.2.9",
+            "1.2.10",
+            "my-pkg@2.0.0",
+        ]
+
     def test_with_value_substring_match(self, setup_teardown: Any) -> None:
         message = TraceItemAttributeValuesRequest(
             meta=COMMON_META,
@@ -260,6 +342,22 @@ class TestTraceItemAttributes(BaseApiTest):
             meta=COMMON_META,
             limit=5,
             key=AttributeKey(name="sentry.is_segment", type=AttributeKey.TYPE_BOOLEAN),
+        )
+        response = AttributeValuesRequest().execute(message)
+        assert response.values == ["true", "false"]
+        assert response.counts == [8, 1]
+
+    def test_boolean_case_with_semver_sort_does_not_crash(self, setup_teardown: Any) -> None:
+        # SORT_SEMVER only applies the semver key to string values; a boolean key
+        # falls back to plain ordering instead of feeding a bool column into the
+        # string-only semver functions (which would fail at ClickHouse).
+        message = TraceItemAttributeValuesRequest(
+            meta=COMMON_META,
+            limit=5,
+            key=AttributeKey(name="sentry.is_segment", type=AttributeKey.TYPE_BOOLEAN),
+            order_by=TraceItemAttributeValuesRequest.OrderBy(
+                sort=TraceItemAttributeValuesRequest.OrderBy.SORT_SEMVER,
+            ),
         )
         response = AttributeValuesRequest().execute(message)
         assert response.values == ["true", "false"]

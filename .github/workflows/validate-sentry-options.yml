@@ -32,7 +32,7 @@ jobs:
   validate-schema:
     needs: cli-version
     name: Validate Schema Evolution
-    uses: getsentry/sentry-options/.github/workflows/validate-schema.yml@f8b8cdc11b73938dbdb44792c96b7b64a3600033
+    uses: getsentry/sentry-options/.github/workflows/validate-schema.yml@main
     secrets: inherit
     with:
       schemas-path: sentry-options/schemas

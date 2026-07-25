@@ -26,6 +26,7 @@ from flask import (
     render_template,
 )
 from flask import request as http_request
+from flask_compress import Compress
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from werkzeug import Response as WerkzeugResponse
 from werkzeug.exceptions import InternalServerError
@@ -94,12 +95,22 @@ def truncate_dataset(dataset: Dataset) -> None:
                 clickhouse.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
 
 
+def _configure_response_compression(app: Flask) -> None:
+    """Compress large JSON query responses with zstd."""
+    app.config["COMPRESS_ALGORITHM"] = ["zstd"]
+    app.config["COMPRESS_MIMETYPES"] = ["application/json"]  # only applies to json responses
+    app.config["COMPRESS_MIN_SIZE"] = 1024  # skips compressions if response under this size
+    app.config["COMPRESS_ZSTD_LEVEL"] = 3
+    Compress(app)
+
+
 application = Flask(__name__, static_url_path="")
 application.testing = settings.TESTING
 application.debug = settings.DEBUG
 application.url_map.converters["dataset"] = DatasetConverter
 application.url_map.converters["entity"] = EntityConverter
 application.url_map.converters["storage"] = StorageConverter
+_configure_response_compression(application)
 atexit.register(close_cogs_recorder)
 
 

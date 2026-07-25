@@ -13,6 +13,10 @@ from snuba.query.allocation_policies import AllocationPolicy
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingStrategyConfig,
 )
+from tests.configs.component_config import (
+    delete_component_config,
+    set_component_config,
+)
 
 
 class SomeConfigurableComponent(ConfigurableComponent):
@@ -142,7 +146,8 @@ class TestConfigurableComponentBasic:
         } in configs
 
         # add an instance of an optional config
-        test_component.set_config_value(
+        set_component_config(
+            test_component,
             config_key="override_config_for_org_id",
             value=100,
             params={"organization_id": 10},
@@ -246,8 +251,8 @@ class TestConfigurableComponentConfigOperations:
 
     def test_get_config_value_with_params(self, test_component: SomeConfigurableComponent) -> None:
         """Test getting config value with parameters."""
-        test_component.set_config_value(
-            "override_config_for_org_id", 100, params={"organization_id": 10}
+        set_component_config(
+            test_component, "override_config_for_org_id", 100, params={"organization_id": 10}
         )
 
         assert (
@@ -259,17 +264,17 @@ class TestConfigurableComponentConfigOperations:
 
     def test_set_config_value(self, test_component: SomeConfigurableComponent) -> None:
         """Test setting config value."""
-        test_component.set_config_value("default_config_1", 200)
+        set_component_config(test_component, "default_config_1", 200)
         assert test_component.get_config_value("default_config_1") == 200
 
     def test_delete_config_value(self, test_component: SomeConfigurableComponent) -> None:
         """Test deleting config value."""
         config_key = "default_config_1"
 
-        test_component.set_config_value(config_key=config_key, value=5)
+        set_component_config(test_component, config_key=config_key, value=5)
         assert test_component.get_config_value(config_key=config_key) == 5
 
-        test_component.delete_config_value(config_key=config_key)
+        delete_component_config(test_component, config_key=config_key)
         # back to default
         assert test_component.get_config_value(config_key=config_key) == 100
 
@@ -279,10 +284,10 @@ class TestConfigurableComponentConfigOperations:
         config_key = "override_config_for_org_id"
         params = {"organization_id": 10}
 
-        test_component.set_config_value(config_key=config_key, value=100, params=params)
+        set_component_config(test_component, config_key=config_key, value=100, params=params)
         assert test_component.get_config_value(config_key=config_key, params=params) == 100
 
-        test_component.delete_config_value(config_key=config_key, params=params)
+        delete_component_config(test_component, config_key=config_key, params=params)
         # back to default
         assert test_component.get_config_value(config_key=config_key, params=params) == -1
 
@@ -296,13 +301,13 @@ class TestConfigurableComponentConfigOperations:
         self, test_component: SomeConfigurableComponent
     ) -> None:
         with pytest.raises(InvalidConfig):
-            test_component.set_config_value("invalid_config", "value")
+            set_component_config(test_component, "invalid_config", "value")
 
     def test_delete_config_value_invalid_config(
         self, test_component: SomeConfigurableComponent
     ) -> None:
         with pytest.raises(InvalidConfig):
-            test_component.delete_config_value("invalid_config")
+            delete_component_config(test_component, "invalid_config")
 
 
 class TestConfigurableComponentConfigRetrieval:

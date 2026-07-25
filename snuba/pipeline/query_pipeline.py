@@ -49,8 +49,14 @@ class QueryPipelineStage(Generic[Tin, Tout]):
     def _process_error(self, pipe_input: QueryPipelineError[Tin]) -> Tout | Exception:
         """default behaviour is to just pass through to the next stage of the pipeline
         Can be overridden to do something else"""
-        logging.exception(pipe_input.error)
-        return pipe_input.error
+        error = pipe_input.error
+        # logging.exception hits the root logger at ERROR, which Sentry captures as
+        # an event -- honor should_report so invalid client queries stay out of Sentry.
+        if getattr(error, "should_report", True):
+            logging.exception(error)
+        else:
+            logging.info("Query pipeline stage failed with a non-reportable error: %s", error)
+        return error
 
     @abstractmethod
     def _process_data(self, pipe_input: QueryPipelineData[Tin]) -> Tout:

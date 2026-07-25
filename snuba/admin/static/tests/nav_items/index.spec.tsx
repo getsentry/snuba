@@ -26,7 +26,7 @@ it("should only display allowed tools", async () => {
 
   await waitFor(() => expect(mockClient.getAllowedTools).toBeCalledTimes(1));
   expect(getByText("SnQL to SQL", { exact: false })).toBeTruthy();
-  expect(queryByText("Runtime Config", { exact: false })).toBeNull();
+  expect(queryByText("System Queries", { exact: false })).toBeNull();
 });
 
 it("should only display all tools", async () => {
@@ -50,12 +50,8 @@ it("should only display all tools", async () => {
 
   await waitFor(() => expect(mockClient.getAllowedTools).toBeCalledTimes(1));
   expect(getByText("SnQL to SQL", { exact: false })).toBeTruthy();
-  expect(getByText("Runtime Config", { exact: false })).toBeTruthy();
-  expect(getByText("Capacity Management", { exact: false })).toBeTruthy();
   expect(getByText("System Queries", { exact: false })).toBeTruthy();
   expect(getByText("ClickHouse Migrations", { exact: false })).toBeTruthy();
   expect(getByText("ClickHouse Tracing", { exact: false })).toBeTruthy();
   expect(getByText("ClickHouse Querylog", { exact: false })).toBeTruthy();
-  expect(getByText("Audit Log", { exact: false })).toBeTruthy();
-  expect(getByText("Kafka", { exact: false })).toBeTruthy();
 });

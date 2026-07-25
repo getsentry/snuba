@@ -28,13 +28,14 @@ from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     BUCKET_COUNT,
-    add_existence_check_to_subscriptable_references,
+    add_existence_check_to_map_attribute_reads,
     attribute_key_to_expression,
     base_conditions_and,
     merge_typed_array_maps,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
     typed_array_map_selected_expressions,
+    use_indexed_name_for_request,
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
@@ -103,14 +104,16 @@ def _build_query(request: TraceItemDetailsRequest) -> Query:
                 literal(request.trace_id),
             ),
             trace_item_filters_to_expression(
+                request.meta.trace_item_type,
                 request.filter,
                 attribute_key_to_expression,
+                use_indexed_name=use_indexed_name_for_request(request.meta),
             ),
         ),
         limit=1,
     )
     treeify_or_and_conditions(res)
-    add_existence_check_to_subscriptable_references(res)
+    add_existence_check_to_map_attribute_reads(res)
     return res
 
 

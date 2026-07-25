@@ -12,6 +12,17 @@
       "default": false,
       "description": "true to emit a tracing log each time a duplicate trace item is detected in the accepted-outcomes aggregator"
     },
+    "consumer.dlq_by_age_sample_rate_by_storage": {
+      "type": "object",
+      "additionalProperties": { "type": "number" },
+      "default": {},
+      "description": "Dict mapping storage name to the fraction of messages older than consumer.dlq_by_age_threshold_seconds (by Kafka broker timestamp) to route to the DLQ, so a backlogged consumer can catch up to fresh data. 0.0 means route none (disabled); 1.0 means route every too-old message; 0.25 means route ~25% of too-old messages and forward the rest. Storages with no entry default to 0.0 (disabled)."
+    },
+    "consumer.dlq_by_age_threshold_seconds": {
+      "type": "integer",
+      "default": 600,
+      "description": "Age threshold in seconds for consumer.dlq_by_age_sample_rate_by_storage. Messages whose Kafka broker timestamp is older than this are candidates for being routed to the DLQ."
+    },
     "eap_items_drop_invalid_timestamps": {
       "type": "boolean",
       "default": false,
@@ -210,7 +221,7 @@
         "type": "number"
       },
       "default": {},
-      "description": "Override values for ConfigurableComponent (allocation policy and storage-routing strategy) configs, keyed by the fully-qualified config key '{resource}.{ClassName}.{config}' (parameterized configs append '.{param}:{value},...', sorted, with '.'/','/':' in param names/values escaped as __dot_literal__/__comma_literal__/__colon_literal__). Values are numbers cast to each config's declared numeric type (int/float) on read. All current ConfigurableComponent configs are numeric; a non-numeric config would require widening this type. Authoritative source for these configs; a key absent here falls back to the legacy Redis runtime config and then the code default. Migrated from per-component runtime config of the same key."
+      "description": "Override values for ConfigurableComponent (allocation policy and storage-routing strategy) configs, keyed by the fully-qualified config key '{resource}.{ClassName}.{config}' (parameterized configs append '|{param}:{value}|...', params sorted). Values are numbers cast to each config's declared numeric type (int/float) on read. All current ConfigurableComponent configs are numeric; a non-numeric config would require widening this type. Authoritative source for these configs; a key absent here falls back to the code default. Read-only at runtime and managed in sentry-options-automator. Migrated from the per-component runtime config of the same key."
     },
     "storage_routing_sampled_too_low_threshold": {
       "type": "object",
@@ -555,6 +566,11 @@
       "default": false,
       "description": "Selects the preferred DogStatsD transport for snuba's Python and Rust metrics backends. When true and a socket path (DOGSTATSD_SOCKET_PATH) is configured, metrics are sent over the Unix domain socket; otherwise they use UDP (host/port). A deployment configured with only one transport uses that one regardless of the flag (socket-only sends over UDS, host/port-only over UDP), so the flag is authoritative only when both are configured, keeping host/port as the UDP rollback target. Read at metrics-backend creation, so flipping it takes effect on the next process restart -- no redeploy required."
     },
+    "use_clickhouse_connect_driver": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the ClickHouse read path uses the clickhouse-connect (HTTP) driver instead of the native protocol. Lets the driver migration roll out and roll back without a deploy. Migrated from the runtime config of the same name."
+    },
     "ondemand_profiler_hostnames": {
       "type": "string",
       "default": "",
@@ -579,6 +595,12 @@
       "type": "string",
       "default": "jittered",
       "description": "TaskBuilderMode for the subscription scheduler: one of immediate, jittered, transition_jitter, transition_immediate."
+    },
+    "eap_items_use_indexed_name_organization_ids": {
+      "type": "array",
+      "items": { "type": "integer" },
+      "default": [],
+      "description": "Organization ids the eap_items indexed_name rewrite is enabled for. For each listed org, equality and IN filters on sentry.op / sentry.metric.name read the bloom-filter-indexed indexed_name column instead of the unindexed attributes_string bucket lookup. Empty (the default) disables the rewrite everywhere. Only add an org once indexed_name is fully populated across its queried retention window, otherwise rows written before it was populated are silently dropped."
     }
   }
 }
