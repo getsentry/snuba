@@ -28,4 +28,3 @@ else
   . "${CARGO_HOME:-$HOME/.cargo}/env"
 fi
 
-export DOGSTATSD_HOST='localhost'

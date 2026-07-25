@@ -9,7 +9,6 @@ from typing import (
 )
 
 from snuba.settings.validation import validate_settings
-from snuba.utils.metrics.addr_config import get_statsd_addr
 
 # All settings must be uppercased, have a default value and cannot start with _.
 # The Rust consumer relies on this to create a JSON file from the evaluated settings
@@ -136,7 +135,6 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
 ]
 
 # Dogstatsd Options
-DOGSTATSD_HOST, DOGSTATSD_PORT = get_statsd_addr()
 DOGSTATSD_SAMPLING_RATES = {
     "metrics.processor.set.size": 0.1,
     "metrics.processor.distribution.size": 0.1,
@@ -144,8 +142,9 @@ DOGSTATSD_SAMPLING_RATES = {
 }
 DDM_METRICS_SAMPLE_RATE = float(os.environ.get("SNUBA_DDM_METRICS_SAMPLE_RATE", 0.01))
 
-NEW_DOGSTATSD_HOST: str | None = os.environ.get("SNUBA_NEW_STATSD_HOST") or None
-NEW_DOGSTATSD_PORT: int | None = int(os.environ.get("SNUBA_NEW_STATSD_PORT") or 0) or None
+# Full DogStatsD address including the transport scheme, e.g.
+# "unixgram:///run/dogstatsd.sock". Passed verbatim to both the Python datadog client and
+# the Rust exporter. Metrics are disabled when this is unset.
 DOGSTATSD_SOCKET_PATH: str | None = os.environ.get("SNUBA_DOGSTATSD_SOCKET_PATH") or None
 
 CLICKHOUSE_READONLY_USER = os.environ.get("CLICKHOUSE_READONLY_USER", "default")

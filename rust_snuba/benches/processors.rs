@@ -207,10 +207,10 @@ fn run_processor_bench(
 }
 
 fn main() {
-    // this sends to nowhere, but because it's UDP we won't error.
-    metrics::init(DogStatsDBackend::new_udp(
-        "127.0.0.1",
-        8081,
+    // This sends to nowhere: nothing is listening on the socket, so the exporter's
+    // forwarder just drops every flush instead of erroring out of the benchmark.
+    metrics::init(DogStatsDBackend::new_uds(
+        "unixgram:///tmp/snuba-benches-dogstatsd.sock",
         "snuba.consumer",
         &[],
     ))
