@@ -27,4 +27,3 @@ else
   touch "${CARGO_HOME:-$HOME/.cargo}/env"
   . "${CARGO_HOME:-$HOME/.cargo}/env"
 fi
-
