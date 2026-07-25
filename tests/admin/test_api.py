@@ -12,6 +12,7 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     TimeSeriesResponse,
 )
 
+from snuba import settings
 from snuba.admin.auth import USER_HEADER_KEY
 from snuba.datasets.factory import get_enabled_dataset_names
 from snuba.web.rpc import RPCEndpoint
@@ -250,6 +251,39 @@ def test_predefined_querylog_queries(admin_api: FlaskClient) -> None:
     assert len(data) > 1
     assert data[0]["description"] == "Find a query by its ID"
     assert data[0]["name"] == "QueryByID"
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_clickhouse_clusters(admin_api: FlaskClient) -> None:
+    response = admin_api.get("/clickhouse_clusters")
+    assert response.status_code == 200
+    data = json.loads(response.data)
+
+    assert len(data) == len(settings.CLUSTERS)
+    for cluster, configured in zip(data, settings.CLUSTERS, strict=True):
+        assert cluster["error"] is None, cluster["error"]
+        # The version of the ClickHouse the tests run against, e.g. 23.8.11.29
+        assert cluster["version"]
+        assert cluster["host"] == configured["host"]
+        assert cluster["port"] == configured["port"]
+        assert set(cluster["storage_sets"]) == set(configured["storage_sets"])
+
+
+@pytest.mark.redis_db
+def test_clickhouse_clusters_reports_unreachable_cluster(admin_api: FlaskClient) -> None:
+    with mock.patch(
+        "snuba.admin.clickhouse.clusters.get_ro_query_node_connection",
+        side_effect=Exception("Connection refused"),
+    ):
+        response = admin_api.get("/clickhouse_clusters")
+
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert len(data) == len(settings.CLUSTERS)
+    for cluster in data:
+        assert cluster["version"] is None
+        assert cluster["error"] == "Connection refused"
 
 
 @pytest.mark.redis_db

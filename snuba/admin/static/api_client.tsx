@@ -26,12 +26,15 @@ import { QuerylogRequest, QuerylogResult } from "SnubaAdmin/querylog/types";
 
 import { AutoReplacementsBypassProjectsData } from "SnubaAdmin/auto_replacements_bypass_projects/types";
 
+import { ClusterData } from "SnubaAdmin/clusters/types";
+
 interface Client {
   getSettings: () => Promise<Settings>;
   getAutoReplacementsBypassProjects: () => Promise<
     AutoReplacementsBypassProjectsData[]
   >;
   getClickhouseNodes: () => Promise<[ClickhouseNodeData]>;
+  getClickhouseClusters: () => Promise<ClusterData[]>;
   getSnubaDatasetNames: () => Promise<SnubaDatasetName[]>;
   getAllowedProjects: () => Promise<string[]>;
   executeSnQLQuery: (query: SnQLRequest) => Promise<any>;
@@ -86,6 +89,11 @@ function Client(): Client {
               storage.query_node,
           );
         });
+    },
+
+    getClickhouseClusters: () => {
+      const url = baseUrl + "clickhouse_clusters";
+      return fetch(url).then((resp) => resp.json());
     },
 
     getSnubaDatasetNames: () => {

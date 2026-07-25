@@ -29,6 +29,7 @@ class AdminTools(Enum):
     SNUBA_EXPLAIN = "snuba-explain"
     MANUAL_JOBS = "view-jobs"
     RPC_ENDPOINTS = "rpc-endpoints"
+    CLUSTERS = "clusters"
 
 
 DEVELOPER_TOOLS: set[AdminTools] = {AdminTools.SNQL_TO_SQL, AdminTools.QUERY_TRACING}

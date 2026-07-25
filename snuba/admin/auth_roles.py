@@ -83,6 +83,7 @@ TOOL_RESOURCES = {
     "snuba-explain": ToolResource("snuba-explain"),
     "querylog": ToolResource("querylog"),
     "rpc-endpoints": ToolResource("rpc-endpoints"),
+    "clusters": ToolResource("clusters"),
     "all": ToolResource("all"),
 }
 
@@ -167,6 +168,7 @@ ROLES = {
                     TOOL_RESOURCES["snuba-explain"],
                     TOOL_RESOURCES["querylog"],
                     TOOL_RESOURCES["rpc-endpoints"],
+                    TOOL_RESOURCES["clusters"],
                 ]
             )
         },
