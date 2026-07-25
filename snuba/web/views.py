@@ -96,11 +96,14 @@ def truncate_dataset(dataset: Dataset) -> None:
 
 
 def _add_compression_attrs(response: Response) -> Response:
-    accept = http_request.headers.get("Accept-Encoding")
-    sentry_sdk.set_attribute("snuba.req_accept_encoding", accept)
-
-    encoding = response.headers.get("Content-Encoding")
-    sentry_sdk.set_attribute("snuba.resp_encoding", encoding)
+    # TODO: update to attributes once we update the sdk
+    # leaving these as tags so I can aggregate by them in the meantime
+    sentry_sdk.set_tag("snuba.req_accept_encoding", http_request.headers.get("Accept-Encoding"))
+    sentry_sdk.set_tag("snuba.resp_encoding", response.headers.get("Content-Encoding"))
+    sentry_sdk.set_tag("snuba.resp_mime_type", response.mimetype)
+    span = sentry_sdk.get_current_span()
+    if span is not None:
+        span.set_data("snuba.resp_content_length", response.content_length)
     return response
 
 
