@@ -45,12 +45,10 @@ pub fn setup_logging() {
 pub fn setup_sentry(sentry_dsn: &str) -> ClientInitGuard {
     sentry::init((
         sentry_dsn,
-        sentry::ClientOptions {
+        sentry::ClientOptions::new()
             // the value for release is also computed in python snuba, please keep the
             // logic in sync
-            release: std::env::var("SNUBA_RELEASE").ok().map(From::from),
-            enable_logs: true,
-            ..Default::default()
-        },
+            .maybe_release(std::env::var("SNUBA_RELEASE").ok())
+            .enable_logs(true),
     ))
 }
