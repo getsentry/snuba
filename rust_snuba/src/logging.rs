@@ -11,8 +11,9 @@ use tracing_subscriber::EnvFilter;
 const ARROYO_KAFKA_LOGGER: &str = "sentry_arroyo::backends::kafka";
 const BROKER_TRANSPORT_FAILURE: &str =
     "Global error: BrokerTransportFailure (Local: Broker transport failure)";
-const BROKER_TRANSPORT_FAILURE_LOG: &str =
-    "librdkafka: Global error: BrokerTransportFailure (Local: Broker transport failure)";
+// Arroyo logs the error as `librdkafka: {error}: {reason}`, so the log body is
+// the exception value behind this prefix.
+const LIBRDKAFKA_LOG_PREFIX: &str = "librdkafka: ";
 
 fn is_broker_transport_failure_event(event: &Event<'_>) -> bool {
     event.logger.as_deref() == Some(ARROYO_KAFKA_LOGGER)
@@ -26,11 +27,14 @@ fn is_broker_transport_failure_event(event: &Event<'_>) -> bool {
 }
 
 fn is_broker_transport_failure_log(log: &Log) -> bool {
-    log.attributes
-        .get("tracing.module_path")
-        .and_then(|attribute| attribute.0.as_str())
-        == Some(ARROYO_KAFKA_LOGGER)
-        && log.body.starts_with(BROKER_TRANSPORT_FAILURE_LOG)
+    log.body
+        .strip_prefix(LIBRDKAFKA_LOG_PREFIX)
+        .is_some_and(|body| body.starts_with(BROKER_TRANSPORT_FAILURE))
+        && log
+            .attributes
+            .get("tracing.module_path")
+            .and_then(|attribute| attribute.0.as_str())
+            == Some(ARROYO_KAFKA_LOGGER)
 }
 
 pub fn setup_logging() {
@@ -73,6 +77,8 @@ pub fn setup_sentry(sentry_dsn: &str) -> ClientInitGuard {
             // logic in sync
             release: std::env::var("SNUBA_RELEASE").ok().map(From::from),
             enable_logs: true,
+            // Only recorded when a Sentry DSN is configured, and while ERROR
+            // still maps to `EventFilter::Event` in `setup_logging`.
             before_send: Some(Arc::new(|event| {
                 if is_broker_transport_failure_event(&event) {
                     counter!(
@@ -104,11 +110,11 @@ mod tests {
 
     use super::*;
 
-    fn event(logger: &str, exception_type: &str, value: &str) -> Event<'static> {
+    fn event(logger: &str, value: &str) -> Event<'static> {
         Event {
             logger: Some(logger.to_owned()),
             exception: vec![Exception {
-                ty: exception_type.to_owned(),
+                ty: "KafkaError".to_owned(),
                 value: Some(value.to_owned()),
                 ..Default::default()
             }]
@@ -134,24 +140,17 @@ mod tests {
     }
 
     #[test]
-    fn identifies_global_broker_transport_failure_event() {
+    fn identifies_only_broker_transport_failure_event() {
         assert!(is_broker_transport_failure_event(&event(
             ARROYO_KAFKA_LOGGER,
-            "KafkaError",
             "Global error: BrokerTransportFailure (Local: Broker transport failure)",
         )));
-    }
-
-    #[test]
-    fn preserves_other_kafka_events() {
         assert!(!is_broker_transport_failure_event(&event(
             ARROYO_KAFKA_LOGGER,
-            "KafkaError",
             "Global error: Authentication (Local: Authentication failure)",
         )));
         assert!(!is_broker_transport_failure_event(&event(
             "snuba::consumer",
-            "KafkaError",
             "Global error: BrokerTransportFailure (Local: Broker transport failure)",
         )));
     }
