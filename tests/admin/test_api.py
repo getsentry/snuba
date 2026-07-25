@@ -268,6 +268,10 @@ def test_clickhouse_clusters(admin_api: FlaskClient) -> None:
         assert cluster["host"] == configured["host"]
         assert cluster["port"] == configured["port"]
         assert set(cluster["storage_sets"]) == set(configured["storage_sets"])
+        # The migrated tables of the test cluster, deduplicated and sorted by
+        # the aggregate the endpoint runs.
+        assert "errors_local" in cluster["tables"]
+        assert cluster["tables"] == sorted(set(cluster["tables"]))
 
 
 @pytest.mark.redis_db
@@ -283,6 +287,7 @@ def test_clickhouse_clusters_reports_unreachable_cluster(admin_api: FlaskClient)
     assert len(data) == len(settings.CLUSTERS)
     for cluster in data:
         assert cluster["version"] is None
+        assert cluster["tables"] == []
         assert cluster["error"] == "Connection refused"
 
 

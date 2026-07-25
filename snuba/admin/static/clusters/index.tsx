@@ -3,6 +3,7 @@ import { Badge, Button, Code, Group, Loader, Space, Text } from "@mantine/core";
 
 import Client from "SnubaAdmin/api_client";
 import { Table } from "SnubaAdmin/table";
+import { Collapse } from "SnubaAdmin/collapse";
 import { ClusterData } from "SnubaAdmin/clusters/types";
 
 function versionCell(cluster: ClusterData) {
@@ -15,6 +16,31 @@ function versionCell(cluster: ClusterData) {
     </Text>
   );
 }
+
+function tablesCell(cluster: ClusterData) {
+  if (cluster.tables.length === 0) {
+    return <Text color="dimmed">—</Text>;
+  }
+  return (
+    <Collapse
+      text={`${cluster.tables.length} table${
+        cluster.tables.length === 1 ? "" : "s"
+      }`}
+    >
+      <div style={tableListStyle}>
+        {cluster.tables.map((table) => (
+          <div key={table}>{table}</div>
+        ))}
+      </div>
+    </Collapse>
+  );
+}
+
+const tableListStyle = {
+  maxHeight: 300,
+  overflowY: "auto" as const,
+  fontSize: 14,
+};
 
 function VersionSummary(props: { clusters: ClusterData[] }) {
   const counts: { [version: string]: number } = {};
@@ -81,6 +107,7 @@ function Clusters(props: { api: Client }) {
     cluster.distributed_cluster_name || <Text color="dimmed">—</Text>,
     cluster.database,
     <Text size="sm">{cluster.storage_sets.join(", ")}</Text>,
+    tablesCell(cluster),
   ]);
 
   return (
@@ -100,13 +127,15 @@ function Clusters(props: { api: Client }) {
           "Distributed Cluster Name",
           "Database",
           "Storage Sets",
+          "Tables in default",
         ]}
-        columnWidths={[3, 3, 3, 3, 2, 5]}
+        columnWidths={[3, 3, 3, 3, 2, 5, 3]}
         rowData={rowData}
       />
       <Text size="sm" color="dimmed">
-        Every cluster this Snuba deployment is configured with. The version is
-        the value of <Code>version()</Code> on each cluster's query node.
+        Every cluster this Snuba deployment is configured with. The version and
+        the tables are read from each cluster's query node, and only tables in
+        the <Code>default</Code> database are listed.
       </Text>
     </div>
   );

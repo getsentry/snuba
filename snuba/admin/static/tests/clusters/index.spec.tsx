@@ -3,7 +3,7 @@ import { ClusterData } from "SnubaAdmin/clusters/types";
 import Client from "SnubaAdmin/api_client";
 import React from "react";
 import { it, expect, jest } from "@jest/globals";
-import { render, waitFor } from "@testing-library/react";
+import { render, waitFor, fireEvent } from "@testing-library/react";
 
 function cluster(overrides: Partial<ClusterData> = {}): ClusterData {
   return {
@@ -17,6 +17,7 @@ function cluster(overrides: Partial<ClusterData> = {}): ClusterData {
     distributed_cluster_name: null,
     storage_sets: ["events"],
     version: "24.8.14.10459",
+    tables: ["errors_local", "sentry_local"],
     error: null,
     ...overrides,
   };
@@ -33,6 +34,7 @@ it("lists every cluster with its ClickHouse version", async () => {
       distributed_cluster_name: "cluster_one_sh_dist",
       storage_sets: ["metrics", "transactions"],
       version: "25.3.1.100",
+      tables: ["metrics_local"],
     }),
   ];
   let mockClient = {
@@ -55,6 +57,30 @@ it("lists every cluster with its ClickHouse version", async () => {
   expect(getAllByText("25.3.1.100", { exact: false })).toHaveLength(2);
   expect(getByText("cluster_one_sh_dist", { exact: false })).toBeTruthy();
   expect(getByText("metrics, transactions", { exact: false })).toBeTruthy();
+  expect(getByText("2 tables", { exact: false })).toBeTruthy();
+  expect(getByText("1 table", { exact: true })).toBeTruthy();
+});
+
+it("expands the list of tables on a cluster", async () => {
+  let mockClient = {
+    ...Client(),
+    getClickhouseClusters: jest
+      .fn<() => Promise<ClusterData[]>>()
+      .mockResolvedValueOnce([cluster()]),
+  };
+
+  let { getByText, queryByText, container } = render(
+    <Clusters api={mockClient} />
+  );
+
+  await waitFor(() =>
+    expect(mockClient.getClickhouseClusters).toBeCalledTimes(1)
+  );
+
+  expect(queryByText("errors_local")).toBeNull();
+  fireEvent.click(container.querySelectorAll("a")[0]);
+  expect(getByText("errors_local")).toBeTruthy();
+  expect(getByText("sentry_local")).toBeTruthy();
 });
 
 it("shows the reason a cluster's version could not be fetched", async () => {
