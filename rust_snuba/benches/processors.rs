@@ -207,14 +207,8 @@ fn run_processor_bench(
 }
 
 fn main() {
-    // This sends to nowhere: nothing is listening on the socket, so the exporter's
-    // forwarder just drops every flush instead of erroring out of the benchmark.
-    metrics::init(DogStatsDBackend::new_uds(
-        "unixgram:///tmp/snuba-benches-dogstatsd.sock",
-        "snuba.consumer",
-        &[],
-    ))
-    .unwrap();
+    // No exporter is installed, so the `metrics` facade discards everything this records.
+    metrics::init(DogStatsDBackend).unwrap();
 
     let mut c = Criterion::default().configure_from_args();
 

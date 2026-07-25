@@ -18,22 +18,18 @@ def create_metrics(
 ) -> MetricsBackend:
     """Create a DogStatsd object if a DogStatsD Unix domain socket is configured.
 
-    Metrics are sent to the local DogStatsD agent over a Unix domain socket;
-    ``DOGSTATSD_SOCKET_PATH`` is the only supported transport. Return a
-    DummyMetricsBackend when it is not configured.
-    ``DOGSTATSD_SOCKET_PATH`` is a full address including the transport scheme, e.g.
-    ``unixgram:///run/dogstatsd.sock``; it is passed to the datadog client verbatim (the
-    client strips the scheme), the same value the Rust exporter consumes.
+    Metrics are sent to the local DogStatsD agent over the socket configured by
+    ``settings.DOGSTATSD_SOCKET_PATH``, which is the only supported transport and is passed
+    to the datadog client verbatim. Return a DummyMetricsBackend when it is not configured.
     Prefixes must start with `snuba.<category>`, for example: `snuba.processor`.
     """
-    socket_path: str | None = settings.DOGSTATSD_SOCKET_PATH
-
     if settings.TESTING:
         from snuba.utils.metrics.backends.testing import TestingMetricsBackend
 
         return TestingMetricsBackend()
 
     # No socket configured -> no metrics.
+    socket_path: str | None = settings.DOGSTATSD_SOCKET_PATH
     if socket_path is None:
         from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 

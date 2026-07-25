@@ -131,8 +131,7 @@ install-proto-dev:
 	echo "Installed local sentry-protos, please restart the vscode language server. Run 'uv pip uninstall sentry-protos && uv sync' to go back to the original version."
 .PHONY: install-proto-dev
 
-# Dumps the DogStatsD payloads snuba emits. Run the snuba process with
-# SNUBA_DOGSTATSD_SOCKET_PATH='unixgram:///tmp/snuba-dogstatsd.sock' to send to it.
+# Dumps the DogStatsD payloads snuba emits; see the script's --help to point snuba at it.
 listen-metrics:
-	python scripts/listen-metrics.py
+	uv run python scripts/listen-metrics.py
 .PHONY: listen-metrics

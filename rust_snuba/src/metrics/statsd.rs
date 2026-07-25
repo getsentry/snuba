@@ -11,39 +11,15 @@ use crate::metrics::global_tags::get_global_tags;
 #[derive(Debug)]
 pub struct DogStatsDBackend;
 
-impl DogStatsDBackend {
-    /// `socket_path` is passed to the exporter verbatim, so it must be a full DogStatsD
-    /// remote address including the transport scheme, e.g. `unixgram:///run/dogstatsd.sock`
-    /// (datagram) or `unix:///run/dogstatsd.sock` (stream). The scheme is supplied via the
-    /// `SNUBA_DOGSTATSD_SOCKET_PATH` env var rather than hardcoded here, so the same value
-    /// also works for the Python datadog client (which strips the scheme itself).
-    pub fn new_uds(socket_path: &str, prefix: &str, tags: &[(&str, String)]) -> Self {
-        let global_labels: Vec<Label> = tags
-            .iter()
-            .map(|(k, v)| Label::new(k.to_string(), v.clone()))
-            .collect();
-
-        DogStatsDBuilder::default()
-            .with_remote_address(socket_path)
-            .expect("invalid DogStatsD address")
-            .set_global_prefix(prefix)
-            .with_global_labels(global_labels)
-            .send_histograms_as_distributions(true)
-            .with_telemetry(true)
-            .install()
-            .expect("failed to install DogStatsD exporter");
-
-        Self
-    }
-}
-
-/// Build the DogStatsD metrics backend.
+/// Install the DogStatsD exporter and return the backend adapting arroyo onto it.
 ///
 /// Metrics go to the local DogStatsD agent over the Unix domain socket configured by
-/// `dogstatsd_socket_path` (`SNUBA_DOGSTATSD_SOCKET_PATH`), matching the gating in the
-/// Python `create_metrics()`.
+/// `dogstatsd_socket_path`; the address is passed to the exporter verbatim, scheme
+/// included, as documented on `settings.DOGSTATSD_SOCKET_PATH` (both runtimes consume the
+/// same value).
 ///
-/// Returns `None` when no socket is configured, leaving metrics disabled.
+/// Returns `None` when no socket is configured, leaving metrics disabled — the same gating
+/// as the Python `create_metrics()`.
 pub fn create_dogstatsd_backend(
     env: &EnvConfig,
     prefix: &str,
@@ -51,11 +27,25 @@ pub fn create_dogstatsd_backend(
 ) -> Option<DogStatsDBackend> {
     let socket_path = env.dogstatsd_socket_path.as_deref()?;
 
-    // Tag every metric with the transport in use. UDS is now the only transport, but the
-    // tag predates that and dashboards filter on it, so it is kept as a constant.
-    let mut tags = tags.to_vec();
-    tags.push(("dogstatsd_transport", "uds".to_owned()));
-    Some(DogStatsDBackend::new_uds(socket_path, prefix, &tags))
+    let mut global_labels: Vec<Label> = tags
+        .iter()
+        .map(|(k, v)| Label::new(k.to_string(), v.clone()))
+        .collect();
+    // UDS is the only transport, so this tag is now constant. It is kept because Datadog
+    // dashboards filter on it; delete it once no dashboard references dogstatsd_transport.
+    global_labels.push(Label::new("dogstatsd_transport", "uds"));
+
+    DogStatsDBuilder::default()
+        .with_remote_address(socket_path)
+        .expect("invalid DogStatsD address")
+        .set_global_prefix(prefix)
+        .with_global_labels(global_labels)
+        .send_histograms_as_distributions(true)
+        .with_telemetry(true)
+        .install()
+        .expect("failed to install DogStatsD exporter");
+
+    Some(DogStatsDBackend)
 }
 
 impl Recorder for DogStatsDBackend {
@@ -154,12 +144,10 @@ mod tests {
 
     #[test]
     fn disabled_without_a_socket() {
-        // No socket configured -> metrics disabled. Returning `None` here also means no
-        // global recorder is installed, so this stays safe to assert in-process.
-        let env = EnvConfig {
-            dogstatsd_socket_path: None,
-            ..Default::default()
-        };
+        // Returning `None` short-circuits before installing the exporter, so asserting this
+        // in-process leaves the global recorder untouched.
+        let env = EnvConfig::default();
+        assert!(env.dogstatsd_socket_path.is_none());
         assert!(create_dogstatsd_backend(&env, "snuba.consumer", &[]).is_none());
     }
 }

@@ -37,9 +37,7 @@
             "cwd": "${workspaceFolder}",
             "sourceLanguages": ["rust"],
             "env": {
-                // Set to a DogStatsD socket address (e.g. "unixgram:///tmp/snuba-dogstatsd.sock",
-                // see `make listen-metrics`) to emit metrics; unset means no metrics.
-                "SNUBA_DOGSTATSD_SOCKET_PATH": ""
+                "SNUBA_DOGSTATSD_SOCKET_PATH": "unixgram:///tmp/snuba-dogstatsd.sock"
             },
             "preLaunchTask": "uvx maturin develop"
         },
