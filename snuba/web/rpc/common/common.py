@@ -586,6 +586,12 @@ _ARRAY_VALUE_TYPES = {
 }
 
 
+def _array_value_length(v: AttributeValue, value_type: str) -> int:
+    """Element count of an array-typed ``AttributeValue``. ``value_type`` must be one of
+    ``_ARRAY_VALUE_TYPES``; every one of them wraps a message with a ``values`` field."""
+    return len(getattr(v, value_type).values)
+
+
 def _validate_comparison_filter_type_array(
     op: ComparisonFilter.Op.ValueType, v: AttributeValue, key: AttributeKey
 ) -> None:
@@ -613,11 +619,20 @@ def _validate_comparison_filter_type_array(
                 "(e.g. val_str, val_int) for element membership, or an array value "
                 "(e.g. val_str_array) for exact array equality"
             )
-        if vt in _ARRAY_VALUE_TYPES and array_element_column(key) is None:
-            raise BadSnubaRPCRequestException(
-                "exact array equality (array value) is only supported on element-typed array "
-                f"keys (TYPE_ARRAY_STRING/INT/DOUBLE/BOOL), got {AttributeKey.Type.Name(key.type)}"
-            )
+        if vt in _ARRAY_VALUE_TYPES:
+            if array_element_column(key) is None:
+                raise BadSnubaRPCRequestException(
+                    "exact array equality (array value) is only supported on element-typed array "
+                    f"keys (TYPE_ARRAY_STRING/INT/DOUBLE/BOOL), got "
+                    f"{AttributeKey.Type.Name(key.type)}"
+                )
+            # An empty array would build an untyped `[]` (Array(Nothing)) RHS, and matching it
+            # is indistinguishable from the attribute being absent (arrayElement on a missing
+            # map key returns an empty array), so reject it like OP_HAS_ANY/OP_HAS_ALL do.
+            if _array_value_length(v, vt) == 0:
+                raise BadSnubaRPCRequestException(
+                    "exact array equality (array value) requires a non-empty array"
+                )
         return
     if op in (ComparisonFilter.OP_HAS_ANY, ComparisonFilter.OP_HAS_ALL):
         if array_element_column(key) is None:
@@ -630,8 +645,7 @@ def _validate_comparison_filter_type_array(
             raise BadSnubaRPCRequestException(
                 "OP_HAS_ANY/OP_HAS_ALL require an array value (e.g. val_str_array)"
             )
-        count = len(v.val_array.values) if vt == "val_array" else len(getattr(v, vt).values)
-        if count == 0:
+        if _array_value_length(v, vt) == 0:
             raise BadSnubaRPCRequestException("OP_HAS_ANY/OP_HAS_ALL require a non-empty array")
         return
     if op in (ComparisonFilter.OP_IN, ComparisonFilter.OP_NOT_IN):
