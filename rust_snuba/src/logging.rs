@@ -1,8 +1,25 @@
 use sentry::integrations::tracing::EventFilter;
+use sentry::protocol::Event;
 use sentry::ClientInitGuard;
+use sentry_arroyo::counter;
 use tracing::Level;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
+
+const ARROYO_KAFKA_LOGGER: &str = "sentry_arroyo::backends::kafka";
+const BROKER_TRANSPORT_FAILURE: &str =
+    "Global error: BrokerTransportFailure (Local: Broker transport failure)";
+
+fn is_broker_transport_failure_event(event: &Event<'_>) -> bool {
+    event.logger.as_deref() == Some(ARROYO_KAFKA_LOGGER)
+        && event.exception.values.iter().any(|exception| {
+            exception.ty == "KafkaError"
+                && exception
+                    .value
+                    .as_deref()
+                    .is_some_and(|value| value.starts_with(BROKER_TRANSPORT_FAILURE))
+        })
+}
 
 pub fn setup_logging() {
     let filter_layer = EnvFilter::try_from_default_env()
@@ -45,12 +62,60 @@ pub fn setup_logging() {
 pub fn setup_sentry(sentry_dsn: &str) -> ClientInitGuard {
     sentry::init((
         sentry_dsn,
-        sentry::ClientOptions {
+        sentry::ClientOptions::new()
             // the value for release is also computed in python snuba, please keep the
             // logic in sync
-            release: std::env::var("SNUBA_RELEASE").ok().map(From::from),
-            enable_logs: true,
-            ..Default::default()
-        },
+            .maybe_release(std::env::var("SNUBA_RELEASE").ok())
+            .enable_logs(true)
+            // Only recorded when a Sentry DSN is configured, and while ERROR
+            // still maps to `EventFilter::Event` in `setup_logging`.
+            .before_send(|event| {
+                if is_broker_transport_failure_event(&event) {
+                    counter!(
+                        "rust_consumer.kafka_error",
+                        1,
+                        "error" => "broker_transport_failure"
+                    );
+                    None
+                } else {
+                    Some(event)
+                }
+            }),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use sentry::protocol::Exception;
+
+    use super::*;
+
+    fn event(logger: &str, value: &str) -> Event<'static> {
+        Event {
+            logger: Some(logger.to_owned()),
+            exception: vec![Exception {
+                ty: "KafkaError".to_owned(),
+                value: Some(value.to_owned()),
+                ..Default::default()
+            }]
+            .into(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn identifies_only_broker_transport_failure_event() {
+        assert!(is_broker_transport_failure_event(&event(
+            ARROYO_KAFKA_LOGGER,
+            "Global error: BrokerTransportFailure (Local: Broker transport failure)",
+        )));
+        assert!(!is_broker_transport_failure_event(&event(
+            ARROYO_KAFKA_LOGGER,
+            "Global error: Authentication (Local: Authentication failure)",
+        )));
+        assert!(!is_broker_transport_failure_event(&event(
+            "snuba::consumer",
+            "Global error: BrokerTransportFailure (Local: Broker transport failure)",
+        )));
+    }
 }

@@ -15,10 +15,7 @@ use sentry_protos::snuba::v1::any_value::Value;
 use sentry_protos::snuba::v1::{ArrayValue, TraceItem, TraceItemType};
 
 use crate::config::ProcessorConfig;
-use crate::processors::utils::{
-    enforce_retention, get_drop_invalid_timestamps_enabled, out_of_valid_interval_secs,
-    record_invalid_timestamp_metric, SilencedDLQMessage,
-};
+use crate::processors::utils::{enforce_retention, SilencedDLQMessage};
 use crate::strategies::clickhouse::rowbinary;
 use crate::types::CogsData;
 use crate::types::{item_type_name, InsertBatch, ItemTypeMetrics, KafkaMessageMetadata};
@@ -48,7 +45,6 @@ struct ProcessedItem {
     origin_timestamp: Option<DateTime<Utc>>,
     item_type_metrics: ItemTypeMetrics,
     cogs_data: CogsData,
-    should_skip: bool,
 }
 
 fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Result<ProcessedItem> {
@@ -66,24 +62,18 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
     let item_type =
         TraceItemType::try_from(trace_item.item_type).unwrap_or(TraceItemType::Unspecified);
 
-    let mut should_skip = false;
     if let Some(event_ts) = event_timestamp {
         let now = Utc::now();
 
-        // should_skip=true will drop messages that are too old or too far in the future
-        if get_drop_invalid_timestamps_enabled() && out_of_valid_interval_secs(event_ts, now) {
-            let is_future = event_ts > now;
-            record_invalid_timestamp_metric("eap_items.messages", is_future, item_type);
-            should_skip = true;
-        }
-        // only DLQ messages that we don't want to drop (when should_skip=false)
-        if !should_skip {
-            if let Some(grace_min) = get_dlq_grace_period_min(&config.storage_name) {
-                if should_dlq_for_prior_partition(event_ts, now, grace_min) {
-                    let item_type_str = item_type_name(item_type);
-                    counter!("eap_items.messages.dlqed_prior_partition", 1, "item_type" => item_type_str);
-                    anyhow::bail!(SilencedDLQMessage);
-                }
+        if let Some(grace_min) = get_dlq_grace_period_min(&config.storage_name) {
+            if let Some(reason) = should_dlq(event_ts, now, grace_min) {
+                counter!(
+                    "eap_items.messages.dlqed_prior_partition",
+                    1,
+                    "item_type" => item_type_name(item_type),
+                    "reason" => reason
+                );
+                anyhow::bail!(SilencedDLQMessage);
             }
         }
     }
@@ -145,7 +135,6 @@ fn process_eap_item(msg: KafkaPayload, config: &ProcessorConfig) -> anyhow::Resu
         origin_timestamp,
         item_type_metrics,
         cogs_data,
-        should_skip,
     })
 }
 
@@ -168,17 +157,27 @@ fn prior_partition_boundary(now: DateTime<Utc>) -> DateTime<Utc> {
     monday.and_time(chrono::NaiveTime::MIN).and_utc()
 }
 
-/// True when we should DLQ this message because it belongs to the prior
-/// week's partition and we are far enough past the current partition
-/// boundary that prior-week stragglers should no longer be admitted.
-fn should_dlq_for_prior_partition(
-    event_ts: DateTime<Utc>,
-    now: DateTime<Utc>,
-    grace_min: i64,
-) -> bool {
+/// `Some(reason)` when this message's event `timestamp` falls outside the
+/// weekly partition we are willing to write to, `None` when it should be
+/// admitted. `grace_min` sizes a symmetric window around each partition
+/// boundary in which straddling writes are still allowed:
+///
+/// - prior-week stragglers are admitted until `grace_min` minutes past the
+///   current boundary, then DLQed as `past_ts`
+/// - next-week timestamps are DLQed as `future_ts` until we are within
+///   `grace_min` minutes of that next boundary
+fn should_dlq(event_ts: DateTime<Utc>, now: DateTime<Utc>, grace_min: i64) -> Option<&'static str> {
     let boundary = prior_partition_boundary(now);
-    let past_min = now.signed_duration_since(boundary).num_minutes();
-    past_min >= grace_min && event_ts < boundary
+    let next_boundary = boundary + chrono::Duration::days(7);
+    let grace = chrono::Duration::minutes(grace_min);
+
+    if event_ts < boundary && now >= boundary + grace {
+        return Some("past_ts");
+    }
+    if event_ts >= next_boundary && now < next_boundary - grace {
+        return Some("future_ts");
+    }
+    None
 }
 
 pub fn process_message(
@@ -187,9 +186,6 @@ pub fn process_message(
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let processed = process_eap_item(msg, config)?;
-    if processed.should_skip {
-        return Ok(InsertBatch::skip());
-    }
     let mut batch = InsertBatch::from_rows([processed.eap_item], processed.origin_timestamp)?;
     batch.item_type_metrics = Some(processed.item_type_metrics);
     batch.cogs_data = Some(processed.cogs_data);
@@ -202,9 +198,6 @@ pub fn process_message_row_binary(
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let processed = process_eap_item(msg, config)?;
-    if processed.should_skip {
-        return Ok(InsertBatch::skip());
-    }
     let row = EAPItemRow::try_from(processed.eap_item)?;
 
     // Encode the row to RowBinary bytes inline so the wide typed struct (~80
@@ -238,13 +231,6 @@ pub(crate) fn process_message_row_binary_typed(
     config: &ProcessorConfig,
 ) -> anyhow::Result<EAPItemRowBatch> {
     let processed = process_eap_item(msg, config)?;
-    if processed.should_skip {
-        return Ok(EAPItemRowBatch {
-            rows: vec![],
-            cogs_data: None,
-            item_type_metrics: None,
-        });
-    }
     Ok(EAPItemRowBatch {
         rows: vec![EAPItemRow::try_from(processed.eap_item)?],
         cogs_data: Some(processed.cogs_data),
@@ -1055,7 +1041,7 @@ mod tests {
         // 45 min past Monday 00:00 UTC; message timestamp is prior week → DLQ.
         let now = ymd_hms(2026, 5, 18, 0, 45, 0);
         let event_ts = ymd_hms(2026, 5, 17, 23, 30, 0);
-        assert!(should_dlq_for_prior_partition(event_ts, now, 45));
+        assert_eq!(should_dlq(event_ts, now, 45), Some("past_ts"));
     }
 
     #[test]
@@ -1063,7 +1049,7 @@ mod tests {
         // 30 min past Monday 00:00 UTC, grace=45 → not DLQ even though prior week.
         let now = ymd_hms(2026, 5, 18, 0, 30, 0);
         let event_ts = ymd_hms(2026, 5, 17, 23, 30, 0);
-        assert!(!should_dlq_for_prior_partition(event_ts, now, 45));
+        assert_eq!(should_dlq(event_ts, now, 45), None);
     }
 
     #[test]
@@ -1071,7 +1057,7 @@ mod tests {
         // Past grace, but message belongs to current week → never DLQ.
         let now = ymd_hms(2026, 5, 18, 1, 30, 0);
         let event_ts = ymd_hms(2026, 5, 18, 1, 0, 0);
-        assert!(!should_dlq_for_prior_partition(event_ts, now, 45));
+        assert_eq!(should_dlq(event_ts, now, 45), None);
     }
 
     /// The column list we ship with `INSERT INTO ... FORMAT RowBinary` must
@@ -1114,16 +1100,34 @@ mod tests {
         // event_ts == boundary belongs to the new week — must not DLQ.
         let now = ymd_hms(2026, 5, 18, 6, 0, 0);
         let event_ts = ymd_hms(2026, 5, 18, 0, 0, 0);
-        assert!(!should_dlq_for_prior_partition(event_ts, now, 45));
+        assert_eq!(should_dlq(event_ts, now, 45), None);
     }
 
     #[test]
-    fn test_should_not_dlq_future_event_ts() {
-        // Producer clock skew: event_ts > now. Belongs to current week (or future);
-        // event_ts < boundary is false, so we never DLQ.
+    fn test_should_not_dlq_future_event_ts_in_current_week() {
+        // Producer clock skew: event_ts > now, but still inside the current
+        // weekly partition (next boundary is Monday 2026-05-25) → admit.
         let now = ymd_hms(2026, 5, 21, 12, 0, 0);
         let event_ts = ymd_hms(2026, 5, 22, 0, 0, 0);
-        assert!(!should_dlq_for_prior_partition(event_ts, now, 45));
+        assert_eq!(should_dlq(event_ts, now, 45), None);
+    }
+
+    #[test]
+    fn test_should_dlq_next_week_event_ts_outside_grace() {
+        // Thursday: event_ts lands in the next partition (Monday 2026-05-25)
+        // and we are far more than grace_min minutes away from it → DLQ.
+        let now = ymd_hms(2026, 5, 21, 12, 0, 0);
+        let event_ts = ymd_hms(2026, 5, 25, 0, 0, 0);
+        assert_eq!(should_dlq(event_ts, now, 45), Some("future_ts"));
+    }
+
+    #[test]
+    fn test_should_not_dlq_next_week_event_ts_within_grace() {
+        // 30 min before Monday 2026-05-25 00:00 with grace=45 → the next
+        // partition is already open for writes.
+        let now = ymd_hms(2026, 5, 24, 23, 30, 0);
+        let event_ts = ymd_hms(2026, 5, 25, 0, 0, 1);
+        assert_eq!(should_dlq(event_ts, now, 45), None);
     }
 
     #[test]
@@ -1131,7 +1135,18 @@ mod tests {
         // grace=0 → DLQ prior-week messages the instant the new week starts.
         let now = ymd_hms(2026, 5, 18, 0, 0, 0);
         let event_ts = ymd_hms(2026, 5, 17, 23, 59, 59);
-        assert!(should_dlq_for_prior_partition(event_ts, now, 0));
+        assert_eq!(should_dlq(event_ts, now, 0), Some("past_ts"));
+    }
+
+    #[test]
+    fn test_should_dlq_grace_zero_admits_next_week_only_at_boundary() {
+        // grace=0 → next-week timestamps are DLQed right up to the boundary.
+        let event_ts = ymd_hms(2026, 5, 25, 0, 0, 0);
+        assert_eq!(
+            should_dlq(event_ts, ymd_hms(2026, 5, 24, 23, 59, 59), 0),
+            Some("future_ts")
+        );
+        assert_eq!(should_dlq(event_ts, ymd_hms(2026, 5, 25, 0, 0, 0), 0), None);
     }
 
     #[test]

@@ -23,11 +23,6 @@
       "default": 600,
       "description": "Age threshold in seconds for consumer.dlq_by_age_sample_rate_by_storage. Messages whose Kafka broker timestamp is older than this are candidates for being routed to the DLQ."
     },
-    "eap_items_drop_invalid_timestamps": {
-      "type": "boolean",
-      "default": false,
-      "description": "When true, the eap-items consumer skips messages whose event timestamp is more than one week in the future or more than thirty days in the past."
-    },
     "experimental_healthcheck": {
       "type": "boolean",
       "default": false,
@@ -595,6 +590,12 @@
       "type": "string",
       "default": "jittered",
       "description": "TaskBuilderMode for the subscription scheduler: one of immediate, jittered, transition_jitter, transition_immediate."
+    },
+    "eap_items_use_indexed_name_organization_ids": {
+      "type": "array",
+      "items": { "type": "integer" },
+      "default": [],
+      "description": "Organization ids the eap_items indexed_name rewrite is enabled for. For each listed org, equality and IN filters on sentry.op / sentry.metric.name read the bloom-filter-indexed indexed_name column instead of the unindexed attributes_string bucket lookup. Empty (the default) disables the rewrite everywhere. Only add an org once indexed_name is fully populated across its queried retention window, otherwise rows written before it was populated are silently dropped."
     }
   }
 }

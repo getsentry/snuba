@@ -34,7 +34,6 @@ from snuba.downsampled_storage_tiers import Tier
 from snuba.protos.common import (
     NORMALIZED_COLUMNS_EAP_ITEMS,
     TYPED_ARRAY_MAP_COLUMNS,
-    NormalizedColumn,
     type_array_typed_columns_select_expressions,
 )
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
@@ -68,6 +67,7 @@ from snuba.web.rpc.common.common import (
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
     typed_array_select_subcolumn_name,
+    use_indexed_name_for_request,
     use_sampling_factor,
     valid_sampling_factor_conditions,
 )
@@ -191,12 +191,13 @@ def _apply_virtual_columns(
         if context is None:
             return expression
 
-        from_column_type = NORMALIZED_COLUMNS_EAP_ITEMS.get(
-            context.from_column_name,
-            NormalizedColumn(context.from_column_name, [AttributeKey.TYPE_STRING]),
-        ).types[0]
         from_column = attribute_key_to_expression(
-            AttributeKey(name=context.from_column_name, type=from_column_type)
+            AttributeKey(
+                name=context.from_column_name,
+                type=NORMALIZED_COLUMNS_EAP_ITEMS.get(
+                    context.from_column_name, [AttributeKey.TYPE_STRING]
+                )[0],
+            )
         )
         if is_existence:
             return get_field_existence_expression(from_column)
@@ -718,8 +719,10 @@ def build_query(
         condition=base_conditions_and(
             request.meta,
             trace_item_filters_to_expression(
+                request.meta.trace_item_type,
                 request.filter,
                 attribute_key_to_expression,
+                use_indexed_name=use_indexed_name_for_request(request.meta),
             ),
             valid_sampling_factor_conditions(),
             *item_type_conds,
