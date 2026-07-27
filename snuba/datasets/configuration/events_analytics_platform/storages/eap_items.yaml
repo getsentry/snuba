@@ -161,6 +161,8 @@ deletion_settings:
   allowed_attributes_by_item_type:
     occurrence:
       - group_id
+    preprod:
+      - sentry.trace_id
 
 mandatory_condition_checkers:
   - condition: OrgIdEnforcer
