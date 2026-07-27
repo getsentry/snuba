@@ -2,10 +2,10 @@ import math
 from collections.abc import Callable, Iterable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 from google.protobuf.message import Message as ProtobufMessage
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     AnyAttributeFilter,
@@ -17,7 +17,6 @@ from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.protos.common import (
     ARRAY_TYPES,
-    ATTRIBUTES_TO_COALESCE,
     COLUMN_PREFIX,
     NORMALIZED_COLUMNS_EAP_ITEMS,
     PROTO_TYPE_TO_ATTRIBUTE_COLUMN,
@@ -25,6 +24,9 @@ from snuba.protos.common import (
     TYPED_ARRAY_MAP_COLUMNS,
     MalformedAttributeException,
     array_element_column,
+    coalesced_attribute_names,
+    first_present_value,
+    key_existence_conditions,
     type_array_to_membership_array_expression_from_typed_columns,
     type_array_typed_column_native_array,
 )
@@ -449,7 +451,7 @@ def _map_backed_operands(k: AttributeKey) -> tuple[Expression, Expression]:
     ``coalesce(...)`` representation untouched.
     """
     col_name = PROTO_TYPE_TO_ATTRIBUTE_COLUMN[k.type]
-    names = [k.name] + list(ATTRIBUTES_TO_COALESCE.get(k.name, ()))
+    names = coalesced_attribute_names(k.name)
 
     def _value(name: str) -> Expression:
         elem = arrayElement(None, column(col_name), literal(name))
@@ -459,17 +461,10 @@ def _map_backed_operands(k: AttributeKey) -> tuple[Expression, Expression]:
         return elem
 
     values = [_value(name) for name in names]
-    existences = [map_key_exists(column(col_name), literal(name)) for name in names]
+    existences = key_existence_conditions(col_name, names)
 
     exists = combine_or_conditions(existences) if len(existences) > 1 else existences[0]
-    if len(values) == 1:
-        value: Expression = values[0]
-    else:
-        args: list[Expression] = []
-        for cond, val in zip(existences[:-1], values[:-1], strict=True):
-            args.extend((cond, val))
-        args.append(values[-1])
-        value = f.multiIf(*args)
+    value = first_present_value(values, existences)
     return value, exists
 
 
@@ -875,14 +870,32 @@ def _any_attribute_filter_to_expression(
     return positive_expr
 
 
+_INDEXED_NAME_KEY_BY_ITEM_TYPE: dict[TraceItemType.ValueType, str] = {
+    TraceItemType.TRACE_ITEM_TYPE_SPAN: "sentry.op",
+    TraceItemType.TRACE_ITEM_TYPE_METRIC: "sentry.metric.name",
+}
+
+USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION = "eap_items_use_indexed_name_organization_ids"
+
+
+def use_indexed_name_for_request(meta: RequestMeta) -> bool:
+    return meta.organization_id in cast(
+        "list[int]", get_option(USE_INDEXED_NAME_ORGANIZATION_IDS_OPTION, [])
+    )
+
+
 def trace_item_filters_to_expression(
+    item_type: TraceItemType.ValueType,
     item_filter: TraceItemFilter,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
     membership_as_has: bool = False,
+    use_indexed_name: bool = False,
 ) -> Expression:
     """
     Trace Item Filters are things like (span.id=12345 AND start_timestamp >= "june 4th, 2024")
     This maps those filters into an expression which can be used in a WHERE clause
+    :param item_type: build one call per item type, each AND-ed with its own
+        ``item_type =`` condition (see ``cross_item_queries``).
     :param item_filter:
     :param membership_as_has: build ``IN``/``NOT IN`` membership as ``has(array, x)``
         rather than ``x IN (array)``. Pass ``True`` only when the result lands in a
@@ -890,28 +903,34 @@ def trace_item_filters_to_expression(
         ``IN`` set leaks an unstable ``__set_*`` identifier into the result-block column
         name and breaks mixed-version distributed reads (see ``_in_or_has``). Leave the
         default for WHERE clauses, where the prepared ``IN`` set drives pruning.
+    :param use_indexed_name: see ``use_indexed_name_for_request``.
     :return:
 
     Array predicates always read the typed ``attributes_array_*`` map columns: an
     element-typed array key (TYPE_ARRAY_STRING/INT/DOUBLE/BOOL) hits its single column
     natively, the deprecated untyped ``TYPE_ARRAY`` searches all four.
     """
+
     if item_filter.HasField("and_filter"):
         filters = item_filter.and_filter.filters
         if len(filters) == 0:
             return literal(True)
         if len(filters) == 1:
             return trace_item_filters_to_expression(
+                item_type,
                 filters[0],
                 attribute_key_to_expression,
                 membership_as_has,
+                use_indexed_name,
             )
         return and_cond(
             *(
                 trace_item_filters_to_expression(
+                    item_type,
                     x,
                     attribute_key_to_expression,
                     membership_as_has,
+                    use_indexed_name,
                 )
                 for x in filters
             )
@@ -923,16 +942,20 @@ def trace_item_filters_to_expression(
             raise BadSnubaRPCRequestException("Invalid trace item filter, empty 'or' clause")
         if len(filters) == 1:
             return trace_item_filters_to_expression(
+                item_type,
                 filters[0],
                 attribute_key_to_expression,
                 membership_as_has,
+                use_indexed_name,
             )
         return or_cond(
             *(
                 trace_item_filters_to_expression(
+                    item_type,
                     x,
                     attribute_key_to_expression,
                     membership_as_has,
+                    use_indexed_name,
                 )
                 for x in filters
             )
@@ -945,18 +968,22 @@ def trace_item_filters_to_expression(
         if len(filters) == 1:
             return not_cond(
                 trace_item_filters_to_expression(
+                    item_type,
                     filters[0],
                     attribute_key_to_expression,
                     membership_as_has,
+                    use_indexed_name,
                 )
             )
         return not_cond(
             and_cond(
                 *(
                     trace_item_filters_to_expression(
+                        item_type,
                         x,
                         attribute_key_to_expression,
                         membership_as_has,
+                        use_indexed_name,
                     )
                     for x in filters
                 )
@@ -985,6 +1012,19 @@ def trace_item_filters_to_expression(
             v_expression: Expression = literal(None)
         else:
             v_expression = _attribute_value_to_expression(v)
+
+        if (
+            use_indexed_name
+            and k.type == AttributeKey.Type.TYPE_STRING
+            and k.name == _INDEXED_NAME_KEY_BY_ITEM_TYPE.get(item_type)
+            and not v.is_null
+            and not item_filter.comparison_filter.ignore_case
+        ):
+            if op == ComparisonFilter.OP_EQUALS and v.val_str:
+                return f.equals(column("indexed_name"), v_expression)
+            values = v.val_str_array.values
+            if op == ComparisonFilter.OP_IN and values and "" not in values:
+                return _in_or_has(column("indexed_name"), v_expression, as_has=membership_as_has)
 
         # `sentry.timestamp` is a normalized column that `attribute_key_to_expression`
         # maps to `CAST(timestamp, 'Float64')`. Wrapping the primary-key/partition
@@ -1317,6 +1357,14 @@ def get_field_existence_expression(field: Expression) -> Expression:
     if isinstance(field, FunctionCall) and field.function_name == "coalesce":
         return combine_or_conditions(
             [get_field_existence_expression(param) for param in field.parameters]
+        )
+
+    if isinstance(field, FunctionCall) and field.function_name == "multiIf":
+        # multiIf(exists1, value1, ..., exists_{n-1}, value_{n-1}, value_n).
+        # (Value operands are at the odd indices plus the trailing else.)
+        value_operands = list(field.parameters[1::2]) + [field.parameters[-1]]
+        return combine_or_conditions(
+            [get_field_existence_expression(param) for param in value_operands]
         )
 
     subscriptable_field = get_subscriptable_field(field)
