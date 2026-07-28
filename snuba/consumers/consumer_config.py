@@ -48,8 +48,6 @@ class TopicConfig:
 @dataclass(frozen=True)
 class EnvConfig:
     sentry_dsn: str | None
-    dogstatsd_host: str | None
-    dogstatsd_port: int | None
     dogstatsd_socket_path: str | None
     default_retention_days: int
     lower_retention_days: int
@@ -125,16 +123,12 @@ def _resolve_topic_config(
 
 def _resolve_env_config() -> EnvConfig:
     sentry_dsn = settings.SENTRY_DSN
-    dogstatsd_host = settings.DOGSTATSD_HOST
-    dogstatsd_port = settings.DOGSTATSD_PORT
     default_retention_days = settings.DEFAULT_RETENTION_DAYS
     lower_retention_days = settings.LOWER_RETENTION_DAYS
     valid_retention_days = list(settings.VALID_RETENTION_DAYS)
     record_cogs = settings.RECORD_COGS
     return EnvConfig(
         sentry_dsn=sentry_dsn,
-        dogstatsd_host=dogstatsd_host,
-        dogstatsd_port=dogstatsd_port,
         dogstatsd_socket_path=settings.DOGSTATSD_SOCKET_PATH,
         default_retention_days=default_retention_days,
         lower_retention_days=lower_retention_days,

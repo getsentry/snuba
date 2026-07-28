@@ -37,7 +37,7 @@
             "cwd": "${workspaceFolder}",
             "sourceLanguages": ["rust"],
             "env": {
-                "DOGSTATSD_HOST": "localhost"
+                "SNUBA_DOGSTATSD_SOCKET_PATH": "unixgram:///tmp/snuba-dogstatsd.sock"
             },
             "preLaunchTask": "uvx maturin develop"
         },
