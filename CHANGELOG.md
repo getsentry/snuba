@@ -1,5 +1,38 @@
 # Changelog
 
+## 26.7.2
+
+### New Features ✨
+
+- (eap) Array-typed attribute key operators (HAS_ANY/HAS_ALL, exact OP_EQUALS) by @MeredithAnya in [#8212](https://github.com/getsentry/snuba/pull/8212)
+- (eap-items) Use indexed_name column for sentry.op/sentry.metric.name filters (reland) by @phacops in [#8209](https://github.com/getsentry/snuba/pull/8209)
+- (gocd) Run distroless image for disney by @sentry-junior in [#8229](https://github.com/getsentry/snuba/pull/8229)
+- (metrics) Instrument req/resp encoding headers. by @tryangul in [#8223](https://github.com/getsentry/snuba/pull/8223)
+
+### Bug Fixes 🐛
+
+- (clickhouse) Require clickhouse-connect&gt;=1.6.0 by @phacops in [#8219](https://github.com/getsentry/snuba/pull/8219)
+- (consumer) Metricize Kafka broker transport failures by @onewland in [#8193](https://github.com/getsentry/snuba/pull/8193)
+- (rpc) Fix SELECT construction for deprecated attribute coalescing by @mjq in [#8217](https://github.com/getsentry/snuba/pull/8217)
+
+### Internal Changes 🔧
+
+#### Deps
+
+- Bump actions/labeler from 6.2.0 to 7.0.0 by @dependabot in [#8226](https://github.com/getsentry/snuba/pull/8226)
+- Bump astral-sh/setup-uv from 8.3.2 to 9.0.0 by @dependabot in [#8227](https://github.com/getsentry/snuba/pull/8227)
+- Bump actions/checkout from 7.0.0 to 7.0.1 by @dependabot in [#8228](https://github.com/getsentry/snuba/pull/8228)
+
+#### Other
+
+- (eap-items) Remove eap_items_drop_invalid_timestamps by @MeredithAnya in [#8222](https://github.com/getsentry/snuba/pull/8222)
+- (gocd) Bump gocd-jsonnet to v3.0.7 by @dmajere in [#8230](https://github.com/getsentry/snuba/pull/8230)
+- Bump sentry-sdk to 2.66.1 and the Rust sentry SDK to 0.48.5 by @getsentry-bot in [#8224](https://github.com/getsentry/snuba/pull/8224)
+
+### Other
+
+- Filter transient Redis/schema-violation errors from Sentry by @phacops in [#8218](https://github.com/getsentry/snuba/pull/8218)
+
 ## 26.7.1
 
 ### New Features ✨
