@@ -124,6 +124,7 @@ REGULAR_FUNCTIONS = {
     "indexOf",
     "has",
     "hasAny",
+    "hasAll",
     "notEmpty",  # can apply to strings as well
     "length",  # can apply to strings as well
     # comparison
