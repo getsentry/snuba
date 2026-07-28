@@ -23,12 +23,6 @@ attributes_array_column = Column(
 
 
 def _tables() -> list[tuple[StorageSetKey, str, OperationTarget]]:
-    # The downsample materialized views never projected `attributes_array`
-    # (they SELECT an explicit column list built from get_eap_items_columns(),
-    # which has never included it), so the column only ever held default
-    # values on the downsample tables and nothing references it anywhere.
-    # It can therefore be dropped from the downsample tables entirely (local
-    # and distributed); only the full-fidelity eap_items_1_local keeps it.
     tables: list[tuple[StorageSetKey, str, OperationTarget]] = [
         (storage_set, "eap_items_1_dist", OperationTarget.DISTRIBUTED),
     ]
@@ -53,10 +47,7 @@ class Migration(migration.ClickhouseNodeMigration):
     the distributed eap_items tables and the downsampled tables entirely.
 
     The column was replaced by the typed attributes_array_{string,int,float,bool}
-    map columns from migration 0059 and is no longer read. The downsample
-    materialized views never projected it, so it holds only default values on
-    the downsample tables; nothing references it there. The full-fidelity
-    eap_items_1_local keeps the column, so no view regeneration is needed.
+    map columns from migration 0059 and is no longer read.
     """
 
     blocking = False
