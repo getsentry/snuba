@@ -86,15 +86,7 @@ function Clusters(props: { api: Client }) {
     fetchClusters();
   }, []);
 
-  if (fetchError !== null) {
-    return <Text color="red">{fetchError}</Text>;
-  }
-
-  if (clusters === null) {
-    return <Loader />;
-  }
-
-  const rowData = clusters.map((cluster) => [
+  const rowData = (clusters || []).map((cluster) => [
     <Code>
       {cluster.host}:{cluster.port}
     </Code>,
@@ -110,28 +102,35 @@ function Clusters(props: { api: Client }) {
     tablesCell(cluster),
   ]);
 
+  // Refresh stays reachable in every state, so a failed load can be retried
+  // without leaving and re-entering the tab.
   return (
     <div>
       <Group>
         <Button onClick={fetchClusters} loading={isLoading}>
           Refresh
         </Button>
-        <VersionSummary clusters={clusters} />
+        {clusters !== null && <VersionSummary clusters={clusters} />}
+        {fetchError !== null && <Text color="red">{fetchError}</Text>}
       </Group>
       <Space h="md" />
-      <Table
-        headerData={[
-          "Query Node",
-          "ClickHouse Version",
-          "Cluster Name",
-          "Distributed Cluster Name",
-          "Database",
-          "Storage Sets",
-          "Tables in default",
-        ]}
-        columnWidths={[3, 3, 3, 3, 2, 5, 3]}
-        rowData={rowData}
-      />
+      {clusters === null ? (
+        isLoading && <Loader />
+      ) : (
+        <Table
+          headerData={[
+            "Query Node",
+            "ClickHouse Version",
+            "Cluster Name",
+            "Distributed Cluster Name",
+            "Database",
+            "Storage Sets",
+            "Tables in default",
+          ]}
+          columnWidths={[3, 3, 3, 3, 2, 5, 3]}
+          rowData={rowData}
+        />
+      )}
       <Text size="sm" color="dimmed">
         Every cluster this Snuba deployment is configured with. The version and
         the tables are read from each cluster's query node, and only tables in

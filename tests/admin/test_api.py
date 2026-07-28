@@ -14,6 +14,7 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
 
 from snuba import settings
 from snuba.admin.auth import USER_HEADER_KEY
+from snuba.admin.clickhouse.clusters import TABLES_DATABASE
 from snuba.datasets.factory import get_enabled_dataset_names
 from snuba.web.rpc import RPCEndpoint
 
@@ -268,10 +269,12 @@ def test_clickhouse_clusters(admin_api: FlaskClient) -> None:
         assert cluster["host"] == configured["host"]
         assert cluster["port"] == configured["port"]
         assert set(cluster["storage_sets"]) == set(configured["storage_sets"])
-        # The migrated tables of the test cluster, deduplicated and sorted by
-        # the aggregate the endpoint runs.
-        assert "errors_local" in cluster["tables"]
+        # Deduplicated and sorted by the aggregate the endpoint runs.
         assert cluster["tables"] == sorted(set(cluster["tables"]))
+        # Tables are only ever listed for TABLES_DATABASE, so the migrated
+        # tables of the test cluster are only expected there.
+        if configured.get("database", TABLES_DATABASE) == TABLES_DATABASE:
+            assert "errors_local" in cluster["tables"]
 
 
 @pytest.mark.redis_db

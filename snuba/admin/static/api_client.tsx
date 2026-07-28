@@ -93,7 +93,24 @@ function Client(): Client {
 
     getClickhouseClusters: () => {
       const url = baseUrl + "clickhouse_clusters";
-      return fetch(url).then((resp) => resp.json());
+      return fetch(url).then((resp) => {
+        if (resp.ok) {
+          return resp.json();
+        }
+        // An error response (e.g. a 403 for a user without the tool) is a JSON
+        // object, not the expected array: reject so the page shows the message
+        // instead of trying to render the error as a list of clusters.
+        return resp.json().then(
+          (err) => {
+            throw new Error(
+              err?.error?.message || err?.error || "Could not load clusters"
+            );
+          },
+          () => {
+            throw new Error(`Could not load clusters (${resp.status})`);
+          }
+        );
+      });
     },
 
     getSnubaDatasetNames: () => {

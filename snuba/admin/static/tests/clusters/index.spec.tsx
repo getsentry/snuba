@@ -101,3 +101,26 @@ it("shows the reason a cluster's version could not be fetched", async () => {
 
   expect(getByText("Connection refused", { exact: false })).toBeTruthy();
 });
+
+it("keeps refresh reachable when the clusters could not be loaded", async () => {
+  let mockClient = {
+    ...Client(),
+    getClickhouseClusters: jest
+      .fn<() => Promise<ClusterData[]>>()
+      .mockRejectedValueOnce(new Error("No permissions on clusters"))
+      .mockResolvedValueOnce([cluster()]),
+  };
+
+  let { getByText, getByRole } = render(<Clusters api={mockClient} />);
+
+  await waitFor(() =>
+    expect(getByText("No permissions on clusters")).toBeTruthy()
+  );
+
+  fireEvent.click(getByRole("button", { name: "Refresh" }));
+
+  await waitFor(() =>
+    expect(mockClient.getClickhouseClusters).toBeCalledTimes(2)
+  );
+  expect(getByText("localhost:9000", { exact: false })).toBeTruthy();
+});
