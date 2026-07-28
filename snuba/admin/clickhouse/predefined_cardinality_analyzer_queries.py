@@ -63,7 +63,7 @@ class SpanGroupingCardinalitySamples(CardinalityQuery):
     AND (org_id = {{org_id}})
     AND (project_id = {{project_id}})
     AND (metric_id = 9223372036854776214)
-    ORDER BY span.description
+    ORDER BY `span.description`
     LIMIT 1000
     """
 
