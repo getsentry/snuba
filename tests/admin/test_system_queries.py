@@ -466,6 +466,57 @@ def test_query_node_connection_uses_cluster_http_port() -> None:
         common.CLUSTER_CONNECTIONS.update(saved_cluster)
 
 
+def test_connection_cache_is_keyed_on_client_settings() -> None:
+    """
+    Two admin tools reaching the same storage on the same host with different
+    ClickhouseClientSettings must get their own pool. The settings — and, on the
+    read-only path, the credentials — are baked into a pool when it is built, so
+    a cache keyed only on storage/host would hand the second caller whichever
+    pool the first one happened to create: System Queries (QUERY -> readonly
+    user, 25s cap) and the Cardinality Analyzer (CARDINALITY_ANALYZER -> trace
+    user, max_threads=10, 60s cap) both reach generic_metrics_distributions on
+    the query node.
+    """
+    from snuba.admin.clickhouse import common
+    from snuba.clusters.cluster import connection_cache
+
+    saved_node = dict(common.NODE_CONNECTIONS)
+    saved_cluster = dict(common.CLUSTER_CONNECTIONS)
+    common.NODE_CONNECTIONS.clear()
+    common.CLUSTER_CONNECTIONS.clear()
+    try:
+        with (
+            patch.object(common, "_validate_node"),  # treat the host as valid
+            patch.object(settings, "CLICKHOUSE_READONLY_USER", "ro_user"),
+            patch.object(settings, "CLICKHOUSE_TRACE_USER", "trace_user"),
+            patch.object(connection_cache, "get_node_connection") as mock_pool,
+        ):
+            common.get_ro_query_node_connection("errors", ClickhouseClientSettings.QUERY)
+            common.get_ro_query_node_connection(
+                "errors", ClickhouseClientSettings.CARDINALITY_ANALYZER
+            )
+
+        assert mock_pool.call_count == 2, (
+            "each client settings profile must build its own pool, not reuse the first caller's"
+        )
+        # _build_validated_pool passes (client_settings, node, username, password, ...)
+        profiles = [call.args[0] for call in mock_pool.call_args_list]
+        usernames = [call.args[2] for call in mock_pool.call_args_list]
+        assert profiles == [
+            ClickhouseClientSettings.QUERY,
+            ClickhouseClientSettings.CARDINALITY_ANALYZER,
+        ]
+        assert usernames == ["ro_user", "trace_user"], (
+            "the cardinality profile must not inherit the readonly credentials "
+            "cached by the QUERY profile"
+        )
+    finally:
+        common.NODE_CONNECTIONS.clear()
+        common.NODE_CONNECTIONS.update(saved_node)
+        common.CLUSTER_CONNECTIONS.clear()
+        common.CLUSTER_CONNECTIONS.update(saved_cluster)
+
+
 @pytest.mark.parametrize(
     "sql_query, sudo_mode",
     [

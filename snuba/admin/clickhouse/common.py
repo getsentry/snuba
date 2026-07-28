@@ -117,7 +117,7 @@ def _build_validated_pool(
     # is correct *only* when we are connecting to that endpoint — i.e. the query
     # node, the same host the normal read path reaches on
     # cluster.get_http_port() (this is what get_ro_query_node_connection, and
-    # thus the tracing/querylog tools, rely on). For any other host
+    # thus the tracing/querylog/cardinality tools, rely on). For any other host
     # — a specific individual node selected by host in the admin tools — that
     # port does not apply: an individual node serves HTTP on the well-known
     # default port, so use that instead.
@@ -147,26 +147,42 @@ def _driver_cache_token() -> str:
     return "connect" if use_clickhouse_connect_driver() else "native"
 
 
+def _settings_cache_token(client_settings: ClickhouseClientSettings) -> str:
+    # Part of the admin connection cache keys because the ClickHouse settings
+    # (and, for the read-only getters, the credentials) a pool is built with are
+    # baked in at construction. Without this, two tools asking for the same
+    # storage/host with different profiles would collide: whichever ran first
+    # would win and the other would silently execute against the wrong pool. For
+    # example System Queries (QUERY -> readonly user, 25s cap) and the
+    # Cardinality Analyzer (CARDINALITY_ANALYZER -> trace user, max_threads=10,
+    # 60s cap) both reach generic_metrics_distributions on the query node.
+    return client_settings.name
+
+
 def get_ro_node_connection(
     clickhouse_host: str,
     clickhouse_port: int,
     storage_name: str,
     client_settings: ClickhouseClientSettings,
 ) -> ClickhousePool:
+    assert client_settings in {
+        ClickhouseClientSettings.QUERY,
+        ClickhouseClientSettings.QUERYLOG,
+        ClickhouseClientSettings.TRACING,
+        ClickhouseClientSettings.CARDINALITY_ANALYZER,
+    }, (
+        "admin can only use QUERY, QUERYLOG, TRACING or CARDINALITY_ANALYZER "
+        "ClickhouseClientSettings"
+    )
+
     storage = _get_storage(storage_name)
 
-    key = f"{storage.get_storage_key()}-{clickhouse_host}-{_driver_cache_token()}"
+    key = f"{storage.get_storage_key()}-{clickhouse_host}-{_settings_cache_token(client_settings)}-{_driver_cache_token()}"
     if key in NODE_CONNECTIONS:
         return NODE_CONNECTIONS[key]
 
     cluster = storage.get_cluster()
     database = cluster.get_database()
-
-    assert client_settings in {
-        ClickhouseClientSettings.QUERY,
-        ClickhouseClientSettings.QUERYLOG,
-        ClickhouseClientSettings.TRACING,
-    }, "admin can only use QUERY, QUERYLOG or TRACING ClickhouseClientSettings"
 
     if (
         client_settings == ClickhouseClientSettings.QUERY
@@ -198,7 +214,7 @@ CLUSTER_CONNECTIONS: MutableMapping[str, ClickhousePool] = {}
 def get_ro_query_node_connection(
     storage_name: str, client_settings: ClickhouseClientSettings
 ) -> ClickhousePool:
-    key = f"{storage_name}-{_driver_cache_token()}"
+    key = f"{storage_name}-{_settings_cache_token(client_settings)}-{_driver_cache_token()}"
     if key in CLUSTER_CONNECTIONS:
         return CLUSTER_CONNECTIONS[key]
 
@@ -221,7 +237,7 @@ def get_sudo_node_connection(
 ) -> ClickhousePool:
     storage = _get_storage(storage_name)
 
-    key = f"{storage.get_storage_key()}-{clickhouse_host}-sudo-{_driver_cache_token()}"
+    key = f"{storage.get_storage_key()}-{clickhouse_host}-sudo-{_settings_cache_token(client_settings)}-{_driver_cache_token()}"
     if key in NODE_CONNECTIONS:
         return NODE_CONNECTIONS[key]
 
@@ -253,7 +269,7 @@ def get_clusterless_node_connection(
     cluster = storage.get_cluster()
     database = cluster.get_database()
 
-    key = f"{storage.get_storage_key()}-{clickhouse_host}-clusterless-{database}-{_driver_cache_token()}"
+    key = f"{storage.get_storage_key()}-{clickhouse_host}-clusterless-{database}-{_settings_cache_token(client_settings)}-{_driver_cache_token()}"
     if key in NODE_CONNECTIONS:
         return NODE_CONNECTIONS[key]
 
@@ -278,18 +294,18 @@ def get_ro_clusterless_node_connection(
     storage_name: str,
     client_settings: ClickhouseClientSettings,
 ) -> ClickhousePool:
-    storage = _get_storage(storage_name)
-    cluster = storage.get_cluster()
-    database = cluster.get_database()
-
-    key = f"{storage.get_storage_key()}-{clickhouse_host}-clusterless-ro-{database}-{_driver_cache_token()}"
-    if key in NODE_CONNECTIONS:
-        return NODE_CONNECTIONS[key]
-
     assert client_settings in {
         ClickhouseClientSettings.QUERY,
         ClickhouseClientSettings.QUERYLOG,
     }, "ro clusterless connections must use a read-only client settings profile"
+
+    storage = _get_storage(storage_name)
+    cluster = storage.get_cluster()
+    database = cluster.get_database()
+
+    key = f"{storage.get_storage_key()}-{clickhouse_host}-clusterless-ro-{database}-{_settings_cache_token(client_settings)}-{_driver_cache_token()}"
+    if key in NODE_CONNECTIONS:
+        return NODE_CONNECTIONS[key]
 
     connection = _build_validated_pool(
         clickhouse_host,
