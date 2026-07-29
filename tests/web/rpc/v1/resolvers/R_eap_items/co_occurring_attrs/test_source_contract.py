@@ -100,3 +100,28 @@ def test_count_is_an_aliased_aggregate(source: CoOccurringAttrsSource) -> None:
 
 def test_repr_names_the_storage(source: CoOccurringAttrsSource) -> None:
     assert source.storage_key.value in repr(source)
+
+
+def test_last_seen_capability_is_consistent(source: CoOccurringAttrsSource) -> None:
+    """has_last_seen must describe what last_seen_expression actually does.
+
+    The endpoint checks the flag and then calls the expression, so a source claiming the
+    capability without implementing it (or vice versa) would either crash or silently drop
+    the column.
+    """
+    if source.has_last_seen:
+        expression = source.last_seen_expression()
+        assert isinstance(expression, FunctionCall)
+        assert expression.alias == "last_seen"
+    else:
+        with pytest.raises(NotImplementedError):
+            source.last_seen_expression()
+
+
+def test_last_seen_column_is_available_when_claimed(source: CoOccurringAttrsSource) -> None:
+    """A source claiming last_seen must actually have the column, or the query fails at
+    ClickHouse rather than here."""
+    if not source.has_last_seen:
+        return
+    columns = {c.name for c in get_storage(source.storage_key).get_schema().get_columns()}
+    assert "last_seen" in columns

@@ -88,3 +88,24 @@ def test_key_array_columns_matches_typed_key_arrays() -> None:
         AttributeKey.Type.TYPE_UNSPECIFIED,
     ):
         assert V2.key_array_columns(attr_type) == [col for col, _ in V2.typed_key_arrays(attr_type)]
+
+
+def test_records_last_seen() -> None:
+    assert V2.has_last_seen
+
+
+def test_last_seen_takes_the_max() -> None:
+    """`last_seen` is a SimpleAggregateFunction(max, DateTime); max over the grouped rows
+    collapses them to the most recent time the key was seen."""
+    expression = V2.last_seen_expression()
+    assert isinstance(expression, FunctionCall)
+    assert expression.function_name == "max"
+    assert expression.alias == "last_seen"
+    assert [p.column_name for p in expression.parameters if isinstance(p, Column)] == ["last_seen"]
+
+
+def test_last_seen_column_exists_on_the_storage() -> None:
+    from snuba.datasets.storages.factory import get_storage
+
+    columns = {c.name for c in get_storage(V2.storage_key).get_schema().get_columns()}
+    assert "last_seen" in columns

@@ -8,9 +8,8 @@ on merge. Compared to v1:
   being folded into the float array or missing entirely.
 - **Rows carry an occurrence count**, so frequency approximates the number of items a key
   was seen on rather than the number of distinct attribute sets containing it.
-
-It also has a ``last_seen`` column, not yet exposed: the response proto has no field for it
-(see getsentry/sentry-protos#387).
+- **Rows carry a ``last_seen`` timestamp**, so the endpoint can report and order by how
+  recently a key was used.
 """
 
 from __future__ import annotations
@@ -88,6 +87,16 @@ class CoOccurringAttrsV2(CoOccurringAttrsSource):
         # Each row carries an occurrence count that the SummingMergeTree accumulates, so
         # summing it approximates the number of items a key was seen on.
         return f.sum(column("count"), alias="count")
+
+    @property
+    def has_last_seen(self) -> bool:
+        return True
+
+    def last_seen_expression(self) -> Expression:
+        # `last_seen` is a SimpleAggregateFunction(max, DateTime): the SummingMergeTree
+        # already applies max on merge, and max again here collapses the rows that a single
+        # attribute key was grouped from.
+        return f.max(column("last_seen"), alias="last_seen")
 
 
 V2 = CoOccurringAttrsV2()

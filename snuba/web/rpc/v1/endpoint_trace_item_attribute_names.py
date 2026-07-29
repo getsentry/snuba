@@ -1,6 +1,7 @@
 import re
 import uuid
 from collections.abc import Mapping
+from datetime import datetime
 from typing import Any
 
 from google.protobuf.json_format import MessageToDict
@@ -37,6 +38,7 @@ from snuba.web.rpc.common.common import (
     treeify_or_and_conditions,
 )
 from snuba.web.rpc.common.debug_info import extract_response_meta
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.proto_visitor import ProtoVisitor, TraceItemFilterWrapper
 from snuba.web.rpc.v1.resolvers.R_eap_items import co_occurring_attrs
 from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs import CoOccurringAttrsSource
@@ -68,6 +70,25 @@ def _order_by_count(request: TraceItemAttributeNamesRequest) -> bool:
     are unaffected.
     """
     return request.order_by.column == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT
+
+
+def _order_by_last_seen(request: TraceItemAttributeNamesRequest) -> bool:
+    """Whether the caller opted into recency ordering via ``order_by`` (COLUMN_LAST_SEEN).
+
+    Combined with ``descending``, this gives "most recently used attributes first", which is
+    the main reason to surface ``last_seen`` at all.
+    """
+    return request.order_by.column == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN
+
+
+def _aggregates_attributes(request: TraceItemAttributeNamesRequest) -> bool:
+    """Whether the requested ordering groups the attribute keys.
+
+    Both frequency and recency ordering aggregate over the rows a key appears in, so both
+    take the GROUP BY path and both can report ``count``/``last_seen``. Name ordering instead
+    selects distinct keys and reports neither.
+    """
+    return _order_by_count(request) or _order_by_last_seen(request)
 
 
 def _order_by_semver(request: TraceItemAttributeNamesRequest) -> bool:
@@ -112,6 +133,18 @@ def _semver_sort_key_py(name: str) -> tuple[tuple[int, int, int, int], int, str]
         is_stable,
         non_null,
     )
+
+
+def _as_datetime(value: Any) -> datetime:
+    """Coerce a ClickHouse DateTime result into a datetime.
+
+    Which of the two the reader hands back depends on the driver (the native protocol
+    deserializes to datetime, the HTTP one can yield an ISO string), so accept both. Mirrors
+    the same handling in resolver_trace_item_stats.
+    """
+    if isinstance(value, datetime):
+        return value
+    return datetime.fromisoformat(str(value))
 
 
 def _name_order_by_expression(semver: bool) -> Expression:
@@ -224,11 +257,16 @@ def get_co_occurring_attributes(
           ORDER BY attr_key ASC
           LIMIT 10000
 
-          -- Opt-in frequency ordering (order_by.column = COLUMN_COUNT) instead groups
-          -- and counts the keys, returning the most common first. The aggregate depends
-          -- on the storage (see co_occurring_attrs.count_expression):
-          --   SELECT arrayJoin(...) AS attr_key, <count aggregate> AS count
-          --   ... GROUP BY attr_key ORDER BY count DESC, attr_key ASC
+          -- The opt-in orderings (order_by.column = COLUMN_COUNT or COLUMN_LAST_SEEN)
+          -- instead group the keys and aggregate over them, returning the most common or
+          -- the most recently seen first. The aggregates depend on the storage (see
+          -- co_occurring_attrs.count_expression / last_seen_expression):
+          --   SELECT arrayJoin(...) AS attr_key, <count aggregate> AS count,
+          --          max(last_seen) AS last_seen
+          --   ... GROUP BY attr_key ORDER BY <count|last_seen> DESC, attr_key ASC
+          --
+          -- COLUMN_LAST_SEEN requires a storage that records last_seen, so it is rejected
+          -- for requests that resolve to v1 (see has_last_seen).
 
       **Storage:** which of the two co-occurring-attributes roll-ups this reads, and the
       parts of the query shape that differ between them (the per-type key arrays and the
@@ -272,6 +310,16 @@ def get_co_occurring_attributes(
           - there is a bloom filter index on all key values
     """
     source = co_occurring_attrs.for_request(request)
+
+    if _order_by_last_seen(request) and not source.has_last_seen:
+        # Only the v2 roll-up records last_seen, and a request can land on v1 either because
+        # the rollout flag is off or because its time range predates v2. Fail loudly rather
+        # than silently returning some other order the caller did not ask for.
+        raise BadSnubaRPCRequestException(
+            "ordering by COLUMN_LAST_SEEN is not available for this request: "
+            f"{source.storage_key.value} does not record last_seen. It is only supported "
+            "for time ranges covered by the v2 co-occurring attributes table."
+        )
 
     # get all attribute keys from the filter
     collector = AttributeKeyCollector()
@@ -348,23 +396,29 @@ def get_co_occurring_attributes(
     )
 
     semver = _order_by_semver(request)
-    if _order_by_count(request):
-        # Opt-in frequency ordering: group by key and count the co-occurring attribute
-        # sets containing it. How the count is computed depends on the storage, so the
-        # source supplies the aggregate.
+    if _aggregates_attributes(request):
+        # Opt-in frequency or recency ordering: group by key and aggregate over the
+        # co-occurring attribute sets containing it. How each aggregate is computed depends
+        # on the storage, so the source supplies the expressions.
         selected_columns = [
             SelectedExpression(name="attr_key", expression=attr_key_expression),
             SelectedExpression(name="count", expression=source.count_expression()),
         ]
+        if source.has_last_seen:
+            # Reported alongside the keys whenever the storage has it, so a caller ordering
+            # by frequency still learns how recent each attribute is.
+            selected_columns.append(
+                SelectedExpression(name="last_seen", expression=source.last_seen_expression())
+            )
         groupby: list[Expression] | None = [column("attr_key")]
         order_by = [
             OrderBy(
                 direction=(
                     OrderByDirection.DESC if request.order_by.descending else OrderByDirection.ASC
                 ),
-                expression=column("count"),
+                expression=column("last_seen" if _order_by_last_seen(request) else "count"),
             ),
-            # stable tiebreak for keys with the same frequency (semver key when
+            # stable tiebreak for keys with the same frequency/recency (semver key when
             # SORT_SEMVER was requested)
             OrderBy(direction=OrderByDirection.ASC, expression=_name_order_by_expression(semver)),
         ]
@@ -417,6 +471,21 @@ def get_co_occurring_attributes(
     return snuba_request
 
 
+def _aggregate_sort_key(row: Mapping[str, Any], sort_column: str) -> float:
+    """Comparable value for the aggregate the ClickHouse ORDER BY used.
+
+    Reduced to a number so counts and timestamps sort with one code path, and so rows
+    missing the column (the synthetic non-stored keys) compare lowest instead of raising on
+    a mixed-type comparison.
+    """
+    value = row.get(sort_column)
+    if value is None:
+        return 0.0
+    if sort_column == "last_seen":
+        return _as_datetime(value).timestamp()
+    return float(value)
+
+
 def convert_co_occurring_results_to_attributes(
     request: TraceItemAttributeNamesRequest,
     query_res: QueryResult,
@@ -427,11 +496,15 @@ def convert_co_occurring_results_to_attributes(
         attribute = TraceItemAttributeNamesResponse.Attribute(
             name=attr_name, type=getattr(AttributeKey.Type, attr_type)
         )
-        # `count` is only selected when ordering by frequency; surface it for the
-        # real attributes. The synthetic non-stored attributes have no count.
+        # `count` and `last_seen` are only selected on the aggregating orderings, and
+        # `last_seen` only on storages that record it. The synthetic non-stored attributes
+        # have neither.
         count = row.get("count")
         if count is not None:
             attribute.count = int(count)
+        last_seen = row.get("last_seen")
+        if last_seen is not None:
+            attribute.last_seen.FromDatetime(_as_datetime(last_seen))
         return attribute
 
     # Name-ordering key that mirrors the ClickHouse ORDER BY: the raw (type, name)
@@ -453,12 +526,16 @@ def convert_co_occurring_results_to_attributes(
             if request.value_substring_match in key_name
         ]
         non_stored.sort(key=_name_key)
-        if _order_by_count(request):
-            # Match ClickHouse: count in the requested direction, then name ASC
-            # (two stable passes). Synthetic non-stored keys have no count, so
+        if _aggregates_attributes(request):
+            # Match ClickHouse: the aggregate in the requested direction, then name ASC
+            # (two stable passes). Synthetic non-stored keys have no aggregate value, so
             # pin them first rather than relying on a sentinel.
+            sort_column = "last_seen" if _order_by_last_seen(request) else "count"
             data.sort(key=_name_key)
-            data.sort(key=lambda row: row.get("count", 0), reverse=request.order_by.descending)
+            data.sort(
+                key=lambda row: _aggregate_sort_key(row, sort_column),
+                reverse=request.order_by.descending,
+            )
             data = non_stored + data
         else:
             # Merge synthetic non-stored keys in and re-sort by name in the

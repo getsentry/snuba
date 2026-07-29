@@ -48,6 +48,24 @@ class CoOccurringAttrsSource(ABC):
         raise NotImplementedError
 
     @property
+    def has_last_seen(self) -> bool:
+        """Whether this storage records when an attribute was last seen.
+
+        False on storages with no such column, in which case ``last_seen_expression`` raises
+        and the endpoint must neither select nor order by it.
+        """
+        return False
+
+    def last_seen_expression(self) -> Expression:
+        """The most recent time each key was seen, aggregated over the grouped rows.
+
+        Only valid when ``has_last_seen``; callers must check first.
+        """
+        raise NotImplementedError(
+            f"{self.storage_key.value} does not record last_seen; guard on has_last_seen"
+        )
+
+    @property
     def data_source(self) -> Storage:
         """The query's FROM clause."""
         return Storage(

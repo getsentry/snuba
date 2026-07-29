@@ -84,3 +84,15 @@ def test_key_array_columns_matches_typed_key_arrays() -> None:
         AttributeKey.Type.TYPE_UNSPECIFIED,
     ):
         assert V1.key_array_columns(attr_type) == [col for col, _ in V1.typed_key_arrays(attr_type)]
+
+
+def test_does_not_record_last_seen() -> None:
+    """This storage has no last_seen column, so the endpoint must not select or order by it."""
+    assert not V1.has_last_seen
+
+
+def test_last_seen_expression_raises() -> None:
+    """Guarding on has_last_seen is the contract; calling anyway is a programming error, not
+    a silently wrong query."""
+    with pytest.raises(NotImplementedError, match="does not record last_seen"):
+        V1.last_seen_expression()

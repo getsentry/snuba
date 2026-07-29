@@ -13,9 +13,11 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_options import OptionValue
 from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeNamesRequest,
+    TraceItemAttributeNamesResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
@@ -27,6 +29,7 @@ from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.data_source.simple import Storage as StorageDataSource
 from snuba.query.expressions import Column, FunctionCall
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
     EndpointTraceItemAttributeNames,
     get_co_occurring_attributes,
@@ -108,13 +111,14 @@ def _request(
     attr_type: AttributeKey.Type.ValueType,
     *,
     order_by_count: bool = False,
+    order_by_column: TraceItemAttributeNamesRequest.OrderBy.Column.ValueType | None = None,
+    descending: bool = True,
 ) -> TraceItemAttributeNamesRequest:
+    if order_by_column is None and order_by_count:
+        order_by_column = TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT
     order_by = (
-        TraceItemAttributeNamesRequest.OrderBy(
-            column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT,
-            descending=True,
-        )
-        if order_by_count
+        TraceItemAttributeNamesRequest.OrderBy(column=order_by_column, descending=descending)
+        if order_by_column is not None
         else None
     )
     return TraceItemAttributeNamesRequest(
@@ -380,3 +384,114 @@ class TestCoOccurringV2DateGate(BaseApiTest):
         assert _queried_storage_key(req) == CO_OCCURRING_ATTRS_STORAGE_KEY
         res = EndpointTraceItemAttributeNames().execute(req)
         assert [attr.name for attr in res.attributes] == ["probe_str"]
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
+class TestLastSeen(BaseApiTest):
+    """Reporting and ordering by `last_seen`, which only the v2 roll-up records.
+
+    The module fixture writes every probe attribute at the same timestamp, which cannot
+    distinguish a recency ordering from an arbitrary one, so this class writes its own items
+    at known, distinct times.
+    """
+
+    # Written oldest-first so a correct descending recency order is the reverse of this.
+    STAGGERED = ["ls_oldest", "ls_middle", "ls_newest"]
+    # Hours before BASE_TIME each was seen; ls_newest is the most recent.
+    OFFSETS = {"ls_oldest": 4, "ls_middle": 2, "ls_newest": 0}
+
+    @pytest.fixture(autouse=True)
+    def staggered_items(self) -> None:
+        items_storage = get_writable_storage(StorageKey("eap_items"))
+        for name, hours_ago in self.OFFSETS.items():
+            write_raw_unprocessed_events(
+                items_storage,
+                [
+                    gen_item_message(
+                        start_timestamp=BASE_TIME - timedelta(hours=hours_ago),
+                        attributes={name: AnyValue(string_value="x")},
+                    )
+                ],
+            )
+
+    def _run(
+        self,
+        *,
+        column: TraceItemAttributeNamesRequest.OrderBy.Column.ValueType,
+        descending: bool = True,
+    ) -> list[TraceItemAttributeNamesResponse.Attribute]:
+        req = _request(AttributeKey.Type.TYPE_STRING, order_by_column=column, descending=descending)
+        req.value_substring_match = "ls_"
+        return list(EndpointTraceItemAttributeNames().execute(req).attributes)
+
+    def test_orders_by_recency_descending(self) -> None:
+        """The point of the feature: most recently used attributes first."""
+        attributes = self._run(
+            column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN
+        )
+        assert [a.name for a in attributes] == list(reversed(self.STAGGERED))
+
+    def test_orders_by_recency_ascending(self) -> None:
+        attributes = self._run(
+            column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN,
+            descending=False,
+        )
+        assert [a.name for a in attributes] == self.STAGGERED
+
+    def test_last_seen_values_reflect_when_each_was_written(self) -> None:
+        """Not just the relative order: the reported timestamps must be the real ones."""
+        attributes = self._run(
+            column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN
+        )
+        seen = {a.name: a.last_seen.ToDatetime() for a in attributes}
+        assert set(seen) == set(self.STAGGERED)
+        for name, hours_ago in self.OFFSETS.items():
+            expected = (BASE_TIME - timedelta(hours=hours_ago)).replace(tzinfo=None)
+            # The roll-up buckets by item timestamp, so this is exact rather than approximate.
+            assert seen[name] == expected, f"{name} last_seen {seen[name]} != {expected}"
+
+    def test_last_seen_is_populated_under_count_ordering_too(self) -> None:
+        """It is selected whenever the storage has it, so a caller ordering by frequency
+        still learns how recent each attribute is."""
+        attributes = self._run(column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT)
+        assert attributes
+        for attribute in attributes:
+            assert attribute.HasField("last_seen"), f"{attribute.name} has no last_seen"
+
+    def test_last_seen_is_unset_under_name_ordering(self) -> None:
+        """Name ordering selects distinct keys without aggregating, so there is nothing to
+        report and the field must stay unset rather than be filled with a placeholder."""
+        attributes = self._run(column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_NAME)
+        assert attributes
+        for attribute in attributes:
+            assert not attribute.HasField("last_seen")
+
+    def test_recency_ordering_is_rejected_on_v1(self) -> None:
+        """v1 has no last_seen column. Rather than silently returning a different order,
+        the request is rejected — including when it is v1 only because of the date gate.
+        """
+        routes_to_v1: list[dict[str, OptionValue]] = [
+            {CO_OCCURRING_ATTRS_V2_OPTION: False},
+            # flag on, but the range predates v2 so the gate routes to v1
+            {
+                CO_OCCURRING_ATTRS_V2_OPTION: True,
+                CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: int(
+                    (BASE_TIME + timedelta(days=365)).timestamp()
+                ),
+            },
+        ]
+        for options in routes_to_v1:
+            with (
+                override_options("snuba", options),
+                pytest.raises(BadSnubaRPCRequestException, match="COLUMN_LAST_SEEN"),
+            ):
+                self._run(column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN)
+
+    def test_other_orderings_still_work_on_v1(self) -> None:
+        """Only recency ordering is gated; the rest must be unaffected."""
+        with override_options("snuba", {CO_OCCURRING_ATTRS_V2_OPTION: False}):
+            by_count = self._run(column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT)
+            assert {a.name for a in by_count} == set(self.STAGGERED)
+            # v1 cannot report last_seen, so it must be left unset rather than zeroed.
+            assert all(not a.HasField("last_seen") for a in by_count)
