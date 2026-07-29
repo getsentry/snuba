@@ -21,6 +21,7 @@ from snuba.query.expressions import FunctionCall, Lambda, Literal
 from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
     CO_OCCURRING_ATTRS_STORAGE_KEY,
     CO_OCCURRING_ATTRS_V2_OPTION,
+    CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION,
     CO_OCCURRING_ATTRS_V2_STORAGE_KEY,
     UNSEARCHABLE_ATTRIBUTE_KEYS,
     EndpointTraceItemAttributeNames,
@@ -85,9 +86,19 @@ def co_occurring_storage(request: pytest.FixtureRequest) -> Generator[bool]:
     The endpoint reads v1 or v2 depending on the ``use_co_occurring_attrs_v2`` option, so
     the shared behaviour (ordering, filtering, pagination, substring match) must hold on
     either side of the rollout.
+
+    The v2 start timestamp is pinned back so the date gate never sends these requests to v1
+    on the v2 leg: the tests query around ``BASE_TIME``, and with the real cutoff whether
+    that range clears it depends on what day of the week the suite runs.
     """
     use_v2 = bool(request.param)
-    with override_options("snuba", {CO_OCCURRING_ATTRS_V2_OPTION: use_v2}):
+    with override_options(
+        "snuba",
+        {
+            CO_OCCURRING_ATTRS_V2_OPTION: use_v2,
+            CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: 0,
+        },
+    ):
         yield use_v2
 
 

@@ -1,6 +1,7 @@
 import re
 import uuid
 from collections.abc import Mapping
+from datetime import UTC, datetime
 from typing import Any
 
 from google.protobuf.json_format import MessageToDict
@@ -68,11 +69,25 @@ MATCH_MODES = {
 CO_OCCURRING_ATTRS_STORAGE_KEY = StorageKey("eap_item_co_occurring_attrs")
 CO_OCCURRING_ATTRS_V2_STORAGE_KEY = StorageKey("eap_item_co_occurring_attrs_v2")
 
-# Killswitch-style rollout flag: flip on to read v2, flip back to fall in behind v1.
-# Keep it off until v2 is populated across the queried retention window, otherwise
-# requests covering dates from before the v2 materialized view started running return
-# no attributes.
+# Killswitch-style rollout flag: flip on to allow reading v2, flip back to fall in behind
+# v1. Enabling it is not sufficient on its own — a request must also be fully inside the
+# window v2 has data for, see _use_v2_storage.
 CO_OCCURRING_ATTRS_V2_OPTION = "use_co_occurring_attrs_v2"
+
+# Unix timestamp of the first `date` bucket the v2 tables hold data for. The v2 tables and
+# their materialized view were created on 2026-07-29, and the view only appends buckets
+# from when it started running, so v2 has nothing before the Monday of that week
+# (2026-07-27 00:00 UTC). `date` is bucketed weekly with toMonday(), and the query rounds
+# its lower bound down to the previous Monday, so the cutoff has to be a Monday too:
+# anything later would make a request starting mid-week round below the cutoff and read
+# a bucket that only exists in v1.
+#
+# A request reaching back before this reads v1 instead, otherwise the attributes that only
+# existed in the earlier part of its range would silently disappear from the results. Once
+# the oldest v2 bucket is older than the longest retention window this becomes dead weight
+# and can be dropped along with the v1 read path.
+CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION = "co_occurring_attrs_v2_start_timestamp"
+CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_DEFAULT = 1785110400  # 2026-07-27 00:00:00 UTC
 
 # (key-array column, AttributeKey type name) per attribute type on the v2 storage, which
 # stores one key array per type so each key is surfaced with its own type.
@@ -113,9 +128,37 @@ V2_UNSPECIFIED_KEY_ARRAYS: list[tuple[str, str]] = [
 ]
 
 
-def _use_v2_storage() -> bool:
-    """Whether to read the v2 co-occurring-attributes storage."""
-    return get_option(CO_OCCURRING_ATTRS_V2_OPTION, False)
+def _v2_covers_request_window(request: TraceItemAttributeNamesRequest) -> bool:
+    """Whether v2 has data for the whole time range the request asks about.
+
+    The comparison is against the request's *rounded* lower bound rather than the raw
+    start timestamp, because that is the bucket the query actually reads: a request
+    starting Wednesday reads from the Monday of that week (see
+    ``get_co_occurring_attributes_date_condition``). Comparing the raw timestamp would let
+    a request starting just after the cutoff read the preceding, non-existent bucket.
+    """
+    start_timestamp = get_option(
+        CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION,
+        CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_DEFAULT,
+    )
+    earliest_bucket = prev_monday(
+        request.meta.start_timestamp.ToDatetime().replace(hour=0, minute=0, second=0)
+    )
+    # ToDatetime() returns a naive UTC datetime, so drop the tzinfo to compare like-for-like
+    v2_start = datetime.fromtimestamp(start_timestamp, UTC).replace(tzinfo=None)
+    return earliest_bucket >= v2_start
+
+
+def _use_v2_storage(request: TraceItemAttributeNamesRequest) -> bool:
+    """Whether to read the v2 co-occurring-attributes storage for this request.
+
+    Requires both the rollout flag and that v2 actually has data covering the requested
+    range; a request reaching further back transparently falls back to v1, which has the
+    full history.
+    """
+    if not get_option(CO_OCCURRING_ATTRS_V2_OPTION, False):
+        return False
+    return _v2_covers_request_window(request)
 
 
 def _order_by_count(request: TraceItemAttributeNamesRequest) -> bool:
@@ -338,10 +381,12 @@ def get_co_occurring_attributes(
           --   ... GROUP BY attr_key ORDER BY count DESC, attr_key ASC
 
       **Storage:** reads `eap_item_co_occurring_attrs` (v1) or, when the
-      `use_co_occurring_attrs_v2` option is on, `eap_item_co_occurring_attrs_v2`. v2 keeps
-      one key array per attribute type, so int and array-typed keys are surfaced with
-      their real `AttributeKey` type instead of being folded into the float array (v1
-      cannot answer array-typed requests at all).
+      `use_co_occurring_attrs_v2` option is on *and* the requested time range is fully
+      inside the window v2 has data for, `eap_item_co_occurring_attrs_v2`. v2 keeps one
+      key array per attribute type, so int and array-typed keys are surfaced with their
+      real `AttributeKey` type instead of being folded into the float array (v1 cannot
+      answer array-typed requests at all). Requests reaching back before v2 exists fall
+      back to v1 rather than returning a partial result.
 
       **Explanation:**
 
@@ -378,7 +423,7 @@ def get_co_occurring_attributes(
           - The attribute keys are deduplicated, resulting in less data to scan (~95% row reduction rate)
           - there is a bloom filter index on all key values
     """
-    use_v2 = _use_v2_storage()
+    use_v2 = _use_v2_storage(request)
 
     # get all attribute keys from the filter
     collector = AttributeKeyCollector()

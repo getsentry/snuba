@@ -30,6 +30,8 @@ from snuba.query.expressions import Column, FunctionCall
 from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
     CO_OCCURRING_ATTRS_STORAGE_KEY,
     CO_OCCURRING_ATTRS_V2_OPTION,
+    CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_DEFAULT,
+    CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION,
     CO_OCCURRING_ATTRS_V2_STORAGE_KEY,
     EndpointTraceItemAttributeNames,
     get_co_occurring_attributes,
@@ -88,7 +90,15 @@ def setup_teardown(eap: None, redis_db: None) -> Generator[None]:
             for _ in range(NUM_ITEMS)
         ],
     )
-    with override_options("snuba", {CO_OCCURRING_ATTRS_V2_OPTION: True}):
+    # Pin the v2 start timestamp back so the date gate does not send these requests to v1;
+    # the gate itself is covered by TestCoOccurringV2DateGate below.
+    with override_options(
+        "snuba",
+        {
+            CO_OCCURRING_ATTRS_V2_OPTION: True,
+            CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: 0,
+        },
+    ):
         yield
 
 
@@ -263,3 +273,108 @@ class TestTraceItemAttributeNamesV2(BaseApiTest):
             if isinstance(param, Column)
         }
         assert array_exists_columns == {"attributes_array_int"}
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
+class TestCoOccurringV2DateGate(BaseApiTest):
+    """The v2 tables only hold data from when their materialized view was created, so a
+    request reaching back before that must read v1 even with the rollout flag on. Otherwise
+    attributes that only existed in the earlier part of the range vanish from the results.
+    """
+
+    # The default cutoff, 2026-07-27 00:00 UTC, is a Monday, matching the weekly toMonday()
+    # bucketing of the `date` column.
+    V2_START = datetime.fromtimestamp(CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_DEFAULT, UTC)
+
+    @pytest.fixture(autouse=True)
+    def use_real_cutoff(self) -> Generator[None]:
+        """Undo the module fixture's pinned-to-0 cutoff so the gate is actually exercised."""
+        with override_options(
+            "snuba",
+            {
+                CO_OCCURRING_ATTRS_V2_OPTION: True,
+                CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: (
+                    CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_DEFAULT
+                ),
+            },
+        ):
+            yield
+
+    def _storage_for_start(self, start: datetime) -> StorageKey:
+        req = _request(AttributeKey.Type.TYPE_STRING)
+        req.meta.start_timestamp.FromDatetime(start)
+        req.meta.end_timestamp.FromDatetime(start + timedelta(hours=1))
+        return _queried_storage_key(req)
+
+    def test_default_cutoff_is_a_monday(self) -> None:
+        """The cutoff must land on a Monday. `date` is bucketed with toMonday() and the query
+        rounds its lower bound down to the previous Monday, so a mid-week cutoff would let a
+        request starting later in that week round *below* it and read a bucket only v1 has."""
+        assert self.V2_START.weekday() == 0
+        assert (self.V2_START.hour, self.V2_START.minute, self.V2_START.second) == (0, 0, 0)
+
+    def test_request_starting_at_the_cutoff_reads_v2(self) -> None:
+        assert self._storage_for_start(self.V2_START) == CO_OCCURRING_ATTRS_V2_STORAGE_KEY
+
+    def test_request_starting_after_the_cutoff_reads_v2(self) -> None:
+        """Later in the same week still rounds down to exactly the cutoff bucket."""
+        assert (
+            self._storage_for_start(self.V2_START + timedelta(days=3))
+            == CO_OCCURRING_ATTRS_V2_STORAGE_KEY
+        )
+
+    def test_request_starting_before_the_cutoff_falls_back_to_v1(self) -> None:
+        """One second earlier rounds to the previous Monday, which v2 never populated."""
+        assert (
+            self._storage_for_start(self.V2_START - timedelta(seconds=1))
+            == CO_OCCURRING_ATTRS_STORAGE_KEY
+        )
+
+    def test_request_reaching_far_back_falls_back_to_v1(self) -> None:
+        assert (
+            self._storage_for_start(self.V2_START - timedelta(days=30))
+            == CO_OCCURRING_ATTRS_STORAGE_KEY
+        )
+
+    def test_gate_uses_rounded_lower_bound_not_raw_timestamp(self) -> None:
+        """Regression guard: the gate must compare the bucket the query actually reads.
+
+        A request starting mid-week just *after* the cutoff reads from the Monday before it.
+        If the cutoff were mid-week (here, the Wednesday the tables were really created) a
+        raw-timestamp comparison would admit such a request even though it reads the
+        preceding bucket, which only exists in v1.
+        """
+        wednesday_cutoff = self.V2_START + timedelta(days=2)
+        with override_options(
+            "snuba",
+            {
+                CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: int(wednesday_cutoff.timestamp()),
+            },
+        ):
+            # Starts after the cutoff instant, but rounds down to the Monday before it.
+            assert (
+                self._storage_for_start(wednesday_cutoff + timedelta(hours=1))
+                == CO_OCCURRING_ATTRS_STORAGE_KEY
+            )
+
+    def test_start_timestamp_is_configurable(self) -> None:
+        """Lowering the option (e.g. after a backfill) widens the v2 window."""
+        before_cutoff = self.V2_START - timedelta(days=30)
+        assert self._storage_for_start(before_cutoff) == CO_OCCURRING_ATTRS_STORAGE_KEY
+        with override_options("snuba", {CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: 0}):
+            assert self._storage_for_start(before_cutoff) == CO_OCCURRING_ATTRS_V2_STORAGE_KEY
+
+    def test_flag_off_reads_v1_even_inside_the_v2_window(self) -> None:
+        """The rollout flag remains an unconditional off switch."""
+        with override_options("snuba", {CO_OCCURRING_ATTRS_V2_OPTION: False}):
+            assert self._storage_for_start(self.V2_START) == CO_OCCURRING_ATTRS_STORAGE_KEY
+
+    def test_gated_fallback_still_returns_attributes(self) -> None:
+        """A request spanning the cutoff is served by v1, so it must still return the
+        attributes rather than an empty result."""
+        req = _request(AttributeKey.Type.TYPE_STRING)
+        req.meta.start_timestamp.FromDatetime(self.V2_START - timedelta(days=30))
+        assert _queried_storage_key(req) == CO_OCCURRING_ATTRS_STORAGE_KEY
+        res = EndpointTraceItemAttributeNames().execute(req)
+        assert [attr.name for attr in res.attributes] == ["probe_str"]
