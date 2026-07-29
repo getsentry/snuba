@@ -195,11 +195,6 @@
       "default": false,
       "description": "When true, the storage routing strategy fetches ClickHouse cluster load info to inform routing decisions."
     },
-    "enable_long_term_retention_downsampling": {
-      "type": "boolean",
-      "default": false,
-      "description": "When true, EAP queries older than 31 days (for non-full-retention item types) are routed to the most-downsampled tier."
-    },
     "storage_routing_config_override": {
       "type": "string",
       "default": "{}",

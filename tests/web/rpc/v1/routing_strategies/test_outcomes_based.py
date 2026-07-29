@@ -91,14 +91,15 @@ def test_outcomes_based_routing_queries_daily_table() -> None:
 
     routing_decision = strategy.get_routing_decision(context)
 
-    assert routing_decision.tier == Tier.TIER_1
+    # the query window starts more than 31 days ago, so long term retention
+    # downsampling applies
+    assert routing_decision.tier == Tier.TIER_8
     assert routing_decision.clickhouse_settings == {"max_threads": 10}
     assert routing_decision.can_run
 
 
 @pytest.mark.eap
 @pytest.mark.redis_db
-@override_options("snuba", {"enable_long_term_retention_downsampling": True})
 def test_item_type_full_retention() -> None:
     """
     Certain item types will not use the long term retention downsampling,
@@ -130,7 +131,6 @@ def test_item_type_full_retention() -> None:
 
 @pytest.mark.eap
 @pytest.mark.redis_db
-@override_options("snuba", {"enable_long_term_retention_downsampling": True})
 def test_item_type_full_retention_preprod() -> None:
     """
     PREPROD item type should not use long term retention downsampling,
@@ -162,7 +162,6 @@ def test_item_type_full_retention_preprod() -> None:
 
 @pytest.mark.eap
 @pytest.mark.redis_db
-@override_options("snuba", {"enable_long_term_retention_downsampling": True})
 def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
     strategy = OutcomesBasedRoutingStrategy()
     end_time = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -198,7 +197,7 @@ def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
 
     # request(s) that query window of 30 minutes, but with timestamps 40 days ago
     # one in MODE_NORMAL, one in MODE_HIGHEST_ACCURACY (which is ignored in favor of
-    # the enable_long_term_retention_downsampling)
+    # the long term retention downsampling)
     start = datetime.now(tz=UTC) - timedelta(days=40, minutes=30)
     end = datetime.now(tz=UTC) - timedelta(days=40)
 
