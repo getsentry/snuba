@@ -19,13 +19,15 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.data_source.simple import Storage as StorageDataSource
 from snuba.query.expressions import FunctionCall, Lambda, Literal
 from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
+    UNSEARCHABLE_ATTRIBUTE_KEYS,
+    EndpointTraceItemAttributeNames,
+    get_co_occurring_attributes,
+)
+from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs import (
     CO_OCCURRING_ATTRS_STORAGE_KEY,
     CO_OCCURRING_ATTRS_V2_OPTION,
     CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION,
     CO_OCCURRING_ATTRS_V2_STORAGE_KEY,
-    UNSEARCHABLE_ATTRIBUTE_KEYS,
-    EndpointTraceItemAttributeNames,
-    get_co_occurring_attributes,
 )
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events

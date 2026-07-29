@@ -1,7 +1,6 @@
 import re
 import uuid
 from collections.abc import Mapping
-from datetime import UTC, datetime
 from typing import Any
 
 from google.protobuf.json_format import MessageToDict
@@ -19,10 +18,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.pluggable_dataset import PluggableDataset
-from snuba.datasets.storages.factory import get_storage
-from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.data_source.simple import Storage
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column, not_cond, or_cond
 from snuba.query.expressions import Argument, Expression, FunctionCall, Lambda
@@ -30,7 +26,6 @@ from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.reader import Row
 from snuba.request import Request as SnubaRequest
-from snuba.state.sentry_options import get_option
 from snuba.web import QueryResult
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
@@ -43,6 +38,8 @@ from snuba.web.rpc.common.common import (
 )
 from snuba.web.rpc.common.debug_info import extract_response_meta
 from snuba.web.rpc.proto_visitor import ProtoVisitor, TraceItemFilterWrapper
+from snuba.web.rpc.v1.resolvers.R_eap_items import co_occurring_attrs
+from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs import CoOccurringAttrsSource
 
 # max value the user can provide for 'limit' in their request
 MAX_REQUEST_LIMIT = 1000
@@ -61,104 +58,6 @@ MATCH_MODES = {
     TraceItemAttributeNamesRequest.MatchMode.MATCH_MODE_ANY: f.hasAny,
     TraceItemAttributeNamesRequest.MatchMode.MATCH_MODE_ALL: f.hasAll,
 }
-
-# The two co-occurring-attribute storages this endpoint can read. v1 is a
-# ReplacingMergeTree holding one row per distinct attribute-key set with only
-# string/float/bool key arrays; v2 is a SummingMergeTree that additionally carries an
-# occurrence `count` and one key array per attribute type (int and the four array types).
-CO_OCCURRING_ATTRS_STORAGE_KEY = StorageKey("eap_item_co_occurring_attrs")
-CO_OCCURRING_ATTRS_V2_STORAGE_KEY = StorageKey("eap_item_co_occurring_attrs_v2")
-
-# Killswitch-style rollout flag: flip on to allow reading v2, flip back to fall in behind
-# v1. Enabling it is not sufficient on its own — a request must also be fully inside the
-# window v2 has data for, see _use_v2_storage.
-CO_OCCURRING_ATTRS_V2_OPTION = "use_co_occurring_attrs_v2"
-
-# Unix timestamp of the first `date` bucket the v2 tables hold data for. The v2 tables and
-# their materialized view were created on 2026-07-29, and the view only appends buckets
-# from when it started running, so v2 has nothing before the Monday of that week
-# (2026-07-27 00:00 UTC). `date` is bucketed weekly with toMonday(), and the query rounds
-# its lower bound down to the previous Monday, so the cutoff has to be a Monday too:
-# anything later would make a request starting mid-week round below the cutoff and read
-# a bucket that only exists in v1.
-#
-# A request reaching back before this reads v1 instead, otherwise the attributes that only
-# existed in the earlier part of its range would silently disappear from the results. Once
-# the oldest v2 bucket is older than the longest retention window this becomes dead weight
-# and can be dropped along with the v1 read path.
-CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION = "co_occurring_attrs_v2_start_timestamp"
-CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_DEFAULT = 1785110400  # 2026-07-27 00:00:00 UTC
-
-# (key-array column, AttributeKey type name) per attribute type on the v2 storage, which
-# stores one key array per type so each key is surfaced with its own type.
-V2_TYPE_KEY_ARRAYS: Mapping[AttributeKey.Type.ValueType, tuple[str, str]] = {
-    AttributeKey.Type.TYPE_STRING: ("attributes_string", "TYPE_STRING"),
-    # backwards compatibility with TYPE_FLOAT: same column, the requested type name
-    AttributeKey.Type.TYPE_FLOAT: ("attributes_float", "TYPE_FLOAT"),
-    AttributeKey.Type.TYPE_DOUBLE: ("attributes_float", "TYPE_DOUBLE"),
-    AttributeKey.Type.TYPE_INT: ("attributes_int", "TYPE_INT"),
-    AttributeKey.Type.TYPE_BOOLEAN: ("attributes_bool", "TYPE_BOOLEAN"),
-    AttributeKey.Type.TYPE_ARRAY_STRING: ("attributes_array_string", "TYPE_ARRAY_STRING"),
-    AttributeKey.Type.TYPE_ARRAY_INT: ("attributes_array_int", "TYPE_ARRAY_INT"),
-    AttributeKey.Type.TYPE_ARRAY_DOUBLE: ("attributes_array_float", "TYPE_ARRAY_DOUBLE"),
-    AttributeKey.Type.TYPE_ARRAY_BOOL: ("attributes_array_bool", "TYPE_ARRAY_BOOL"),
-}
-
-# The deprecated untyped TYPE_ARRAY has no element type, so it surfaces the keys of all
-# four element-typed array maps, each tagged with its own type.
-V2_ARRAY_KEY_ARRAYS: list[tuple[str, str]] = [
-    V2_TYPE_KEY_ARRAYS[attr_type]
-    for attr_type in (
-        AttributeKey.Type.TYPE_ARRAY_STRING,
-        AttributeKey.Type.TYPE_ARRAY_INT,
-        AttributeKey.Type.TYPE_ARRAY_DOUBLE,
-        AttributeKey.Type.TYPE_ARRAY_BOOL,
-    )
-]
-
-# TYPE_UNSPECIFIED surfaces every type. `attributes_int` is deliberately left out: int
-# attributes are double-written to a float bucket on eap_items, so they are already in
-# `attributes_float` and including both arrays would emit each int key twice (once as
-# TYPE_DOUBLE, once as TYPE_INT). An explicit TYPE_INT request reads `attributes_int`.
-V2_UNSPECIFIED_KEY_ARRAYS: list[tuple[str, str]] = [
-    V2_TYPE_KEY_ARRAYS[AttributeKey.Type.TYPE_STRING],
-    V2_TYPE_KEY_ARRAYS[AttributeKey.Type.TYPE_DOUBLE],
-    V2_TYPE_KEY_ARRAYS[AttributeKey.Type.TYPE_BOOLEAN],
-    *V2_ARRAY_KEY_ARRAYS,
-]
-
-
-def _v2_covers_request_window(request: TraceItemAttributeNamesRequest) -> bool:
-    """Whether v2 has data for the whole time range the request asks about.
-
-    The comparison is against the request's *rounded* lower bound rather than the raw
-    start timestamp, because that is the bucket the query actually reads: a request
-    starting Wednesday reads from the Monday of that week (see
-    ``get_co_occurring_attributes_date_condition``). Comparing the raw timestamp would let
-    a request starting just after the cutoff read the preceding, non-existent bucket.
-    """
-    start_timestamp = get_option(
-        CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION,
-        CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_DEFAULT,
-    )
-    earliest_bucket = prev_monday(
-        request.meta.start_timestamp.ToDatetime().replace(hour=0, minute=0, second=0)
-    )
-    # ToDatetime() returns a naive UTC datetime, so drop the tzinfo to compare like-for-like
-    v2_start = datetime.fromtimestamp(start_timestamp, UTC).replace(tzinfo=None)
-    return earliest_bucket >= v2_start
-
-
-def _use_v2_storage(request: TraceItemAttributeNamesRequest) -> bool:
-    """Whether to read the v2 co-occurring-attributes storage for this request.
-
-    Requires both the rollout flag and that v2 actually has data covering the requested
-    range; a request reaching further back transparently falls back to v1, which has the
-    full history.
-    """
-    if not get_option(CO_OCCURRING_ATTRS_V2_OPTION, False):
-        return False
-    return _v2_covers_request_window(request)
 
 
 def _order_by_count(request: TraceItemAttributeNamesRequest) -> bool:
@@ -277,57 +176,11 @@ def get_co_occurring_attributes_date_condition(
     )
 
 
-def _typed_key_arrays(
-    request: TraceItemAttributeNamesRequest, *, use_v2: bool
-) -> list[tuple[str, str]]:
-    """The (key-array column, ``AttributeKey`` type name) pairs the request's ``type``
-    reads on the selected storage.
-
-    v1 only has string/float/bool key arrays: int keys live in the float array (so an int
-    request reads it and its keys come back typed TYPE_DOUBLE) and array-typed keys are
-    not stored at all (so an array-typed request falls back to all three arrays, as it
-    always has). v2 keeps one key array per attribute type, so every key is surfaced with
-    its own type and array-typed requests are answered natively.
-    """
-    if not use_v2:
-        if request.type == AttributeKey.Type.TYPE_STRING:
-            return [("attributes_string", "TYPE_STRING")]
-        if request.type == AttributeKey.Type.TYPE_FLOAT:
-            # backwards compatibility with TYPE_FLOAT
-            return [("attributes_float", "TYPE_FLOAT")]
-        if request.type in (AttributeKey.Type.TYPE_DOUBLE, AttributeKey.Type.TYPE_INT):
-            return [("attributes_float", "TYPE_DOUBLE")]
-        if request.type == AttributeKey.Type.TYPE_BOOLEAN:
-            return [("attributes_bool", "TYPE_BOOLEAN")]
-        # TYPE_UNSPECIFIED (and any type v1 cannot answer natively)
-        return [
-            ("attributes_string", "TYPE_STRING"),
-            ("attributes_float", "TYPE_DOUBLE"),
-            ("attributes_bool", "TYPE_BOOLEAN"),
-        ]
-
-    if request.type == AttributeKey.Type.TYPE_ARRAY:
-        # deprecated untyped TYPE_ARRAY: no element type, so surface all four
-        return list(V2_ARRAY_KEY_ARRAYS)
-    typed = V2_TYPE_KEY_ARRAYS.get(request.type)
-    if typed is not None:
-        return [typed]
-    # TYPE_UNSPECIFIED (or any type with no dedicated column) surfaces every type
-    return list(V2_UNSPECIFIED_KEY_ARRAYS)
-
-
-def _searched_key_array_columns(
-    request: TraceItemAttributeNamesRequest, *, use_v2: bool
-) -> list[str]:
-    """The key-array columns the request's ``type`` reads on the selected storage."""
-    return [col for col, _ in _typed_key_arrays(request, use_v2=use_v2)]
-
-
 def _add_substring_match_optimization(
     request: TraceItemAttributeNamesRequest,
     condition: Expression,
     *,
-    use_v2: bool,
+    source: CoOccurringAttrsSource,
 ) -> FunctionCall | Expression:
     """Add arrayExists to WHERE clause to filter rows before loading arrays.
 
@@ -342,8 +195,7 @@ def _add_substring_match_optimization(
     like_lambda = Lambda(None, ("x",), f.like(Argument(None, "x"), pattern))
 
     exists = [
-        f.arrayExists(like_lambda, column(col))
-        for col in _searched_key_array_columns(request, use_v2=use_v2)
+        f.arrayExists(like_lambda, column(col)) for col in source.key_array_columns(request.type)
     ]
     if not exists:
         return condition
@@ -373,20 +225,16 @@ def get_co_occurring_attributes(
           LIMIT 10000
 
           -- Opt-in frequency ordering (order_by.column = COLUMN_COUNT) instead groups
-          -- and counts the keys, returning the most common first. On the v1 storage the
-          -- frequency is a row count; on v2 (a SummingMergeTree carrying an occurrence
-          -- `count` per attribute set) it is the sum of that column, which approximates
-          -- the number of items the key was seen on:
-          --   SELECT arrayJoin(...) AS attr_key, sum(count) AS count
+          -- and counts the keys, returning the most common first. The aggregate depends
+          -- on the storage (see co_occurring_attrs.count_expression):
+          --   SELECT arrayJoin(...) AS attr_key, <count aggregate> AS count
           --   ... GROUP BY attr_key ORDER BY count DESC, attr_key ASC
 
-      **Storage:** reads `eap_item_co_occurring_attrs` (v1) or, when the
-      `use_co_occurring_attrs_v2` option is on *and* the requested time range is fully
-      inside the window v2 has data for, `eap_item_co_occurring_attrs_v2`. v2 keeps one
-      key array per attribute type, so int and array-typed keys are surfaced with their
-      real `AttributeKey` type instead of being folded into the float array (v1 cannot
-      answer array-typed requests at all). Requests reaching back before v2 exists fall
-      back to v1 rather than returning a partial result.
+      **Storage:** which of the two co-occurring-attributes roll-ups this reads, and the
+      parts of the query shape that differ between them (the per-type key arrays and the
+      frequency aggregate), are decided by
+      `resolvers.R_eap_items.co_occurring_attrs.for_request`. See that module for the
+      differences between v1 and v2 and for how the rollout is gated.
 
       **Explanation:**
 
@@ -423,19 +271,12 @@ def get_co_occurring_attributes(
           - The attribute keys are deduplicated, resulting in less data to scan (~95% row reduction rate)
           - there is a bloom filter index on all key values
     """
-    use_v2 = _use_v2_storage(request)
+    source = co_occurring_attrs.for_request(request)
 
     # get all attribute keys from the filter
     collector = AttributeKeyCollector()
     TraceItemFilterWrapper(request.intersecting_attributes_filter).accept(collector)
     attribute_keys_to_search = collector.keys
-    storage_key = CO_OCCURRING_ATTRS_V2_STORAGE_KEY if use_v2 else CO_OCCURRING_ATTRS_STORAGE_KEY
-
-    storage = Storage(
-        key=storage_key,
-        schema=get_storage(storage_key).get_schema().get_columns(),
-        sample=None,
-    )
 
     condition: Expression = and_cond(
         project_id_and_org_conditions(request.meta),
@@ -452,7 +293,7 @@ def get_co_occurring_attributes(
         )
 
     # Optimization: Add arrayExists to WHERE clause to filter rows before loading arrays
-    condition = _add_substring_match_optimization(request, condition, use_v2=use_v2)
+    condition = _add_substring_match_optimization(request, condition, source=source)
 
     if request.meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
         condition = and_cond(f.equals(column("item_type"), request.meta.trace_item_type), condition)
@@ -472,7 +313,7 @@ def get_co_occurring_attributes(
             ),
             column(col),
         )
-        for col, type_name in _typed_key_arrays(request, use_v2=use_v2)
+        for col, type_name in source.typed_key_arrays(request.type)
     ]
     array_func = typed_arrays[0] if len(typed_arrays) == 1 else f.arrayConcat(*typed_arrays)
 
@@ -509,15 +350,11 @@ def get_co_occurring_attributes(
     semver = _order_by_semver(request)
     if _order_by_count(request):
         # Opt-in frequency ordering: group by key and count the co-occurring attribute
-        # sets containing it. On v1 (one row per distinct attribute set) that is a row
-        # count; on v2 each row carries an occurrence `count` that the SummingMergeTree
-        # accumulates, so sum it to approximate the number of items with that key.
-        count_expression = (
-            f.sum(column("count"), alias="count") if use_v2 else f.count(alias="count")
-        )
+        # sets containing it. How the count is computed depends on the storage, so the
+        # source supplies the aggregate.
         selected_columns = [
             SelectedExpression(name="attr_key", expression=attr_key_expression),
-            SelectedExpression(name="count", expression=count_expression),
+            SelectedExpression(name="count", expression=source.count_expression()),
         ]
         groupby: list[Expression] | None = [column("attr_key")]
         order_by = [
@@ -548,7 +385,7 @@ def get_co_occurring_attributes(
         ]
 
     query = Query(
-        from_clause=storage,
+        from_clause=source.data_source,
         selected_columns=selected_columns,
         groupby=groupby,
         condition=condition,
