@@ -465,8 +465,7 @@ jobs:
       - name: Bootstrap per-worker Snuba instances
         run: python3 sentry/.github/workflows/scripts/bootstrap-snuba.py
 
-      - name: Run snuba tests
-        if: needs.files-changed.outputs.api_changes == 'false'
+      - name: Run snuba CI tests
         working-directory: sentry
         run: |
           pytest -k 'not __In' \
@@ -476,7 +475,6 @@ jobs:
             -vv
 
       - name: Run full tests
-        if: needs.files-changed.outputs.api_changes == 'true'
         working-directory: sentry
         run: |
           pytest -k 'not __In' \
