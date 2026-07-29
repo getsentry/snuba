@@ -589,7 +589,7 @@
     "use_co_occurring_attrs_v2": {
       "type": "boolean",
       "default": false,
-      "description": "When true, the TraceItemAttributeNames RPC may read the v2 co-occurring-attributes storage (eap_item_co_occurring_attrs_v2) instead of v1. v2 is a SummingMergeTree carrying an occurrence count per attribute set (so count ordering sums that column rather than counting rows), a last_seen timestamp (which v1 lacks entirely, so ordering by COLUMN_LAST_SEEN is only available on v2 and is rejected otherwise), and one attribute-key array per type, which lets int and array-typed keys be returned with their real AttributeKey type. Enabling this is safe at any time: a request whose time range reaches back before co_occurring_attrs_v2_start_timestamp still reads v1, since v2 has no data there."
+      "description": "When true, the TraceItemAttributeNames RPC may read the v2 co-occurring-attributes storage (eap_item_co_occurring_attrs_v2) instead of v1. v2 is a SummingMergeTree carrying an occurrence count per attribute set (so count ordering sums that column rather than counting rows), a last_seen timestamp (which v1 lacks entirely, so ordering by COLUMN_LAST_SEEN is only honoured on v2 and degrades to COLUMN_COUNT otherwise), and one attribute-key array per type, which lets int and array-typed keys be returned with their real AttributeKey type. Enabling this is safe at any time: a request whose time range reaches back before co_occurring_attrs_v2_start_timestamp still reads v1, since v2 has no data there."
     },
     "co_occurring_attrs_v2_start_timestamp": {
       "type": "integer",

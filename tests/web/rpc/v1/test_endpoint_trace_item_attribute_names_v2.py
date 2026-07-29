@@ -29,7 +29,7 @@ from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.data_source.simple import Storage as StorageDataSource
 from snuba.query.expressions import Column, FunctionCall
-from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
     EndpointTraceItemAttributeNames,
     get_co_occurring_attributes,
@@ -46,6 +46,18 @@ from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import gen_item_message
 
 BASE_TIME = datetime.now(UTC).replace(minute=0, second=0, microsecond=0) - timedelta(hours=3)
+
+# The two ways a request ends up reading v1: the rollout flag is off, or the flag is on but
+# the date gate routed an older time range there. Behaviour must be identical in both.
+ROUTES_TO_V1: list[dict[str, OptionValue]] = [
+    {CO_OCCURRING_ATTRS_V2_OPTION: False},
+    {
+        CO_OCCURRING_ATTRS_V2_OPTION: True,
+        CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: int(
+            (BASE_TIME + timedelta(days=365)).timestamp()
+        ),
+    },
+]
 
 # Number of items written, which is also the expected `count` for every attribute below
 # since each attribute is present on every item.
@@ -396,22 +408,49 @@ class TestLastSeen(BaseApiTest):
     at known, distinct times.
     """
 
-    # Written oldest-first so a correct descending recency order is the reverse of this.
+    # Recency, frequency and name each give a *different* order over this data, so a test
+    # asserting one of them cannot be satisfied by accident by another. In particular the
+    # oldest attribute is the most frequent, so recency and count orderings are opposites.
+    #
+    #   name        hours ago   items written   recency rank   count rank
+    #   ls_oldest       4             3              last        first
+    #   ls_middle       2             2              middle      middle
+    #   ls_newest       0             1              first        last
     STAGGERED = ["ls_oldest", "ls_middle", "ls_newest"]
-    # Hours before BASE_TIME each was seen; ls_newest is the most recent.
     OFFSETS = {"ls_oldest": 4, "ls_middle": 2, "ls_newest": 0}
+    ITEM_COUNTS = {"ls_oldest": 3, "ls_middle": 2, "ls_newest": 1}
+
+    # Most recent first: the reverse of write order.
+    BY_RECENCY_DESC = ["ls_newest", "ls_middle", "ls_oldest"]
+    # Most frequent first: the exact opposite of BY_RECENCY_DESC, which is what makes a
+    # degraded recency request distinguishable from an honoured one. Both storages agree on
+    # this order here (see the filler attribute below), though they count different things.
+    BY_COUNT_DESC = ["ls_oldest", "ls_middle", "ls_newest"]
 
     @pytest.fixture(autouse=True)
     def staggered_items(self) -> None:
         items_storage = get_writable_storage(StorageKey("eap_items"))
         for name, hours_ago in self.OFFSETS.items():
+            # All of an attribute's items share a timestamp, so last_seen stays exact while
+            # the number of items drives its count.
+            #
+            # Each item also gets a unique filler attribute so that every item is a distinct
+            # attribute-key *set*. Without it the items for one attribute collapse into a
+            # single set, and v1 — which counts sets, not items — reports 1 for everything,
+            # making its count ordering degenerate into the name tiebreak. The filler names
+            # deliberately avoid the "ls_" substring the tests filter on, so they stay out of
+            # the results.
             write_raw_unprocessed_events(
                 items_storage,
                 [
                     gen_item_message(
                         start_timestamp=BASE_TIME - timedelta(hours=hours_ago),
-                        attributes={name: AnyValue(string_value="x")},
+                        attributes={
+                            name: AnyValue(string_value="x"),
+                            f"pad{i}_{name[3:]}": AnyValue(string_value="x"),
+                        },
                     )
+                    for i in range(self.ITEM_COUNTS[name])
                 ],
             )
 
@@ -430,14 +469,14 @@ class TestLastSeen(BaseApiTest):
         attributes = self._run(
             column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN
         )
-        assert [a.name for a in attributes] == list(reversed(self.STAGGERED))
+        assert [a.name for a in attributes] == self.BY_RECENCY_DESC
 
     def test_orders_by_recency_ascending(self) -> None:
         attributes = self._run(
             column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN,
             descending=False,
         )
-        assert [a.name for a in attributes] == self.STAGGERED
+        assert [a.name for a in attributes] == list(reversed(self.BY_RECENCY_DESC))
 
     def test_last_seen_values_reflect_when_each_was_written(self) -> None:
         """Not just the relative order: the reported timestamps must be the real ones."""
@@ -467,31 +506,89 @@ class TestLastSeen(BaseApiTest):
         for attribute in attributes:
             assert not attribute.HasField("last_seen")
 
-    def test_recency_ordering_is_rejected_on_v1(self) -> None:
-        """v1 has no last_seen column. Rather than silently returning a different order,
-        the request is rejected — including when it is v1 only because of the date gate.
+    @pytest.mark.parametrize("route_index", [0, 1], ids=["flag_off", "date_gate"])
+    def test_recency_ordering_degrades_to_count_on_v1(self, route_index: int) -> None:
+        """v1 has no last_seen column, so a recency request cannot be honoured there.
+
+        Rather than failing, it falls back to frequency ordering: both rank "attributes worth
+        showing first", so an autocomplete caller still gets a useful answer. The downgrade
+        stays detectable because last_seen is absent from the response.
+
+        Covers both ways a request lands on v1 — the flag being off, and the date gate
+        routing an older time range there.
         """
-        routes_to_v1: list[dict[str, OptionValue]] = [
-            {CO_OCCURRING_ATTRS_V2_OPTION: False},
-            # flag on, but the range predates v2 so the gate routes to v1
-            {
-                CO_OCCURRING_ATTRS_V2_OPTION: True,
-                CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: int(
-                    (BASE_TIME + timedelta(days=365)).timestamp()
-                ),
-            },
-        ]
-        for options in routes_to_v1:
-            with (
-                override_options("snuba", options),
-                pytest.raises(BadSnubaRPCRequestException, match="COLUMN_LAST_SEEN"),
-            ):
-                self._run(column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN)
+        with override_options("snuba", ROUTES_TO_V1[route_index]):
+            attributes = self._run(
+                column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN
+            )
+        # No error, and the attributes still come back — in count order, which over this
+        # data is the exact reverse of the recency order that was asked for.
+        assert [a.name for a in attributes] == self.BY_COUNT_DESC
+        # Counts are populated; last_seen cannot be, so it stays unset.
+        assert all(a.HasField("count") for a in attributes)
+        assert all(not a.HasField("last_seen") for a in attributes)
+
+    @pytest.mark.parametrize("route_index", [0, 1], ids=["flag_off", "date_gate"])
+    def test_degraded_ordering_matches_a_real_count_ordering(self, route_index: int) -> None:
+        """The degraded result must be exactly what COLUMN_COUNT would have returned.
+
+        This is the invariant that catches the ordering being derived inconsistently between
+        the ClickHouse ORDER BY and the Python re-sort of the merged synthetic attributes:
+        the two would disagree and the orders would drift apart.
+        """
+        with override_options("snuba", ROUTES_TO_V1[route_index]):
+            degraded = self._run(
+                column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN
+            )
+            by_count = self._run(column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT)
+        assert [a.name for a in degraded] == [a.name for a in by_count]
+        assert [a.count for a in degraded] == [a.count for a in by_count]
 
     def test_other_orderings_still_work_on_v1(self) -> None:
-        """Only recency ordering is gated; the rest must be unaffected."""
+        """Only recency ordering degrades; the rest must be unaffected."""
         with override_options("snuba", {CO_OCCURRING_ATTRS_V2_OPTION: False}):
             by_count = self._run(column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT)
-            assert {a.name for a in by_count} == set(self.STAGGERED)
+            assert [a.name for a in by_count] == self.BY_COUNT_DESC
             # v1 cannot report last_seen, so it must be left unset rather than zeroed.
             assert all(not a.HasField("last_seen") for a in by_count)
+
+    def test_recency_ordering_is_honoured_on_v2(self) -> None:
+        """Guard against the degrade firing when it should not: on v2 the requested ordering
+        must be applied, not silently swapped for count."""
+        by_recency = self._run(
+            column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN
+        )
+        assert [a.name for a in by_recency] == self.BY_RECENCY_DESC
+        assert all(a.HasField("last_seen") for a in by_recency)
+
+    @pytest.mark.parametrize("route_index", [0, 1], ids=["flag_off", "date_gate"])
+    def test_degrade_is_recorded_as_a_metric(self, route_index: int) -> None:
+        """The downgrade is otherwise invisible to the caller, so it has to be visible to us
+        while the v2 rollout is in progress."""
+        with override_options("snuba", ROUTES_TO_V1[route_index]):
+            self._run(column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN)
+        calls = get_recorded_metric_calls("increment", "rpc.attribute_names_order_by_degraded")
+        assert calls, "expected a degrade metric"
+        tags = calls[-1].tags or {}
+        assert tags.get("requested") == "COLUMN_LAST_SEEN"
+        assert tags.get("applied") == "COLUMN_COUNT"
+        assert tags.get("storage") == CO_OCCURRING_ATTRS_STORAGE_KEY.value
+
+    def test_no_degrade_metric_when_honoured(self) -> None:
+        """Guard against the metric (and the downgrade) firing on v2."""
+        self._run(column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN)
+        assert not get_recorded_metric_calls("increment", "rpc.attribute_names_order_by_degraded")
+
+    def test_recency_and_count_orderings_differ_on_v2(self) -> None:
+        """Sanity check on the fixture data as much as the code: over these attributes the
+        two aggregating orderings are exact opposites, so any test asserting one of them
+        cannot be passed by accident by the other."""
+        by_recency = self._run(
+            column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN
+        )
+        by_count = self._run(column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT)
+        assert [a.name for a in by_recency] == self.BY_RECENCY_DESC
+        assert [a.name for a in by_count] == self.BY_COUNT_DESC
+        assert list(reversed(self.BY_COUNT_DESC)) == self.BY_RECENCY_DESC
+        # v2 counts items, so the counts are the number written rather than a flat 1.
+        assert {a.name: a.count for a in by_count} == self.ITEM_COUNTS

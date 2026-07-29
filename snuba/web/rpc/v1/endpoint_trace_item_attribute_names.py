@@ -38,7 +38,6 @@ from snuba.web.rpc.common.common import (
     treeify_or_and_conditions,
 )
 from snuba.web.rpc.common.debug_info import extract_response_meta
-from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.proto_visitor import ProtoVisitor, TraceItemFilterWrapper
 from snuba.web.rpc.v1.resolvers.R_eap_items import co_occurring_attrs
 from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs import CoOccurringAttrsSource
@@ -72,23 +71,55 @@ def _order_by_count(request: TraceItemAttributeNamesRequest) -> bool:
     return request.order_by.column == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT
 
 
-def _order_by_last_seen(request: TraceItemAttributeNamesRequest) -> bool:
-    """Whether the caller opted into recency ordering via ``order_by`` (COLUMN_LAST_SEEN).
+def _requested_last_seen_ordering(request: TraceItemAttributeNamesRequest) -> bool:
+    """Whether the caller *asked* for recency ordering (COLUMN_LAST_SEEN).
 
     Combined with ``descending``, this gives "most recently used attributes first", which is
-    the main reason to surface ``last_seen`` at all.
+    the main reason to surface ``last_seen`` at all. Note this is the request as sent; use
+    ``_effective_order_by_column`` for what the query can actually do.
     """
     return request.order_by.column == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN
 
 
-def _aggregates_attributes(request: TraceItemAttributeNamesRequest) -> bool:
-    """Whether the requested ordering groups the attribute keys.
+def _effective_order_by_column(
+    request: TraceItemAttributeNamesRequest,
+    source: CoOccurringAttrsSource,
+) -> TraceItemAttributeNamesRequest.OrderBy.Column.ValueType:
+    """The ordering the query will actually apply, which may differ from the one requested.
+
+    Only the v2 roll-up records ``last_seen``, and a request can land on v1 either because
+    the rollout flag is off or because its time range predates v2. Rather than failing, a
+    recency request on such a storage degrades to frequency ordering: both rank "attributes
+    worth showing first", so a caller doing autocomplete still gets a useful result instead
+    of an error. The degradation is reported as a metric, and ``last_seen`` is simply absent
+    from the response, so it stays detectable.
+
+    Everything downstream keys off this rather than off ``request.order_by.column`` so the
+    ClickHouse ORDER BY and the Python re-sort of the merged synthetic attributes cannot
+    disagree about which ordering was used.
+    """
+    column = request.order_by.column
+    if (
+        column == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN
+        and not source.has_last_seen
+    ):
+        return TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT
+    return column
+
+
+def _aggregates_attributes(
+    order_by_column: TraceItemAttributeNamesRequest.OrderBy.Column.ValueType,
+) -> bool:
+    """Whether an ordering groups the attribute keys.
 
     Both frequency and recency ordering aggregate over the rows a key appears in, so both
     take the GROUP BY path and both can report ``count``/``last_seen``. Name ordering instead
     selects distinct keys and reports neither.
     """
-    return _order_by_count(request) or _order_by_last_seen(request)
+    return order_by_column in (
+        TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT,
+        TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN,
+    )
 
 
 def _order_by_semver(request: TraceItemAttributeNamesRequest) -> bool:
@@ -265,8 +296,9 @@ def get_co_occurring_attributes(
           --          max(last_seen) AS last_seen
           --   ... GROUP BY attr_key ORDER BY <count|last_seen> DESC, attr_key ASC
           --
-          -- COLUMN_LAST_SEEN requires a storage that records last_seen, so it is rejected
-          -- for requests that resolve to v1 (see has_last_seen).
+          -- COLUMN_LAST_SEEN requires a storage that records last_seen, so for requests
+          -- that resolve to v1 it degrades to COLUMN_COUNT (see
+          -- _effective_order_by_column).
 
       **Storage:** which of the two co-occurring-attributes roll-ups this reads, and the
       parts of the query shape that differ between them (the per-type key arrays and the
@@ -310,16 +342,9 @@ def get_co_occurring_attributes(
           - there is a bloom filter index on all key values
     """
     source = co_occurring_attrs.for_request(request)
-
-    if _order_by_last_seen(request) and not source.has_last_seen:
-        # Only the v2 roll-up records last_seen, and a request can land on v1 either because
-        # the rollout flag is off or because its time range predates v2. Fail loudly rather
-        # than silently returning some other order the caller did not ask for.
-        raise BadSnubaRPCRequestException(
-            "ordering by COLUMN_LAST_SEEN is not available for this request: "
-            f"{source.storage_key.value} does not record last_seen. It is only supported "
-            "for time ranges covered by the v2 co-occurring attributes table."
-        )
+    # May differ from what was requested: recency ordering degrades to frequency on a
+    # storage without last_seen. See _effective_order_by_column.
+    order_by_column = _effective_order_by_column(request, source)
 
     # get all attribute keys from the filter
     collector = AttributeKeyCollector()
@@ -396,7 +421,7 @@ def get_co_occurring_attributes(
     )
 
     semver = _order_by_semver(request)
-    if _aggregates_attributes(request):
+    if _aggregates_attributes(order_by_column):
         # Opt-in frequency or recency ordering: group by key and aggregate over the
         # co-occurring attribute sets containing it. How each aggregate is computed depends
         # on the storage, so the source supplies the expressions.
@@ -416,7 +441,12 @@ def get_co_occurring_attributes(
                 direction=(
                     OrderByDirection.DESC if request.order_by.descending else OrderByDirection.ASC
                 ),
-                expression=column("last_seen" if _order_by_last_seen(request) else "count"),
+                expression=column(
+                    "last_seen"
+                    if order_by_column
+                    == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN
+                    else "count"
+                ),
             ),
             # stable tiebreak for keys with the same frequency/recency (semver key when
             # SORT_SEMVER was requested)
@@ -489,7 +519,18 @@ def _aggregate_sort_key(row: Mapping[str, Any], sort_column: str) -> float:
 def convert_co_occurring_results_to_attributes(
     request: TraceItemAttributeNamesRequest,
     query_res: QueryResult,
+    order_by_column: TraceItemAttributeNamesRequest.OrderBy.Column.ValueType | None = None,
 ) -> list[TraceItemAttributeNamesResponse.Attribute]:
+    """Build the response attributes, re-sorting to match the ClickHouse ORDER BY.
+
+    ``order_by_column`` is the ordering the query actually applied, which can differ from the
+    requested one (see ``_effective_order_by_column``). It must be the same value the query
+    was built with, or the merge below re-sorts into a different order than ClickHouse used.
+    Defaults to the requested column for callers that did not degrade anything.
+    """
+    if order_by_column is None:
+        order_by_column = request.order_by.column
+
     def t(row: Row) -> TraceItemAttributeNamesResponse.Attribute:
         attr_type, attr_name = row["attr_key"]
         assert isinstance(attr_type, str)
@@ -526,11 +567,15 @@ def convert_co_occurring_results_to_attributes(
             if request.value_substring_match in key_name
         ]
         non_stored.sort(key=_name_key)
-        if _aggregates_attributes(request):
+        if _aggregates_attributes(order_by_column):
             # Match ClickHouse: the aggregate in the requested direction, then name ASC
             # (two stable passes). Synthetic non-stored keys have no aggregate value, so
             # pin them first rather than relying on a sentinel.
-            sort_column = "last_seen" if _order_by_last_seen(request) else "count"
+            sort_column = (
+                "last_seen"
+                if order_by_column == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN
+                else "count"
+            )
             data.sort(key=_name_key)
             data.sort(
                 key=lambda row: _aggregate_sort_key(row, sort_column),
@@ -590,6 +635,26 @@ class EndpointTraceItemAttributeNames(
         )
 
     def _execute(self, in_msg: TraceItemAttributeNamesRequest) -> TraceItemAttributeNamesResponse:
+        # Resolve the source and the ordering once, so the query and the response re-sort
+        # agree even when the requested ordering had to be degraded.
+        source = co_occurring_attrs.for_request(in_msg)
+        order_by_column = _effective_order_by_column(in_msg, source)
+        if order_by_column != in_msg.order_by.column:
+            # Recency ordering asked for on a storage without last_seen. Surfacing this as a
+            # metric keeps an otherwise silent downgrade visible while the v2 rollout is in
+            # progress.
+            self.metrics.increment(
+                "attribute_names_order_by_degraded",
+                1,
+                tags={
+                    "requested": TraceItemAttributeNamesRequest.OrderBy.Column.Name(
+                        in_msg.order_by.column
+                    ),
+                    "applied": TraceItemAttributeNamesRequest.OrderBy.Column.Name(order_by_column),
+                    "storage": source.storage_key.value,
+                },
+            )
+
         snuba_request = get_co_occurring_attributes(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
@@ -598,7 +663,7 @@ class EndpointTraceItemAttributeNames(
         )
 
         response = TraceItemAttributeNamesResponse(
-            attributes=convert_co_occurring_results_to_attributes(in_msg, res),
+            attributes=convert_co_occurring_results_to_attributes(in_msg, res, order_by_column),
             meta=extract_response_meta(
                 in_msg.meta.request_id, in_msg.meta.debug, [res], [self._timer]
             ),
