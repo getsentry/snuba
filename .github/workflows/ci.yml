@@ -225,16 +225,15 @@ jobs:
             .
 
       - name: Publish snuba-ci image to artifacts
-      # we publish to github artifacts separately so that third-party
-      # contributions also work, as all the test jobs need this image.
-      # otherwise third-party contributors would have to provide a working,
-      # authenticated GHCR, which seems impossible to ensure in the general
-      # case.
+        # we publish to github artifacts separately so that third-party
+        # contributions also work, as all the test jobs need this image.
+        # otherwise third-party contributors would have to provide a working,
+        # authenticated GHCR, which seems impossible to ensure in the general
+        # case.
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: snuba-ci
           path: /tmp/snuba-ci.tar
-
 
   docker-deps:
     name: Warm Docker dependency image cache
@@ -470,12 +469,9 @@ jobs:
         if: needs.files-changed.outputs.api_changes == 'false'
         working-directory: sentry
         run: |
-          # Only these dirs carry the `snuba_ci` marker; collecting all of tests/ just to find them is wasteful.
           pytest -k 'not __In' \
-            tests/sentry/snuba \
-            tests/sentry/workflow_engine/endpoints \
-            tests/snuba/rules/conditions \
             -m snuba_ci \
+            tests \
             -n "$XDIST_WORKERS" --dist=loadfile --reuse-db \
             -vv
 
@@ -484,36 +480,10 @@ jobs:
         working-directory: sentry
         run: |
           pytest -k 'not __In' \
-              tests/snuba \
-              tests/sentry/snuba \
-              tests/sentry/eventstream/kafka \
-              tests/sentry/post_process_forwarder \
-              tests/sentry/services/eventstore/snuba \
-              tests/sentry/search/events \
-              tests/sentry/event_manager \
-              tests/sentry/api/endpoints/test_organization_profiling_functions.py \
-              tests/sentry/integrations/slack/test_unfurl.py \
-              tests/sentry/uptime/endpoints/test_project_uptime_alert_check_index.py \
-              tests/sentry/uptime/endpoints/test_organization_uptime_stats.py \
-              tests/sentry/api/endpoints/test_organization_traces.py \
-              tests/sentry/api/endpoints/test_organization_spans_fields.py \
-              tests/sentry/api/endpoints/test_organization_ai_conversations.py \
-              tests/sentry/api/endpoints/test_organization_ai_conversation_details.py \
-              tests/sentry/sentry_metrics/querying \
+              -m snuba \
+              tests \
               -n "$XDIST_WORKERS" --dist=loadfile --reuse-db \
               -vv
-
-      - name: Run CI module tests
-        if: needs.files-changed.outputs.api_changes == 'true'
-        working-directory: sentry
-        run: |
-          pytest -k 'not __In' \
-            tests/sentry/snuba \
-            tests/sentry/workflow_engine/endpoints \
-            tests/snuba/rules/conditions \
-            -m snuba_ci \
-            -n "$XDIST_WORKERS" --dist=loadfile --reuse-db \
-            -vv
 
   clickhouse-versions:
     needs: [linting, snuba-image, docker-deps]
