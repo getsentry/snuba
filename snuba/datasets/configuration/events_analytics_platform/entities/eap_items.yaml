@@ -96,6 +96,8 @@ storages:
     is_writable: false
   - storage: eap_item_co_occurring_attrs
     is_writable: false
+  - storage: eap_item_co_occurring_attrs_v2
+    is_writable: false
   - storage: eap_items_downsample_8_ro
     is_writable: false
   - storage: eap_items_downsample_64_ro

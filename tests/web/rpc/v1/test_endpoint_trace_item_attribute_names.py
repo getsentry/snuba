@@ -1,8 +1,10 @@
 import uuid
+from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeNamesRequest,
     TraceItemAttributeNamesResponse,
@@ -14,8 +16,12 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.query.data_source.simple import Storage as StorageDataSource
 from snuba.query.expressions import FunctionCall, Lambda, Literal
 from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
+    CO_OCCURRING_ATTRS_STORAGE_KEY,
+    CO_OCCURRING_ATTRS_V2_OPTION,
+    CO_OCCURRING_ATTRS_V2_STORAGE_KEY,
     UNSEARCHABLE_ATTRIBUTE_KEYS,
     EndpointTraceItemAttributeNames,
     get_co_occurring_attributes,
@@ -70,6 +76,19 @@ def populate_eap_spans_storage(num_rows: int) -> None:
 @pytest.fixture(autouse=True)
 def setup_teardown(eap: None, redis_db: None) -> None:
     populate_eap_spans_storage(num_rows=TOTAL_GENERATED_SPANS)
+
+
+@pytest.fixture(autouse=True, params=[False, True], ids=["co_occurring_v1", "co_occurring_v2"])
+def co_occurring_storage(request: pytest.FixtureRequest) -> Generator[bool]:
+    """Run every test in this module against both co-occurring-attributes storages.
+
+    The endpoint reads v1 or v2 depending on the ``use_co_occurring_attrs_v2`` option, so
+    the shared behaviour (ordering, filtering, pagination, substring match) must hold on
+    either side of the rollout.
+    """
+    use_v2 = bool(request.param)
+    with override_options("snuba", {CO_OCCURRING_ATTRS_V2_OPTION: use_v2}):
+        yield use_v2
 
 
 @pytest.mark.eap
@@ -276,6 +295,33 @@ class TestTraceItemAttributeNames(BaseApiTest):
         )
         res = EndpointTraceItemAttributeNames().execute(req)
         assert res.meta.query_info != []
+
+    def test_reads_the_storage_selected_by_the_rollout_flag(
+        self, co_occurring_storage: bool
+    ) -> None:
+        """The ``use_co_occurring_attrs_v2`` option picks which co-occurring-attributes
+        storage the query reads, and is a straight rollback switch in either direction."""
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                request_id=str(uuid.uuid4()),
+                start_timestamp=Timestamp(seconds=int((BASE_TIME - timedelta(days=1)).timestamp())),
+                end_timestamp=Timestamp(seconds=int((BASE_TIME + timedelta(days=1)).timestamp())),
+            ),
+            limit=10,
+            type=AttributeKey.Type.TYPE_STRING,
+        )
+        expected = (
+            CO_OCCURRING_ATTRS_V2_STORAGE_KEY
+            if co_occurring_storage
+            else CO_OCCURRING_ATTRS_STORAGE_KEY
+        )
+        from_clause = get_co_occurring_attributes(req).query.get_from_clause()
+        assert isinstance(from_clause, StorageDataSource)
+        assert from_clause.key == expected
 
     def test_basic_co_occurring_attrs(self) -> None:
         req = TraceItemAttributeNamesRequest(

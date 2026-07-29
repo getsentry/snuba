@@ -586,6 +586,11 @@
       "default": "jittered",
       "description": "TaskBuilderMode for the subscription scheduler: one of immediate, jittered, transition_jitter, transition_immediate."
     },
+    "use_co_occurring_attrs_v2": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the TraceItemAttributeNames RPC reads the v2 co-occurring-attributes storage (eap_item_co_occurring_attrs_v2) instead of v1. v2 is a SummingMergeTree carrying an occurrence count per attribute set (so count ordering sums that column rather than counting rows) and one attribute-key array per type, which lets int and array-typed keys be returned with their real AttributeKey type. Only enable once the v2 materialized view has populated the queried retention window, otherwise older dates return no attributes."
+    },
     "eap_items_use_indexed_name_organization_ids": {
       "type": "array",
       "items": { "type": "integer" },

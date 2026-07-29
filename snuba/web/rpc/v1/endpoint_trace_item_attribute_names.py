@@ -29,6 +29,7 @@ from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.reader import Row
 from snuba.request import Request as SnubaRequest
+from snuba.state.sentry_options import get_option
 from snuba.web import QueryResult
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
@@ -59,6 +60,62 @@ MATCH_MODES = {
     TraceItemAttributeNamesRequest.MatchMode.MATCH_MODE_ANY: f.hasAny,
     TraceItemAttributeNamesRequest.MatchMode.MATCH_MODE_ALL: f.hasAll,
 }
+
+# The two co-occurring-attribute storages this endpoint can read. v1 is a
+# ReplacingMergeTree holding one row per distinct attribute-key set with only
+# string/float/bool key arrays; v2 is a SummingMergeTree that additionally carries an
+# occurrence `count` and one key array per attribute type (int and the four array types).
+CO_OCCURRING_ATTRS_STORAGE_KEY = StorageKey("eap_item_co_occurring_attrs")
+CO_OCCURRING_ATTRS_V2_STORAGE_KEY = StorageKey("eap_item_co_occurring_attrs_v2")
+
+# Killswitch-style rollout flag: flip on to read v2, flip back to fall in behind v1.
+# Keep it off until v2 is populated across the queried retention window, otherwise
+# requests covering dates from before the v2 materialized view started running return
+# no attributes.
+CO_OCCURRING_ATTRS_V2_OPTION = "use_co_occurring_attrs_v2"
+
+# (key-array column, AttributeKey type name) per attribute type on the v2 storage, which
+# stores one key array per type so each key is surfaced with its own type.
+V2_TYPE_KEY_ARRAYS: Mapping[AttributeKey.Type.ValueType, tuple[str, str]] = {
+    AttributeKey.Type.TYPE_STRING: ("attributes_string", "TYPE_STRING"),
+    # backwards compatibility with TYPE_FLOAT: same column, the requested type name
+    AttributeKey.Type.TYPE_FLOAT: ("attributes_float", "TYPE_FLOAT"),
+    AttributeKey.Type.TYPE_DOUBLE: ("attributes_float", "TYPE_DOUBLE"),
+    AttributeKey.Type.TYPE_INT: ("attributes_int", "TYPE_INT"),
+    AttributeKey.Type.TYPE_BOOLEAN: ("attributes_bool", "TYPE_BOOLEAN"),
+    AttributeKey.Type.TYPE_ARRAY_STRING: ("attributes_array_string", "TYPE_ARRAY_STRING"),
+    AttributeKey.Type.TYPE_ARRAY_INT: ("attributes_array_int", "TYPE_ARRAY_INT"),
+    AttributeKey.Type.TYPE_ARRAY_DOUBLE: ("attributes_array_float", "TYPE_ARRAY_DOUBLE"),
+    AttributeKey.Type.TYPE_ARRAY_BOOL: ("attributes_array_bool", "TYPE_ARRAY_BOOL"),
+}
+
+# The deprecated untyped TYPE_ARRAY has no element type, so it surfaces the keys of all
+# four element-typed array maps, each tagged with its own type.
+V2_ARRAY_KEY_ARRAYS: list[tuple[str, str]] = [
+    V2_TYPE_KEY_ARRAYS[attr_type]
+    for attr_type in (
+        AttributeKey.Type.TYPE_ARRAY_STRING,
+        AttributeKey.Type.TYPE_ARRAY_INT,
+        AttributeKey.Type.TYPE_ARRAY_DOUBLE,
+        AttributeKey.Type.TYPE_ARRAY_BOOL,
+    )
+]
+
+# TYPE_UNSPECIFIED surfaces every type. `attributes_int` is deliberately left out: int
+# attributes are double-written to a float bucket on eap_items, so they are already in
+# `attributes_float` and including both arrays would emit each int key twice (once as
+# TYPE_DOUBLE, once as TYPE_INT). An explicit TYPE_INT request reads `attributes_int`.
+V2_UNSPECIFIED_KEY_ARRAYS: list[tuple[str, str]] = [
+    V2_TYPE_KEY_ARRAYS[AttributeKey.Type.TYPE_STRING],
+    V2_TYPE_KEY_ARRAYS[AttributeKey.Type.TYPE_DOUBLE],
+    V2_TYPE_KEY_ARRAYS[AttributeKey.Type.TYPE_BOOLEAN],
+    *V2_ARRAY_KEY_ARRAYS,
+]
+
+
+def _use_v2_storage() -> bool:
+    """Whether to read the v2 co-occurring-attributes storage."""
+    return get_option(CO_OCCURRING_ATTRS_V2_OPTION, False)
 
 
 def _order_by_count(request: TraceItemAttributeNamesRequest) -> bool:
@@ -177,9 +234,57 @@ def get_co_occurring_attributes_date_condition(
     )
 
 
+def _typed_key_arrays(
+    request: TraceItemAttributeNamesRequest, *, use_v2: bool
+) -> list[tuple[str, str]]:
+    """The (key-array column, ``AttributeKey`` type name) pairs the request's ``type``
+    reads on the selected storage.
+
+    v1 only has string/float/bool key arrays: int keys live in the float array (so an int
+    request reads it and its keys come back typed TYPE_DOUBLE) and array-typed keys are
+    not stored at all (so an array-typed request falls back to all three arrays, as it
+    always has). v2 keeps one key array per attribute type, so every key is surfaced with
+    its own type and array-typed requests are answered natively.
+    """
+    if not use_v2:
+        if request.type == AttributeKey.Type.TYPE_STRING:
+            return [("attributes_string", "TYPE_STRING")]
+        if request.type == AttributeKey.Type.TYPE_FLOAT:
+            # backwards compatibility with TYPE_FLOAT
+            return [("attributes_float", "TYPE_FLOAT")]
+        if request.type in (AttributeKey.Type.TYPE_DOUBLE, AttributeKey.Type.TYPE_INT):
+            return [("attributes_float", "TYPE_DOUBLE")]
+        if request.type == AttributeKey.Type.TYPE_BOOLEAN:
+            return [("attributes_bool", "TYPE_BOOLEAN")]
+        # TYPE_UNSPECIFIED (and any type v1 cannot answer natively)
+        return [
+            ("attributes_string", "TYPE_STRING"),
+            ("attributes_float", "TYPE_DOUBLE"),
+            ("attributes_bool", "TYPE_BOOLEAN"),
+        ]
+
+    if request.type == AttributeKey.Type.TYPE_ARRAY:
+        # deprecated untyped TYPE_ARRAY: no element type, so surface all four
+        return list(V2_ARRAY_KEY_ARRAYS)
+    typed = V2_TYPE_KEY_ARRAYS.get(request.type)
+    if typed is not None:
+        return [typed]
+    # TYPE_UNSPECIFIED (or any type with no dedicated column) surfaces every type
+    return list(V2_UNSPECIFIED_KEY_ARRAYS)
+
+
+def _searched_key_array_columns(
+    request: TraceItemAttributeNamesRequest, *, use_v2: bool
+) -> list[str]:
+    """The key-array columns the request's ``type`` reads on the selected storage."""
+    return [col for col, _ in _typed_key_arrays(request, use_v2=use_v2)]
+
+
 def _add_substring_match_optimization(
     request: TraceItemAttributeNamesRequest,
     condition: Expression,
+    *,
+    use_v2: bool,
 ) -> FunctionCall | Expression:
     """Add arrayExists to WHERE clause to filter rows before loading arrays.
 
@@ -193,25 +298,15 @@ def _add_substring_match_optimization(
     pattern = f"%{request.value_substring_match}%"
     like_lambda = Lambda(None, ("x",), f.like(Argument(None, "x"), pattern))
 
-    if request.type == AttributeKey.Type.TYPE_STRING:
-        return and_cond(condition, f.arrayExists(like_lambda, column("attributes_string")))
-    if request.type in (
-        AttributeKey.Type.TYPE_FLOAT,
-        AttributeKey.Type.TYPE_DOUBLE,
-        AttributeKey.Type.TYPE_INT,
-    ):
-        return and_cond(condition, f.arrayExists(like_lambda, column("attributes_float")))
-    if request.type == AttributeKey.Type.TYPE_BOOLEAN:
-        return and_cond(condition, f.arrayExists(like_lambda, column("attributes_bool")))
-    # TYPE_UNSPECIFIED - check all arrays with OR
-    return and_cond(
-        condition,
-        or_cond(
-            f.arrayExists(like_lambda, column("attributes_string")),
-            f.arrayExists(like_lambda, column("attributes_float")),
-            f.arrayExists(like_lambda, column("attributes_bool")),
-        ),
-    )
+    exists = [
+        f.arrayExists(like_lambda, column(col))
+        for col in _searched_key_array_columns(request, use_v2=use_v2)
+    ]
+    if not exists:
+        return condition
+    if len(exists) == 1:
+        return and_cond(condition, exists[0])
+    return and_cond(condition, or_cond(*exists))
 
 
 def get_co_occurring_attributes(
@@ -235,9 +330,18 @@ def get_co_occurring_attributes(
           LIMIT 10000
 
           -- Opt-in frequency ordering (order_by.column = COLUMN_COUNT) instead groups
-          -- and counts the keys, returning the most common first:
-          --   SELECT arrayJoin(...) AS attr_key, count() AS count
+          -- and counts the keys, returning the most common first. On the v1 storage the
+          -- frequency is a row count; on v2 (a SummingMergeTree carrying an occurrence
+          -- `count` per attribute set) it is the sum of that column, which approximates
+          -- the number of items the key was seen on:
+          --   SELECT arrayJoin(...) AS attr_key, sum(count) AS count
           --   ... GROUP BY attr_key ORDER BY count DESC, attr_key ASC
+
+      **Storage:** reads `eap_item_co_occurring_attrs` (v1) or, when the
+      `use_co_occurring_attrs_v2` option is on, `eap_item_co_occurring_attrs_v2`. v2 keeps
+      one key array per attribute type, so int and array-typed keys are surfaced with
+      their real `AttributeKey` type instead of being folded into the float array (v1
+      cannot answer array-typed requests at all).
 
       **Explanation:**
 
@@ -274,11 +378,13 @@ def get_co_occurring_attributes(
           - The attribute keys are deduplicated, resulting in less data to scan (~95% row reduction rate)
           - there is a bloom filter index on all key values
     """
+    use_v2 = _use_v2_storage()
+
     # get all attribute keys from the filter
     collector = AttributeKeyCollector()
     TraceItemFilterWrapper(request.intersecting_attributes_filter).accept(collector)
     attribute_keys_to_search = collector.keys
-    storage_key = StorageKey("eap_item_co_occurring_attrs")
+    storage_key = CO_OCCURRING_ATTRS_V2_STORAGE_KEY if use_v2 else CO_OCCURRING_ATTRS_STORAGE_KEY
 
     storage = Storage(
         key=storage_key,
@@ -301,65 +407,29 @@ def get_co_occurring_attributes(
         )
 
     # Optimization: Add arrayExists to WHERE clause to filter rows before loading arrays
-    condition = _add_substring_match_optimization(request, condition)
+    condition = _add_substring_match_optimization(request, condition, use_v2=use_v2)
 
     if request.meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
         condition = and_cond(f.equals(column("item_type"), request.meta.trace_item_type), condition)
 
-    string_array = f.arrayMap(
-        Lambda(
-            None,
-            ("x",),
-            f.tuple(
-                "TYPE_STRING",
-                column("x"),
+    # One (type, key) tuple array per key-array column the request reads, so every key
+    # carries the AttributeKey type of the column it came from. A single-type request
+    # reads one array; TYPE_UNSPECIFIED (and untyped TYPE_ARRAY) concatenates several.
+    typed_arrays = [
+        f.arrayMap(
+            Lambda(
+                None,
+                ("x",),
+                f.tuple(
+                    type_name,
+                    column("x"),
+                ),
             ),
-        ),
-        column("attributes_string"),
-    )
-
-    # backwards compatibility with TYPE_FLOAT
-    floating_point_type = (
-        "TYPE_FLOAT" if request.type == AttributeKey.Type.TYPE_FLOAT else "TYPE_DOUBLE"
-    )
-
-    double_array = f.arrayMap(
-        Lambda(
-            None,
-            ("x",),
-            f.tuple(
-                floating_point_type,
-                column("x"),
-            ),
-        ),
-        column("attributes_float"),
-    )
-
-    bool_array = f.arrayMap(
-        Lambda(
-            None,
-            ("x",),
-            f.tuple(
-                "TYPE_BOOLEAN",
-                column("x"),
-            ),
-        ),
-        column("attributes_bool"),
-    )
-
-    array_func = None
-    if request.type == AttributeKey.Type.TYPE_STRING:
-        array_func = string_array
-    elif request.type in (
-        AttributeKey.Type.TYPE_FLOAT,
-        AttributeKey.Type.TYPE_DOUBLE,
-        AttributeKey.Type.TYPE_INT,
-    ):
-        array_func = double_array
-    elif request.type == AttributeKey.Type.TYPE_BOOLEAN:
-        array_func = bool_array
-    else:
-        array_func = f.arrayConcat(string_array, double_array, bool_array)
+            column(col),
+        )
+        for col, type_name in _typed_key_arrays(request, use_v2=use_v2)
+    ]
+    array_func = typed_arrays[0] if len(typed_arrays) == 1 else f.arrayConcat(*typed_arrays)
 
     # Exclude the unsearchable keys with NOT has(array(...), x) rather than
     # NOT (x IN (...)). A constant IN-set makes ClickHouse build an internal
@@ -393,11 +463,16 @@ def get_co_occurring_attributes(
 
     semver = _order_by_semver(request)
     if _order_by_count(request):
-        # Opt-in frequency ordering: group by key and count how many rows
-        # (co-occurring attribute sets) contain each key.
+        # Opt-in frequency ordering: group by key and count the co-occurring attribute
+        # sets containing it. On v1 (one row per distinct attribute set) that is a row
+        # count; on v2 each row carries an occurrence `count` that the SummingMergeTree
+        # accumulates, so sum it to approximate the number of items with that key.
+        count_expression = (
+            f.sum(column("count"), alias="count") if use_v2 else f.count(alias="count")
+        )
         selected_columns = [
             SelectedExpression(name="attr_key", expression=attr_key_expression),
-            SelectedExpression(name="count", expression=f.count(alias="count")),
+            SelectedExpression(name="count", expression=count_expression),
         ]
         groupby: list[Expression] | None = [column("attr_key")]
         order_by = [
