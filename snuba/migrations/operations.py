@@ -19,6 +19,7 @@ from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters import cluster
 from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseNode, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.migrations.async_ddl import execute_ddl_async
 from snuba.migrations.columns import MigrationModifiers
 from snuba.migrations.table_engines import TableEngine
 
@@ -58,8 +59,8 @@ class SqlOperation(ABC):
     def storage_set(self) -> StorageSetKey:
         return self._storage_set
 
-    def _get_on_cluster_clause(self) -> str:
-        """Returns ON CLUSTER clause for multi-node clusters, empty string otherwise.
+    def _get_cluster_name(self) -> str | None:
+        """Returns the cluster name to use for ON CLUSTER, or None for single node.
 
         Uses the appropriate cluster name based on target type:
         - LOCAL: uses cluster_name (for storage nodes)
@@ -67,14 +68,16 @@ class SqlOperation(ABC):
         """
         cluster = get_cluster(self._storage_set)
         if cluster.is_single_node():
-            return ""
+            return None
 
         # Use the appropriate cluster name based on target type
         if self.target == OperationTarget.DISTRIBUTED:
-            cluster_name = cluster.get_clickhouse_distributed_cluster_name()
-        else:
-            cluster_name = cluster.get_clickhouse_cluster_name()
+            return cluster.get_clickhouse_distributed_cluster_name()
+        return cluster.get_clickhouse_cluster_name()
 
+    def _get_on_cluster_clause(self) -> str:
+        """Returns ON CLUSTER clause for multi-node clusters, empty string otherwise."""
+        cluster_name = self._get_cluster_name()
         if cluster_name:
             return f" ON CLUSTER '{cluster_name}'"
         return ""
@@ -133,10 +136,23 @@ class SqlOperation(ABC):
         if settings.LOG_MIGRATIONS:
             logger.info(f"Executing op: {sql}")
             logger.info(f"Executing on {self.target.value} node: {node}")
+        cluster_name = self._get_cluster_name()
         try:
-            connection.execute(sql, settings=self._settings)
-            # No polling needed - alter_sync=2 and mutations_sync=2 ensure ClickHouse
-            # blocks until all replicas confirm completion
+            if cluster_name and settings.ASYNC_MIGRATION_DDL:
+                # Submit the ON CLUSTER DDL without blocking on the cluster, then poll
+                # system.distributed_ddl_queue for per-host status. Waiting inline
+                # (distributed_ddl_output_mode=throw) makes a lagging replica surface as
+                # an opaque "IncompleteRead" truncated response instead of a real error.
+                execute_ddl_async(
+                    connection,
+                    sql,
+                    cluster_name=cluster_name,
+                    query_settings=self._settings,
+                )
+            else:
+                # Single node, or async explicitly disabled: alter_sync=2 and
+                # mutations_sync=2 make ClickHouse block until replicas confirm.
+                connection.execute(sql, settings=self._settings)
         except Exception:
             logger.exception(
                 f"Failed to execute operation on {self.storage_set}, target: {self.target}\n{sql}\n{self._settings}"

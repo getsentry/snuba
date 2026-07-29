@@ -748,10 +748,16 @@ class TestOnCluster:
         assert "ON CLUSTER 'query_cluster'" in sql
 
     @patch("snuba.migrations.operations.get_cluster")
+    @patch("snuba.migrations.operations.execute_ddl_async")
     def test_run_sql_with_on_cluster_uses_single_node_execution(
-        self, mock_get_cluster: Mock
+        self, mock_execute_ddl_async: Mock, mock_get_cluster: Mock
     ) -> None:
-        """RunSql with ON CLUSTER in statement should use single-node execution."""
+        """RunSql with ON CLUSTER in statement should use single-node execution.
+
+        On a multi-node cluster the statement is submitted from one node and then
+        polled via system.distributed_ddl_queue (see snuba.migrations.async_ddl),
+        rather than being run once per node.
+        """
         mock_cluster = _make_mock_cluster(single_node=False)
         mock_node = Mock()
         mock_cluster.get_local_nodes.return_value = [mock_node]
@@ -763,8 +769,11 @@ class TestOnCluster:
         op = RunSql(StorageSetKey.EVENTS, sql, target=OperationTarget.LOCAL)
         op.execute()
 
-        # Should execute once (single-node execution via parent's execute())
-        mock_connection.execute.assert_called_once_with(sql, settings=None)
+        # Submitted exactly once, from a single node, through the async DDL path.
+        mock_execute_ddl_async.assert_called_once()
+        assert mock_execute_ddl_async.call_args.args[1] == sql
+        assert mock_execute_ddl_async.call_args.kwargs["cluster_name"] == "test_cluster"
+        mock_cluster.get_node_connection.assert_called_once()
 
     @patch("snuba.migrations.operations.get_cluster")
     def test_run_sql_without_on_cluster_uses_per_node_execution(
@@ -787,7 +796,10 @@ class TestOnCluster:
         assert mock_connection.execute.call_count == 2
 
     @patch("snuba.migrations.operations.get_cluster")
-    def test_run_sql_on_cluster_case_insensitive(self, mock_get_cluster: Mock) -> None:
+    @patch("snuba.migrations.operations.execute_ddl_async")
+    def test_run_sql_on_cluster_case_insensitive(
+        self, mock_execute_ddl_async: Mock, mock_get_cluster: Mock
+    ) -> None:
         """RunSql should detect ON CLUSTER regardless of case."""
         mock_cluster = _make_mock_cluster(single_node=False)
         mock_node = Mock()
@@ -801,5 +813,5 @@ class TestOnCluster:
         op = RunSql(StorageSetKey.EVENTS, sql, target=OperationTarget.LOCAL)
         op.execute()
 
-        # Should execute once (detected ON CLUSTER)
-        mock_connection.execute.assert_called_once()
+        # Should submit once (detected ON CLUSTER), not once per node
+        mock_execute_ddl_async.assert_called_once()

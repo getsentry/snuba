@@ -423,6 +423,31 @@ SLICED_STORAGE_SETS: Mapping[str, int] = {}
 
 LOG_MIGRATIONS = True
 
+# Run ON CLUSTER DDL asynchronously and poll system.distributed_ddl_queue for
+# completion, instead of letting the initiator node block on the response.
+#
+# Synchronous ON CLUSTER DDL (distributed_ddl_output_mode=throw) makes ClickHouse
+# stream the per-host result table and then raise TIMEOUT_EXCEEDED mid-body when a
+# replica does not report in. Headers and the first rows are already on the wire,
+# so the server cannot emit a well-formed error payload and simply closes the
+# connection. The client sees an opaque
+#   Connection broken: IncompleteRead(N bytes read)
+# and the real per-replica error is lost.
+#
+# Submitting with distributed_ddl_task_timeout=0 returns immediately, and we then
+# poll the queue, which gives us the exact per-host status, exception_code and
+# exception_text.
+ASYNC_MIGRATION_DDL = os.environ.get("ASYNC_MIGRATION_DDL", "1") != "0"
+
+# How long to poll system.distributed_ddl_queue for an async DDL task before
+# giving up, and how long to sleep between polls.
+ASYNC_MIGRATION_DDL_TIMEOUT_SECONDS = int(
+    os.environ.get("ASYNC_MIGRATION_DDL_TIMEOUT_SECONDS", 300)
+)
+ASYNC_MIGRATION_DDL_POLL_INTERVAL_SECONDS = float(
+    os.environ.get("ASYNC_MIGRATION_DDL_POLL_INTERVAL_SECONDS", 1.0)
+)
+
 # Mapping storage set key to a mapping of logical partition
 # to slice id
 LOGICAL_PARTITION_MAPPING: Mapping[str, Mapping[int, int]] = {}
