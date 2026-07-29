@@ -23,23 +23,9 @@ attributes_array_column = Column(
 
 
 def _tables() -> list[tuple[StorageSetKey, str]]:
-    # The downsample materialized views never projected `attributes_array`
-    # (they SELECT an explicit column list built from get_eap_items_columns(),
-    # which has never included it), so the column only ever held default
-    # values on the downsample tables and nothing references it anywhere.
-    #
-    # Only the distributed tables are touched here. Distributed tables hold no
-    # data, so dropping the column is a cheap metadata-only change. The local
-    # (MergeTree) tables deliberately keep the column: DROP COLUMN on a
-    # MergeTree table rewrites every part even when the column is empty, which
-    # is unacceptable in customer-facing environments. (A previous version of
-    # this migration, 0062_drop_attributes_array_json_from_dist_and_downsample,
-    # was reverted for exactly that reason.)
     tables: list[tuple[StorageSetKey, str]] = [(storage_set, "eap_items_1_dist")]
     for w in SAMPLING_WEIGHTS:
         tables.append((storage_set, f"eap_items_1_downsample_{w}_dist"))
-    # The read-only distributed tables (created in 0056 via CREATE TABLE ... AS)
-    # inherited the column from their source dist tables, so drop it there too.
     tables.append((ro_storage_set, "eap_items_1_dist_ro"))
     for w in SAMPLING_WEIGHTS:
         tables.append((ro_storage_set, f"eap_items_1_downsample_{w}_dist_ro"))
