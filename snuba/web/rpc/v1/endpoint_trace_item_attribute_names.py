@@ -270,6 +270,7 @@ def _add_substring_match_optimization(
 
 def get_co_occurring_attributes(
     request: TraceItemAttributeNamesRequest,
+    source: CoOccurringAttrsSource | None = None,
 ) -> SnubaRequest:
     """Constructs the clickhouse query for co-occurring attributes:
 
@@ -341,9 +342,15 @@ def get_co_occurring_attributes(
           - The attribute keys are deduplicated, resulting in less data to scan (~95% row reduction rate)
           - there is a bloom filter index on all key values
     """
-    source = co_occurring_attrs.for_request(request)
+    # Resolving the source reads runtime options, so a caller that also needs it must pass
+    # the one it resolved rather than let this resolve a second time: an option flipping
+    # between the two reads would build the query for one storage while the response is
+    # processed as if it were the other. Defaults to resolving for callers with no such need.
+    if source is None:
+        source = co_occurring_attrs.for_request(request)
     # May differ from what was requested: recency ordering degrades to frequency on a
-    # storage without last_seen. See _effective_order_by_column.
+    # storage without last_seen. Pure given `source`, so deriving it here and in the caller
+    # cannot disagree. See _effective_order_by_column.
     order_by_column = _effective_order_by_column(request, source)
 
     # get all attribute keys from the filter
@@ -635,8 +642,10 @@ class EndpointTraceItemAttributeNames(
         )
 
     def _execute(self, in_msg: TraceItemAttributeNamesRequest) -> TraceItemAttributeNamesResponse:
-        # Resolve the source and the ordering once, so the query and the response re-sort
-        # agree even when the requested ordering had to be degraded.
+        # Resolve the source once and pass it to both the query builder and the response
+        # converter. Resolving it reads runtime options, so re-resolving per caller would let
+        # an option flip mid-request produce a query ordered one way and a response re-sorted
+        # another.
         source = co_occurring_attrs.for_request(in_msg)
         order_by_column = _effective_order_by_column(in_msg, source)
         if order_by_column != in_msg.order_by.column:
@@ -655,7 +664,7 @@ class EndpointTraceItemAttributeNames(
                 },
             )
 
-        snuba_request = get_co_occurring_attributes(in_msg)
+        snuba_request = get_co_occurring_attributes(in_msg, source)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,

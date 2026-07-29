@@ -10,6 +10,7 @@ the ``count`` column.
 import uuid
 from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
+from unittest import mock
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -34,12 +35,15 @@ from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
     EndpointTraceItemAttributeNames,
     get_co_occurring_attributes,
 )
+from snuba.web.rpc.v1.resolvers.R_eap_items import co_occurring_attrs
 from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs import (
     CO_OCCURRING_ATTRS_STORAGE_KEY,
     CO_OCCURRING_ATTRS_V2_OPTION,
     CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_DEFAULT,
     CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION,
     CO_OCCURRING_ATTRS_V2_STORAGE_KEY,
+    V1,
+    V2,
 )
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -592,3 +596,42 @@ class TestLastSeen(BaseApiTest):
         assert list(reversed(self.BY_COUNT_DESC)) == self.BY_RECENCY_DESC
         # v2 counts items, so the counts are the number written rather than a flat 1.
         assert {a.name: a.count for a in by_count} == self.ITEM_COUNTS
+
+    def test_source_is_resolved_once_per_request(self) -> None:
+        """The source must be resolved exactly once and shared.
+
+        Resolving it reads runtime options, so a second resolution could see a different
+        value if an option flips mid-request. The query would then be built for one storage
+        while the response is re-sorted as if it were the other, and the result matches
+        neither ordering (regression guard: the count was 2).
+        """
+        with mock.patch.object(
+            co_occurring_attrs, "for_request", wraps=co_occurring_attrs.for_request
+        ) as resolve:
+            self._run(column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN)
+        assert resolve.call_count == 1, (
+            f"source resolved {resolve.call_count} times; the query and the response "
+            "converter must share a single resolution"
+        )
+
+    def test_ordering_survives_the_source_changing_mid_request(self) -> None:
+        """Even if a resolution did diverge, the response must stay coherent.
+
+        Simulates the option flipping between resolutions by returning v2 first and v1
+        after. With a single resolution the second value is never read, so the result is the
+        ordering the query actually applied rather than a mix of the two.
+        """
+        sources = iter([V2, V1])
+
+        def flipping(_request: TraceItemAttributeNamesRequest) -> object:
+            return next(sources, V1)
+
+        with mock.patch.object(co_occurring_attrs, "for_request", side_effect=flipping):
+            attributes = self._run(
+                column=TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN
+            )
+        # v2 was resolved, so recency ordering is honoured end to end: the order is the
+        # requested one and last_seen is populated, not the misordered mix the double
+        # resolution produced.
+        assert [a.name for a in attributes] == self.BY_RECENCY_DESC
+        assert all(a.HasField("last_seen") for a in attributes)
