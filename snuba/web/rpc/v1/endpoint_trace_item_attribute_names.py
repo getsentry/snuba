@@ -232,8 +232,8 @@ def get_co_occurring_attributes(
 
       **Storage:** which of the two co-occurring-attributes roll-ups this reads, and the
       parts of the query shape that differ between them (the per-type key arrays and the
-      frequency aggregate), are decided by
-      `resolvers.R_eap_items.co_occurring_attrs.for_request`. See that module for the
+      frequency aggregate), come from the `CoOccurringAttrsSource` returned by
+      `resolvers.R_eap_items.co_occurring_attrs.for_request`. See that package for the
       differences between v1 and v2 and for how the rollout is gated.
 
       **Explanation:**
