@@ -23,6 +23,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
     TraceItemFilter,
 )
+from sentry_sdk import traces
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -347,9 +348,9 @@ def _build_query(
     if random.random() < _get_apply_final_rollout_percentage():
         query.set_final(True)
 
-    span = sentry_sdk.get_current_span()
-    if span:
-        span.set_data("is_final", query.get_final())
+    span = traces.get_current_span()
+    if span is not None:
+        span.set_attribute("is_final", query.get_final())
 
     treeify_or_and_conditions(query)
 
@@ -494,7 +495,7 @@ def _process_results(
     # First pass: parse rows and build attribute dicts
     parsed_rows: list[tuple[str, Timestamp, dict[str, GetTraceResponse.Item.Attribute]]] = []
 
-    with sentry_sdk.start_span(op="function", description="add_attributes"):
+    with traces.start_span(name="add_attributes", attributes={"sentry.op": "function"}):
         for row in data:
             id = row.pop("id")
             ts = row.pop("timestamp")
@@ -564,7 +565,7 @@ def _process_results(
     # Second pass: sort attributes and assemble items
     items: list[GetTraceResponse.Item] = []
 
-    with sentry_sdk.start_span(op="function", description="sort_attributes"):
+    with traces.start_span(name="sort_attributes", attributes={"sentry.op": "function"}):
         for id, timestamp, attributes in parsed_rows:
             item = GetTraceResponse.Item(
                 id=id,
@@ -576,9 +577,9 @@ def _process_results(
             )
             items.append(item)
 
-    current_span = sentry_sdk.get_current_span()
+    current_span = traces.get_current_span()
     if current_span is not None:
-        current_span.set_data("rows_processed", len(parsed_rows))
+        current_span.set_attribute("rows_processed", len(parsed_rows))
 
     return ProcessedResults(
         items=items,
@@ -663,7 +664,7 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
                 page_token = EndpointGetTracePageToken(i, last_seen_timestamp_precise, last_seen_id)
                 break
 
-        with sentry_sdk.start_span(op="function", description="assemble_response"):
+        with traces.start_span(name="assemble_response", attributes={"sentry.op": "function"}):
             response_meta = extract_response_meta(
                 in_msg.meta.request_id,
                 in_msg.meta.debug,

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-import sentry_sdk
+from sentry_sdk import traces
 
 from snuba import environment, settings
 from snuba.datasets.dataset import Dataset
@@ -140,7 +140,7 @@ def parse_and_run_query(
         referrer (str): legacy param, you probably don't need to provide this. It should be in the tenant_ids of the body
     """
 
-    with sentry_sdk.start_span(description="build_schema", op="validate"):
+    with traces.start_span(name="build_schema", attributes={"sentry.op": "validate"}):
         schema = RequestSchema.build(HTTPQuerySettings, is_mql)
 
     # NOTE(Volo): dataset is not necessary for queries because storages can be queried directly

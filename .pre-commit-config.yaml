@@ -37,7 +37,9 @@ repos:
         name: validate-configs-syntax
         entry: env SNUBA_SETTINGS=test python3 -m snuba.validate_configs
         language: python
-        additional_dependencies: [ 'fastjsonschema', 'pyyaml', 'sentry_sdk' ]
+        # sentry_sdk must be >=2.62 for `sentry_sdk.traces` (span streaming API).
+        # Keep the floor in sync with pyproject.toml.
+        additional_dependencies: [ 'fastjsonschema', 'pyyaml', 'sentry_sdk>=2.66.1' ]
         pass_filenames: false
         files: 'snuba/datasets/configuration/.*'
       - id: cargo-fmt

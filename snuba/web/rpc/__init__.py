@@ -12,6 +12,7 @@ from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
+from sentry_sdk import traces
 
 from snuba import environment
 from snuba.query.allocation_policies import AllocationPolicyViolations
@@ -84,19 +85,19 @@ def _flush_logs() -> None:
 
 
 def _set_rpc_error_tags(in_msg: ProtobufMessage) -> None:
-    sentry_sdk.set_tag("source", "rpc_api")
+    sentry_sdk.set_attribute("source", "rpc_api")
 
-    # Extract and tag fields from meta if available
+    # Extract and annotate fields from meta if available
     if hasattr(in_msg, "meta"):
         meta = in_msg.meta
 
         if hasattr(meta, "referrer") and meta.referrer:
-            sentry_sdk.set_tag("referrer", meta.referrer)
+            sentry_sdk.set_attribute("referrer", meta.referrer)
 
         if hasattr(meta, "organization_id") and meta.organization_id:
-            sentry_sdk.set_tag("organization_id", str(meta.organization_id))
+            sentry_sdk.set_attribute("organization_id", str(meta.organization_id))
         if hasattr(meta, "request_id") and meta.request_id:
-            sentry_sdk.set_tag("request_id", str(meta.request_id))
+            sentry_sdk.set_attribute("request_id", str(meta.request_id))
 
 
 class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
@@ -202,10 +203,9 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     @final
     def execute(self, in_msg: Tin) -> Tout:
         scope = sentry_sdk.get_current_scope()
+        # In stream mode this renames the service span (the segment) directly,
+        # which is what the old `span.description = ...` line did separately.
         scope.set_transaction_name(self.config_key())
-        span = scope.span
-        if span is not None:
-            span.description = self.config_key()
         self.routing_context = RoutingContext(
             timer=self._timer,
             in_msg=in_msg,
@@ -218,8 +218,13 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         meta = getattr(in_msg, "meta", RequestMeta())
         try:
             if self.routing_decision.can_run:
-                with sentry_sdk.start_span(op="execute") as span:
-                    span.set_data("selected_tier", self.routing_decision.tier)
+                with traces.start_span(
+                    name="execute",
+                    attributes={
+                        "sentry.op": "execute",
+                        "selected_tier": self.routing_decision.tier.name,
+                    },
+                ):
                     out = self._execute(in_msg)
             else:
                 raise RPCAllocationPolicyException(

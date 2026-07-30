@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import NamedTuple
 
-import sentry_sdk
+from sentry_sdk import traces
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clusters.storage_sets import StorageSetKey, is_valid_storage_set_combination
@@ -269,8 +269,9 @@ class ProcessorsExecutor(DataSourceVisitor[None, Table], JoinVisitor[None, Table
         processors: Sequence[ClickhouseQueryProcessor],
     ) -> None:
         for clickhouse_processor in processors:
-            with sentry_sdk.start_span(
-                description=type(clickhouse_processor).__name__, op="processor"
+            with traces.start_span(
+                name=type(clickhouse_processor).__name__,
+                attributes={"sentry.op": "processor"},
             ):
                 clickhouse_processor.process_query(clickhouse_query, self.__settings)
 

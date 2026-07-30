@@ -181,24 +181,21 @@ def setup_sentry() -> None:
         release=os.getenv("SNUBA_RELEASE"),
         traces_sample_rate=settings.SENTRY_TRACE_SAMPLE_RATE,
         profiles_sample_rate=settings.SNUBA_PROFILES_SAMPLE_RATE,
-        _experiments={
-            # Turns on the metrics module
-            "enable_metrics": True,
-            # Enables sending of code locations for metrics
-            "metric_code_locations": True,
-        },
+        # Send spans to Sentry in batches as they finish, instead of buffering a
+        # whole trace in memory and shipping it as a single transaction event.
+        # This removes the 1000-span-per-transaction cap, keeps memory flat in
+        # long-running consumers, and preserves the spans that already finished
+        # when a process is killed mid-trace (e.g. an OOM-kill).
+        #
+        # NOTE: this disables the legacy tracing API. `sentry_sdk.start_span()`,
+        # `start_transaction()`, `update_current_span()` and `scope.span` all
+        # silently become no-ops, so instrumentation must use `sentry_sdk.traces`.
+        trace_lifecycle="stream",
     )
 
     from snuba.state.sentry_options import init_options
 
     init_options()
-
-    from snuba.utils.profiler import run_ondemand_profiler
-
-    if settings.SENTRY_DSN is not None:
-        # Do not run ondemand profiler in tests, it interferes with mocked
-        # `time.sleep()` and assertions on that mock.
-        run_ondemand_profiler()
 
 
 metrics = create_metrics(

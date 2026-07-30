@@ -9,6 +9,7 @@ from typing import Any
 
 import sentry_sdk
 from redis.cluster import ClusterPipeline as StrictClusterPipeline
+from sentry_sdk import traces
 
 from snuba import settings
 from snuba.processor import ReplacementType
@@ -127,23 +128,36 @@ class ProjectsQueryFlags:
 
         try:
             with redis_client.pipeline() as p:
-                with sentry_sdk.start_span(op="function", description="build_redis_pipeline"):
+                with traces.start_span(
+                    name="build_redis_pipeline", attributes={"sentry.op": "function"}
+                ):
                     cls._query_redis(s_project_ids, state_name, p)
 
-                with sentry_sdk.start_span(
-                    op="function", description="execute_redis_pipeline"
+                with traces.start_span(
+                    name="execute_redis_pipeline", attributes={"sentry.op": "function"}
                 ) as span:
                     results = p.execute()
                     # getting size of str(results) since sys.getsizeof() doesn't count recursively
-                    span.set_tag("results_size", sys.getsizeof(str(results)))
+                    span.set_attribute("results_size", sys.getsizeof(str(results)))
 
-            with sentry_sdk.start_span(op="function", description="process_redis_results") as span:
+            with traces.start_span(
+                name="process_redis_results", attributes={"sentry.op": "function"}
+            ) as span:
                 flags = cls._process_redis_results(results, len(s_project_ids))
-                span.set_tag("projects", s_project_ids)
-                span.set_tag("exclude_groups", flags.group_ids_to_exclude)
-                span.set_tag("len(exclude_groups)", len(flags.group_ids_to_exclude))
-                span.set_tag("latest_replacement_time", flags.latest_replacement_time)
-                span.set_tag("replacement_types", flags.replacement_types)
+                # Span attributes only accept scalars and homogeneous lists, so
+                # the sets/datetime here have to be converted explicitly.
+                span.set_attribute("projects", sorted(s_project_ids))
+                span.set_attribute("exclude_groups", sorted(flags.group_ids_to_exclude))
+                span.set_attribute("len(exclude_groups)", len(flags.group_ids_to_exclude))
+                span.set_attribute(
+                    "latest_replacement_time",
+                    (
+                        flags.latest_replacement_time.isoformat()
+                        if flags.latest_replacement_time is not None
+                        else ""
+                    ),
+                )
+                span.set_attribute("replacement_types", sorted(flags.replacement_types))
 
             return flags
         except Exception as e:

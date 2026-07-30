@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import sentry_sdk
+from sentry_sdk import traces
 
 from snuba.datasets.entities.factory import get_entity
 from snuba.query import Query
@@ -69,7 +69,7 @@ def run_entity_validators(
     """
     for validator_func in VALIDATORS:
         description = getattr(validator_func, "__name__", "custom")
-        with sentry_sdk.start_span(op="validator", description=description):
+        with traces.start_span(name=description, attributes={"sentry.op": "validator"}):
             if settings and settings.get_dry_run():
                 with explain_meta.with_query_differ("entity_validator", description, query):
                     validator_func(query)

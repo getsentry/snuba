@@ -1,14 +1,19 @@
+from __future__ import annotations
+
 import _strptime  # NOQA fixes _strptime deferred import issue
 import inspect
-from functools import wraps
-from typing import Any, TypeVar, cast
 from collections.abc import Callable, Mapping
+from functools import wraps
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
-import sentry_sdk
+from sentry_sdk import traces
 
 from snuba import settings
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.types import Tags
+
+if TYPE_CHECKING:
+    from sentry_sdk._types import Attributes
 
 
 def create_metrics(
@@ -71,14 +76,28 @@ def with_span(op: str = "function") -> Callable[[F], F]:
 
     def decorator(func: F) -> F:
         frame_info = inspect.stack()[1]
-        filename = frame_info.filename
+        # Built once at decoration time rather than on every call.
+        attributes: Attributes = {"sentry.op": op, "filename": frame_info.filename}
 
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            with sentry_sdk.start_span(description=func.__name__, op=op) as span:
-                span.set_data("filename", filename)
+            with traces.start_span(name=func.__name__, attributes=attributes):
                 return func(*args, **kwargs)
 
         return cast(F, wrapper)
 
     return decorator
+
+
+def set_current_span_attributes(attributes: Mapping[str, Any]) -> None:
+    """Set attributes on the currently active span, if there is one.
+
+    The stream-mode replacement for ``sentry_sdk.update_current_span()``, which
+    is a no-op once ``trace_lifecycle="stream"`` is enabled. There is no active
+    span when the surrounding code runs outside a traced request (e.g. on a
+    consumer path), or when the trace was not sampled.
+    """
+    span = traces.get_current_span()
+    if span is None:
+        return
+    span.set_attributes(dict(attributes))

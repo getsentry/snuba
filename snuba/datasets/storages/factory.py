@@ -4,7 +4,7 @@ import contextlib
 from collections.abc import MutableSequence, Sequence
 from glob import glob
 
-import sentry_sdk
+from sentry_sdk import traces
 
 from snuba import settings
 from snuba.datasets.cdc.cdcstorage import CdcStorage
@@ -18,7 +18,7 @@ from snuba.utils.config_component_factory import ConfigComponentFactory
 
 class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
     def __init__(self) -> None:
-        with sentry_sdk.start_span(op="initialize", description="Storage Factory"):
+        with traces.start_span(name="Storage Factory", attributes={"sentry.op": "initialize"}):
             self._config_built_storages: dict[StorageKey, Storage] = {}
             self._all_storages: dict[StorageKey, Storage] = {}
             self.__initialize()

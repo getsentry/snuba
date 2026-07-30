@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+from typing import Any
+
 from sentry_sdk import metrics
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.types import Tags
+
+
+def _attributes(tags: Tags | None) -> dict[str, Any] | None:
+    """The SDK takes an invariant ``dict``; ``Tags`` is a ``Mapping``."""
+    return dict(tags) if tags is not None else None
 
 
 class SentryMetricsBackend(MetricsBackend):
@@ -21,7 +28,7 @@ class SentryMetricsBackend(MetricsBackend):
         tags: Tags | None = None,
         unit: str | None = None,
     ) -> None:
-        metrics.incr(name, value, unit or "none", tags)
+        metrics.count(name, value, unit or "none", _attributes(tags))
 
     def gauge(
         self,
@@ -30,7 +37,7 @@ class SentryMetricsBackend(MetricsBackend):
         tags: Tags | None = None,
         unit: str | None = None,
     ) -> None:
-        metrics.gauge(name, value, unit or "none", tags)
+        metrics.gauge(name, value, unit or "none", _attributes(tags))
 
     def timing(
         self,
@@ -39,8 +46,9 @@ class SentryMetricsBackend(MetricsBackend):
         tags: Tags | None = None,
         unit: str | None = None,
     ) -> None:
-        # The Sentry SDK has strict typing on the unit, so it doesn't allow passing arbitrary units
-        metrics.timing(name, value, unit or "millisecond", tags)  # type: ignore[arg-type]
+        # The SDK dropped the dedicated `timing` API; a timing is a distribution
+        # measured in milliseconds.
+        metrics.distribution(name, value, unit or "millisecond", _attributes(tags))
 
     def distribution(
         self,
@@ -49,7 +57,7 @@ class SentryMetricsBackend(MetricsBackend):
         tags: Tags | None = None,
         unit: str | None = None,
     ) -> None:
-        metrics.distribution(name, value, unit or "none", tags)
+        metrics.distribution(name, value, unit or "none", _attributes(tags))
 
     def events(
         self,

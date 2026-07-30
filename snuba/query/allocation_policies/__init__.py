@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import json
 import os
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, cast
 
-import sentry_sdk
 from redis.exceptions import TimeoutError as RedisTimeoutError
+from sentry_sdk import traces
 
 from snuba import environment, settings
 from snuba.configs.configuration import (
@@ -451,11 +452,12 @@ class AllocationPolicy(ConfigurableComponent, ABC):
     def get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
-        with sentry_sdk.start_span(
-            op="allocation_policy.get_quota_allowance", name=self.__class__.__name__
+        with traces.start_span(
+            name=self.__class__.__name__,
+            attributes={"sentry.op": "allocation_policy.get_quota_allowance"},
         ) as span:
             for t, tid in tenant_ids.items():
-                span.set_data(f"tenant_ids.{t}", str(tid))
+                span.set_attribute(f"tenant_ids.{t}", str(tid))
             try:
                 if not self.is_active:
                     allowance = QuotaAllowance(
@@ -515,7 +517,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
                         "max_threads": str(allowance.max_threads),
                     },
                 )
-                span.set_data("db_request_throttled", True)
+                span.set_attribute("db_request_throttled", True)
             if not self.is_enforced:
                 allowance = QuotaAllowance(
                     can_run=True,
@@ -531,7 +533,13 @@ class AllocationPolicy(ConfigurableComponent, ABC):
             # make sure we always know which storage key we rejected a query from
             allowance.explanation["storage_key"] = self._resource_identifier.value
             for k, v in allowance.to_dict().items():
-                span.set_data(f"quota_allowance.{k}", v)
+                # Span attributes only accept scalars; stringify the nested
+                # values (e.g. `explanation`) rather than letting the SDK
+                # safe_repr() them into something unreadable.
+                span.set_attribute(
+                    f"quota_allowance.{k}",
+                    v if isinstance(v, (str, int, float, bool)) else json.dumps(v, default=repr),
+                )
             return allowance
 
     @abstractmethod

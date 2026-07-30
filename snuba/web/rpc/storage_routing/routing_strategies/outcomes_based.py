@@ -2,7 +2,6 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import cast
 
-import sentry_sdk
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import GetTracesRequest
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
@@ -25,6 +24,7 @@ from snuba.query.logical import Query
 from snuba.query.query_settings import OutcomesQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.state.sentry_options import get_mapped_option, get_option
+from snuba.utils.metrics.util import set_current_span_attributes
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     timestamp_in_range_condition,
@@ -246,8 +246,8 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         ):
             routing_decision.tier = Tier.TIER_8
 
-        sentry_sdk.update_current_span(
-            attributes={
+        set_current_span_attributes(
+            {
                 "downsampling_mode": (
                     "highest_accuracy" if self._is_highest_accuracy_mode(in_msg_meta) else "normal"
                 ),
@@ -297,8 +297,8 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         elif ingested_items > max_items_before_downsampling * 100:
             routing_decision.tier = Tier.TIER_512
 
-        sentry_sdk.update_current_span(
-            attributes={
+        set_current_span_attributes(
+            {
                 "ingested_items": ingested_items,
                 "max_items_before_downsampling": max_items_before_downsampling,
                 "tier": routing_decision.tier.name,

@@ -11,10 +11,10 @@ from typing import (
     cast,
 )
 
-import sentry_sdk
 from parsimonious.exceptions import IncompleteParseError
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
+from sentry_sdk import traces
 
 from snuba.clickhouse.columns import Array, ColumnSet
 from snuba.clickhouse.query_dsl.accessors import get_time_range_expressions
@@ -1400,7 +1400,7 @@ def _post_process(
         # custom processors can be partials instead of functions but partials don't
         # have the __name__ attribute set automatically (and we don't set it manually)
         description = getattr(func, "__name__", "custom")
-        with sentry_sdk.start_span(op="processor", description=description):
+        with traces.start_span(name=description, attributes={"sentry.op": "processor"}):
             if settings and settings.get_dry_run():
                 with explain_meta.with_query_differ("snql_parsing", description, query):
                     func(query)
@@ -1440,7 +1440,7 @@ def parse_snql_query(
     custom_processing: CustomProcessors | None = None,
     settings: QuerySettings | None = None,
 ) -> CompositeQuery[LogicalDataSource] | LogicalQuery:
-    with sentry_sdk.start_span(op="parser", description="parse_snql_query_initial"):
+    with traces.start_span(name="parse_snql_query_initial", attributes={"sentry.op": "parser"}):
         query = parse_snql_query_initial(body)
 
     if settings and settings.get_dry_run():
@@ -1450,7 +1450,7 @@ def parse_snql_query(
         # NOTE (volo): The anonymizer that runs after this function call chokes on
         # OR and AND clauses with multiple parameters so we have to treeify them
         # before we run the anonymizer and the rest of the post processors
-        with sentry_sdk.start_span(op="processor", description="treeify_conditions"):
+        with traces.start_span(name="treeify_conditions", attributes={"sentry.op": "processor"}):
             _post_process(query, [_treeify_or_and_conditions], settings)
 
         timer = Timer("snql_pipeline")
@@ -1495,22 +1495,22 @@ class PostProcessAndValidateQuery(
         query, dataset, custom_processing = pipe_input.data
         settings = pipe_input.query_settings
 
-        with sentry_sdk.start_span(op="processor", description="post_processors"):
+        with traces.start_span(name="post_processors", attributes={"sentry.op": "processor"}):
             _post_process(
                 query,
                 POST_PROCESSORS,
                 settings,
             )
         # Custom processing to tweak the AST before validation
-        with sentry_sdk.start_span(op="processor", description="custom_processing"):
+        with traces.start_span(name="custom_processing", attributes={"sentry.op": "processor"}):
             if custom_processing is not None:
                 _post_process(query, custom_processing, settings)
         # Time based processing
-        with sentry_sdk.start_span(op="processor", description="time_based_processing"):
+        with traces.start_span(name="time_based_processing", attributes={"sentry.op": "processor"}):
             _post_process(query, [_replace_time_condition], settings)
         _post_process(query, [_select_entity_for_dataset(dataset)], settings)
         # Validating
-        with sentry_sdk.start_span(op="validate", description="expression_validators"):
+        with traces.start_span(name="expression_validators", attributes={"sentry.op": "validate"}):
             _post_process(query, VALIDATORS)
 
         return query
