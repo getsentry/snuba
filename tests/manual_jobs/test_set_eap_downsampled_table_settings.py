@@ -49,8 +49,23 @@ def test_get_reset_query(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.mark.parametrize(
     "table_name",
     [
+        "eap_items_1_downsample_8_local",
+        "eap_items_1_downsample_64_local",
+        "eap_items_1_downsample_512_local",
+    ],
+)
+def test_accepts_supported_downsampled_eap_local_tables(
+    monkeypatch: pytest.MonkeyPatch, table_name: str
+) -> None:
+    _build_job(monkeypatch, table_name)
+
+
+@pytest.mark.parametrize(
+    "table_name",
+    [
         "eap_items_1_local",
         "eap_items_1_downsample_8_dist",
+        "eap_items_1_downsample_16_local",
         "eap_items_1_downsample_8_local; DROP TABLE events",
         "events_local",
     ],

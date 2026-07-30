@@ -1,4 +1,3 @@
-import re
 from collections.abc import Mapping
 from typing import Any
 
@@ -7,7 +6,11 @@ from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.manual_jobs import Job, JobLogger, JobSpec
 
-_DOWNSAMPLED_EAP_TABLE_RE = re.compile(r"eap_items_1_downsample_[0-9]+_local")
+_DOWNSAMPLED_EAP_TABLES = [
+    "eap_items_1_downsample_8_local",
+    "eap_items_1_downsample_64_local",
+    "eap_items_1_downsample_512_local",
+]
 
 
 class SetEAPDownsampledTableSettings(Job):
@@ -20,7 +23,7 @@ class SetEAPDownsampledTableSettings(Job):
     def __validate_job_params(self, params: Mapping[Any, Any] | None) -> None:
         assert params is not None, "table_name parameter required"
         table_name = params.get("table_name")
-        assert isinstance(table_name, str) and _DOWNSAMPLED_EAP_TABLE_RE.fullmatch(table_name), (
+        assert isinstance(table_name, str) and table_name in _DOWNSAMPLED_EAP_TABLES, (
             "table_name must be a downsampled EAP local table"
         )
         self._table_name = table_name
