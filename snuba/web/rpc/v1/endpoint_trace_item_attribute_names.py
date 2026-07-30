@@ -1,6 +1,7 @@
 import re
 import uuid
 from collections.abc import Mapping
+from datetime import datetime
 from typing import Any
 
 from google.protobuf.json_format import MessageToDict
@@ -18,10 +19,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.pluggable_dataset import PluggableDataset
-from snuba.datasets.storages.factory import get_storage
-from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.data_source.simple import Storage
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column, not_cond, or_cond
 from snuba.query.expressions import Argument, Expression, FunctionCall, Lambda
@@ -41,6 +39,8 @@ from snuba.web.rpc.common.common import (
 )
 from snuba.web.rpc.common.debug_info import extract_response_meta
 from snuba.web.rpc.proto_visitor import ProtoVisitor, TraceItemFilterWrapper
+from snuba.web.rpc.v1.resolvers.R_eap_items import co_occurring_attrs
+from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs import CoOccurringAttrsSource
 
 # max value the user can provide for 'limit' in their request
 MAX_REQUEST_LIMIT = 1000
@@ -69,6 +69,42 @@ def _order_by_count(request: TraceItemAttributeNamesRequest) -> bool:
     are unaffected.
     """
     return request.order_by.column == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT
+
+
+def _effective_order_by_column(
+    request: TraceItemAttributeNamesRequest,
+    source: CoOccurringAttrsSource,
+) -> TraceItemAttributeNamesRequest.OrderBy.Column.ValueType:
+    """The ordering the query will apply, which may differ from the one requested.
+
+    Only v2 records ``last_seen``, so a recency request that lands on v1 degrades to frequency
+    ordering rather than failing: both rank "attributes worth showing first", so an
+    autocomplete caller still gets a useful answer. It stays detectable because ``last_seen``
+    is then absent from the response, and via a metric.
+
+    Everything downstream keys off this rather than ``request.order_by.column``, so the
+    ClickHouse ORDER BY and the Python re-sort cannot disagree about which ordering was used.
+    """
+    column = request.order_by.column
+    if (
+        column == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN
+        and not source.has_last_seen
+    ):
+        return TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT
+    return column
+
+
+def _aggregates_attributes(
+    order_by_column: TraceItemAttributeNamesRequest.OrderBy.Column.ValueType,
+) -> bool:
+    """Whether an ordering groups the keys, and so can report ``count``/``last_seen``.
+
+    Name ordering instead selects distinct keys and reports neither.
+    """
+    return order_by_column in (
+        TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT,
+        TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN,
+    )
 
 
 def _order_by_semver(request: TraceItemAttributeNamesRequest) -> bool:
@@ -113,6 +149,17 @@ def _semver_sort_key_py(name: str) -> tuple[tuple[int, int, int, int], int, str]
         is_stable,
         non_null,
     )
+
+
+def _as_datetime(value: Any) -> datetime:
+    """Coerce a ClickHouse DateTime result into a datetime.
+
+    Which the reader returns depends on the driver (native gives a datetime, HTTP can give an
+    ISO string), so accept both. Mirrors resolver_trace_item_stats.
+    """
+    if isinstance(value, datetime):
+        return value
+    return datetime.fromisoformat(str(value))
 
 
 def _name_order_by_expression(semver: bool) -> Expression:
@@ -180,6 +227,8 @@ def get_co_occurring_attributes_date_condition(
 def _add_substring_match_optimization(
     request: TraceItemAttributeNamesRequest,
     condition: Expression,
+    *,
+    source: CoOccurringAttrsSource,
 ) -> FunctionCall | Expression:
     """Add arrayExists to WHERE clause to filter rows before loading arrays.
 
@@ -193,29 +242,19 @@ def _add_substring_match_optimization(
     pattern = f"%{request.value_substring_match}%"
     like_lambda = Lambda(None, ("x",), f.like(Argument(None, "x"), pattern))
 
-    if request.type == AttributeKey.Type.TYPE_STRING:
-        return and_cond(condition, f.arrayExists(like_lambda, column("attributes_string")))
-    if request.type in (
-        AttributeKey.Type.TYPE_FLOAT,
-        AttributeKey.Type.TYPE_DOUBLE,
-        AttributeKey.Type.TYPE_INT,
-    ):
-        return and_cond(condition, f.arrayExists(like_lambda, column("attributes_float")))
-    if request.type == AttributeKey.Type.TYPE_BOOLEAN:
-        return and_cond(condition, f.arrayExists(like_lambda, column("attributes_bool")))
-    # TYPE_UNSPECIFIED - check all arrays with OR
-    return and_cond(
-        condition,
-        or_cond(
-            f.arrayExists(like_lambda, column("attributes_string")),
-            f.arrayExists(like_lambda, column("attributes_float")),
-            f.arrayExists(like_lambda, column("attributes_bool")),
-        ),
-    )
+    exists = [
+        f.arrayExists(like_lambda, column(col)) for col in source.key_array_columns(request.type)
+    ]
+    if not exists:
+        return condition
+    if len(exists) == 1:
+        return and_cond(condition, exists[0])
+    return and_cond(condition, or_cond(*exists))
 
 
 def get_co_occurring_attributes(
     request: TraceItemAttributeNamesRequest,
+    source: CoOccurringAttrsSource | None = None,
 ) -> SnubaRequest:
     """Constructs the clickhouse query for co-occurring attributes:
 
@@ -234,10 +273,15 @@ def get_co_occurring_attributes(
           ORDER BY attr_key ASC
           LIMIT 10000
 
-          -- Opt-in frequency ordering (order_by.column = COLUMN_COUNT) instead groups
-          -- and counts the keys, returning the most common first:
-          --   SELECT arrayJoin(...) AS attr_key, count() AS count
-          --   ... GROUP BY attr_key ORDER BY count DESC, attr_key ASC
+          -- COLUMN_COUNT and COLUMN_LAST_SEEN instead group the keys and aggregate, most
+          -- common or most recent first:
+          --   SELECT arrayJoin(...) AS attr_key, <count aggregate> AS count,
+          --          max(last_seen) AS last_seen
+          --   ... GROUP BY attr_key ORDER BY <count|last_seen> DESC, attr_key ASC
+
+      **Storage:** the roll-up this reads and the parts of the query shape that differ between
+      the two (per-type key arrays, the aggregates) come from the `CoOccurringAttrsSource`
+      returned by `resolvers.R_eap_items.co_occurring_attrs.for_request`.
 
       **Explanation:**
 
@@ -274,17 +318,17 @@ def get_co_occurring_attributes(
           - The attribute keys are deduplicated, resulting in less data to scan (~95% row reduction rate)
           - there is a bloom filter index on all key values
     """
+    # Callers that need the source themselves must pass the one they resolved: resolving reads
+    # runtime options, and an option flipping between two reads would build the query for one
+    # storage while the response is processed as if it were the other.
+    if source is None:
+        source = co_occurring_attrs.for_request(request)
+    order_by_column = _effective_order_by_column(request, source)
+
     # get all attribute keys from the filter
     collector = AttributeKeyCollector()
     TraceItemFilterWrapper(request.intersecting_attributes_filter).accept(collector)
     attribute_keys_to_search = collector.keys
-    storage_key = StorageKey("eap_item_co_occurring_attrs")
-
-    storage = Storage(
-        key=storage_key,
-        schema=get_storage(storage_key).get_schema().get_columns(),
-        sample=None,
-    )
 
     condition: Expression = and_cond(
         project_id_and_org_conditions(request.meta),
@@ -301,65 +345,28 @@ def get_co_occurring_attributes(
         )
 
     # Optimization: Add arrayExists to WHERE clause to filter rows before loading arrays
-    condition = _add_substring_match_optimization(request, condition)
+    condition = _add_substring_match_optimization(request, condition, source=source)
 
     if request.meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
         condition = and_cond(f.equals(column("item_type"), request.meta.trace_item_type), condition)
 
-    string_array = f.arrayMap(
-        Lambda(
-            None,
-            ("x",),
-            f.tuple(
-                "TYPE_STRING",
-                column("x"),
+    # One (type, key) tuple array per column read, so every key carries the AttributeKey type
+    # of the column it came from.
+    typed_arrays = [
+        f.arrayMap(
+            Lambda(
+                None,
+                ("x",),
+                f.tuple(
+                    type_name,
+                    column("x"),
+                ),
             ),
-        ),
-        column("attributes_string"),
-    )
-
-    # backwards compatibility with TYPE_FLOAT
-    floating_point_type = (
-        "TYPE_FLOAT" if request.type == AttributeKey.Type.TYPE_FLOAT else "TYPE_DOUBLE"
-    )
-
-    double_array = f.arrayMap(
-        Lambda(
-            None,
-            ("x",),
-            f.tuple(
-                floating_point_type,
-                column("x"),
-            ),
-        ),
-        column("attributes_float"),
-    )
-
-    bool_array = f.arrayMap(
-        Lambda(
-            None,
-            ("x",),
-            f.tuple(
-                "TYPE_BOOLEAN",
-                column("x"),
-            ),
-        ),
-        column("attributes_bool"),
-    )
-
-    array_func = None
-    if request.type == AttributeKey.Type.TYPE_STRING:
-        array_func = string_array
-    elif request.type in (
-        AttributeKey.Type.TYPE_FLOAT,
-        AttributeKey.Type.TYPE_DOUBLE,
-        AttributeKey.Type.TYPE_INT,
-    ):
-        array_func = double_array
-    elif request.type == AttributeKey.Type.TYPE_BOOLEAN:
-        array_func = bool_array
-    else:
-        array_func = f.arrayConcat(string_array, double_array, bool_array)
+            column(col),
+        )
+        for col, type_name in source.typed_key_arrays(request.type)
+    ]
+    array_func = typed_arrays[0] if len(typed_arrays) == 1 else f.arrayConcat(*typed_arrays)
 
     # Exclude the unsearchable keys with NOT has(array(...), x) rather than
     # NOT (x IN (...)). A constant IN-set makes ClickHouse build an internal
@@ -392,22 +399,31 @@ def get_co_occurring_attributes(
     )
 
     semver = _order_by_semver(request)
-    if _order_by_count(request):
-        # Opt-in frequency ordering: group by key and count how many rows
-        # (co-occurring attribute sets) contain each key.
+    if _aggregates_attributes(order_by_column):
         selected_columns = [
             SelectedExpression(name="attr_key", expression=attr_key_expression),
-            SelectedExpression(name="count", expression=f.count(alias="count")),
+            SelectedExpression(name="count", expression=source.count_expression()),
         ]
+        if source.has_last_seen:
+            # Selected whenever the storage has it, so a caller ordering by frequency still
+            # learns how recent each attribute is.
+            selected_columns.append(
+                SelectedExpression(name="last_seen", expression=source.last_seen_expression())
+            )
         groupby: list[Expression] | None = [column("attr_key")]
         order_by = [
             OrderBy(
                 direction=(
                     OrderByDirection.DESC if request.order_by.descending else OrderByDirection.ASC
                 ),
-                expression=column("count"),
+                expression=column(
+                    "last_seen"
+                    if order_by_column
+                    == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN
+                    else "count"
+                ),
             ),
-            # stable tiebreak for keys with the same frequency (semver key when
+            # stable tiebreak for keys with the same frequency/recency (semver key when
             # SORT_SEMVER was requested)
             OrderBy(direction=OrderByDirection.ASC, expression=_name_order_by_expression(semver)),
         ]
@@ -428,7 +444,7 @@ def get_co_occurring_attributes(
         ]
 
     query = Query(
-        from_clause=storage,
+        from_clause=source.data_source,
         selected_columns=selected_columns,
         groupby=groupby,
         condition=condition,
@@ -460,21 +476,48 @@ def get_co_occurring_attributes(
     return snuba_request
 
 
+def _aggregate_sort_key(row: Mapping[str, Any], sort_column: str) -> float:
+    """Comparable value for the aggregate the ClickHouse ORDER BY used.
+
+    A number, so counts and timestamps share one code path and rows missing the column (the
+    synthetic non-stored keys) compare lowest instead of raising on a mixed-type comparison.
+    """
+    value = row.get(sort_column)
+    if value is None:
+        return 0.0
+    if sort_column == "last_seen":
+        return _as_datetime(value).timestamp()
+    return float(value)
+
+
 def convert_co_occurring_results_to_attributes(
     request: TraceItemAttributeNamesRequest,
     query_res: QueryResult,
+    order_by_column: TraceItemAttributeNamesRequest.OrderBy.Column.ValueType | None = None,
 ) -> list[TraceItemAttributeNamesResponse.Attribute]:
+    """Build the response attributes, re-sorting to match the ClickHouse ORDER BY.
+
+    ``order_by_column`` must be the value the query was built with (see
+    ``_effective_order_by_column``), or the merge below re-sorts into a different order than
+    ClickHouse used. Defaults to the requested column.
+    """
+    if order_by_column is None:
+        order_by_column = request.order_by.column
+
     def t(row: Row) -> TraceItemAttributeNamesResponse.Attribute:
         attr_type, attr_name = row["attr_key"]
         assert isinstance(attr_type, str)
         attribute = TraceItemAttributeNamesResponse.Attribute(
             name=attr_name, type=getattr(AttributeKey.Type, attr_type)
         )
-        # `count` is only selected when ordering by frequency; surface it for the
-        # real attributes. The synthetic non-stored attributes have no count.
+        # Only selected on the aggregating orderings; the synthetic non-stored keys have
+        # neither, and `last_seen` is absent on storages that do not record it.
         count = row.get("count")
         if count is not None:
             attribute.count = int(count)
+        last_seen = row.get("last_seen")
+        if last_seen is not None:
+            attribute.last_seen.FromDatetime(_as_datetime(last_seen))
         return attribute
 
     # Name-ordering key that mirrors the ClickHouse ORDER BY: the raw (type, name)
@@ -496,12 +539,20 @@ def convert_co_occurring_results_to_attributes(
             if request.value_substring_match in key_name
         ]
         non_stored.sort(key=_name_key)
-        if _order_by_count(request):
-            # Match ClickHouse: count in the requested direction, then name ASC
-            # (two stable passes). Synthetic non-stored keys have no count, so
+        if _aggregates_attributes(order_by_column):
+            # Match ClickHouse: the aggregate in the requested direction, then name ASC
+            # (two stable passes). Synthetic non-stored keys have no aggregate value, so
             # pin them first rather than relying on a sentinel.
+            sort_column = (
+                "last_seen"
+                if order_by_column == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN
+                else "count"
+            )
             data.sort(key=_name_key)
-            data.sort(key=lambda row: row.get("count", 0), reverse=request.order_by.descending)
+            data.sort(
+                key=lambda row: _aggregate_sort_key(row, sort_column),
+                reverse=request.order_by.descending,
+            )
             data = non_stored + data
         else:
             # Merge synthetic non-stored keys in and re-sort by name in the
@@ -556,7 +607,24 @@ class EndpointTraceItemAttributeNames(
         )
 
     def _execute(self, in_msg: TraceItemAttributeNamesRequest) -> TraceItemAttributeNamesResponse:
-        snuba_request = get_co_occurring_attributes(in_msg)
+        # Resolved once and shared, so the query and the response re-sort cannot disagree.
+        source = co_occurring_attrs.for_request(in_msg)
+        order_by_column = _effective_order_by_column(in_msg, source)
+        if order_by_column != in_msg.order_by.column:
+            # Keeps an otherwise silent downgrade visible during the v2 rollout.
+            self.metrics.increment(
+                "attribute_names_order_by_degraded",
+                1,
+                tags={
+                    "requested": TraceItemAttributeNamesRequest.OrderBy.Column.Name(
+                        in_msg.order_by.column
+                    ),
+                    "applied": TraceItemAttributeNamesRequest.OrderBy.Column.Name(order_by_column),
+                    "storage": source.storage_key.value,
+                },
+            )
+
+        snuba_request = get_co_occurring_attributes(in_msg, source)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
@@ -564,7 +632,7 @@ class EndpointTraceItemAttributeNames(
         )
 
         response = TraceItemAttributeNamesResponse(
-            attributes=convert_co_occurring_results_to_attributes(in_msg, res),
+            attributes=convert_co_occurring_results_to_attributes(in_msg, res, order_by_column),
             meta=extract_response_meta(
                 in_msg.meta.request_id, in_msg.meta.debug, [res], [self._timer]
             ),
