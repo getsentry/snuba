@@ -1,7 +1,7 @@
 """Query shape of the v1 co-occurring-attributes source.
 
-No ClickHouse needed: these cover the pure per-storage decisions. End-to-end behaviour
-against real data is in tests/web/rpc/v1/test_endpoint_trace_item_attribute_names.py.
+Pure per-storage decisions, no ClickHouse. End-to-end coverage is in
+tests/web/rpc/v1/test_endpoint_trace_item_attribute_names.py.
 """
 
 import pytest
@@ -29,7 +29,7 @@ def test_data_source_points_at_the_storage() -> None:
 
 
 def test_count_counts_rows() -> None:
-    """One row per distinct attribute-key set, so frequency is a row count."""
+    """Rows are distinct attribute-key sets, so frequency is a row count."""
     expression = V1.count_expression()
     assert isinstance(expression, FunctionCall)
     assert expression.function_name == "count"
@@ -72,8 +72,7 @@ def test_unspecified_reads_every_array() -> None:
 def test_array_types_fall_back_to_every_scalar_array(
     attr_type: AttributeKey.Type.ValueType,
 ) -> None:
-    """This storage keeps no array-typed keys, so array requests degrade to the historical
-    behaviour of reading all three scalar arrays rather than returning nothing."""
+    """No array-typed keys here, so these degrade to reading all three scalar arrays."""
     assert list(V1.typed_key_arrays(attr_type)) == ALL_SCALAR_ARRAYS
 
 
@@ -87,12 +86,11 @@ def test_key_array_columns_matches_typed_key_arrays() -> None:
 
 
 def test_does_not_record_last_seen() -> None:
-    """This storage has no last_seen column, so the endpoint must not select or order by it."""
+    """No last_seen column, so the endpoint must not select or order by it."""
     assert not V1.has_last_seen
 
 
 def test_last_seen_expression_raises() -> None:
-    """Guarding on has_last_seen is the contract; calling anyway is a programming error, not
-    a silently wrong query."""
+    """Guarding on has_last_seen is the contract; calling anyway is a programming error."""
     with pytest.raises(NotImplementedError, match="does not record last_seen"):
         V1.last_seen_expression()

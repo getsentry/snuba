@@ -1,22 +1,12 @@
-"""The co-occurring-attributes roll-ups that ``TraceItemAttributeNames`` reads from.
+"""Pre-aggregated roll-ups of ``eap_items`` that ``TraceItemAttributeNames`` reads from.
 
-The endpoint answers "which attribute keys co-occur with these ones" from a pre-aggregated
-roll-up of ``eap_items`` rather than from the item table itself. There are two such
-roll-ups and they do not have the same schema, so choosing one also decides part of the
-query's shape. ``CoOccurringAttrsSource`` is that choice: one implementation per table,
-each owning the query shape its own schema requires.
+The two roll-ups have different schemas, so choosing one also decides part of the query's
+shape. ``CoOccurringAttrsSource`` is that choice, one implementation per table:
 
     v1.py   eap_item_co_occurring_attrs      ReplacingMergeTree, scalar key arrays only
     v2.py   eap_item_co_occurring_attrs_v2   SummingMergeTree, one key array per type
 
-Use ``for_request`` to get the source a request should read; see ``selection.py`` for how
-the rollout is gated.
-
-This deliberately sits above the entity layer rather than in a ``QueryStorageSelector``. A
-selector picks a *table* for an otherwise-identical query, whereas these two need different
-SELECT lists and a different aggregate. The selector would also never run here: the
-endpoint builds a ``Storage`` data source, so ``EntityProcessingStage`` returns via
-``try_translate_storage_query`` before ``select_storage`` is reached.
+``for_request`` picks the source for a request.
 """
 
 from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs.base import (

@@ -71,32 +71,19 @@ def _order_by_count(request: TraceItemAttributeNamesRequest) -> bool:
     return request.order_by.column == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT
 
 
-def _requested_last_seen_ordering(request: TraceItemAttributeNamesRequest) -> bool:
-    """Whether the caller *asked* for recency ordering (COLUMN_LAST_SEEN).
-
-    Combined with ``descending``, this gives "most recently used attributes first", which is
-    the main reason to surface ``last_seen`` at all. Note this is the request as sent; use
-    ``_effective_order_by_column`` for what the query can actually do.
-    """
-    return request.order_by.column == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN
-
-
 def _effective_order_by_column(
     request: TraceItemAttributeNamesRequest,
     source: CoOccurringAttrsSource,
 ) -> TraceItemAttributeNamesRequest.OrderBy.Column.ValueType:
-    """The ordering the query will actually apply, which may differ from the one requested.
+    """The ordering the query will apply, which may differ from the one requested.
 
-    Only the v2 roll-up records ``last_seen``, and a request can land on v1 either because
-    the rollout flag is off or because its time range predates v2. Rather than failing, a
-    recency request on such a storage degrades to frequency ordering: both rank "attributes
-    worth showing first", so a caller doing autocomplete still gets a useful result instead
-    of an error. The degradation is reported as a metric, and ``last_seen`` is simply absent
-    from the response, so it stays detectable.
+    Only v2 records ``last_seen``, so a recency request that lands on v1 degrades to frequency
+    ordering rather than failing: both rank "attributes worth showing first", so an
+    autocomplete caller still gets a useful answer. It stays detectable because ``last_seen``
+    is then absent from the response, and via a metric.
 
-    Everything downstream keys off this rather than off ``request.order_by.column`` so the
-    ClickHouse ORDER BY and the Python re-sort of the merged synthetic attributes cannot
-    disagree about which ordering was used.
+    Everything downstream keys off this rather than ``request.order_by.column``, so the
+    ClickHouse ORDER BY and the Python re-sort cannot disagree about which ordering was used.
     """
     column = request.order_by.column
     if (
@@ -110,11 +97,9 @@ def _effective_order_by_column(
 def _aggregates_attributes(
     order_by_column: TraceItemAttributeNamesRequest.OrderBy.Column.ValueType,
 ) -> bool:
-    """Whether an ordering groups the attribute keys.
+    """Whether an ordering groups the keys, and so can report ``count``/``last_seen``.
 
-    Both frequency and recency ordering aggregate over the rows a key appears in, so both
-    take the GROUP BY path and both can report ``count``/``last_seen``. Name ordering instead
-    selects distinct keys and reports neither.
+    Name ordering instead selects distinct keys and reports neither.
     """
     return order_by_column in (
         TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT,
@@ -169,9 +154,8 @@ def _semver_sort_key_py(name: str) -> tuple[tuple[int, int, int, int], int, str]
 def _as_datetime(value: Any) -> datetime:
     """Coerce a ClickHouse DateTime result into a datetime.
 
-    Which of the two the reader hands back depends on the driver (the native protocol
-    deserializes to datetime, the HTTP one can yield an ISO string), so accept both. Mirrors
-    the same handling in resolver_trace_item_stats.
+    Which the reader returns depends on the driver (native gives a datetime, HTTP can give an
+    ISO string), so accept both. Mirrors resolver_trace_item_stats.
     """
     if isinstance(value, datetime):
         return value
@@ -289,23 +273,15 @@ def get_co_occurring_attributes(
           ORDER BY attr_key ASC
           LIMIT 10000
 
-          -- The opt-in orderings (order_by.column = COLUMN_COUNT or COLUMN_LAST_SEEN)
-          -- instead group the keys and aggregate over them, returning the most common or
-          -- the most recently seen first. The aggregates depend on the storage (see
-          -- co_occurring_attrs.count_expression / last_seen_expression):
+          -- COLUMN_COUNT and COLUMN_LAST_SEEN instead group the keys and aggregate, most
+          -- common or most recent first:
           --   SELECT arrayJoin(...) AS attr_key, <count aggregate> AS count,
           --          max(last_seen) AS last_seen
           --   ... GROUP BY attr_key ORDER BY <count|last_seen> DESC, attr_key ASC
-          --
-          -- COLUMN_LAST_SEEN requires a storage that records last_seen, so for requests
-          -- that resolve to v1 it degrades to COLUMN_COUNT (see
-          -- _effective_order_by_column).
 
-      **Storage:** which of the two co-occurring-attributes roll-ups this reads, and the
-      parts of the query shape that differ between them (the per-type key arrays and the
-      frequency aggregate), come from the `CoOccurringAttrsSource` returned by
-      `resolvers.R_eap_items.co_occurring_attrs.for_request`. See that package for the
-      differences between v1 and v2 and for how the rollout is gated.
+      **Storage:** the roll-up this reads and the parts of the query shape that differ between
+      the two (per-type key arrays, the aggregates) come from the `CoOccurringAttrsSource`
+      returned by `resolvers.R_eap_items.co_occurring_attrs.for_request`.
 
       **Explanation:**
 
@@ -342,15 +318,11 @@ def get_co_occurring_attributes(
           - The attribute keys are deduplicated, resulting in less data to scan (~95% row reduction rate)
           - there is a bloom filter index on all key values
     """
-    # Resolving the source reads runtime options, so a caller that also needs it must pass
-    # the one it resolved rather than let this resolve a second time: an option flipping
-    # between the two reads would build the query for one storage while the response is
-    # processed as if it were the other. Defaults to resolving for callers with no such need.
+    # Callers that need the source themselves must pass the one they resolved: resolving reads
+    # runtime options, and an option flipping between two reads would build the query for one
+    # storage while the response is processed as if it were the other.
     if source is None:
         source = co_occurring_attrs.for_request(request)
-    # May differ from what was requested: recency ordering degrades to frequency on a
-    # storage without last_seen. Pure given `source`, so deriving it here and in the caller
-    # cannot disagree. See _effective_order_by_column.
     order_by_column = _effective_order_by_column(request, source)
 
     # get all attribute keys from the filter
@@ -378,9 +350,8 @@ def get_co_occurring_attributes(
     if request.meta.trace_item_type != TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
         condition = and_cond(f.equals(column("item_type"), request.meta.trace_item_type), condition)
 
-    # One (type, key) tuple array per key-array column the request reads, so every key
-    # carries the AttributeKey type of the column it came from. A single-type request
-    # reads one array; TYPE_UNSPECIFIED (and untyped TYPE_ARRAY) concatenates several.
+    # One (type, key) tuple array per column read, so every key carries the AttributeKey type
+    # of the column it came from.
     typed_arrays = [
         f.arrayMap(
             Lambda(
@@ -429,16 +400,13 @@ def get_co_occurring_attributes(
 
     semver = _order_by_semver(request)
     if _aggregates_attributes(order_by_column):
-        # Opt-in frequency or recency ordering: group by key and aggregate over the
-        # co-occurring attribute sets containing it. How each aggregate is computed depends
-        # on the storage, so the source supplies the expressions.
         selected_columns = [
             SelectedExpression(name="attr_key", expression=attr_key_expression),
             SelectedExpression(name="count", expression=source.count_expression()),
         ]
         if source.has_last_seen:
-            # Reported alongside the keys whenever the storage has it, so a caller ordering
-            # by frequency still learns how recent each attribute is.
+            # Selected whenever the storage has it, so a caller ordering by frequency still
+            # learns how recent each attribute is.
             selected_columns.append(
                 SelectedExpression(name="last_seen", expression=source.last_seen_expression())
             )
@@ -511,9 +479,8 @@ def get_co_occurring_attributes(
 def _aggregate_sort_key(row: Mapping[str, Any], sort_column: str) -> float:
     """Comparable value for the aggregate the ClickHouse ORDER BY used.
 
-    Reduced to a number so counts and timestamps sort with one code path, and so rows
-    missing the column (the synthetic non-stored keys) compare lowest instead of raising on
-    a mixed-type comparison.
+    A number, so counts and timestamps share one code path and rows missing the column (the
+    synthetic non-stored keys) compare lowest instead of raising on a mixed-type comparison.
     """
     value = row.get(sort_column)
     if value is None:
@@ -530,10 +497,9 @@ def convert_co_occurring_results_to_attributes(
 ) -> list[TraceItemAttributeNamesResponse.Attribute]:
     """Build the response attributes, re-sorting to match the ClickHouse ORDER BY.
 
-    ``order_by_column`` is the ordering the query actually applied, which can differ from the
-    requested one (see ``_effective_order_by_column``). It must be the same value the query
-    was built with, or the merge below re-sorts into a different order than ClickHouse used.
-    Defaults to the requested column for callers that did not degrade anything.
+    ``order_by_column`` must be the value the query was built with (see
+    ``_effective_order_by_column``), or the merge below re-sorts into a different order than
+    ClickHouse used. Defaults to the requested column.
     """
     if order_by_column is None:
         order_by_column = request.order_by.column
@@ -544,9 +510,8 @@ def convert_co_occurring_results_to_attributes(
         attribute = TraceItemAttributeNamesResponse.Attribute(
             name=attr_name, type=getattr(AttributeKey.Type, attr_type)
         )
-        # `count` and `last_seen` are only selected on the aggregating orderings, and
-        # `last_seen` only on storages that record it. The synthetic non-stored attributes
-        # have neither.
+        # Only selected on the aggregating orderings; the synthetic non-stored keys have
+        # neither, and `last_seen` is absent on storages that do not record it.
         count = row.get("count")
         if count is not None:
             attribute.count = int(count)
@@ -642,16 +607,11 @@ class EndpointTraceItemAttributeNames(
         )
 
     def _execute(self, in_msg: TraceItemAttributeNamesRequest) -> TraceItemAttributeNamesResponse:
-        # Resolve the source once and pass it to both the query builder and the response
-        # converter. Resolving it reads runtime options, so re-resolving per caller would let
-        # an option flip mid-request produce a query ordered one way and a response re-sorted
-        # another.
+        # Resolved once and shared, so the query and the response re-sort cannot disagree.
         source = co_occurring_attrs.for_request(in_msg)
         order_by_column = _effective_order_by_column(in_msg, source)
         if order_by_column != in_msg.order_by.column:
-            # Recency ordering asked for on a storage without last_seen. Surfacing this as a
-            # metric keeps an otherwise silent downgrade visible while the v2 rollout is in
-            # progress.
+            # Keeps an otherwise silent downgrade visible during the v2 rollout.
             self.metrics.increment(
                 "attribute_names_order_by_degraded",
                 1,

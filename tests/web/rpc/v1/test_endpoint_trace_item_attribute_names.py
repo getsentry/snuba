@@ -83,15 +83,11 @@ def setup_teardown(eap: None, redis_db: None) -> None:
 
 @pytest.fixture(autouse=True, params=[False, True], ids=["co_occurring_v1", "co_occurring_v2"])
 def co_occurring_storage(request: pytest.FixtureRequest) -> Generator[bool]:
-    """Run every test in this module against both co-occurring-attributes storages.
+    """Run every test in this module against both co-occurring-attributes storages, so the
+    shared behaviour holds on either side of the rollout.
 
-    The endpoint reads v1 or v2 depending on the ``use_co_occurring_attrs_v2`` option, so
-    the shared behaviour (ordering, filtering, pagination, substring match) must hold on
-    either side of the rollout.
-
-    The v2 start timestamp is pinned back so the date gate never sends these requests to v1
-    on the v2 leg: the tests query around ``BASE_TIME``, and with the real cutoff whether
-    that range clears it depends on what day of the week the suite runs.
+    The v2 start timestamp is pinned back so the date gate does not send the v2 leg to v1:
+    whether ``BASE_TIME`` clears the real cutoff depends on the day the suite runs.
     """
     use_v2 = bool(request.param)
     with override_options(
@@ -312,8 +308,7 @@ class TestTraceItemAttributeNames(BaseApiTest):
     def test_reads_the_storage_selected_by_the_rollout_flag(
         self, co_occurring_storage: bool
     ) -> None:
-        """The ``use_co_occurring_attrs_v2`` option picks which co-occurring-attributes
-        storage the query reads, and is a straight rollback switch in either direction."""
+        """The option picks which storage is read, in either direction."""
         req = TraceItemAttributeNamesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],

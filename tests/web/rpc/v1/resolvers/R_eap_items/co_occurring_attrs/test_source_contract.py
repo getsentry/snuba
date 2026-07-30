@@ -1,8 +1,7 @@
 """Contract every CoOccurringAttrsSource must satisfy.
 
-The endpoint builds one query from whichever source it is handed, so these invariants are
-what let it do that without knowing which storage it got. Parameterized over all
-implementations, so a new source has to satisfy them too.
+These invariants are what let the endpoint build one query without knowing which storage it
+got. Parameterized over all implementations, so a new source has to satisfy them too.
 """
 
 import pytest
@@ -18,8 +17,7 @@ from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs.base import (
 ALL_SOURCES = [V1, V2]
 SOURCE_IDS = [type(source).__name__ for source in ALL_SOURCES]
 
-# Every AttributeKey type a caller can send, including the ones a given storage may not
-# represent natively.
+# Every type a caller can send, including ones a storage may not represent natively.
 ALL_ATTRIBUTE_TYPES = [value.number for value in AttributeKey.Type.DESCRIPTOR.values]
 
 
@@ -48,12 +46,8 @@ def test_data_source_matches_the_storage_schema(source: CoOccurringAttrsSource) 
 def test_every_attribute_type_reads_something(
     source: CoOccurringAttrsSource, attr_type: AttributeKey.Type.ValueType
 ) -> None:
-    """No requested type may produce an empty read.
-
-    An empty list would make the endpoint emit an arrayConcat() of nothing and silently
-    return no attributes, so a storage that cannot answer a type natively must fall back to
-    whatever it does have.
-    """
+    """An empty read would emit arrayConcat() of nothing and silently return no attributes,
+    so a storage that cannot answer a type natively must fall back to what it does have."""
     assert len(source.typed_key_arrays(attr_type)) > 0
 
 
@@ -61,11 +55,8 @@ def test_every_attribute_type_reads_something(
 def test_key_arrays_exist_on_the_storage(
     source: CoOccurringAttrsSource, attr_type: AttributeKey.Type.ValueType
 ) -> None:
-    """Every column a source claims to read must exist on its storage.
-
-    This is the invariant that would break if a source were pointed at the wrong table, or
-    if a column were renamed in one schema but not the mapping.
-    """
+    """Catches a source pointed at the wrong table, or a column renamed in one schema but
+    not in the mapping."""
     available = {c.name for c in get_storage(source.storage_key).get_schema().get_columns()}
     for column, _ in source.typed_key_arrays(attr_type):
         assert column in available, f"{column} missing from {source.storage_key.value}"
@@ -75,8 +66,8 @@ def test_key_arrays_exist_on_the_storage(
 def test_reported_types_are_real_attribute_types(
     source: CoOccurringAttrsSource, attr_type: AttributeKey.Type.ValueType
 ) -> None:
-    """The type name each key is tagged with is resolved via getattr(AttributeKey.Type, ...)
-    when building the response, so a typo would only surface as a runtime AttributeError."""
+    """Resolved via getattr(AttributeKey.Type, ...) when building the response, so a typo
+    would only surface as a runtime AttributeError."""
     for _, type_name in source.typed_key_arrays(attr_type):
         assert AttributeKey.Type.Value(type_name) is not None
 
@@ -91,8 +82,7 @@ def test_no_column_is_read_twice(
 
 
 def test_count_is_an_aliased_aggregate(source: CoOccurringAttrsSource) -> None:
-    """The endpoint selects this as `count` and orders by that alias, so the expression has
-    to carry it regardless of which aggregate the storage uses."""
+    """The endpoint orders by the `count` alias, so the expression has to carry it."""
     expression = source.count_expression()
     assert isinstance(expression, FunctionCall)
     assert expression.alias == "count"
@@ -103,12 +93,8 @@ def test_repr_names_the_storage(source: CoOccurringAttrsSource) -> None:
 
 
 def test_last_seen_capability_is_consistent(source: CoOccurringAttrsSource) -> None:
-    """has_last_seen must describe what last_seen_expression actually does.
-
-    The endpoint checks the flag and then calls the expression, so a source claiming the
-    capability without implementing it (or vice versa) would either crash or silently drop
-    the column.
-    """
+    """The endpoint checks the flag then calls the expression, so a source claiming the
+    capability without implementing it (or vice versa) would crash or drop the column."""
     if source.has_last_seen:
         expression = source.last_seen_expression()
         assert isinstance(expression, FunctionCall)
@@ -119,8 +105,7 @@ def test_last_seen_capability_is_consistent(source: CoOccurringAttrsSource) -> N
 
 
 def test_last_seen_column_is_available_when_claimed(source: CoOccurringAttrsSource) -> None:
-    """A source claiming last_seen must actually have the column, or the query fails at
-    ClickHouse rather than here."""
+    """Otherwise the query fails at ClickHouse rather than here."""
     if not source.has_last_seen:
         return
     columns = {c.name for c in get_storage(source.storage_key).get_schema().get_columns()}

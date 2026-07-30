@@ -1,15 +1,9 @@
 """``eap_item_co_occurring_attrs``: the original co-occurring-attributes roll-up.
 
 A ``ReplacingMergeTree`` holding one row per distinct attribute-key set, with only
-string/float/bool key arrays. Two consequences shape the queries below:
-
-- **Int keys have no array of their own.** They are visible only because ``eap_items``
-  double-writes int attributes into a float bucket, so an int request reads the float array
-  and its keys are reported as ``TYPE_DOUBLE``.
-- **Array-typed keys are not represented at all**, so an array-typed request cannot be
-  answered natively and falls back to reading every scalar array.
-
-There is also no occurrence count, so frequency means "number of matching rows".
+string/float/bool key arrays and no occurrence count. So int keys have no array of their own
+(they are visible only because ``eap_items`` double-writes them into a float bucket) and
+array-typed keys are absent entirely.
 """
 
 from __future__ import annotations
@@ -31,8 +25,6 @@ STRING_KEY_ARRAY = ("attributes_string", "TYPE_STRING")
 FLOAT_KEY_ARRAY = ("attributes_float", "TYPE_DOUBLE")
 BOOL_KEY_ARRAY = ("attributes_bool", "TYPE_BOOLEAN")
 
-# Every key array this storage has. Used for TYPE_UNSPECIFIED and, because there is nothing
-# better to read, for the array types it cannot answer.
 ALL_KEY_ARRAYS: list[tuple[str, str]] = [
     STRING_KEY_ARRAY,
     FLOAT_KEY_ARRAY,
@@ -51,7 +43,7 @@ class CoOccurringAttrsV1(CoOccurringAttrsSource):
         if requested_type == AttributeKey.Type.TYPE_STRING:
             return [STRING_KEY_ARRAY]
         if requested_type == AttributeKey.Type.TYPE_FLOAT:
-            # backwards compatibility with TYPE_FLOAT: same column, echo the requested type
+            # backwards compatibility: same column, echo the requested type
             return [("attributes_float", "TYPE_FLOAT")]
         if requested_type in (AttributeKey.Type.TYPE_DOUBLE, AttributeKey.Type.TYPE_INT):
             return [FLOAT_KEY_ARRAY]
@@ -62,8 +54,7 @@ class CoOccurringAttrsV1(CoOccurringAttrsSource):
         return ALL_KEY_ARRAYS
 
     def count_expression(self) -> Expression:
-        # One row per distinct attribute-key set, so the frequency of a key is the number
-        # of those sets it appears in.
+        # Rows are distinct attribute-key sets, so this counts the sets a key appears in.
         return f.count(alias="count")
 
 
