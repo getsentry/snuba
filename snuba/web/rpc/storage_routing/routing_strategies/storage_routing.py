@@ -5,6 +5,7 @@ from abc import ABC
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC
+from functools import cache
 from typing import (
     Any,
     NamedTuple,
@@ -279,6 +280,28 @@ class StrategyData(ConfigurableComponentData):
     policies_data: list[PolicyData]
 
 
+@cache
+def _get_eap_allocation_policies() -> tuple[AllocationPolicy, ...]:
+    resource_identifier = ResourceIdentifier("EAP")
+    return (
+        ConcurrentRateLimitAllocationPolicy(
+            storage_key=resource_identifier,
+            required_tenant_types=["organization_id", "referrer", "project_id"],
+            default_config_overrides={"is_enforced": 0, "concurrent_limit": 66},
+        ),
+        ReferrerGuardRailPolicy(
+            storage_key=resource_identifier,
+            required_tenant_types=["referrer"],
+            default_config_overrides={"is_enforced": 0, "is_active": 0},
+        ),
+        BytesScannedRejectingPolicy(
+            storage_key=resource_identifier,
+            required_tenant_types=["organization_id", "project_id", "referrer"],
+            default_config_overrides={"is_active": 0, "is_enforced": 0},
+        ),
+    )
+
+
 class BaseRoutingStrategy(ConfigurableComponent, ABC):
     def __init__(self, default_config_overrides: dict[str, Any] | None = None) -> None:
         if default_config_overrides is None:
@@ -354,26 +377,9 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         return False
 
     def get_allocation_policies(self) -> list[AllocationPolicy]:
-        # by default all routing strategies share allocation policies since effectively they are all
-        # protecting the same resource (EAP)
-        EAP_RESOURCE_IDENTIFIER = ResourceIdentifier("EAP")
-        return [
-            ConcurrentRateLimitAllocationPolicy(
-                storage_key=EAP_RESOURCE_IDENTIFIER,
-                required_tenant_types=["organization_id", "referrer", "project_id"],
-                default_config_overrides={"is_enforced": 0, "concurrent_limit": 66},
-            ),
-            ReferrerGuardRailPolicy(
-                storage_key=EAP_RESOURCE_IDENTIFIER,
-                required_tenant_types=["referrer"],
-                default_config_overrides={"is_enforced": 0, "is_active": 0},
-            ),
-            BytesScannedRejectingPolicy(
-                storage_key=EAP_RESOURCE_IDENTIFIER,
-                required_tenant_types=["organization_id", "project_id", "referrer"],
-                default_config_overrides={"is_active": 0, "is_enforced": 0},
-            ),
-        ]
+        # Policy definitions are immutable; runtime config is still read for every decision.
+        # Return a new list so callers cannot mutate the cached container.
+        return list(_get_eap_allocation_policies())
 
     def get_delete_allocation_policies(self) -> list[AllocationPolicy]:
         return []
