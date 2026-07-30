@@ -30,12 +30,15 @@ import {
 
 import { AutoReplacementsBypassProjectsData } from "SnubaAdmin/auto_replacements_bypass_projects/types";
 
+import { ClusterData } from "SnubaAdmin/clusters/types";
+
 interface Client {
   getSettings: () => Promise<Settings>;
   getAutoReplacementsBypassProjects: () => Promise<
     AutoReplacementsBypassProjectsData[]
   >;
   getClickhouseNodes: () => Promise<[ClickhouseNodeData]>;
+  getClickhouseClusters: () => Promise<ClusterData[]>;
   getSnubaDatasetNames: () => Promise<SnubaDatasetName[]>;
   getAllowedProjects: () => Promise<string[]>;
   executeSnQLQuery: (query: SnQLRequest) => Promise<any>;
@@ -94,6 +97,28 @@ function Client(): Client {
               storage.query_node,
           );
         });
+    },
+
+    getClickhouseClusters: () => {
+      const url = baseUrl + "clickhouse_clusters";
+      return fetch(url).then((resp) => {
+        if (resp.ok) {
+          return resp.json();
+        }
+        // An error response (e.g. a 403 for a user without the tool) is a JSON
+        // object, not the expected array: reject so the page shows the message
+        // instead of trying to render the error as a list of clusters.
+        return resp.json().then(
+          (err) => {
+            throw new Error(
+              err?.error?.message || err?.error || "Could not load clusters"
+            );
+          },
+          () => {
+            throw new Error(`Could not load clusters (${resp.status})`);
+          }
+        );
+      });
     },
 
     getSnubaDatasetNames: () => {
