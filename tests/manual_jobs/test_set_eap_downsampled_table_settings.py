@@ -21,6 +21,11 @@ def _build_job(monkeypatch: pytest.MonkeyPatch, table_name: str) -> SetEAPDownsa
     )
 
 
+def test_jobs_allow_adhoc_run() -> None:
+    assert SetEAPDownsampledTableSettings.allow_adhoc_run
+    assert ResetEAPDownsampledTableSettings.allow_adhoc_run
+
+
 def test_get_query(monkeypatch: pytest.MonkeyPatch) -> None:
     job = _build_job(monkeypatch, "eap_items_1_downsample_8_local")
 

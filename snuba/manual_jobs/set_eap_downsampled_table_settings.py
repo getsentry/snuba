@@ -16,6 +16,8 @@ _DOWNSAMPLED_EAP_TABLES = [
 class SetEAPDownsampledTableSettings(Job):
     """Enable block metadata columns on a downsampled EAP local table."""
 
+    allow_adhoc_run = True
+
     def __init__(self, job_spec: JobSpec) -> None:
         self.__validate_job_params(job_spec.params)
         super().__init__(job_spec)
