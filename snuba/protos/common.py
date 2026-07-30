@@ -1,12 +1,12 @@
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
-from typing import Final
+from typing import Final, NamedTuple
 
 from sentry_conventions.attributes import ATTRIBUTE_METADATA
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import arrayElement, column, literal
+from snuba.query.dsl import arrayElement, column, literal, map_key_exists
 from snuba.query.expressions import (
     Argument,
     Expression,
@@ -26,23 +26,42 @@ class MalformedAttributeException(Exception):
     pass
 
 
-COLUMN_PREFIX: str = "sentry."
+class NormalizedColumn(NamedTuple):
+    column_name: str
+    types: Sequence[AttributeKey.Type.ValueType]
 
-NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, Sequence[AttributeKey.Type.ValueType]]] = {
-    f"{COLUMN_PREFIX}organization_id": [AttributeKey.Type.TYPE_INT],
-    f"{COLUMN_PREFIX}project_id": [AttributeKey.Type.TYPE_INT],
-    f"{COLUMN_PREFIX}timestamp": [
-        AttributeKey.Type.TYPE_FLOAT,
-        AttributeKey.Type.TYPE_DOUBLE,
-        AttributeKey.Type.TYPE_INT,
-        AttributeKey.Type.TYPE_STRING,
-    ],
-    f"{COLUMN_PREFIX}trace_id": [
-        AttributeKey.Type.TYPE_STRING
-    ],  # this gets converted from a uuid to a string in a storage processor
-    f"{COLUMN_PREFIX}item_id": [AttributeKey.Type.TYPE_STRING],
-    f"{COLUMN_PREFIX}sampling_weight": [AttributeKey.Type.TYPE_DOUBLE],
-    f"{COLUMN_PREFIX}sampling_factor": [AttributeKey.Type.TYPE_DOUBLE],
+
+def sentry_column(column_name: str) -> str:
+    return f"sentry.{column_name}"
+
+
+NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, NormalizedColumn]] = {
+    sentry_column("organization_id"): NormalizedColumn(
+        "organization_id", [AttributeKey.Type.TYPE_INT]
+    ),
+    sentry_column("project_id"): NormalizedColumn("project_id", [AttributeKey.Type.TYPE_INT]),
+    sentry_column("timestamp"): NormalizedColumn(
+        "timestamp",
+        [
+            AttributeKey.Type.TYPE_FLOAT,
+            AttributeKey.Type.TYPE_DOUBLE,
+            AttributeKey.Type.TYPE_INT,
+            AttributeKey.Type.TYPE_STRING,
+        ],
+    ),
+    # trace_id gets converted from a uuid to a string in a storage processor
+    sentry_column("trace_id"): NormalizedColumn("trace_id", [AttributeKey.Type.TYPE_STRING]),
+    sentry_column("item_id"): NormalizedColumn("item_id", [AttributeKey.Type.TYPE_STRING]),
+    sentry_column("sampling_weight"): NormalizedColumn(
+        "sampling_weight", [AttributeKey.Type.TYPE_DOUBLE]
+    ),
+    sentry_column("sampling_factor"): NormalizedColumn(
+        "sampling_factor", [AttributeKey.Type.TYPE_DOUBLE]
+    ),
+    sentry_column("session_id"): NormalizedColumn("session_id", [AttributeKey.Type.TYPE_STRING]),
+    "gen_ai.conversation.id": NormalizedColumn(
+        "ai_conversation_id", [AttributeKey.Type.TYPE_STRING]
+    ),
 }
 
 PROTO_TYPE_TO_CLICKHOUSE_TYPE: Final[Mapping[AttributeKey.Type.ValueType, str]] = {
@@ -162,6 +181,34 @@ def _generate_subscriptable_reference(
     )
 
 
+def coalesced_attribute_names(attribute_name: str) -> list[str]:
+    """The attribute name, then its deprecated/replacement aliases."""
+    return [attribute_name] + list(ATTRIBUTES_TO_COALESCE.get(attribute_name, ()))
+
+
+def key_existence_conditions(col_name: str, names: Sequence[str]) -> list[FunctionCall]:
+    """One ``has(mapKeys(<col>), <name>)`` existence check per candidate key."""
+    return [map_key_exists(column(col_name), literal(name)) for name in names]
+
+
+def first_present_value(
+    values: Sequence[Expression],
+    existences: Sequence[FunctionCall],
+    *,
+    alias: str | None = None,
+) -> Expression:
+    """``multiIf(exists1, value1, ..., exists_{n-1}, value_{n-1}, value_n)``.
+    ``existences`` and ``values`` must be in the same precedence order;
+    ``alias`` is applied if supplied."""
+    if len(values) == 1:
+        return values[0]
+    args: list[Expression] = []
+    for cond, val in zip(existences[:-1], values[:-1], strict=True):
+        args.extend((cond, val))
+    args.append(values[-1])
+    return f.multiIf(*args, alias=alias) if alias else f.multiIf(*args)
+
+
 # The typed array map columns (Map(String, Array(T))), in element-type order. Shared by
 # the per-attribute SELECT (type_array_typed_columns_select_expressions) and the
 # whole-map reads / merges in snuba.web.rpc.common.common.
@@ -171,6 +218,12 @@ TYPED_ARRAY_MAP_COLUMNS: tuple[str, ...] = (
     "attributes_array_float",
     "attributes_array_bool",
 )
+
+# Normalized String columns whose unset value ingests as an empty string (not NULL) — e.g.
+# ai_conversation_id when a TraceItem has no conversation_id. Because the column is never NULL,
+# existence must be checked with notEmpty(...) instead of isNotNull(...), which would otherwise
+# match every row (see get_field_existence_expression).
+EMPTY_STRING_DEFAULT_COLUMNS: tuple[str, ...] = ("ai_conversation_id",)
 
 
 def type_array_typed_columns_select_expressions(attr_key: AttributeKey) -> list[FunctionCall]:
@@ -297,11 +350,12 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
         return column("attr_key")
 
     if attr_key.name in NORMALIZED_COLUMNS_EAP_ITEMS:
-        if attr_key.type not in NORMALIZED_COLUMNS_EAP_ITEMS[attr_key.name]:
+        normalized_column = NORMALIZED_COLUMNS_EAP_ITEMS[attr_key.name]
+        if attr_key.type not in normalized_column.types:
             formatted_attribute_types = ", ".join(
                 map(
                     AttributeKey.Type.Name,
-                    NORMALIZED_COLUMNS_EAP_ITEMS[attr_key.name],
+                    normalized_column.types,
                 )
             )
             raise MalformedAttributeException(
@@ -309,27 +363,18 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
             )
 
         return f.cast(
-            column(attr_key.name[len(COLUMN_PREFIX) :]),
+            column(normalized_column.column_name),
             PROTO_TYPE_TO_CLICKHOUSE_TYPE[attr_key.type],
             alias=alias,
         )
 
     if attr_key.type in PROTO_TYPE_TO_ATTRIBUTE_COLUMN:
         if attr_key.name in ATTRIBUTES_TO_COALESCE:
-            expressions = [
-                _generate_subscriptable_reference(
-                    attribute_name,
-                    attr_key.type,
-                )
-                for attribute_name in [
-                    attr_key.name,
-                ]
-                + list(ATTRIBUTES_TO_COALESCE[attr_key.name])
-            ]
-            return f.coalesce(
-                *expressions,
-                alias=alias,
-            )
+            col_name = PROTO_TYPE_TO_ATTRIBUTE_COLUMN[attr_key.type]
+            names = coalesced_attribute_names(attr_key.name)
+            values = [_generate_subscriptable_reference(name, attr_key.type) for name in names]
+            existences = key_existence_conditions(col_name, names)
+            return first_present_value(values, existences, alias=alias)
         return _generate_subscriptable_reference(
             attr_key.name,
             attr_key.type,

@@ -23,6 +23,10 @@ import {
 } from "SnubaAdmin/snql_to_sql/types";
 
 import { QuerylogRequest, QuerylogResult } from "SnubaAdmin/querylog/types";
+import {
+  CardinalityQueryRequest,
+  CardinalityQueryResult,
+} from "SnubaAdmin/cardinality_analyzer/types";
 
 import { AutoReplacementsBypassProjectsData } from "SnubaAdmin/auto_replacements_bypass_projects/types";
 
@@ -48,6 +52,10 @@ interface Client {
   getPredefinedQuerylogOptions: () => Promise<[PredefinedQuery]>;
   getQuerylogSchema: () => Promise<QuerylogResult>;
   executeQuerylogQuery: (req: QuerylogRequest) => Promise<QuerylogResult>;
+  getPredefinedCardinalityQueryOptions: () => Promise<[PredefinedQuery]>;
+  executeCardinalityQuery: (
+    req: CardinalityQueryRequest,
+  ) => Promise<CardinalityQueryResult>;
   getAllMigrationGroups: () => Promise<MigrationGroupResult[]>;
   runMigration: (req: RunMigrationRequest) => Promise<RunMigrationResult>;
   getAllowedTools: () => Promise<AllowedTools>;
@@ -262,6 +270,24 @@ function Client(): Client {
     },
     executeQuerylogQuery: (query: QuerylogRequest) => {
       const url = baseUrl + "clickhouse_querylog_query";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        body: JSON.stringify(query),
+      }).then((resp) => {
+        if (resp.ok) {
+          return resp.json();
+        } else {
+          return resp.json().then(Promise.reject.bind(Promise));
+        }
+      });
+    },
+    getPredefinedCardinalityQueryOptions: () => {
+      const url = baseUrl + "cardinality_queries";
+      return fetch(url).then((resp) => resp.json());
+    },
+    executeCardinalityQuery: (query: CardinalityQueryRequest) => {
+      const url = baseUrl + "cardinality_query";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "POST",

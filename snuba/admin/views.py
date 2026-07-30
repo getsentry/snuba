@@ -21,11 +21,15 @@ from snuba import settings
 from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
+from snuba.admin.cardinality_analyzer.cardinality_analyzer import run_metrics_query
 from snuba.admin.clickhouse.clusters import get_cluster_info
 from snuba.admin.clickhouse.common import InvalidCustomQuery, InvalidNodeError
 from snuba.admin.clickhouse.copy_tables import copy_tables
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
+from snuba.admin.clickhouse.predefined_cardinality_analyzer_queries import (
+    CardinalityQuery,
+)
 from snuba.admin.clickhouse.predefined_querylog_queries import QuerylogQuery
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
 from snuba.admin.clickhouse.profile_events import gather_profile_events
@@ -360,6 +364,13 @@ def clickhouse_queries() -> Response:
 @check_tool_perms(tools=[AdminTools.QUERYLOG])
 def querylog_queries() -> Response:
     res = [q.to_json() for q in QuerylogQuery.all_classes()]
+    return make_response(jsonify(res), 200)
+
+
+@application.route("/cardinality_queries")
+@check_tool_perms(tools=[AdminTools.CARDINALITY_ANALYZER])
+def cardinality_queries() -> Response:
+    res = [q.to_json() for q in CardinalityQuery.all_classes()]
     return make_response(jsonify(res), 200)
 
 
@@ -803,6 +814,66 @@ def snuba_debug() -> Response:
         )
     finally:
         explain_cleanup()
+
+
+@application.route("/cardinality_query", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.CARDINALITY_ANALYZER])
+def cardinality_analyzer_query() -> Response:
+    # HACK (Volo):
+    # mostly copypasta from querylog, should not stick around for too long
+    # when production query tool gets made this should not be necessary
+    user = request.headers.get(USER_HEADER_KEY, "unknown")
+    if user == "unknown" and settings.ADMIN_AUTH_PROVIDER != "NOOP":
+        return Response(
+            json.dumps({"error": "Unauthorized"}),
+            401,
+            {"Content-Type": "application/json"},
+        )
+    req = json.loads(request.data)
+    try:
+        raw_sql = req["sql"]
+    except KeyError as e:
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "request",
+                        "message": f"Invalid request, missing key {e.args[0]}",
+                    }
+                }
+            ),
+            400,
+        )
+    try:
+        result = run_metrics_query(raw_sql, user)
+        rows, columns = result.results, result.meta
+        if columns:
+            return make_response(
+                jsonify({"column_names": [name for name, _ in columns], "rows": rows}),
+                200,
+            )
+        return make_response(
+            jsonify({"error": {"type": "unknown", "message": "no columns"}}),
+            500,
+        )
+    except ClickhouseError as err:
+        details = {
+            "type": "clickhouse",
+            "message": str(err),
+            "code": err.code,
+        }
+        return make_response(jsonify({"error": details}), 400)
+    except InvalidCustomQuery as err:
+        return Response(
+            json.dumps({"error": {"message": str(err)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
+    except Exception as err:
+        return make_response(
+            jsonify({"error": {"type": "unknown", "message": str(err)}}),
+            500,
+        )
 
 
 @application.route("/rpc_endpoints", methods=["GET"])

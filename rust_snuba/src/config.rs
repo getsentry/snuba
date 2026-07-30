@@ -114,8 +114,6 @@ pub struct MessageProcessorConfig {
 #[serde(deny_unknown_fields)]
 pub struct EnvConfig {
     pub sentry_dsn: Option<String>,
-    pub dogstatsd_host: Option<String>,
-    pub dogstatsd_port: Option<u16>,
     pub dogstatsd_socket_path: Option<String>,
     pub default_retention_days: u16,
     pub lower_retention_days: u16,
@@ -128,8 +126,6 @@ impl Default for EnvConfig {
     fn default() -> Self {
         Self {
             sentry_dsn: None,
-            dogstatsd_host: None,
-            dogstatsd_port: None,
             dogstatsd_socket_path: None,
             default_retention_days: 90,
             lower_retention_days: 30,
