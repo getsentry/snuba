@@ -467,21 +467,22 @@ jobs:
 
       - name: Run snuba CI tests
         working-directory: sentry
-        run: |
-          pytest -k 'not __In' \
-            -m snuba_ci \
-            tests \
-            -n "$XDIST_WORKERS" --dist=loadfile --reuse-db \
-            -vv
+        # monolith acceptance tests contain some js
+        run: >
+          pytest -k 'not __In'
+          -m snuba_ci
+          tests --ignore=tests/acceptance
+          -n "$XDIST_WORKERS" --dist=loadfile --reuse-db
+          -vv
 
       - name: Run full tests
         working-directory: sentry
-        run: |
-          pytest -k 'not __In' \
-              -m snuba \
-              tests \
-              -n "$XDIST_WORKERS" --dist=loadfile --reuse-db \
-              -vv
+        run: >
+          pytest -k 'not __In'
+          -m snuba
+          tests --ignore=tests/acceptance
+          -n "$XDIST_WORKERS" --dist=loadfile --reuse-db
+          -vv
 
   clickhouse-versions:
     needs: [linting, snuba-image, docker-deps]
