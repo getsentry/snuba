@@ -26,6 +26,7 @@ from snuba.query.logical import Query as LogicalQuery
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.state import explain_meta
+from snuba.utils.sentry import SENTRY_OP
 
 
 class EntityProcessingExecutor:
@@ -58,7 +59,7 @@ class EntityProcessingExecutor:
 
     def get_storage(self, query: LogicalQuery, settings: QuerySettings) -> EntityStorageConnection:
         with traces.start_span(
-            name="select_storage", attributes={"sentry.op": "build_plan.storage_query_plan_builder"}
+            name="select_storage", attributes={SENTRY_OP: "build_plan.storage_query_plan_builder"}
         ):
             return self.__selector.select_storage(query, settings, self.__storages)
 
@@ -67,7 +68,7 @@ class EntityProcessingExecutor:
     ) -> ClickhouseCluster:
         if is_storage_set_sliced(storage.get_storage_set_key()):
             with traces.start_span(
-                name="select_storage", attributes={"sentry.op": "build_plan.sliced_storage"}
+                name="select_storage", attributes={SENTRY_OP: "build_plan.sliced_storage"}
             ):
                 assert self.__partition_key_column_name is not None, (
                     "partition key column name must be defined for a sliced storage"
@@ -92,7 +93,7 @@ class EntityProcessingExecutor:
         check_storage_readiness(storage)
 
         with traces.start_span(
-            name="translate", attributes={"sentry.op": "build_plan.storage_query_plan_builder"}
+            name="translate", attributes={SENTRY_OP: "build_plan.storage_query_plan_builder"}
         ):
             # The QueryTranslator class should be instantiated once for each call to
             # translate_query_and_apply_mappers to avoid cache conflicts.

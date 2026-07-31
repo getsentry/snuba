@@ -48,6 +48,7 @@ from snuba.settings import (
 )
 from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.util import with_span
+from snuba.utils.sentry import SENTRY_OP
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
@@ -495,7 +496,7 @@ def _process_results(
     # First pass: parse rows and build attribute dicts
     parsed_rows: list[tuple[str, Timestamp, dict[str, GetTraceResponse.Item.Attribute]]] = []
 
-    with traces.start_span(name="add_attributes", attributes={"sentry.op": "function"}):
+    with traces.start_span(name="add_attributes", attributes={SENTRY_OP: "function"}):
         for row in data:
             id = row.pop("id")
             ts = row.pop("timestamp")
@@ -565,7 +566,7 @@ def _process_results(
     # Second pass: sort attributes and assemble items
     items: list[GetTraceResponse.Item] = []
 
-    with traces.start_span(name="sort_attributes", attributes={"sentry.op": "function"}):
+    with traces.start_span(name="sort_attributes", attributes={SENTRY_OP: "function"}):
         for id, timestamp, attributes in parsed_rows:
             item = GetTraceResponse.Item(
                 id=id,
@@ -664,7 +665,7 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
                 page_token = EndpointGetTracePageToken(i, last_seen_timestamp_precise, last_seen_id)
                 break
 
-        with traces.start_span(name="assemble_response", attributes={"sentry.op": "function"}):
+        with traces.start_span(name="assemble_response", attributes={SENTRY_OP: "function"}):
             response_meta = extract_response_meta(
                 in_msg.meta.request_id,
                 in_msg.meta.debug,

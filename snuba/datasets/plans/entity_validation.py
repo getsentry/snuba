@@ -12,6 +12,7 @@ from snuba.query.logical import EntityQuery
 from snuba.query.parser.validation.functions import FunctionCallsValidator
 from snuba.query.query_settings import QuerySettings
 from snuba.state import explain_meta
+from snuba.utils.sentry import SENTRY_OP
 
 EXPRESSION_VALIDATORS = [FunctionCallsValidator()]
 
@@ -69,7 +70,7 @@ def run_entity_validators(
     """
     for validator_func in VALIDATORS:
         description = getattr(validator_func, "__name__", "custom")
-        with traces.start_span(name=description, attributes={"sentry.op": "validator"}):
+        with traces.start_span(name=description, attributes={SENTRY_OP: "validator"}):
             if settings and settings.get_dry_run():
                 with explain_meta.with_query_differ("entity_validator", description, query):
                     validator_func(query)

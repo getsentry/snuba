@@ -61,6 +61,7 @@ from snuba.utils.health_info import (
 )
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.util import with_span
+from snuba.utils.sentry import SENTRY_OP, set_tag_and_attribute
 from snuba.web import QueryException, QueryTooLongException
 from snuba.web.bulk_delete_query import delete_from_storage as bulk_delete_from_storage
 from snuba.web.constants import get_http_status_for_clickhouse_error
@@ -97,11 +98,11 @@ def truncate_dataset(dataset: Dataset) -> None:
 
 
 def _add_compression_attrs(response: Response) -> Response:
-    sentry_sdk.set_attribute(
+    set_tag_and_attribute(
         "snuba.req_accept_encoding", http_request.headers.get("Accept-Encoding") or ""
     )
-    sentry_sdk.set_attribute("snuba.resp_encoding", response.headers.get("Content-Encoding") or "")
-    sentry_sdk.set_attribute("snuba.resp_mime_type", response.mimetype or "")
+    set_tag_and_attribute("snuba.resp_encoding", response.headers.get("Content-Encoding") or "")
+    set_tag_and_attribute("snuba.resp_mime_type", response.mimetype or "")
     span = traces.get_current_span()
     if span is not None and response.content_length is not None:
         span.set_attribute("snuba.resp_content_length", response.content_length)
@@ -233,7 +234,7 @@ def health() -> Response:
 
 
 def parse_request_body(http_request: Request) -> dict[str, Any]:
-    with traces.start_span(name="parse_request_body", attributes={"sentry.op": "parse"}):
+    with traces.start_span(name="parse_request_body", attributes={SENTRY_OP: "parse"}):
         metrics.timing("http_request_body_length", len(http_request.data))
         try:
             body = json.loads(http_request.data)
@@ -245,9 +246,11 @@ def parse_request_body(http_request: Request) -> dict[str, Any]:
 
 def _trace_transaction(dataset_name: str) -> None:
     # Set on the scope so every span in this request inherits them, including
-    # the service span the WSGI integration opened before we got here.
-    sentry_sdk.set_attribute("dataset", dataset_name)
-    sentry_sdk.set_attribute("referrer", http_request.referrer or "")
+    # the service span the WSGI integration opened before we got here. Dual-write
+    # tags + attributes while telemetry is mid-transition: tags land on error
+    # events, attributes on streamed spans.
+    set_tag_and_attribute("dataset", dataset_name)
+    set_tag_and_attribute("referrer", http_request.referrer or "")
 
     # `scope.transaction` is None in stream mode, so we can't read the current
     # name back off it. Rebuild it from the same source the Flask integration
@@ -260,34 +263,37 @@ def _trace_transaction(dataset_name: str) -> None:
 
 
 def _set_snql_api_error_tags(body: dict[str, Any], http_referrer: str | None) -> None:
-    """Set Sentry scope attributes for SnQL API error tracking.
+    """Set Sentry scope tags and attributes for SnQL API error tracking.
 
     Annotates all errors in the SnQL API with:
     - source: snql_api
     - referrer: from HTTP header or request body
-    - tenant_ids: as context and individual attributes
+    - tenant_ids: as context and individual tags/attributes
+
+    Dual-writes tags and attributes while telemetry is mid-transition: tags
+    land on error events, attributes on streamed spans.
 
     This function is wrapped in a try-except to ensure that any failure
-    in setting attributes does not crash the API request.
+    in setting tags/attributes does not crash the API request.
     """
     try:
-        sentry_sdk.set_attribute("source", "snql_api")
+        set_tag_and_attribute("source", "snql_api")
 
         # Extract and annotate referrer
         referrer = http_referrer or body.get("tenant_ids", {}).get("referrer", "<unknown>")
-        sentry_sdk.set_attribute("referrer", referrer)
+        set_tag_and_attribute("referrer", referrer)
 
         # Extract and set tenant_ids as context for better error tracking
         tenant_ids = body.get("tenant_ids", {})
         if tenant_ids:
             sentry_sdk.set_context("tenant_ids", tenant_ids)
-            # Also set individual tenant_id attributes for easier filtering
+            # Also set individual tenant_id tags/attributes for easier filtering
             for key, value in tenant_ids.items():
                 if key != "referrer":  # Skip referrer as it's already set above
-                    sentry_sdk.set_attribute(f"tenant_id.{key}", str(value))
+                    set_tag_and_attribute(f"tenant_id.{key}", str(value))
     except Exception as e:
         # Log the error but don't let it crash the API request
-        logger.warning("Failed to set Sentry attributes for SnQL API", exc_info=e)
+        logger.warning("Failed to set Sentry tags/attributes for SnQL API", exc_info=e)
 
 
 @application.route("/query", methods=["GET", "POST"])

@@ -16,6 +16,7 @@ from snuba.processor import ReplacementType
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.replacers.replacer_processor import ReplacerState
 from snuba.state.sentry_options import get_option
+from snuba.utils.sentry import SENTRY_OP
 
 redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 
@@ -129,19 +130,19 @@ class ProjectsQueryFlags:
         try:
             with redis_client.pipeline() as p:
                 with traces.start_span(
-                    name="build_redis_pipeline", attributes={"sentry.op": "function"}
+                    name="build_redis_pipeline", attributes={SENTRY_OP: "function"}
                 ):
                     cls._query_redis(s_project_ids, state_name, p)
 
                 with traces.start_span(
-                    name="execute_redis_pipeline", attributes={"sentry.op": "function"}
+                    name="execute_redis_pipeline", attributes={SENTRY_OP: "function"}
                 ) as span:
                     results = p.execute()
                     # getting size of str(results) since sys.getsizeof() doesn't count recursively
                     span.set_attribute("results_size", sys.getsizeof(str(results)))
 
             with traces.start_span(
-                name="process_redis_results", attributes={"sentry.op": "function"}
+                name="process_redis_results", attributes={SENTRY_OP: "function"}
             ) as span:
                 flags = cls._process_redis_results(results, len(s_project_ids))
                 # Span attributes only accept scalars and homogeneous lists, so

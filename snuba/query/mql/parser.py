@@ -72,6 +72,7 @@ from snuba.query.snql.parser import (
 )
 from snuba.state import explain_meta
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.sentry import SENTRY_OP
 
 # The parser returns a bunch of different types, so create a single aggregate type to
 # capture everything.
@@ -1265,7 +1266,7 @@ def parse_mql_query(
     # NOTE (volo): The anonymizer that runs after this function call chokes on
     # OR and AND clauses with multiple parameters so we have to treeify them
     # before we run the anonymizer and the rest of the post processors
-    with traces.start_span(name="treeify_conditions", attributes={"sentry.op": "processor"}):
+    with traces.start_span(name="treeify_conditions", attributes={SENTRY_OP: "processor"}):
         _post_process(query, [_treeify_or_and_conditions], settings)
 
     res = PostProcessAndValidateMQLQuery().execute(
@@ -1295,16 +1296,16 @@ class ParsePopulateResolveMQL(
     ) -> LogicalQuery:
         mql_str, dataset, mql_context_dict, settings = pipe_input.data
 
-        with traces.start_span(name="parse_mql_query_initial", attributes={"sentry.op": "parser"}):
+        with traces.start_span(name="parse_mql_query_initial", attributes={SENTRY_OP: "parser"}):
             query = parse_mql_query_body(mql_str, dataset)
 
         with traces.start_span(
-            name="populate_query_from_mql_context", attributes={"sentry.op": "parser"}
+            name="populate_query_from_mql_context", attributes={SENTRY_OP: "parser"}
         ):
             query, mql_context = populate_query_from_mql_context(query, mql_context_dict)
 
         with traces.start_span(
-            name="resolve_indexer_mappings", attributes={"sentry.op": "processor"}
+            name="resolve_indexer_mappings", attributes={SENTRY_OP: "processor"}
         ):
             resolve_mappings(query, mql_context.indexer_mappings, dataset)
 
@@ -1335,7 +1336,7 @@ class PostProcessAndValidateMQLQuery(
         ],
     ) -> LogicalQuery:
         query, settings, custom_processing = pipe_input.data
-        with traces.start_span(name="post_processors", attributes={"sentry.op": "processor"}):
+        with traces.start_span(name="post_processors", attributes={SENTRY_OP: "processor"}):
             _post_process(
                 query,
                 MQL_POST_PROCESSORS,
@@ -1344,7 +1345,7 @@ class PostProcessAndValidateMQLQuery(
 
         # Filter in select optimizer
         with traces.start_span(
-            name="filter_in_select_optimize", attributes={"sentry.op": "processor"}
+            name="filter_in_select_optimize", attributes={SENTRY_OP: "processor"}
         ):
             if settings is None:
                 FilterInSelectOptimizer().process_query(query, HTTPQuerySettings())
@@ -1352,16 +1353,16 @@ class PostProcessAndValidateMQLQuery(
                 FilterInSelectOptimizer().process_query(query, settings)
 
         # Custom processing to tweak the AST before validation
-        with traces.start_span(name="custom_processing", attributes={"sentry.op": "processor"}):
+        with traces.start_span(name="custom_processing", attributes={SENTRY_OP: "processor"}):
             if custom_processing is not None:
                 _post_process(query, custom_processing, settings)
 
         # Time based processing
-        with traces.start_span(name="time_based_processing", attributes={"sentry.op": "processor"}):
+        with traces.start_span(name="time_based_processing", attributes={SENTRY_OP: "processor"}):
             _post_process(query, [_replace_time_condition], settings)
 
         # Validating
-        with traces.start_span(name="expression_validators", attributes={"sentry.op": "validate"}):
+        with traces.start_span(name="expression_validators", attributes={SENTRY_OP: "validate"}):
             _post_process(query, VALIDATORS)
 
         return query

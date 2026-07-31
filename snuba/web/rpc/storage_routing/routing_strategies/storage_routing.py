@@ -55,6 +55,7 @@ from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.util import set_current_span_attributes
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import import_submodules_in_directory
+from snuba.utils.sentry import SENTRY_OP
 from snuba.web import QueryException, QueryResult
 from snuba.web.rpc.common.exceptions import RPCAllocationPolicyException
 from snuba.web.rpc.storage_routing.common import extract_message_meta
@@ -216,7 +217,8 @@ def _construct_hacky_querylog_payload(
     # Read the trace id off the propagation context rather than the active span:
     # it is populated whether or not a span is active and whether or not the
     # trace was sampled, so the querylog always gets a real id.
-    trace_id = sentry_sdk.get_current_scope().get_active_propagation_context().trace_id
+    propagation_context = sentry_sdk.get_current_scope().get_active_propagation_context()
+    trace_id = propagation_context.trace_id if propagation_context is not None else ""
     assert routing_decision.routing_context is not None
     query_result = routing_decision.routing_context.query_result or QueryResult(
         {}, {"stats": {}, "sql": "", "experiments": {}}
@@ -467,7 +469,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             allocation_policy_name = allocation_policy.class_name()
             with traces.start_span(
                 name=allocation_policy_name,
-                attributes={"sentry.op": "allocation_policy.get_quota_allowance"},
+                attributes={SENTRY_OP: "allocation_policy.get_quota_allowance"},
             ) as span:
                 recommendations[allocation_policy_name] = allocation_policy.get_quota_allowance(
                     routing_context.tenant_ids,
@@ -489,7 +491,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
 
         default_tier = self._get_default_routing_decision_tier()
 
-        with traces.start_span(name="decide_tier", attributes={"sentry.op": "decide_tier"}) as span:
+        with traces.start_span(name="decide_tier", attributes={SENTRY_OP: "decide_tier"}) as span:
             try:
                 routing_context.timer.mark(_START_ESTIMATION_MARK)
 

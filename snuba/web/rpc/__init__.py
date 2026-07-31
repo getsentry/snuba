@@ -25,6 +25,7 @@ from snuba.utils.registered_class import (
     RegisteredClass,
     import_submodules_in_directory,
 )
+from snuba.utils.sentry import SENTRY_OP, set_tag_and_attribute
 from snuba.web import QueryException
 from snuba.web.rpc.common.common import Tin, Tout
 from snuba.web.rpc.common.exceptions import (
@@ -85,19 +86,21 @@ def _flush_logs() -> None:
 
 
 def _set_rpc_error_tags(in_msg: ProtobufMessage) -> None:
-    sentry_sdk.set_attribute("source", "rpc_api")
+    # Dual-write tags + attributes while telemetry is mid-transition: tags land
+    # on error events, attributes on streamed spans.
+    set_tag_and_attribute("source", "rpc_api")
 
     # Extract and annotate fields from meta if available
     if hasattr(in_msg, "meta"):
         meta = in_msg.meta
 
         if hasattr(meta, "referrer") and meta.referrer:
-            sentry_sdk.set_attribute("referrer", meta.referrer)
+            set_tag_and_attribute("referrer", meta.referrer)
 
         if hasattr(meta, "organization_id") and meta.organization_id:
-            sentry_sdk.set_attribute("organization_id", str(meta.organization_id))
+            set_tag_and_attribute("organization_id", str(meta.organization_id))
         if hasattr(meta, "request_id") and meta.request_id:
-            sentry_sdk.set_attribute("request_id", str(meta.request_id))
+            set_tag_and_attribute("request_id", str(meta.request_id))
 
 
 class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
@@ -221,7 +224,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
                 with traces.start_span(
                     name="execute",
                     attributes={
-                        "sentry.op": "execute",
+                        SENTRY_OP: "execute",
                         "selected_tier": self.routing_decision.tier.name,
                     },
                 ):

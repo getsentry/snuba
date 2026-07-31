@@ -37,6 +37,7 @@ from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.sentry import SENTRY_OP
 from snuba.web import (
     QueryException,
     QueryExtraData,
@@ -107,9 +108,7 @@ def _dry_run_query_runner(
     clickhouse_query: ClickhouseQuery | CompositeQuery[Table],
     cluster_name: str,
 ) -> QueryResult:
-    with traces.start_span(
-        name="dryrun_create_query", attributes={"sentry.op": "function"}
-    ) as span:
+    with traces.start_span(name="dryrun_create_query", attributes={SENTRY_OP: "function"}) as span:
         formatted_query = format_query(clickhouse_query)
         span.set_attribute("query", json.dumps(formatted_query.structured(), default=repr))
 
@@ -193,7 +192,7 @@ def _format_storage_query_and_run(
     visitor = TablesCollector()
     visitor.visit(from_clause)
     table_names = ",".join(sorted(visitor.get_tables()))
-    with traces.start_span(name="create_query", attributes={"sentry.op": "function"}) as span:
+    with traces.start_span(name="create_query", attributes={SENTRY_OP: "function"}) as span:
         _apply_turbo_sampling_if_needed(clickhouse_query, query_settings)
 
         formatted_query = format_query(clickhouse_query)
@@ -258,7 +257,7 @@ def _format_storage_query_and_run(
     with traces.start_span(
         name="execute_query",
         attributes={
-            "sentry.op": "function",
+            SENTRY_OP: "function",
             sentry_sdk.consts.SPANDATA.DB_QUERY_TEXT: formatted_sql,
             "table": table_names,
         },

@@ -31,6 +31,7 @@ from snuba.reader import Reader, Result, build_result_transformer
 from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.gauge import ThreadSafeGauge
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.sentry import SENTRY_OP
 
 ignore_logger("clickhouse_driver.connection")
 
@@ -284,7 +285,7 @@ class ClickhouseNativePool(ClickhousePool):
                         with traces.start_span(
                             name="clickhouse query",
                             attributes={
-                                "sentry.op": "db.clickhouse",
+                                SENTRY_OP: "db.clickhouse",
                                 sentry_sdk.consts.SPANDATA.DB_SYSTEM: "clickhouse",
                                 sentry_sdk.consts.SPANDATA.DB_QUERY_TEXT: query,
                             },

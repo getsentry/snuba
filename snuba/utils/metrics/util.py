@@ -4,16 +4,14 @@ import _strptime  # NOQA fixes _strptime deferred import issue
 import inspect
 from collections.abc import Callable, Mapping
 from functools import wraps
-from typing import TYPE_CHECKING, Any, TypeVar, cast
+from typing import Any, TypeVar, cast
 
 from sentry_sdk import traces
 
 from snuba import settings
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.types import Tags
-
-if TYPE_CHECKING:
-    from sentry_sdk._types import Attributes
+from snuba.utils.sentry import SENTRY_OP
 
 
 def create_metrics(
@@ -77,7 +75,7 @@ def with_span(op: str = "function") -> Callable[[F], F]:
     def decorator(func: F) -> F:
         frame_info = inspect.stack()[1]
         # Built once at decoration time rather than on every call.
-        attributes: Attributes = {"sentry.op": op, "filename": frame_info.filename}
+        attributes: dict[str, Any] = {SENTRY_OP: op, "filename": frame_info.filename}
 
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:

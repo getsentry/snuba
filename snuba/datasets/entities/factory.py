@@ -13,12 +13,13 @@ from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.datasets.storages.factory import initialize_storage_factory
 from snuba.datasets.table_storage import TableWriter
 from snuba.utils.config_component_factory import ConfigComponentFactory
+from snuba.utils.sentry import SENTRY_OP
 from snuba.utils.serializable_exception import SerializableException
 
 
 class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
     def __init__(self) -> None:
-        with traces.start_span(name="Entity Factory", attributes={"sentry.op": "initialize"}):
+        with traces.start_span(name="Entity Factory", attributes={SENTRY_OP: "initialize"}):
             initialize_storage_factory()
             self._entity_map: dict[EntityKey, PluggableEntity] = {}
             self._name_map: dict[type[Entity], EntityKey] = {}

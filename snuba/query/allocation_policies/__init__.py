@@ -21,6 +21,7 @@ from snuba.configs.configuration import (
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import import_submodules_in_directory
+from snuba.utils.sentry import SENTRY_OP
 from snuba.utils.serializable_exception import JsonSerializable, SerializableException
 from snuba.web import QueryResult
 
@@ -454,7 +455,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
     ) -> QuotaAllowance:
         with traces.start_span(
             name=self.__class__.__name__,
-            attributes={"sentry.op": "allocation_policy.get_quota_allowance"},
+            attributes={SENTRY_OP: "allocation_policy.get_quota_allowance"},
         ) as span:
             for t, tid in tenant_ids.items():
                 span.set_attribute(f"tenant_ids.{t}", str(tid))

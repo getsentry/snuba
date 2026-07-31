@@ -68,6 +68,7 @@ from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.util import set_current_span_attributes, with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.sentry import SENTRY_OP
 from snuba.utils.serializable_exception import (
     SerializableException,
     SerializableExceptionDict,
@@ -870,7 +871,7 @@ def _apply_allocation_policies_quota(
     min_threads_across_policies = MAX_THRESHOLD
     with traces.start_span(
         name="_apply_allocation_policies_quota",
-        attributes={"sentry.op": "allocation_policy"},
+        attributes={SENTRY_OP: "allocation_policy"},
     ) as span:
         for allocation_policy in allocation_policies:
             allowance = allocation_policy.get_quota_allowance(attribution_info.tenant_ids, query_id)

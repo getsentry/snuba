@@ -6,6 +6,7 @@ from sentry_sdk import traces
 from yaml import safe_load
 
 from snuba import settings
+from snuba.utils.sentry import SENTRY_OP
 
 
 def load_configuration_data(path: str, validators: dict[str, Any]) -> dict[str, Any]:
@@ -15,7 +16,7 @@ def load_configuration_data(path: str, validators: dict[str, Any]) -> dict[str, 
     """
     with traces.start_span(
         name="load_and_validate",
-        attributes={"sentry.op": "load_and_validate", "file": path},
+        attributes={SENTRY_OP: "load_and_validate", "file": path},
     ) as span:
         with open(path) as file:
             config = safe_load(file)

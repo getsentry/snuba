@@ -26,6 +26,7 @@ from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.util import with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.sentry import SENTRY_OP
 from snuba.web import QueryException, QueryExtraData, QueryResult
 
 logger = logging.getLogger("snuba.query")
@@ -140,7 +141,7 @@ def parse_and_run_query(
         referrer (str): legacy param, you probably don't need to provide this. It should be in the tenant_ids of the body
     """
 
-    with traces.start_span(name="build_schema", attributes={"sentry.op": "validate"}):
+    with traces.start_span(name="build_schema", attributes={SENTRY_OP: "validate"}):
         schema = RequestSchema.build(HTTPQuerySettings, is_mql)
 
     # NOTE(Volo): dataset is not necessary for queries because storages can be queried directly

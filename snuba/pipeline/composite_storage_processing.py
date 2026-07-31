@@ -22,6 +22,7 @@ from snuba.query.joins.semi_joins import SemiJoinOptimizer
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.state import explain_meta
+from snuba.utils.sentry import SENTRY_OP
 
 
 def apply_composite_storage_processors(
@@ -271,7 +272,7 @@ class ProcessorsExecutor(DataSourceVisitor[None, Table], JoinVisitor[None, Table
         for clickhouse_processor in processors:
             with traces.start_span(
                 name=type(clickhouse_processor).__name__,
-                attributes={"sentry.op": "processor"},
+                attributes={SENTRY_OP: "processor"},
             ):
                 clickhouse_processor.process_query(clickhouse_query, self.__settings)
 

@@ -26,6 +26,7 @@ from snuba.clickhouse.native import (
 )
 from snuba.reader import unwrap_nullable_type
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.sentry import SENTRY_OP
 
 logger = logging.getLogger("snuba.clickhouse.connect")
 
@@ -38,10 +39,13 @@ def _driver_params(params: Params) -> Sequence[Any] | dict[str, Any] | None:
     ``Params`` allows any ``Mapping``, but the driver's signature takes an
     invariant ``dict``. Falsy params (including an empty sequence) mean "no
     parameters" here, matching the previous ``params if params else None``.
+    Sequence params are passed through; mappings are copied to a plain ``dict``.
     """
     if not params:
         return None
-    return dict(params) if isinstance(params, Mapping) else params
+    if isinstance(params, Mapping):
+        return dict(params)
+    return params
 
 
 # Stand-in for "no read timeout" on the HTTP path. The native driver maps a
@@ -224,7 +228,7 @@ class ClickhouseConnectPool(ClickhousePool):
         with traces.start_span(
             name="clickhouse query",
             attributes={
-                "sentry.op": "db.clickhouse",
+                SENTRY_OP: "db.clickhouse",
                 sentry_sdk.consts.SPANDATA.DB_SYSTEM: "clickhouse",
                 sentry_sdk.consts.SPANDATA.DB_QUERY_TEXT: query,
             },
@@ -316,7 +320,7 @@ class ClickhouseConnectPool(ClickhousePool):
             with traces.start_span(
                 name="clickhouse query",
                 attributes={
-                    "sentry.op": "db.clickhouse",
+                    SENTRY_OP: "db.clickhouse",
                     sentry_sdk.consts.SPANDATA.DB_SYSTEM: "clickhouse",
                     sentry_sdk.consts.SPANDATA.DB_QUERY_TEXT: query,
                 },
@@ -473,15 +477,20 @@ class ClickhouseConnectPool(ClickhousePool):
 
         with self._translate_clickhouse_errors():
             client = self._get_client()
+            # No DB_QUERY_TEXT here: insert goes through client.insert with a
+            # row matrix, not a SQL string.
             with traces.start_span(
                 name=f"INSERT INTO {table}",
                 attributes={
-                    "sentry.op": "db.clickhouse",
+                    SENTRY_OP: "db.clickhouse",
                     sentry_sdk.consts.SPANDATA.DB_SYSTEM: "clickhouse",
                 },
             ) as span:
-                if query_id is not None:
-                    span.set_attribute("query_id", query_id)
+                # Always set so a missing id is obvious when inspecting the span.
+                span.set_attribute(
+                    "query_id",
+                    query_id if query_id is not None else "unknown-query-id",
+                )
                 client.insert(
                     table,
                     matrix,
@@ -541,7 +550,7 @@ class ClickhouseConnectPool(ClickhousePool):
             with traces.start_span(
                 name="clickhouse query",
                 attributes={
-                    "sentry.op": "db.clickhouse",
+                    SENTRY_OP: "db.clickhouse",
                     sentry_sdk.consts.SPANDATA.DB_SYSTEM: "clickhouse",
                     sentry_sdk.consts.SPANDATA.DB_QUERY_TEXT: query,
                 },
