@@ -45,12 +45,13 @@ def _get_request_meta(
     hour_interval: int | None = None,
     downsampled_storage_config: DownsampledStorageConfig | None = None,
     trace_item_type: TraceItemType.ValueType | None = None,
+    standard_retention_days: int | None = None,
 ) -> RequestMeta:
     hour_interval = hour_interval or 24
     start = start or BASE_TIME - timedelta(hours=hour_interval)
     end = end or BASE_TIME
     trace_item_type = trace_item_type or TraceItemType.TRACE_ITEM_TYPE_SPAN
-    return RequestMeta(
+    meta = RequestMeta(
         project_ids=[_PROJECT_ID],
         organization_id=_ORG_ID,
         cogs_category="something",
@@ -60,6 +61,9 @@ def _get_request_meta(
         trace_item_type=trace_item_type,
         downsampled_storage_config=downsampled_storage_config,
     )
+    if standard_retention_days is not None:
+        meta.standard_retention_days = standard_retention_days
+    return meta
 
 
 @pytest.fixture
@@ -157,6 +161,82 @@ def test_item_type_full_retention_preprod() -> None:
     routing_decision = strategy.get_routing_decision(context)
     assert routing_decision.tier == Tier.TIER_1
     assert routing_decision.clickhouse_settings == {"max_threads": 10}
+    assert routing_decision.can_run
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
+@override_options("snuba", {"enable_long_term_retention_downsampling": True})
+def test_standard_retention_days_extends_full_fidelity_window() -> None:
+    """Orgs with longer standard retention should stay on tier 1 inside that window."""
+    strategy = OutcomesBasedRoutingStrategy()
+    end_time = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    # 50 days ago: past the default 30d window, still inside a 90d standard retention.
+    start_time = end_time - timedelta(days=50)
+
+    request = TraceItemTableRequest(
+        meta=_get_request_meta(
+            start=start_time,
+            end=end_time,
+            standard_retention_days=90,
+        )
+    )
+    request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
+    context = RoutingContext(
+        in_msg=request,
+        timer=Timer("test"),
+        query_id=uuid.uuid4().hex,
+    )
+
+    routing_decision = strategy.get_routing_decision(context)
+    assert routing_decision.tier == Tier.TIER_1
+    assert routing_decision.can_run
+
+    # Past the org's 90d standard retention, long-term downsampling still applies.
+    start_time = end_time - timedelta(days=100)
+    request = TraceItemTableRequest(
+        meta=_get_request_meta(
+            start=start_time,
+            end=end_time,
+            standard_retention_days=90,
+        )
+    )
+    request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
+    context = RoutingContext(
+        in_msg=request,
+        timer=Timer("test"),
+        query_id=uuid.uuid4().hex,
+    )
+
+    routing_decision = strategy.get_routing_decision(context)
+    assert routing_decision.tier == Tier.TIER_8
+    assert routing_decision.can_run
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
+@override_options("snuba", {"enable_long_term_retention_downsampling": True})
+def test_invalid_standard_retention_days_falls_back_to_default() -> None:
+    strategy = OutcomesBasedRoutingStrategy()
+    end_time = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    start_time = end_time - timedelta(days=50)
+
+    request = TraceItemTableRequest(
+        meta=_get_request_meta(
+            start=start_time,
+            end=end_time,
+            standard_retention_days=45,  # not in VALID_RETENTION_DAYS
+        )
+    )
+    request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
+    context = RoutingContext(
+        in_msg=request,
+        timer=Timer("test"),
+        query_id=uuid.uuid4().hex,
+    )
+
+    routing_decision = strategy.get_routing_decision(context)
+    assert routing_decision.tier == Tier.TIER_8
     assert routing_decision.can_run
 
 
