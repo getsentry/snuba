@@ -24,7 +24,7 @@ from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array
 from snuba.query.logical import Query
 from snuba.query.query_settings import OutcomesQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.settings import LOWER_RETENTION_DAYS, VALID_RETENTION_DAYS
+from snuba.settings import LOWER_RETENTION_DAYS
 from snuba.state.sentry_options import get_mapped_option, get_option
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
@@ -237,11 +237,16 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
 
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
 
+        # Cap at 90 days for now; unset/non-positive values use the default lower retention.
+        max_standard_retention_days = 90
         if (
             in_msg_meta.HasField("standard_retention_days")
-            and in_msg_meta.standard_retention_days in VALID_RETENTION_DAYS
+            and in_msg_meta.standard_retention_days > 0
         ):
-            full_fidelity_retention_days = in_msg_meta.standard_retention_days
+            full_fidelity_retention_days = min(
+                in_msg_meta.standard_retention_days,
+                max_standard_retention_days,
+            )
         else:
             full_fidelity_retention_days = LOWER_RETENTION_DAYS
 
