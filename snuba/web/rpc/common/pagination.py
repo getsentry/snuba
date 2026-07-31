@@ -18,6 +18,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     TraceItemFilter,
 )
 
+from snuba.protos.common import NORMALIZED_COLUMNS_EAP_ITEMS
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
 from snuba.query.expressions import Expression, OptionalScalarType
@@ -49,8 +50,9 @@ def null_safe_ordering_expression(
 
     Apply this to the ORDER BY and to the page boundary of the same column, or the two
     disagree on where absent keys sort and pagination skips or repeats rows. A type with no
-    sentinel (unset, arrays) is returned unchanged, so a page token issued before this
-    existed — it carries no attribute type — keeps its previous NULL-naive comparison.
+    sentinel is returned unchanged, which covers the columns that need none: normalized
+    columns and `timestamp` (never NULL, and their page token carries no type), and arrays
+    (rejected from ORDER BY upstream).
     """
     if attr_type not in _NULL_ORDERING_SENTINELS:
         return expression
@@ -277,19 +279,24 @@ class FlexibleTimeWindowPageWithFilters:
                         )
                         prefix = cls._SEMVER_FILTER_PREFIX if is_semver else cls._FILTER_PREFIX
 
+                        # Only a map-backed attribute reads as NULL when its key is absent,
+                        # and `last_result_value` is then null; get_filters uses this type to
+                        # sort it the way ORDER BY did. A normalized column is never NULL and
+                        # its ORDER BY compares the raw column, so leaving the type unset is
+                        # what keeps the two sides in step.
+                        null_sort_type = (
+                            selected_key.type
+                            if selected_key is not None
+                            and selected_key.name not in NORMALIZED_COLUMNS_EAP_ITEMS
+                            else AttributeKey.Type.TYPE_UNSPECIFIED
+                        )
+
                         filters.append(
                             TraceItemFilter(
                                 comparison_filter=ComparisonFilter(
                                     key=AttributeKey(
                                         name=f"{prefix}.{attribute_expression.alias}",
-                                        # `last_result_value` is null when the last row had
-                                        # no such attribute; the type is what lets
-                                        # get_filters sort that row the way ORDER BY did.
-                                        type=(
-                                            selected_key.type
-                                            if selected_key is not None
-                                            else AttributeKey.Type.TYPE_UNSPECIFIED
-                                        ),
+                                        type=null_sort_type,
                                     ),
                                     op=ComparisonFilter.OP_LESS_THAN,
                                     value=last_result_value,

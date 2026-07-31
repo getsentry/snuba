@@ -73,7 +73,8 @@ def _expected_filters(sequence_bookmark: int) -> Expression:
         f.tuple(
             column("timestamp"),
             f.ifNull(column(_SEQUENCE_ALIAS), literal(0)),
-            f.ifNull(column(_ITEM_ID_ALIAS), literal("")),
+            # `sentry.item_id` is a normalized column, never NULL, so it needs no sentinel.
+            column(_ITEM_ID_ALIAS),
         ),
         f.tuple(
             f.toDateTime("2025-10-06 14:00:00"),

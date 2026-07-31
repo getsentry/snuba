@@ -63,6 +63,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import LimitBy, OrderBy, OrderByDirection
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column as snuba_column
+from snuba.query.dsl import literal
 from snuba.query.expressions import Expression
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint
@@ -4495,6 +4496,54 @@ def test_build_query_with_order_by_optimization_disabled_because_groupby() -> No
         OrderBy(
             direction=OrderByDirection.DESC,
             expression=snuba_column("timestamp"),
+        ),
+    ]
+
+
+def test_build_query_orders_flextime_map_attributes_null_safely_without_a_time_window() -> None:
+    # A swallowed routing failure leaves the decision with no time window, but the client's
+    # page token still compares against the previous page's ORDER BY, so the null handling
+    # has to follow the requested mode rather than the routing outcome.
+    request = TraceItemTableRequest(
+        meta=RequestMeta(
+            project_ids=[1],
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+            downsampled_storage_config=DownsampledStorageConfig(
+                mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
+            ),
+        ),
+        columns=[
+            Column(key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.timestamp.sequence")),
+            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+        ],
+        order_by=[
+            TraceItemTableRequest.OrderBy(
+                column=Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.timestamp.sequence")
+                ),
+                descending=True,
+            ),
+            TraceItemTableRequest.OrderBy(
+                column=Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
+                ),
+                descending=True,
+            ),
+        ],
+    )
+    request = _apply_labels_to_columns(request)
+
+    query = build_query(request, time_window=None)
+
+    selected = {column.name: column.expression for column in query.get_selected_columns()}
+    assert query.get_orderby() == [
+        OrderBy(
+            direction=OrderByDirection.DESC,
+            expression=f.ifNull(selected["sentry.timestamp.sequence"], literal(0)),
+        ),
+        OrderBy(
+            direction=OrderByDirection.DESC,
+            expression=selected["sentry.item_id"],
         ),
     ]
 

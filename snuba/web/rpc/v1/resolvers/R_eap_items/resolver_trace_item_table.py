@@ -6,6 +6,7 @@ from typing import Any
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
+from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     AggregationComparisonFilter,
     AggregationFilter,
@@ -742,9 +743,15 @@ def build_query(
             groupby,
             request.order_by,
             request.meta,
-            # A time window means the routing strategy pages through the ORDER BY values
-            # (see FlexibleTimeWindowPageWithFilters) rather than by offset.
-            paginated_by_order_by=time_window is not None,
+            # Flextime is the mode that pages through the ORDER BY values (see
+            # FlexibleTimeWindowPageWithFilters). Keyed off the request rather than off
+            # `time_window` because a swallowed routing failure drops the time window while
+            # the client's page token still compares against the ORDER BY of the page
+            # before it, and the two must agree on where absent keys sort.
+            paginated_by_order_by=(
+                request.meta.downsampled_storage_config.mode
+                == DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
+            ),
         ),
         limitby=_convert_limit_by(request.limit_by, selected_columns),
         groupby=groupby,
