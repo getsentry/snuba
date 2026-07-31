@@ -238,10 +238,10 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
 
         if (
-            in_msg_meta.HasField("retention_days")
-            and in_msg_meta.retention_days in VALID_RETENTION_DAYS
+            in_msg_meta.HasField("customer_standard_retention_days_config")
+            and in_msg_meta.customer_standard_retention_days_config in VALID_RETENTION_DAYS
         ):
-            full_fidelity_retention_days = in_msg_meta.retention_days
+            full_fidelity_retention_days = in_msg_meta.customer_standard_retention_days_config
         else:
             full_fidelity_retention_days = LOWER_RETENTION_DAYS
 
