@@ -237,29 +237,20 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
 
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
 
-        # Cap at 90 days for now; unset/non-positive values use the default lower retention.
-        max_standard_retention_days = 90
-        if (
-            in_msg_meta.HasField("standard_retention_days")
-            and in_msg_meta.standard_retention_days > 0
-        ):
-            full_fidelity_retention_days = min(
-                in_msg_meta.standard_retention_days,
-                max_standard_retention_days,
-            )
-        else:
-            full_fidelity_retention_days = LOWER_RETENTION_DAYS
-
-        full_fidelity_days_ago_ts = int(
-            (datetime.now(tz=UTC) - timedelta(days=full_fidelity_retention_days + 1)).timestamp()
+        # Cap at 90 days; unset/non-positive values fall back to LOWER_RETENTION_DAYS.
+        requested_retention_days = in_msg_meta.standard_retention_days
+        full_fidelity_retention_days = (
+            min(requested_retention_days, 90)
+            if requested_retention_days > 0
+            else LOWER_RETENTION_DAYS
         )
-        older_than_full_fidelity_days = (
-            full_fidelity_days_ago_ts > in_msg_meta.start_timestamp.seconds
+        full_fidelity_cutoff = datetime.now(tz=UTC) - timedelta(
+            days=full_fidelity_retention_days + 1
         )
 
         if (
             get_option("enable_long_term_retention_downsampling", False)
-            and older_than_full_fidelity_days
+            and full_fidelity_cutoff.timestamp() > in_msg_meta.start_timestamp.seconds
             and in_msg_meta.trace_item_type not in ITEM_TYPE_FULL_RETENTION
         ):
             routing_decision.tier = Tier.TIER_8
