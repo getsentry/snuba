@@ -251,10 +251,10 @@ def test_max_standard_retention_days_option_is_honored() -> None:
     "snuba",
     {
         "enable_long_term_retention_downsampling": True,
-        "standard_retention_days": 45,
+        "default_standard_retention_days": 45,
     },
 )
-def test_standard_retention_days_option_is_honored() -> None:
+def test_default_standard_retention_days_option_is_honored() -> None:
     end_time = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
 
     routing_decision = _get_routing_decision(

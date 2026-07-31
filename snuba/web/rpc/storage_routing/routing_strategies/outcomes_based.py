@@ -246,7 +246,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
                 get_option("max_standard_retention_days", MAX_STANDARD_RETENTION_DAYS),
             )
             if requested_retention_days > 0
-            else get_option("standard_retention_days", DEFAULT_STANDARD_RETENTION_DAYS)
+            else get_option("default_standard_retention_days", DEFAULT_STANDARD_RETENTION_DAYS)
         )
         standard_retention_cutoff = datetime.now(tz=UTC) - timedelta(
             days=standard_retention_days + 1
