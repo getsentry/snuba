@@ -26,6 +26,7 @@ from snuba.web.rpc.storage_routing.routing_strategies.outcomes_based import (
 )
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
+    RoutingDecision,
 )
 from tests.web.rpc.v1.routing_strategies.common import (
     override_component_config,
@@ -45,6 +46,7 @@ def _get_request_meta(
     hour_interval: int | None = None,
     downsampled_storage_config: DownsampledStorageConfig | None = None,
     trace_item_type: TraceItemType.ValueType | None = None,
+    standard_retention_days: int | None = None,
 ) -> RequestMeta:
     hour_interval = hour_interval or 24
     start = start or BASE_TIME - timedelta(hours=hour_interval)
@@ -59,6 +61,31 @@ def _get_request_meta(
         end_timestamp=Timestamp(seconds=int(end.timestamp())),
         trace_item_type=trace_item_type,
         downsampled_storage_config=downsampled_storage_config,
+        standard_retention_days=standard_retention_days or 0,
+    )
+
+
+def _get_routing_decision(
+    start_days_ago: int,
+    standard_retention_days: int | None = None,
+) -> RoutingDecision:
+    end = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    request = TraceItemTableRequest(
+        meta=_get_request_meta(
+            start=end - timedelta(days=start_days_ago),
+            end=end,
+            standard_retention_days=standard_retention_days,
+            downsampled_storage_config=DownsampledStorageConfig(
+                mode=DownsampledStorageConfig.MODE_NORMAL
+            ),
+        )
+    )
+    return OutcomesBasedRoutingStrategy().get_routing_decision(
+        RoutingContext(
+            in_msg=request,
+            timer=Timer("test"),
+            query_id=uuid.uuid4().hex,
+        )
     )
 
 
@@ -157,6 +184,41 @@ def test_item_type_full_retention_preprod() -> None:
     routing_decision = strategy.get_routing_decision(context)
     assert routing_decision.tier == Tier.TIER_1
     assert routing_decision.clickhouse_settings == {"max_threads": 10}
+    assert routing_decision.can_run
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
+@pytest.mark.parametrize(
+    ("start_days_ago", "standard_retention_days", "option_overrides", "expected_tier"),
+    [
+        (50, 60, {}, Tier.TIER_1),
+        (70, 60, {}, Tier.TIER_8),
+        (50, 120, {}, Tier.TIER_1),
+        (100, 120, {}, Tier.TIER_8),
+        (50, 0, {}, Tier.TIER_8),
+        (50, None, {}, Tier.TIER_8),
+        (40, 90, {"max_standard_retention_days": 45}, Tier.TIER_1),
+        (50, 90, {"max_standard_retention_days": 45}, Tier.TIER_8),
+        (40, None, {"default_standard_retention_days": 45}, Tier.TIER_1),
+        (50, None, {"default_standard_retention_days": 45}, Tier.TIER_8),
+    ],
+)
+def test_standard_retention_days_routing(
+    start_days_ago: int,
+    standard_retention_days: int | None,
+    option_overrides: dict[str, int],
+    expected_tier: Tier,
+) -> None:
+    with override_options(
+        "snuba",
+        {"enable_long_term_retention_downsampling": True, **option_overrides},
+    ):
+        routing_decision = _get_routing_decision(
+            start_days_ago=start_days_ago,
+            standard_retention_days=standard_retention_days,
+        )
+    assert routing_decision.tier == expected_tier
     assert routing_decision.can_run
 
 

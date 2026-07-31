@@ -42,6 +42,9 @@ from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingDecision,
 )
 
+DEFAULT_STANDARD_RETENTION_DAYS = 30
+MAX_STANDARD_RETENTION_DAYS = 90
+
 
 def project_id_and_org_conditions(meta: RequestMeta) -> Expression:
     return and_cond(
@@ -236,12 +239,22 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
 
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
 
-        thirty_one_days_ago_ts = int((datetime.now(tz=UTC) - timedelta(days=31)).timestamp())
-        older_than_thirty_days = thirty_one_days_ago_ts > in_msg_meta.start_timestamp.seconds
+        requested_retention_days = in_msg_meta.standard_retention_days
+        standard_retention_days = (
+            min(
+                requested_retention_days,
+                get_option("max_standard_retention_days", MAX_STANDARD_RETENTION_DAYS),
+            )
+            if requested_retention_days > 0
+            else get_option("default_standard_retention_days", DEFAULT_STANDARD_RETENTION_DAYS)
+        )
+        standard_retention_cutoff = datetime.now(tz=UTC) - timedelta(
+            days=standard_retention_days + 1
+        )
 
         if (
             get_option("enable_long_term_retention_downsampling", False)
-            and older_than_thirty_days
+            and standard_retention_cutoff.timestamp() > in_msg_meta.start_timestamp.seconds
             and in_msg_meta.trace_item_type not in ITEM_TYPE_FULL_RETENTION
         ):
             routing_decision.tier = Tier.TIER_8
