@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Mapping, Optional, Sequence, Union
+from typing import Any
 
 from snuba.datasets.cdc.cdcprocessors import (
     CdcMessageRow,
@@ -15,18 +16,18 @@ from snuba.writer import WriterTableRow
 
 @dataclass(frozen=True)
 class GroupAssigneeRecord:
-    date_added: Union[datetime, str]
-    user_id: Optional[int]
-    team_id: Optional[int]
+    date_added: datetime | str
+    user_id: int | None
+    team_id: int | None
 
 
 @dataclass(frozen=True)
 class GroupAssigneeRow(CdcMessageRow):
-    offset: Optional[int]
+    offset: int | None
     record_deleted: bool
     project_id: int
     group_id: int
-    record_content: Union[None, GroupAssigneeRecord]
+    record_content: None | GroupAssigneeRecord
 
     @classmethod
     def from_wal(
@@ -35,7 +36,7 @@ class GroupAssigneeRow(CdcMessageRow):
         columnnames: Sequence[str],
         columnvalues: Sequence[Any],
     ) -> GroupAssigneeRow:
-        raw_data = dict(zip(columnnames, columnvalues))
+        raw_data = dict(zip(columnnames, columnvalues, strict=False))
         return cls(
             offset=offset,
             record_deleted=False,

@@ -7,7 +7,7 @@ from snuba.datasets.entities.factory import initialize_entity_factory
 def test_entity_key() -> None:
     initialize_entity_factory()
     with pytest.raises(AttributeError):
-        EntityKey.NON_EXISTENT_ENTITY
+        EntityKey.NON_EXISTENT_ENTITY  # noqa: B018 access triggers expected AttributeError
 
     assert (
         REGISTERED_ENTITY_KEYS["GENERIC_METRICS_DISTRIBUTIONS"] == "generic_metrics_distributions"

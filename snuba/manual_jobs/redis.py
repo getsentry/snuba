@@ -1,6 +1,6 @@
 import typing
+from collections.abc import Sequence
 from datetime import datetime
-from typing import List, Sequence
 
 from snuba.manual_jobs.job_status import JobStatus
 from snuba.redis import RedisClientKey, get_redis_client
@@ -61,7 +61,7 @@ def _get_job_type(job_id: str) -> str:
     return typing.cast(str, _redis_client.get(name=_build_job_type_key(job_id)).decode())
 
 
-def _get_job_types_multi(job_ids_keys: Sequence[str]) -> List[str]:
+def _get_job_types_multi(job_ids_keys: Sequence[str]) -> list[str]:
     with _redis_client.pipeline(transaction=False) as pipeline:
         for job_id_key in job_ids_keys:
             pipeline.get(job_id_key)
@@ -70,7 +70,7 @@ def _get_job_types_multi(job_ids_keys: Sequence[str]) -> List[str]:
     return [job_type.decode() for job_type in redis_statuses]
 
 
-def _get_job_status_multi(job_ids_keys: Sequence[str]) -> List[JobStatus]:
+def _get_job_status_multi(job_ids_keys: Sequence[str]) -> list[JobStatus]:
     if len(job_ids_keys) == 0:
         return []
 

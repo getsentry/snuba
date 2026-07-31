@@ -184,6 +184,7 @@ pub fn deserialize_message(
                 timestamp: event.timestamp as u32,
                 trace_ids: event.trace_ids.unwrap_or_default(),
                 urls: event.urls.unwrap_or_default(),
+                segment_names: event.segment_names.unwrap_or_default(),
                 user,
                 user_email: event.user.email.unwrap_or_default(),
                 user_id: user_id.unwrap_or_default(),
@@ -374,6 +375,8 @@ struct ReplayEvent {
     #[serde(default)]
     urls: Option<Vec<String>>,
     #[serde(default)]
+    segment_names: Option<Vec<String>>,
+    #[serde(default)]
     user: User,
     #[serde(default)]
     trace_ids: Option<Vec<Uuid>>,
@@ -551,6 +554,7 @@ pub struct ReplayRow {
     title: Option<String>,
     trace_ids: Vec<Uuid>,
     urls: Vec<String>,
+    segment_names: Vec<String>,
     user_email: String,
     user_id: String,
     user_name: String,
@@ -612,6 +616,7 @@ mod tests {
             "replay_start_timestamp": 1702659277,
             "replay_type": "buffer",
             "urls": ["urls"],
+            "segment_names": ["segment1", "segment2"],
             "trace_ids": ["2cd798d70f9346089026d2014a826629"],
             "error_ids": ["df11e6d952da470386a64340f13151c4"],
             "tags": [
@@ -694,6 +699,7 @@ mod tests {
             "replay_start_timestamp": 1702659277,
             "replay_type": "buffer",
             "urls": ["urls"],
+            "segment_names": ["segment1", "segment2"],
             "trace_ids": ["2cd798d70f9346089026d2014a826629"],
             "error_ids": ["df11e6d952da470386a64340f13151c4"],
             "tags": [
@@ -772,6 +778,7 @@ mod tests {
             vec![Uuid::parse_str("2cd798d70f9346089026d2014a826629").unwrap()]
         );
         assert_eq!(replay_row.urls, vec!["urls"]);
+        assert_eq!(replay_row.segment_names, vec!["segment1", "segment2"]);
 
         // Default columns - not providable on this event.
         assert_eq!(&replay_row.click_alt, "");
@@ -812,6 +819,7 @@ mod tests {
                 ["transaction.name", null]
             ],
             "urls": null,
+            "segment_names": null,
             "is_archived": null,
             "trace_ids": null,
             "error_ids": null,
@@ -903,7 +911,7 @@ mod tests {
         assert_eq!(&replay_row.user_geo_country_code, "");
         assert_eq!(&replay_row.user_geo_region, "");
         assert_eq!(&replay_row.user_geo_subdivision, "");
-        assert_eq!(replay_row.error_ids, vec![]);
+        assert_eq!(replay_row.error_ids, Vec::<Uuid>::new());
         assert_eq!(replay_row.error_sample_rate, -1.0);
         assert_eq!(replay_row.ip_address_v4, None);
         assert_eq!(replay_row.ip_address_v6, None);
@@ -919,8 +927,9 @@ mod tests {
         assert_eq!(replay_row.segment_id, None);
         assert_eq!(replay_row.session_sample_rate, -1.0);
         assert_eq!(replay_row.title, None);
-        assert_eq!(replay_row.trace_ids, vec![]);
+        assert_eq!(replay_row.trace_ids, Vec::<Uuid>::new());
         assert_eq!(replay_row.urls, Vec::<String>::new());
+        assert_eq!(replay_row.segment_names, Vec::<String>::new());
 
         // Default columns - not providable on this event.
         assert_eq!(&replay_row.click_alt, "");
@@ -1031,7 +1040,7 @@ mod tests {
         assert_eq!(&replay_row.user, "");
         assert_eq!(replay_row.debug_id, Uuid::nil());
         assert_eq!(replay_row.error_id, Uuid::nil());
-        assert_eq!(replay_row.error_ids, vec![]);
+        assert_eq!(replay_row.error_ids, Vec::<Uuid>::new());
         assert_eq!(replay_row.error_sample_rate, -1.0);
         assert_eq!(replay_row.fatal_id, Uuid::nil());
         assert_eq!(replay_row.info_id, Uuid::nil());
@@ -1042,8 +1051,9 @@ mod tests {
         assert_eq!(replay_row.replay_start_timestamp, None);
         assert_eq!(replay_row.session_sample_rate, -1.0);
         assert_eq!(replay_row.title, None);
-        assert_eq!(replay_row.trace_ids, vec![]);
+        assert_eq!(replay_row.trace_ids, Vec::<Uuid>::new());
         assert_eq!(replay_row.urls, Vec::<String>::new());
+        assert_eq!(replay_row.segment_names, Vec::<String>::new());
         assert_eq!(replay_row.viewed_by_id, 0);
         assert_eq!(replay_row.warning_id, Uuid::nil());
     }
@@ -1116,7 +1126,7 @@ mod tests {
         assert_eq!(&replay_row.user, "");
         assert_eq!(replay_row.debug_id, Uuid::nil());
         assert_eq!(replay_row.error_id, Uuid::nil());
-        assert_eq!(replay_row.error_ids, vec![]);
+        assert_eq!(replay_row.error_ids, Vec::<Uuid>::new());
         assert_eq!(replay_row.error_sample_rate, -1.0);
         assert_eq!(replay_row.fatal_id, Uuid::nil());
         assert_eq!(replay_row.info_id, Uuid::nil());
@@ -1127,8 +1137,9 @@ mod tests {
         assert_eq!(replay_row.replay_start_timestamp, None);
         assert_eq!(replay_row.session_sample_rate, -1.0);
         assert_eq!(replay_row.title, None);
-        assert_eq!(replay_row.trace_ids, vec![]);
+        assert_eq!(replay_row.trace_ids, Vec::<Uuid>::new());
         assert_eq!(replay_row.urls, Vec::<String>::new());
+        assert_eq!(replay_row.segment_names, Vec::<String>::new());
         assert_eq!(replay_row.viewed_by_id, 0);
         assert_eq!(replay_row.warning_id, Uuid::nil());
     }
@@ -1213,7 +1224,7 @@ mod tests {
         assert_eq!(replay_row.click_is_dead, 0);
         assert_eq!(replay_row.click_is_rage, 0);
         assert_eq!(replay_row.click_node_id, 0);
-        assert_eq!(replay_row.error_ids, vec![]);
+        assert_eq!(replay_row.error_ids, Vec::<Uuid>::new());
         assert_eq!(replay_row.error_sample_rate, -1.0);
         assert_eq!(replay_row.ip_address_v4, None);
         assert_eq!(replay_row.ip_address_v6, None);
@@ -1222,8 +1233,9 @@ mod tests {
         assert_eq!(replay_row.replay_start_timestamp, None);
         assert_eq!(replay_row.session_sample_rate, -1.0);
         assert_eq!(replay_row.title, None);
-        assert_eq!(replay_row.trace_ids, vec![]);
+        assert_eq!(replay_row.trace_ids, Vec::<Uuid>::new());
         assert_eq!(replay_row.urls, Vec::<String>::new());
+        assert_eq!(replay_row.segment_names, Vec::<String>::new());
         assert_eq!(replay_row.viewed_by_id, 0);
     }
 
@@ -1295,7 +1307,7 @@ mod tests {
         assert_eq!(replay_row.click_node_id, 0);
         assert_eq!(replay_row.debug_id, Uuid::nil());
         assert_eq!(replay_row.error_id, Uuid::nil());
-        assert_eq!(replay_row.error_ids, vec![]);
+        assert_eq!(replay_row.error_ids, Vec::<Uuid>::new());
         assert_eq!(replay_row.error_sample_rate, -1.0);
         assert_eq!(replay_row.fatal_id, Uuid::nil());
         assert_eq!(replay_row.info_id, Uuid::nil());
@@ -1305,8 +1317,9 @@ mod tests {
         assert_eq!(replay_row.replay_start_timestamp, None);
         assert_eq!(replay_row.session_sample_rate, -1.0);
         assert_eq!(replay_row.title, None);
-        assert_eq!(replay_row.trace_ids, vec![]);
+        assert_eq!(replay_row.trace_ids, Vec::<Uuid>::new());
         assert_eq!(replay_row.urls, Vec::<String>::new());
+        assert_eq!(replay_row.segment_names, Vec::<String>::new());
         assert_eq!(replay_row.viewed_by_id, 0);
         assert_eq!(replay_row.warning_id, Uuid::nil());
     }
@@ -1366,7 +1379,7 @@ mod tests {
         assert_eq!(&replay_row.dist, "");
         assert_eq!(&replay_row.environment, "");
         assert_eq!(replay_row.error_id, Uuid::nil());
-        assert_eq!(replay_row.error_ids, vec![]);
+        assert_eq!(replay_row.error_ids, Vec::<Uuid>::new());
         assert_eq!(replay_row.error_sample_rate, -1.0);
         assert_eq!(replay_row.fatal_id, Uuid::nil());
         assert_eq!(replay_row.info_id, Uuid::nil());
@@ -1389,8 +1402,9 @@ mod tests {
         assert_eq!(replay_row.tags_key, Vec::<String>::new());
         assert_eq!(replay_row.tags_value, Vec::<String>::new());
         assert_eq!(replay_row.title, None);
-        assert_eq!(replay_row.trace_ids, vec![]);
+        assert_eq!(replay_row.trace_ids, Vec::<Uuid>::new());
         assert_eq!(replay_row.urls, Vec::<String>::new());
+        assert_eq!(replay_row.segment_names, Vec::<String>::new());
         assert_eq!(&replay_row.user_email, "");
         assert_eq!(&replay_row.user_id, "");
         assert_eq!(&replay_row.user_name, "");

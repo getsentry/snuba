@@ -2,18 +2,12 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from queue import Queue, SimpleQueue
 from typing import (
     Any,
-    Iterable,
-    Iterator,
-    List,
-    Mapping,
-    Optional,
-    Sequence,
-    Union,
     cast,
 )
 from urllib.parse import urlencode
@@ -23,11 +17,12 @@ import sentry_sdk
 from urllib3.connectionpool import HTTPConnectionPool, HTTPSConnectionPool
 from urllib3.exceptions import HTTPError
 
-from snuba import settings, state
+from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.errors import ClickhouseWriterError
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.clickhouse.query import Expression
+from snuba.state.sentry_options import get_option
 from snuba.utils.codecs import Encoder
 from snuba.utils.iterators import chunked
 from snuba.utils.metrics import MetricsBackend
@@ -53,8 +48,7 @@ class JSONRowEncoder(Encoder[bytes, WriterTableRow]):
     def __default(self, value: Any) -> Any:
         if isinstance(value, datetime):
             return value.strftime(DATETIME_FORMAT)
-        else:
-            raise TypeError
+        raise TypeError
 
     def encode(self, value: WriterTableRow) -> bytes:
         return cast(bytes, rapidjson.dumps(value, default=self.__default).encode("utf-8"))
@@ -68,21 +62,20 @@ class ValuesRowEncoder(Encoder[bytes, WriterTableRow]):
     def encode_value(self, value: Any) -> str:
         if isinstance(value, Expression):
             return value.accept(self.__formatter)
-        else:
-            raise TypeError("unknown Clickhouse value type", value.__class__)
+        raise TypeError("unknown Clickhouse value type", value.__class__)
 
     def encode(self, row: WriterTableRow) -> bytes:
         ordered_columns = [self.encode_value(row.get(column)) for column in self.__columns]
         ordered_columns_str = ",".join(ordered_columns)
-        return f"({ordered_columns_str})".encode("utf-8")
+        return f"({ordered_columns_str})".encode()
 
 
 class InsertStatement:
     def __init__(self, table_name: str) -> None:
         self.__table_name = table_name
-        self.__database: Optional[str] = None
-        self.__format: Optional[str] = None
-        self.__column_names: Optional[Sequence[str]] = None
+        self.__database: str | None = None
+        self.__format: str | None = None
+        self.__column_names: Sequence[str] | None = None
 
     def with_database(self, database_name: str) -> InsertStatement:
         self.__database = database_name
@@ -104,7 +97,7 @@ class InsertStatement:
         format_statement = ""
 
         if self.__format:
-            if not self.__format == "VALUES":
+            if self.__format != "VALUES":
                 format_statement = f"FORMAT {self.__format}"
             else:
                 format_statement = "VALUES"
@@ -156,16 +149,16 @@ class HTTPWriteBatch:
         user: str,
         password: str,
         statement: InsertStatement,
-        encoding: Optional[str],
+        encoding: str | None,
         options: Mapping[str, Any],  # should be ``Mapping[str, str]``?
-        chunk_size: Optional[int] = None,
+        chunk_size: int | None = None,
         buffer_size: int = 0,  # 0 means unbounded
-        debug_buffer_size_bytes: Optional[int] = None,  # None means disabled
+        debug_buffer_size_bytes: int | None = None,  # None means disabled
     ) -> None:
         if chunk_size is None:
             chunk_size = settings.CLICKHOUSE_HTTP_CHUNK_SIZE
 
-        self.__queue: Union[Queue[Union[bytes, None]], SimpleQueue[Union[bytes, None]]] = (
+        self.__queue: Queue[bytes | None] | SimpleQueue[bytes | None] = (
             Queue(buffer_size) if buffer_size else SimpleQueue()
         )
 
@@ -193,7 +186,7 @@ class HTTPWriteBatch:
             body=body,
         )
 
-        self.__debug_buffer: List[bytes] = []
+        self.__debug_buffer: list[bytes] = []
         self.__size = 0
         self.__debug_buffer_size_bytes = debug_buffer_size_bytes
         self.__closed = False
@@ -226,7 +219,7 @@ class HTTPWriteBatch:
         self.__queue.put(None)
         self.__closed = True
 
-    def join(self, timeout: Optional[float] = None) -> None:
+    def join(self, timeout: float | None = None) -> None:
         try:
             response = self._result.result(timeout)
         except TimeoutError:
@@ -268,8 +261,7 @@ class HTTPWriteBatch:
                     sentry_sdk.set_tag("snuba_has_errored_row", "false")
 
                 raise ClickhouseWriterError(message, code=code, row=row)
-            else:
-                raise HTTPError(f"Received unexpected {response.status} response: {content}")
+            raise HTTPError(f"Received unexpected {response.status} response: {content}")
 
 
 class HTTPBatchWriter(BatchWriter[bytes]):
@@ -280,13 +272,13 @@ class HTTPBatchWriter(BatchWriter[bytes]):
         user: str,
         password: str,
         secure: bool,
-        ca_certs: Optional[str],
-        verify: Optional[bool],
+        ca_certs: str | None,
+        verify: bool | None,
         metrics: MetricsBackend,
         statement: InsertStatement,
-        encoding: Optional[str],
-        options: Optional[Mapping[str, Any]] = None,
-        chunk_size: Optional[int] = None,
+        encoding: str | None,
+        options: Mapping[str, Any] | None = None,
+        chunk_size: int | None = None,
         buffer_size: int = 0,
         max_connections: int = 1,
         block_connections: bool = False,
@@ -315,11 +307,7 @@ class HTTPBatchWriter(BatchWriter[bytes]):
         self.__statement = statement
         self.__buffer_size = buffer_size
         self.__chunk_size = chunk_size
-        self.__debug_buffer_size_bytes = state.get_config("debug_buffer_size_bytes", None)
-        assert (
-            isinstance(self.__debug_buffer_size_bytes, int)
-            or self.__debug_buffer_size_bytes is None
-        )
+        self.__debug_buffer_size_bytes = get_option("debug_buffer_size_bytes", 0)
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__}: {self.__statement.get_qualified_table()} on {self.__pool.host}:{self.__pool.port}>"
@@ -351,9 +339,12 @@ class HTTPBatchWriter(BatchWriter[bytes]):
             batch.append(value)
 
         batch.close()
-        batch_join_timeout = state.get_config(
-            "http_batch_join_timeout", settings.BATCH_JOIN_TIMEOUT
-        )
+        # A 0 (the schema default) means "unset": fall back to the env-configured
+        # settings.BATCH_JOIN_TIMEOUT, preserving the prior runtime-config
+        # behavior where the option was only an override.
+        batch_join_timeout = (
+            get_option("http_batch_join_timeout", 0)
+        ) or settings.BATCH_JOIN_TIMEOUT
         # IMPORTANT: Please read the docstring of this method if you ever decide to remove the
         # timeout argument from the join method.
         batch.join(timeout=batch_join_timeout)

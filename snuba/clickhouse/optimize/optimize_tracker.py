@@ -1,5 +1,5 @@
+from collections.abc import Sequence
 from datetime import datetime
-from typing import Sequence, Set
 
 from snuba.redis import RedisClientType
 
@@ -44,11 +44,11 @@ class OptimizedPartitionTracker:
         self.__completed_bucket = f"{common_prefix}:completed"
         self.__key_expire_time = expire_time
 
-    def __get_partitions(self, bucket: str) -> Set[str]:
+    def __get_partitions(self, bucket: str) -> set[str]:
         """
         Get the partitions from a given bucket.
         """
-        partitions_set: Set[str] = set()
+        partitions_set: set[str] = set()
         partitions = self.__redis_client.smembers(bucket)
         if partitions:
             for partition in partitions:
@@ -57,13 +57,13 @@ class OptimizedPartitionTracker:
 
         return partitions_set
 
-    def get_all_partitions(self) -> Set[str]:
+    def get_all_partitions(self) -> set[str]:
         """
         Get a set of partitions which need to be optimized.
         """
         return self.__get_partitions(self.__all_bucket)
 
-    def get_completed_partitions(self) -> Set[str]:
+    def get_completed_partitions(self) -> set[str]:
         """
         Get a set of partitions that have completed optimization.
         """
@@ -94,7 +94,7 @@ class OptimizedPartitionTracker:
         """
         self.__update_partitions(self.__completed_bucket, [part_name.encode("utf-8")])
 
-    def get_partitions_to_optimize(self) -> Set[str]:
+    def get_partitions_to_optimize(self) -> set[str]:
         """
         Get a set of partition names which need optimization.
 
@@ -113,8 +113,7 @@ class OptimizedPartitionTracker:
 
         if not completed_partitions:
             return all_partitions
-        else:
-            return all_partitions - completed_partitions
+        return all_partitions - completed_partitions
 
     def delete_all_states(self) -> None:
         """

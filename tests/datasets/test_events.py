@@ -1,6 +1,6 @@
 import pytest
+from sentry_options.testing import override_options
 
-from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.clusters.cluster import ClickhouseClientSettings
@@ -42,19 +42,16 @@ class TestEventsDataset:
         tag1, tag2 = hashed[0]
 
         event = clickhouse.execute(
-            (
-                f"SELECT replaceAll(toString(event_id), '-', '') FROM {table_name} WHERE has(_tags_hash_map, {tag1}) "
-                f"AND has(_tags_hash_map, {tag2})"
-            )
+            f"SELECT replaceAll(toString(event_id), '-', '') FROM {table_name} WHERE has(_tags_hash_map, {tag1}) "
+            f"AND has(_tags_hash_map, {tag2})"
         ).results
         assert len(event) == 1
         assert event[0][0] == self.event["data"]["id"]
 
 
 @pytest.mark.redis_db
+@override_options("snuba", {"enable_events_readonly_table": True})
 def test_storage_selector() -> None:
-    state.set_config("enable_events_readonly_table", True)
-
     storage = get_storage(StorageKey.ERRORS)
     storage_ro = get_storage(StorageKey.ERRORS_RO)
     storage_connections = [

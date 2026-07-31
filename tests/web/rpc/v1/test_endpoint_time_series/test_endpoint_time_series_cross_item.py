@@ -1,6 +1,8 @@
+from collections.abc import Generator
 from datetime import datetime
 
 import pytest
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     Expression,
     TimeSeriesRequest,
@@ -164,3 +166,15 @@ class TestTimeSeriesCrossItemQueries(BaseApiTest):
         response = EndpointTimeSeries().execute(message)
 
         assert len(response.result_timeseries) == 0
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
+class TestTimeSeriesCrossItemQueriesLocalJoin(TestTimeSeriesCrossItemQueries):
+    """Re-run the cross-item TimeSeries tests with the local-join optimization enabled
+    (raw trace_id join + distributed_product_mode='local'). See EAP-377."""
+
+    @pytest.fixture(autouse=True)
+    def enable_local_join(self) -> Generator[None]:
+        with override_options("snuba", {"use_local_join_for_cross_item_queries": True}):
+            yield

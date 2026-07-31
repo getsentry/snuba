@@ -1,0 +1,70 @@
+---
+source: src/processors/mod.rs
+expression: diff
+---
+[
+    Change {
+        path: ".cache_read_tokens",
+        change: RangeAdd {
+            added: Minimum(
+                0.0,
+            ),
+        },
+    },
+    Change {
+        path: ".cache_write_tokens",
+        change: RangeAdd {
+            added: Minimum(
+                0.0,
+            ),
+        },
+    },
+    Change {
+        path: ".completion_tokens",
+        change: RangeAdd {
+            added: Minimum(
+                0.0,
+            ),
+        },
+    },
+    Change {
+        path: ".is_long_context",
+        change: RangeAdd {
+            added: Minimum(
+                0.0,
+            ),
+        },
+    },
+    Change {
+        path: ".is_regional",
+        change: RangeAdd {
+            added: Minimum(
+                0.0,
+            ),
+        },
+    },
+    Change {
+        path: ".org_id",
+        change: RangeAdd {
+            added: Minimum(
+                0.0,
+            ),
+        },
+    },
+    Change {
+        path: ".project_id",
+        change: RangeAdd {
+            added: Minimum(
+                0.0,
+            ),
+        },
+    },
+    Change {
+        path: ".prompt_tokens",
+        change: RangeAdd {
+            added: Minimum(
+                0.0,
+            ),
+        },
+    },
+]

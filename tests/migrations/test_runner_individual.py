@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Generator, Optional, Sequence, cast
+from collections.abc import Generator, Sequence
+from typing import Any, cast
 
 import pytest
 
@@ -34,7 +35,7 @@ def _drop_all_tables() -> None:
 
 
 @pytest.fixture(autouse=True)
-def setup_teardown(clickhouse_db: None) -> Generator[None, None, None]:
+def setup_teardown(clickhouse_db: None) -> Generator[None]:
     _drop_all_tables()
     yield
     _drop_all_tables()
@@ -225,8 +226,8 @@ def run_prior_migrations(
 def perform_select_query(
     columns: Sequence[str],
     table: str,
-    where: Optional[Dict[str, str]],
-    limit: Optional[str],
+    where: dict[str, str] | None,
+    limit: str | None,
     connection: ClickhousePool,
 ) -> Sequence[Any]:
     """Performs a SELECT query, with optional WHERE and LIMIT clauses

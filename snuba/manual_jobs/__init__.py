@@ -1,8 +1,9 @@
 import logging
 import os
 from abc import ABC, abstractmethod
+from collections.abc import MutableMapping
 from dataclasses import dataclass
-from typing import Any, MutableMapping, Optional, cast
+from typing import Any, cast
 
 from snuba.manual_jobs.redis import _set_job_type
 from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
@@ -36,11 +37,18 @@ class JobLogger(ABC):
 class JobSpec:
     job_id: str
     job_type: str
-    is_async: Optional[bool] = False
-    params: Optional[MutableMapping[Any, Any]] = None
+    is_async: bool | None = False
+    params: MutableMapping[Any, Any] | None = None
 
 
 class Job(ABC, metaclass=RegisteredClass):
+    # Whether this job may be run ad-hoc (from snuba-admin or the run-by-type
+    # endpoint) without a manifest entry. Only set this to True for read-only
+    # or idempotent jobs that are safe to run any number of times. Destructive
+    # jobs (deletes, scrubbers, migrations, mutations) must leave this False so
+    # they stay gated behind an explicit manifest entry.
+    allow_adhoc_run: bool = False
+
     def __init__(self, job_spec: JobSpec) -> None:
         self.job_spec = job_spec
         self.is_async = job_spec.is_async

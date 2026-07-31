@@ -1,6 +1,7 @@
 import operator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from typing import Any, Callable, Iterator, TypeVar, cast
+from typing import Any, TypeVar, cast
 
 T = TypeVar("T")
 

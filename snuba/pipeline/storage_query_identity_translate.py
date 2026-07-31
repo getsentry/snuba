@@ -21,16 +21,14 @@ def try_translate_storage_query(
     if finder.is_storage_query:
         if not finder.has_join:
             return _translate_storage_query(query)
-        else:
-            raise InvalidQueryException("Joins not supported for storage queries")
-    elif finder.is_mixed_data_source_query:
+        raise InvalidQueryException("Joins not supported for storage queries")
+    if finder.is_mixed_data_source_query:
         raise InvalidQueryException(
             "Queries on storages and entities are not supported",
             data_sources=[str(d) for d in finder.simple_data_sources],
         )
-    else:
-        # this is not a storage query, pass this on to the rest of the pipeline
-        return None
+    # this is not a storage query, pass this on to the rest of the pipeline
+    return None
 
 
 def _translate_storage_query(
@@ -51,21 +49,20 @@ def _translate_storage_query(
             )
         )
         return res
-    else:
-        assert isinstance(from_clause, (LogicalQuery, CompositeQuery))
-        return CompositeQuery(
-            from_clause=_translate_storage_query(from_clause),
-            selected_columns=query.get_selected_columns(),
-            array_join=query.get_arrayjoin(),
-            condition=query.get_condition(),
-            groupby=query.get_groupby(),
-            having=query.get_having(),
-            order_by=query.get_orderby(),
-            limitby=query.get_limitby(),
-            offset=query.get_offset(),
-            totals=query.has_totals(),
-            granularity=query.get_granularity(),
-        )
+    assert isinstance(from_clause, (LogicalQuery, CompositeQuery))
+    return CompositeQuery(
+        from_clause=_translate_storage_query(from_clause),
+        selected_columns=query.get_selected_columns(),
+        array_join=query.get_arrayjoin(),
+        condition=query.get_condition(),
+        groupby=query.get_groupby(),
+        having=query.get_having(),
+        order_by=query.get_orderby(),
+        limitby=query.get_limitby(),
+        offset=query.get_offset(),
+        totals=query.has_totals(),
+        granularity=query.get_granularity(),
+    )
 
 
 class _LogicalDataSourceFinder(
@@ -93,12 +90,12 @@ class _LogicalDataSourceFinder(
 
     @property
     def is_storage_query(self) -> bool:
-        return all((isinstance(d, Storage) for d in self.simple_data_sources))
+        return all(isinstance(d, Storage) for d in self.simple_data_sources)
 
     @property
     def is_mixed_data_source_query(self) -> bool:
-        return any((isinstance(d, Storage) for d in self.simple_data_sources)) and any(
-            (isinstance(d, Entity) for d in self.simple_data_sources)
+        return any(isinstance(d, Storage) for d in self.simple_data_sources) and any(
+            isinstance(d, Entity) for d in self.simple_data_sources
         )
 
     def __init__(self) -> None:

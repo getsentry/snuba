@@ -4,13 +4,14 @@ pub mod eap_items;
 mod errors;
 mod functions;
 mod generic_metrics;
+mod llm_proxy_cost;
 mod outcomes;
 mod profile_chunks;
 mod profiles;
 mod querylog;
 mod release_health_metrics;
 mod replays;
-mod utils;
+pub mod utils;
 
 use crate::config::ProcessorConfig;
 use crate::types::{InsertBatch, InsertOrReplacement, KafkaMessageMetadata};
@@ -64,6 +65,7 @@ define_processing_functions! {
     ("ErrorsProcessor", "events", ProcessingFunctionType::ProcessingFunctionWithReplacements(errors::process_message_with_replacement)),
     ("ProfileChunksProcessor", "snuba-profile-chunks", ProcessingFunctionType::ProcessingFunction(profile_chunks::process_message)),
     ("EAPItemsProcessor", "snuba-items", ProcessingFunctionType::ProcessingFunction(eap_items::process_message)),
+    ("LlmProxyCostProcessor", "snuba-llm-proxy-cost", ProcessingFunctionType::ProcessingFunction(llm_proxy_cost::process_message)),
 }
 
 // COGS is recorded for these processors
@@ -161,6 +163,12 @@ mod tests {
                         ".*.*[\"sentry._internal.ingested_at\"]",
                         "<ingestion timestamp>",
                     );
+                    settings.add_redaction(
+                        ".*.*[\"sentry._internal.received_at\"]",
+                        "<received timestamp>",
+                    );
+                    // session_id is randomized when absent, so redact it.
+                    settings.add_redaction(".*.session_id", "<random uuid>");
                 }
 
                 // This payload is protobuf (so binary), not JSON (so text).

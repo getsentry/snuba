@@ -3,19 +3,21 @@ from __future__ import annotations
 import logging
 import random
 import uuid
+from collections.abc import Mapping, MutableMapping, MutableSequence
 from dataclasses import dataclass
 from functools import partial
 from hashlib import md5
 from threading import Lock
-from typing import Any, Mapping, MutableMapping, MutableSequence, Optional, Union, cast
+from typing import Any, cast
 
 import rapidjson
 import sentry_sdk
 from clickhouse_driver.errors import ErrorCodes
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
+from sentry_options import OptionValue
 from sentry_sdk.api import configure_scope
 
-from snuba import environment, settings, state
+from snuba import environment, settings
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
@@ -47,7 +49,7 @@ from snuba.querylog.query_metadata import (
     get_query_status_from_error_codes,
     get_request_status,
 )
-from snuba.reader import Reader, Result
+from snuba.reader import Column, Reader, Result
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state.cache.abstract import Cache, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import (
@@ -58,6 +60,7 @@ from snuba.state.cache.redis.backend import (
 )
 from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import RateLimitExceeded
+from snuba.state.sentry_options import get_mapped_option, get_option
 from snuba.util import force_bytes
 from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.metrics.timer import Timer
@@ -114,7 +117,7 @@ logger = logging.getLogger("snuba.query")
 
 
 def update_query_metadata_and_stats(
-    query: Union[Query, CompositeQuery[Table]],
+    query: Query | CompositeQuery[Table],
     sql: str,
     stats: MutableMapping[str, Any],
     query_metadata_list: MutableSequence[ClickhouseQueryMetadata],
@@ -122,9 +125,9 @@ def update_query_metadata_and_stats(
     trace_id: str,
     status: QueryStatus,
     request_status: Status,
-    profile_data: Optional[snuba_queries_v1._QueryMetadataResultProfileObject] = None,
-    error_code: Optional[int] = None,
-    triggered_rate_limiter: Optional[str] = None,
+    profile_data: snuba_queries_v1._QueryMetadataResultProfileObject | None = None,
+    error_code: int | None = None,
+    triggered_rate_limiter: str | None = None,
 ) -> MutableMapping[str, Any]:
     """
     If query logging is enabled then logs details about the query and its status, as
@@ -162,7 +165,7 @@ def execute_query(
     # as the execute method depends on it. Otherwise we can make this
     # file rely either entirely on clickhouse query or entirely on
     # the formatter.
-    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    clickhouse_query: Query | CompositeQuery[Table],
     query_settings: QuerySettings,
     formatted_query: FormattedQuery,
     reader: Reader,
@@ -184,14 +187,38 @@ def execute_query(
         robust=robust,
     )
 
+    # The clickhouse-connect (HTTP) reader returns empty meta for a zero-row result
+    # (ClickHouse sends a zero-byte Native body, so there's no column header; the
+    # native driver always reports columns). Synthesize the names from the query we
+    # just ran instead of paying for a second scan; types are left blank (an empty
+    # result has no values to coerce).
+    if not result["meta"]:
+        synthesized_meta: list[Column] = []
+        for index, selected in enumerate(clickhouse_query.get_selected_columns()):
+            # ClickHouse names the column by its SQL alias (matching the native
+            # driver), so prefer that; fall back to the logical name (can differ,
+            # e.g. MQL ``time`` vs ``events.time``), then a bare column's own name,
+            # then the ``_invalid_alias_{index}`` placeholder Query.get_columns() uses.
+            name = (
+                selected.expression.alias
+                or selected.name
+                or getattr(selected.expression, "column_name", None)
+                or f"_invalid_alias_{index}"
+            )
+            synthesized_meta.append({"name": name, "type": ""})
+        result["meta"] = synthesized_meta
+
     timer.mark("execute")
     stats.update(
         {
             "result_rows": len(result["data"]),
             "result_cols": len(result["meta"]),
-            "max_threads": clickhouse_query_settings.get("max_threads", None),
         }
     )
+    # stats.max_threads is an optional integer in the querylog schema, so only
+    # record it when set (emitting null gets the message rejected).
+    if (max_threads := clickhouse_query_settings.get("max_threads")) is not None:
+        stats["max_threads"] = max_threads
 
     return result
 
@@ -201,7 +228,7 @@ def get_query_cache_key(formatted_query: FormattedQuery) -> str:
 
 
 def _get_cache_partition(reader: Reader) -> Cache[Result]:
-    enable_cache_partitioning = state.get_config("enable_cache_partitioning", 1)
+    enable_cache_partitioning = get_option("enable_cache_partitioning", True)
     if not enable_cache_partitioning:
         return cache_partitions[DEFAULT_CACHE_PARTITION_ID]
 
@@ -225,7 +252,7 @@ def _get_cache_partition(reader: Reader) -> Cache[Result]:
 
 @with_span(op="function")
 def execute_query_with_query_id(
-    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    clickhouse_query: Query | CompositeQuery[Table],
     query_settings: QuerySettings,
     formatted_query: FormattedQuery,
     reader: Reader,
@@ -235,7 +262,7 @@ def execute_query_with_query_id(
     robust: bool,
     referrer: str,
 ) -> Result:
-    if state.get_config("randomize_query_id", False):
+    if get_option("randomize_query_id", False):
         query_id = uuid.uuid4().hex
     else:
         query_id = get_query_cache_key(formatted_query)
@@ -254,7 +281,7 @@ def execute_query_with_query_id(
             referrer,
         )
     except ClickhouseError as e:
-        if e.code != ErrorCodes.QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING or not state.get_config(
+        if e.code != ErrorCodes.QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING or not get_option(
             "retry_duplicate_query_id", False
         ):
             raise
@@ -280,7 +307,7 @@ def execute_query_with_query_id(
 
 @with_span(op="function")
 def execute_query_with_readthrough_caching(
-    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    clickhouse_query: Query | CompositeQuery[Table],
     query_settings: QuerySettings,
     formatted_query: FormattedQuery,
     reader: Reader,
@@ -291,8 +318,8 @@ def execute_query_with_readthrough_caching(
     query_id: str,
     referrer: str,
 ) -> Result:
-    if referrer in settings.BYPASS_CACHE_REFERRERS and state.get_config(
-        "enable_bypass_cache_referrers"
+    if referrer in settings.BYPASS_CACHE_REFERRERS and get_option(
+        "enable_bypass_cache_referrers", False
     ):
         query_id = f"randomized-{uuid.uuid4().hex}"
         clickhouse_query_settings["query_id"] = query_id
@@ -348,50 +375,67 @@ def execute_query_with_readthrough_caching(
     )
 
 
+def _query_settings_dict(option: str) -> Mapping[str, Any]:
+    """A dict-typed sentry-option of {clickhouse_setting: value}."""
+    value: OptionValue = get_option(option, {})
+    return value if isinstance(value, dict) else {}
+
+
+def _query_settings_override(option: str, name: str) -> Mapping[str, Any]:
+    """One entry of a dict-typed sentry-option whose values are JSON-object
+    strings ({"clickhouse_setting": "value"}), keyed by ``name`` (a query
+    prefix or referrer). sentry-options can't express dict-of-dict natively, so
+    the second level is a JSON string parsed here."""
+    raw = get_mapped_option(option, name, "")
+    if not raw:
+        return {}
+    try:
+        parsed = rapidjson.loads(raw)
+    except (TypeError, ValueError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
 def _get_query_settings_from_config(
-    override_prefix: Optional[str],
+    override_prefix: str | None,
     async_override: bool,
-    referrer: Optional[str],
+    referrer: str | None,
 ) -> MutableMapping[str, Any]:
     """
-    Helper function to get the query settings from the config. Order of precedence
-    for overlapping config within this method is:
-    1. referrer/<referrer>/query_settings/<setting>
-    2. <override_prefix>/query_settings/<setting>
-    3. query_settings/<setting>
+    Helper function to get the query settings from sentry-options. Order of
+    precedence for overlapping settings within this method is:
+    1. referrer/<referrer>  (query_settings_by_referrer)
+    2. <override_prefix>    (query_settings_by_prefix)
+    3. base                 (query_settings)
 
     #TODO: Make this configurable by entity/dataset. Since we want to use
     #      different settings across different clusters belonging to the
     #      same entity/dataset, using cache_partition right now. This is
     #      not ideal but it works for now.
     """
-    all_confs = state.get_all_configs()
-
-    # Populate the query settings with the default values
-    clickhouse_query_settings: MutableMapping[str, Any] = {
-        k.split("/", 1)[1]: v for k, v in all_confs.items() if k.startswith("query_settings/")
-    }
+    # Populate the query settings with the base values.
+    clickhouse_query_settings: MutableMapping[str, Any] = dict(
+        _query_settings_dict("query_settings")
+    )
 
     if async_override:
-        for k, v in all_confs.items():
-            if k.startswith("async_query_settings/"):
-                clickhouse_query_settings[k.split("/", 1)[1]] = v
+        clickhouse_query_settings.update(_query_settings_dict("async_query_settings"))
 
     if override_prefix:
-        for k, v in all_confs.items():
-            if k.startswith(f"{override_prefix}/query_settings/"):
-                clickhouse_query_settings[k.split("/", 2)[2]] = v
+        clickhouse_query_settings.update(
+            _query_settings_override("query_settings_by_prefix", override_prefix)
+        )
 
     if referrer:
-        for k, v in all_confs.items():
-            if k.startswith(f"referrer/{referrer}/query_settings/"):
-                clickhouse_query_settings[k.split("/", 3)[3]] = v
+        clickhouse_query_settings.update(
+            _query_settings_override("query_settings_by_referrer", referrer)
+        )
 
     return clickhouse_query_settings
 
 
 def _raw_query(
-    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    clickhouse_query: Query | CompositeQuery[Table],
     query_settings: QuerySettings,
     attribution_info: AttributionInfo,
     dataset_name: str,
@@ -402,7 +446,7 @@ def _raw_query(
     timer: Timer,
     # NOTE: This variable is a piece of state which is updated and used outside this function
     stats: MutableMapping[str, Any],
-    trace_id: Optional[str] = None,
+    trace_id: str | None = None,
     robust: bool = False,
 ) -> QueryResult:
     """
@@ -428,9 +472,8 @@ def _raw_query(
     consistent = query_settings.get_consistent()
     stats["consistent"] = consistent
     if consistent:
-        sample_rate = state.get_config(f"{dataset_name}_ignore_consistent_queries_sample_rate", 0)
-        assert sample_rate is not None
-        ignore_consistent = random.random() < float(sample_rate)
+        sample_rate = get_mapped_option("ignore_consistent_queries_sample_rate", dataset_name, 0.0)
+        ignore_consistent = random.random() < sample_rate
         if not ignore_consistent:
             clickhouse_query_settings["load_balancing"] = "in_order"
             clickhouse_query_settings["max_threads"] = 1
@@ -448,7 +491,7 @@ def _raw_query(
         sql=sql,
         stats=stats,
         query_settings=clickhouse_query_settings,
-        trace_id=trace_id,
+        trace_id=cast(str, trace_id),
     )
 
     try:
@@ -476,23 +519,22 @@ def _raw_query(
         elif isinstance(cause, ClickhouseError):
             error_code = cause.code
             status = get_query_status_from_error_codes(error_code)
-            if error_code == ErrorCodes.TOO_MANY_BYTES:
-                # Only treat as rate limiting if the limit was set by allocation policy
-                if stats.get("max_bytes_to_read_set_by_policy", False):
-                    calculated_cause = RateLimitExceeded(
-                        "Query scanned more than the allocated amount of bytes",
-                        quota_allowance=stats["quota_allowance"],
-                    )
-                    status = QueryStatus.RATE_LIMITED
+            # Only treat as rate limiting if the limit was set by allocation policy
+            if error_code == ErrorCodes.TOO_MANY_BYTES and stats.get(
+                "max_bytes_to_read_set_by_policy", False
+            ):
+                calculated_cause = RateLimitExceeded(
+                    "Query scanned more than the allocated amount of bytes",
+                    quota_allowance=stats["quota_allowance"],
+                )
+                status = QueryStatus.RATE_LIMITED
 
             with configure_scope() as scope:
                 fingerprint = ["{{default}}", str(cause.code), dataset_name]
                 if error_code not in constants.CLICKHOUSE_SYSTEMATIC_FAILURES:
                     fingerprint.append(attribution_info.referrer)
                 scope.fingerprint = fingerprint
-        elif isinstance(cause, TimeoutError):
-            status = QueryStatus.TIMEOUT
-        elif isinstance(cause, ExecutionTimeoutError):
+        elif isinstance(cause, (TimeoutError, ExecutionTimeoutError)):
             status = QueryStatus.TIMEOUT
 
         with configure_scope() as scope:
@@ -520,7 +562,10 @@ def _raw_query(
         stats = update_with_status(
             status=QueryStatus.SUCCESS,
             request_status=get_request_status(),
-            profile_data=result["profile"],
+            profile_data=cast(
+                "snuba_queries_v1._QueryMetadataResultProfileObject | None",
+                result["profile"],
+            ),
         )
         return QueryResult(
             result,
@@ -593,7 +638,7 @@ def _record_bytes_scanned(
 
 
 def db_query(
-    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    clickhouse_query: Query | CompositeQuery[Table],
     query_settings: QuerySettings,
     attribution_info: AttributionInfo,
     dataset_name: str,
@@ -741,7 +786,7 @@ def db_query(
                 stats = dict(result.extra["stats"])
                 stats["sampling_tier"] = query_settings.get_sampling_tier()
                 result.extra["stats"] = stats
-            return result
+            return result  # noqa: B012 - intentional: all error paths above are caught into `error`, so this finally is the single terminal point after quota/bytes-scanned bookkeeping
         raise error or Exception("No error or result when running query, this should never happen")
 
 
@@ -775,8 +820,8 @@ def _add_quota_info(
 
 def _populate_query_status(
     summary: dict[str, Any],
-    rejection_quota_and_policy: Optional[_QuotaAndPolicy],
-    throttle_quota_and_policy: Optional[_QuotaAndPolicy],
+    rejection_quota_and_policy: _QuotaAndPolicy | None,
+    throttle_quota_and_policy: _QuotaAndPolicy | None,
 ) -> None:
     is_successful = "is_successful"
     is_rejected = "is_rejected"
@@ -869,16 +914,32 @@ def _apply_allocation_policies_quota(
         stats["quota_allowance"]["summary"] = summary
 
         if not can_run:
+            rejecting_policy = (
+                rejection_quota_and_policy.policy.class_name()
+                if rejection_quota_and_policy is not None
+                else "unknown"
+            )
+            span.set_data("policy", rejecting_policy)
+            span.set_data("action", "rejected")
             metrics.increment(
                 "rejected_query",
-                tags={"storage_key": allocation_policies[0].resource_identifier.value},
+                tags={
+                    "storage_key": allocation_policies[0].resource_identifier.value,
+                    "policy": rejecting_policy,
+                },
             )
             raise AllocationPolicyViolations.from_args(stats["quota_allowance"])
 
         if throttle_quota_and_policy is not None:
+            throttling_policy = throttle_quota_and_policy.policy.class_name()
+            span.set_data("policy", throttling_policy)
+            span.set_data("action", "throttled")
             metrics.increment(
                 "throttled_query",
-                tags={"storage_key": allocation_policies[0].resource_identifier.value},
+                tags={
+                    "storage_key": allocation_policies[0].resource_identifier.value,
+                    "policy": throttling_policy,
+                },
             )
         else:
             metrics.increment(

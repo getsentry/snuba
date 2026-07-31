@@ -1,5 +1,5 @@
+from collections.abc import Callable, Sequence
 from logging import Logger
-from typing import Callable, Sequence
 from unittest import mock
 from unittest.mock import Mock, patch
 

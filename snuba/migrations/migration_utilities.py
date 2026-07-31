@@ -1,14 +1,12 @@
-from typing import Optional, Set, Tuple
-
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 
-ClickhouseVersion = Tuple[int, int]
+ClickhouseVersion = tuple[int, int]
 
 
 def get_clickhouse_version_for_storage_set(
-    storage_set: StorageSetKey, clickhouse: Optional[ClickhousePool]
+    storage_set: StorageSetKey, clickhouse: ClickhousePool | None
 ) -> ClickhouseVersion:
     """
     Determine the clickhouse version for a storage set. Assumes (and verifies)
@@ -24,7 +22,7 @@ def get_clickhouse_version_for_storage_set(
             for node in cluster.get_local_nodes()
         ]
 
-    versions: Set[ClickhouseVersion] = set()
+    versions: set[ClickhouseVersion] = set()
 
     for connection in connections:
         ver = connection.execute("SELECT version()").results[0][0]

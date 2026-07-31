@@ -1,4 +1,4 @@
-from typing import Iterator
+from collections.abc import Iterator
 
 import pytest
 
@@ -38,7 +38,7 @@ def test_get_dataset() -> None:
 @pytest.fixture(scope="function")
 def disable_datasets() -> Iterator[None]:
     og_disabled = settings.DISABLED_DATASETS
-    settings.DISABLED_DATASETS = set(["events"])
+    settings.DISABLED_DATASETS = {"events"}
     yield
     settings.DISABLED_DATASETS = og_disabled
 
@@ -75,6 +75,5 @@ def test_all_names() -> None:
         "generic_metrics",
         "replays",
         "search_issues",
-        "spans",
         "group_attributes",
     }

@@ -1,14 +1,15 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, TypedDict, cast
+from typing import Any, TypedDict, cast
 
 from snuba.reader import Column, Result, Row, transform_rows
 from snuba.utils.serializable_exception import JsonSerializable, SerializableException
 
 
 class QueryExtraData(TypedDict):
-    stats: Dict[str, Any]
+    stats: dict[str, Any]
     sql: str
     experiments: Mapping[str, Any]
 
@@ -33,9 +34,7 @@ class QueryException(SerializableException):
         super().__init__(message, should_report, **extra_data)
 
     @classmethod
-    def from_args(
-        cls, exception_type: str, message: str, extra: QueryExtraData
-    ) -> "QueryException":
+    def from_args(cls, exception_type: str, message: str, extra: QueryExtraData) -> QueryException:
         return cls(
             exception_type=exception_type,
             message=message,
@@ -66,13 +65,56 @@ class QueryResult:
 
     @property
     def quota_allowance(self) -> Mapping[str, Mapping[str, Any]]:
-        return self.extra.get("stats", {}).get("quota_allowance", {})
+        result: Mapping[str, Mapping[str, Any]] = self.extra.get("stats", {}).get(
+            "quota_allowance", {}
+        )
+        return result
 
 
 def transform_column_names(result: QueryResult, mapping: Mapping[str, list[str]]) -> None:
     """
-    Replaces the column names in a ResultSet object in place.
+    Replaces the column names in a ResultSet object in place. ``mapping`` maps
+    each ClickHouse alias to its user-facing output name(s), e.g.
+    ``{"_snuba_event_id": ["event_id"]}``.
+
+    Runs on every query (including cache hits), so it avoids allocating a new
+    dict per row when possible:
+
+    * Identity, e.g. ``{"event_id": ["event_id"]}`` -> no-op.
+    * 1:1 rename, e.g. ``{"_snuba_event_id": ["event_id"]}`` -> keys are renamed
+      in place.
+    * Fan-out (``{"_snuba_duration": ["duration", "duration_ms"]}``) or a target
+      that collides with an existing column -> rebuild each row dict.
     """
+    renames: list[tuple[str, str]] = []
+    has_fan_out = False
+    for alias, names in mapping.items():
+        if len(names) != 1:
+            has_fan_out = True
+            break
+        if names[0] != alias:
+            renames.append((alias, names[0]))
+
+    if not has_fan_out:
+        if not renames:
+            return
+
+        targets = {new for _, new in renames}
+        existing = {c["name"] for c in result.result["meta"]}
+        # In-place renaming is safe only when targets are unique and none
+        # collides with an existing column (a passthrough column reused as a
+        # target, or a chained rename a -> b, b -> c); otherwise rebuild below.
+        if len(targets) == len(renames) and targets.isdisjoint(existing):
+
+            def rename_in_place(row: Row) -> Row:
+                for old, new in renames:
+                    if old in row:
+                        row[new] = row.pop(old)
+                return row
+
+            transform_rows(result.result, rename_in_place)
+            _transform_meta_names(result, mapping)
+            return
 
     def transformer(row: Row) -> Row:
         new_row: Row = {}
@@ -83,7 +125,10 @@ def transform_column_names(result: QueryResult, mapping: Mapping[str, list[str]]
         return new_row
 
     transform_rows(result.result, transformer)
+    _transform_meta_names(result, mapping)
 
+
+def _transform_meta_names(result: QueryResult, mapping: Mapping[str, list[str]]) -> None:
     new_meta = []
     for c in result.result["meta"]:
         names = mapping.get(c["name"], [c["name"]])

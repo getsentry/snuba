@@ -19,8 +19,7 @@ class StorageKeyJoinFinder(JoinVisitor[StorageKey, Table]):
     def visit_individual_node(self, node: IndividualNode[Table]) -> StorageKey:
         if isinstance(node.data_source, ProcessableQuery):
             return node.data_source.get_from_clause().storage_key
-        else:
-            return node.data_source.storage_key
+        return node.data_source.storage_key
 
     def visit_join_clause(self, node: JoinClause[Table]) -> StorageKey:
         left_storage_key = node.left_node.accept(self)

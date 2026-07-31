@@ -2,10 +2,12 @@
 
 eval $(regions-project-env-vars --region="${SENTRY_REGION}")
 
+IMAGE_TAG="${GO_REVISION_SNUBA_REPO}-distroless"
+
 /devinfra/scripts/get-cluster-credentials \
 && k8s-deploy \
   --label-selector="${LABEL_SELECTOR}" \
-  --image="us-docker.pkg.dev/sentryio/snuba-mr/image:${GO_REVISION_SNUBA_REPO}" \
+  --image="us-docker.pkg.dev/sentryio/snuba-mr/image:${IMAGE_TAG}" \
   --container-name="consumer" \
   --container-name="eap-accepted-outcomes-consumer" \
   --container-name="eap-items-consumer" \
@@ -13,6 +15,7 @@ eval $(regions-project-env-vars --region="${SENTRY_REGION}")
   --container-name="generic-metrics-counters-consumer" \
   --container-name="generic-metrics-distributions-consumer" \
   --container-name="generic-metrics-sets-consumer" \
+  --container-name="llm-proxy-cost-consumer" \
   --container-name="loadbalancer-outcomes-consumer" \
   --container-name="metrics-consumer" \
   --container-name="outcomes-billing-consumer" \

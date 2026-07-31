@@ -3,13 +3,14 @@ from __future__ import annotations
 import logging
 import textwrap
 from collections import defaultdict
+from collections.abc import MutableMapping
 from dataclasses import replace
 from math import floor
-from typing import Any, MutableMapping, Optional
+from typing import Any
 
 import sentry_sdk
 
-from snuba import environment, state
+from snuba import environment
 from snuba import settings as snuba_settings
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.query import format_query
@@ -30,6 +31,7 @@ from snuba.querylog.query_metadata import (
 )
 from snuba.reader import Reader
 from snuba.settings import MAX_QUERY_SIZE_BYTES
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -57,7 +59,7 @@ class ExecutionStage(QueryPipelineStage[ClickhouseQuery | CompositeQuery[Table],
         attribution_info: AttributionInfo,
         query_metadata: SnubaQueryMetadata,
         robust: bool = False,
-        concurrent_queries_gauge: Optional[Gauge] = None,
+        concurrent_queries_gauge: Gauge | None = None,
     ):
         self._attribution_info = attribution_info
         self._query_metadata = query_metadata
@@ -86,18 +88,17 @@ class ExecutionStage(QueryPipelineStage[ClickhouseQuery | CompositeQuery[Table],
                     cluster, "get_clickhouse_cluster_name", lambda: "no_cluster_name"
                 )(),
             )
-        else:
-            return _run_and_apply_column_names(
-                timer=pipe_input.timer,
-                query_metadata=self._query_metadata,
-                attribution_info=self._attribution_info,
-                robust=self._robust,
-                concurrent_queries_gauge=None,
-                clickhouse_query=pipe_input.data,
-                query_settings=pipe_input.query_settings,
-                reader=cluster.get_reader(),
-                cluster_name=cluster.get_clickhouse_cluster_name() or "",
-            )
+        return _run_and_apply_column_names(
+            timer=pipe_input.timer,
+            query_metadata=self._query_metadata,
+            attribution_info=self._attribution_info,
+            robust=self._robust,
+            concurrent_queries_gauge=None,
+            clickhouse_query=pipe_input.data,
+            query_settings=pipe_input.query_settings,
+            reader=cluster.get_reader(),
+            cluster_name=cluster.get_clickhouse_cluster_name() or "",
+        )
 
 
 def _dry_run_query_runner(
@@ -123,7 +124,7 @@ def _run_and_apply_column_names(
     query_metadata: SnubaQueryMetadata,
     attribution_info: AttributionInfo,
     robust: bool,
-    concurrent_queries_gauge: Optional[Gauge],
+    concurrent_queries_gauge: Gauge | None,
     clickhouse_query: ClickhouseQuery | CompositeQuery[Table],
     query_settings: QuerySettings,
     reader: Reader,
@@ -163,18 +164,11 @@ def _run_and_apply_column_names(
 
 
 def _max_query_size_bytes() -> int:
-    return (
-        state.get_int_config(MAX_QUERY_SIZE_BYTES_CONFIG, MAX_QUERY_SIZE_BYTES)
-        or MAX_QUERY_SIZE_BYTES
-    )
+    return get_option(MAX_QUERY_SIZE_BYTES_CONFIG, MAX_QUERY_SIZE_BYTES) or MAX_QUERY_SIZE_BYTES
 
 
 def _disable_max_query_size_check_for_clusters() -> set[str]:
-    return set(
-        (state.get_str_config(DISABLE_MAX_QUERY_SIZE_CHECK_FOR_CLUSTERS_CONFIG, "") or "").split(
-            ","
-        )
-    )
+    return set((get_option(DISABLE_MAX_QUERY_SIZE_CHECK_FOR_CLUSTERS_CONFIG, "") or "").split(","))
 
 
 def _format_storage_query_and_run(
@@ -185,7 +179,7 @@ def _format_storage_query_and_run(
     query_settings: QuerySettings,
     reader: Reader,
     robust: bool,
-    concurrent_queries_gauge: Optional[Gauge] = None,
+    concurrent_queries_gauge: Gauge | None = None,
     cluster_name: str = "",
 ) -> QueryResult:
     """
@@ -252,7 +246,7 @@ def _format_storage_query_and_run(
             cause.__class__.__name__,
             str(cause),
             extra=QueryExtraData(
-                stats=stats,
+                stats=dict(stats),
                 sql=formatted_sql,
                 experiments=clickhouse_query.get_experiments(),
             ),
@@ -300,9 +294,8 @@ def get_query_size_group(query_size_bytes: int) -> str:
     """
     if query_size_bytes == _max_query_size_bytes():
         return "100%"
-    else:
-        query_size_group = int(floor(query_size_bytes / _max_query_size_bytes() * 10)) * 10
-        return f">={query_size_group}%"
+    query_size_group = int(floor(query_size_bytes / _max_query_size_bytes() * 10)) * 10
+    return f">={query_size_group}%"
 
 
 def _apply_turbo_sampling_if_needed(
@@ -313,11 +306,14 @@ def _apply_turbo_sampling_if_needed(
     TODO: Remove this method entirely and move the sampling logic
     into a query processor.
     """
-    if isinstance(clickhouse_query, ClickhouseQuery):
-        if query_settings.get_turbo() and not clickhouse_query.get_from_clause().sampling_rate:
-            clickhouse_query.set_from_clause(
-                replace(
-                    clickhouse_query.get_from_clause(),
-                    sampling_rate=snuba_settings.TURBO_SAMPLE_RATE,
-                )
+    if (
+        isinstance(clickhouse_query, ClickhouseQuery)
+        and query_settings.get_turbo()
+        and not clickhouse_query.get_from_clause().sampling_rate
+    ):
+        clickhouse_query.set_from_clause(
+            replace(
+                clickhouse_query.get_from_clause(),
+                sampling_rate=snuba_settings.TURBO_SAMPLE_RATE,
             )
+        )

@@ -1,11 +1,11 @@
-from typing import List, Sequence, Tuple
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import UUID, Array, Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
-new_columns: Sequence[Tuple[Column[Modifiers], str]] = [
+new_columns: Sequence[tuple[Column[Modifiers], str]] = [
     (Column("error_ids", Array(UUID())), "url"),
     (
         Column(
@@ -19,7 +19,7 @@ new_columns: Sequence[Tuple[Column[Modifiers], str]] = [
     ),
 ]
 
-new_indexes: List[operations.SqlOperation] = [
+new_indexes: list[operations.SqlOperation] = [
     operations.AddIndex(
         storage_set=StorageSetKey.REPLAYS,
         table_name="replays_local",
@@ -30,7 +30,7 @@ new_indexes: List[operations.SqlOperation] = [
     ),
 ]
 
-drop_indexes: List[operations.SqlOperation] = [
+drop_indexes: list[operations.SqlOperation] = [
     operations.DropIndex(
         StorageSetKey.REPLAYS,
         "replays_local",
@@ -43,7 +43,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
     blocking = False
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
-        new_column_ops: List[operations.SqlOperation] = [
+        new_column_ops: list[operations.SqlOperation] = [
             operations.AddColumn(
                 storage_set=StorageSetKey.REPLAYS,
                 table_name="replays_local",
@@ -55,7 +55,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
         return new_column_ops + new_indexes
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
-        drop_column_ops: List[operations.SqlOperation] = [
+        drop_column_ops: list[operations.SqlOperation] = [
             operations.DropColumn(StorageSetKey.REPLAYS, "replays_local", column.name)
             for column, _ in reversed(new_columns)
         ]

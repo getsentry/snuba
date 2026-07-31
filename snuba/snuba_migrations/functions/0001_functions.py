@@ -1,4 +1,4 @@
-from typing import List, MutableMapping, Optional, Sequence, Union
+from collections.abc import MutableMapping, Sequence
 
 from snuba.clickhouse.columns import (
     UUID,
@@ -15,7 +15,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, migration_utilities, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
-common_columns: List[Column[Modifiers]] = [
+common_columns: list[Column[Modifiers]] = [
     Column("project_id", UInt(64)),
     Column("transaction_name", String()),
     Column("timestamp", DateTime()),
@@ -34,13 +34,13 @@ common_columns: List[Column[Modifiers]] = [
     Column("retention_days", UInt(16)),
 ]
 
-raw_columns: List[Column[Modifiers]] = common_columns + [
+raw_columns: list[Column[Modifiers]] = common_columns + [
     Column("durations", Array(Float(64))),
     Column("profile_id", UUID()),
     Column("materialization_version", UInt(8)),
 ]
 
-agg_columns: List[Column[Modifiers]] = common_columns + [
+agg_columns: list[Column[Modifiers]] = common_columns + [
     Column("count", AggregateFunction("count", [Float(64)])),
     Column(
         "percentiles",
@@ -71,18 +71,16 @@ class Migration(migration.CodeMigration):
     local_view_table = "functions_local"
 
     def _create_functions_mv_table(
-        self, clickhouse: Optional[ClickhousePool]
+        self, clickhouse: ClickhousePool | None
     ) -> operations.SqlOperation:
-        table_settings: MutableMapping[str, Union[int, str]] = {
+        table_settings: MutableMapping[str, int | str] = {
             "index_granularity": self.index_granularity,
         }
 
         clickhouse_version = migration_utilities.get_clickhouse_version_for_storage_set(
             self.storage_set, clickhouse
         )
-        if migration_utilities.supports_setting(
-            clickhouse_version, "allow_nullable_key"
-        ):
+        if migration_utilities.supports_setting(clickhouse_version, "allow_nullable_key"):
             table_settings["allow_nullable_key"] = 1
 
         return operations.CreateTable(

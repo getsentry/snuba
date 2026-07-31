@@ -1,3 +1,4 @@
+import pytest
 from confluent_kafka.admin import AdminClient
 
 from snuba.datasets.storages.factory import get_writable_storage
@@ -10,7 +11,7 @@ from snuba.utils.streams.topics import Topic
 from snuba.utils.streams.topics import Topic as SnubaTopic
 
 
-def test_get_physical_topic_name(monkeypatch) -> None:  # type: ignore
+def test_get_physical_topic_name(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(
         SLICED_KAFKA_TOPIC_MAP, ("ingest-replay-events", 2), "ingest-replay-events-2"
     )

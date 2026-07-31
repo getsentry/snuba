@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import Mock, patch
 
@@ -27,7 +27,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_delete_trace_items import EndpointDeleteTraceItems
@@ -38,7 +38,7 @@ from tests.web.rpc.v1.test_utils import gen_item_message
 _REQUEST_ID = uuid.uuid4().hex
 
 _TRACE_ID = str(uuid.uuid4())
-_BASE_TIME = datetime.now(tz=timezone.utc).replace(
+_BASE_TIME = datetime.now(tz=UTC).replace(
     minute=0,
     second=0,
     microsecond=0,
@@ -68,8 +68,8 @@ _SPANS = [
 
 @pytest.fixture(autouse=False)
 def setup_teardown(eap: None, redis_db: None) -> None:
-    items_storage = get_storage(StorageKey("eap_items"))
-    write_raw_unprocessed_events(items_storage, _SPANS)  # type: ignore
+    items_storage = get_writable_storage(StorageKey("eap_items"))
+    write_raw_unprocessed_events(items_storage, _SPANS)
 
 
 @pytest.mark.eap
@@ -183,12 +183,14 @@ class TestEndpointDeleteTrace(BaseApiTest):
             ],
         )
 
-        with patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10):
-            with patch("snuba.web.bulk_delete_query.produce_delete_query") as mock_produce:
-                EndpointDeleteTraceItems().execute(message)
+        with (
+            patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10),
+            patch("snuba.web.bulk_delete_query.produce_delete_query") as mock_produce,
+        ):
+            EndpointDeleteTraceItems().execute(message)
 
-                # Verify produce_delete_query was called with attribute_conditions
-                assert mock_produce.call_count == 1
+            # Verify produce_delete_query was called with attribute_conditions
+            assert mock_produce.call_count == 1
 
     def test_filters_with_in_operation_accepted(self) -> None:
         """Test that filters with OP_IN are properly converted to attribute_conditions"""
@@ -226,11 +228,11 @@ class TestEndpointDeleteTrace(BaseApiTest):
             ],
         )
 
-        with patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10):
-            with patch("snuba.web.bulk_delete_query.produce_delete_query"):
-                assert isinstance(
-                    EndpointDeleteTraceItems().execute(message), DeleteTraceItemsResponse
-                )
+        with (
+            patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10),
+            patch("snuba.web.bulk_delete_query.produce_delete_query"),
+        ):
+            assert isinstance(EndpointDeleteTraceItems().execute(message), DeleteTraceItemsResponse)
 
     def test_filters_with_unsupported_operation_rejected(self) -> None:
         """Test that filters with operations other than OP_EQUALS/OP_IN are rejected"""

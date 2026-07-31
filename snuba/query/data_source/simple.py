@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from abc import ABC
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Optional, Sequence
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
@@ -36,7 +36,7 @@ class SimpleDataSource(DataSource, ABC):
 class LogicalDataSource(SimpleDataSource):
     key: EntityKey | StorageKey
     schema: ColumnSet
-    sample: Optional[float] = None
+    sample: float | None = None
 
     def get_columns(self) -> ColumnSet:
         return self.schema
@@ -54,7 +54,7 @@ class Entity(LogicalDataSource):
 
     key: EntityKey
     schema: ColumnSet
-    sample: Optional[float] = None
+    sample: float | None = None
 
     def get_columns(self) -> ColumnSet:
         return self.schema
@@ -71,7 +71,7 @@ class Storage(LogicalDataSource):
 
     key: StorageKey
     schema: ColumnSet = field(default_factory=lambda: ColumnSet([]))
-    sample: Optional[float] = None
+    sample: float | None = None
 
     @property
     def human_readable_id(self) -> str:
@@ -100,7 +100,7 @@ class Table(SimpleDataSource):
         default_factory=lambda: [DEFAULT_PASSTHROUGH_POLICY]
     )
     final: bool = False
-    sampling_rate: Optional[float] = None
+    sampling_rate: float | None = None
     # TODO: Move mandatory connditions out of
     # here as they are structural property of a storage. This requires
     # the processors that consume these fields to access the storage.

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, replace
 from datetime import date, datetime
-from typing import Callable, Generic, Iterator, Optional, Tuple, TypeVar, Union
+from typing import Generic, TypeVar, cast
 
 from snuba import settings
 
@@ -22,7 +23,7 @@ _AUTO_REPR = not settings.PRETTY_FORMAT_EXPRESSIONS
 @dataclass(frozen=True, repr=_AUTO_REPR)
 class _Expression:
     # TODO: Make it impossible to assign empty string as an alias.
-    alias: Optional[str]
+    alias: str | None
 
 
 class Expression(_Expression, ABC):
@@ -77,8 +78,7 @@ class Expression(_Expression, ABC):
         if settings.PRETTY_FORMAT_EXPRESSIONS:
             visitor = StringifyVisitor()
             return self.accept(visitor)
-        else:
-            return super().__repr__()
+        return super().__repr__()
 
     def functional_eq(self, other: Expression) -> bool:
         """Returns if an expression is functionally equivalent to the other. i.e. performs an equality
@@ -132,10 +132,6 @@ class ExpressionVisitor(ABC, Generic[TVisited]):
     def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> TVisited:
         raise NotImplementedError
 
-    @abstractmethod
-    def visit_json_path(self, exp: JsonPath) -> TVisited:
-        raise NotImplementedError
-
 
 class NoopVisitor(ExpressionVisitor[None]):
     """A noop visitor that will traverse every node but will not
@@ -154,7 +150,7 @@ class NoopVisitor(ExpressionVisitor[None]):
     def visit_function_call(self, exp: FunctionCall) -> None:
         for param in exp.parameters:
             param.accept(self)
-        return None
+        return
 
     def visit_curried_function_call(self, exp: CurriedFunctionCall) -> None:
         for param in exp.parameters:
@@ -169,9 +165,6 @@ class NoopVisitor(ExpressionVisitor[None]):
 
     def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> None:
         return None
-
-    def visit_json_path(self, exp: JsonPath) -> None:
-        return exp.base.accept(self)
 
 
 class StringifyVisitor(ExpressionVisitor[str]):
@@ -272,13 +265,6 @@ class StringifyVisitor(ExpressionVisitor[str]):
         sql_repr = repr(exp.sql)
         return f"{self._get_line_prefix()}DangerousRawSQL({sql_repr}){self._get_alias_str(exp)}"
 
-    def visit_json_path(self, exp: JsonPath) -> str:
-        base_str = exp.base.accept(self)[len(self._get_line_prefix()) :]
-        type_str = f"::{exp.return_type}" if exp.return_type else ""
-        return (
-            f"{self._get_line_prefix()}{base_str}.`{exp.path}`{type_str}{self._get_alias_str(exp)}"
-        )
-
 
 class ColumnVisitor(ExpressionVisitor[set[str]]):
     def __init__(self) -> None:
@@ -313,11 +299,8 @@ class ColumnVisitor(ExpressionVisitor[set[str]]):
     def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> set[str]:
         return self.columns
 
-    def visit_json_path(self, exp: JsonPath) -> set[str]:
-        return exp.base.accept(self)
 
-
-OptionalScalarType = Union[None, bool, str, float, int, date, datetime]
+OptionalScalarType = None | bool | str | float | int | date | datetime
 
 
 @dataclass(frozen=True, repr=_AUTO_REPR)
@@ -349,7 +332,7 @@ class Column(Expression):
     Represent a column in the schema of the dataset.
     """
 
-    table_name: Optional[str]
+    table_name: str | None
     column_name: str
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
@@ -388,8 +371,8 @@ class SubscriptableReference(Expression):
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         transformed = replace(
             self,
-            column=self.column.transform(func),
-            key=self.key.transform(func),
+            column=cast(Column, self.column.transform(func)),
+            key=cast(Literal, self.key.transform(func)),
         )
         return func(transformed)
 
@@ -424,7 +407,7 @@ class FunctionCall(Expression):
 
     function_name: str
     # This is a tuple with variable size and not a Sequence to enforce it is hashable
-    parameters: Tuple[Expression, ...]
+    parameters: tuple[Expression, ...]
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         """
@@ -441,7 +424,7 @@ class FunctionCall(Expression):
         """
         transformed = replace(
             self,
-            parameters=tuple(map(lambda child: child.transform(func), self.parameters)),
+            parameters=tuple(child.transform(func) for child in self.parameters),
         )
         return func(transformed)
 
@@ -452,8 +435,7 @@ class FunctionCall(Expression):
         order we have in the transform method.
         """
         for child in self.parameters:
-            for sub in child:
-                yield sub
+            yield from child
         yield self
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
@@ -490,7 +472,7 @@ class CurriedFunctionCall(Expression):
     internal_function: FunctionCall
     # The parameters to apply to the result of internal_function.
     # This is a tuple with variable size and not a Sequence to enforce it is hashable
-    parameters: Tuple[Expression, ...]
+    parameters: tuple[Expression, ...]
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         """
@@ -501,8 +483,8 @@ class CurriedFunctionCall(Expression):
         """
         transformed = replace(
             self,
-            internal_function=self.internal_function.transform(func),
-            parameters=tuple(map(lambda child: child.transform(func), self.parameters)),
+            internal_function=cast(FunctionCall, self.internal_function.transform(func)),
+            parameters=tuple(child.transform(func) for child in self.parameters),
         )
         return func(transformed)
 
@@ -513,8 +495,7 @@ class CurriedFunctionCall(Expression):
         for child in self.internal_function:
             yield child
         for child in self.parameters:
-            for sub in child:
-                yield sub
+            yield from child
         yield self
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
@@ -566,7 +547,7 @@ class Lambda(Expression):
     # the parameters in the expressions. These are intentionally not expressions
     # since they are variable names and cannot have aliases
     # This is a tuple with variable size and not a Sequence to enforce it is hashable
-    parameters: Tuple[str, ...]
+    parameters: tuple[str, ...]
     transformation: Expression
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
@@ -581,8 +562,7 @@ class Lambda(Expression):
         """
         Traverse the subtree in a postfix order.
         """
-        for child in self.transformation:
-            yield child
+        yield from self.transformation
         yield self
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
@@ -593,9 +573,7 @@ class Lambda(Expression):
             return False
         if self.parameters != other.parameters:
             return False
-        if not self.transformation.functional_eq(other.transformation):
-            return False
-        return True
+        return self.transformation.functional_eq(other.transformation)
 
 
 @dataclass(frozen=True, repr=_AUTO_REPR)
@@ -624,40 +602,3 @@ class DangerousRawSQL(Expression):
         if not isinstance(other, self.__class__):
             return False
         return self.sql == other.sql
-
-
-@dataclass(frozen=True, repr=_AUTO_REPR)
-class JsonPath(Expression):
-    """
-    Represents ClickHouse JSON sub-column access with an optional type cast.
-
-    Produces SQL like:
-      col.`path`                 (no return type)
-      col.`path`::Type           (simple return type)
-      col.`path`.:`Type`         (complex return type, e.g. Array(JSON))
-    """
-
-    base: Expression
-    path: str
-    return_type: Optional[str] = None
-
-    def transform(self, func: Callable[[Expression], Expression]) -> Expression:
-        transformed = replace(self, base=self.base.transform(func))
-        return func(transformed)
-
-    def __iter__(self) -> Iterator[Expression]:
-        for sub in self.base:
-            yield sub
-        yield self
-
-    def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
-        return visitor.visit_json_path(self)
-
-    def functional_eq(self, other: Expression) -> bool:
-        if not isinstance(other, self.__class__):
-            return False
-        return (
-            self.base.functional_eq(other.base)
-            and self.path == other.path
-            and self.return_type == other.return_type
-        )

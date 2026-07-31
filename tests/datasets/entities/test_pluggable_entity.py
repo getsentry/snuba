@@ -1,5 +1,5 @@
-from datetime import datetime, timedelta, timezone
-from typing import Mapping
+from collections.abc import Mapping
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -29,15 +29,14 @@ from snuba.query.processors.logical.timeseries_processor import TimeSeriesProces
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query
 from snuba.request import Request
-from snuba.utils.schemas import AggregateFunction
+from snuba.utils.schemas import AggregateFunction, DateTime, Nested, UInt
 from snuba.utils.schemas import Column as SchemaColumn
-from snuba.utils.schemas import DateTime, Nested, UInt
 
 
 @pytest.fixture
 def start_time() -> datetime:
     return (datetime.utcnow() - timedelta(days=1)).replace(
-        hour=12, minute=15, second=0, microsecond=0, tzinfo=timezone.utc
+        hour=12, minute=15, second=0, microsecond=0, tzinfo=UTC
     )
 
 

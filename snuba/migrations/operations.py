@@ -3,9 +3,10 @@ from __future__ import annotations
 import logging
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any
 
 import structlog
 
@@ -47,7 +48,7 @@ class SqlOperation(ABC):
         self,
         storage_set: StorageSetKey,
         target: OperationTarget,
-        settings: Optional[Mapping[str, Any]] = None,
+        settings: Mapping[str, Any] | None = None,
     ):
         self._storage_set = storage_set
         self._settings = settings
@@ -78,7 +79,7 @@ class SqlOperation(ABC):
             return f" ON CLUSTER '{cluster_name}'"
         return ""
 
-    def _get_execution_node(self) -> Optional[ClickhouseNode]:
+    def _get_execution_node(self) -> ClickhouseNode | None:
         """Returns a single node to execute DDL on (ON CLUSTER handles distribution)."""
         cluster = get_cluster(self._storage_set)
         if self.target == OperationTarget.DISTRIBUTED:
@@ -86,7 +87,7 @@ class SqlOperation(ABC):
                 return None
             nodes = cluster.get_distributed_nodes()
             return nodes[0] if nodes else None
-        elif self.target == OperationTarget.LOCAL:
+        if self.target == OperationTarget.LOCAL:
             nodes = cluster.get_local_nodes()
             return nodes[0] if nodes else None
         raise ValueError(f"Target not set for {self}")
@@ -147,9 +148,8 @@ class SqlOperation(ABC):
         nodes = self.get_nodes()
         cluster = get_cluster(self._storage_set)
         sql = self.format_sql()
-        if nodes:
-            if settings.LOG_MIGRATIONS:
-                logger.info(f"Executing op: {sql}")
+        if nodes and settings.LOG_MIGRATIONS:
+            logger.info(f"Executing op: {sql}")
         for node in nodes:
             connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
             if settings.LOG_MIGRATIONS:
@@ -206,11 +206,11 @@ class RetryOnSyncError:
     def execute(self) -> None:
         for i in range(30, -1, -1):  # wait at most ~30 seconds
             try:
-                super().execute()  # type: ignore
+                super().execute()  # type: ignore[misc]
                 break
             except Exception as e:
                 # Metadata on replica is not up to date with common metadata in Zookeeper (status code = 517)
-                if i and e.code == 517:  # type: ignore
+                if i and e.code == 517:  # type: ignore[attr-defined]
                     time.sleep(1)
                 else:
                     raise
@@ -230,7 +230,7 @@ class CreateTable(SqlOperation):
         columns: Sequence[Column[MigrationModifiers]],
         engine: TableEngine,
         target: OperationTarget = OperationTarget.UNSET,
-        settings: Optional[Mapping[str, Any]] = None,
+        settings: Mapping[str, Any] | None = None,
     ):
         super().__init__(storage_set, target=target, settings=settings)
         self.table_name = table_name
@@ -385,7 +385,7 @@ class AddColumn(RetryOnSyncError, SqlOperation):
         storage_set: StorageSetKey,
         table_name: str,
         column: Column[MigrationModifiers],
-        after: Optional[str] = None,
+        after: str | None = None,
         target: OperationTarget = OperationTarget.UNSET,
     ):
         super().__init__(storage_set, target=target)
@@ -457,7 +457,7 @@ class ModifyColumn(RetryOnSyncError, SqlOperation):
         storage_set: StorageSetKey,
         table_name: str,
         column: Column[MigrationModifiers],
-        ttl_month: Optional[Tuple[str, int]] = None,
+        ttl_month: tuple[str, int] | None = None,
         target: OperationTarget = OperationTarget.UNSET,
     ):
         super().__init__(storage_set, target=target)
@@ -547,7 +547,7 @@ class AddIndex(SqlOperation):
         index_expression: str,
         index_type: str,
         granularity: int,
-        after: Optional[str] = None,
+        after: str | None = None,
         target: OperationTarget = OperationTarget.UNSET,
     ):
         super().__init__(storage_set, target=target)
@@ -678,11 +678,11 @@ class InsertIntoSelect(SqlOperation):
         dest_columns: Sequence[str],
         src_table_name: str,
         src_columns: Sequence[str],
-        prewhere: Optional[str] = None,
-        order_by: Optional[str] = None,
-        limit: Optional[int] = None,
-        offset: Optional[int] = None,
-        where: Optional[str] = None,
+        prewhere: str | None = None,
+        order_by: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        where: str | None = None,
         target: OperationTarget = OperationTarget.UNSET,
     ):
         super().__init__(storage_set, target=target)
@@ -738,7 +738,7 @@ class GenericOperation(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def description(self) -> Optional[str]:
+    def description(self) -> str | None:
         raise NotImplementedError
 
 
@@ -752,8 +752,8 @@ class RunPython(GenericOperation):
     def __init__(
         self,
         func: Callable[[logging.Logger], None],
-        new_node_func: Optional[Callable[[Sequence[StorageSetKey]], None]] = None,
-        description: Optional[str] = None,
+        new_node_func: Callable[[Sequence[StorageSetKey]], None] | None = None,
+        description: str | None = None,
     ) -> None:
         self.__func = func
         self.__new_node_func = new_node_func
@@ -771,7 +771,7 @@ class RunPython(GenericOperation):
         if self.__new_node_func is not None:
             self.__new_node_func(storage_sets)
 
-    def description(self) -> Optional[str]:
+    def description(self) -> str | None:
         return self.__description
 
 
@@ -784,15 +784,14 @@ class RunSqlAsCode(GenericOperation):
 
     def __init__(
         self,
-        operation_function: Union[SqlOperation, Callable[[Optional[ClickhousePool]], SqlOperation]],
+        operation_function: SqlOperation | Callable[[ClickhousePool | None], SqlOperation],
     ) -> None:
         self.__operation_function = operation_function
 
-    def _get_operation(self, clickhouse: Optional[ClickhousePool]) -> SqlOperation:
+    def _get_operation(self, clickhouse: ClickhousePool | None) -> SqlOperation:
         if callable(self.__operation_function):
             return self.__operation_function(clickhouse)
-        else:
-            return self.__operation_function
+        return self.__operation_function
 
     def execute(self, logger: logging.Logger) -> None:
         self._get_operation(None).execute()
@@ -816,5 +815,5 @@ class RunSqlAsCode(GenericOperation):
             logger.info(f"Executing {sql}")
             clickhouse.execute(sql)
 
-    def description(self) -> Optional[str]:
+    def description(self) -> str | None:
         return self._get_operation(None).format_sql()

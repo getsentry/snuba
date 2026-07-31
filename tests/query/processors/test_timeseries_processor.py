@@ -1,5 +1,3 @@
-from typing import Optional
-
 import pytest
 
 from snuba.clickhouse.columns import ColumnSet
@@ -168,9 +166,9 @@ tests = [
 )
 def test_timeseries_format_expressions(
     granularity: int,
-    condition: Optional[FunctionCall],
+    condition: FunctionCall | None,
     exp_column: FunctionCall,
-    exp_condition: Optional[FunctionCall],
+    exp_condition: FunctionCall | None,
     formatted_column: str,
     formatted_condition: str,
 ) -> None:

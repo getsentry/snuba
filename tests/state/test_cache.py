@@ -2,21 +2,22 @@ from __future__ import annotations
 
 import random
 import time
+from collections.abc import Callable
 from concurrent.futures import Future
 from threading import Thread
-from typing import Any, Callable
+from typing import Any
 from unittest import mock
 
 import pytest
 import rapidjson
 import sentry_sdk
 from redis import RedisError, ResponseError
-from redis.exceptions import ReadOnlyError
+from redis.exceptions import ConnectionError, ReadOnlyError
 from redis.exceptions import TimeoutError as RedisTimeoutError
+from sentry_options.testing import override_options
 from sentry_redis_tools.failover_redis import FailoverRedis
 
 from snuba.redis import RedisClientKey, get_redis_client
-from snuba.state import set_config
 from snuba.state.cache.abstract import Cache
 from snuba.state.cache.redis.backend import RedisCache
 from snuba.utils.codecs import ExceptionAwareCodec
@@ -109,8 +110,8 @@ def noop(value: int) -> None:
 
 
 @pytest.mark.redis_db
+@override_options("snuba", {"read_through_cache.short_circuit": True})
 def test_short_circuit(backend: Cache[bytes]) -> None:
-    set_config("read_through_cache.short_circuit", 1)
     key = "key"
     value = b"value"
     function = mock.MagicMock(return_value=value)
@@ -118,12 +119,12 @@ def test_short_circuit(backend: Cache[bytes]) -> None:
     assert backend.get(key) is None
 
     with assert_changes(lambda: function.call_count, 0, 1):
-        backend.get_readthrough(key, function, noop) == value
+        assert backend.get_readthrough(key, function, noop) == value
 
     assert backend.get(key) is None
 
     with assert_changes(lambda: function.call_count, 1, 2):
-        backend.get_readthrough(key, function, noop) == value
+        assert backend.get_readthrough(key, function, noop) == value
 
 
 @pytest.mark.redis_db
@@ -144,12 +145,12 @@ def test_get_readthrough(backend: Cache[bytes]) -> None:
     assert backend.get(key) is None
 
     with assert_changes(lambda: function.call_count, 0, 1):
-        backend.get_readthrough(key, function, noop) == value
+        assert backend.get_readthrough(key, function, noop) == value
 
     assert backend.get(key) == value
 
     with assert_does_not_change(lambda: function.call_count, 1):
-        backend.get_readthrough(key, function, noop) == value
+        assert backend.get_readthrough(key, function, noop) == value
 
 
 @pytest.mark.redis_db
@@ -172,7 +173,7 @@ def test_get_readthrough_set_wait(backend: Cache[bytes]) -> None:
 
     def function() -> bytes:
         time.sleep(1)
-        return f"{random.random()}".encode("utf-8")
+        return f"{random.random()}".encode()
 
     def worker() -> bytes:
         return backend.get_readthrough(key, function, noop)
@@ -261,10 +262,17 @@ def test_set_fails_open(backend: Cache[bytes]) -> None:
 
 @pytest.mark.redis_db
 @pytest.mark.parametrize(
-    "error", [ResponseError("OOM command not allowed under OOM prevention."), RedisTimeoutError()]
+    "error",
+    [
+        ResponseError("OOM command not allowed under OOM prevention."),
+        RedisTimeoutError(),
+        ConnectionError("Error while reading from redis : (104, 'Connection reset by peer')"),
+    ],
 )
 def test_dont_record_expected_errors(backend: Cache[bytes], error: Exception) -> None:
-    with mock.patch.object(redis_client, "set", side_effect=error):
-        with mock.patch.object(sentry_sdk, "capture_exception") as capture_exception:
-            backend.get_readthrough("key", lambda: b"value", noop)
-            capture_exception.assert_not_called()
+    with (
+        mock.patch.object(redis_client, "set", side_effect=error),
+        mock.patch.object(sentry_sdk, "capture_exception") as capture_exception,
+    ):
+        backend.get_readthrough("key", lambda: b"value", noop)
+        capture_exception.assert_not_called()

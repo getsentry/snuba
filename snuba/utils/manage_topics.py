@@ -1,9 +1,12 @@
 import logging
 import time
-from typing import Sequence
+from collections.abc import Sequence
 
 from confluent_kafka import KafkaError, KafkaException
-from confluent_kafka.admin import AdminClient, NewTopic
+from confluent_kafka.admin import (  # type: ignore[attr-defined]  # NewTopic lacks explicit re-export
+    AdminClient,
+    NewTopic,
+)
 
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.utils.streams.topics import Topic
@@ -21,16 +24,16 @@ def create_topics(client: AdminClient, topics: Sequence[Topic], num_partitions: 
             topic_spec.topic_name,
             num_partitions=num_partitions,
             replication_factor=1,
-            config=topic_spec.topic_creation_config,
+            config=dict(topic_spec.topic_creation_config),
         )
 
     logger.info("Creating Kafka topics...")
-    for topic, future in client.create_topics(
+    for topic_name, future in client.create_topics(
         list(topics_to_create.values()), operation_timeout=1
     ).items():
         try:
             future.result()
-            logger.info("Topic %s created", topic)
+            logger.info("Topic %s created", topic_name)
         except KafkaException as err:
             if err.args[0].code() != KafkaError.TOPIC_ALREADY_EXISTS:
                 logger.error("Failed to create topic %s", topic, exc_info=err)
@@ -43,7 +46,7 @@ def recreate_topic(client: AdminClient, topic: Topic, num_partitions: int = 1) -
         topic_spec.topic_name,
         num_partitions=num_partitions,
         replication_factor=1,
-        config=topic_spec.topic_creation_config,
+        config=dict(topic_spec.topic_creation_config),
     )
     logger.info(f"Deleting Kafka topic {topic_spec.topic_name} ...")
     future = client.delete_topics([topic_spec.topic_name])[topic_spec.topic_name]
@@ -58,10 +61,12 @@ def recreate_topic(client: AdminClient, topic: Topic, num_partitions: int = 1) -
     time.sleep(2)
 
     logger.info(f"Recreating Kafka topic {topic_spec.topic_name} ...")
-    for topic, future in client.create_topics([topic_to_recreate], operation_timeout=1).items():
+    for topic_name, future in client.create_topics(
+        [topic_to_recreate], operation_timeout=1
+    ).items():
         try:
             future.result()
-            logger.info("Topic %s recreated", topic)
+            logger.info("Topic %s recreated", topic_name)
         except KafkaException as err:
             if err.args[0].code() != KafkaError.TOPIC_ALREADY_EXISTS:
                 logger.error("Failed to recreate topic %s", topic, exc_info=err)

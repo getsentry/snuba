@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 import sentry_sdk
 
 from snuba import environment, settings
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_dataset_name
+from snuba.datasets.factory import get_dataset, get_dataset_name
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.pipeline.query_pipeline import QueryPipelineResult
 from snuba.pipeline.stages.query_execution import ExecutionStage
@@ -38,7 +38,7 @@ def _run_query_pipeline(
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     robust: bool = False,
-    concurrent_queries_gauge: Optional[Gauge] = None,
+    concurrent_queries_gauge: Gauge | None = None,
     force_dry_run: bool = False,
 ) -> QueryResult:
     clickhouse_query = EntityProcessingStage().execute(
@@ -59,7 +59,7 @@ def _run_query_pipeline(
     ).execute(clickhouse_query)
     if res.error:
         raise res.error
-    elif res.data:
+    if res.data:
         return res.data
     # we should never get here
     raise Exception("No result or data, very bad exception")
@@ -71,7 +71,7 @@ def run_query(
     request: Request,
     timer: Timer,
     robust: bool = False,
-    concurrent_queries_gauge: Optional[Gauge] = None,
+    concurrent_queries_gauge: Gauge | None = None,
 ) -> QueryResult:
     """
     Processes, runs a Snuba Query, then records the metadata about the query that was run.
@@ -109,12 +109,9 @@ def run_query(
     return result
 
 
-def _get_dataset(dataset_name: Optional[str]) -> Dataset:
+def _get_dataset(dataset_name: str | None) -> Dataset:
     if dataset_name:
-        try:
-            return get_dataset(dataset_name)
-        except InvalidDatasetError:
-            return PluggableDataset(name=dataset_name, all_entities=[])
+        return get_dataset(dataset_name)
     return PluggableDataset(name=settings.DEFAULT_DATASET_NAME, all_entities=[])
 
 
@@ -123,8 +120,8 @@ def parse_and_run_query(
     body: dict[str, Any],
     timer: Timer,
     is_mql: bool = False,
-    dataset_name: Optional[str] = None,
-    referrer: Optional[str] = None,
+    dataset_name: str | None = None,
+    referrer: str | None = None,
 ) -> tuple[Request, QueryResult]:
     """Top level entrypoint from a raw query body to a query result
 

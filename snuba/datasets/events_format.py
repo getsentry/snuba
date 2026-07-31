@@ -1,13 +1,7 @@
+from collections.abc import Callable, Iterable, Mapping, MutableMapping, Sequence
 from datetime import datetime, timedelta
 from typing import (
     Any,
-    Callable,
-    Iterable,
-    Mapping,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Tuple,
     TypeVar,
 )
 
@@ -53,13 +47,13 @@ def extract_http(output: MutableMapping[str, Any], request: Mapping[str, Any]) -
 
 def extract_extra_tags(
     nested_col: Mapping[str, Any],
-) -> Tuple[Sequence[str], Sequence[str]]:
+) -> tuple[Sequence[str], Sequence[str]]:
     return extract_nested(nested_col, lambda s: _unicodify(s) or None)
 
 
 def extract_nested(
-    nested_col: Mapping[str, Any], val_processor: Callable[[Any], Optional[TVal]]
-) -> Tuple[Sequence[str], Sequence[TVal]]:
+    nested_col: Mapping[str, Any], val_processor: Callable[[Any], TVal | None]
+) -> tuple[Sequence[str], Sequence[TVal]]:
     keys = []
     values = []
     for key, value in sorted(nested_col.items()):
@@ -76,17 +70,17 @@ def extract_nested(
 def extract_extra_contexts(
     contexts: Mapping[str, Any],
     sort: bool = False,
-) -> Tuple[Sequence[str], Sequence[str]]:
+) -> tuple[Sequence[str], Sequence[str]]:
     context_keys = []
     context_values = []
     valid_types = (int, float, str)
-    contexts_iter: Iterable[Tuple[str, Any]] = contexts.items()
+    contexts_iter: Iterable[tuple[str, Any]] = contexts.items()
     if sort:
         contexts_iter = sorted(contexts_iter)
     for ctx_name, ctx_obj in contexts_iter:
         if isinstance(ctx_obj, dict):
             ctx_obj.pop("type", None)  # ignore type alias
-            ctx_iter: Iterable[Tuple[str, Any]] = ctx_obj.items()
+            ctx_iter: Iterable[tuple[str, Any]] = ctx_obj.items()
             if sort:
                 ctx_iter = sorted(ctx_iter)
             for inner_ctx_name, ctx_value in ctx_iter:
@@ -106,17 +100,16 @@ def extract_extra_contexts(
     return (context_keys, context_values)
 
 
-def enforce_retention(retention_days: Optional[int], timestamp: Optional[datetime]) -> int:
+def enforce_retention(retention_days: int | None, timestamp: datetime | None) -> int:
     if not isinstance(retention_days, int):
         retention_days = settings.DEFAULT_RETENTION_DAYS
 
-    if settings.ENFORCE_RETENTION:
-        if retention_days not in settings.VALID_RETENTION_DAYS:
-            retention_days = (
-                settings.LOWER_RETENTION_DAYS
-                if retention_days <= settings.LOWER_RETENTION_DAYS
-                else settings.DEFAULT_RETENTION_DAYS
-            )
+    if settings.ENFORCE_RETENTION and retention_days not in settings.VALID_RETENTION_DAYS:
+        retention_days = (
+            settings.LOWER_RETENTION_DAYS
+            if retention_days <= settings.LOWER_RETENTION_DAYS
+            else settings.DEFAULT_RETENTION_DAYS
+        )
 
     # This is not ideal but it should never happen anyways
     timestamp = _ensure_valid_date(timestamp)

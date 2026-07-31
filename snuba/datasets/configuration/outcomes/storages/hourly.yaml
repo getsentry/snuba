@@ -51,5 +51,10 @@ query_processors:
       prewhere_candidates:
         - project_id
         - org_id
+  - processor: ClickhouseSettingsOverride
+    args:
+      overwrite_existing: false
+      settings:
+        max_execution_time: 10
 mandatory_condition_checkers:
   - condition: OrgIdEnforcer

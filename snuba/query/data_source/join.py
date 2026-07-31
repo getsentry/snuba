@@ -1,18 +1,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping, MutableSequence, Sequence
 from dataclasses import dataclass
 from enum import Enum
 from typing import (
     Generic,
-    Mapping,
-    MutableSequence,
     NamedTuple,
-    Optional,
-    Sequence,
-    Tuple,
     TypeVar,
-    Union,
 )
 
 from snuba.datasets.entities.entity_key import EntityKey
@@ -45,7 +40,7 @@ class JoinRelationship(NamedTuple):
 
     rhs_entity: EntityKey
     join_type: JoinType
-    columns: Sequence[Tuple[str, str]]
+    columns: Sequence[tuple[str, str]]
     # Keeps track of the semantically equivalent columns between the two
     # related entities. Example transaction_name on the transactions table
     # and transaction_name on the spans table. These columns are not part
@@ -84,7 +79,7 @@ class IndividualNode(JoinNode[TSimpleDataSource], Generic[TSimpleDataSource]):
     """
 
     alias: str
-    data_source: Union[TSimpleDataSource, ProcessableQuery[TSimpleDataSource]]
+    data_source: TSimpleDataSource | ProcessableQuery[TSimpleDataSource]
 
     def get_alias_node_map(self) -> Mapping[str, IndividualNode[TSimpleDataSource]]:
         return {self.alias: self}
@@ -140,7 +135,7 @@ class JoinClause(DataSource, JoinNode[TSimpleDataSource], Generic[TSimpleDataSou
     right_node: IndividualNode[TSimpleDataSource]
     keys: Sequence[JoinCondition]
     join_type: JoinType
-    join_modifier: Optional[JoinModifier] = None
+    join_modifier: JoinModifier | None = None
 
     def get_column_sets(self) -> Mapping[str, ColumnSet]:
         return {

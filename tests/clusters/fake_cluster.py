@@ -1,6 +1,7 @@
-from typing import Any, List, Mapping, MutableMapping, Optional, Sequence, Set, Tuple
+from collections.abc import Mapping, MutableMapping, Sequence
+from typing import Any
 
-from snuba.clickhouse.native import ClickhousePool, ClickhouseResult, Params
+from snuba.clickhouse.native import ClickhouseNativePool, ClickhouseResult, Params
 from snuba.clusters.cluster import (
     ClickhouseClientSettings,
     ClickhouseCluster,
@@ -13,9 +14,9 @@ class ServerExplodedException(SerializableException):
     pass
 
 
-class FakeClickhousePool(ClickhousePool):
+class FakeClickhousePool(ClickhouseNativePool):
     def __init__(self, host_name: str) -> None:
-        self.__queries: List[str] = []
+        self.__queries: list[str] = []
         self.host = host_name
 
     def execute(
@@ -23,8 +24,8 @@ class FakeClickhousePool(ClickhousePool):
         query: str,
         params: Params = None,
         with_column_types: bool = False,
-        query_id: Optional[str] = None,
-        settings: Optional[Mapping[str, Any]] = None,
+        query_id: str | None = None,
+        settings: Mapping[str, Any] | None = None,
         types_check: bool = False,
         columnar: bool = False,
         capture_trace: bool = False,
@@ -39,7 +40,7 @@ class FakeClickhousePool(ClickhousePool):
 
 class FakeFailingClickhousePool(FakeClickhousePool):
     def __init__(self, host_name: str) -> None:
-        self.__queries: List[str] = []
+        self.__queries: list[str] = []
         self.host = host_name
 
     def execute(
@@ -47,8 +48,8 @@ class FakeFailingClickhousePool(FakeClickhousePool):
         query: str,
         params: Params = None,
         with_column_types: bool = False,
-        query_id: Optional[str] = None,
-        settings: Optional[Mapping[str, Any]] = None,
+        query_id: str | None = None,
+        settings: Mapping[str, Any] | None = None,
         types_check: bool = False,
         columnar: bool = False,
         capture_trace: bool = False,
@@ -70,14 +71,14 @@ class FakeClickhouseCluster(ClickhouseCluster):
         database: str,
         http_port: int,
         secure: bool,
-        ca_certs: Optional[str],
-        verify: Optional[bool],
-        storage_sets: Set[str],
+        ca_certs: str | None,
+        verify: bool | None,
+        storage_sets: set[str],
         single_node: bool,
         # The cluster name and distributed cluster name only apply if single_node is set to False
-        cluster_name: Optional[str] = None,
-        distributed_cluster_name: Optional[str] = None,
-        nodes: Optional[Sequence[Tuple[ClickhouseNode, bool]]] = None,
+        cluster_name: str | None = None,
+        distributed_cluster_name: str | None = None,
+        nodes: Sequence[tuple[ClickhouseNode, bool]] | None = None,
     ):
         super().__init__(
             host=host,
@@ -98,7 +99,7 @@ class FakeClickhouseCluster(ClickhouseCluster):
         self.__cluster_name = cluster_name
         self.__nodes = {node.host_name: (node, healthy) for node, healthy in nodes} if nodes else {}
         self.__connections: MutableMapping[
-            Tuple[ClickhouseNode, ClickhouseClientSettings], FakeClickhousePool
+            tuple[ClickhouseNode, ClickhouseClientSettings], FakeClickhousePool
         ] = {}
 
     def get_queries(
@@ -128,7 +129,7 @@ class FakeClickhouseCluster(ClickhouseCluster):
         self,
         client_settings: ClickhouseClientSettings,
         node: ClickhouseNode,
-    ) -> ClickhousePool:
+    ) -> ClickhouseNativePool:
         settings, timeout = client_settings.value
         cache_key = (node, client_settings)
         if cache_key not in self.__connections:

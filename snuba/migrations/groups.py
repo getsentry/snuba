@@ -1,5 +1,4 @@
 from enum import Enum
-from typing import Dict, Set
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.readiness_state import ReadinessState
@@ -20,7 +19,6 @@ from snuba.migrations.group_loader import (
     ReplaysLoader,
     SearchIssuesLoader,
     SessionsLoader,
-    SpansLoader,
     SystemLoader,
     TestMigrationLoader,
     TransactionsLoader,
@@ -42,7 +40,6 @@ class MigrationGroup(Enum):
     GENERIC_METRICS = "generic_metrics"
     TEST_MIGRATION = "test_migration"
     SEARCH_ISSUES = "search_issues"
-    SPANS = "spans"
     EVENTS_ANALYTICS_PLATFORM = "events_analytics_platform"
     GROUP_ATTRIBUTES = "group_attributes"
     PROFILE_CHUNKS = "profile_chunks"
@@ -70,7 +67,7 @@ class _MigrationGroup:
     def __init__(
         self,
         loader: GroupLoader,
-        storage_sets_keys: Set[StorageSetKey],
+        storage_sets_keys: set[StorageSetKey],
         readiness_state: ReadinessState,
     ) -> None:
         self.loader = loader
@@ -78,7 +75,7 @@ class _MigrationGroup:
         self.readiness_state = readiness_state
 
 
-_REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
+_REGISTERED_MIGRATION_GROUPS: dict[MigrationGroup, _MigrationGroup] = {
     MigrationGroup.SYSTEM: _MigrationGroup(
         loader=SystemLoader(),
         storage_sets_keys={StorageSetKey.MIGRATIONS},
@@ -164,14 +161,12 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
         },
         readiness_state=ReadinessState.COMPLETE,
     ),
-    MigrationGroup.SPANS: _MigrationGroup(
-        loader=SpansLoader(),
-        storage_sets_keys={StorageSetKey.SPANS},
-        readiness_state=ReadinessState.COMPLETE,
-    ),
     MigrationGroup.EVENTS_ANALYTICS_PLATFORM: _MigrationGroup(
         loader=EventsAnalyticsPlatformLoader(),
-        storage_sets_keys={StorageSetKey.EVENTS_ANALYTICS_PLATFORM},
+        storage_sets_keys={
+            StorageSetKey.EVENTS_ANALYTICS_PLATFORM,
+            StorageSetKey.EVENTS_ANALYTICS_PLATFORM_RO,
+        },
         readiness_state=ReadinessState.COMPLETE,
     ),
     MigrationGroup.GROUP_ATTRIBUTES: _MigrationGroup(
@@ -191,7 +186,7 @@ class DuplicateStorageSetFoundInGroup(Exception):
     pass
 
 
-def build_storage_set_to_group_mapping() -> Dict[StorageSetKey, MigrationGroup]:
+def build_storage_set_to_group_mapping() -> dict[StorageSetKey, MigrationGroup]:
     result = {}
     for migration_group, _migration_group in _REGISTERED_MIGRATION_GROUPS.items():
         for storage_set_key in _migration_group.storage_set_keys:
@@ -203,7 +198,7 @@ def build_storage_set_to_group_mapping() -> Dict[StorageSetKey, MigrationGroup]:
     return result
 
 
-_STORAGE_SET_TO_MIGRATION_GROUP_MAPPING: Dict[StorageSetKey, MigrationGroup] = (
+_STORAGE_SET_TO_MIGRATION_GROUP_MAPPING: dict[StorageSetKey, MigrationGroup] = (
     build_storage_set_to_group_mapping()
 )
 
@@ -212,17 +207,17 @@ def get_group_loader(group: MigrationGroup) -> GroupLoader:
     return _REGISTERED_MIGRATION_GROUPS[group].loader
 
 
-def get_storage_set_keys(group: MigrationGroup) -> Set[StorageSetKey]:
+def get_storage_set_keys(group: MigrationGroup) -> set[StorageSetKey]:
     return _REGISTERED_MIGRATION_GROUPS[group].storage_set_keys
 
 
 def get_group_readiness_state_from_storage_set(
     storage_set_key: StorageSetKey,
 ) -> ReadinessState:
-    migration_group = _STORAGE_SET_TO_MIGRATION_GROUP_MAPPING.get(storage_set_key, None)
+    migration_group = _STORAGE_SET_TO_MIGRATION_GROUP_MAPPING.get(storage_set_key)
     if not migration_group:
         return ReadinessState.LIMITED
-    registered_migration_group = _REGISTERED_MIGRATION_GROUPS.get(migration_group, None)
+    registered_migration_group = _REGISTERED_MIGRATION_GROUPS.get(migration_group)
     if registered_migration_group:
         return registered_migration_group.readiness_state
     return ReadinessState.LIMITED

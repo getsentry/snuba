@@ -8,7 +8,7 @@ from snuba.migrations.autogeneration.diff import generate_python_migration
 
 
 def mockstoragewithcolumns(cols: list[str]) -> Any:
-    colstr = ",\n            ".join([s for s in cols])
+    colstr = ",\n            ".join(list(cols))
     storage = f"""
 version: v1
 kind: writable_storage

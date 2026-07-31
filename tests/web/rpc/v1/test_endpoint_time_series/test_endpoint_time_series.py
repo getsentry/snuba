@@ -1,7 +1,8 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from itertools import chain
-from typing import Any, Callable
+from typing import Any
 from unittest.mock import MagicMock, call, patch
 
 import pytest
@@ -40,7 +41,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
 
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint
@@ -72,16 +73,18 @@ def store_spans_timeseries(
     period_secs: int,
     len_secs: int,
     metrics: list[DummyMetric],
-    attributes: dict[str, AnyValue] = {},
+    attributes: dict[str, AnyValue] | None = None,
 ) -> None:
+    if attributes is None:
+        attributes = {}
     messages = []
     for secs in range(0, len_secs, period_secs):
         dt = start_datetime + timedelta(seconds=secs)
         a = attributes | {m.name: AnyValue(double_value=m.get_value(secs)) for m in metrics}
         messages.append(gen_item_message(dt, a))
-    items_storage = get_storage(StorageKey("eap_items"))
+    items_storage = get_writable_storage(StorageKey("eap_items"))
 
-    write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+    write_raw_unprocessed_events(items_storage, messages)
 
 
 @pytest.mark.eap
@@ -241,6 +244,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 for sum_datapoint, avg_datapoint in zip(
                     expected_sum_timeseries.data_points,
                     expected_avg_timeseries.data_points,
+                    strict=False,
                 )
             ],
         )
@@ -1173,6 +1177,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 for sum_datapoint, avg_datapoint in zip(
                     expected_sum_timeseries.data_points,
                     expected_avg_timeseries.data_points,
+                    strict=False,
                 )
             ],
         )
@@ -1969,8 +1974,8 @@ class TestTimeSeriesApi(BaseApiTest):
                 )
             )
 
-        items_storage = get_storage(StorageKey("eap_items"))
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+        items_storage = get_writable_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(items_storage, messages)
 
         message = TimeSeriesRequest(
             meta=RequestMeta(
@@ -2080,9 +2085,7 @@ class TestTimeSeriesApi(BaseApiTest):
         )
         # figure out the expected value for avg(game_size * game_size_unit_mult) timeseries
         data_points_bytes = list(
-            chain(
-                map(lambda x: x * 10**9, data_points_gb), map(lambda x: x * 10**6, data_points_mb)
-            )
+            chain((x * 10**9 for x in data_points_gb), (x * 10**6 for x in data_points_mb))
         )
 
         # query for avg(game_size * game_size_unit_mult)

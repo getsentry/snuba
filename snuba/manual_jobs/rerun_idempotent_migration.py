@@ -1,4 +1,5 @@
-from typing import Any, Mapping, Optional
+from collections.abc import Mapping
+from typing import Any
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.manual_jobs import Job, JobLogger, JobSpec
@@ -21,7 +22,7 @@ class RerunIdempotentMigration(Job):
         self.__validate_job_params(job_spec.params)
         super().__init__(job_spec)
 
-    def __validate_job_params(self, params: Optional[Mapping[Any, Any]]) -> None:
+    def __validate_job_params(self, params: Mapping[Any, Any] | None) -> None:
         assert params is not None, "storage_set and migration_id parameters required"
         assert params.get("storage_set"), "storage_set required"
         assert params.get("migration_id"), "migration_id required"

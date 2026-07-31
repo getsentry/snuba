@@ -1,7 +1,8 @@
 import logging
 import signal
+from collections.abc import Sequence
 from contextlib import closing
-from typing import Any, Optional, Sequence
+from typing import Any
 
 import click
 import structlog
@@ -89,10 +90,10 @@ def subscriptions_scheduler(
     auto_offset_reset: str,
     no_strict_offset_reset: bool,
     schedule_ttl: int,
-    slice_id: Optional[int],
-    log_level: Optional[str],
-    stale_threshold_seconds: Optional[int],
-    health_check_file: Optional[str],
+    slice_id: int | None,
+    log_level: str | None,
+    stale_threshold_seconds: int | None,
+    health_check_file: str | None,
 ) -> None:
     """
     The subscriptions scheduler's job is to schedule subscriptions for a single entity.

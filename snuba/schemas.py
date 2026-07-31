@@ -1,5 +1,6 @@
 import copy
-from typing import Any, Generator, Mapping, MutableMapping
+from collections.abc import Generator, Mapping, MutableMapping
+from typing import Any
 
 import jsonschema
 
@@ -23,7 +24,7 @@ def validate_jsonschema(
         properties: Mapping[str, Any],
         instance: MutableMapping[str, Any],
         schema: Mapping[str, Any],
-    ) -> Generator[Exception, None, None]:
+    ) -> Generator[Exception]:
         for property, subschema in properties.items():
             if property not in instance and "default" in subschema:
                 if callable(subschema["default"]):
@@ -32,8 +33,7 @@ def validate_jsonschema(
                     default_value = copy.deepcopy(subschema["default"])
                 instance[property] = default_value
 
-        for error in orig(validator, properties, instance, schema):
-            yield error
+        yield from orig(validator, properties, instance, schema)
 
     # Using schema defaults during validation will cause the input value to be
     # mutated, so to be on the safe side we create a deep copy of that value to

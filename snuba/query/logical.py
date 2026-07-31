@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from abc import ABCMeta
-from typing import Any, Callable, Iterable, Optional, Sequence, Type, Union, cast
+from collections.abc import Callable, Iterable, Sequence
+from typing import Any, cast
 
 from snuba.query import LimitBy, OrderBy, ProcessableQuery, SelectedExpression
 from snuba.query.composite import CompositeQuery
@@ -23,21 +24,21 @@ class Query(ProcessableQuery[LogicalDataSource]):
 
     def __init__(
         self,
-        from_clause: Optional[LogicalDataSource],
+        from_clause: LogicalDataSource | None,
         # New data model to replace the one based on the dictionary
-        selected_columns: Optional[Sequence[SelectedExpression]] = None,
-        array_join: Optional[Sequence[Expression]] = None,
-        condition: Optional[Expression] = None,
-        prewhere: Optional[Expression] = None,
-        groupby: Optional[Sequence[Expression]] = None,
-        having: Optional[Expression] = None,
-        order_by: Optional[Sequence[OrderBy]] = None,
-        limitby: Optional[LimitBy] = None,
-        sample: Optional[float] = None,
-        limit: Optional[int] = None,
+        selected_columns: Sequence[SelectedExpression] | None = None,
+        array_join: Sequence[Expression] | None = None,
+        condition: Expression | None = None,
+        prewhere: Expression | None = None,
+        groupby: Sequence[Expression] | None = None,
+        having: Expression | None = None,
+        order_by: Sequence[OrderBy] | None = None,
+        limitby: LimitBy | None = None,
+        sample: float | None = None,
+        limit: int | None = None,
         offset: int = 0,
         totals: bool = False,
-        granularity: Optional[int] = None,
+        granularity: int | None = None,
     ):
         """
         Expects an already parsed query body.
@@ -68,7 +69,7 @@ class Query(ProcessableQuery[LogicalDataSource]):
     def set_final(self, final: bool) -> None:
         self.__final = final
 
-    def get_sample(self) -> Optional[float]:
+    def get_sample(self) -> float | None:
         return self.__sample
 
     def _eq_functions(self) -> Sequence[str]:
@@ -95,8 +96,7 @@ class _FlexibleQueryType(ABCMeta):
             data_source_type = cast(type, getattr(self, "data_source", object)())
             instance_data_source = instance.get_from_clause()
             return isinstance(instance_data_source, data_source_type)
-        else:
-            return False
+        return False
 
 
 """
@@ -135,7 +135,7 @@ that when someone is passing in an EntityQuery its datasource is actually an Ent
 
 class EntityQuery(Query, metaclass=_FlexibleQueryType):
     @classmethod
-    def data_source(cls) -> Type[Entity]:
+    def data_source(cls) -> type[Entity]:
         return Entity
 
     def get_from_clause(self) -> Entity:
@@ -144,13 +144,11 @@ class EntityQuery(Query, metaclass=_FlexibleQueryType):
     @classmethod
     def check_data_source(
         cls,
-        data_source: Union[
-            Query,
-            ProcessableQuery[Entity],
-            CompositeQuery[Entity],
-            JoinClause[Entity],
-            IndividualNode[Entity],
-        ],
+        data_source: Query
+        | ProcessableQuery[Entity]
+        | CompositeQuery[Entity]
+        | JoinClause[Entity]
+        | IndividualNode[Entity],
     ) -> None:
         if isinstance(data_source, JoinClause):
             if isinstance(data_source.left_node, IndividualNode):
@@ -165,20 +163,20 @@ class EntityQuery(Query, metaclass=_FlexibleQueryType):
             assert isinstance(data_source.get_from_clause(), cls.data_source())
 
     @classmethod
-    def from_query(cls, query: Union[Query, CompositeQuery[Entity]]) -> "EntityQuery":
+    def from_query(cls, query: Query | CompositeQuery[Entity]) -> EntityQuery:
         cls.check_data_source(query)
         return cast("EntityQuery", query)
 
 
 class StorageQuery(Query, metaclass=_FlexibleQueryType):
     @classmethod
-    def data_source(cls) -> Type[Storage]:
+    def data_source(cls) -> type[Storage]:
         return Storage
 
     def get_from_clause(self) -> Storage:
         return cast(Storage, super().get_from_clause())
 
     @classmethod
-    def from_query(cls, query: Query) -> "StorageQuery":
+    def from_query(cls, query: Query) -> StorageQuery:
         assert isinstance(query.get_from_clause(), cls.data_source())
         return cast("StorageQuery", query)

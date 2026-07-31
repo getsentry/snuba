@@ -1,6 +1,6 @@
 """Unit tests for query_metadata module"""
 
-from typing import Any, Dict
+from typing import Any
 
 from clickhouse_driver.errors import ErrorCodes
 
@@ -39,7 +39,7 @@ class TestGetRequestStatus:
     def test_get_request_status_too_many_bytes_with_policy(self) -> None:
         """Test that TOO_MANY_BYTES with allocation policy flag returns RATE_LIMITED"""
         error = ClickhouseError("Too many bytes", code=ErrorCodes.TOO_MANY_BYTES)
-        context: Dict[str, Any] = {"max_bytes_to_read_set_by_policy": True}
+        context: dict[str, Any] = {"max_bytes_to_read_set_by_policy": True}
         status = get_request_status(error, context)
         assert status.status == RequestStatus.RATE_LIMITED
         assert status.slo == SLO.FOR
@@ -47,7 +47,7 @@ class TestGetRequestStatus:
     def test_get_request_status_too_many_bytes_without_policy(self) -> None:
         """Test that TOO_MANY_BYTES without allocation policy flag returns ERROR"""
         error = ClickhouseError("Too many bytes", code=ErrorCodes.TOO_MANY_BYTES)
-        context: Dict[str, Any] = {"max_bytes_to_read_set_by_policy": False}
+        context: dict[str, Any] = {"max_bytes_to_read_set_by_policy": False}
         status = get_request_status(error, context)
         assert status.status == RequestStatus.ERROR
         assert status.slo == SLO.AGAINST
@@ -62,7 +62,7 @@ class TestGetRequestStatus:
     def test_get_request_status_too_many_bytes_empty_context(self) -> None:
         """Test that TOO_MANY_BYTES with empty context returns ERROR"""
         error = ClickhouseError("Too many bytes", code=ErrorCodes.TOO_MANY_BYTES)
-        context: Dict[str, Any] = {}
+        context: dict[str, Any] = {}
         status = get_request_status(error, context)
         assert status.status == RequestStatus.ERROR
         assert status.slo == SLO.AGAINST

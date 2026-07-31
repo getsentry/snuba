@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import Array, Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
@@ -12,9 +12,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
 
     blocking = True
 
-    def __forward_migrations(
-        self, table_name: str
-    ) -> Sequence[operations.SqlOperation]:
+    def __forward_migrations(self, table_name: str) -> Sequence[operations.SqlOperation]:
         return [
             operations.AddColumn(
                 storage_set=StorageSetKey.QUERYLOG,
@@ -29,9 +27,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
             ),
         ]
 
-    def __backwards_migrations(
-        self, table_name: str
-    ) -> Sequence[operations.SqlOperation]:
+    def __backwards_migrations(self, table_name: str) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropColumn(
                 StorageSetKey.QUERYLOG, table_name, "clickhouse_queries.bytes_scanned"

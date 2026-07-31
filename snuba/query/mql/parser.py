@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
-from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
+from typing import Any
 
 import sentry_sdk
 from parsimonious.exceptions import IncompleteParseError
@@ -74,7 +75,7 @@ from snuba.utils.metrics.timer import Timer
 
 # The parser returns a bunch of different types, so create a single aggregate type to
 # capture everything.
-MQLSTUFF = Dict[str, Union[str, list[SelectedExpression], list[Expression]]]
+MQLSTUFF = dict[str, str | list[SelectedExpression] | list[Expression]]
 logger = logging.getLogger("snuba.mql.parser")
 
 
@@ -89,7 +90,7 @@ class InitialParseResult:
     table_alias: str | None = None
 
 
-FormulaParameter = Union[InitialParseResult, int, float]
+FormulaParameter = InitialParseResult | int | float
 
 ARITHMETIC_OPERATORS_MAPPING = {
     "+": "plus",
@@ -103,7 +104,7 @@ UNARY_OPERATORS = {
 }
 
 
-class MQLVisitor(NodeVisitor):  # type: ignore
+class MQLVisitor(NodeVisitor):  # type: ignore[misc]
     """
     Builds the arguments for a Snuba AST from the MQL Parsimonious parse tree.
     """
@@ -114,7 +115,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_expression(
         self,
         node: Node,
-        children: Tuple[
+        children: tuple[
             InitialParseResult,
             Any,
         ],
@@ -141,7 +142,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_term(
         self,
         node: Node,
-        children: Tuple[InitialParseResult, Any],
+        children: tuple[InitialParseResult, Any],
     ) -> InitialParseResult:
         term, zero_or_more_others = children
         if zero_or_more_others:
@@ -161,25 +162,24 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_unary(self, node: Node, children: Sequence[Any]) -> Any:
         unary_op, coefficient = children
         if unary_op:
-            if isinstance(coefficient, float) or isinstance(coefficient, int):
+            if isinstance(coefficient, (float, int)):
                 return -coefficient
-            elif isinstance(coefficient, InitialParseResult):
+            if isinstance(coefficient, InitialParseResult):
                 return InitialParseResult(
                     expression=None,
                     formula=unary_op[0],
                     parameters=[coefficient],
                 )
-            else:
-                raise InvalidQueryException(
-                    f"Unary expression not supported for type {type(coefficient)}"
-                )
+            raise InvalidQueryException(
+                f"Unary expression not supported for type {type(coefficient)}"
+            )
 
         return coefficient
 
     def visit_coefficient(
         self,
         node: Node,
-        children: Tuple[InitialParseResult],
+        children: tuple[InitialParseResult],
     ) -> InitialParseResult:
         return children[0]
 
@@ -189,7 +189,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_filter(
         self,
         node: Node,
-        children: Tuple[
+        children: tuple[
             InitialParseResult,
             Any,
             Sequence[Any],
@@ -256,9 +256,8 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         ]
         if len(filters) == 1:
             return filters[0]
-        else:
-            # We flatten all filters into a single condition since Snuba supports it.
-            return FunctionCall(None, operator, tuple(filters))
+        # We flatten all filters into a single condition since Snuba supports it.
+        return FunctionCall(None, operator, tuple(filters))
 
     def visit_filter_expr(self, node: Node, children: Sequence[Any]) -> Any:
         return self._filter(children, BooleanFunctions.OR)
@@ -269,7 +268,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_filter_factor(
         self,
         node: Node,
-        children: Tuple[Sequence[str | Sequence[str] | FilterFactorValue] | FunctionCall, Any],
+        children: tuple[Sequence[str | Sequence[str] | FilterFactorValue] | FunctionCall, Any],
     ) -> FunctionCall:
         factor, *_ = children
         if isinstance(factor, FunctionCall):
@@ -280,7 +279,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         lhs: str
         filter_factor_value: FilterFactorValue
 
-        condition_op, lhs, _, _, _, filter_factor_value = factor  # type: ignore
+        condition_op, lhs, _, _, _, filter_factor_value = factor  # type: ignore[assignment]
         condition_op_value = "!" if len(condition_op) == 1 and condition_op[0] == "!" else ""
 
         contains_wildcard = filter_factor_value.contains_wildcard
@@ -320,20 +319,19 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                     ),
                 ),
             )
-        else:
-            assert isinstance(rhs, str)
-            if not condition_op_value:
-                op = ConditionFunctions.EQ
-            elif condition_op_value == "!":
-                op = ConditionFunctions.NEQ
-            return FunctionCall(
-                None,
-                op,
-                (
-                    Column(None, None, lhs[0]),
-                    Literal(None, rhs),
-                ),
-            )
+        assert isinstance(rhs, str)
+        if not condition_op_value:
+            op = ConditionFunctions.EQ
+        elif condition_op_value == "!":
+            op = ConditionFunctions.NEQ
+        return FunctionCall(
+            None,
+            op,
+            (
+                Column(None, None, lhs[0]),
+                Literal(None, rhs),
+            ),
+        )
 
     def visit_nested_expr(self, node: Node, children: Sequence[Any]) -> Any:
         _, _, filter_expr, *_ = children
@@ -342,8 +340,8 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_function(
         self,
         node: Node,
-        children: Tuple[
-            Tuple[InitialParseResult,],
+        children: tuple[
+            tuple[InitialParseResult,],
             Sequence[list[SelectedExpression]],
         ],
     ) -> InitialParseResult:
@@ -358,7 +356,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_group_by(
         self,
         node: Node,
-        children: Tuple[Any, Any, Any, Sequence[Sequence[str]]],
+        children: tuple[Any, Any, Any, Sequence[Sequence[str]]],
     ) -> list[SelectedExpression]:
         *_, groupbys = children
         groupby = groupbys[0]
@@ -439,7 +437,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_target(
         self,
         node: Node,
-        children: Sequence[Union[InitialParseResult, Sequence[InitialParseResult]]],
+        children: Sequence[InitialParseResult | Sequence[InitialParseResult]],
     ) -> InitialParseResult:
         target = children[0]
         if isinstance(children[0], list):
@@ -452,16 +450,16 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         raise InvalidQueryException("Variables are not supported yet")
 
     def visit_nested_expression(
-        self, node: Node, children: Tuple[Any, Any, InitialParseResult]
+        self, node: Node, children: tuple[Any, Any, InitialParseResult]
     ) -> InitialParseResult:
         return children[2]
 
     def visit_aggregate(
         self,
         node: Node,
-        children: Tuple[
+        children: tuple[
             str,
-            Tuple[
+            tuple[
                 Any,
                 Any,
                 InitialParseResult,
@@ -485,10 +483,10 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_curried_aggregate(
         self,
         node: Node,
-        children: Tuple[
+        children: tuple[
             str,
-            Tuple[Any, Any, Sequence[Sequence[Union[str, int, float]]], Any, Any],
-            Tuple[Any, Any, InitialParseResult, Any, Any],
+            tuple[Any, Any, Sequence[Sequence[str | int | float]], Any, Any],
+            tuple[Any, Any, InitialParseResult, Any, Any],
         ],
     ) -> InitialParseResult:
         aggregate_name, agg_params, zero_or_one = children
@@ -513,12 +511,12 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_arbitrary_function(
         self,
         node: Node,
-        children: Tuple[
+        children: tuple[
             str,
-            Tuple[
+            tuple[
                 Any,
                 Sequence[InitialParseResult],
-                Sequence[Sequence[Union[str, int, float]]],
+                Sequence[Sequence[str | int | float]],
                 Any,
             ],
         ],
@@ -596,23 +594,21 @@ class MQLVisitor(NodeVisitor):  # type: ignore
             target.groupby = group_by
         return target
 
-    def visit_param(
-        self, node: Node, children: Tuple[Union[str, int, float], Any]
-    ) -> Union[str, int, float]:
+    def visit_param(self, node: Node, children: tuple[str | int | float, Any]) -> str | int | float:
         param, *_ = children
         return param
 
     def visit_param_expression(
-        self, node: Node, children: Tuple[Union[str, int, float], Any]
-    ) -> Union[str, int, float]:
+        self, node: Node, children: tuple[str | int | float, Any]
+    ) -> str | int | float:
         param = children[0]
         return param
 
     def visit_aggregate_list(
         self,
         node: Node,
-        children: Tuple[list[Union[str, int, float]], Optional[Union[str, int, float]]],
-    ) -> Sequence[Union[str, int, float]]:
+        children: tuple[list[str | int | float], str | int | float | None],
+    ) -> Sequence[str | int | float]:
         agg_params, param = children
         if param is not None:
             agg_params.append(param)
@@ -701,12 +697,12 @@ def parse_mql_query_body(body: str, dataset: Dataset) -> EntityQuery:
             idx = e.column()
             prefix = line[max(0, idx - 3) : idx]
             suffix = line[idx : (idx + 10)]
-            raise ParsingException(f"Parsing error on line {e.line()} at '{prefix}{suffix}'")
+            raise ParsingException(f"Parsing error on line {e.line()} at '{prefix}{suffix}'") from e
         except Exception as e:
             message = str(e)
             if "\n" in message:
                 message, _ = message.split("\n", 1)
-            raise ParsingException(message)
+            raise ParsingException(message) from e
 
         if not parsed.expression and not parsed.formula:
             raise ParsingException("No aggregate/expression or formula specified in MQL query")
@@ -740,15 +736,14 @@ def build_formula_query_from_clause(
     def find_all_leaf_nodes(tree: FormulaParameter) -> list[InitialParseResult] | None:
         if isinstance(tree, InitialParseResult) and tree.formula is None:
             return [tree]
-        elif isinstance(tree, InitialParseResult) and tree.formula is not None:
+        if isinstance(tree, InitialParseResult) and tree.formula is not None:
             nodes = []
             for p in tree.parameters or []:
                 found = find_all_leaf_nodes(p)
                 if found:
                     nodes.extend(found)
             return nodes
-        else:
-            return None
+        return None
 
     join_nodes = find_all_leaf_nodes(parsed)
     if join_nodes is None:
@@ -759,9 +754,8 @@ def build_formula_query_from_clause(
     # Example: sum(`transactions.duration`) by transaction / sum(`transactions.duration`)
     groupbys = join_nodes[0].groupby
     for node in join_nodes:
-        if node.groupby is not None:
-            if node.groupby != groupbys:
-                raise InvalidQueryException("All terms in a formula must have the same groupby")
+        if node.groupby is not None and node.groupby != groupbys:
+            raise InvalidQueryException("All terms in a formula must have the same groupby")
 
     entity_keys = [select_entity(node.mri or "", dataset) for node in join_nodes]
     if len(entity_keys) == 1:
@@ -922,7 +916,7 @@ def convert_formula_to_query(
         if leaf_node.groupby:
             for group_exp in leaf_node.groupby:
                 if isinstance(group_exp.expression, Column):
-                    alias: Optional[str]
+                    alias: str | None
                     if alias_wrap(leaf_node.table_alias):
                         alias = f"{alias_wrap(leaf_node.table_alias)}.{group_exp.expression.alias}"
                     else:
@@ -960,7 +954,7 @@ def convert_formula_to_query(
 
         if not isinstance(param, InitialParseResult):
             return []
-        elif param.expression is not None:
+        if param.expression is not None:
             conditions = []
             for c in param.conditions or []:
                 assert isinstance(c, FunctionCall)
@@ -973,13 +967,12 @@ def convert_formula_to_query(
                 )
             )
             return conditions
-        elif param.formula:
+        if param.formula:
             conditions = []
             for p in param.parameters or []:
                 conditions.extend(extract_filters(p))
             return conditions
-        else:
-            raise InvalidQueryException("Could not extract valid filters for formula")
+        raise InvalidQueryException("Could not extract valid filters for formula")
 
     conditions = []
     for p in parsed.parameters or []:
@@ -1033,9 +1026,10 @@ def select_entity(mri: str, dataset: Dataset) -> EntityKey:
     if get_dataset_name(dataset) == "metrics":
         if entity := METRICS_ENTITIES.get(mri[0]):
             return entity
-    elif get_dataset_name(dataset) == "generic_metrics":
-        if entity := GENERIC_ENTITIES.get(mri[0]):
-            return entity
+    elif get_dataset_name(dataset) == "generic_metrics" and (
+        entity := GENERIC_ENTITIES.get(mri[0])
+    ):
+        return entity
 
     raise ParsingException(f"invalid metric type {mri[0]}")
 
@@ -1087,6 +1081,9 @@ def populate_query_from_mql_context(
             query.set_totals(with_totals)
 
     if isinstance(query, CompositeQuery):
+        join_clause = query.get_from_clause()
+        assert isinstance(join_clause, JoinClause)
+        alias_node_map = join_clause.get_alias_node_map()
 
         def add_time_join_keys(join_clause: JoinClause[Any]) -> str:
             match (join_clause.left_node, join_clause.right_node):
@@ -1145,9 +1142,7 @@ def populate_query_from_mql_context(
         number_of_groupbys = len(query.get_groupby())
 
         no_groupby_or_one_sided_groupby = False
-        if number_of_groupbys == 0:
-            no_groupby_or_one_sided_groupby = True
-        elif number_of_groupbys % number_of_joins != 0:
+        if number_of_groupbys == 0 or number_of_groupbys % number_of_joins != 0:
             no_groupby_or_one_sided_groupby = True
 
         if selected_time:
@@ -1217,7 +1212,7 @@ def populate_query_from_mql_context(
     return query, mql_context
 
 
-def quantiles_to_quantile(query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]) -> None:
+def quantiles_to_quantile(query: CompositeQuery[LogicalDataSource] | LogicalQuery) -> None:
     """
     Changes quantiles(0.5)(...) to arrayElement(quantiles(0.5)(...), 1). This is to simplify
     the API (so that the arrays don't need to be unwrapped) and also avoids bugs where comparing
@@ -1225,19 +1220,19 @@ def quantiles_to_quantile(query: Union[CompositeQuery[LogicalDataSource], Logica
     """
 
     def transform(exp: Expression) -> Expression:
-        if isinstance(exp, CurriedFunctionCall):
-            if exp.internal_function.function_name in ("quantiles", "quantilesIf"):
-                if len(exp.internal_function.parameters) == 1:
-                    return arrayElement(exp.alias, replace(exp, alias=None), Literal(None, 1))
+        if (
+            isinstance(exp, CurriedFunctionCall)
+            and exp.internal_function.function_name in ("quantiles", "quantilesIf")
+            and len(exp.internal_function.parameters) == 1
+        ):
+            return arrayElement(exp.alias, replace(exp, alias=None), Literal(None, 1))
 
         return exp
 
     query.transform_expressions(transform)
 
 
-CustomProcessors = Sequence[
-    Callable[[Union[CompositeQuery[LogicalDataSource], LogicalQuery]], None]
-]
+CustomProcessors = Sequence[Callable[[CompositeQuery[LogicalDataSource] | LogicalQuery], None]]
 
 MQL_POST_PROCESSORS: CustomProcessors = POST_PROCESSORS + [
     quantiles_to_quantile,
@@ -1248,9 +1243,9 @@ def parse_mql_query(
     body: str,
     mql_context_dict: dict[str, Any],
     dataset: Dataset,
-    custom_processing: Optional[CustomProcessors] = None,
+    custom_processing: CustomProcessors | None = None,
     settings: QuerySettings | None = None,
-) -> Union[CompositeQuery[LogicalDataSource], LogicalQuery]:
+) -> CompositeQuery[LogicalDataSource] | LogicalQuery:
     # dummy variables that dont matter
     dummy_timer = Timer("mql_pipeline")
     dummy_settings = HTTPQuerySettings()
@@ -1367,6 +1362,6 @@ class PostProcessAndValidateMQLQuery(
 
 
 @dataclass
-class FilterFactorValue(object):
+class FilterFactorValue:
     value: str | Sequence[str] | Condition | BooleanCondition
     contains_wildcard: bool

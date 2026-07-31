@@ -3,7 +3,7 @@
 import argparse
 import re
 from collections import OrderedDict
-from typing import Mapping, Optional, Sequence
+from collections.abc import Mapping, Sequence
 
 from clickhouse_driver import Client
 
@@ -100,7 +100,7 @@ def copy_tables(
     source_database: str,
     target_database: str,
     execute: bool,
-    tables: Optional[Sequence[str]],
+    tables: Sequence[str] | None,
 ) -> None:
     """
     When adding a replica to a clickhouse cluster, that node will not have any tables

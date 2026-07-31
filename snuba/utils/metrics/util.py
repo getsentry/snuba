@@ -1,8 +1,9 @@
-import inspect
-from functools import partial, wraps
-from typing import Any, Callable, Mapping, Optional, TypeVar, cast
-
 import _strptime  # NOQA fixes _strptime deferred import issue
+import inspect
+from functools import wraps
+from typing import Any, TypeVar, cast
+from collections.abc import Callable, Mapping
+
 import sentry_sdk
 
 from snuba import settings
@@ -12,48 +13,52 @@ from snuba.utils.metrics.types import Tags
 
 def create_metrics(
     prefix: str,
-    tags: Optional[Tags] = None,
-    sample_rates: Optional[Mapping[str, float]] = None,
+    tags: Tags | None = None,
+    sample_rates: Mapping[str, float] | None = None,
 ) -> MetricsBackend:
-    """Create a DogStatsd object if DOGSTATSD_HOST and DOGSTATSD_PORT are defined,
-    with the specified prefix and tags. Return a DummyMetricsBackend otherwise.
+    """Create a DogStatsd object if a DogStatsD Unix domain socket is configured.
+
+    Metrics are sent to the local DogStatsD agent over the socket configured by
+    ``settings.DOGSTATSD_SOCKET_PATH``, which is the only supported transport and is passed
+    to the datadog client verbatim. Return a DummyMetricsBackend when it is not configured.
     Prefixes must start with `snuba.<category>`, for example: `snuba.processor`.
     """
-    host: Optional[str] = settings.DOGSTATSD_HOST
-    port: Optional[int] = settings.DOGSTATSD_PORT
-
     if settings.TESTING:
         from snuba.utils.metrics.backends.testing import TestingMetricsBackend
 
         return TestingMetricsBackend()
-    elif host is None and port is None:
+
+    # No socket configured -> no metrics.
+    socket_path: str | None = settings.DOGSTATSD_SOCKET_PATH
+    if socket_path is None:
         from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 
         return DummyMetricsBackend()
-    elif host is None or port is None:
-        raise ValueError(
-            f"DOGSTATSD_HOST and DOGSTATSD_PORT should both be None or not None. Found DOGSTATSD_HOST: {host}, DOGSTATSD_PORT: {port} instead."
-        )
 
-    from datadog import DogStatsd
+    from datadog import DogStatsd  # type: ignore[attr-defined]  # datadog lacks explicit re-export
 
     from snuba.utils.metrics.backends.datadog import DatadogMetricsBackend
     from snuba.utils.metrics.backends.dualwrite import SentryDatadogMetricsBackend
     from snuba.utils.metrics.backends.sentry import SentryMetricsBackend
 
+    constant_tags = [f"{key}:{value}" for key, value in tags.items()] if tags is not None else None
+
+    def make_client() -> DogStatsd:
+        # socket_path is passed to the datadog client verbatim. It is expected to be a
+        # full address including the transport scheme (e.g.
+        # "unixgram:///run/dogstatsd.sock"); the datadog client strips the scheme and
+        # selects the socket kind itself. The same env var (SNUBA_DOGSTATSD_SOCKET_PATH)
+        # is passed verbatim to the Rust exporter, which parses the scheme too, so no
+        # scheme is hardcoded on either side.
+        return DogStatsd(
+            socket_path=socket_path,
+            namespace=prefix,
+            constant_tags=constant_tags,
+            disable_telemetry=False,
+        )
+
     return SentryDatadogMetricsBackend(
-        DatadogMetricsBackend(
-            partial(
-                DogStatsd,
-                host=host,
-                port=port,
-                namespace=prefix,
-                constant_tags=(
-                    [f"{key}:{value}" for key, value in tags.items()] if tags is not None else None
-                ),
-            ),
-            sample_rates,
-        ),
+        DatadogMetricsBackend(make_client, sample_rates),
         SentryMetricsBackend(),
     )
 

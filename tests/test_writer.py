@@ -1,5 +1,4 @@
 import gzip
-from typing import Optional
 
 import pytest
 import rapidjson
@@ -48,7 +47,7 @@ DATA = """project_id,id,status,last_seen,first_seen,active_at,first_release_id
 
 
 class FakeQuery(FormattedQuery):
-    def get_sql(self, format: Optional[str] = None) -> str:
+    def get_sql(self, format: str | None = None) -> str:
         return "SELECT count() FROM groupedmessage_local;"
 
 

@@ -1,6 +1,7 @@
 import copy
+from collections.abc import Iterator, Sequence
 from contextlib import _GeneratorContextManager, contextmanager
-from typing import Any, Iterator, Sequence, Union
+from typing import Any
 from unittest.mock import Mock, patch
 
 import pytest
@@ -85,7 +86,7 @@ class TestValidateMigrations:
     drop_col_local_op = DropColumn(storage, "test_local_table", "col")
     drop_col_dist_op = DropColumn(storage, "test_dist_table", "col")
 
-    def _dist_to_local(self, op: Union[CreateTable, AddColumn, DropColumn]) -> str:
+    def _dist_to_local(self, op: CreateTable | AddColumn | DropColumn) -> str:
         if op.table_name == "test_dist_table":
             return "test_local_table"
         if op.table_name == "test_dist_table2":
@@ -269,18 +270,17 @@ class TestValidateMigrations:
             def forwards_ops(self) -> Sequence[SqlOperation]:
                 if forwards_local_first_val:
                     return (*forwards_local, *forwards_dist)
-                else:
-                    return (*forwards_dist, *forwards_local)
+                return (*forwards_dist, *forwards_local)
 
             def backwards_ops(self) -> Sequence[SqlOperation]:
                 if backwards_local_first_val:
                     return (*backwards_local, *backwards_dist)
-                else:
-                    return (*backwards_dist, *backwards_local)
+                return (*backwards_dist, *backwards_local)
 
         with expectation_new as err:
             validate_migration_order(TestMigrationNew())
         if err_msg:
+            assert err is not None
             assert str(err.value) == err_msg
 
 
@@ -300,7 +300,7 @@ def test_conflicts(mock_get_local_table_name: Mock, mock_get_cluster: Mock) -> N
     )
     mock_get_cluster.return_value = mock_cluster
 
-    def _dist_to_local(op: Union[CreateTable, AddColumn, DropColumn]) -> str:
+    def _dist_to_local(op: CreateTable | AddColumn | DropColumn) -> str:
         if op.table_name == "test_dist_table":
             return "test_local_table"
         if op.table_name == "test_dist_table2":

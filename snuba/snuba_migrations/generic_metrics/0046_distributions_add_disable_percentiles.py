@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
@@ -19,7 +19,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=self.local_table_name,
                 column=Column(
                     "disable_percentiles",
-                    UInt(8, Modifiers(default=str("0"), codecs=["T64"])),
+                    UInt(8, Modifiers(default="0", codecs=["T64"])),
                 ),
                 target=operations.OperationTarget.LOCAL,
                 after="granularities",
@@ -29,7 +29,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=self.dist_table_name,
                 column=Column(
                     "disable_percentiles",
-                    UInt(8, Modifiers(default=str("0"), codecs=["T64"])),
+                    UInt(8, Modifiers(default="0", codecs=["T64"])),
                 ),
                 target=operations.OperationTarget.DISTRIBUTED,
                 after="granularities",

@@ -1,16 +1,16 @@
-from typing import List, Optional, Sequence
+from collections.abc import Sequence
 
 from snuba.utils.describer import Description, DescriptionVisitor, Property
 
 
 class TestDescriber(DescriptionVisitor):
     def __init__(self) -> None:
-        self.__content: List[Optional[str]] = []
+        self.__content: list[str | None] = []
 
-    def get_content(self) -> Sequence[Optional[str]]:
+    def get_content(self) -> Sequence[str | None]:
         return self.__content
 
-    def visit_header(self, header: Optional[str]) -> None:
+    def visit_header(self, header: str | None) -> None:
         self.__content.append(header)
 
     def visit_description(self, desc: Description) -> None:

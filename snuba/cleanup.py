@@ -1,6 +1,6 @@
 import logging
+from collections.abc import Sequence
 from datetime import datetime, timedelta
-from typing import Sequence
 
 from snuba import util
 from snuba.clickhouse.native import ClickhousePool

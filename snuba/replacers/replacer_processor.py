@@ -1,8 +1,7 @@
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from enum import Enum
-from typing import Any, Generic, Mapping, Optional, TypeVar, cast
-
-from typing_extensions import NamedTuple
+from typing import Any, Generic, NamedTuple, TypeVar, cast
 
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import ReplacementType
@@ -45,11 +44,11 @@ class Replacement(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def get_insert_query(self, table_name: str) -> Optional[str]:
+    def get_insert_query(self, table_name: str) -> str | None:
         raise NotImplementedError()
 
     @abstractmethod
-    def get_count_query(self, table_name: str) -> Optional[str]:
+    def get_count_query(self, table_name: str) -> str | None:
         raise NotImplementedError()
 
     @abstractmethod
@@ -81,7 +80,7 @@ class ReplacerProcessor(ABC, Generic[R], metaclass=RegisteredClass):
         return cast("ReplacerProcessor[R]", cls.class_from_name(name))
 
     @abstractmethod
-    def process_message(self, message: ReplacementMessage[Mapping[str, Any]]) -> Optional[R]:
+    def process_message(self, message: ReplacementMessage[Mapping[str, Any]]) -> R | None:
         """
         Processes one message from the topic.
         """

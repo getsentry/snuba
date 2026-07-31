@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Generator, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Generator, Iterator, Mapping, NewType, Optional, Sequence
+from typing import Any, NewType
 
 SnapshotId = NewType("SnapshotId", str)
 SnapshotTableRow = Mapping[str, Any]
@@ -18,7 +19,7 @@ class TableConfig:
 
     table: str
     zip: bool
-    columns: Optional[Sequence[ColumnConfig]]
+    columns: Sequence[ColumnConfig] | None
 
     @classmethod
     def from_dict(cls, content: Mapping[str, Any]) -> TableConfig:
@@ -27,16 +28,14 @@ class TableConfig:
             # This has already been validated by the jsonschema validator
             assert isinstance(column, Mapping)
             if column.get("formatter") is not None:
-                formatter: Optional[FormatterConfig] = FormatterConfig.from_dict(
-                    column["formatter"]
-                )
+                formatter: FormatterConfig | None = FormatterConfig.from_dict(column["formatter"])
             else:
                 formatter = None
             columns.append(ColumnConfig(name=column["name"], formatter=formatter))
         return TableConfig(content["table"], content["zip"], columns)
 
 
-class FormatterConfig(ABC):
+class FormatterConfig(ABC):  # noqa: B024 - intentional abstract parent class with no abstract methods
     """
     Parent class to all the the formatter configs.
     """
@@ -45,8 +44,7 @@ class FormatterConfig(ABC):
     def from_dict(cls, content: Mapping[str, str]) -> FormatterConfig:
         if content["type"] == "datetime":
             return DateTimeFormatterConfig.from_dict(content)
-        else:
-            raise ValueError("Unknown config for column formatter")
+        raise ValueError("Unknown config for column formatter")
 
 
 class DateFormatPrecision(Enum):
@@ -70,7 +68,7 @@ class ColumnConfig:
     """
 
     name: str
-    formatter: Optional[FormatterConfig] = None
+    formatter: FormatterConfig | None = None
 
 
 @dataclass(frozen=True)
@@ -103,12 +101,10 @@ class BulkLoadSource(ABC):
 
     @abstractmethod
     @contextmanager
-    def get_parsed_table_file(
-        self, table: str
-    ) -> Generator[Iterator[SnapshotTableRow], None, None]:
+    def get_parsed_table_file(self, table: str) -> Generator[Iterator[SnapshotTableRow]]:
         raise NotImplementedError
 
     @abstractmethod
     @contextmanager
-    def get_preprocessed_table_file(self, table: str) -> Generator[Iterator[bytes], None, None]:
+    def get_preprocessed_table_file(self, table: str) -> Generator[Iterator[bytes]]:
         raise NotImplementedError

@@ -1,5 +1,3 @@
-from typing import List
-
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageMeta
 from sentry_protos.snuba.v1.request_common_pb2 import (
     QueryInfo,
@@ -16,15 +14,14 @@ from snuba.web import QueryResult
 
 
 def _construct_meta_if_downsampled(
-    query_results: List[QueryResult],
+    query_results: list[QueryResult],
 ) -> DownsampledStorageMeta | None:
     highest_sampling_tier = Tier.TIER_NO_TIER
 
     for query_result in query_results:
         sampling_tier = query_result.extra.get("stats", {}).get("sampling_tier")
-        if sampling_tier:
-            if sampling_tier.value > highest_sampling_tier.value:
-                highest_sampling_tier = sampling_tier
+        if sampling_tier and sampling_tier.value > highest_sampling_tier.value:
+            highest_sampling_tier = sampling_tier
 
     return (
         DownsampledStorageMeta(
@@ -38,10 +35,10 @@ def _construct_meta_if_downsampled(
 def extract_response_meta(
     request_id: str,
     debug: bool,
-    query_results: List[QueryResult],
-    timers: List[Timer],
+    query_results: list[QueryResult],
+    timers: list[Timer],
 ) -> ResponseMeta:
-    query_info: List[QueryInfo] = []
+    query_info: list[QueryInfo] = []
 
     downsampled_storage_meta = _construct_meta_if_downsampled(query_results)
 
@@ -67,7 +64,7 @@ def extract_response_meta(
             else ResponseMeta(request_id=request_id, query_info=query_info)
         )
 
-    for query_result, timer in zip(query_results, timers):
+    for query_result, timer in zip(query_results, timers, strict=False):
         extra = getattr(query_result, "extra", None) or {}
         stats = extra.get("stats", {}) if isinstance(extra, dict) else {}
         result = getattr(query_result, "result", None) or {}

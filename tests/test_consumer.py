@@ -2,10 +2,10 @@ import functools
 import itertools
 import json
 import pickle
+from collections.abc import MutableSequence
 from datetime import datetime
 from pathlib import Path
 from pickle import PickleBuffer
-from typing import MutableSequence
 from unittest.mock import Mock, call
 
 import pytest
@@ -88,7 +88,7 @@ def test_streaming_consumer_strategy(tmpdir: Path) -> None:
     commit_function = Mock()
     strategy = factory.create_with_partitions(commit_function, {})
 
-    for i in range(3):
+    for _i in range(3):
         strategy.poll()
         strategy.submit(next(messages))
 

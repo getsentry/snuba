@@ -1,20 +1,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Iterable, MutableMapping, Sequence
 from dataclasses import dataclass, replace
 from enum import Enum
 from itertools import chain
 from typing import Any as AnyType
 from typing import (
-    Callable,
     Generic,
-    Iterable,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Set,
-    Tuple,
-    Type,
     TypeVar,
     cast,
 )
@@ -56,7 +49,7 @@ class OrderBy:
 class SelectedExpression:
     # The name of this column in the resultset.
     # TODO: Make this non nullable
-    name: Optional[str]
+    name: str | None
     expression: Expression
 
 
@@ -94,19 +87,19 @@ class Query(DataSource, ABC):
         # TODO: Consider if to remove the defaults and make some of
         # these fields mandatory. This impacts a lot of code so it
         # would be done on its own.
-        selected_columns: Optional[Sequence[SelectedExpression]] = None,
-        array_join: Optional[Sequence[Expression]] = None,
-        condition: Optional[Expression] = None,
-        groupby: Optional[Sequence[Expression]] = None,
-        having: Optional[Expression] = None,
-        order_by: Optional[Sequence[OrderBy]] = None,
-        limitby: Optional[LimitBy] = None,
-        limit: Optional[int] = None,
+        selected_columns: Sequence[SelectedExpression] | None = None,
+        array_join: Sequence[Expression] | None = None,
+        condition: Expression | None = None,
+        groupby: Sequence[Expression] | None = None,
+        having: Expression | None = None,
+        order_by: Sequence[OrderBy] | None = None,
+        limitby: LimitBy | None = None,
+        limit: int | None = None,
         offset: int = 0,
         totals: bool = False,
-        granularity: Optional[int] = None,
-        experiments: Optional[MutableMapping[str, AnyType]] = None,
-        on_cluster: Optional[Expression] = None,
+        granularity: int | None = None,
+        experiments: MutableMapping[str, AnyType] | None = None,
+        on_cluster: Expression | None = None,
         is_delete: bool = False,
     ):
         self.__selected_columns = selected_columns or []
@@ -165,10 +158,10 @@ class Query(DataSource, ABC):
     def set_ast_groupby(self, groupby: Sequence[Expression]) -> None:
         self.__groupby = groupby
 
-    def get_condition(self) -> Optional[Expression]:
+    def get_condition(self) -> Expression | None:
         return self.__condition
 
-    def set_ast_condition(self, condition: Optional[Expression]) -> None:
+    def set_ast_condition(self, condition: Expression | None) -> None:
         self.__condition = condition
 
     def add_condition_to_ast(self, condition: Expression) -> None:
@@ -177,16 +170,16 @@ class Query(DataSource, ABC):
         else:
             self.__condition = binary_condition(BooleanFunctions.AND, condition, self.__condition)
 
-    def get_arrayjoin(self) -> Optional[Sequence[Expression]]:
+    def get_arrayjoin(self) -> Sequence[Expression] | None:
         return self.__array_join
 
-    def set_arrayjoin(self, arrayjoin: Optional[Sequence[Expression]]) -> None:
+    def set_arrayjoin(self, arrayjoin: Sequence[Expression] | None) -> None:
         self.__array_join = arrayjoin
 
-    def get_having(self) -> Optional[Expression]:
+    def get_having(self) -> Expression | None:
         return self.__having
 
-    def set_ast_having(self, condition: Optional[Expression]) -> None:
+    def set_ast_having(self, condition: Expression | None) -> None:
         self.__having = condition
 
     def get_orderby(self) -> Sequence[OrderBy]:
@@ -195,13 +188,13 @@ class Query(DataSource, ABC):
     def set_ast_orderby(self, orderby: Sequence[OrderBy]) -> None:
         self.__order_by = orderby
 
-    def get_limitby(self) -> Optional[LimitBy]:
+    def get_limitby(self) -> LimitBy | None:
         return self.__limitby
 
     def set_limitby(self, limitby: LimitBy) -> None:
         self.__limitby = limitby
 
-    def get_limit(self) -> Optional[int]:
+    def get_limit(self) -> int | None:
         return self.__limit
 
     def set_limit(self, limit: int) -> None:
@@ -222,7 +215,7 @@ class Query(DataSource, ABC):
     def set_granularity(self, granularity: int) -> None:
         self.__granularity = granularity
 
-    def get_granularity(self) -> Optional[int]:
+    def get_granularity(self) -> int | None:
         return self.__granularity
 
     def add_experiment(self, name: str, value: AnyType) -> None:
@@ -240,7 +233,7 @@ class Query(DataSource, ABC):
     def is_delete(self) -> bool:
         return self.__is_delete
 
-    def get_on_cluster(self) -> Optional[Expression]:
+    def get_on_cluster(self) -> Expression | None:
         return self.__on_cluster
 
     @abstractmethod
@@ -259,12 +252,12 @@ class Query(DataSource, ABC):
         deduplicate any of the expressions found.
         """
         return chain(
-            chain.from_iterable(map(lambda selected: selected.expression, self.__selected_columns)),
+            chain.from_iterable(selected.expression for selected in self.__selected_columns),
             self.__array_join or [],
             self.__condition or [],
             chain.from_iterable(self.__groupby),
             self.__having or [],
-            chain.from_iterable(map(lambda orderby: orderby.expression, self.__order_by)),
+            chain.from_iterable(orderby.expression for orderby in self.__order_by),
             self.__limitby.columns if self.__limitby else [],
             self._get_expressions_impl(),
         )
@@ -300,33 +293,24 @@ class Query(DataSource, ABC):
         def transform_expression_list(
             expressions: Sequence[Expression],
         ) -> Sequence[Expression]:
-            return list(
-                map(lambda exp: exp.transform(func), expressions),
-            )
+            return [exp.transform(func) for exp in expressions]
 
-        self.__selected_columns = list(
-            map(
-                lambda selected: replace(selected, expression=selected.expression.transform(func)),
-                self.__selected_columns,
-            )
-        )
-        if not skip_array_join:
-            if self.__array_join:
-                self.__array_join = [
-                    join_element.transform(func) for join_element in self.__array_join
-                ]
+        self.__selected_columns = [
+            replace(selected, expression=selected.expression.transform(func))
+            for selected in self.__selected_columns
+        ]
+        if not skip_array_join and self.__array_join:
+            self.__array_join = [join_element.transform(func) for join_element in self.__array_join]
 
         if not skip_transform_condition:
             self.__condition = self.__condition.transform(func) if self.__condition else None
         self.__groupby = transform_expression_list(self.__groupby)
         self.__having = self.__having.transform(func) if self.__having else None
         if not skip_transform_order_by:
-            self.__order_by = list(
-                map(
-                    lambda clause: replace(clause, expression=clause.expression.transform(func)),
-                    self.__order_by,
-                )
-            )
+            self.__order_by = [
+                replace(clause, expression=clause.expression.transform(func))
+                for clause in self.__order_by
+            ]
 
         if self.__limitby is not None:
             self.__limitby = LimitBy(
@@ -355,12 +339,10 @@ class Query(DataSource, ABC):
         The transformation happens in place.
         """
 
-        self.__selected_columns = list(
-            map(
-                lambda selected: replace(selected, expression=selected.expression.accept(visitor)),
-                self.__selected_columns,
-            )
-        )
+        self.__selected_columns = [
+            replace(selected, expression=selected.expression.accept(visitor))
+            for selected in self.__selected_columns
+        ]
         if self.__array_join is not None:
             self.__array_join = [join_element.accept(visitor) for join_element in self.__array_join]
         if self.__condition is not None:
@@ -368,12 +350,10 @@ class Query(DataSource, ABC):
         self.__groupby = [e.accept(visitor) for e in (self.__groupby or [])]
         if self.__having is not None:
             self.__having = self.__having.accept(visitor)
-        self.__order_by = list(
-            map(
-                lambda clause: replace(clause, expression=clause.expression.accept(visitor)),
-                self.__order_by,
-            )
-        )
+        self.__order_by = [
+            replace(clause, expression=clause.expression.accept(visitor))
+            for clause in self.__order_by
+        ]
         if self.__limitby is not None:
             self.__limitby = LimitBy(
                 self.__limitby.limit,
@@ -382,27 +362,27 @@ class Query(DataSource, ABC):
         self._transform_impl(visitor)
 
     def __get_all_ast_referenced_expressions(
-        self, expressions: Iterable[Expression], exp_type: Type[TExp]
-    ) -> Set[TExp]:
-        ret: Set[TExp] = set()
+        self, expressions: Iterable[Expression], exp_type: type[TExp]
+    ) -> set[TExp]:
+        ret: set[TExp] = set()
         for expression in expressions:
             ret |= {c for c in expression if isinstance(c, exp_type)}
         return ret
 
-    def get_all_ast_referenced_columns(self) -> Set[Column]:
+    def get_all_ast_referenced_columns(self) -> set[Column]:
         return self.__get_all_ast_referenced_expressions(self.get_all_expressions(), Column)
 
-    def get_all_ast_referenced_subscripts(self) -> Set[SubscriptableReference]:
+    def get_all_ast_referenced_subscripts(self) -> set[SubscriptableReference]:
         return self.__get_all_ast_referenced_expressions(
             self.get_all_expressions(), SubscriptableReference
         )
 
-    def get_columns_referenced_in_conditions_ast(self) -> Set[Column]:
+    def get_columns_referenced_in_conditions_ast(self) -> set[Column]:
         return self.__get_all_ast_referenced_expressions(
             [self.__condition] if self.__condition is not None else [], Column
         )
 
-    def get_columns_referenced_in_select(self) -> Set[Column]:
+    def get_columns_referenced_in_select(self) -> set[Column]:
         return self.__get_all_ast_referenced_expressions(
             [selected.expression for selected in self.__selected_columns], Column
         )
@@ -417,8 +397,8 @@ class Query(DataSource, ABC):
         Caution: for this to work, data_source needs to be already populated,
         otherwise it would throw.
         """
-        declared_symbols: Set[str] = set()
-        referenced_symbols: Set[str] = set()
+        declared_symbols: set[str] = set()
+        referenced_symbols: set[str] = set()
         for e in self.get_all_expressions():
             # SELECT f(g(x)) as A -> declared_symbols = {A}
             # SELECT a as B -> declared_symbols = {B} referenced_symbols = {a}
@@ -455,7 +435,7 @@ class Query(DataSource, ABC):
             "get_granularity",
         )
 
-    def equals(self, other: object) -> Tuple[bool, str]:
+    def equals(self, other: object) -> tuple[bool, str]:
         if self.__class__ != other.__class__:
             return False, f"{self.__class__} != {other.__class__}"
 
@@ -484,23 +464,23 @@ class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
 
     def __init__(
         self,
-        from_clause: Optional[TSimpleDataSource],
+        from_clause: TSimpleDataSource | None,
         # TODO: Consider if to remove the defaults and make some of
         # these fields mandatory. This impacts a lot of code so it
         # would be done on its own.
-        selected_columns: Optional[Sequence[SelectedExpression]] = None,
-        array_join: Optional[Sequence[Expression]] = None,
-        condition: Optional[Expression] = None,
-        groupby: Optional[Sequence[Expression]] = None,
-        having: Optional[Expression] = None,
-        order_by: Optional[Sequence[OrderBy]] = None,
-        limitby: Optional[LimitBy] = None,
-        limit: Optional[int] = None,
+        selected_columns: Sequence[SelectedExpression] | None = None,
+        array_join: Sequence[Expression] | None = None,
+        condition: Expression | None = None,
+        groupby: Sequence[Expression] | None = None,
+        having: Expression | None = None,
+        order_by: Sequence[OrderBy] | None = None,
+        limitby: LimitBy | None = None,
+        limit: int | None = None,
         offset: int = 0,
         totals: bool = False,
-        granularity: Optional[int] = None,
+        granularity: int | None = None,
         is_delete: bool = False,
-        on_cluster: Optional[Expression] = None,
+        on_cluster: Expression | None = None,
     ):
         super().__init__(
             selected_columns=selected_columns,

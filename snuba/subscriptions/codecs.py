@@ -34,8 +34,8 @@ class SubscriptionDataCodec(Codec[bytes, SubscriptionData]):
     def decode(self, value: bytes) -> SubscriptionData:
         try:
             data = json.loads(value.decode("utf-8"))
-        except json.JSONDecodeError:
-            raise InvalidQueryException("Invalid JSON")
+        except json.JSONDecodeError as e:
+            raise InvalidQueryException("Invalid JSON") from e
 
         if data.get("subscription_type") == SubscriptionType.RPC.value:
             return RPCSubscriptionData.from_dict(data, self.entity_key)

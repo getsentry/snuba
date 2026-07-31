@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Mapping, Optional, Union
+from collections.abc import Mapping
 
 from snuba import settings
 from snuba.clickhouse.escaping import escape_string
@@ -37,11 +37,11 @@ class MergeTree(TableEngine):
         self,
         storage_set: StorageSetKey,
         order_by: str,
-        primary_key: Optional[str] = None,
-        partition_by: Optional[str] = None,
-        sample_by: Optional[str] = None,
-        ttl: Optional[str] = None,
-        settings: Optional[Mapping[str, Union[str, int]]] = None,
+        primary_key: str | None = None,
+        partition_by: str | None = None,
+        sample_by: str | None = None,
+        ttl: str | None = None,
+        settings: Mapping[str, str | int] | None = None,
         unsharded: bool = False,
     ) -> None:
         self._storage_set_value = storage_set.value
@@ -90,9 +90,8 @@ class MergeTree(TableEngine):
     def _get_engine_type(self, cluster: ClickhouseCluster, table_name: str) -> str:
         if cluster.is_single_node():
             return "MergeTree()"
-        else:
-            zoo_path = self._get_zookeeper_path(cluster, table_name)
-            return f"ReplicatedMergeTree({zoo_path}, '{{replica}}')"
+        zoo_path = self._get_zookeeper_path(cluster, table_name)
+        return f"ReplicatedMergeTree({zoo_path}, '{{replica}}')"
 
 
 class ReplacingMergeTree(MergeTree):
@@ -100,12 +99,12 @@ class ReplacingMergeTree(MergeTree):
         self,
         storage_set: StorageSetKey,
         order_by: str,
-        primary_key: Optional[str] = None,
-        version_column: Optional[str] = None,
-        partition_by: Optional[str] = None,
-        sample_by: Optional[str] = None,
-        ttl: Optional[str] = None,
-        settings: Optional[Mapping[str, str]] = None,
+        primary_key: str | None = None,
+        version_column: str | None = None,
+        partition_by: str | None = None,
+        sample_by: str | None = None,
+        ttl: str | None = None,
+        settings: Mapping[str, str] | None = None,
         unsharded: bool = False,
     ) -> None:
         super().__init__(
@@ -125,11 +124,12 @@ class ReplacingMergeTree(MergeTree):
             if self.__version_column:
                 return f"ReplacingMergeTree({self.__version_column})"
             return "ReplacingMergeTree()"
-        else:
-            zoo_path = self._get_zookeeper_path(cluster, table_name)
-            if self.__version_column:
-                return f"ReplicatedReplacingMergeTree({zoo_path}, '{{replica}}', {self.__version_column})"
-            return f"ReplicatedReplacingMergeTree({zoo_path}, '{{replica}}')"
+        zoo_path = self._get_zookeeper_path(cluster, table_name)
+        if self.__version_column:
+            return (
+                f"ReplicatedReplacingMergeTree({zoo_path}, '{{replica}}', {self.__version_column})"
+            )
+        return f"ReplicatedReplacingMergeTree({zoo_path}, '{{replica}}')"
 
 
 class CollapsingMergeTree(MergeTree):
@@ -137,12 +137,12 @@ class CollapsingMergeTree(MergeTree):
         self,
         storage_set: StorageSetKey,
         order_by: str,
-        primary_key: Optional[str] = None,
-        sign_column: Optional[str] = None,
-        partition_by: Optional[str] = None,
-        sample_by: Optional[str] = None,
-        ttl: Optional[str] = None,
-        settings: Optional[Mapping[str, str]] = None,
+        primary_key: str | None = None,
+        sign_column: str | None = None,
+        partition_by: str | None = None,
+        sample_by: str | None = None,
+        ttl: str | None = None,
+        settings: Mapping[str, str] | None = None,
         unsharded: bool = False,
     ) -> None:
         super().__init__(
@@ -160,31 +160,28 @@ class CollapsingMergeTree(MergeTree):
     def _get_engine_type(self, cluster: ClickhouseCluster, table_name: str) -> str:
         if cluster.is_single_node():
             return f"CollapsingMergeTree({self.__sign_column})"
-        else:
-            zoo_path = self._get_zookeeper_path(cluster, table_name)
-            return f"ReplicatedCollapsingMergeTree({zoo_path}, '{{replica}}', {self.__sign_column})"
+        zoo_path = self._get_zookeeper_path(cluster, table_name)
+        return f"ReplicatedCollapsingMergeTree({zoo_path}, '{{replica}}', {self.__sign_column})"
 
 
 class SummingMergeTree(MergeTree):
     def _get_engine_type(self, cluster: ClickhouseCluster, table_name: str) -> str:
         if cluster.is_single_node():
             return "SummingMergeTree()"
-        else:
-            zoo_path = self._get_zookeeper_path(cluster, table_name)
-            return f"ReplicatedSummingMergeTree({zoo_path}, '{{replica}}')"
+        zoo_path = self._get_zookeeper_path(cluster, table_name)
+        return f"ReplicatedSummingMergeTree({zoo_path}, '{{replica}}')"
 
 
 class AggregatingMergeTree(MergeTree):
     def _get_engine_type(self, cluster: ClickhouseCluster, table_name: str) -> str:
         if cluster.is_single_node():
             return "AggregatingMergeTree()"
-        else:
-            zoo_path = self._get_zookeeper_path(cluster, table_name)
-            return f"ReplicatedAggregatingMergeTree({zoo_path}, '{{replica}}')"
+        zoo_path = self._get_zookeeper_path(cluster, table_name)
+        return f"ReplicatedAggregatingMergeTree({zoo_path}, '{{replica}}')"
 
 
 class Distributed(TableEngine):
-    def __init__(self, local_table_name: str, sharding_key: Optional[str]) -> None:
+    def __init__(self, local_table_name: str, sharding_key: str | None) -> None:
         self.__local_table_name = local_table_name
         self.__sharding_key = sharding_key
 

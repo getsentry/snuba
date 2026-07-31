@@ -3,13 +3,15 @@ from __future__ import annotations
 import math
 from abc import ABC, abstractmethod
 from bisect import bisect_left
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
     AttributeConditionalAggregation,
 )
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     AttributeKey,
@@ -19,6 +21,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Reliability,
 )
 
+from snuba.protos.common import ARRAY_TYPES
 from snuba.query.dsl import CurriedFunctions as cf
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column, literal
@@ -65,8 +68,15 @@ def _get_condition_in_aggregation(
 ) -> Expression:
     condition_in_aggregation: Expression = literal(True)
     if isinstance(aggregation, AttributeConditionalAggregation):
+        # This condition is embedded in SELECT-clause conditional aggregates (countIf,
+        # sumIf, ...), so build any constant IN-set as has(array, x) to keep the
+        # result-block column name stable across mixed-version ClickHouse nodes on
+        # distributed reads (membership_as_has, see common._in_or_has).
         condition_in_aggregation = trace_item_filters_to_expression(
-            aggregation.filter, attribute_key_to_expression
+            TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED,
+            aggregation.filter,
+            attribute_key_to_expression,
+            membership_as_has=True,
         )
     return condition_in_aggregation
 
@@ -129,9 +139,11 @@ def _resolve_field_and_existence(
         else:
             raise RuntimeError("expected existence_checks to never be empty, but it is")
         return field, existence
-    else:
-        field = attribute_key_to_expression(aggregation.key)
-        return field, get_field_existence_expression(field)
+    # Array keys resolve like scalars now: attribute_key_to_expression reads the typed
+    # array column(s) natively and get_field_existence_expression maps that read to a
+    # notEmpty existence check (see snuba.web.rpc.common.common).
+    field = attribute_key_to_expression(aggregation.key)
+    return field, get_field_existence_expression(field)
 
 
 @dataclass(frozen=True)
@@ -154,7 +166,7 @@ class ExtrapolationContext(ABC):
     @staticmethod
     def from_row(
         column_label: str,
-        row_data: Dict[str, Any],
+        row_data: dict[str, Any],
     ) -> ExtrapolationContext:
         value = row_data[column_label]
         is_extrapolated = False
@@ -233,7 +245,7 @@ class GenericExtrapolationContext(ExtrapolationContext):
         # than the value, so reliability is low.
         if self.confidence_interval == 0:
             return Reliability.RELIABILITY_HIGH
-        elif self.value == 0:
+        if self.value == 0:
             return Reliability.RELIABILITY_LOW
 
         if abs(self.confidence_interval / self.value) <= CONFIDENCE_INTERVAL_THRESHOLD:
@@ -287,7 +299,7 @@ class CustomColumnInformation:
 
     # A column that this custom column depends on or attached to.
     # For example, if we are computing the confidence interval for an aggregation column, we need to know for which column we are computing a confidence interval.
-    referenced_column: Optional[str]
+    referenced_column: str | None
 
     # Metadata about the custom column that can be used to encode additional information in the column.
     # E.g. the aggregation function type for the confidence interval column.
@@ -302,7 +314,7 @@ class CustomColumnInformation:
         return alias
 
     @staticmethod
-    def from_alias(alias: str) -> "CustomColumnInformation":
+    def from_alias(alias: str) -> CustomColumnInformation:
         if not alias.startswith(CUSTOM_COLUMN_PREFIX):
             raise ValueError(f"Alias {alias} does not start with {CUSTOM_COLUMN_PREFIX}")
 
@@ -326,18 +338,19 @@ def _get_sampling_weight_expression(
     if extrapolation_mode == ExtrapolationMode.EXTRAPOLATION_MODE_CLIENT_ONLY:
         # Use client sample rate attribute, convert to weight (1/rate)
         return f.divide(1, client_sample_rate_column)
-    elif extrapolation_mode == ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY:
+    if extrapolation_mode == ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY:
         # Use server sample rate attribute, convert to weight (1/rate)
         return f.divide(1, server_sample_rate_column)
-    else:
-        # Default behavior for existing modes - always use sampling_factor now
-        return f.divide(1, sampling_factor_column)
+    # Default behavior for existing modes - always use sampling_factor now
+    return f.divide(1, sampling_factor_column)
 
 
 def get_attribute_confidence_interval_alias(
     aggregation: AttributeAggregation | AttributeConditionalAggregation,
-    additional_metadata: dict[str, str] = {},
+    additional_metadata: dict[str, str] | None = None,
 ) -> str | None:
+    if additional_metadata is None:
+        additional_metadata = {}
     function_alias_map = {
         Function.FUNCTION_COUNT: "count",
         Function.FUNCTION_AVG: "avg",
@@ -419,7 +432,7 @@ def get_count_column(
     )
 
 
-def _get_possible_percentiles(percentile: float, granularity: float, width: float) -> List[float]:
+def _get_possible_percentiles(percentile: float, granularity: float, width: float) -> list[float]:
     """
     Returns a list of possible percentiles to use for the confidence interval calculation from the range percentile - width to percentile + width,
     with a granularity of granularity.
@@ -798,7 +811,10 @@ def get_confidence_interval_column(
             use_sampling_factor=use_sampling_factor,
         ),
         Function.FUNCTION_AVG: _get_ci_avg(
-            aggregation, attribute_key_to_expression, alias, use_sampling_factor
+            aggregation,
+            attribute_key_to_expression,
+            alias,
+            use_sampling_factor,
         ),
         Function.FUNCTION_P50: _get_possible_percentiles_expression(
             aggregation, 0.5, attribute_key_to_expression, use_sampling_factor
@@ -852,6 +868,9 @@ def _array_aggregation_to_expression(
     condition_in_aggregation: Expression,
     alias_dict: dict[str, str],
 ) -> Expression:
+    # Arrays only support uniq (counting distinct elements across the array), used e.g.
+    # for crash-free user rate. The field is a native read of the typed array column(s)
+    # (element-typed key -> one column; deprecated TYPE_ARRAY -> all four concatenated).
     if aggregation.aggregate == Function.FUNCTION_UNIQ:
         return f.round(
             f.uniqArrayIfOrNull(
@@ -879,7 +898,7 @@ def aggregation_to_expression(
         aggregation, attribute_key_to_expression
     )
 
-    if aggregation.key.type == AttributeKey.Type.TYPE_ARRAY:
+    if aggregation.key.type in ARRAY_TYPES:
         return _array_aggregation_to_expression(
             aggregation, field, condition_in_aggregation, alias_dict
         )
@@ -945,7 +964,11 @@ def aggregation_to_expression(
         ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY,
     ]:
         agg_func_expr = get_extrapolated_function(
-            aggregation, field, field_exists, attribute_key_to_expression, use_sampling_factor
+            aggregation,
+            field,
+            field_exists,
+            attribute_key_to_expression,
+            use_sampling_factor,
         )
     else:
         agg_func_expr = function_map.get(aggregation.aggregate)

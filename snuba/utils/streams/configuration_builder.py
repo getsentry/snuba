@@ -1,4 +1,5 @@
-from typing import Any, Mapping, Optional, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 from arroyo.backends.kafka import build_kafka_configuration
 from arroyo.backends.kafka import (
@@ -14,24 +15,22 @@ from snuba.utils.streams.types import KafkaBrokerConfig
 
 
 def _get_default_topic_configuration(
-    topic: Optional[Topic], slice_id: Optional[int] = None
+    topic: Topic | None, slice_id: int | None = None
 ) -> Mapping[str, Any]:
     if topic is not None:
         if slice_id is not None:
             return settings.SLICED_KAFKA_BROKER_CONFIG.get(
                 (topic.value, slice_id), settings.BROKER_CONFIG
             )
-        else:
-            return settings.KAFKA_BROKER_CONFIG.get(topic.value, settings.BROKER_CONFIG)
-    else:
-        return settings.BROKER_CONFIG
+        return settings.KAFKA_BROKER_CONFIG.get(topic.value, settings.BROKER_CONFIG)
+    return settings.BROKER_CONFIG
 
 
 def get_default_kafka_configuration(
-    topic: Optional[Topic] = None,
-    slice_id: Optional[int] = None,
-    bootstrap_servers: Optional[Sequence[str]] = None,
-    override_params: Optional[Mapping[str, Any]] = None,
+    topic: Topic | None = None,
+    slice_id: int | None = None,
+    bootstrap_servers: Sequence[str] | None = None,
+    override_params: Mapping[str, Any] | None = None,
 ) -> KafkaBrokerConfig:
     default_topic_config = _get_default_topic_configuration(topic, slice_id)
 
@@ -39,15 +38,15 @@ def get_default_kafka_configuration(
 
 
 def build_kafka_consumer_configuration(
-    topic: Optional[Topic],
+    topic: Topic | None,
     group_id: str,
-    slice_id: Optional[int] = None,
-    auto_offset_reset: Optional[str] = None,
-    queued_max_messages_kbytes: Optional[int] = None,
-    queued_min_messages: Optional[int] = None,
-    bootstrap_servers: Optional[Sequence[str]] = None,
-    override_params: Optional[Mapping[str, Any]] = None,
-    strict_offset_reset: Optional[bool] = None,
+    slice_id: int | None = None,
+    auto_offset_reset: str | None = None,
+    queued_max_messages_kbytes: int | None = None,
+    queued_min_messages: int | None = None,
+    bootstrap_servers: Sequence[str] | None = None,
+    override_params: Mapping[str, Any] | None = None,
+    strict_offset_reset: bool | None = None,
 ) -> KafkaBrokerConfig:
     default_topic_config = _get_default_topic_configuration(topic, slice_id)
 
@@ -64,10 +63,10 @@ def build_kafka_consumer_configuration(
 
 
 def build_kafka_producer_configuration(
-    topic: Optional[Topic],
-    slice_id: Optional[int] = None,
-    bootstrap_servers: Optional[Sequence[str]] = None,
-    override_params: Optional[Mapping[str, Any]] = None,
+    topic: Topic | None,
+    slice_id: int | None = None,
+    bootstrap_servers: Sequence[str] | None = None,
+    override_params: Mapping[str, Any] | None = None,
 ) -> KafkaBrokerConfig:
     default_topic_config = _get_default_topic_configuration(topic, slice_id)
 

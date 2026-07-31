@@ -29,61 +29,53 @@ logger = logging.getLogger("snuba.query.bytes_scanned_window_policy")
 
 # A hardcoded list of referrers which do not have an organization_id associated with them
 # purposefully not in config because we don't want that to be easily changeable
-_ORG_LESS_REFERRERS = set(
-    [
-        "subscriptions_executor",
-        "weekly_reports.outcomes",
-        "reports.key_errors",
-        "reports.key_performance_issues",
-        "weekly_reports.key_transactions.this_week",
-        "weekly_reports.key_transactions.last_week",
-        "dynamic_sampling.distribution.fetch_projects_with_count_per_root_total_volumes",
-        "dynamic_sampling.distribution.fetch_orgs_with_count_per_root_total_volumes",
-        "dynamic_sampling.counters.fetch_projects_with_count_per_transaction_volumes",
-        "dynamic_sampling.counters.fetch_projects_with_transaction_totals",
-        "dynamic_sampling.counters.get_org_transaction_volumes",
-        "dynamic_sampling.counters.get_active_orgs",
-        "migration.backfill_perf_issue_events_issue_platform",
-        "api.vroom",
-        "replays.query.download_replay_segments",
-        "release_monitor.fetch_projects_with_recent_sessions",
-        "http://localhost:1219/",
-        "reprocessing2.start_group_reprocessing",
-        "metric_validation",
-    ]
-)
+_ORG_LESS_REFERRERS = {
+    "subscriptions_executor",
+    "weekly_reports.outcomes",
+    "reports.key_errors",
+    "reports.key_performance_issues",
+    "weekly_reports.key_transactions.this_week",
+    "weekly_reports.key_transactions.last_week",
+    "dynamic_sampling.distribution.fetch_projects_with_count_per_root_total_volumes",
+    "dynamic_sampling.distribution.fetch_orgs_with_count_per_root_total_volumes",
+    "dynamic_sampling.counters.fetch_projects_with_count_per_transaction_volumes",
+    "dynamic_sampling.counters.fetch_projects_with_transaction_totals",
+    "dynamic_sampling.counters.get_org_transaction_volumes",
+    "dynamic_sampling.counters.get_active_orgs",
+    "migration.backfill_perf_issue_events_issue_platform",
+    "api.vroom",
+    "replays.query.download_replay_segments",
+    "release_monitor.fetch_projects_with_recent_sessions",
+    "http://localhost:1219/",
+    "reprocessing2.start_group_reprocessing",
+    "metric_validation",
+}
 
 
 # referrers which do not serve the UI and are given low capacity by default
-_SINGLE_THREAD_REFERRERS = set(
-    [
-        "delete-events-from-file",
-        "delete-event-user-data",
-        "scrub-nodestore",
-        "fetch_events_for_deletion",
-        "delete-events-by-tag-value",
-        "delete.fetch_last_group",
-        "forward-events",
-        "_insert_transaction.verify_transaction",
-        "tasks.update_user_reports",
-        "test.wait_for_event_count",
-    ]
-)
+_SINGLE_THREAD_REFERRERS = {
+    "delete-events-from-file",
+    "delete-event-user-data",
+    "scrub-nodestore",
+    "fetch_events_for_deletion",
+    "delete-events-by-tag-value",
+    "delete.fetch_last_group",
+    "forward-events",
+    "_insert_transaction.verify_transaction",
+    "tasks.update_user_reports",
+    "test.wait_for_event_count",
+}
 
 
 # subscriptions currently do not undergo rate limiting in any way.
 # having subscriptions be too slow means there is an incident
-_PASS_THROUGH_REFERRERS = set(
-    [
-        "subscriptions_executor",
-    ]
-)
+_PASS_THROUGH_REFERRERS = {
+    "subscriptions_executor",
+}
 
 
 UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY = int(1e10)
-_RATE_LIMITER = RedisSlidingWindowRateLimiter(
-    get_redis_client(RedisClientKey.RATE_LIMITER)
-)
+_RATE_LIMITER = RedisSlidingWindowRateLimiter(get_redis_client(RedisClientKey.RATE_LIMITER))
 DEFAULT_OVERRIDE_LIMIT = -1
 DEFAULT_BYTES_SCANNED_LIMIT = 10000000
 QUOTA_UNIT = "bytes"
@@ -117,17 +109,15 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
             ),
         ]
 
-    def _are_tenant_ids_valid(
-        self, tenant_ids: dict[str, str | int]
-    ) -> tuple[bool, str]:
+    def _are_tenant_ids_valid(self, tenant_ids: dict[str, str | int]) -> tuple[bool, str]:
         if self.is_cross_org_query(tenant_ids):
             return True, "cross org query"
         if tenant_ids.get("referrer") is None:
             return False, "no referrer"
         if (
             tenant_ids.get("organization_id") is None
-            and tenant_ids.get("referrer", None) not in _ORG_LESS_REFERRERS
-            and tenant_ids.get("referrer", None) not in _SINGLE_THREAD_REFERRERS
+            and tenant_ids.get("referrer") not in _ORG_LESS_REFERRERS
+            and tenant_ids.get("referrer") not in _SINGLE_THREAD_REFERRERS
         ):
             return False, f"no organization_id for referrer {tenant_ids['referrer']}"
 
@@ -137,19 +127,18 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
         ids_are_valid, why = self._are_tenant_ids_valid(tenant_ids)
-        if not ids_are_valid:
-            if self.is_enforced:
-                return QuotaAllowance(
-                    can_run=False,
-                    max_threads=0,
-                    explanation={"reason": why},
-                    is_throttled=False,
-                    throttle_threshold=0,
-                    rejection_threshold=0,
-                    quota_used=0,
-                    quota_unit=NO_UNITS,
-                    suggestion=NO_SUGGESTION,
-                )
+        if not ids_are_valid and self.is_enforced:
+            return QuotaAllowance(
+                can_run=False,
+                max_threads=0,
+                explanation={"reason": why},
+                is_throttled=False,
+                throttle_threshold=0,
+                rejection_threshold=0,
+                quota_used=0,
+                quota_unit=NO_UNITS,
+                suggestion=NO_SUGGESTION,
+            )
         if self.is_cross_org_query(tenant_ids):
             return QuotaAllowance(
                 can_run=True,
@@ -163,7 +152,7 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                 suggestion=CROSS_ORG_SUGGESTION,
             )
         referrer = tenant_ids.get("referrer", "no_referrer")
-        org_id = tenant_ids.get("organization_id", None)
+        org_id = tenant_ids.get("organization_id")
         if referrer in _PASS_THROUGH_REFERRERS:
             return QuotaAllowance(
                 can_run=True,
@@ -217,9 +206,9 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
             is_throttled = False
             if granted_quota.granted <= 0:
                 is_throttled = True
-                explanation[
-                    "reason"
-                ] = f"organization {org_id} is over the bytes scanned limit of {org_limit_bytes_scanned}"
+                explanation["reason"] = (
+                    f"organization {org_id} is over the bytes scanned limit of {org_limit_bytes_scanned}"
+                )
                 explanation["is_enforced"] = self.is_enforced
                 explanation["granted_quota"] = granted_quota.granted
                 explanation["limit"] = org_limit_bytes_scanned
@@ -253,7 +242,10 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
     def _get_bytes_scanned_in_query(
         self, tenant_ids: dict[str, str | int], result_or_error: QueryResultOrError
     ) -> int:
-        progress_bytes_scanned = cast(int, result_or_error.query_result.result.get("profile", {}).get("progress_bytes", None))  # type: ignore
+        progress_bytes_scanned = cast(
+            int,
+            result_or_error.query_result.result.get("profile", {}).get("progress_bytes", None),  # type: ignore[union-attr]
+        )
         if isinstance(progress_bytes_scanned, (int, float)):
             self.metrics.increment(
                 "progress_bytes_scanned",

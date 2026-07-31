@@ -1,8 +1,9 @@
 import random
 import uuid
+from collections.abc import Iterable
 from datetime import datetime
 from operator import attrgetter
-from typing import Any, Dict, Iterable, NamedTuple, Optional, Type
+from typing import Any, NamedTuple, Optional
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -23,12 +24,15 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     TraceItemFilter,
 )
 
-from snuba import state
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
+from snuba.protos.common import (
+    TYPED_ARRAY_MAP_COLUMNS,
+    type_array_typed_columns_select_expressions,
+)
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
@@ -41,15 +45,19 @@ from snuba.settings import (
     ENABLE_TRACE_PAGINATION_DEFAULT,
     ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS,
 )
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.util import with_span
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
-    process_arrays,
+    merge_typed_array_maps,
+    merge_typed_array_subcolumns,
     project_id_and_org_conditions,
     timestamp_in_range_condition,
     treeify_or_and_conditions,
+    typed_array_map_selected_expressions,
+    typed_array_select_subcolumn_name,
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
@@ -202,12 +210,27 @@ def _build_query(
 
     if len(item.attributes) > 0:
         for attribute_key in item.attributes:
-            selected_columns.append(
-                SelectedExpression(
-                    name=attribute_key.name,
-                    expression=(attribute_key_to_expression(attribute_key)),
+            if attribute_key.type == AttributeKey.Type.TYPE_ARRAY:
+                # Deprecated untyped array: read as four typed sub-columns, merged back in
+                # _process_results. Element-typed array keys read one native column below.
+                for typed_col, expression in zip(
+                    TYPED_ARRAY_MAP_COLUMNS,
+                    type_array_typed_columns_select_expressions(attribute_key),
+                    strict=True,
+                ):
+                    selected_columns.append(
+                        SelectedExpression(
+                            name=typed_array_select_subcolumn_name(attribute_key.name, typed_col),
+                            expression=expression,
+                        )
+                    )
+            else:
+                selected_columns.append(
+                    SelectedExpression(
+                        name=attribute_key.name,
+                        expression=attribute_key_to_expression(attribute_key),
+                    )
                 )
-            )
     else:
         selected_columns += [
             SelectedExpression(
@@ -226,26 +249,18 @@ def _build_query(
                     tuple(column(f"attributes_float_{i}") for i in range(40)),
                 ),
             ),
-            SelectedExpression(
-                name="attributes_array",
-                expression=FunctionCall(
-                    "attributes_array",
-                    "toJSONString",
-                    (column("attributes_array"),),
-                ),
-            ),
+            # Read every array attribute from the typed array map columns.
+            *typed_array_map_selected_expressions(),
         ]
         selected_columns.extend(
-            map(
-                lambda col_name: SelectedExpression(
-                    name=col_name,
-                    expression=column(
-                        col_name,
-                        alias=f"selected_{col_name}",
-                    ),
+            SelectedExpression(
+                name=col_name,
+                expression=column(
+                    col_name,
+                    alias=f"selected_{col_name}",
                 ),
-                (NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS),
             )
+            for col_name in (NORMALIZED_COLUMNS_TO_INCLUDE_EAP_ITEMS)
         )
 
     entity = Entity(
@@ -303,7 +318,7 @@ def _build_query(
             expression=column("item_id"),
         ),
     ]
-    if state.get_int_config("enable_trace_pagination", ENABLE_TRACE_PAGINATION_DEFAULT):
+    if get_option("enable_trace_pagination", bool(ENABLE_TRACE_PAGINATION_DEFAULT)):
         order_by = new_order_by
     else:
         order_by = old_order_by
@@ -343,7 +358,7 @@ def _build_query(
 
 def _get_apply_final_rollout_percentage() -> float:
     return (
-        state.get_float_config(
+        get_option(
             APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
             0.0,
         )
@@ -385,28 +400,27 @@ def convert_to_attribute_value(value: Any) -> AttributeValue:
         return AttributeValue(
             val_bool=value,
         )
-    elif isinstance(value, int):
+    if isinstance(value, int):
         return AttributeValue(
             val_int=value,
         )
-    elif isinstance(value, float):
+    if isinstance(value, float):
         return AttributeValue(
             val_double=value,
         )
-    elif isinstance(value, str):
+    if isinstance(value, str):
         return AttributeValue(
             val_str=value,
         )
-    elif isinstance(value, (list, tuple)):
+    if isinstance(value, (list, tuple)):
         return AttributeValue(
             val_array=Array(values=[convert_to_attribute_value(v) for v in value])
         )
-    elif isinstance(value, datetime):
+    if isinstance(value, datetime):
         return AttributeValue(
             val_double=value.timestamp(),
         )
-    else:
-        raise BadSnubaRPCRequestException(f"data type unknown: {type(value)}")
+    raise BadSnubaRPCRequestException(f"data type unknown: {type(value)}")
 
 
 def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeValue]:
@@ -418,7 +432,7 @@ def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeVa
             ),
             convert_to_attribute_value(value),
         )
-    elif isinstance(value, int):
+    if isinstance(value, int):
         return (
             AttributeKey(
                 name=key,
@@ -426,7 +440,7 @@ def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeVa
             ),
             convert_to_attribute_value(value),
         )
-    elif isinstance(value, float):
+    if isinstance(value, float):
         return (
             AttributeKey(
                 name=key,
@@ -434,7 +448,7 @@ def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeVa
             ),
             convert_to_attribute_value(value),
         )
-    elif isinstance(value, str):
+    if isinstance(value, str):
         return (
             AttributeKey(
                 name=key,
@@ -442,12 +456,12 @@ def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeVa
             ),
             convert_to_attribute_value(value),
         )
-    elif isinstance(value, list):
+    if isinstance(value, list):
         return (
             AttributeKey(name=key, type=AttributeKey.Type.TYPE_ARRAY),
             convert_to_attribute_value(value),
         )
-    elif isinstance(value, datetime):
+    if isinstance(value, datetime):
         return (
             AttributeKey(
                 name=key,
@@ -455,23 +469,19 @@ def _value_to_attribute(key: str, value: Any) -> tuple[AttributeKey, AttributeVa
             ),
             convert_to_attribute_value(value),
         )
-    else:
-        raise BadSnubaRPCRequestException(f"data type unknown: {type(value)}")
+    raise BadSnubaRPCRequestException(f"data type unknown: {type(value)}")
 
 
-ProcessedResults = NamedTuple(
-    "ProcessedResults",
-    [
-        ("items", list[GetTraceResponse.Item]),
-        ("last_seen_timestamp_precise", float),
-        ("last_seen_id", str),
-    ],
-)
+class ProcessedResults(NamedTuple):
+    items: list[GetTraceResponse.Item]
+    last_seen_timestamp_precise: float
+    last_seen_id: str
 
 
 @with_span(op="function")
 def _process_results(
-    data: Iterable[Dict[str, Any]],
+    data: Iterable[dict[str, Any]],
+    array_attribute_names: Iterable[str] = (),
 ) -> ProcessedResults:
     """
     Used to process the results returned from clickhouse in two passes.
@@ -488,7 +498,6 @@ def _process_results(
         for row in data:
             id = row.pop("id")
             ts = row.pop("timestamp")
-            arrays = row.pop("attributes_array", "{}") or "{}"
             # We want to merge these values after to overwrite potential floats
             # with the same name.
             booleans = row.pop("attributes_bool", {}) or {}
@@ -503,23 +512,46 @@ def _process_results(
 
             attributes: dict[str, GetTraceResponse.Item.Attribute] = {}
 
-            def add_attribute(key: str, value: Any) -> None:
+            def add_attribute(
+                key: str,
+                value: Any,
+                attributes: dict[str, GetTraceResponse.Item.Attribute] = attributes,
+            ) -> None:
                 attribute_key, attribute_value = _value_to_attribute(key, value)
                 attributes[key] = GetTraceResponse.Item.Attribute(
                     key=attribute_key,
                     value=attribute_value,
                 )
 
+            # Bulk mode: every array attribute, merged from the four whole typed array map
+            # columns (no-op in per-attribute mode, where they aren't selected).
+            for name, values in merge_typed_array_maps(row):
+                if values:
+                    add_attribute(name, values)
+
+            if array_attribute_names:
+                # Per-attribute deprecated untyped TYPE_ARRAY: merge each array's four typed
+                # sub-columns by name. Element-typed array keys arrive as a native list
+                # under their own key and are added by the generic loop below.
+                for name, values in merge_typed_array_subcolumns(row, array_attribute_names):
+                    if values:
+                        add_attribute(name, values)
+
             for row_key, row_value in row.items():
+                if row_value is None:
+                    continue
                 if isinstance(row_value, dict):
                     for column_key, column_value in row_value.items():
                         add_attribute(column_key, column_value)
+                elif isinstance(row_value, (list, tuple)):
+                    # A per-attribute element-typed array reads as a native list; an absent
+                    # or stored-empty attribute reads as [], which we drop (missing and
+                    # stored-empty arrays are indistinguishable in the typed columns) to
+                    # match every other read path rather than emit an empty val_array.
+                    if row_value:
+                        add_attribute(row_key, list(row_value))
                 else:
                     add_attribute(row_key, row_value)
-
-            attributes_array = process_arrays(arrays)
-            for array_key, array_value in attributes_array.items():
-                add_attribute(array_key, array_value)
 
             for bool_key, bool_value in booleans.items():
                 add_attribute(bool_key, bool_value)
@@ -584,11 +616,11 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
         return "v1"
 
     @classmethod
-    def request_class(cls) -> Type[GetTraceRequest]:
+    def request_class(cls) -> type[GetTraceRequest]:
         return GetTraceRequest
 
     @classmethod
-    def response_class(cls) -> Type[GetTraceResponse]:
+    def response_class(cls) -> type[GetTraceResponse]:
         return GetTraceResponse
 
     def _execute(self, in_msg: GetTraceRequest) -> GetTraceResponse:
@@ -596,8 +628,8 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
             "eap_trace_request_without_limit", 1, tags={"referrer": in_msg.meta.referrer}
         )
 
-        enable_pagination = state.get_int_config(
-            "enable_trace_pagination", ENABLE_TRACE_PAGINATION_DEFAULT
+        enable_pagination = get_option(
+            "enable_trace_pagination", bool(ENABLE_TRACE_PAGINATION_DEFAULT)
         )
         if enable_pagination:
             limit = _get_pagination_limit(in_msg.limit)
@@ -666,6 +698,11 @@ class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
         )
         processed_results = _process_results(
             results.result.get("data", []),
+            array_attribute_names=[
+                attribute_key.name
+                for attribute_key in item.attributes
+                if attribute_key.type == AttributeKey.Type.TYPE_ARRAY
+            ],
         )
         items = processed_results.items
         last_seen_timestamp_precise = processed_results.last_seen_timestamp_precise

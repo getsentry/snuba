@@ -1,3 +1,3 @@
-from typing import MutableMapping, Tuple
+from collections.abc import MutableMapping
 
-ColumnStatesMapType = MutableMapping[Tuple[str, int, str, str], str]
+ColumnStatesMapType = MutableMapping[tuple[str, int, str, str], str]

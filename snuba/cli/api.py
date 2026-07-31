@@ -1,5 +1,4 @@
 import os
-from typing import Optional, Union
 
 import click
 
@@ -16,16 +15,16 @@ from snuba.utils import server
 @click.option("--backlog", type=click.IntRange(128))
 def api(
     *,
-    bind: Optional[str],
+    bind: str | None,
     debug: bool,
-    log_level: Optional[str],
-    processes: Optional[int],
-    threads: Optional[int],
-    backlog: Optional[int],
+    log_level: str | None,
+    processes: int | None,
+    threads: int | None,
+    backlog: int | None,
 ) -> None:
     from snuba import settings
 
-    port: Union[int, str]
+    port: int | str
     if bind:
         if ":" in bind:
             host, port = bind.split(":", 1)

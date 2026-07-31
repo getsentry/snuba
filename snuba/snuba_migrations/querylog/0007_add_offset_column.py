@@ -1,11 +1,11 @@
-from typing import Generator, Sequence, Tuple
+from collections.abc import Generator, Sequence
 
 from snuba.clickhouse.columns import Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
-columns: Sequence[Tuple[Column[Modifiers], str]] = [
+columns: Sequence[tuple[Column[Modifiers], str]] = [
     (Column("partition", UInt(16)), "status"),
     (Column("offset", UInt(64)), "partition"),
 ]
@@ -26,7 +26,7 @@ class Migration(migration.ClickhouseNodeMigration):
         return list(_backward())
 
 
-def _forward() -> Generator[operations.SqlOperation, None, None]:
+def _forward() -> Generator[operations.SqlOperation]:
     for column, after in columns:
         yield operations.AddColumn(
             StorageSetKey.QUERYLOG,
@@ -45,8 +45,8 @@ def _forward() -> Generator[operations.SqlOperation, None, None]:
         )
 
 
-def _backward() -> Generator[operations.SqlOperation, None, None]:
-    for column, after in columns:
+def _backward() -> Generator[operations.SqlOperation]:
+    for column, _after in columns:
         yield operations.DropColumn(
             storage_set=StorageSetKey.QUERYLOG,
             table_name="querylog_dist",

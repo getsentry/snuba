@@ -1,5 +1,5 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 from snuba.clickhouse.columns import Column, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
@@ -28,21 +28,15 @@ new_columns: Sequence[NewColumn] = [
         after="dist",
     ),
     NewColumn(
-        column=Column(
-            "transaction_status", UInt(8, Modifiers(default=str(UNKNOWN_SPAN_STATUS)))
-        ),
+        column=Column("transaction_status", UInt(8, Modifiers(default=str(UNKNOWN_SPAN_STATUS)))),
         after="transaction_op",
     ),
     NewColumn(
-        column=Column(
-            "http_method", String(Modifiers(nullable=True, low_cardinality=True))
-        ),
+        column=Column("http_method", String(Modifiers(nullable=True, low_cardinality=True))),
         after="transaction_status",
     ),
     NewColumn(
-        column=Column(
-            "browser_name", String(Modifiers(nullable=True, low_cardinality=True))
-        ),
+        column=Column("browser_name", String(Modifiers(nullable=True, low_cardinality=True))),
         after="http_method",
     ),
     NewColumn(

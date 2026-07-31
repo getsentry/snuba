@@ -3,44 +3,37 @@ from __future__ import annotations
 import itertools
 import re
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from re import Pattern
 from typing import (
     Any,
-    Callable,
-    Dict,
-    Iterator,
-    List,
-    Mapping,
-    Optional,
-    Pattern,
-    Sequence,
-    Tuple,
     TypedDict,
     TypeVar,
 )
 
 from snuba.clickhouse.formatter.nodes import FormattedQuery
 
-Column = TypedDict("Column", {"name": str, "type": str}, total=False)
-Row = Dict[str, Any]
 
-Result = TypedDict(
-    "Result",
-    {
-        "meta": List[Column],
-        "data": List[Row],
-        "totals": Row,
-        "profile": Optional[Dict[str, Any]],
-        "trace_output": str,
-    },
-    total=False,
-)
+class Column(TypedDict, total=False):
+    name: str
+    type: str
+
+
+Row = dict[str, Any]
+
+
+class Result(TypedDict, total=False):
+    meta: list[Column]
+    data: list[Row]
+    totals: Row
+    profile: dict[str, Any] | None
+    trace_output: str
 
 
 def iterate_rows(result: Result) -> Iterator[Row]:
     if "totals" in result:
         return itertools.chain(result["data"], [result["totals"]])
-    else:
-        return iter(result["data"])
+    return iter(result["data"])
 
 
 def transform_rows(result: Result, transformer: Callable[[Row], Row]) -> None:
@@ -58,30 +51,28 @@ def transform_rows(result: Result, transformer: Callable[[Row], Row]) -> None:
 NULLABLE_RE = re.compile(r"^Nullable\((.+)\)$")
 
 
-def unwrap_nullable_type(type: str) -> Tuple[bool, str]:
+def unwrap_nullable_type(type: str) -> tuple[bool, str]:
     match = NULLABLE_RE.match(type)
     if match is not None:
         return True, match.groups()[0]
-    else:
-        return False, type
+    return False, type
 
 
 T = TypeVar("T")
 R = TypeVar("R")
 
 
-def transform_nullable(function: Callable[[T], R]) -> Callable[[Optional[T]], Optional[R]]:
-    def transform_column(value: Optional[T]) -> Optional[R]:
+def transform_nullable(function: Callable[[T], R]) -> Callable[[T | None], R | None]:
+    def transform_column(value: T | None) -> R | None:
         if value is None:
             return value
-        else:
-            return function(value)
+        return function(value)
 
     return transform_column
 
 
 def build_result_transformer(
-    column_transformations: Sequence[Tuple[Pattern[str], Callable[[Any], Any]]],
+    column_transformations: Sequence[tuple[Pattern[str], Callable[[Any], Any]]],
 ) -> Callable[[Result], None]:
     """
     Builds and returns a function that can be used to mutate a ``Result``
@@ -116,9 +107,7 @@ def build_result_transformer(
 
 
 class Reader(ABC):
-    def __init__(
-        self, cache_partition_id: Optional[str], query_settings_prefix: Optional[str]
-    ) -> None:
+    def __init__(self, cache_partition_id: str | None, query_settings_prefix: str | None) -> None:
         self.__cache_partition_id = cache_partition_id
         self.__query_settings_prefix = query_settings_prefix
 
@@ -126,7 +115,7 @@ class Reader(ABC):
     def execute(
         self,
         query: FormattedQuery,
-        settings: Optional[Mapping[str, str]] = None,
+        settings: Mapping[str, str] | None = None,
         with_totals: bool = False,
         robust: bool = False,
         capture_trace: bool = False,
@@ -135,7 +124,7 @@ class Reader(ABC):
         raise NotImplementedError
 
     @property
-    def cache_partition_id(self) -> Optional[str]:
+    def cache_partition_id(self) -> str | None:
         """
         Return the cache partition if there is one.
 
@@ -147,7 +136,7 @@ class Reader(ABC):
         """
         return self.__cache_partition_id
 
-    def get_query_settings_prefix(self) -> Optional[str]:
+    def get_query_settings_prefix(self) -> str | None:
         """
         Return the query settings prefix if there is one.
         """

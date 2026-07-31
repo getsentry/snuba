@@ -1,4 +1,5 @@
-from typing import MutableSequence, NamedTuple, Optional, Union
+from collections.abc import MutableSequence
+from typing import NamedTuple
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.types import Tags
@@ -6,30 +7,30 @@ from snuba.utils.metrics.types import Tags
 
 class Increment(NamedTuple):
     name: str
-    value: Union[int, float]
-    tags: Optional[Tags]
-    unit: Optional[str] = None
+    value: int | float
+    tags: Tags | None
+    unit: str | None = None
 
 
 class Gauge(NamedTuple):
     name: str
-    value: Union[int, float]
-    tags: Optional[Tags]
-    unit: Optional[str] = None
+    value: int | float
+    tags: Tags | None
+    unit: str | None = None
 
 
 class Timing(NamedTuple):
     name: str
-    value: Union[int, float]
-    tags: Optional[Tags]
-    unit: Optional[str] = None
+    value: int | float
+    tags: Tags | None
+    unit: str | None = None
 
 
 class Distribution(NamedTuple):
     name: str
-    value: Union[int, float]
-    tags: Optional[Tags]
-    unit: Optional[str] = None
+    value: int | float
+    tags: Tags | None
+    unit: str | None = None
 
 
 class Events(NamedTuple):
@@ -37,7 +38,7 @@ class Events(NamedTuple):
     text: str
     alert_type: str
     priority: str
-    tags: Optional[Tags]
+    tags: Tags | None
 
 
 class TestingMetricsBackend(MetricsBackend):
@@ -50,41 +51,41 @@ class TestingMetricsBackend(MetricsBackend):
     # TODO: This might make sense to extend the dummy metrics backend.
 
     def __init__(self) -> None:
-        self.calls: MutableSequence[Union[Increment, Gauge, Timing, Distribution, Events]] = []
+        self.calls: MutableSequence[Increment | Gauge | Timing | Distribution | Events] = []
 
     def increment(
         self,
         name: str,
-        value: Union[int, float] = 1,
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        value: int | float = 1,
+        tags: Tags | None = None,
+        unit: str | None = None,
     ) -> None:
         self.calls.append(Increment(name, value, tags, unit))
 
     def gauge(
         self,
         name: str,
-        value: Union[int, float],
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        value: int | float,
+        tags: Tags | None = None,
+        unit: str | None = None,
     ) -> None:
         self.calls.append(Gauge(name, value, tags, unit))
 
     def timing(
         self,
         name: str,
-        value: Union[int, float],
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        value: int | float,
+        tags: Tags | None = None,
+        unit: str | None = None,
     ) -> None:
         self.calls.append(Timing(name, value, tags, unit))
 
     def distribution(
         self,
         name: str,
-        value: Union[int, float],
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        value: int | float,
+        tags: Tags | None = None,
+        unit: str | None = None,
     ) -> None:
         self.calls.append(Distribution(name, value, tags, unit))
 
@@ -94,6 +95,6 @@ class TestingMetricsBackend(MetricsBackend):
         text: str,
         alert_type: str,
         priority: str,
-        tags: Optional[Tags] = None,
+        tags: Tags | None = None,
     ) -> None:
         self.calls.append(Events(title, text, alert_type, priority, tags))

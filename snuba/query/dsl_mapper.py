@@ -1,4 +1,4 @@
-from typing import Callable, Sequence
+from collections.abc import Callable, Sequence
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.query import LimitBy, OrderBy, SelectedExpression
@@ -12,7 +12,6 @@ from snuba.query.expressions import (
     Expression,
     ExpressionVisitor,
     FunctionCall,
-    JsonPath,
     Lambda,
     Literal,
     SubscriptableReference,
@@ -189,12 +188,6 @@ class DSLMapperVisitor(ExpressionVisitor[str]):
         alias_str = f", {repr(exp.alias)}" if exp.alias else ", None"
         return f"DangerousRawSQL({alias_str}, {repr(exp.sql)})"
 
-    def visit_json_path(self, exp: JsonPath) -> str:
-        alias_str = repr(exp.alias)
-        base_str = exp.base.accept(self)
-        type_str = f", {repr(exp.return_type)}" if exp.return_type else ""
-        return f"JsonPath({alias_str}, {base_str}, {repr(exp.path)}{type_str})"
-
     def visit_selected_expression(self, exp: SelectedExpression) -> str:
         return f"SelectedExpression({repr(exp.name)}, {exp.expression.accept(self)})"
 
@@ -212,9 +205,9 @@ def ast_repr(
 ) -> str:
     if not exp:
         return "None"
-    elif isinstance(exp, Expression):
+    if isinstance(exp, Expression):
         return exp.accept(visitor)
-    elif isinstance(exp, LimitBy):
+    if isinstance(exp, LimitBy):
         return visitor.visit_limitby(exp)
 
     strings = []

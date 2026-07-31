@@ -1,4 +1,4 @@
-from typing import Optional
+import logging
 
 import pytest
 
@@ -18,7 +18,7 @@ class TestQueryPipelineStage(QueryPipelineStage[int, int]):
         return check_input_and_multiply(pipe_input.data)
 
 
-def check_input_and_multiply(num: Optional[int]) -> int:
+def check_input_and_multiply(num: int | None) -> int:
     if num == 0 or num is None:
         raise Exception("Input cannot be zero")
     return num * 2
@@ -67,6 +67,39 @@ def test_handle_error() -> None:
     res = ErrorStage().execute(input)
     assert error_processed
     assert res.error == input.error
+
+
+class _NonReportableError(Exception):
+    should_report = False
+
+
+def test_process_error_reportable_logs_at_error(caplog: pytest.LogCaptureFixture) -> None:
+    input: QueryPipelineResult[int] = QueryPipelineResult(
+        data=None,
+        error=Exception("boom"),
+        query_settings=HTTPQuerySettings(),
+        timer=Timer("something"),
+    )
+    with caplog.at_level(logging.INFO):
+        TestQueryPipelineStage().execute(input)
+    assert any(record.levelno == logging.ERROR for record in caplog.records)
+
+
+def test_process_error_non_reportable_not_logged_at_error(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    input: QueryPipelineResult[int] = QueryPipelineResult(
+        data=None,
+        error=_NonReportableError("invalid client query"),
+        query_settings=HTTPQuerySettings(),
+        timer=Timer("something"),
+    )
+    with caplog.at_level(logging.INFO):
+        res = TestQueryPipelineStage().execute(input)
+    # should_report=False must not log at ERROR (Sentry would capture it).
+    assert not any(record.levelno == logging.ERROR for record in caplog.records)
+    assert any(record.levelno == logging.INFO for record in caplog.records)
+    assert res.error is input.error
 
 
 def test_recover_from_error() -> None:

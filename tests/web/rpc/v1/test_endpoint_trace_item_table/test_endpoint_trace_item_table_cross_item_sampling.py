@@ -2,6 +2,7 @@ from datetime import datetime
 from unittest.mock import patch
 
 import pytest
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
     TraceItemTableRequest,
@@ -13,7 +14,6 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
-from snuba import state
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.downsampled_storage_tiers import Tier
 from snuba.web.rpc import RPCEndpoint
@@ -64,9 +64,6 @@ class TestTraceItemTableCrossItemSampling(BaseApiTest):
         - The inner query uses downsampled storage (TIER_8)
         - The outer query uses full storage (EAP_ITEMS)
         """
-        # Enable the feature flag
-        state.set_config("cross_item_queries_no_sample_outer", 1)
-
         trace_ids, all_items, start_time, end_time = create_cross_item_test_data()
         write_cross_item_data_to_storage(all_items)
 
@@ -83,49 +80,48 @@ class TestTraceItemTableCrossItemSampling(BaseApiTest):
 
         storage_keys, storage_tracker = track_storage_selections()
 
-        with storage_tracker:
-            with patch.object(RPCEndpoint, "_RPCEndpoint__before_execute"):
-                message = create_trace_item_table_request(
-                    start_time=start_time,
-                    end_time=end_time,
-                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                    columns=[
-                        Column(
-                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.span_id")
-                        )
-                    ],
-                    trace_filters=trace_filters,
-                )
+        # Enable the feature flag for the duration of the query execution.
+        with (
+            override_options("snuba", {"cross_item_queries_no_sample_outer": True}),
+            storage_tracker,
+            patch.object(RPCEndpoint, "_RPCEndpoint__before_execute"),
+        ):
+            message = create_trace_item_table_request(
+                start_time=start_time,
+                end_time=end_time,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                columns=[
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.span_id"))
+                ],
+                trace_filters=trace_filters,
+            )
 
-                mock_routing_decision = create_mock_routing_decision(Tier.TIER_8, message)
+            mock_routing_decision = create_mock_routing_decision(Tier.TIER_8, message)
 
-                endpoint = EndpointTraceItemTable()
-                endpoint.routing_decision = mock_routing_decision
-                endpoint.execute(message)
+            endpoint = EndpointTraceItemTable()
+            endpoint.routing_decision = mock_routing_decision
+            endpoint.execute(message)
 
-                # Verify storages were selected (should have at least 2 calls: inner + outer)
-                assert len(storage_keys) >= 2, (
-                    f"Expected at least 2 storage selections, got {len(storage_keys)}"
-                )
+            # Verify storages were selected (should have at least 2 calls: inner + outer)
+            assert len(storage_keys) >= 2, (
+                f"Expected at least 2 storage selections, got {len(storage_keys)}"
+            )
 
-                # The inner query should use downsampled storage (TIER_8)
-                assert StorageKey.EAP_ITEMS_DOWNSAMPLE_8 in storage_keys, (
-                    f"Inner query should use EAP_ITEMS_DOWNSAMPLE_8, got: {storage_keys}"
-                )
+            # The inner query should use downsampled storage (TIER_8)
+            assert StorageKey.EAP_ITEMS_DOWNSAMPLE_8 in storage_keys, (
+                f"Inner query should use EAP_ITEMS_DOWNSAMPLE_8, got: {storage_keys}"
+            )
 
-                # The outer query should use full storage (EAP_ITEMS)
-                assert StorageKey.EAP_ITEMS in storage_keys, (
-                    f"Outer query should use EAP_ITEMS, got: {storage_keys}"
-                )
+            # The outer query should use full storage (EAP_ITEMS)
+            assert StorageKey.EAP_ITEMS in storage_keys, (
+                f"Outer query should use EAP_ITEMS, got: {storage_keys}"
+            )
 
     def test_cross_item_query_sampling_disabled(self) -> None:
         """
         Test that when cross_item_queries_no_sample_outer is disabled (default):
         - Both queries use the same storage tier
         """
-        # Explicitly disable the feature flag
-        state.set_config("cross_item_queries_no_sample_outer", 0)
-
         trace_ids, all_items, start_time, end_time = create_cross_item_test_data()
         write_cross_item_data_to_storage(all_items)
 
@@ -138,32 +134,34 @@ class TestTraceItemTableCrossItemSampling(BaseApiTest):
 
         storage_keys, storage_tracker = track_storage_selections()
 
-        with storage_tracker:
-            with patch.object(RPCEndpoint, "_RPCEndpoint__before_execute"):
-                message = create_trace_item_table_request(
-                    start_time=start_time,
-                    end_time=end_time,
-                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
-                    columns=[
-                        Column(
-                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.span_id")
-                        )
-                    ],
-                    trace_filters=trace_filters,
-                )
+        # Explicitly disable the feature flag for the duration of the query execution.
+        with (
+            override_options("snuba", {"cross_item_queries_no_sample_outer": False}),
+            storage_tracker,
+            patch.object(RPCEndpoint, "_RPCEndpoint__before_execute"),
+        ):
+            message = create_trace_item_table_request(
+                start_time=start_time,
+                end_time=end_time,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                columns=[
+                    Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.span_id"))
+                ],
+                trace_filters=trace_filters,
+            )
 
-                mock_routing_decision = create_mock_routing_decision(Tier.TIER_8, message)
+            mock_routing_decision = create_mock_routing_decision(Tier.TIER_8, message)
 
-                endpoint = EndpointTraceItemTable()
-                endpoint.routing_decision = mock_routing_decision
-                endpoint.execute(message)
+            endpoint = EndpointTraceItemTable()
+            endpoint.routing_decision = mock_routing_decision
+            endpoint.execute(message)
 
-                # When feature is disabled, both inner and outer queries should use the same tier
-                assert len(storage_keys) >= 2, (
-                    f"Expected at least 2 storage selections, got {len(storage_keys)}"
-                )
+            # When feature is disabled, both inner and outer queries should use the same tier
+            assert len(storage_keys) >= 2, (
+                f"Expected at least 2 storage selections, got {len(storage_keys)}"
+            )
 
-                # All storages should be TIER_8 (downsampled)
-                assert all(key == StorageKey.EAP_ITEMS_DOWNSAMPLE_8 for key in storage_keys), (
-                    f"All queries should use EAP_ITEMS_DOWNSAMPLE_8, got: {storage_keys}"
-                )
+            # All storages should be TIER_8 (downsampled)
+            assert all(key == StorageKey.EAP_ITEMS_DOWNSAMPLE_8 for key in storage_keys), (
+                f"All queries should use EAP_ITEMS_DOWNSAMPLE_8, got: {storage_keys}"
+            )

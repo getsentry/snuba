@@ -1,11 +1,11 @@
-from typing import Iterator, Sequence, Tuple
+from collections.abc import Iterator, Sequence
 
 from snuba.clickhouse.columns import Column, Float
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
-columns: Sequence[Tuple[Column[Modifiers], str]] = [
+columns: Sequence[tuple[Column[Modifiers], str]] = [
     (
         Column("error_sample_rate", Float(64, Modifiers(nullable=True))),
         "replay_type",

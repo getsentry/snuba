@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Mapping, Optional, Sequence, Union
+from typing import Any
 
 from snuba.datasets.cdc.cdcprocessors import (
     CdcMessageRow,
@@ -18,8 +19,8 @@ class GroupMessageRecord:
     status: int
     last_seen: datetime
     first_seen: datetime
-    active_at: Optional[datetime] = None
-    first_release_id: Optional[int] = None
+    active_at: datetime | None = None
+    first_release_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -34,17 +35,17 @@ class RawGroupMessageRecord:
     status: int
     last_seen: str
     first_seen: str
-    active_at: Optional[str] = None
-    first_release_id: Optional[int] = None
+    active_at: str | None = None
+    first_release_id: int | None = None
 
 
 @dataclass(frozen=True)
 class GroupedMessageRow(CdcMessageRow):
-    offset: Optional[int]
+    offset: int | None
     project_id: int
     id: int
     record_deleted: bool
-    record_content: Union[None, GroupMessageRecord, RawGroupMessageRecord]
+    record_content: None | GroupMessageRecord | RawGroupMessageRecord
 
     @classmethod
     def from_wal(
@@ -53,7 +54,7 @@ class GroupedMessageRow(CdcMessageRow):
         columnnames: Sequence[str],
         columnvalues: Sequence[Any],
     ) -> GroupedMessageRow:
-        raw_data = dict(zip(columnnames, columnvalues))
+        raw_data = dict(zip(columnnames, columnvalues, strict=False))
         return cls(
             offset=offset,
             project_id=raw_data["project_id"],
@@ -111,7 +112,7 @@ class GroupedMessageRow(CdcMessageRow):
 class GroupedMessageProcessor(CdcProcessor):
     def __init__(self) -> None:
         postgres_table = "sentry_groupedmessage"
-        super(GroupedMessageProcessor, self).__init__(
+        super().__init__(
             pg_table=postgres_table,
             message_row_class=GroupedMessageRow,
         )

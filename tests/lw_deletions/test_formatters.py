@@ -1,4 +1,4 @@
-from typing import Sequence, Type
+from collections.abc import Sequence
 
 import pytest
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
@@ -76,7 +76,7 @@ SEARCH_ISSUES_FORMATTER = SearchIssuesFormatter
 def test_search_issues_formatter(
     messages: Sequence[DeleteQueryMessage],
     expected_formatted: Sequence[ConditionsBag],
-    formatter: Type[Formatter],
+    formatter: type[Formatter],
 ) -> None:
     formatted = formatter().format(messages)
     assert formatted == expected_formatted
@@ -102,7 +102,7 @@ def test_search_issues_formatter(
 def test_eap_items_formatter_identity_conditions(
     messages: Sequence[DeleteQueryMessage],
     expected_formatted: Sequence[ConditionsBag],
-    formatter: Type[Formatter],
+    formatter: type[Formatter],
 ) -> None:
     formatted = formatter().format(messages)
     assert formatted == expected_formatted

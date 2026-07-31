@@ -13,9 +13,9 @@ class TestState:
     def setup_method(self) -> None:
         from snuba.web.views import application
 
-        assert application.testing == True
+        assert application.testing
         self.app = application.test_client()
-        self.app.post = partial(self.app.post, headers={"referer": "test"})  # type: ignore
+        self.app.post = partial(self.app.post, headers={"referer": "test"})  # type: ignore[method-assign]
 
     @pytest.mark.redis_db
     def test_config(self) -> None:
@@ -33,18 +33,6 @@ class TestState:
         state.set_configs({"bar": "quux"}, force=True)
         all_configs = state.get_all_configs()
         assert all(all_configs[k] == v for k, v in [("foo", 1), ("bar", "quux"), ("baz", 3)])
-
-    @pytest.mark.redis_db
-    def test_config_desc(self) -> None:
-        state.set_config_description("foo", "Does foo")
-        assert state.get_config_description("foo") == "Does foo"
-        state.set_config_description("bar", "bars something")
-        assert all(
-            state.get_all_config_descriptions()[k] == d
-            for k, d in [("foo", "Does foo"), ("bar", "bars something")]
-        )
-        state.delete_config_description("foo")
-        assert state.get_config_description("foo") is None
 
     @pytest.mark.redis_db
     def test_config_types(self) -> None:
@@ -97,7 +85,7 @@ class TestState:
 
     @pytest.mark.redis_db
     def test_memoize(self) -> None:
-        @state.memoize(0.1)  # type: ignore
+        @state.memoize(0.1)  # type: ignore[arg-type]
         def rand(config_key: str = "test") -> float:
             return random.random()
 
@@ -109,7 +97,7 @@ class TestState:
 
     @pytest.mark.redis_db
     def test_memoize_with_args(self) -> None:
-        @state.memoize(0.1)  # type: ignore
+        @state.memoize(0.1)  # type: ignore[arg-type]
         def rand(config_key: str = "test1") -> str:
             return f"{random.random()}:{config_key}"
 

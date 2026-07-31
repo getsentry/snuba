@@ -1,4 +1,4 @@
-from typing import List, Tuple, cast
+from typing import cast
 from uuid import UUID
 
 import pytest
@@ -69,10 +69,10 @@ def test_entity_subscriptions_data() -> None:
     ]
 
     assert len(stores) == 1
-    assert len([s for s in stores[0].all()]) == 1
+    assert len(list(stores[0].all())) == 1
 
     result = cast(
-        List[Tuple[UUID, SubscriptionData]],
+        list[tuple[UUID, SubscriptionData]],
         RedisSubscriptionDataStore(
             redis_client,
             entity_key,

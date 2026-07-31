@@ -1,6 +1,7 @@
 import importlib
+from collections.abc import Generator
 from datetime import datetime
-from typing import Any, Generator
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -34,7 +35,7 @@ def _drop_all_tables() -> None:
 
 
 @pytest.fixture(autouse=True)
-def setup_teardown() -> Generator[None, None, None]:
+def setup_teardown() -> Generator[None]:
     _drop_all_tables()
     yield
     _drop_all_tables()
@@ -70,22 +71,18 @@ def test_get_status() -> None:
 def test_show_all() -> None:
     runner = Runner()
     assert all(
-        [
-            migration.status == Status.NOT_STARTED
-            for (_, group_migrations) in runner.show_all()
-            for migration in group_migrations
-        ]
+        migration.status == Status.NOT_STARTED
+        for (_, group_migrations) in runner.show_all()
+        for migration in group_migrations
     )
     # only need to run migrations for the system table to
     # test show_all, can fake the status for the rest
     runner.run_all(force=True, group=MigrationGroup.SYSTEM)
     runner.run_all(force=True, fake=True)
     assert all(
-        [
-            migration.status == Status.COMPLETED
-            for (_, group_migrations) in runner.show_all()
-            for migration in group_migrations
-        ]
+        migration.status == Status.COMPLETED
+        for (_, group_migrations) in runner.show_all()
+        for migration in group_migrations
     )
 
 
@@ -98,7 +95,7 @@ def test_show_all_for_groups() -> None:
     assert len(results) == 1
     group, migrations = results[0]
     assert group == MigrationGroup("system")
-    assert all([migration.status == Status.NOT_STARTED for migration in migrations])
+    assert all(migration.status == Status.NOT_STARTED for migration in migrations)
 
     runner.run_migration(migration_key, force=True)
     results = runner.show_all(["system"])
@@ -106,7 +103,7 @@ def test_show_all_for_groups() -> None:
     assert len(results) == 1
     group, migrations = results[0]
     assert group == MigrationGroup("system")
-    assert all([migration.status == Status.COMPLETED for migration in migrations])
+    assert all(migration.status == Status.COMPLETED for migration in migrations)
 
 
 @pytest.mark.custom_clickhouse_db
@@ -332,7 +329,7 @@ def test_reverse_idempotency_all() -> None:
         if migration.group != MigrationGroup.SYSTEM:
             runner.reverse_migration(migration, force=True)
 
-            def reverse_twice() -> None:
+            def reverse_twice(migration: MigrationKey = migration) -> None:
                 # reverse again to ensure idempotency
                 runner.run_migration(migration, fake=True)
                 runner.reverse_migration(migration, force=True)
@@ -351,13 +348,17 @@ def test_reverse_idempotency_all() -> None:
                     ClickhouseClientSettings.MIGRATE
                 )
 
-                before_state = cluster_connection.execute(
-                    "SELECT create_table_query FROM system.tables"
-                ).results
+                # `system.tables` has no guaranteed row order, and the
+                # reverse_twice() cycle in between can perturb the order rows
+                # are returned in (e.g. ON CLUSTER DDL re-registering tables).
+                # Order the snapshots so the comparison reflects the set of
+                # tables and their definitions, not the iteration order.
+                snapshot_query = (
+                    "SELECT create_table_query FROM system.tables ORDER BY create_table_query"
+                )
+                before_state = cluster_connection.execute(snapshot_query).results
                 reverse_twice()
-                after_state = cluster_connection.execute(
-                    "SELECT create_table_query FROM system.tables"
-                ).results
+                after_state = cluster_connection.execute(snapshot_query).results
                 assert before_state == after_state
             except UndefinedClickhouseCluster:
                 # Some groups do not have a cluster defined (e.g. test_migration)
@@ -489,7 +490,7 @@ def test_check_inactive_replica() -> None:
     with pytest.raises(InactiveClickhouseReplica) as exc:
         check_for_inactive_replicas([mock_cluster])
 
-    assert exc.value.args[0] == (
+    assert str(exc.value) == (
         "Cluster test_cluster has inactive replicas for table bad_table_1 "
         "with 2 out of 3 replicas active.\n"
         "Cluster test_cluster has inactive replicas for table bad_table_2 "

@@ -1,7 +1,8 @@
 import itertools
 import uuid
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Optional, Tuple, Union
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 import simplejson as json
@@ -18,7 +19,7 @@ from tests.helpers import write_processed_messages
 @pytest.mark.redis_db
 class TestLegacyOutcomesApi(BaseApiTest):
     @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
+    def test_entity(self) -> str | tuple[str, str]:
         return "outcomes"
 
     @pytest.fixture
@@ -49,8 +50,8 @@ class TestLegacyOutcomesApi(BaseApiTest):
         num_outcomes: int,
         outcome: int,
         time_since_base: timedelta,
-        category: Optional[int],
-        quantity: Optional[int] = None,
+        category: int | None,
+        quantity: int | None = None,
     ) -> None:
         outcomes = []
         for _ in range(num_outcomes):
@@ -84,7 +85,7 @@ class TestLegacyOutcomesApi(BaseApiTest):
         write_processed_messages(self.storage, outcomes)
 
     def format_time(self, time: datetime) -> str:
-        return time.replace(tzinfo=timezone.utc).isoformat()
+        return time.replace(tzinfo=UTC).isoformat()
 
     def test_happy_path_querying(self, get_project_id: Callable[[], int]) -> None:
         project_id = get_project_id()
@@ -170,7 +171,7 @@ class TestLegacyOutcomesApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200
         assert len(data["data"]) == 3
-        assert all([row["aggregate"] == 10 for row in data["data"]])
+        assert all(row["aggregate"] == 10 for row in data["data"])
         assert sorted([row["project_id"] for row in data["data"]]) == [
             project_id,
             project_id,
@@ -314,8 +315,8 @@ class TestOutcomesAPI(BaseApiTest):
         num_outcomes: int,
         outcome: int,
         time_since_base: timedelta,
-        category: Optional[int],
-        quantity: Optional[int] = None,
+        category: int | None,
+        quantity: int | None = None,
     ) -> None:
         outcomes = []
         for _ in range(num_outcomes):
@@ -349,7 +350,7 @@ class TestOutcomesAPI(BaseApiTest):
         write_processed_messages(self.storage, outcomes)
 
     def format_time(self, time: datetime) -> str:
-        return time.replace(tzinfo=timezone.utc).isoformat()
+        return time.replace(tzinfo=UTC).isoformat()
 
     @pytest.fixture(autouse=True)
     def setup_teardown(self, clickhouse_db: None) -> None:
@@ -426,4 +427,4 @@ class TestOutcomesAPI(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200
         assert len(data["data"]) == 2
-        assert all([row["aggregate"] == 10 for row in data["data"]])
+        assert all(row["aggregate"] == 10 for row in data["data"])

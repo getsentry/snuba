@@ -13,7 +13,7 @@ use sentry_arroyo::types::Message;
 use sentry_arroyo::{counter, timer};
 
 use crate::config::ClickhouseConfig;
-use crate::runtime_config::get_load_balancing_config;
+use crate::options::{get_load_balancing_config, get_max_insert_block_size};
 use crate::types::{BytesInsertBatch, RowData};
 
 fn clickhouse_task_runner(
@@ -70,11 +70,97 @@ fn clickhouse_task_runner(
     }
 }
 
-pub struct ClickhouseWriterStep<N> {
-    inner: RunTaskInThreads<BytesInsertBatch<RowData>, BytesInsertBatch<()>, anyhow::Error, N>,
+/// Wire format for the INSERT. Module-internal: callers pick [`JsonWriterStep`]
+/// or [`RowBinaryWriterStep`].
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum InsertFormat {
+    JsonEachRow,
+    RowBinary,
 }
 
-impl<N> ClickhouseWriterStep<N>
+impl InsertFormat {
+    fn as_str(self) -> &'static str {
+        match self {
+            InsertFormat::JsonEachRow => "JSONEachRow",
+            InsertFormat::RowBinary => "RowBinary",
+        }
+    }
+}
+
+type WriterInner<N> =
+    RunTaskInThreads<BytesInsertBatch<RowData>, BytesInsertBatch<()>, anyhow::Error, N>;
+
+/// Shared core for both writers: ClickHouse client + task runner in a
+/// `RunTaskInThreads`; format and columns are the only per-format inputs.
+#[allow(clippy::too_many_arguments)]
+fn build_writer_inner<N>(
+    next_step: N,
+    cluster_config: ClickhouseConfig,
+    table: String,
+    skip_write: bool,
+    concurrency: &ConcurrencyConfig,
+    storage_name: String,
+    format: InsertFormat,
+    columns: Option<&'static [&'static str]>,
+) -> WriterInner<N>
+where
+    N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
+{
+    RunTaskInThreads::new(
+        next_step,
+        clickhouse_task_runner(
+            Arc::new(ClickhouseClient::new(
+                &cluster_config,
+                &table,
+                storage_name,
+                format,
+                columns,
+            )),
+            skip_write,
+        ),
+        concurrency,
+        Some("clickhouse"),
+    )
+}
+
+/// `ProcessingStrategy` impl delegating to the inner `RunTaskInThreads`.
+macro_rules! impl_writer_delegate {
+    ($ty:ident) => {
+        impl<N> ProcessingStrategy<BytesInsertBatch<RowData>> for $ty<N>
+        where
+            N: ProcessingStrategy<BytesInsertBatch<()>>,
+        {
+            fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
+                self.inner.poll()
+            }
+
+            fn submit(
+                &mut self,
+                message: Message<BytesInsertBatch<RowData>>,
+            ) -> Result<(), SubmitError<BytesInsertBatch<RowData>>> {
+                self.inner.submit(message)
+            }
+
+            fn terminate(&mut self) {
+                self.inner.terminate();
+            }
+
+            fn join(
+                &mut self,
+                timeout: Option<Duration>,
+            ) -> Result<Option<CommitRequest>, StrategyError> {
+                self.inner.join(timeout)
+            }
+        }
+    };
+}
+
+/// Writer for the `JSONEachRow` wire format (the historical default).
+pub struct JsonWriterStep<N> {
+    inner: WriterInner<N>,
+}
+
+impl<N> JsonWriterStep<N>
 where
     N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
 {
@@ -86,47 +172,59 @@ where
         concurrency: &ConcurrencyConfig,
         storage_name: String,
     ) -> Self {
-        let inner = RunTaskInThreads::new(
-            next_step,
-            clickhouse_task_runner(
-                Arc::new(ClickhouseClient::new(
-                    &cluster_config.clone(),
-                    &table,
-                    storage_name,
-                )),
+        JsonWriterStep {
+            inner: build_writer_inner(
+                next_step,
+                cluster_config,
+                table,
                 skip_write,
+                concurrency,
+                storage_name,
+                InsertFormat::JsonEachRow,
+                None,
             ),
-            concurrency,
-            Some("clickhouse"),
-        );
-
-        ClickhouseWriterStep { inner }
+        }
     }
 }
 
-impl<N> ProcessingStrategy<BytesInsertBatch<RowData>> for ClickhouseWriterStep<N>
+impl_writer_delegate!(JsonWriterStep);
+
+/// Writer for the `RowBinary` wire format. `columns` is required: RowBinary is
+/// positional, so the explicit column list maps wire order to the table's
+/// columns (see `EAPItemRow::COLUMN_NAMES`).
+pub struct RowBinaryWriterStep<N> {
+    inner: WriterInner<N>,
+}
+
+impl<N> RowBinaryWriterStep<N>
 where
-    N: ProcessingStrategy<BytesInsertBatch<()>>,
+    N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
 {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
-        self.inner.poll()
-    }
-
-    fn submit(
-        &mut self,
-        message: Message<BytesInsertBatch<RowData>>,
-    ) -> Result<(), SubmitError<BytesInsertBatch<RowData>>> {
-        self.inner.submit(message)
-    }
-
-    fn terminate(&mut self) {
-        self.inner.terminate();
-    }
-
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
-        self.inner.join(timeout)
+    pub fn new(
+        next_step: N,
+        cluster_config: ClickhouseConfig,
+        table: String,
+        skip_write: bool,
+        concurrency: &ConcurrencyConfig,
+        storage_name: String,
+        columns: &'static [&'static str],
+    ) -> Self {
+        RowBinaryWriterStep {
+            inner: build_writer_inner(
+                next_step,
+                cluster_config,
+                table,
+                skip_write,
+                concurrency,
+                storage_name,
+                InsertFormat::RowBinary,
+                Some(columns),
+            ),
+        }
     }
 }
+
+impl_writer_delegate!(RowBinaryWriterStep);
 
 pub struct RetryConfig {
     initial_backoff_ms: f64,
@@ -154,7 +252,13 @@ pub struct ClickhouseClient {
 }
 
 impl ClickhouseClient {
-    pub fn new(config: &ClickhouseConfig, table: &str, storage_name: String) -> ClickhouseClient {
+    pub fn new(
+        config: &ClickhouseConfig,
+        table: &str,
+        storage_name: String,
+        format: InsertFormat,
+        columns: Option<&[&str]>,
+    ) -> ClickhouseClient {
         let mut headers = HeaderMap::with_capacity(6);
         headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
         headers.insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip,deflate"));
@@ -175,8 +279,20 @@ impl ClickhouseClient {
         let host = &config.host;
         let port = &config.http_port;
 
-        let base_url = format!("{scheme}://{host}:{port}?insert_distributed_sync=1");
-        let query = format!("INSERT INTO {table} FORMAT JSONEachRow");
+        // `decompress=1` tells ClickHouse the POST body is in its native
+        // compressed format (LZ4 blocks framed with CityHash128 checksums) —
+        // the same wire format `clickhouse-rs` used and what
+        // `clickhouse-compressor` produces. Distinct from HTTP-standard
+        // `Content-Encoding: lz4`, which would need `enable_http_compression=1`.
+        let base_url = format!("{scheme}://{host}:{port}?insert_distributed_sync=1&decompress=1");
+        let columns_clause = match columns {
+            Some(cols) => format!(" ({})", cols.join(", ")),
+            None => String::new(),
+        };
+        let query = format!(
+            "INSERT INTO {table}{columns_clause} FORMAT {fmt}",
+            fmt = format.as_str(),
+        );
 
         ClickhouseClient {
             client: Client::new(),
@@ -196,13 +312,22 @@ impl ClickhouseClient {
         if let Some(offset) = lb_config.first_offset {
             url.push_str(&format!("&load_balancing_first_offset={offset}"));
         }
+        if let Some(block_size) = get_max_insert_block_size(&self.storage_name) {
+            url.push_str(&format!("&max_insert_block_size={block_size}"));
+        }
         url
     }
 
     pub async fn send(&self, body: Vec<u8>, retry_config: RetryConfig) -> anyhow::Result<Response> {
-        // Convert to Bytes once for efficient cloning since sending the request
-        // moves the body into the request body.
-        let body_bytes = bytes::Bytes::from(body);
+        // Compress once before the retry loop — the encoded body is identical
+        // across attempts, so paying the LZ4 cost per attempt would be wasted
+        // work. `bytes::Bytes` makes the per-attempt clone cheap (refcount bump).
+        let body_bytes = bytes::Bytes::from(lz4_compress(&body));
+        // Free the uncompressed buffer before entering the retry loop. With
+        // `insert_distributed_sync=1` against a slow shard the loop can hold
+        // each in-flight slot for seconds — dragging `body` through it kept
+        // ~1× the batch size resident per slot for no reason.
+        drop(body);
 
         for attempt in 0..=retry_config.max_retries {
             let url = self.build_url();
@@ -288,10 +413,80 @@ impl ClickhouseClient {
     }
 }
 
+/// ClickHouse native compressed-block size cap. Matches the server's
+/// `max_compress_block_size` default; sending larger blocks risks tripping
+/// server-side decompress limits.
+const LZ4_BLOCK_SIZE: usize = 1024 * 1024;
+
+/// ClickHouse compression method identifier for LZ4 in the native block header.
+const LZ4_METHOD_BYTE: u8 = 0x82;
+
+/// CityHash128 over `data` in the wire layout ClickHouse's
+/// `CompressedReadBuffer` reads: 8 little-endian bytes of the low 64-bit half
+/// first, then 8 little-endian bytes of the high half.
+///
+/// `cityhash-rs` returns a `u128` with the halves swapped relative to that
+/// convention (the canonical "low" half ends up in the upper 64 bits of the
+/// returned `u128`), so a naive `to_le_bytes()` puts the wrong half first
+/// and ClickHouse rejects the body with `CANNOT_DECOMPRESS / Checksum
+/// doesn't match`. Rotating by 64 swaps the halves back into the order CH
+/// expects.
+///
+/// We use CityHash 1.0.2 — that's the variant ClickHouse bundles for
+/// compression checksums; the 110 variant is reserved for newer hash columns
+/// and is NOT interchangeable here.
+fn ch_compression_checksum(data: &[u8]) -> [u8; 16] {
+    cityhash_rs::cityhash_102_128(data)
+        .rotate_left(64)
+        .to_le_bytes()
+}
+
+/// Encode `input` in ClickHouse's native compressed format — the same wire
+/// shape `clickhouse-rs` and `clickhouse-compressor` produce, and what the
+/// server expects when `decompress=1` is set in the URL.
+///
+/// The body is a concatenation of one or more blocks. Each block is laid out:
+///
+///   [0..16]  CityHash128(header || compressed), low half LE then high half LE
+///   [16]     LZ4_METHOD_BYTE (0x82)
+///   [17..21] u32 LE: compressed size INCLUDING the 9-byte header
+///   [21..25] u32 LE: uncompressed size of this block
+///   [25..]   raw LZ4 block bytes (no frame, no prepended size)
+///
+/// The 9-byte (method + sizes) header is hashed together with the compressed
+/// bytes so the checksum guards both.
+fn lz4_compress(input: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(input.len() / 2 + 32);
+    for chunk in input.chunks(LZ4_BLOCK_SIZE) {
+        let compressed = lz4_flex::block::compress(chunk);
+        let compressed_with_header = 9u32 + compressed.len() as u32;
+        let uncompressed_size = chunk.len() as u32;
+
+        let block_start = out.len();
+        out.extend_from_slice(&[0u8; 16]);
+        out.push(LZ4_METHOD_BYTE);
+        out.extend_from_slice(&compressed_with_header.to_le_bytes());
+        out.extend_from_slice(&uncompressed_size.to_le_bytes());
+        out.extend_from_slice(&compressed);
+
+        let checksum = ch_compression_checksum(&out[block_start + 16..]);
+        out[block_start..block_start + 16].copy_from_slice(&checksum);
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sentry_options::testing::override_options;
+    use serde_json::json;
+    use std::sync::Once;
     use tokio::time::Instant;
+
+    static INIT: Once = Once::new();
+    fn init_options() {
+        INIT.call_once(|| crate::init_sentry_options().unwrap());
+    }
 
     fn make_test_config() -> ClickhouseConfig {
         ClickhouseConfig {
@@ -319,11 +514,18 @@ mod tests {
         crate::testutils::initialize_python();
         let config = make_test_config();
         println!("config: {config:?}");
-        let client = ClickhouseClient::new(&config, "querylog_local", "test_storage".to_string());
+        let client = ClickhouseClient::new(
+            &config,
+            "querylog_local",
+            "test_storage".to_string(),
+            InsertFormat::JsonEachRow,
+            None,
+        );
 
         let url = client.build_url();
         assert!(url.contains("load_balancing=in_order"));
         assert!(url.contains("insert_distributed_sync"));
+        assert!(url.contains("decompress=1"));
         println!("running test");
         let res = client.send(b"[]".to_vec(), RetryConfig::default()).await;
         println!("Response status {}", res.unwrap().status());
@@ -333,8 +535,15 @@ mod tests {
     #[test]
     fn test_url_with_runtime_config_override() {
         crate::testutils::initialize_python();
+        init_options();
         let config = make_test_config();
-        let client = ClickhouseClient::new(&config, "test_table", "writer_v2_lb_test".to_string());
+        let client = ClickhouseClient::new(
+            &config,
+            "test_table",
+            "writer_v2_lb_test".to_string(),
+            InsertFormat::JsonEachRow,
+            None,
+        );
 
         // Default: in_order
         let url = client.build_url();
@@ -342,18 +551,165 @@ mod tests {
         assert!(!url.contains("load_balancing_first_offset"));
 
         // Override to first_or_random with offset
-        crate::runtime_config::patch_str_config_for_test(
-            "clickhouse_load_balancing:writer_v2_lb_test",
-            Some("first_or_random"),
-        );
-        crate::runtime_config::patch_str_config_for_test(
-            "clickhouse_load_balancing_first_offset:writer_v2_lb_test",
-            Some("1"),
-        );
+        let _guard = override_options(&[
+            (
+                "snuba",
+                "clickhouse_load_balancing",
+                json!({ "writer_v2_lb_test": "first_or_random" }),
+            ),
+            (
+                "snuba",
+                "clickhouse_load_balancing_first_offset",
+                json!({ "writer_v2_lb_test": "1" }),
+            ),
+        ])
+        .unwrap();
 
         let url = client.build_url();
         assert!(url.contains("load_balancing=first_or_random"));
         assert!(url.contains("load_balancing_first_offset=1"));
+    }
+
+    #[test]
+    fn test_url_with_max_insert_block_size() {
+        crate::testutils::initialize_python();
+        init_options();
+        let config = make_test_config();
+        let client = ClickhouseClient::new(
+            &config,
+            "test_table",
+            "writer_v2_block_size_test".to_string(),
+            InsertFormat::JsonEachRow,
+            None,
+        );
+        let other_client = ClickhouseClient::new(
+            &config,
+            "test_table",
+            "writer_v2_other_storage".to_string(),
+            InsertFormat::JsonEachRow,
+            None,
+        );
+
+        // Default (key absent): no suffix.
+        assert!(!client.build_url().contains("max_insert_block_size"));
+
+        // Per-storage override at or above the ClickHouse default sets the suffix.
+        {
+            let _guard = override_options(&[(
+                "snuba",
+                "clickhouse_max_insert_block_size",
+                json!({ "writer_v2_block_size_test": 2_000_000 }),
+            )])
+            .unwrap();
+            assert!(client
+                .build_url()
+                .contains("&max_insert_block_size=2000000"));
+            // A different storage isn't affected.
+            assert!(!other_client.build_url().contains("max_insert_block_size"));
+        }
+
+        // Values below the ClickHouse default (1_048_449) are rejected.
+        {
+            let _guard = override_options(&[(
+                "snuba",
+                "clickhouse_max_insert_block_size",
+                json!({ "writer_v2_block_size_test": 1_000_000 }),
+            )])
+            .unwrap();
+            assert!(!client.build_url().contains("max_insert_block_size"));
+        }
+
+        // Exactly the default is accepted.
+        {
+            let _guard = override_options(&[(
+                "snuba",
+                "clickhouse_max_insert_block_size",
+                json!({ "writer_v2_block_size_test": 1_048_449 }),
+            )])
+            .unwrap();
+            assert!(client
+                .build_url()
+                .contains("&max_insert_block_size=1048449"));
+        }
+    }
+
+    /// Walks a buffer of concatenated ClickHouse-native compressed blocks,
+    /// verifies each block's header layout and CityHash128 checksum, and
+    /// returns the concatenated decompressed payload. Used by the roundtrip
+    /// tests below — kept as a helper so single-block and multi-block paths
+    /// share the same decoder.
+    fn decode_native_blocks(buf: &[u8]) -> Vec<u8> {
+        let mut decoded = Vec::new();
+        let mut pos = 0;
+        while pos < buf.len() {
+            assert!(buf.len() - pos >= 25, "truncated block header");
+            let stored_checksum: [u8; 16] = buf[pos..pos + 16].try_into().unwrap();
+            assert_eq!(buf[pos + 16], LZ4_METHOD_BYTE, "wrong compression method");
+            let compressed_with_header =
+                u32::from_le_bytes(buf[pos + 17..pos + 21].try_into().unwrap()) as usize;
+            let uncompressed_size =
+                u32::from_le_bytes(buf[pos + 21..pos + 25].try_into().unwrap()) as usize;
+            let block_end = pos + 16 + compressed_with_header;
+            assert!(block_end <= buf.len(), "block size overruns buffer");
+
+            let computed = ch_compression_checksum(&buf[pos + 16..block_end]);
+            assert_eq!(computed, stored_checksum, "checksum mismatch");
+
+            let chunk = lz4_flex::block::decompress(&buf[pos + 25..block_end], uncompressed_size)
+                .expect("decompress");
+            assert_eq!(chunk.len(), uncompressed_size);
+            decoded.extend_from_slice(&chunk);
+            pos = block_end;
+        }
+        decoded
+    }
+
+    /// Guards the cityhash-rs ↔ ClickHouse byte-order convention: the wire
+    /// puts the canonical "low" 64 bits first (LE), and `cityhash-rs` stores
+    /// that half in the upper 64 bits of its returned `u128`. Without the
+    /// rotate, this test fails AND CH would reject the body with
+    /// "Checksum doesn't match" — which is exactly how this bug first
+    /// surfaced (see the it_works integration test).
+    #[test]
+    fn test_compression_checksum_matches_clickhouse_wire_order() {
+        let data = b"snuba clickhouse native compressed block payload";
+        let bytes = ch_compression_checksum(data);
+
+        let wire_low = u64::from_le_bytes(bytes[..8].try_into().unwrap());
+        let wire_high = u64::from_le_bytes(bytes[8..].try_into().unwrap());
+
+        let raw = cityhash_rs::cityhash_102_128(data);
+        // cityhash-rs convention: canonical "low" in upper bits, "high" in lower.
+        let canonical_low = (raw >> 64) as u64;
+        let canonical_high = raw as u64;
+
+        assert_eq!(wire_low, canonical_low);
+        assert_eq!(wire_high, canonical_high);
+    }
+
+    #[test]
+    fn test_lz4_compress_roundtrip_single_block() {
+        let mut input = b"INSERT INTO eap_items FORMAT RowBinary\n".to_vec();
+        for i in 0..1024 {
+            input.push((i % 251) as u8);
+        }
+        assert!(input.len() < LZ4_BLOCK_SIZE);
+
+        let compressed = lz4_compress(&input);
+        assert_eq!(decode_native_blocks(&compressed), input);
+    }
+
+    #[test]
+    fn test_lz4_compress_chunks_at_block_size() {
+        // 2.5 blocks: exercises the chunking loop (3 blocks expected, last partial).
+        let input: Vec<u8> = (0..(LZ4_BLOCK_SIZE * 2 + LZ4_BLOCK_SIZE / 2))
+            .map(|i| (i % 251) as u8)
+            .collect();
+
+        let compressed = lz4_compress(&input);
+        let decoded = decode_native_blocks(&compressed);
+        assert_eq!(decoded.len(), input.len());
+        assert_eq!(decoded, input);
     }
 
     #[tokio::test]
@@ -371,7 +727,13 @@ mod tests {
             database: "default".to_string(),
         };
 
-        let client = ClickhouseClient::new(&config, "test_table", "test_storage".to_string());
+        let client = ClickhouseClient::new(
+            &config,
+            "test_table",
+            "test_storage".to_string(),
+            InsertFormat::JsonEachRow,
+            None,
+        );
 
         let start_time = Instant::now();
         let result = client

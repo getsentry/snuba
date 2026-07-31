@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Optional, Sequence, cast
+from collections.abc import Sequence
+from typing import cast
 
 import sentry_sdk
 
@@ -41,8 +42,8 @@ class EntityProcessingExecutor:
         self,
         storages: Sequence[EntityStorageConnection],
         selector: QueryStorageSelector,
-        post_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
-        partition_key_column_name: Optional[str] = None,
+        post_processors: Sequence[ClickhouseQueryProcessor] | None = None,
+        partition_key_column_name: str | None = None,
     ) -> None:
         # A list of storages and the translation mappers they are associated with.
         # This list will only contain one storage and mappers for single storage entities.
@@ -97,18 +98,15 @@ class EntityProcessingExecutor:
             # translate_query_and_apply_mappers to avoid cache conflicts.
             clickhouse_query = QueryTranslator(mappers).translate(query)
 
-        with sentry_sdk.start_span(
-            op="build_plan.storage_query_plan_builder", description="set_from_clause"
-        ):
-            clickhouse_query.set_from_clause(
-                get_query_data_source(
-                    storage.get_schema().get_data_source(),
-                    allocation_policies=storage.get_allocation_policies(),
-                    final=query.get_final(),
-                    sampling_rate=query.get_sample(),
-                    storage_key=storage.get_storage_key(),
-                )
+        clickhouse_query.set_from_clause(
+            get_query_data_source(
+                storage.get_schema().get_data_source(),
+                allocation_policies=storage.get_allocation_policies(),
+                final=query.get_final(),
+                sampling_rate=query.get_sample(),
+                storage_key=storage.get_storage_key(),
             )
+        )
 
         if settings.get_dry_run():
             explain_meta.add_transform_step(

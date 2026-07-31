@@ -89,7 +89,7 @@ def test_combined_scheduler_and_executor(tmpdir: Path) -> None:
         strategy.submit(message)
 
         # Wait for the query to be executed and the result message produced
-        for i in range(10):
+        for _i in range(10):
             time.sleep(0.5)
             strategy.poll()
             if commit.call_count == 2:

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from granian import Granian
 from granian.constants import Interfaces
 
@@ -10,7 +8,7 @@ def serve(
     module: str,
     bind: str,
     processes: int = 1,
-    threads: Optional[int] = None,
+    threads: int | None = None,
     backlog: int = 128,
     reload: bool = False,
     name: str | None = None,
@@ -33,4 +31,4 @@ def serve(
         reload=reload,
         process_name=name,
     )
-    server.serve()  # type: ignore
+    server.serve()

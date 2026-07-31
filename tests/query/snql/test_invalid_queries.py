@@ -1,5 +1,4 @@
 import re
-from typing import Optional
 from unittest import mock
 
 import pytest
@@ -102,7 +101,7 @@ def test_failures(query_body: str, message: str) -> None:
         "bookmark": (EntityKey.GROUPEDMESSAGE, "first_release_id"),
     }
 
-    def events_mock(relationship: str) -> Optional[JoinRelationship]:
+    def events_mock(relationship: str) -> JoinRelationship | None:
         if relationship not in mapping:
             return None
         entity_key, rhs_column = mapping[relationship]

@@ -1,4 +1,4 @@
-from typing import Callable, Iterable, Optional, Sequence
+from collections.abc import Callable, Iterable, Sequence
 
 from snuba.query import LimitBy, OrderBy, SelectedExpression
 from snuba.query import ProcessableQuery as AbstractQuery
@@ -14,21 +14,21 @@ Expression = SnubaExpression
 class Query(AbstractQuery[Table]):
     def __init__(
         self,
-        from_clause: Optional[Table],
+        from_clause: Table | None,
         # New data model to replace the one based on the dictionary
-        selected_columns: Optional[Sequence[SelectedExpression]] = None,
-        array_join: Optional[Sequence[Expression]] = None,
-        condition: Optional[Expression] = None,
-        prewhere: Optional[Expression] = None,
-        groupby: Optional[Sequence[Expression]] = None,
-        having: Optional[Expression] = None,
-        order_by: Optional[Sequence[OrderBy]] = None,
-        limitby: Optional[LimitBy] = None,
-        limit: Optional[int] = None,
+        selected_columns: Sequence[SelectedExpression] | None = None,
+        array_join: Sequence[Expression] | None = None,
+        condition: Expression | None = None,
+        prewhere: Expression | None = None,
+        groupby: Sequence[Expression] | None = None,
+        having: Expression | None = None,
+        order_by: Sequence[OrderBy] | None = None,
+        limitby: LimitBy | None = None,
+        limit: int | None = None,
         offset: int = 0,
         totals: bool = False,
-        granularity: Optional[int] = None,
-        on_cluster: Optional[Expression] = None,
+        granularity: int | None = None,
+        on_cluster: Expression | None = None,
         is_delete: bool = False,
     ) -> None:
         self.__prewhere = prewhere
@@ -60,13 +60,13 @@ class Query(AbstractQuery[Table]):
         if self.__prewhere is not None:
             self.__prewhere = self.__prewhere.accept(visitor)
 
-    def get_prewhere_ast(self) -> Optional[Expression]:
+    def get_prewhere_ast(self) -> Expression | None:
         """
         Temporary method until pre where management is moved to Clickhouse query
         """
         return self.__prewhere
 
-    def set_prewhere_ast_condition(self, condition: Optional[Expression]) -> None:
+    def set_prewhere_ast_condition(self, condition: Expression | None) -> None:
         self.__prewhere = condition
 
     def _eq_functions(self) -> Sequence[str]:

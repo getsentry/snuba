@@ -1,4 +1,5 @@
-from typing import Any, MutableMapping, Optional
+from collections.abc import MutableMapping
+from typing import Any
 
 import requests
 import structlog
@@ -6,8 +7,8 @@ import structlog
 logger = structlog.get_logger().bind(module=__name__)
 
 
-class SlackClient(object):
-    def __init__(self, channel_id: Optional[str] = None, token: Optional[str] = None) -> None:
+class SlackClient:
+    def __init__(self, channel_id: str | None = None, token: str | None = None) -> None:
         self.__channel_id = channel_id
         self.__token = token
 
@@ -51,7 +52,7 @@ class SlackClient(object):
         file_name: str,
         file_path: str,
         file_type: str,
-        initial_comment: Optional[str] = None,
+        initial_comment: str | None = None,
     ) -> None:
         headers = {
             "Authorization": f"Bearer {self.__token}",
@@ -62,17 +63,17 @@ class SlackClient(object):
             "initial_comment": initial_comment,
         }
 
-        files = {
-            "file": (file_name, open(file_path, "rb"), file_type),
-        }
-
         try:
-            resp = requests.post(
-                "https://slack.com/api/files.upload",
-                headers=headers,
-                data=data,
-                files=files,
-            )
+            with open(file_path, "rb") as file_obj:
+                files = {
+                    "file": (file_name, file_obj, file_type),
+                }
+                resp = requests.post(
+                    "https://slack.com/api/files.upload",
+                    headers=headers,
+                    data=data,
+                    files=files,
+                )
         except Exception as exc:
             logger.error(exc, exc_info=True)
             return

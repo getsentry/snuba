@@ -4,7 +4,7 @@ from typing import Any
 from google.protobuf.message import Message
 
 
-class RequestVisitor(ABC):
+class RequestVisitor(ABC):  # noqa: B024 dynamic visit dispatch via getattr; ABC marks it non-instantiable by design
     """
     When you call visitor.visit(msg), the visitor will call the appropriate visit function
     visit_TraceItemTableRequest, visit_Column, visit_AttributeAggregation, etc.

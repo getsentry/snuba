@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
@@ -23,7 +23,7 @@ class FormulaReliabilityCalculator:
     def __init__(
         self,
         request: TimeSeriesRequest,
-        clickhouse_data: list[Dict[str, Any]],
+        clickhouse_data: list[dict[str, Any]],
         time_buckets: list[Timestamp],
     ) -> None:
         """

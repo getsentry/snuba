@@ -10,6 +10,20 @@ from snuba.admin.clickhouse.trace_log_parsing import (
 from tests.fixtures import get_raw_join_query_trace
 
 
+def test_tracing_summary_empty_trace_output() -> None:
+    """
+    The clickhouse-connect (HTTP) driver does not surface the server's
+    send_logs_level output, so trace_output is always empty on that path.
+    Summarizing it must return an empty summary, not raise — it used to
+    IndexError on parsed[0] ("list index out of range"), which 500'd the
+    tracing tool when the HTTP driver was enabled.
+    """
+    assert summarize_trace_output("").query_summaries == {}
+    # Whitespace / lines that don't parse into the expected structure also
+    # yield no summaries rather than raising.
+    assert summarize_trace_output("   \n\n").query_summaries == {}
+
+
 def test_tracing_summary() -> None:
     output = summarize_trace_output(get_raw_join_query_trace())
     assert set(output.query_summaries.keys()) == {

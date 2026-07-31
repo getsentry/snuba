@@ -1,4 +1,4 @@
-from typing import Optional, Sequence, Set
+from collections.abc import Sequence
 
 from snuba.clickhouse.query import Query
 from snuba.query.conditions import (
@@ -34,7 +34,7 @@ def array_join_pattern(column_name: str) -> FunctionCall:
     )
 
 
-def _get_mapping_keys_in_condition(condition: Expression, column_name: str) -> Optional[Set[str]]:
+def _get_mapping_keys_in_condition(condition: Expression, column_name: str) -> set[str] | None:
     """
     Finds the top level conditions that include filter based on the arrayJoin.
     This is meant to be used to find the keys the query is filtering the arrayJoin
@@ -92,7 +92,7 @@ def get_filtered_mapping_keys(query: Query, column_name: str) -> Sequence[str]:
     )
 
     if not array_join_found:
-        return list()
+        return []
 
     ast_condition = query.get_condition()
     cond_keys = (
@@ -114,7 +114,7 @@ def get_filtered_mapping_keys(query: Query, column_name: str) -> Sequence[str]:
         return []
 
     keys = cond_keys | having_keys
-    return sorted(list(keys))
+    return sorted(keys)
 
 
 class ArrayJoinKeyValueOptimizer(ClickhouseQueryProcessor):
@@ -196,29 +196,27 @@ class ArrayJoinKeyValueOptimizer(ClickhouseQueryProcessor):
                     return _unfiltered_mapping_pairs(
                         expr.alias, self.__column_name, pair_alias, array_index
                     )
-                else:
-                    return _filtered_mapping_pairs(
-                        expr.alias,
-                        self.__column_name,
-                        pair_alias,
-                        filtered_keys,
-                        array_index,
-                    )
+                return _filtered_mapping_pairs(
+                    expr.alias,
+                    self.__column_name,
+                    pair_alias,
+                    filtered_keys,
+                    array_index,
+                )
 
-            elif filtered_keys:
+            if filtered_keys:
                 # Only one between arrayJoin(col.key) and arrayJoin(col.value)
                 # is present, and it is arrayJoin(col.key) since we found
                 # filtered keys.
                 return _filtered_mapping_keys(expr.alias, self.__column_name, filtered_keys)
-            else:
-                # No viable optimization
-                return expr
+            # No viable optimization
+            return expr
 
         query.transform_expressions(replace_expression)
 
 
 def _unfiltered_mapping_pairs(
-    alias: Optional[str], column_name: str, pair_alias: str, tuple_index: LiteralExpr
+    alias: str | None, column_name: str, pair_alias: str, tuple_index: LiteralExpr
 ) -> Expression:
     # (arrayJoin(
     #   arrayMap((x,y) -> (x,y), tags.key, tags.value)
@@ -237,7 +235,7 @@ def _unfiltered_mapping_pairs(
 
 
 def _filtered_mapping_pairs(
-    alias: Optional[str],
+    alias: str | None,
     column_name: str,
     pair_alias: str,
     filtered_tags: Sequence[LiteralExpr],
@@ -264,7 +262,7 @@ def _filtered_mapping_pairs(
 
 
 def _filtered_mapping_keys(
-    alias: Optional[str], column_name: str, filtered_tags: Sequence[LiteralExpr]
+    alias: str | None, column_name: str, filtered_tags: Sequence[LiteralExpr]
 ) -> Expression:
     # arrayJoin(arrayFilter(
     #   tag -> tag IN (tags),

@@ -1,4 +1,4 @@
-from typing import List, Tuple, cast
+from typing import cast
 from uuid import UUID
 
 import pytest
@@ -83,7 +83,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
         identifier = creator.create(subscription, self.timer)
         assert (
             cast(
-                List[Tuple[UUID, SubscriptionData]],
+                list[tuple[UUID, SubscriptionData]],
                 RedisSubscriptionDataStore(
                     get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
                     self.entity_key,
@@ -279,7 +279,7 @@ class TestMetricsCountersSubscriptionCreator:
         identifier = creator.create(subscription, self.timer)
         assert (
             cast(
-                List[Tuple[UUID, SubscriptionData]],
+                list[tuple[UUID, SubscriptionData]],
                 RedisSubscriptionDataStore(
                     get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
                     entity_key,
@@ -316,7 +316,7 @@ class TestSubscriptionDeleter(BaseSubscriptionTest):
         identifier = creator.create(subscription, Timer("test"))
         assert (
             cast(
-                List[Tuple[UUID, SubscriptionData]],
+                list[tuple[UUID, SubscriptionData]],
                 RedisSubscriptionDataStore(
                     get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
                     self.entity_key,
@@ -381,7 +381,7 @@ class TestRPCSubscriptionCreator:
         identifier = creator.create(subscription, self.timer)
         assert (
             cast(
-                List[Tuple[UUID, SubscriptionData]],
+                list[tuple[UUID, SubscriptionData]],
                 RedisSubscriptionDataStore(
                     get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
                     EntityKey.EAP_ITEMS,

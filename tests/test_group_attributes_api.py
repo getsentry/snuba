@@ -1,5 +1,6 @@
+from collections.abc import Callable
 from datetime import datetime
-from typing import Any, Callable, Tuple, Union
+from typing import Any
 
 import pytest
 import simplejson as json
@@ -43,7 +44,7 @@ def kafka_metadata() -> KafkaMessageMetadata:
 
 class TestGroupAttributesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
     @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
+    def test_entity(self) -> str | tuple[str, str]:
         return "group_attributes"
 
     @pytest.fixture

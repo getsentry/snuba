@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import Client from "SnubaAdmin/api_client";
 import { Collapse } from "SnubaAdmin/collapse";
-import { CSV } from "SnubaAdmin/cardinality_analyzer/CSV";
+import { CSV } from "SnubaAdmin/utils/CSV";
 import QueryEditor from "SnubaAdmin/query_editor";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
 import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";

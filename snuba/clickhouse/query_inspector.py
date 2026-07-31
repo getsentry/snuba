@@ -1,4 +1,4 @@
-from typing import Mapping, MutableMapping, Optional, Set
+from collections.abc import Mapping, MutableMapping
 
 from snuba.clickhouse.query_dsl.accessors import get_time_range_estimate
 from snuba.query import ProcessableQuery
@@ -12,12 +12,11 @@ from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
 
 
-def _get_date_range(query: ProcessableQuery[Table]) -> Optional[int]:
+def _get_date_range(query: ProcessableQuery[Table]) -> int | None:
     from_date, to_date = get_time_range_estimate(query)
     if from_date is None or to_date is None:
         return None
-    else:
-        return (to_date - from_date).days
+    return (to_date - from_date).days
 
 
 class TablesCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
@@ -28,20 +27,20 @@ class TablesCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
     """
 
     def __init__(self) -> None:
-        self.__tables: Set[str] = set()
-        self.__max_time_range: Optional[int] = None
+        self.__tables: set[str] = set()
+        self.__max_time_range: int | None = None
         self.__has_complex_conditions: bool = False
         self.__final: bool = False
-        self.__sample_rate: Optional[float] = None
-        self.__all_raw_columns: MutableMapping[str, Set[ColumnExpr]] = {}
+        self.__sample_rate: float | None = None
+        self.__all_raw_columns: MutableMapping[str, set[ColumnExpr]] = {}
         self.__all_conditions: MutableMapping[str, Expression] = {}
-        self.__all_groupby: MutableMapping[str, Set[Expression]] = {}
-        self.__all_array_joins: MutableMapping[str, Set[Expression]] = {}
+        self.__all_groupby: MutableMapping[str, set[Expression]] = {}
+        self.__all_array_joins: MutableMapping[str, set[Expression]] = {}
 
-    def get_tables(self) -> Set[str]:
+    def get_tables(self) -> set[str]:
         return self.__tables
 
-    def get_max_time_range(self) -> Optional[int]:
+    def get_max_time_range(self) -> int | None:
         return self.__max_time_range
 
     def has_complex_condition(self) -> bool:
@@ -50,19 +49,19 @@ class TablesCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
     def any_final(self) -> bool:
         return self.__final
 
-    def get_sample_rate(self) -> Optional[float]:
+    def get_sample_rate(self) -> float | None:
         return self.__sample_rate
 
-    def get_all_raw_columns(self) -> Mapping[str, Set[ColumnExpr]]:
+    def get_all_raw_columns(self) -> Mapping[str, set[ColumnExpr]]:
         return self.__all_raw_columns
 
     def get_all_conditions(self) -> Mapping[str, Expression]:
         return self.__all_conditions
 
-    def get_all_groupby(self) -> Mapping[str, Set[Expression]]:
+    def get_all_groupby(self) -> Mapping[str, set[Expression]]:
         return self.__all_groupby
 
-    def get_all_arrayjoin(self) -> Mapping[str, Set[Expression]]:
+    def get_all_arrayjoin(self) -> Mapping[str, set[Expression]]:
         return self.__all_array_joins
 
     def __find_complex_conditions(self, query: ProcessableQuery[Table]) -> bool:
@@ -83,8 +82,8 @@ class TablesCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
     def _visit_join(self, data_source: JoinClause[Table]) -> None:
         self.visit_join_clause(data_source)
 
-    def _list_array_join(self, query: ProcessableQuery[Table]) -> Set[Expression]:
-        ret: Set[Expression] = set()
+    def _list_array_join(self, query: ProcessableQuery[Table]) -> set[Expression]:
+        ret: set[Expression] = set()
         query_arrayjoin = query.get_arrayjoin()
         if query_arrayjoin is not None:
             ret.update(query_arrayjoin)
@@ -105,9 +104,7 @@ class TablesCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
         )
 
         table_name = data_source.get_from_clause().table_name
-        self.__all_raw_columns[table_name] = {
-            c for c in data_source.get_all_ast_referenced_columns()
-        }
+        self.__all_raw_columns[table_name] = set(data_source.get_all_ast_referenced_columns())
 
         condition = data_source.get_condition()
         if condition is not None:

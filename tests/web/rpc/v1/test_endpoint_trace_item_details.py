@@ -16,7 +16,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
 
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_trace_item_details import (
     EndpointTraceItemDetails,
@@ -38,7 +38,7 @@ _TRACE_ID = str(uuid.uuid4())
 
 @pytest.fixture(autouse=False)
 def setup_logs_in_db(eap: None, redis_db: None) -> None:
-    logs_storage = get_storage(StorageKey("eap_items"))
+    logs_storage = get_writable_storage(StorageKey("eap_items"))
     messages = []
     for i in range(120):
         timestamp = BASE_TIME + timedelta(minutes=i)
@@ -63,12 +63,12 @@ def setup_logs_in_db(eap: None, redis_db: None) -> None:
                 },
             )
         )
-    write_raw_unprocessed_events(logs_storage, messages)  # type: ignore
+    write_raw_unprocessed_events(logs_storage, messages)
 
 
 @pytest.fixture(autouse=False)
 def setup_spans_in_db(eap: None, redis_db: None) -> None:
-    spans_storage = get_storage(StorageKey("eap_items"))
+    spans_storage = get_writable_storage(StorageKey("eap_items"))
     messages = [
         gen_item_message(
             start_timestamp=BASE_TIME - timedelta(minutes=i),
@@ -81,7 +81,7 @@ def setup_spans_in_db(eap: None, redis_db: None) -> None:
         for i in range(120)
     ]
 
-    write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+    write_raw_unprocessed_events(spans_storage, messages)
 
 
 def _str_tags_array(*values: str) -> AnyValue:
@@ -258,17 +258,17 @@ class TestTraceItemDetails(BaseApiTest):
             assert k in attributes_returned, k
 
     def test_endpoint_returns_array_attribute(self, eap: None, redis_db: None) -> None:
-        """attributes_array from storage is exposed as val_array on TraceItemDetails."""
+        """Allowlisted attributes_array paths are exposed as val_array on TraceItemDetails."""
         span_ts = BASE_TIME - timedelta(minutes=1)
-        storage = get_storage(StorageKey("eap_items"))
+        storage = get_writable_storage(StorageKey("eap_items"))
         write_raw_unprocessed_events(
-            storage,  # type: ignore
+            storage,
             [
                 gen_item_message(
                     span_ts,
                     attributes={
-                        "tags": _str_tags_array("gamma", "delta"),
-                        "cols": _int_vals_array(1, 3),
+                        "gen_ai.response.text": _str_tags_array("gamma", "delta"),
+                        "workflow_ids": _int_vals_array(1, 3),
                     },
                 ),
             ],
@@ -323,14 +323,171 @@ class TestTraceItemDetails(BaseApiTest):
                 trace_id=trace_id,
             )
         )
-        tags_attr = next((a for a in res.attributes if a.name == "tags"), None)
+        tags_attr = next((a for a in res.attributes if a.name == "gen_ai.response.text"), None)
         assert tags_attr is not None
         assert tags_attr.value.WhichOneof("value") == "val_array"
         assert [e.val_str for e in tags_attr.value.val_array.values] == ["gamma", "delta"]
-        cols_attr = next((a for a in res.attributes if a.name == "cols"), None)
+        cols_attr = next((a for a in res.attributes if a.name == "workflow_ids"), None)
         assert cols_attr is not None
         assert cols_attr.value.WhichOneof("value") == "val_array"
         assert [e.val_int for e in cols_attr.value.val_array.values] == [1, 3]
+
+    def test_array_attributes_read_from_typed_columns(self, eap: None, redis_db: None) -> None:
+        """Every array attribute is read from the typed array map columns and decodes to a
+        val_array, with no allowlist restriction — an arbitrary (formerly non-allowlisted)
+        array attribute is returned just like any other."""
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        storage = get_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            storage,  # type: ignore
+            [
+                gen_item_message(
+                    span_ts,
+                    attributes={
+                        # allowlisted -> returned by both read paths
+                        "gen_ai.response.text": _str_tags_array("gamma", "delta"),
+                        # not allowlisted -> only the typed-column read path returns it
+                        "my_tags": _str_tags_array("alpha", "beta"),
+                    },
+                ),
+            ],
+        )
+        start = Timestamp()
+        end = Timestamp()
+        start.FromDatetime(BASE_TIME - timedelta(hours=4))
+        end.GetCurrentTime()
+
+        spans = (
+            EndpointTraceItemTable()
+            .execute(
+                TraceItemTableRequest(
+                    meta=RequestMeta(
+                        project_ids=[1],
+                        organization_id=1,
+                        cogs_category="something",
+                        referrer="something",
+                        start_timestamp=start,
+                        end_timestamp=end,
+                        request_id=_REQUEST_ID,
+                        trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    ),
+                    columns=[
+                        Column(
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
+                        ),
+                        Column(
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.trace_id")
+                        ),
+                    ],
+                )
+            )
+            .column_values
+        )
+        item_id = spans[0].results[0].val_str
+        trace_id = spans[1].results[0].val_str
+
+        res = EndpointTraceItemDetails().execute(
+            TraceItemDetailsRequest(
+                meta=RequestMeta(
+                    project_ids=[1],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    start_timestamp=start,
+                    end_timestamp=end,
+                    request_id=_REQUEST_ID,
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                ),
+                item_id=item_id,
+                trace_id=trace_id,
+            )
+        )
+        by_name = {a.name: a.value for a in res.attributes}
+        assert by_name["gen_ai.response.text"].WhichOneof("value") == "val_array"
+        assert [e.val_str for e in by_name["gen_ai.response.text"].val_array.values] == [
+            "gamma",
+            "delta",
+        ]
+        # No allowlist: an arbitrary array attribute is returned too.
+        assert "my_tags" in by_name
+        assert [e.val_str for e in by_name["my_tags"].val_array.values] == ["alpha", "beta"]
+
+    def test_dotted_key_array_attribute_parsed_properly(self, eap: None, redis_db: None) -> None:
+        trace_id = uuid.uuid4().hex
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        storage = get_writable_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            storage,
+            [
+                gen_item_message(
+                    span_ts,
+                    trace_id=trace_id,
+                    remove_default_attributes=True,
+                    attributes={
+                        "gen_ai.input.messages": _str_tags_array("node", "--enable-source-maps"),
+                    },
+                ),
+            ],
+        )
+        start = Timestamp()
+        end = Timestamp()
+        start.FromDatetime(BASE_TIME - timedelta(hours=4))
+        end.GetCurrentTime()
+
+        spans = (
+            EndpointTraceItemTable()
+            .execute(
+                TraceItemTableRequest(
+                    meta=RequestMeta(
+                        project_ids=[1],
+                        organization_id=1,
+                        cogs_category="something",
+                        referrer="something",
+                        start_timestamp=start,
+                        end_timestamp=end,
+                        request_id=_REQUEST_ID,
+                        trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    ),
+                    columns=[
+                        Column(
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
+                        ),
+                        Column(
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.trace_id")
+                        ),
+                    ],
+                )
+            )
+            .column_values
+        )
+        idx = next(
+            i
+            for i, tr in enumerate(spans[1].results)
+            if tr.val_str.replace("-", "").lower() == trace_id.replace("-", "").lower()
+        )
+        item_id = spans[0].results[idx].val_str
+        trace_id_for_details = spans[1].results[idx].val_str
+
+        res = EndpointTraceItemDetails().execute(
+            TraceItemDetailsRequest(
+                meta=RequestMeta(
+                    project_ids=[1],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    start_timestamp=start,
+                    end_timestamp=end,
+                    request_id=_REQUEST_ID,
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                ),
+                item_id=item_id,
+                trace_id=trace_id_for_details,
+            )
+        )
+        attr = next((a for a in res.attributes if a.name == "gen_ai.input.messages"), None)
+        assert attr is not None
+        assert attr.value.WhichOneof("value") == "val_array"
+        assert [e.val_str for e in attr.value.val_array.values] == ["node", "--enable-source-maps"]
 
     def test_endpoint_on_spans(self, setup_spans_in_db: Any) -> None:
         end = Timestamp()
@@ -438,11 +595,10 @@ def test_convert_results_dedupes() -> None:
     assert len(is_segment_attrs) == 1
 
 
-def test_convert_results_includes_attributes_array() -> None:
-    """
-    TraceItemDetails maps the ClickHouse attributes_array JSON payload into val_array
-    attributes (same path EndpointTraceItemDetails uses after the query).
-    """
+def test_convert_results_reads_typed_array_maps() -> None:
+    """Every array attribute is read from the typed array map columns (not just an
+    allowlist). Homogeneous arrays keep order; a mixed-type array is merged across the
+    typed columns in column order (string, int, float, bool)."""
     data = [
         {
             "timestamp": 1750964400,
@@ -455,11 +611,20 @@ def test_convert_results_includes_attributes_array() -> None:
             "attributes_int": {},
             "attributes_float": {},
             "attributes_bool": {},
-            "attributes_array": '{"tags":[{"String":"gamma"},{"String":"delta"}]}',
+            "attributes_array_string": {"tags": ["a", "b"], "mixed": ["s"]},
+            "attributes_array_int": {"cols": [1, 3], "mixed": [9]},
+            "attributes_array_float": {"ratios": [1.5]},
+            "attributes_array_bool": {"flags": [True, False]},
         }
     ]
     _, _, attrs = _convert_results(data)
-    tags = [a for a in attrs if a.name == "tags"]
-    assert len(tags) == 1
-    assert tags[0].value.WhichOneof("value") == "val_array"
-    assert [e.val_str for e in tags[0].value.val_array.values] == ["gamma", "delta"]
+    by_name = {a.name: a.value for a in attrs}
+    # Not restricted to an allowlist: arbitrary array attributes are returned.
+    assert [e.val_str for e in by_name["tags"].val_array.values] == ["a", "b"]
+    assert [e.val_int for e in by_name["cols"].val_array.values] == [1, 3]
+    assert by_name["ratios"].val_array.values[0].WhichOneof("value") == "val_double"
+    assert [e.val_bool for e in by_name["flags"].val_array.values] == [True, False]
+    # A name present in multiple typed maps is merged (string elements then int).
+    assert [
+        (e.WhichOneof("value"), e.val_str or e.val_int) for e in by_name["mixed"].val_array.values
+    ] == [("val_str", "s"), ("val_int", 9)]

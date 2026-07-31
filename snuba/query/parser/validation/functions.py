@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Mapping
+from collections.abc import Mapping
 
 from snuba.clickhouse.columns import Array, DateTime, String
 from snuba.datasets.entities.factory import get_entity
@@ -32,12 +32,12 @@ default_validators: Mapping[str, FunctionCallValidator] = {
     "like": SignatureValidator([Column({Array, String}), Any()]),
     "notLike": SignatureValidator([Column({Array, String}), Any()]),
 }
-global_validators: List[FunctionCallValidator] = [AllowedFunctionValidator()]
+global_validators: list[FunctionCallValidator] = [AllowedFunctionValidator()]
 
 
 class QueryEntityFinder(
-    DataSourceVisitor[List[QueryEntity], QueryEntity],
-    JoinVisitor[List[QueryEntity], QueryEntity],
+    DataSourceVisitor[list[QueryEntity], QueryEntity],
+    JoinVisitor[list[QueryEntity], QueryEntity],
 ):
     """
     Finds the QueryEntity from the data source. The QueryEntity is passed
@@ -65,22 +65,22 @@ class QueryEntityFinder(
     a single QueryEntity.
     """
 
-    def _visit_simple_source(self, data_source: QueryEntity) -> List[QueryEntity]:
+    def _visit_simple_source(self, data_source: QueryEntity) -> list[QueryEntity]:
         return [data_source]
 
-    def _visit_join(self, data_source: JoinClause[QueryEntity]) -> List[QueryEntity]:
+    def _visit_join(self, data_source: JoinClause[QueryEntity]) -> list[QueryEntity]:
         return self.visit_join_clause(data_source)
 
-    def _visit_simple_query(self, data_source: ProcessableQuery[QueryEntity]) -> List[QueryEntity]:
+    def _visit_simple_query(self, data_source: ProcessableQuery[QueryEntity]) -> list[QueryEntity]:
         return self.visit(data_source.get_from_clause())
 
-    def _visit_composite_query(self, data_source: CompositeQuery[QueryEntity]) -> List[QueryEntity]:
+    def _visit_composite_query(self, data_source: CompositeQuery[QueryEntity]) -> list[QueryEntity]:
         return []
 
-    def visit_individual_node(self, node: IndividualNode[QueryEntity]) -> List[QueryEntity]:
+    def visit_individual_node(self, node: IndividualNode[QueryEntity]) -> list[QueryEntity]:
         return self.visit(node.data_source)
 
-    def visit_join_clause(self, node: JoinClause[QueryEntity]) -> List[QueryEntity]:
+    def visit_join_clause(self, node: JoinClause[QueryEntity]) -> list[QueryEntity]:
         return node.right_node.accept(self) + node.left_node.accept(self)
 
 

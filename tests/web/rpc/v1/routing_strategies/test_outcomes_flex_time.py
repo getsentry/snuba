@@ -17,7 +17,10 @@ from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
     TimeWindow,
 )
-from tests.web.rpc.v1.routing_strategies.common import store_outcomes_data
+from tests.web.rpc.v1.routing_strategies.common import (
+    override_component_config,
+    store_outcomes_data,
+)
 
 BASE_TIME = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(
     hours=24
@@ -58,7 +61,6 @@ def test_outcomes_flex_time_routing_strategy_with_data() -> None:
     # store 10 million log items every hour for 24 hours
     store_outcomes()
     strategy = OutcomesFlexTimeRoutingStrategy()
-    strategy.set_config_value("max_items_to_query", 120_000_000)
     # query the last 24 hours
     request = TraceItemTableRequest(
         meta=_get_request_meta(BASE_TIME - timedelta(hours=24), BASE_TIME)
@@ -66,13 +68,14 @@ def test_outcomes_flex_time_routing_strategy_with_data() -> None:
     request.meta.trace_item_type = TraceItemType.TRACE_ITEM_TYPE_LOG
     request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
 
-    routing_decision = strategy.get_routing_decision(
-        RoutingContext(
-            in_msg=request,
-            timer=Timer("test"),
-            query_id=uuid.uuid4().hex,
+    with override_component_config(strategy, "max_items_to_query", 120_000_000):
+        routing_decision = strategy.get_routing_decision(
+            RoutingContext(
+                in_msg=request,
+                timer=Timer("test"),
+                query_id=uuid.uuid4().hex,
+            )
         )
-    )
     assert routing_decision.time_window is not None
     # time range should be 12 hours because 120M items / 10M items per hour = 12 hours
     assert (
@@ -87,7 +90,6 @@ def test_outcomes_flex_time_routing_strategy_with_data() -> None:
 def test_outcomes_flex_time_routing_strategy_with_data_and_page_token() -> None:
     store_outcomes()
     strategy = OutcomesFlexTimeRoutingStrategy()
-    strategy.set_config_value("max_items_to_query", 120_000_000)
     # this is the case where the original request time range is being shortened by the page token
     # so even though the original request is for the past 24 hours, the page token specifies the request from 12 hours ago to 24 hours ago
 
@@ -112,13 +114,14 @@ def test_outcomes_flex_time_routing_strategy_with_data_and_page_token() -> None:
     request.meta.downsampled_storage_config.mode = (
         DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
     )
-    routing_decision = strategy.get_routing_decision(
-        RoutingContext(
-            in_msg=request,
-            timer=Timer("test"),
-            query_id=uuid.uuid4().hex,
+    with override_component_config(strategy, "max_items_to_query", 120_000_000):
+        routing_decision = strategy.get_routing_decision(
+            RoutingContext(
+                in_msg=request,
+                timer=Timer("test"),
+                query_id=uuid.uuid4().hex,
+            )
         )
-    )
     assert routing_decision.time_window is not None
     assert (
         routing_decision.time_window.start_timestamp.seconds

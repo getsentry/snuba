@@ -1,15 +1,16 @@
 import uuid
+from collections.abc import Callable, MutableMapping
 from datetime import datetime, timedelta
-from typing import Any, Callable, MutableMapping, Tuple, Union
+from typing import Any
 from unittest.mock import Mock, patch
 
 import pytest
 import simplejson as json
+from sentry_options.testing import override_options
 
 from snuba.core.initialize import initialize_snuba
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.state import set_config
 from tests.base import BaseApiTest
 from tests.datasets.configuration.utils import ConfigurationTest
 from tests.helpers import write_unprocessed_events
@@ -17,8 +18,10 @@ from tests.test_api import SimpleAPITest
 
 
 def base_insert_event(
-    now: datetime = datetime.now(),
-) -> Tuple[int, str, MutableMapping[str, Any]]:
+    now: datetime | None = None,
+) -> tuple[int, str, MutableMapping[str, Any]]:
+    if now is None:
+        now = datetime.now()
     return (
         2,
         "insert",
@@ -49,7 +52,7 @@ def base_insert_event(
 
 class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
     @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
+    def test_entity(self) -> str | tuple[str, str]:
         return "search_issues"
 
     @pytest.fixture
@@ -105,55 +108,55 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         )
 
     @patch("snuba.web.bulk_delete_query.produce_delete_query")
+    @override_options("snuba", {"read_through_cache.short_circuit": True})
     def test_simple_delete(self, mock_produce_delete: Mock) -> None:
-        set_config("read_through_cache.short_circuit", 1)
         now = datetime.now().replace(minute=0, second=0, microsecond=0)
         occurrence_id = str(uuid.uuid4())
         group_id = 4
 
-        evt: MutableMapping[str, Any] = dict(
-            organization_id=1,
-            project_id=3,
-            event_id=str(uuid.uuid4().hex),
-            group_id=group_id,
-            primary_hash=str(uuid.uuid4().hex),
-            datetime=datetime.utcnow().isoformat() + "Z",
-            platform="other",
-            message="message",
-            data={"received": now.timestamp()},
-            occurrence_data=dict(
-                id=occurrence_id,
-                type=1,
-                issue_title="search me",
-                fingerprint=["one", "two"],
-                detection_time=now.timestamp(),
-            ),
-            retention_days=90,
-        )
+        evt: MutableMapping[str, Any] = {
+            "organization_id": 1,
+            "project_id": 3,
+            "event_id": str(uuid.uuid4().hex),
+            "group_id": group_id,
+            "primary_hash": str(uuid.uuid4().hex),
+            "datetime": datetime.utcnow().isoformat() + "Z",
+            "platform": "other",
+            "message": "message",
+            "data": {"received": now.timestamp()},
+            "occurrence_data": {
+                "id": occurrence_id,
+                "type": 1,
+                "issue_title": "search me",
+                "fingerprint": ["one", "two"],
+                "detection_time": now.timestamp(),
+            },
+            "retention_days": 90,
+        }
 
         assert self.events_storage
         write_unprocessed_events(self.events_storage, [evt])
 
         # delete fails when feature flag is off
-        set_config("storage_deletes_enabled", 0)
-        response = self.delete_query(group_id)
-        assert int(int(response.status_code) / 100) != 2
+        with override_options("snuba", {"storage_deletes_enabled": False}):
+            response = self.delete_query(group_id)
+            assert int(int(response.status_code) / 100) != 2
 
         # delete succeeds when feature flag is on
-        set_config("storage_deletes_enabled", 1)
-        response = self.delete_query(group_id)
-        data = json.loads(response.data)
-        assert response.status_code == 200, data
+        with override_options("snuba", {"storage_deletes_enabled": True}):
+            response = self.delete_query(group_id)
+            data = json.loads(response.data)
+            assert response.status_code == 200, data
 
-        # check we produce the delete query message
-        assert mock_produce_delete.call_count == 1
+            # check we produce the delete query message
+            assert mock_produce_delete.call_count == 1
 
-        # check args for delete query message
-        called_args = mock_produce_delete.call_args[0][0]
-        assert called_args["storage_name"] == "search_issues"
-        assert called_args["conditions"]["project_id"] == [3]
-        assert called_args["conditions"]["group_id"] == [4]
-        assert called_args["rows_to_delete"] == 1
+            # check args for delete query message
+            called_args = mock_produce_delete.call_args[0][0]
+            assert called_args["storage_name"] == "search_issues"
+            assert called_args["conditions"]["project_id"] == [3]
+            assert called_args["conditions"]["group_id"] == [4]
+            assert called_args["rows_to_delete"] == 1
 
     def test_bad_delete(self) -> None:
         res = self.app.delete(
@@ -196,25 +199,25 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
     def test_simple_search_query(self) -> None:
         now = datetime.now().replace(minute=0, second=0, microsecond=0)
 
-        evt: MutableMapping[str, Any] = dict(
-            organization_id=1,
-            project_id=2,
-            event_id=str(uuid.uuid4().hex),
-            group_id=3,
-            primary_hash=str(uuid.uuid4().hex),
-            datetime=datetime.utcnow().isoformat() + "Z",
-            platform="other",
-            message="message",
-            data={"received": now.timestamp()},
-            occurrence_data=dict(
-                id=str(uuid.uuid4().hex),
-                type=1,
-                issue_title="search me",
-                fingerprint=["one", "two"],
-                detection_time=now.timestamp(),
-            ),
-            retention_days=90,
-        )
+        evt: MutableMapping[str, Any] = {
+            "organization_id": 1,
+            "project_id": 2,
+            "event_id": str(uuid.uuid4().hex),
+            "group_id": 3,
+            "primary_hash": str(uuid.uuid4().hex),
+            "datetime": datetime.utcnow().isoformat() + "Z",
+            "platform": "other",
+            "message": "message",
+            "data": {"received": now.timestamp()},
+            "occurrence_data": {
+                "id": str(uuid.uuid4().hex),
+                "type": 1,
+                "issue_title": "search me",
+                "fingerprint": ["one", "two"],
+                "detection_time": now.timestamp(),
+            },
+            "retention_days": 90,
+        }
 
         assert self.events_storage
         write_unprocessed_events(self.events_storage, [evt])

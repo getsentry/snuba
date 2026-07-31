@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import uuid
+from collections.abc import Callable, Mapping
 from datetime import datetime
-from typing import Any, Callable, Mapping
+from typing import Any
 
 import pytest
 from google.protobuf.message import Message as ProtobufMessage

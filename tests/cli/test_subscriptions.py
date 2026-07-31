@@ -1,9 +1,12 @@
-from typing import Sequence
+from collections.abc import Sequence
 from unittest.mock import Mock, patch
 
 from click import Command
 from click.testing import CliRunner
 
+import snuba.cli.subscriptions_executor
+import snuba.cli.subscriptions_scheduler
+import snuba.cli.subscriptions_scheduler_executor
 import snuba.subscriptions.executor_consumer
 from snuba.cli.subscriptions_executor import subscriptions_executor
 from snuba.cli.subscriptions_scheduler import subscriptions_scheduler

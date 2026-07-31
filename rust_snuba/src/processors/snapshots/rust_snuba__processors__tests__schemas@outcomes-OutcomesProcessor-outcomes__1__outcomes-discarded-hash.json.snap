@@ -12,6 +12,7 @@ expression: snapshot_payload
     "outcome": 1,
     "project_id": 1,
     "quantity": 1,
+    "quantity64": 1,
     "reason": "discarded-hash",
     "timestamp": 1680029444
   }

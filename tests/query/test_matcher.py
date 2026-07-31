@@ -1,5 +1,3 @@
-from typing import Optional
-
 import pytest
 
 from snuba.query.expressions import Column as ColumnExpr
@@ -272,7 +270,7 @@ test_cases = [
             "relevant_and_wrong",
             (
                 FunctionCallExpr(None, "f", (ColumnExpr(None, None, "my_col"),)),
-                FunctionCallExpr(None, "bla", tuple()),
+                FunctionCallExpr(None, "bla", ()),
             ),
         ),
         None,
@@ -294,13 +292,13 @@ test_cases = [
             "f_name",
             (
                 FunctionCallExpr(None, "f", (ColumnExpr(None, None, "my_col"),)),
-                FunctionCallExpr(None, "second_name", tuple()),
+                FunctionCallExpr(None, "second_name", ()),
             ),
         ),
         MatchResult(
             {
                 "second_function_name": "second_name",
-                "second_function": FunctionCallExpr(None, "second_name", tuple()),
+                "second_function": FunctionCallExpr(None, "second_name", ()),
             },
         ),
     ),
@@ -366,7 +364,7 @@ def test_base_expression(
     name: str,
     pattern: Pattern[Expression],
     expression: Expression,
-    expected_result: Optional[MatchResult],
+    expected_result: MatchResult | None,
 ) -> None:
     res = pattern.match(expression)
     assert res == expected_result
@@ -390,11 +388,11 @@ def test_accessors() -> None:
             "f_name",
             (
                 FunctionCallExpr(None, "f", (ColumnExpr(None, None, "my_col"),)),
-                FunctionCallExpr(None, "second_name", tuple()),
+                FunctionCallExpr(None, "second_name", ()),
             ),
         )
     )
 
     assert result is not None
-    assert result.expression("second_function") == FunctionCallExpr(None, "second_name", tuple())
+    assert result.expression("second_function") == FunctionCallExpr(None, "second_name", ())
     assert result.scalar("second_function_name") == "second_name"

@@ -1,6 +1,6 @@
 import logging
+from collections.abc import Sequence
 from syslog import LOG_CRIT
-from typing import Optional, Sequence
 
 import click
 from confluent_kafka import KafkaException
@@ -30,7 +30,7 @@ def bootstrap(
     kafka: bool,
     migrate: bool,
     force: bool,
-    log_level: Optional[str] = None,
+    log_level: str | None = None,
 ) -> None:
     """
     Warning: Not intended to be used in production yet.
@@ -80,7 +80,7 @@ def bootstrap(
 
         logger.info("Connected to Kafka on attempt %d", attempts)
 
-        create_topics(client, [t for t in Topic])
+        create_topics(client, list(Topic))
 
     if migrate:
         check_clickhouse_connections(CLUSTERS)

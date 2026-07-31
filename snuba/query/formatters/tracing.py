@@ -1,4 +1,5 @@
-from typing import Any, List, Mapping, Sequence, Union
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
@@ -12,17 +13,17 @@ from snuba.query.data_source.simple import SimpleDataSource
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.expressions import StringifyVisitor
 
-TExpression = Union[str, Mapping[str, Any], Sequence[Any]]
+TExpression = str | Mapping[str, Any] | Sequence[Any]
 
 
-def _indent_str_list(str_list: List[str], levels: int) -> List[str]:
+def _indent_str_list(str_list: list[str], levels: int) -> list[str]:
     indent = "  " * levels
     return [f"{indent}{s}" for s in str_list]
 
 
 def format_query(
-    query: Union[ProcessableQuery[SimpleDataSource], CompositeQuery[SimpleDataSource]],
-) -> List[str]:
+    query: ProcessableQuery[SimpleDataSource] | CompositeQuery[SimpleDataSource],
+) -> list[str]:
     """
     Formats a query as a list of strings with each element being a new line
 
@@ -96,14 +97,14 @@ def format_query(
 
 
 class TracingQueryFormatter(
-    DataSourceVisitor[List[str], SimpleDataSource],
-    JoinVisitor[List[str], SimpleDataSource],
+    DataSourceVisitor[list[str], SimpleDataSource],
+    JoinVisitor[list[str], SimpleDataSource],
 ):
-    def _indent_str_list(self, str_list: List[str], levels: int) -> List[str]:
+    def _indent_str_list(self, str_list: list[str], levels: int) -> list[str]:
         indent = "  " * levels
         return [f"{indent}{s}" for s in str_list]
 
-    def _visit_simple_source(self, data_source: SimpleDataSource) -> List[str]:
+    def _visit_simple_source(self, data_source: SimpleDataSource) -> list[str]:
         # Entity and Table define their sampling rates with slightly different
         # terms and renaming it would introduce a lot of code changes down the line
         # so we use this dynamic workaround
@@ -111,40 +112,39 @@ class TracingQueryFormatter(
         sample_str = f" SAMPLE {sample_val}" if sample_val is not None else ""
         return [f"{data_source.human_readable_id}{sample_str}"]
 
-    def _visit_join(self, data_source: JoinClause[SimpleDataSource]) -> List[str]:
+    def _visit_join(self, data_source: JoinClause[SimpleDataSource]) -> list[str]:
         return self.visit_join_clause(data_source)
 
-    def _visit_simple_query(self, data_source: ProcessableQuery[SimpleDataSource]) -> List[str]:
+    def _visit_simple_query(self, data_source: ProcessableQuery[SimpleDataSource]) -> list[str]:
         return format_query(data_source)
 
-    def _visit_composite_query(self, data_source: CompositeQuery[SimpleDataSource]) -> List[str]:
+    def _visit_composite_query(self, data_source: CompositeQuery[SimpleDataSource]) -> list[str]:
         return format_query(data_source)
 
-    def visit_individual_node(self, node: IndividualNode[SimpleDataSource]) -> List[str]:
+    def visit_individual_node(self, node: IndividualNode[SimpleDataSource]) -> list[str]:
         return [f"{self.visit(node.data_source)} AS `{node.alias}`"]
 
-    def visit_join_clause(self, node: JoinClause[SimpleDataSource]) -> List[str]:
+    def visit_join_clause(self, node: JoinClause[SimpleDataSource]) -> list[str]:
         if node.join_type == JoinType.CROSS:
             return [
                 *_indent_str_list(node.left_node.accept(self), 1),
                 f"{node.join_type.name.upper()} JOIN",
                 *_indent_str_list(node.right_node.accept(self), 1),
             ]
-        else:
-            on_list = [
-                [
-                    f"{c.left.table_alias}.{c.left.column}",
-                    f"{c.right.table_alias}.{c.right.column}",
-                ]
-                for c in node.keys
-            ][0]
-            return [
-                *_indent_str_list(node.left_node.accept(self), 1),
-                f"{node.join_type.name.upper()} JOIN",
-                *_indent_str_list(node.right_node.accept(self), 1),
-                "ON",
-                *_indent_str_list(
-                    on_list,
-                    1,
-                ),
+        on_list = [
+            [
+                f"{c.left.table_alias}.{c.left.column}",
+                f"{c.right.table_alias}.{c.right.column}",
             ]
+            for c in node.keys
+        ][0]
+        return [
+            *_indent_str_list(node.left_node.accept(self), 1),
+            f"{node.join_type.name.upper()} JOIN",
+            *_indent_str_list(node.right_node.accept(self), 1),
+            "ON",
+            *_indent_str_list(
+                on_list,
+                1,
+            ),
+        ]

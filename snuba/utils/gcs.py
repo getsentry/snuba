@@ -1,8 +1,9 @@
 import os
-from typing import NamedTuple, Optional, Sequence
+from collections.abc import Sequence
+from typing import NamedTuple
 
 import structlog
-from google.cloud.storage.client import Client  # type: ignore
+from google.cloud.storage.client import Client  # type: ignore[import-untyped]
 
 logger = structlog.get_logger().bind(module=__name__)
 
@@ -29,9 +30,7 @@ class GCSUploader:
         self.bucket_name = bucket_name
         self.storage_client = Client(project=self.project_id)
 
-    def upload_file(
-        self, source_file_name: str, destination_blob_name: Optional[str] = None
-    ) -> None:
+    def upload_file(self, source_file_name: str, destination_blob_name: str | None = None) -> None:
         """
         Upload a file to the bucket. If no destination_blob_name is specified, the source file name is used.
         """
@@ -56,7 +55,7 @@ class GCSUploader:
 
         logger.info(f"File {source_blob_name} downloaded to {destination_file_name}.")
 
-    def list_blobs(self, prefix: Optional[str] = None, delimiter: Optional[str] = None) -> Blobs:
+    def list_blobs(self, prefix: str | None = None, delimiter: str | None = None) -> Blobs:
         """
         List blob names. If the prefix is provided, it will list blob names that exists
         under that prefix only. Delimiter is used if you want to get back prefixes. See
@@ -67,7 +66,7 @@ class GCSUploader:
         names = [blob.name for blob in blobs]
         prefixes = []
         if delimiter:
-            prefixes = [prefix for prefix in blobs.prefixes]
+            prefixes = list(blobs.prefixes)
 
         return Blobs(names, prefixes)
 
@@ -77,4 +76,4 @@ class GCSUploader:
         """
         bucket = self.storage_client.bucket(self.bucket_name)
         blob = bucket.blob(source_blob_name)
-        return True if blob.exists() else False  # satisfy mypy
+        return bool(blob.exists())  # satisfy mypy

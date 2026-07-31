@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod, abstractproperty
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
-from typing import Generic, Sequence, Set, TypeVar
+from typing import Generic, TypeVar
 
 from snuba import settings
 from snuba.migrations.runner import get_active_migration_groups
@@ -82,8 +83,8 @@ TOOL_RESOURCES = {
     "clickhouse-migrations": ToolResource("clickhouse-migrations"),
     "snuba-explain": ToolResource("snuba-explain"),
     "querylog": ToolResource("querylog"),
-    "database-clusters": ToolResource("database-clusters"),
     "rpc-endpoints": ToolResource("rpc-endpoints"),
+    "clusters": ToolResource("clusters"),
     "all": ToolResource("all"),
 }
 
@@ -127,7 +128,7 @@ MIGRATIONS_RESOURCES = {
 @dataclass(frozen=True)
 class Role:
     name: str
-    actions: Set[MigrationAction | ToolAction]
+    actions: set[MigrationAction | ToolAction]
 
 
 def generate_tool_test_role(tool: str) -> Role:
@@ -167,8 +168,8 @@ ROLES = {
                     TOOL_RESOURCES["clickhouse-migrations"],
                     TOOL_RESOURCES["snuba-explain"],
                     TOOL_RESOURCES["querylog"],
-                    TOOL_RESOURCES["database-clusters"],
                     TOOL_RESOURCES["rpc-endpoints"],
+                    TOOL_RESOURCES["clusters"],
                 ]
             )
         },

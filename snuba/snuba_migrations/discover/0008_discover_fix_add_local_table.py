@@ -1,4 +1,4 @@
-from typing import List, Sequence
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import (
     UUID,
@@ -16,7 +16,7 @@ from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget
 
-columns: List[Column[Modifiers]] = [
+columns: list[Column[Modifiers]] = [
     Column("event_id", UUID()),
     Column("project_id", UInt(64)),
     Column("type", String(Modifiers(low_cardinality=True))),
@@ -58,9 +58,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=StorageSetKey.DISCOVER,
                 table_name=self.local_table_name,
                 columns=columns,
-                engine=table_engines.Merge(
-                    table_name_regex="^errors_local$|^transactions_local$"
-                ),
+                engine=table_engines.Merge(table_name_regex="^errors_local$|^transactions_local$"),
                 target=OperationTarget.LOCAL,
             ),
         ]

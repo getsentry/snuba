@@ -140,6 +140,12 @@ query_processors:
           sentry:user: user
         contexts:
           trace.trace_id: trace_id
+  - processor: ClickhouseSettingsOverride
+    args:
+      overwrite_existing: false
+      settings:
+        max_execution_time: 25
+        timeout_before_checking_execution_speed: 0
 
 deletion_settings:
   is_enabled: 1

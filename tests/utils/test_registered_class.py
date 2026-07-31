@@ -1,4 +1,4 @@
-from typing import Type, cast
+from typing import cast
 
 import pytest
 
@@ -112,10 +112,10 @@ class TypedFromName(metaclass=RegisteredClass):
         return "base"
 
     @classmethod
-    def get_class_from_name(cls, name: str) -> Type["TypedFromName"]:
+    def get_class_from_name(cls, name: str) -> type["TypedFromName"]:
         # NOTE: This method cannot be type safe without doing this cast. Such is the nature of metaprogramming
         res = cls.class_from_name(name)
-        return cast(Type[TypedFromName], res)
+        return cast(type[TypedFromName], res)
 
 
 class ExtraName(TypedFromName):
@@ -124,7 +124,7 @@ class ExtraName(TypedFromName):
         return "extra_name"
 
 
-def get_from_name(name: str) -> Type[TypedFromName]:
+def get_from_name(name: str) -> type[TypedFromName]:
     return TypedFromName.get_class_from_name(name)
 
 

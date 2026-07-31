@@ -1,14 +1,9 @@
 import numbers
 import uuid
-from datetime import datetime, timezone
+from collections.abc import Mapping, MutableMapping, Sequence
+from datetime import UTC, datetime
 from typing import (
     Any,
-    Dict,
-    Mapping,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Tuple,
     TypedDict,
     cast,
 )
@@ -54,7 +49,7 @@ class IssueOccurrenceData(TypedDict, total=False):
     subtitle: str
     culprit: str
     level: str
-    resource_id: Optional[str]
+    resource_id: str | None
     detection_time: float
 
 
@@ -72,9 +67,9 @@ class IssueEventData(TypedDict, total=False):
     request: Mapping[str, Any]  # http_method, http_referer
 
     # tag aliases
-    environment: Optional[str]  # tags[environment] -> environment
-    release: Optional[str]  # tags[sentry:release] -> release
-    dist: Optional[str]  # tags[sentry:dist] -> dist
+    environment: str | None  # tags[environment] -> environment
+    release: str | None  # tags[sentry:release] -> release
+    dist: str | None  # tags[sentry:dist] -> dist
     # (tags[sentry:user] or user[id]) -> user
 
     # contexts aliases
@@ -140,7 +135,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         self, event_data: IssueEventData, processed: MutableMapping[str, Any]
     ) -> None:
         existing_tags = event_data.get("tags", None)
-        tags: Mapping[str, Any] = _as_dict_safe(cast(Dict[str, Any], existing_tags))
+        tags: Mapping[str, Any] = _as_dict_safe(cast(dict[str, Any], existing_tags))
         if not existing_tags:
             processed["tags.key"], processed["tags.value"] = [], []
         else:
@@ -227,7 +222,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         # NOTE: we do this conversion because the JSONRowEncoder will strip out milliseconds out
         # of datetime objects specifically. To work around that, we convert the datetime to a
         # timestamp in milliseconds
-        client_timestamp = client_timestamp.replace(tzinfo=timezone.utc)
+        client_timestamp = client_timestamp.replace(tzinfo=UTC)
         processed["timestamp_ms"] = int(client_timestamp.timestamp() * 1000)
 
     def process_insert_v1(
@@ -317,8 +312,8 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
         ]
 
     def process_message(
-        self, message: Tuple[int, str, SearchIssueEvent], metadata: KafkaMessageMetadata
-    ) -> Optional[ProcessedMessage]:
+        self, message: tuple[int, str, SearchIssueEvent], metadata: KafkaMessageMetadata
+    ) -> ProcessedMessage | None:
         if not (isinstance(message, (list, tuple)) and len(message) >= 2):
             raise InvalidMessageFormat(
                 f"Expected message format (<version:int>, <operation:str>, <event>>)), got {message} instead"

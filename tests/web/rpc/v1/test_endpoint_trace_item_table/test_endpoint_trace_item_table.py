@@ -1,5 +1,6 @@
 import random
 import re
+from dataclasses import replace
 from datetime import datetime, timedelta
 from math import isclose
 from typing import Any
@@ -57,13 +58,15 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
 
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.query import OrderBy, OrderByDirection
+from snuba.query import LimitBy, OrderBy, OrderByDirection
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column as snuba_column
+from snuba.query.expressions import Expression
 from snuba.web import QueryException
 from snuba.web.rpc import RPCEndpoint
+from snuba.web.rpc.common.common import attribute_key_to_expression
 from snuba.web.rpc.common.exceptions import (
     BadSnubaRPCRequestException,
     QueryTimeoutException,
@@ -75,8 +78,12 @@ from snuba.web.rpc.proto_visitor import (
 from snuba.web.rpc.v1.endpoint_trace_item_table import (
     EndpointTraceItemTable,
     _apply_labels_to_columns,
+    _validate_limit_by,
     _validate_order_by,
+    _validate_select_and_groupby,
 )
+from snuba.web.rpc.v1.resolvers.common.aggregation import aggregation_to_expression
+from snuba.web.rpc.v1.resolvers.common.trace_item_table import convert_results
 from snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_table import build_query
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -95,7 +102,7 @@ _SPAN_COUNT = 120
 
 @pytest.fixture(autouse=False)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
-    items_storage = get_storage(StorageKey("eap_items"))
+    items_storage = get_writable_storage(StorageKey("eap_items"))
     messages = [
         gen_item_message(
             start_timestamp=BASE_TIME + timedelta(minutes=i),
@@ -134,7 +141,7 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
         )
         for i in range(_SPAN_COUNT)
     ]
-    write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+    write_raw_unprocessed_events(items_storage, messages)
 
 
 @pytest.mark.clickhouse_db
@@ -1118,6 +1125,38 @@ class TestTraceItemTable(BaseApiTest):
         )
         EndpointTraceItemTable().execute(message)
 
+    def test_order_by_timestamp_does_not_error_with_aggregation_and_groupby(self) -> None:
+        # Regression test: an aggregation query that groups by and orders by
+        # `sentry.timestamp`. `sentry.timestamp` is ordered on the raw `timestamp`
+        # column for read-in-order; the GROUP BY must use the same raw column so
+        # ClickHouse does not reject the query with "Column `timestamp` is not under
+        # aggregate function and not in GROUP BY" (Code 215).
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_COUNT,
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp"),
+                    )
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.timestamp")
+                    ),
+                    descending=True,
+                ),
+            ],
+        )
+        EndpointTraceItemTable().execute(message)
+
     def test_aggregation_on_attribute_column_backward_compat(
         self,
         setup_teardown: Any,
@@ -1420,6 +1459,43 @@ class TestTraceItemTable(BaseApiTest):
         with pytest.raises(BadSnubaRPCRequestException):
             EndpointTraceItemTable().execute(message)
 
+    def test_aggregation_filter_without_aggregation_or_group_by(self, setup_teardown: Any) -> None:
+        """An aggregation_filter (HAVING) with no aggregate column and no group_by must be
+        rejected in validation rather than reaching ClickHouse (Code 215). SNUBA-BNG."""
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")),
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location"))
+                ),
+            ],
+            aggregation_filter=AggregationFilter(
+                comparison_filter=AggregationComparisonFilter(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_COUNT,
+                        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="my.float.field"),
+                        label="count()",
+                    ),
+                    op=AggregationComparisonFilter.OP_EQUALS,
+                    val=644,
+                )
+            ),
+            limit=5,
+        )
+        with pytest.raises(BadSnubaRPCRequestException):
+            EndpointTraceItemTable().execute(message)
+
     def test_table_with_no_columns(self, setup_teardown: Any) -> None:
         """Test that a request with no columns raises a validation error."""
         message = TraceItemTableRequest(
@@ -1449,7 +1525,7 @@ class TestTraceItemTable(BaseApiTest):
         # first I write new messages with different value of kylestags,
         # theres a different number of messages for each tag so that
         # each will have a different sum value when i do aggregate
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME + timedelta(minutes=1)
         messages = (
             [
@@ -1474,7 +1550,7 @@ class TestTraceItemTable(BaseApiTest):
                 for i in range(30)
             ]
         )
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)
 
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -1546,7 +1622,7 @@ class TestTraceItemTable(BaseApiTest):
         # first I write new messages with different value of kylestags,
         # theres a different number of messages for each tag so that
         # each will have a different sum value when i do aggregate
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = (
             [
@@ -1573,7 +1649,7 @@ class TestTraceItemTable(BaseApiTest):
                 for i in range(30)
             ]
         )
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)
 
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -1641,7 +1717,7 @@ class TestTraceItemTable(BaseApiTest):
         """
         This test sums only if the traceitem contains kylestag = val2
         """
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = (
             [
@@ -1666,7 +1742,7 @@ class TestTraceItemTable(BaseApiTest):
                 for i in range(3)
             ]
         )
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)
 
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -1726,7 +1802,7 @@ class TestTraceItemTable(BaseApiTest):
         ]
 
     def test_reliability_with_conditional_aggregation(self) -> None:
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = [
             gen_item_message(
@@ -1738,7 +1814,7 @@ class TestTraceItemTable(BaseApiTest):
                 server_sample_rate=0.85,
             ),
         ]
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)
 
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -1833,7 +1909,7 @@ class TestTraceItemTable(BaseApiTest):
         # first I write new messages with different value of kylestags,
         # theres a different number of messages for each tag so that
         # each will have a different sum value when i do aggregate
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = (
             [
@@ -1858,7 +1934,7 @@ class TestTraceItemTable(BaseApiTest):
                 for i in range(30)
             ]
         )
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)
 
         base_message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -2056,7 +2132,7 @@ class TestTraceItemTable(BaseApiTest):
         # first I write new messages with different value of kylestags,
         # theres a different number of messages for each tag so that
         # each will have a different sum value when i do aggregate
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = (
             [
@@ -2081,7 +2157,7 @@ class TestTraceItemTable(BaseApiTest):
                 for i in range(30)
             ]
         )
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)
 
         base_message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -2230,7 +2306,7 @@ class TestTraceItemTable(BaseApiTest):
         # first I write new messages with different value of kylestags,
         # theres a different number of messages for each tag so that
         # each will have a different sum value when i do aggregate
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = (
             [
@@ -2255,7 +2331,7 @@ class TestTraceItemTable(BaseApiTest):
                 for i in range(30)
             ]
         )
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)
 
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -2334,7 +2410,7 @@ class TestTraceItemTable(BaseApiTest):
         This simulates a SQL HAVING clause with complex expressions.
         """
         # Write test data with different success/failure patterns for different services
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
 
         # Service A: High success rate (9 success, 1 failure = 10% failure rate)
@@ -2401,7 +2477,7 @@ class TestTraceItemTable(BaseApiTest):
         ]
 
         all_messages = service_a_messages + service_b_messages + service_c_messages
-        write_raw_unprocessed_events(items_storage, all_messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, all_messages)
 
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -3268,8 +3344,94 @@ class TestTraceItemTable(BaseApiTest):
             AttributeValue(val_str="a") for _ in range(10)
         ] + [AttributeValue(val_str="default") for _ in range(5)]
 
+    def test_virtual_column_filter_uses_value_map(self) -> None:
+        # Regression: a filter on a virtual column must compare against the mapped
+        # value. Map-backed filters build arrayElement(attributes_string, key)
+        # directly (see _map_backed_operands), so _apply_virtual_columns has to
+        # rewrite that form too, not only the SubscriptableReference used by
+        # SELECT / group by — otherwise the filter matches the raw key/value and
+        # returns nothing.
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_item(span_ts, {"device.class": "1"}, 3)
+        write_eap_item(span_ts, {"device.class": "2"}, 5)
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="device.class.label")),
+            ],
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="device.class.label"),
+                    op=ComparisonFilter.OP_EQUALS,
+                    value=AttributeValue(val_str="low"),
+                )
+            ),
+            virtual_column_contexts=[
+                VirtualColumnContext(
+                    from_column_name="device.class",
+                    to_column_name="device.class.label",
+                    value_map={"1": "low", "2": "medium"},
+                    default_value="Unknown",
+                ),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values[0].results == [
+            AttributeValue(val_str="low") for _ in range(3)
+        ]
+
+    def test_virtual_column_like_filter_uses_backing_existence(self) -> None:
+        # LIKE (and null / default-value guards) build a has(mapKeys(...)) existence
+        # check on the request key; for a virtual column that key is absent in
+        # storage, so _apply_virtual_columns must rewrite the existence guard to
+        # the backing column too — otherwise it matches nothing.
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        write_eap_item(span_ts, {"device.class": "1"}, 3)
+        write_eap_item(span_ts, {"device.class": "2"}, 5)
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="device.class.label")),
+            ],
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="device.class.label"),
+                    op=ComparisonFilter.OP_LIKE,
+                    value=AttributeValue(val_str="%low%"),
+                )
+            ),
+            virtual_column_contexts=[
+                VirtualColumnContext(
+                    from_column_name="device.class",
+                    to_column_name="device.class.label",
+                    value_map={"1": "low", "2": "medium"},
+                    default_value="Unknown",
+                ),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values[0].results == [
+            AttributeValue(val_str="low") for _ in range(3)
+        ]
+
     def test_normal_mode_end_to_end(self) -> None:
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = [
             gen_item_message(
@@ -3278,7 +3440,7 @@ class TestTraceItemTable(BaseApiTest):
             )
             for _ in range(3600)
         ]
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)
 
         best_effort_message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -3299,7 +3461,7 @@ class TestTraceItemTable(BaseApiTest):
         EndpointTraceItemTable().execute(best_effort_message)
 
     def test_downsampling_uses_hexintcolumnprocessor(self) -> None:
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = [
             gen_item_message(
@@ -3308,7 +3470,7 @@ class TestTraceItemTable(BaseApiTest):
             )
             for _ in range(3600)
         ]
-        write_raw_unprocessed_events(items_storage, messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, messages)
 
         best_effort_message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -3552,7 +3714,7 @@ class TestTraceItemTable(BaseApiTest):
         * Second batch: game_size = 500 to 850, game_size_unit_mult = 10^6 (MB)
         * Query for avg(game_size * game_size_unit_mult) and verify the result.
         """
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
 
         data_points_gb = list(range(1, 10 + 1))
         data_points_mb = list(range(500, 850 + 1))
@@ -3578,7 +3740,7 @@ class TestTraceItemTable(BaseApiTest):
             )
             for val in data_points_mb
         ]
-        write_raw_unprocessed_events(items_storage, gb_messages + mb_messages)  # type: ignore
+        write_raw_unprocessed_events(items_storage, gb_messages + mb_messages)
 
         # Calculate expected average of (game_size * game_size_unit_mult)
         all_products = [val * 10**9 for val in data_points_gb] + [
@@ -3636,15 +3798,27 @@ def _str_array(*values: str) -> AnyValue:
     return AnyValue(array_value=ArrayValue(values=[AnyValue(string_value=v) for v in values]))
 
 
+def _int_array(*values: int) -> AnyValue:
+    return AnyValue(array_value=ArrayValue(values=[AnyValue(int_value=v) for v in values]))
+
+
+def _double_array(*values: float) -> AnyValue:
+    return AnyValue(array_value=ArrayValue(values=[AnyValue(double_value=v) for v in values]))
+
+
+def _bool_array(*values: bool) -> AnyValue:
+    return AnyValue(array_value=ArrayValue(values=[AnyValue(bool_value=v) for v in values]))
+
+
 class TestArrayWildcardSearch(BaseApiTest):
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
     def test_like_filter_on_array_attribute(self) -> None:
         """Wildcard search on array attributes using LIKE returns matching items."""
         span_ts = BASE_TIME - timedelta(minutes=1)
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         write_raw_unprocessed_events(
-            items_storage,  # type: ignore
+            items_storage,
             [
                 gen_item_message(
                     span_ts, attributes={"tags": _str_array("auth-error", "timeout", "retry")}
@@ -3689,9 +3863,9 @@ class TestArrayWildcardSearch(BaseApiTest):
     def test_not_like_filter_on_array_attribute(self) -> None:
         """NOT_LIKE on array attributes excludes items where any element matches."""
         span_ts = BASE_TIME - timedelta(minutes=1)
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         write_raw_unprocessed_events(
-            items_storage,  # type: ignore
+            items_storage,
             [
                 gen_item_message(span_ts, attributes={"tags": _str_array("auth-error", "timeout")}),
                 gen_item_message(span_ts, attributes={"tags": _str_array("success", "cached")}),
@@ -3727,6 +3901,200 @@ class TestArrayWildcardSearch(BaseApiTest):
         # Only the item with ["success", "cached"] should match (no "error" elements)
         assert len(response.column_values[0].results) == 1
 
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    def test_trace_item_table_array_op_equals_includes_string_ignore_case(self) -> None:
+        """OP_EQUALS with ignore_case matches a string in a TYPE_ARRAY (element-wise)."""
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        items_storage = get_writable_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,
+            [
+                gen_item_message(span_ts, attributes={"tags": _str_array("ERROR", "other")}),
+                gen_item_message(
+                    span_ts, attributes={"tags": _str_array("success", "cached", "http-error")}
+                ),
+                gen_item_message(span_ts, attributes={"tags": _str_array("Error", "timeout")}),
+            ],
+        )
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_ARRAY,
+                        name="tags",
+                    ),
+                    op=ComparisonFilter.OP_EQUALS,
+                    value=AttributeValue(val_str="error"),
+                    ignore_case=True,
+                )
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags")),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert len(response.column_values[0].results) == 2
+        by_name = {cv.attribute_name: cv for cv in response.column_values}
+        for row in by_name["tags"].results:
+            vals = [e.val_str for e in row.val_array.values if e.WhichOneof("value") == "val_str"]
+            assert "error" in [val.lower() for val in vals]
+
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    def test_trace_item_table_array_op_equals_includes_int(self) -> None:
+        """OP_EQUALS on TYPE_ARRAY with val_int=45 returns rows where some element is 45."""
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        items_storage = get_writable_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,
+            [
+                gen_item_message(span_ts, attributes={"frame_linenos": _int_array(1, 45, 200)}),
+                gen_item_message(span_ts, attributes={"frame_linenos": _int_array(10, 20)}),
+                gen_item_message(span_ts, attributes={"frame_linenos": _int_array(45, 99)}),
+            ],
+        )
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_ARRAY,
+                        name="frame_linenos",
+                    ),
+                    op=ComparisonFilter.OP_EQUALS,
+                    value=AttributeValue(val_int=45),
+                )
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="frame_linenos")),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert len(response.column_values[0].results) == 2
+        by_name = {cv.attribute_name: cv for cv in response.column_values}
+        assert by_name["frame_linenos"].results[0].WhichOneof("value") == "val_array"
+        for row in by_name["frame_linenos"].results:
+            int_vals = [
+                e.val_int for e in row.val_array.values if e.WhichOneof("value") == "val_int"
+            ]
+            assert 45 in int_vals
+
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    @pytest.mark.parametrize(
+        "attr_name,match_attrs,no_match_attrs,filter_value,check_row",
+        [
+            pytest.param(
+                "arr_eq_flt",
+                {"arr_eq_flt": _double_array(0.0, 1.5, 2.0)},
+                {"arr_eq_flt": _double_array(0.1, 0.2)},
+                AttributeValue(val_float=1.5),
+                lambda row: (
+                    any(
+                        isclose(e.val_double, 1.5)
+                        for e in row.val_array.values
+                        if e.WhichOneof("value") == "val_double"
+                    )
+                    or any(
+                        isclose(e.val_float, 1.5)
+                        for e in row.val_array.values
+                        if e.WhichOneof("value") == "val_float"
+                    )
+                ),
+                id="val_float",
+            ),
+            pytest.param(
+                "arr_eq_dbl",
+                {"arr_eq_dbl": _double_array(9.9, 1.0)},
+                {"arr_eq_dbl": _double_array(0.0, 0.0)},
+                AttributeValue(val_double=9.9),
+                lambda row: any(
+                    e.WhichOneof("value") == "val_double" and e.val_double == 9.9
+                    for e in row.val_array.values
+                ),
+                id="val_double",
+            ),
+            pytest.param(
+                "arr_eq_bool",
+                {"arr_eq_bool": _bool_array(False, True)},
+                {"arr_eq_bool": _bool_array(False, False)},
+                AttributeValue(val_bool=True),
+                lambda row: any(
+                    e.WhichOneof("value") == "val_bool" and e.val_bool is True
+                    for e in row.val_array.values
+                ),
+                id="val_bool",
+            ),
+        ],
+    )
+    def test_trace_item_table_array_op_equals_all_scalar_rhs_types(
+        self,
+        attr_name: str,
+        match_attrs: dict[str, AnyValue],
+        no_match_attrs: dict[str, AnyValue],
+        filter_value: AttributeValue,
+        check_row: Any,
+    ) -> None:
+        """OP_EQUALS on TYPE_ARRAY: each scalar AttributeValue type matches a stored element"""
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        items_storage = get_writable_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,
+            [
+                gen_item_message(span_ts, attributes=match_attrs),
+                gen_item_message(span_ts, attributes=no_match_attrs),
+            ],
+        )
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_ARRAY,
+                        name=attr_name,
+                    ),
+                    op=ComparisonFilter.OP_EQUALS,
+                    value=filter_value,
+                )
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name=attr_name)),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        by_name = {cv.attribute_name: cv for cv in response.column_values}
+        assert len(by_name[attr_name].results) == 1
+        assert check_row(by_name[attr_name].results[0])
+
 
 class TestTraceItemTableArrayColumn(BaseApiTest):
     @pytest.mark.clickhouse_db
@@ -3734,9 +4102,9 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
     def test_select_array_column_returns_val_array(self) -> None:
         """TYPE_ARRAY columns are returned as val_array on TraceItemTable."""
         span_ts = BASE_TIME - timedelta(minutes=1)
-        items_storage = get_storage(StorageKey("eap_items"))
+        items_storage = get_writable_storage(StorageKey("eap_items"))
         write_raw_unprocessed_events(
-            items_storage,  # type: ignore
+            items_storage,
             [
                 gen_item_message(
                     span_ts,
@@ -3744,6 +4112,14 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
                         "tags": _str_array("alpha", "beta"),
                         "cols": AnyValue(
                             array_value=ArrayValue(values=[AnyValue(int_value=v) for v in [1, 3]])
+                        ),
+                        "resource.process.command_args": AnyValue(
+                            array_value=ArrayValue(
+                                values=[
+                                    AnyValue(string_value="node"),
+                                    AnyValue(string_value="--enable-source-maps"),
+                                ]
+                            )
                         ),
                     },
                 ),
@@ -3763,6 +4139,11 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
                 Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
                 Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags")),
                 Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="cols")),
+                Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_ARRAY, name="resource.process.command_args"
+                    )
+                ),
             ],
         )
         response = EndpointTraceItemTable().execute(message)
@@ -3773,10 +4154,99 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
             "beta",
         ]
         assert by_name["cols"].results[0].WhichOneof("value") == "val_array"
-        assert [e.val_str for e in by_name["cols"].results[0].val_array.values] == [
-            "1",
-            "3",
-        ]
+        assert [e.val_int for e in by_name["cols"].results[0].val_array.values] == [1, 3]
+        assert (
+            by_name["resource.process.command_args"].results[0].WhichOneof("value") == "val_array"
+        )
+        assert [
+            e.val_str for e in by_name["resource.process.command_args"].results[0].val_array.values
+        ] == ["node", "--enable-source-maps"]
+
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    def test_select_array_column_reads_typed_columns(self) -> None:
+        """A homogeneous array attribute decodes to a val_array read from the typed
+        attributes_array_* columns. Element-typed keys read one column; the deprecated
+        untyped TYPE_ARRAY reads all four and merges."""
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        items_storage = get_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,  # type: ignore
+            [
+                gen_item_message(
+                    span_ts,
+                    attributes={"tags": _str_array("alpha", "beta"), "cols": _int_array(1, 3)},
+                ),
+            ],
+        )
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY_STRING, name="tags")),
+                Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY_INT, name="cols")),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        by_name = {cv.attribute_name: cv for cv in response.column_values}
+        assert by_name["tags"].results[0].WhichOneof("value") == "val_array"
+        assert [e.val_str for e in by_name["tags"].results[0].val_array.values] == ["alpha", "beta"]
+        assert by_name["cols"].results[0].WhichOneof("value") == "val_array"
+        assert [e.val_int for e in by_name["cols"].results[0].val_array.values] == [1, 3]
+
+
+class TestArrayOperationsRejected:
+    """Array attributes support select + filter (and uniq, for crash-free rate), but not
+    group_by / order_by / other aggregations."""
+
+    def test_group_by_array_raises(self) -> None:
+        request = TraceItemTableRequest(
+            columns=[Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.name"))],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags")],
+        )
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="group_by is not supported on array attributes",
+        ):
+            _validate_select_and_groupby(request)
+
+    def test_order_by_array_raises(self) -> None:
+        request = TraceItemTableRequest(
+            columns=[Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags"))],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags"))
+                )
+            ],
+        )
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="order_by is not supported on array attributes",
+        ):
+            _validate_order_by(request)
+
+    def test_non_uniq_aggregation_on_array_raises(self) -> None:
+        # Only uniq is supported on arrays; other aggregations are rejected.
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="not supported for array attribute",
+        ):
+            aggregation_to_expression(
+                AttributeConditionalAggregation(
+                    aggregate=Function.FUNCTION_COUNT,
+                    key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags"),
+                    label="count(tags)",
+                ),
+                attribute_key_to_expression,
+            )
 
 
 class TestUtils:
@@ -3798,7 +4268,7 @@ class TestUtils:
                         label="avg(custom_measurement_2)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     ),
-                    label=None,  # type: ignore
+                    label=None,  # type: ignore[arg-type]
                 ),
             ],
             order_by=[],
@@ -3826,7 +4296,7 @@ class TestUtils:
                         label="avg(custom_measurement_2)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     ),
-                    label=None,  # type: ignore
+                    label=None,  # type: ignore[arg-type]
                 ),
             ],
             order_by=[],
@@ -3976,14 +4446,13 @@ def test_build_query_with_order_by_optimization_disabled_because_multiproject() 
     request = _apply_labels_to_columns(request)
 
     query = build_query(request)
+    # The full sort-key expansion is disabled (multi-project), but ordering by
+    # sentry.timestamp still targets the raw `timestamp` column rather than a CAST so
+    # ClickHouse can read in primary-key order.
     assert query.get_orderby() == [
         OrderBy(
             direction=OrderByDirection.DESC,
-            expression=f.cast(
-                snuba_column("timestamp"),
-                "String",
-                alias="sentry.timestamp_TYPE_STRING",
-            ),
+            expression=snuba_column("timestamp"),
         ),
     ]
 
@@ -4019,14 +4488,13 @@ def test_build_query_with_order_by_optimization_disabled_because_groupby() -> No
     request = _apply_labels_to_columns(request)
 
     query = build_query(request)
+    # The full sort-key expansion is disabled (group by present), but ordering by
+    # sentry.timestamp still targets the raw `timestamp` column rather than a CAST so
+    # ClickHouse can read in primary-key order.
     assert query.get_orderby() == [
         OrderBy(
             direction=OrderByDirection.DESC,
-            expression=f.cast(
-                snuba_column("timestamp"),
-                "String",
-                alias="sentry.timestamp_TYPE_STRING",
-            ),
+            expression=snuba_column("timestamp"),
         ),
     ]
 
@@ -4064,3 +4532,461 @@ def test_order_by_bug() -> None:
     )
     with pytest.raises(BadSnubaRPCRequestException, match=error_message):
         _validate_order_by(message)
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+class TestSemverSorting:
+    """ORDER BY with the SORT_SEMVER option applies the semver key so versions
+    sort numerically (1.2.9 before 1.2.10) with pre-releases before their
+    corresponding stable release. Without SORT_SEMVER the ordering stays
+    lexicographic (there is no hardcoded per-attribute behavior).
+    """
+
+    _RELEASES = [
+        "1.2.9",
+        "1.2.10",
+        "1.2.3",
+        "1.2.3-beta.1",
+        "1.2.2",
+        "my-pkg@2.0.0",
+        "1.2",
+        "1.2.0",
+        # PEP 440 dot-style dev build (Sentry's own sentry.release format) and
+        # its GA release, to verify the dev build sorts before GA.
+        "24.7.0.dev0+abc123",
+        "24.7.0",
+        # SemVer build metadata must not affect precedence: "1.2.3+build456"
+        # sorts as the stable 1.2.3, not as a prerelease of 1.2.0.
+        "1.2.3+build456",
+    ]
+
+    @pytest.fixture(autouse=True)
+    def _setup(self, clickhouse_db: None, redis_db: None) -> None:
+        for i, release in enumerate(self._RELEASES):
+            write_eap_item(
+                start_timestamp=BASE_TIME + timedelta(minutes=i),
+                raw_attributes={"sentry.release": release, "semver_test_marker": "1"},
+            )
+
+    def _query_releases(self, descending: bool = False, semver: bool = True) -> list[str]:
+        sort = (
+            TraceItemTableRequest.OrderBy.SORT_SEMVER
+            if semver
+            else TraceItemTableRequest.OrderBy.SORT_UNSPECIFIED
+        )
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="semver_test_marker")
+                )
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.release"))
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.release")
+                    ),
+                    descending=descending,
+                    sort=sort,
+                )
+            ],
+            limit=len(self._RELEASES) + 10,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        return [v.val_str for v in response.column_values[0].results]
+
+    def test_numeric_ordering(self) -> None:
+        releases = self._query_releases()
+        assert releases.index("1.2.9") < releases.index("1.2.10"), (
+            "1.2.9 must sort before 1.2.10 (numeric, not lexicographic)"
+        )
+
+    def test_default_sort_is_lexicographic(self) -> None:
+        # Without SORT_SEMVER there is no semver behavior (no hardcoded
+        # attributes), so plain lexicographic order applies: "1.2.10" < "1.2.9".
+        releases = self._query_releases(semver=False)
+        assert releases.index("1.2.10") < releases.index("1.2.9"), (
+            "without SORT_SEMVER, ordering is lexicographic"
+        )
+
+    def test_prerelease_before_stable(self) -> None:
+        releases = self._query_releases()
+        assert releases.index("1.2.3-beta.1") < releases.index("1.2.3"), (
+            "prerelease 1.2.3-beta.1 must sort before stable 1.2.3"
+        )
+
+    def test_dot_dev_prerelease_before_stable(self) -> None:
+        releases = self._query_releases()
+        assert releases.index("24.7.0.dev0+abc123") < releases.index("24.7.0"), (
+            "PEP 440 dot-style dev build must sort before its GA release"
+        )
+
+    def test_prerelease_of_newer_after_older_stable(self) -> None:
+        releases = self._query_releases()
+        assert releases.index("1.2.3-beta.1") > releases.index("1.2.2"), (
+            "prerelease 1.2.3-beta.1 must sort after older stable 1.2.2"
+        )
+
+    def test_package_prefix_stripped(self) -> None:
+        releases = self._query_releases()
+        assert releases.index("my-pkg@2.0.0") > releases.index("1.2.10"), (
+            "my-pkg@2.0.0 should sort as version 2.0.0 (after 1.x)"
+        )
+
+    def test_build_metadata_ignored(self) -> None:
+        # Build metadata does not affect precedence: "1.2.3+build456" must sort
+        # as stable 1.2.3 (after 1.2.2 and after the 1.2.3-beta.1 prerelease),
+        # not as a prerelease of 1.2.0 (which would land before 1.2.2).
+        releases = self._query_releases()
+        assert releases.index("1.2.3+build456") > releases.index("1.2.2"), (
+            "1.2.3+build456 must sort as 1.2.3 (stable), after 1.2.2"
+        )
+        assert releases.index("1.2.3+build456") > releases.index("1.2.3-beta.1"), (
+            "build metadata is not a prerelease: 1.2.3+build456 sorts after 1.2.3-beta.1"
+        )
+
+    def test_length_normalisation(self) -> None:
+        releases = self._query_releases()
+        idx_12 = releases.index("1.2")
+        idx_120 = releases.index("1.2.0")
+        # Both normalise to [1,2,0,0], so they are adjacent.  The raw-string
+        # tiebreaker then breaks the tie deterministically: "1.2" < "1.2.0".
+        assert idx_12 < idx_120, (
+            "1.2 and 1.2.0 normalise equally and must be adjacent, with '1.2' "
+            "first via the raw-string tiebreaker"
+        )
+
+    def test_desc_is_reverse_of_asc(self) -> None:
+        # The raw-string tiebreaker in semver_sort_key gives distinct release
+        # strings a deterministic total order (e.g. "1.2" < "1.2.0"), so DESC is
+        # the exact reverse of ASC even for versions that share the same numeric
+        # key.
+        asc = self._query_releases(descending=False)
+        desc = self._query_releases(descending=True)
+        assert asc == list(reversed(desc))
+
+
+def test_convert_results_empty_typed_array_is_null() -> None:
+    """An absent/empty element-typed array reads as an empty native list; convert_results
+    surfaces it as NULL (like a missing scalar), not an empty val_array. A populated array
+    still decodes to a val_array."""
+    request = TraceItemTableRequest(
+        columns=[
+            Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY_STRING, name="tags"), label="tags")
+        ]
+    )
+    result = convert_results(request, [{"tags": []}, {"tags": ["a", "b"]}])
+    (tags,) = result
+    assert tags.attribute_name == "tags"
+    assert tags.results[0].is_null is True
+    assert [e.val_str for e in tags.results[1].val_array.values] == ["a", "b"]
+
+
+def _limit_by_request(
+    limit_by: TraceItemTableRequest.LimitBy,
+    limit: int = 0,
+    downsampled_storage_config: DownsampledStorageConfig | None = None,
+) -> TraceItemTableRequest:
+    """Builds a project_id/transaction/count() request grouped by project and
+    transaction, with the given limit_by attached."""
+    return TraceItemTableRequest(
+        meta=RequestMeta(
+            project_ids=[1, 2, 3],
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            downsampled_storage_config=downsampled_storage_config
+            or DownsampledStorageConfig(mode=DownsampledStorageConfig.MODE_NORMAL),
+        ),
+        columns=[
+            Column(
+                key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id"),
+                label="project_id",
+            ),
+            Column(
+                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="transaction"),
+                label="transaction",
+            ),
+            Column(
+                aggregation=AttributeAggregation(
+                    aggregate=Function.FUNCTION_COUNT,
+                    key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id"),
+                    label="count()",
+                ),
+                label="count()",
+            ),
+        ],
+        group_by=[
+            AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id"),
+            AttributeKey(type=AttributeKey.TYPE_STRING, name="transaction"),
+        ],
+        limit=limit,
+        limit_by=limit_by,
+    )
+
+
+_LimitByColumn = TraceItemTableRequest.LimitBy.Column
+
+
+def _project_id_limit_by_column() -> "TraceItemTableRequest.LimitBy.Column":
+    return _LimitByColumn(key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id"))
+
+
+def test_build_query_with_limit_by() -> None:
+    """A `limit_by` on a column key produces a `LIMIT n BY ...` clause using that
+    column's expression."""
+    request = _limit_by_request(
+        TraceItemTableRequest.LimitBy(columns=[_project_id_limit_by_column()], limit=10)
+    )
+
+    wrapper = TraceItemTableRequestWrapper(request)
+    wrapper.accept(AggregationToConditionalAggregationVisitor())
+    request = _apply_labels_to_columns(request)
+
+    query = build_query(request)
+    limitby = query.get_limitby()
+    # the alias is stripped so LIMIT BY emits the bare expression
+    assert limitby == LimitBy(
+        limit=10,
+        columns=[
+            attribute_key_to_expression(
+                AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id")
+            ).transform(lambda e: replace(e, alias=None))
+        ],
+    )
+
+
+def test_build_query_limit_by_label_reference() -> None:
+    """A `limit_by` referencing a selected column by label resolves to the expression
+    selected under that label."""
+    request = _limit_by_request(
+        TraceItemTableRequest.LimitBy(columns=[_LimitByColumn(label="project_id")], limit=10)
+    )
+
+    wrapper = TraceItemTableRequestWrapper(request)
+    wrapper.accept(AggregationToConditionalAggregationVisitor())
+    request = _apply_labels_to_columns(request)
+
+    query = build_query(request)
+    limitby = query.get_limitby()
+    assert limitby == LimitBy(
+        limit=10,
+        columns=[
+            attribute_key_to_expression(
+                AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id")
+            ).transform(lambda e: replace(e, alias=None))
+        ],
+    )
+
+
+def test_build_query_limit_by_virtual_column_has_no_alias() -> None:
+    """A `limit_by` on a virtual column must not leak an alias into the LIMIT BY clause:
+    `_apply_virtual_columns` re-aliases the expression, so build_query must strip it (an
+    aliased `expr AS alias` in LIMIT BY is invalid unless declared in the SELECT)."""
+    request = TraceItemTableRequest(
+        meta=RequestMeta(
+            project_ids=[1],
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        ),
+        columns=[
+            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="foo"), label="foo"),
+        ],
+        virtual_column_contexts=[
+            VirtualColumnContext(
+                from_column_name="sentry.project_id",
+                to_column_name="project_name",
+                value_map={"1": "sentry"},
+            )
+        ],
+        limit_by=TraceItemTableRequest.LimitBy(
+            columns=[
+                _LimitByColumn(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="project_name"))
+            ],
+            limit=5,
+        ),
+    )
+    request = _apply_labels_to_columns(request)
+    query = build_query(request)
+    limitby = query.get_limitby()
+    assert limitby is not None
+    # every node in the LIMIT BY expression must be alias-free
+    aliases: list[str | None] = []
+
+    def _collect_alias(e: Expression) -> Expression:
+        aliases.append(e.alias)
+        return e
+
+    for column in limitby.columns:
+        column.transform(_collect_alias)
+    assert all(alias is None for alias in aliases)
+
+
+def test_build_query_without_limit_by() -> None:
+    """Requests that do not set `limit_by` produce a query with no LIMIT BY clause."""
+    request = TraceItemTableRequest(
+        meta=RequestMeta(
+            project_ids=[1],
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+        ),
+        columns=[Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="foo"))],
+    )
+    request = _apply_labels_to_columns(request)
+    query = build_query(request)
+    assert query.get_limitby() is None
+
+
+def test_validate_limit_by_with_top_level_limit_allowed() -> None:
+    """The top-level `limit` may be combined with `limit_by`: it caps the overall result
+    while limit_by bounds rows per group."""
+    message = _limit_by_request(
+        TraceItemTableRequest.LimitBy(columns=[_project_id_limit_by_column()], limit=5), limit=10
+    )
+    message = _apply_labels_to_columns(message)
+    _validate_limit_by(message)  # does not raise
+
+
+def test_validate_limit_by_rejected_with_flextime() -> None:
+    """limit_by cannot be combined with flextime routing (flextime paginates on the
+    top-level limit, which limit_by forces to 0)."""
+    message = _limit_by_request(
+        TraceItemTableRequest.LimitBy(columns=[_project_id_limit_by_column()], limit=5),
+        downsampled_storage_config=DownsampledStorageConfig(
+            mode=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY_FLEXTIME
+        ),
+    )
+    message = _apply_labels_to_columns(message)
+    with pytest.raises(BadSnubaRPCRequestException, match="flextime"):
+        _validate_limit_by(message)
+
+
+def test_validate_limit_by_rejects_array_key() -> None:
+    """limit_by cannot be an array attribute (arrays expand into typed sub-columns and
+    can't be grouped on), whether passed as a key or referenced by label."""
+    array_column = Column(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags"), label="tags")
+
+    direct = _limit_by_request(
+        TraceItemTableRequest.LimitBy(
+            columns=[_LimitByColumn(key=AttributeKey(type=AttributeKey.TYPE_ARRAY, name="tags"))],
+            limit=5,
+        )
+    )
+    direct = _apply_labels_to_columns(direct)
+    with pytest.raises(BadSnubaRPCRequestException, match="array attributes"):
+        _validate_limit_by(direct)
+
+    alias = _limit_by_request(
+        TraceItemTableRequest.LimitBy(columns=[_LimitByColumn(label="tags")], limit=5)
+    )
+    alias.columns.append(array_column)
+    alias = _apply_labels_to_columns(alias)
+    with pytest.raises(BadSnubaRPCRequestException, match="array attributes"):
+        _validate_limit_by(alias)
+
+
+def test_validate_limit_by_key_not_in_group_by() -> None:
+    """In an aggregation query, a key-based limit_by must be one of the group_by columns
+    (ClickHouse applies LIMIT BY after GROUP BY)."""
+    message = _limit_by_request(
+        TraceItemTableRequest.LimitBy(
+            columns=[
+                _LimitByColumn(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="release"))
+            ],
+            limit=5,
+        )
+    )
+    message = _apply_labels_to_columns(message)
+    with pytest.raises(BadSnubaRPCRequestException, match="must be in group_by"):
+        _validate_limit_by(message)
+
+
+def test_validate_limit_by_formula_label_in_aggregation_rejected() -> None:
+    """In an aggregation query a formula-referencing limit_by is rejected: a formula is
+    not a group_by column, so ClickHouse could not LIMIT BY it post-aggregation."""
+    formula_column = Column(
+        formula=Column.BinaryFormula(
+            op=Column.BinaryFormula.OP_DIVIDE,
+            left=Column(key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="a")),
+            right=Column(key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="b")),
+        ),
+        label="ratio",
+    )
+    message = TraceItemTableRequest(
+        meta=RequestMeta(project_ids=[1], trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN),
+        columns=[
+            Column(
+                key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id"),
+                label="project_id",
+            ),
+            formula_column,
+            Column(
+                aggregation=AttributeAggregation(
+                    aggregate=Function.FUNCTION_COUNT,
+                    key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id"),
+                    label="count()",
+                ),
+                label="count()",
+            ),
+        ],
+        group_by=[AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.project_id")],
+        limit_by=TraceItemTableRequest.LimitBy(columns=[_LimitByColumn(label="ratio")], limit=5),
+    )
+    message = _apply_labels_to_columns(message)
+    with pytest.raises(BadSnubaRPCRequestException, match="must be in group_by"):
+        _validate_limit_by(message)
+
+
+def test_validate_limit_by_label_to_aggregate_rejected() -> None:
+    """A `limit_by` label pointing at a selected aggregate is rejected (the aggregate
+    lives on the resolved column, and ClickHouse cannot LIMIT BY it)."""
+    message = _limit_by_request(
+        TraceItemTableRequest.LimitBy(columns=[_LimitByColumn(label="count()")], limit=5)
+    )
+    message = _apply_labels_to_columns(message)
+    with pytest.raises(BadSnubaRPCRequestException, match="does not support aggregations"):
+        _validate_limit_by(message)
+
+
+def test_validate_limit_by_label_not_selected() -> None:
+    """A `limit_by` label must reference a selected column."""
+    message = _limit_by_request(
+        TraceItemTableRequest.LimitBy(columns=[_LimitByColumn(label="not_a_column")], limit=5)
+    )
+    message = _apply_labels_to_columns(message)
+    with pytest.raises(BadSnubaRPCRequestException, match="is not a selected column"):
+        _validate_limit_by(message)
+
+
+def test_validate_limit_by_empty_column() -> None:
+    """A `limit_by` column must set either a key or a label."""
+    message = _limit_by_request(TraceItemTableRequest.LimitBy(columns=[_LimitByColumn()], limit=5))
+    message = _apply_labels_to_columns(message)
+    with pytest.raises(BadSnubaRPCRequestException, match="must specify a key or a label"):
+        _validate_limit_by(message)
+
+
+def test_validate_limit_by_zero_limit() -> None:
+    """A `limit_by` with columns set but a non-positive limit is rejected."""
+    message = _limit_by_request(
+        TraceItemTableRequest.LimitBy(columns=[_project_id_limit_by_column()], limit=0)
+    )
+    message = _apply_labels_to_columns(message)
+    with pytest.raises(BadSnubaRPCRequestException, match="greater than 0"):
+        _validate_limit_by(message)
+
+
+def test_validate_limit_by_no_columns() -> None:
+    """A `limit_by` with a limit but no columns is rejected."""
+    message = _limit_by_request(TraceItemTableRequest.LimitBy(columns=[], limit=5))
+    message = _apply_labels_to_columns(message)
+    with pytest.raises(BadSnubaRPCRequestException, match="at least one column"):
+        _validate_limit_by(message)

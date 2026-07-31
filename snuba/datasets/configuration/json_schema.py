@@ -285,7 +285,9 @@ MAP_SCHEMA = make_column_schema(
         "type": "object",
         "properties": {
             "key": {"anyOf": _SIMPLE_ARRAY_INNER_TYPES},
-            "value": {"anyOf": _SIMPLE_ARRAY_INNER_TYPES},
+            # Map values may be a simple type or an Array, e.g.
+            # Map(String, Array(String)).
+            "value": {"anyOf": [*_SIMPLE_ARRAY_INNER_TYPES, del_name_field(ARRAY_SCHEMA)]},
         },
         "additionalProperties": False,
     },

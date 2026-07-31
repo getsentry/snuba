@@ -69,7 +69,7 @@ def test_query_experiments() -> None:
 
     query.set_experiments({"optimization1": True})
     assert query.get_experiments() == {"optimization1": True}
-    assert query.get_experiment_value("optimization1") == True
+    assert query.get_experiment_value("optimization1")
 
     assert query.get_experiment_value("optimization2") is None
     query.add_experiment("optimization2", "group1")

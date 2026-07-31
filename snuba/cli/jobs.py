@@ -1,4 +1,5 @@
-from typing import Any, MutableMapping, Tuple
+from collections.abc import MutableMapping
+from typing import Any
 
 import click
 
@@ -36,21 +37,21 @@ def _run_job_and_echo_status(job_spec: JobSpec) -> None:
 @click.option("--job_id")
 def run_from_manifest(*, json_manifest: str, job_id: str) -> None:
     job_specs = list_job_specs(json_manifest)
-    if job_id not in job_specs.keys():
+    if job_id not in job_specs:
         raise click.ClickException("Provide a valid job id")
 
     _run_job_and_echo_status(job_specs[job_id])
 
 
-def _parse_params(pairs: Tuple[str, ...]) -> MutableMapping[Any, Any]:
-    return {k: v for k, v in (pair.split("=") for pair in pairs)}
+def _parse_params(pairs: tuple[str, ...]) -> MutableMapping[Any, Any]:
+    return dict(pair.split("=") for pair in pairs)
 
 
 @jobs.command()
 @click.option("--job_type")
 @click.option("--job_id")
 @click.argument("pairs", nargs=-1)
-def run(*, job_type: str, job_id: str, pairs: Tuple[str, ...]) -> None:
+def run(*, job_type: str, job_id: str, pairs: tuple[str, ...]) -> None:
     if not job_type or not job_id:
         raise click.ClickException(JOB_SPECIFICATION_ERROR_MSG)
     job_spec = JobSpec(job_id=job_id, job_type=job_type, params=_parse_params(pairs))
@@ -62,6 +63,22 @@ def run(*, job_type: str, job_id: str, pairs: Tuple[str, ...]) -> None:
 @click.option("--job_id")
 def status(*, job_id: str) -> None:
     click.echo(get_job_status(job_id))
+
+
+@jobs.command()
+def dump_runtime_configs() -> None:
+    """Dump all Redis values (runtime configs, allocation-policy / CBRS
+    overrides, and other stored state, minus the cache and rate-limiter) to
+    stdout.
+
+    Runs the LogRuntimeConfigs job directly, so it needs no job manifest entry
+    and can be run as many times as you want (no job-status/lock guard).
+    """
+    from snuba.manual_jobs.job_logging import get_console_job_logger
+    from snuba.manual_jobs.log_runtime_configs import LogRuntimeConfigs
+
+    job = LogRuntimeConfigs(JobSpec(job_id="log_runtime_configs", job_type="LogRuntimeConfigs"))
+    job.execute(get_console_job_logger())
 
 
 @jobs.command()

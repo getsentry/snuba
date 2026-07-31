@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, MutableSequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Mapping, MutableSequence, Optional, Set, cast
+from typing import Any, cast
 
 from clickhouse_driver.errors import ErrorCodes
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
@@ -126,7 +127,7 @@ ERROR_CODE_MAPPINGS = {
 
 
 def get_request_status(
-    cause: Exception | None = None, context: Optional[Mapping[str, Any]] = None
+    cause: Exception | None = None, context: Mapping[str, Any] | None = None
 ) -> Status:
     slo_status: RequestStatus
     if cause is None:
@@ -152,10 +153,14 @@ def get_request_status(
     elif isinstance(cause, ExecutionTimeoutError):
         slo_status = RequestStatus.CACHE_WAIT_TIMEOUT
     elif isinstance(
-        cause, (StorageNotAvailable, InvalidJsonRequestException, InvalidQueryException)
+        cause,
+        (
+            StorageNotAvailable,
+            InvalidJsonRequestException,
+            InvalidQueryException,
+            QueryTooLongException,
+        ),
     ):
-        slo_status = RequestStatus.INVALID_REQUEST
-    elif isinstance(cause, QueryTooLongException):
         slo_status = RequestStatus.INVALID_REQUEST
     else:
         slo_status = RequestStatus.ERROR
@@ -163,7 +168,7 @@ def get_request_status(
     return Status(slo_status)
 
 
-Columnset = Set[str]
+Columnset = set[str]
 
 
 @dataclass(frozen=True)
@@ -187,7 +192,7 @@ class ClickhouseQueryProfile:
     it easier to analyze both in the querylog and in discover.
     """
 
-    time_range: Optional[int]  # range in days
+    time_range: int | None  # range in days
     table: str
     all_columns: Columnset
     # True if we have a combination of AND and OR instead of
@@ -216,14 +221,14 @@ class ClickhouseQueryProfile:
 class ClickhouseQueryMetadata:
     sql: str
     sql_anonymized: str
-    start_timestamp: Optional[datetime]
-    end_timestamp: Optional[datetime]
-    stats: Dict[str, Any]
+    start_timestamp: datetime | None
+    end_timestamp: datetime | None
+    stats: dict[str, Any]
     status: QueryStatus
     request_status: Status
     profile: ClickhouseQueryProfile
     trace_id: str
-    result_profile: Optional[snuba_queries_v1._QueryMetadataResultProfileObject] = None
+    result_profile: snuba_queries_v1._QueryMetadataResultProfileObject | None = None
 
     def to_dict(self) -> snuba_queries_v1.QueryMetadata:
         start = int(self.start_timestamp.timestamp()) if self.start_timestamp else None
@@ -257,7 +262,7 @@ class SnubaQueryMetadata:
         end_timestamp: datetime | None = None,
         entity: str | None = None,
         query_list: MutableSequence[ClickhouseQueryMetadata] | None = None,
-        projects: Set[int] | None = None,
+        projects: set[int] | None = None,
         snql_anonymized: str | None = None,
     ):
         if not (

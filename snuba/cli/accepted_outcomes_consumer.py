@@ -1,7 +1,7 @@
 import json
 import sys
+from collections.abc import Sequence
 from dataclasses import asdict
-from typing import Optional, Sequence
 
 import click
 
@@ -140,7 +140,7 @@ def accepted_outcomes_consumer(
     no_strict_offset_reset: bool,
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
-    raw_topic: Optional[str],
+    raw_topic: str | None,
     accepted_outcomes_topic: str,
     bootstrap_servers: Sequence[str],
     accepted_outcomes_bootstrap_server: Sequence[str],
@@ -149,13 +149,13 @@ def accepted_outcomes_consumer(
     bucket_interval: int,
     commit_frequency_sec: int,
     log_level: str,
-    concurrency: Optional[int],
+    concurrency: int | None,
     max_poll_interval_ms: int,
     health_check: str,
-    health_check_file: Optional[str],
+    health_check_file: str | None,
     enforce_schema: bool,
-    max_dlq_buffer_length: Optional[int],
-    join_timeout_ms: Optional[int],
+    max_dlq_buffer_length: int | None,
+    join_timeout_ms: int | None,
 ) -> None:
     """
     Accepted outcomes consumer
@@ -191,7 +191,7 @@ def accepted_outcomes_consumer(
 
     os.environ["RUST_LOG"] = log_level.lower()
 
-    exitcode = rust_snuba.accepted_outcomes_consumer(  # type: ignore
+    exitcode = rust_snuba.accepted_outcomes_consumer(  # type: ignore[attr-defined]
         consumer_group,
         auto_offset_reset,
         no_strict_offset_reset,

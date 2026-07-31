@@ -26,7 +26,7 @@ from snuba.query.logical import Query
                     Literal(None, 1),
                 ),
             ),
-            set([1]),
+            {1},
             id="equals_case",
         ),
         pytest.param(
@@ -38,12 +38,12 @@ from snuba.query.logical import Query
                     FunctionCall(None, "array", tuple([Literal(None, i) for i in range(1, 5)])),
                 ),
             ),
-            set([1, 2, 3, 4]),
+            {1, 2, 3, 4},
             id="in_case",
         ),
         pytest.param(
             Literal(None, 1),
-            set([]),
+            set(),
             id="empty_case",
         ),
     ],

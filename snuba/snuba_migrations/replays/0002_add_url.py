@@ -1,11 +1,11 @@
-from typing import Sequence, Tuple
+from collections.abc import Sequence
 
 from snuba.clickhouse.columns import Column, String
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
-new_columns: Sequence[Tuple[Column[Modifiers], str]] = [
+new_columns: Sequence[tuple[Column[Modifiers], str]] = [
     (Column("url", String()), "title"),
 ]
 

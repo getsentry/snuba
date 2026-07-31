@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from operator import attrgetter
 from typing import Any
 from unittest.mock import patch
@@ -7,6 +7,7 @@ from unittest.mock import patch
 import pytest
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.endpoint_get_trace_pb2 import (
     GetTraceRequest,
     GetTraceResponse,
@@ -28,14 +29,15 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, TraceItem
 
-from snuba import state
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.settings import ENABLE_TRACE_PAGINATION_DEFAULT
+from snuba.state.sentry_options import get_option
 from snuba.web.rpc.v1.endpoint_get_trace import (
     APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
     EndpointGetTrace,
     _build_query,
+    _process_results,
     _value_to_attribute,
 )
 from tests.base import BaseApiTest
@@ -43,7 +45,7 @@ from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import SERVER_NAME, gen_item_message
 
 _TRACE_ID = uuid.uuid4().hex
-_BASE_TIME = datetime.now(tz=timezone.utc).replace(
+_BASE_TIME = datetime.now(tz=UTC).replace(
     minute=0,
     second=0,
     microsecond=0,
@@ -143,10 +145,10 @@ def get_attributes(
 
 @pytest.fixture(autouse=False)
 def setup_teardown(eap: None, redis_db: None) -> None:
-    items_storage = get_storage(StorageKey("eap_items"))
+    items_storage = get_writable_storage(StorageKey("eap_items"))
 
-    write_raw_unprocessed_events(items_storage, _SPANS)  # type: ignore
-    write_raw_unprocessed_events(items_storage, _LOGS)  # type: ignore
+    write_raw_unprocessed_events(items_storage, _SPANS)
+    write_raw_unprocessed_events(items_storage, _LOGS)
 
 
 @pytest.mark.eap
@@ -221,13 +223,13 @@ class TestGetTrace(BaseApiTest):
                                 key=attrgetter("key.name"),
                             ),
                         )
-                        for timestamp, span in zip(timestamps, spans)
+                        for timestamp, span in zip(timestamps, spans, strict=False)
                     ],
                 ),
             ],
             page_token=(
                 PageToken(end_pagination=True)
-                if state.get_int_config("enable_trace_pagination", ENABLE_TRACE_PAGINATION_DEFAULT)
+                if get_option("enable_trace_pagination", bool(ENABLE_TRACE_PAGINATION_DEFAULT))
                 else None
             ),
         )
@@ -316,13 +318,13 @@ class TestGetTrace(BaseApiTest):
                                 ),
                             ],
                         )
-                        for timestamp, span in zip(timestamps, spans)
+                        for timestamp, span in zip(timestamps, spans, strict=False)
                     ],
                 ),
             ],
             page_token=(
                 PageToken(end_pagination=True)
-                if state.get_int_config("enable_trace_pagination", ENABLE_TRACE_PAGINATION_DEFAULT)
+                if get_option("enable_trace_pagination", bool(ENABLE_TRACE_PAGINATION_DEFAULT))
                 else None
             ),
         )
@@ -359,23 +361,13 @@ class TestGetTrace(BaseApiTest):
             items=[item],
         )
 
-        state.set_config(
-            APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
-            1.0,
-        )
+        with override_options("snuba", {APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY: 1.0}):
+            query = _build_query(message, item)
+            assert query.get_final()
 
-        query = _build_query(message, item)
-
-        assert query.get_final() == True
-
-        state.set_config(
-            APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY,
-            0.0,
-        )
-
-        query = _build_query(message, item)
-
-        assert query.get_final() == False
+        with override_options("snuba", {APPLY_FINAL_ROLLOUT_PERCENTAGE_CONFIG_KEY: 0.0}):
+            query = _build_query(message, item)
+            assert not query.get_final()
 
     def test_with_logs(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
@@ -438,13 +430,13 @@ class TestGetTrace(BaseApiTest):
                                 ),
                             ],
                         )
-                        for timestamp, log in zip(timestamps, logs)
+                        for timestamp, log in zip(timestamps, logs, strict=False)
                     ],
                 ),
             ],
             page_token=(
                 PageToken(end_pagination=True)
-                if state.get_int_config("enable_trace_pagination", ENABLE_TRACE_PAGINATION_DEFAULT)
+                if get_option("enable_trace_pagination", bool(ENABLE_TRACE_PAGINATION_DEFAULT))
                 else None
             ),
         )
@@ -485,12 +477,184 @@ def get_span_id(span: TraceItem) -> str:
     )[2:].rjust(16, "0")
 
 
+def test_process_results_leaves_explicit_attribute_allowlist_collision_as_string() -> None:
+    processed_results = _process_results(
+        [
+            {
+                "id": "abc123",
+                "timestamp": 1778785776.0,
+                "gen_ai.input.messages": '{"location": "Paris"}',
+            }
+        ],
+    )
+
+    item = processed_results.items[0]
+    attribute = next(attr for attr in item.attributes if attr.key.name == "gen_ai.input.messages")
+    assert attribute.key.type == AttributeKey.Type.TYPE_STRING
+    assert attribute.value.val_str == '{"location": "Paris"}'
+
+
+def test_process_results_skips_none_array_attribute() -> None:
+    processed_results = _process_results(
+        [
+            {
+                "id": "abc123",
+                "timestamp": 1778785776.0,
+                "gen_ai.input.messages": None,
+            }
+        ],
+    )
+
+    item = processed_results.items[0]
+    assert not any(a.key.name == "gen_ai.input.messages" for a in item.attributes)
+
+
+def test_process_results_falls_back_to_string_on_malformed_array_json() -> None:
+    processed_results = _process_results(
+        [
+            {
+                "id": "abc123",
+                "timestamp": 1778785776.0,
+                "gen_ai.input.messages": "[not valid json",
+            }
+        ],
+    )
+
+    item = processed_results.items[0]
+    attribute = next(attr for attr in item.attributes if attr.key.name == "gen_ai.input.messages")
+    assert attribute.key.type == AttributeKey.Type.TYPE_STRING
+    assert attribute.value.val_str == "[not valid json"
+
+
+def test_process_results_falls_back_to_string_on_untagged_array_elements() -> None:
+    processed_results = _process_results(
+        [
+            {
+                "id": "abc123",
+                "timestamp": 1778785776.0,
+                "gen_ai.input.messages": '["gamma", "delta"]',
+            }
+        ],
+    )
+
+    item = processed_results.items[0]
+    attribute = next(attr for attr in item.attributes if attr.key.name == "gen_ai.input.messages")
+    assert attribute.key.type == AttributeKey.Type.TYPE_STRING
+    assert attribute.value.val_str == '["gamma", "delta"]'
+
+
+@pytest.mark.parametrize(
+    "subcolumns,expected_kind,expected_values",
+    [
+        (
+            {
+                "my_tags.attributes_array_string": ["a", "b"],
+                "my_tags.attributes_array_int": [],
+                "my_tags.attributes_array_float": [],
+                "my_tags.attributes_array_bool": [],
+            },
+            "val_str",
+            ["a", "b"],
+        ),
+        (
+            {
+                "my_tags.attributes_array_string": [],
+                "my_tags.attributes_array_int": [1, 3],
+                "my_tags.attributes_array_float": [],
+                "my_tags.attributes_array_bool": [],
+            },
+            "val_int",
+            [1, 3],
+        ),
+        (
+            {
+                "my_tags.attributes_array_string": [],
+                "my_tags.attributes_array_int": [],
+                "my_tags.attributes_array_float": [],
+                "my_tags.attributes_array_bool": [True, False],
+            },
+            "val_bool",
+            [True, False],
+        ),
+    ],
+    ids=["strings", "ints", "bools"],
+)
+def test_process_results_merges_typed_array_subcolumns(
+    subcolumns: dict[str, Any], expected_kind: str, expected_values: list[Any]
+) -> None:
+    """Past the cutoff, a per-attribute array column read as four native typed
+    sub-columns is merged back into a single native val_array. We only store
+    homogeneous arrays, so exactly one sub-column is non-empty and its native element
+    type is preserved (no JSON, no tuple)."""
+    processed_results = _process_results(
+        [{"id": "abc123", "timestamp": 1778785776.0, **subcolumns}],
+        array_attribute_names=["my_tags"],
+    )
+    item = processed_results.items[0]
+    attribute = next(attr for attr in item.attributes if attr.key.name == "my_tags")
+    assert attribute.key.type == AttributeKey.Type.TYPE_ARRAY
+    vals = attribute.value.val_array.values
+    assert [getattr(v, expected_kind) for v in vals] == expected_values
+
+
+def test_process_results_skips_empty_typed_array_subcolumns() -> None:
+    """A requested array attribute whose typed sub-columns are all empty (absent on the
+    item) is not surfaced as an empty array attribute."""
+    processed_results = _process_results(
+        [
+            {
+                "id": "abc123",
+                "timestamp": 1778785776.0,
+                "my_tags.attributes_array_string": [],
+                "my_tags.attributes_array_int": [],
+                "my_tags.attributes_array_float": [],
+                "my_tags.attributes_array_bool": [],
+            }
+        ],
+        array_attribute_names=["my_tags"],
+    )
+    item = processed_results.items[0]
+    assert all(attr.key.name != "my_tags" for attr in item.attributes)
+
+
+def test_process_results_element_typed_array_empty_is_omitted() -> None:
+    """A per-attribute element-typed array read as an empty native list (absent or
+    stored-empty) is omitted, not surfaced as an empty val_array; a populated one is
+    returned."""
+    processed_results = _process_results(
+        [
+            {"id": "empty", "timestamp": 1778785776.0, "my_tags": []},
+            {"id": "full", "timestamp": 1778785776.0, "my_tags": ["a", "b"]},
+        ],
+    )
+    empty_item, full_item = processed_results.items
+    assert all(attr.key.name != "my_tags" for attr in empty_item.attributes)
+    my_tags = next(attr for attr in full_item.attributes if attr.key.name == "my_tags")
+    assert [e.val_str for e in my_tags.value.val_array.values] == ["a", "b"]
+
+
+def test_process_results_keeps_empty_string_attribute() -> None:
+    processed_results = _process_results(
+        [
+            {
+                "id": "abc123",
+                "timestamp": 1778785776.0,
+                "sentry.parent_span_id": "",
+            }
+        ],
+    )
+
+    item = processed_results.items[0]
+    attribute = next(attr for attr in item.attributes if attr.key.name == "sentry.parent_span_id")
+    assert attribute.key.type == AttributeKey.Type.TYPE_STRING
+    assert attribute.value.val_str == ""
+
+
 @pytest.mark.eap
 @pytest.mark.redis_db
 class TestGetTracePagination(BaseApiTest):
     def test_pagination_with_user_limit(self, setup_teardown: Any) -> None:
         """Test that pagination respects user-provided limit"""
-        state.set_config("enable_trace_pagination", 1)
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
         three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
         mylimit = 10
@@ -540,7 +704,7 @@ class TestGetTracePagination(BaseApiTest):
                     items_received.append(item.id)
             assert curr_response_len <= mylimit
             if curr_response_len < mylimit:
-                assert response.page_token.end_pagination == True
+                assert response.page_token.end_pagination
             if response.page_token.end_pagination:
                 break
             message.page_token.CopyFrom(response.page_token)
@@ -552,7 +716,6 @@ class TestGetTracePagination(BaseApiTest):
         with patch(
             "snuba.web.rpc.v1.endpoint_get_trace.ENDPOINT_GET_TRACE_PAGINATION_MAX_ITEMS", configmax
         ):
-            state.set_config("enable_trace_pagination", 1)
             """
             import snuba.web.rpc.v1.endpoint_get_trace as endpoint_get_trace
 
@@ -609,8 +772,69 @@ class TestGetTracePagination(BaseApiTest):
                         items_received.append(item.id)
                 assert curr_response_len <= configmax
                 if curr_response_len < configmax:
-                    assert response.page_token.end_pagination == True
+                    assert response.page_token.end_pagination
                 if response.page_token.end_pagination:
                     break
                 message.page_token.CopyFrom(response.page_token)
             assert len(items_received) == len(_SPANS) + len(_LOGS)
+
+
+_COALESCE_TRACE_ID = uuid.uuid4().hex
+# Only `sentry.transaction` (deprecated) - no `sentry.segment.name`.
+_COALESCE_SPAN = gen_item_message(
+    start_timestamp=_BASE_TIME,
+    trace_id=_COALESCE_TRACE_ID,
+    item_id=int(uuid.uuid4().hex[:16], 16).to_bytes(16, byteorder="little", signed=False),
+    remove_default_attributes=True,
+    attributes={
+        "sentry.is_segment": AnyValue(bool_value=True),
+        "sentry.transaction": AnyValue(string_value="root"),
+    },
+)
+
+
+@pytest.fixture(autouse=False)
+def setup_teardown_coalesce(eap: None, redis_db: None) -> None:
+    items_storage = get_writable_storage(StorageKey("eap_items"))
+    write_raw_unprocessed_events(items_storage, [_COALESCE_SPAN])
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
+class TestGetTraceCoalescedAttribute(BaseApiTest):
+    def test_reads_deprecated_value_via_canonical_name(self, setup_teardown_coalesce: Any) -> None:
+        ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
+        three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
+        message = GetTraceRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=Timestamp(seconds=three_hours_later),
+                request_id=_REQUEST_ID,
+            ),
+            trace_id=_COALESCE_TRACE_ID,
+            items=[
+                GetTraceRequest.TraceItem(
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    attributes=[
+                        AttributeKey(
+                            name="sentry.segment.name",
+                            type=AttributeKey.Type.TYPE_STRING,
+                        ),
+                    ],
+                )
+            ],
+        )
+        response = EndpointGetTrace().execute(message)
+
+        items = [item for group in response.item_groups for item in group.items]
+        assert len(items) == 1
+        segment_name = next(
+            attr.value.val_str
+            for attr in items[0].attributes
+            if attr.key.name == "sentry.segment.name"
+        )
+        assert segment_name == "root"

@@ -1,5 +1,6 @@
+from collections.abc import Sequence
 from datetime import datetime
-from typing import Optional, Sequence, Set, Tuple, Union, cast
+from typing import cast
 
 from snuba.query import FromClauseNotSet, ProcessableQuery
 from snuba.query import Query as AbstractQuery
@@ -26,7 +27,7 @@ from snuba.query.matchers import (
 )
 
 
-def get_object_ids_in_condition(condition: Expression, object_column: str) -> Set[int]:
+def get_object_ids_in_condition(condition: Expression, object_column: str) -> set[int]:
     """
     Extract project ids from an expression. Returns None if no project
     if condition is found. It returns an empty set of conflicting project_id
@@ -64,19 +65,18 @@ def get_object_ids_in_condition(condition: Expression, object_column: str) -> Se
         rhs_objects = get_object_ids_in_condition(match.expression("rhs"), object_column)
         if not lhs_objects:
             return rhs_objects
-        elif not rhs_objects:
+        if not rhs_objects:
             return lhs_objects
-        else:
-            return (
-                lhs_objects & rhs_objects
-                if match.string("operator") == BooleanFunctions.AND
-                else lhs_objects | rhs_objects
-            )
+        return (
+            lhs_objects & rhs_objects
+            if match.string("operator") == BooleanFunctions.AND
+            else lhs_objects | rhs_objects
+        )
 
     return set()
 
 
-def get_object_ids_in_query_ast(query: AbstractQuery, object_column: str) -> Set[int]:
+def get_object_ids_in_query_ast(query: AbstractQuery, object_column: str) -> set[int]:
     """
     Finds the object ids (e.g. project ids) this query is filtering according to the AST
     query representation.
@@ -95,7 +95,7 @@ def get_object_ids_in_query_ast(query: AbstractQuery, object_column: str) -> Set
         return this_query_object_ids
     if isinstance(from_clause, SimpleDataSource):
         return this_query_object_ids
-    elif isinstance(from_clause, AbstractQuery):
+    if isinstance(from_clause, AbstractQuery):
         subquery_project_ids = get_object_ids_in_query_ast(from_clause, object_column)
         return subquery_project_ids.union(this_query_object_ids)
     return set()
@@ -104,13 +104,13 @@ def get_object_ids_in_query_ast(query: AbstractQuery, object_column: str) -> Set
 def get_time_range_expressions(
     conditions: Sequence[Expression],
     timestamp_field: str,
-    table_name: Optional[str] = None,
-) -> Tuple[
-    Optional[Tuple[datetime, FunctionCallExpr]],
-    Optional[Tuple[datetime, FunctionCallExpr]],
+    table_name: str | None = None,
+) -> tuple[
+    tuple[datetime, FunctionCallExpr] | None,
+    tuple[datetime, FunctionCallExpr] | None,
 ]:
-    max_lower_bound: Optional[Tuple[datetime, FunctionCallExpr]] = None
-    min_upper_bound: Optional[Tuple[datetime, FunctionCallExpr]] = None
+    max_lower_bound: tuple[datetime, FunctionCallExpr] | None = None
+    min_upper_bound: tuple[datetime, FunctionCallExpr] | None = None
     table_match = String(table_name) if table_name else None
     for c in conditions:
         match = FunctionCall(
@@ -143,9 +143,9 @@ def get_time_range_expressions(
 
 
 def get_time_range(
-    query: Union[ProcessableQuery[Table], ProcessableQuery[LogicalDataSource]],
+    query: ProcessableQuery[Table] | ProcessableQuery[LogicalDataSource],
     timestamp_field: str,
-) -> Tuple[Optional[datetime], Optional[datetime]]:
+) -> tuple[datetime | None, datetime | None]:
     """
     Finds the minimal time range for this query. Which means, it finds
     the >= timestamp condition with the highest datetime literal and
@@ -169,7 +169,7 @@ def get_time_range(
 
 def get_time_range_estimate(
     query: ProcessableQuery[Table],
-) -> Tuple[Optional[datetime], Optional[datetime]]:
+) -> tuple[datetime | None, datetime | None]:
     """
     Best guess to find the time range for the query.
     We pick the first column that is compared with a datetime Literal.

@@ -1,5 +1,6 @@
-from datetime import datetime, timezone
-from typing import Any, Iterable, Mapping, Tuple
+from collections.abc import Iterable, Mapping
+from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 
@@ -9,7 +10,7 @@ from snuba.datasets.processors.generic_metrics_processor import (
     GenericDistributionsMetricsProcessor,
 )
 
-timestamp = int(datetime.now(timezone.utc).timestamp())
+timestamp = int(datetime.now(UTC).timestamp())
 
 MAPPING_META_COMMON = {
     "c": {
@@ -28,7 +29,7 @@ def dis_processor() -> GenericDistributionsMetricsProcessor:
     return GenericDistributionsMetricsProcessor()
 
 
-def sorted_tag_items(message: Mapping[str, Any]) -> Iterable[Tuple[str, int]]:
+def sorted_tag_items(message: Mapping[str, Any]) -> Iterable[tuple[str, int]]:
     tags = message["tags"]
     return sorted(tags.items())
 

@@ -37,6 +37,20 @@ test-distributed:
 
 tests: test
 
+lint:
+	uv run ruff check --fix .
+	uv run ruff format .
+.PHONY: lint
+
+lint-check:
+	uv run ruff check .
+	uv run ruff format --check .
+.PHONY: lint-check
+
+typecheck:
+	uv run mypy .
+.PHONY: typecheck
+
 api-tests:
 	SNUBA_SETTINGS=test pytest -vv tests/*_api.py
 
@@ -117,6 +131,7 @@ install-proto-dev:
 	echo "Installed local sentry-protos, please restart the vscode language server. Run 'uv pip uninstall sentry-protos && uv sync' to go back to the original version."
 .PHONY: install-proto-dev
 
+# Dumps the DogStatsD payloads snuba emits; see the script's --help to point snuba at it.
 listen-metrics:
-	sudo tcpdump -i lo0 -l -A udp port 8125
+	uv run python scripts/listen-metrics.py
 .PHONY: listen-metrics

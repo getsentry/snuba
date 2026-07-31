@@ -1,4 +1,4 @@
-from typing import List, Sequence
+from collections.abc import Sequence
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
@@ -21,7 +21,7 @@ local_table_name = "eap_spans_2_local"
 dist_table_name = "eap_spans_2_dist"
 num_attr_buckets = 20
 
-columns: List[Column[Modifiers]] = [
+columns: list[Column[Modifiers]] = [
     Column("organization_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("service", String(Modifiers(codecs=["ZSTD(1)"]))),
@@ -92,7 +92,7 @@ class Migration(migration.ClickhouseNodeMigration):
     blocking = False
 
     def forwards_ops(self) -> Sequence[SqlOperation]:
-        res: List[SqlOperation] = [
+        res: list[SqlOperation] = [
             operations.CreateTable(
                 storage_set=storage_set_name,
                 table_name=local_table_name,

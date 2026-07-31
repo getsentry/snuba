@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from glob import glob
-from typing import Optional, Sequence, Type
 
 import sentry_sdk
 
@@ -21,7 +21,7 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
         with sentry_sdk.start_span(op="initialize", description="Entity Factory"):
             initialize_storage_factory()
             self._entity_map: dict[EntityKey, PluggableEntity] = {}
-            self._name_map: dict[Type[Entity], EntityKey] = {}
+            self._name_map: dict[type[Entity], EntityKey] = {}
             self.__initialize()
 
     def __initialize(self) -> None:
@@ -41,7 +41,7 @@ class _EntityFactory(ConfigComponentFactory[Entity, EntityKey]):
         self._name_map = {v.__class__: k for k, v in self._entity_map.items()}
 
     def all_names(self) -> Sequence[EntityKey]:
-        return [name for name in self._entity_map.keys()]
+        return list(self._entity_map.keys())
 
     def get(self, name: EntityKey) -> Entity:
         try:
@@ -63,7 +63,7 @@ class InvalidEntityError(SerializableException):
     """Exception raised on invalid entity access."""
 
 
-_ENT_FACTORY: Optional[_EntityFactory] = None
+_ENT_FACTORY: _EntityFactory | None = None
 
 
 def _ent_factory() -> _EntityFactory:

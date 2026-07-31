@@ -1,7 +1,8 @@
 import itertools
 import json
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Iterable, Mapping, Tuple, Union
+from collections.abc import Callable, Iterable, Mapping
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 from pytest import approx
@@ -26,7 +27,7 @@ SNQL_ROUTE = "/generic_metrics/snql"
 
 def utc_yesterday_12_15() -> datetime:
     return (datetime.utcnow() - timedelta(days=1)).replace(
-        hour=12, minute=15, second=0, microsecond=0, tzinfo=timezone.utc
+        hour=12, minute=15, second=0, microsecond=0, tzinfo=UTC
     )
 
 
@@ -36,7 +37,7 @@ placeholder_counter = 0
 def gen_string() -> str:
     global placeholder_counter
     placeholder_counter += 1
-    return "placeholder{:04d}".format(placeholder_counter)
+    return f"placeholder{placeholder_counter:04d}"
 
 
 SHARED_TAGS: Mapping[str, str] = {
@@ -83,7 +84,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
         return self.app
 
     @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
+    def test_entity(self) -> str | tuple[str, str]:
         return "generic_metrics_sets"
 
     @pytest.fixture(autouse=True)
@@ -216,7 +217,7 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
         return self.app
 
     @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
+    def test_entity(self) -> str | tuple[str, str]:
         return "generic_metrics_distributions"
 
     @pytest.fixture(autouse=True)
@@ -481,7 +482,7 @@ class TestGenericMetricsApiCounters(BaseApiTest):
         return self.app
 
     @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
+    def test_entity(self) -> str | tuple[str, str]:
         return "generic_metrics_counters"
 
     @pytest.fixture(autouse=True)
@@ -620,7 +621,7 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
         return self.app
 
     @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
+    def test_entity(self) -> str | tuple[str, str]:
         return "generic_metrics_counters"
 
     @pytest.fixture(autouse=True)
@@ -760,7 +761,7 @@ class TestOrgGenericMetricsApiGauges(BaseApiTest):
         return self.app
 
     @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
+    def test_entity(self) -> str | tuple[str, str]:
         return "generic_metrics_gauges"
 
     @pytest.fixture(autouse=True)

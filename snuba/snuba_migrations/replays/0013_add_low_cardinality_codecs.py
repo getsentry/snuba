@@ -1,4 +1,4 @@
-from typing import Iterator, List, Sequence
+from collections.abc import Iterator, Sequence
 
 from snuba.clickhouse.columns import Column, String
 from snuba.clusters.storage_sets import StorageSetKey
@@ -21,18 +21,14 @@ def forward_columns_iter() -> Iterator[operations.ModifyColumn]:
         yield operations.ModifyColumn(
             storage_set=StorageSetKey.REPLAYS,
             table_name="replays_local",
-            column=Column(
-                column_name, String(Modifiers(nullable=True, low_cardinality=True))
-            ),
+            column=Column(column_name, String(Modifiers(nullable=True, low_cardinality=True))),
             target=operations.OperationTarget.LOCAL,
         )
 
         yield operations.ModifyColumn(
             storage_set=StorageSetKey.REPLAYS,
             table_name="replays_dist",
-            column=Column(
-                column_name, String(Modifiers(nullable=True, low_cardinality=True))
-            ),
+            column=Column(column_name, String(Modifiers(nullable=True, low_cardinality=True))),
             target=operations.OperationTarget.DISTRIBUTED,
         )
 
@@ -42,23 +38,19 @@ def backward_columns_iter() -> Iterator[operations.SqlOperation]:
         yield operations.ModifyColumn(
             storage_set=StorageSetKey.REPLAYS,
             table_name="replays_dist",
-            column=Column(
-                column_name, String(Modifiers(nullable=True, low_cardinality=False))
-            ),
+            column=Column(column_name, String(Modifiers(nullable=True, low_cardinality=False))),
             target=operations.OperationTarget.DISTRIBUTED,
         )
 
         yield operations.ModifyColumn(
             storage_set=StorageSetKey.REPLAYS,
             table_name="replays_local",
-            column=Column(
-                column_name, String(Modifiers(nullable=True, low_cardinality=False))
-            ),
+            column=Column(column_name, String(Modifiers(nullable=True, low_cardinality=False))),
             target=operations.OperationTarget.LOCAL,
         )
 
 
-columns: List[str] = [
+columns: list[str] = [
     "browser_name",
     "device_brand",
     "device_family",
