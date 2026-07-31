@@ -1,4 +1,5 @@
 import random
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
@@ -47,41 +48,46 @@ class LogOutcomeDataPoint:
     num_logs: int
 
 
-def _store_logs_and_outcomes(data_points: list[LogOutcomeDataPoint]) -> None:
+def _default_log_attributes(time: datetime, index: int) -> dict[str, AnyValue]:
+    return {
+        "color": AnyValue(
+            string_value=random.choice(
+                [
+                    "red",
+                    "green",
+                    "blue",
+                ]
+            )
+        ),
+        "location": AnyValue(
+            string_value=random.choice(
+                [
+                    "mobile",
+                    "frontend",
+                    "backend",
+                ]
+            )
+        ),
+        "sentry.timestamp_precise": AnyValue(double_value=int(time.timestamp()) + random.random()),
+    }
+
+
+def _store_logs_and_outcomes(
+    data_points: list[LogOutcomeDataPoint],
+    log_attributes: Callable[[datetime, int], dict[str, AnyValue]] = _default_log_attributes,
+) -> None:
     items_storage = get_writable_storage(StorageKey("eap_items"))
 
     messages = []
     outcome_data = []
     for data_point in data_points:
-        for _ in range(data_point.num_logs):
+        for index in range(data_point.num_logs):
             item_id = random.randint(0, 2**128 - 1).to_bytes(16, byteorder="big")
             message = gen_item_message(
                 start_timestamp=data_point.time,
                 item_id=item_id,
                 type=TraceItemType.TRACE_ITEM_TYPE_LOG,
-                attributes={
-                    "color": AnyValue(
-                        string_value=random.choice(
-                            [
-                                "red",
-                                "green",
-                                "blue",
-                            ]
-                        )
-                    ),
-                    "location": AnyValue(
-                        string_value=random.choice(
-                            [
-                                "mobile",
-                                "frontend",
-                                "backend",
-                            ]
-                        )
-                    ),
-                    "sentry.timestamp_precise": AnyValue(
-                        double_value=int(data_point.time.timestamp()) + random.random()
-                    ),
-                },
+                attributes=log_attributes(data_point.time, index),
                 project_id=_PROJECT_ID,
                 organization_id=_ORG_ID,
             )
@@ -338,6 +344,86 @@ class TestTraceItemTableFlexTime:
                 queried_item_ids.extend(get_item_ids_from_response(response))
 
         assert times_queried == expected_times_queried
+        assert len(set(queried_item_ids)) == len(queried_item_ids)
+        assert set(queried_item_ids) == set(stored_item_ids), set(stored_item_ids) - set(
+            queried_item_ids
+        )
+
+    def test_paginate_when_an_order_by_attribute_is_absent_from_some_items(self, eap: Any) -> None:
+        def log_attributes(time: datetime, index: int) -> dict[str, AnyValue]:
+            # Every log in an hour shares a `timestamp_precise`, so ordering falls through to
+            # `sentry.timestamp.sequence` — which only half of them carry, the way logs from
+            # an SDK that predates that counter do.
+            attributes = {
+                "color": AnyValue(string_value="red"),
+                "sentry.timestamp_precise": AnyValue(double_value=int(time.timestamp())),
+            }
+            if index % 2 == 0:
+                attributes["sentry.timestamp.sequence"] = AnyValue(int_value=index)
+            return attributes
+
+        num_hours_to_query = 4
+        _store_logs_and_outcomes(
+            [
+                LogOutcomeDataPoint(
+                    time=BASE_TIME - timedelta(hours=hour),
+                    num_outcomes=10_000_000,
+                    num_logs=_LOG_COUNT,
+                )
+                for hour in range(num_hours_to_query + 1)
+            ],
+            log_attributes,
+        )
+
+        columns = [
+            Column(key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp")),
+            Column(
+                key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp_precise")
+            ),
+            Column(key=AttributeKey(type=AttributeKey.TYPE_INT, name="sentry.timestamp.sequence")),
+            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")),
+        ]
+        order_by = [
+            TraceItemTableRequest.OrderBy(column=column, descending=True) for column in columns
+        ]
+        start_timestamp = Timestamp(
+            seconds=int((BASE_TIME - timedelta(hours=num_hours_to_query)).timestamp())
+        )
+        end_timestamp = Timestamp(seconds=int(BASE_TIME.timestamp()))
+
+        all_ids_response = EndpointTraceItemTable().execute(
+            _generate_table_request(
+                start_timestamp,
+                end_timestamp,
+                accuracy=DownsampledStorageConfig.MODE_HIGHEST_ACCURACY,
+                limit=3000,
+                columns=columns,
+                order_by=order_by,
+            )
+        )
+        stored_item_ids = get_item_ids_from_response(all_ids_response)
+
+        strategy = OutcomesFlexTimeRoutingStrategy()
+        end_pagination = PageToken(end_pagination=True)
+        page_token = PageToken(offset=0)
+        queried_item_ids: list[str] = []
+        with override_component_config(strategy, "max_items_to_query", 20_000_000):
+            while page_token != end_pagination:
+                response = EndpointTraceItemTable().execute(
+                    _generate_table_request(
+                        start_timestamp,
+                        end_timestamp,
+                        accuracy=DownsampledStorageConfig.Mode.MODE_HIGHEST_ACCURACY_FLEXTIME,
+                        limit=_LOG_COUNT,
+                        page_token=page_token,
+                        columns=columns,
+                        order_by=order_by,
+                    )
+                )
+                assert isinstance(response, TraceItemTableResponse)
+                page_token = response.page_token
+                queried_item_ids.extend(get_item_ids_from_response(response))
+
         assert len(set(queried_item_ids)) == len(queried_item_ids)
         assert set(queried_item_ids) == set(stored_item_ids), set(stored_item_ids) - set(
             queried_item_ids

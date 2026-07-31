@@ -76,7 +76,10 @@ from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.common.pagination import FlexibleTimeWindowPageWithFilters
+from snuba.web.rpc.common.pagination import (
+    FlexibleTimeWindowPageWithFilters,
+    null_safe_ordering_expression,
+)
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingDecision,
     TimeWindow,
@@ -299,6 +302,7 @@ def _convert_order_by(
     groupby: list[Expression],
     order_by: Sequence[TraceItemTableRequest.OrderBy],
     request_meta: RequestMeta,
+    paginated_by_order_by: bool = False,
 ) -> Sequence[OrderBy]:
     res: list[OrderBy] = []
     for i, x in enumerate(order_by):
@@ -345,6 +349,12 @@ def _convert_order_by(
             # expression so an aggregation query that orders by `sentry.timestamp` stays
             # valid.
             expression = _groupby_order_by_expression(x.column.key)
+            if paginated_by_order_by and x.column.key.name not in NORMALIZED_COLUMNS_EAP_ITEMS:
+                # A map-backed attribute reads as NULL when the key is absent, and the page
+                # token compares this same value as a tuple element, where a NULL makes the
+                # whole comparison NULL and drops the row. Sort absent keys somewhere the
+                # comparison can also express.
+                expression = null_safe_ordering_expression(expression, x.column.key.type)
             # SORT_SEMVER: client-driven semver ordering, string columns only
             # (numeric/timestamp columns already sort numerically).
             if (
@@ -732,6 +742,9 @@ def build_query(
             groupby,
             request.order_by,
             request.meta,
+            # A time window means the routing strategy pages through the ORDER BY values
+            # (see FlexibleTimeWindowPageWithFilters) rather than by offset.
+            paginated_by_order_by=time_window is not None,
         ),
         limitby=_convert_limit_by(request.limit_by, selected_columns),
         groupby=groupby,
