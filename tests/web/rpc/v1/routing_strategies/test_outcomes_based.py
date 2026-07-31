@@ -66,13 +66,13 @@ def _get_request_meta(
 
 
 def _get_routing_decision(
-    start: datetime,
-    end: datetime,
+    start_days_ago: int,
     standard_retention_days: int | None = None,
 ) -> RoutingDecision:
+    end = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     request = TraceItemTableRequest(
         meta=_get_request_meta(
-            start=start,
+            start=end - timedelta(days=start_days_ago),
             end=end,
             standard_retention_days=standard_retention_days,
             downsampled_storage_config=DownsampledStorageConfig(
@@ -189,86 +189,36 @@ def test_item_type_full_retention_preprod() -> None:
 
 @pytest.mark.eap
 @pytest.mark.redis_db
-@override_options("snuba", {"enable_long_term_retention_downsampling": True})
 @pytest.mark.parametrize(
-    ("start_days_ago", "standard_retention_days", "expected_tier"),
+    ("start_days_ago", "standard_retention_days", "option_overrides", "expected_tier"),
     [
-        (50, 60, Tier.TIER_1),
-        (70, 60, Tier.TIER_8),
-        (50, 120, Tier.TIER_1),
-        (100, 120, Tier.TIER_8),
-        (50, 0, Tier.TIER_8),
-        (50, None, Tier.TIER_8),
+        (50, 60, {}, Tier.TIER_1),
+        (70, 60, {}, Tier.TIER_8),
+        (50, 120, {}, Tier.TIER_1),
+        (100, 120, {}, Tier.TIER_8),
+        (50, 0, {}, Tier.TIER_8),
+        (50, None, {}, Tier.TIER_8),
+        (40, 90, {"max_standard_retention_days": 45}, Tier.TIER_1),
+        (50, 90, {"max_standard_retention_days": 45}, Tier.TIER_8),
+        (40, None, {"default_standard_retention_days": 45}, Tier.TIER_1),
+        (50, None, {"default_standard_retention_days": 45}, Tier.TIER_8),
     ],
 )
 def test_standard_retention_days_routing(
     start_days_ago: int,
     standard_retention_days: int | None,
+    option_overrides: dict[str, int],
     expected_tier: Tier,
 ) -> None:
-    end_time = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-    routing_decision = _get_routing_decision(
-        start=end_time - timedelta(days=start_days_ago),
-        end=end_time,
-        standard_retention_days=standard_retention_days,
-    )
+    with override_options(
+        "snuba",
+        {"enable_long_term_retention_downsampling": True, **option_overrides},
+    ):
+        routing_decision = _get_routing_decision(
+            start_days_ago=start_days_ago,
+            standard_retention_days=standard_retention_days,
+        )
     assert routing_decision.tier == expected_tier
-    assert routing_decision.can_run
-
-
-@pytest.mark.eap
-@pytest.mark.redis_db
-@override_options(
-    "snuba",
-    {
-        "enable_long_term_retention_downsampling": True,
-        "max_standard_retention_days": 45,
-    },
-)
-def test_max_standard_retention_days_option_is_honored() -> None:
-    end_time = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-
-    routing_decision = _get_routing_decision(
-        start=end_time - timedelta(days=40),
-        end=end_time,
-        standard_retention_days=90,
-    )
-    assert routing_decision.tier == Tier.TIER_1
-    assert routing_decision.can_run
-
-    routing_decision = _get_routing_decision(
-        start=end_time - timedelta(days=50),
-        end=end_time,
-        standard_retention_days=90,
-    )
-    assert routing_decision.tier == Tier.TIER_8
-    assert routing_decision.can_run
-
-
-@pytest.mark.eap
-@pytest.mark.redis_db
-@override_options(
-    "snuba",
-    {
-        "enable_long_term_retention_downsampling": True,
-        "default_standard_retention_days": 45,
-    },
-)
-def test_default_standard_retention_days_option_is_honored() -> None:
-    end_time = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-
-    routing_decision = _get_routing_decision(
-        start=end_time - timedelta(days=40),
-        end=end_time,
-    )
-    assert routing_decision.tier == Tier.TIER_1
-    assert routing_decision.can_run
-
-    routing_decision = _get_routing_decision(
-        start=end_time - timedelta(days=50),
-        end=end_time,
-    )
-    assert routing_decision.tier == Tier.TIER_8
     assert routing_decision.can_run
 
 
