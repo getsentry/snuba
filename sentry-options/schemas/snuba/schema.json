@@ -203,7 +203,12 @@
     "max_standard_retention_days": {
       "type": "integer",
       "default": 90,
-      "description": "Upper bound on RequestMeta.standard_retention_days when deciding the full-fidelity window for long-term retention downsampling. Values above this cap are clamped."
+      "description": "Upper bound on RequestMeta.standard_retention_days when deciding the standard retention window for long-term retention downsampling. Values above this cap are clamped."
+    },
+    "standard_retention_days": {
+      "type": "integer",
+      "default": 30,
+      "description": "Default standard retention window in days used by outcomes-based routing when RequestMeta.standard_retention_days is unset or non-positive."
     },
     "storage_routing_config_override": {
       "type": "string",
