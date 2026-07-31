@@ -237,10 +237,10 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
 
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
 
-        # Cap at 90 days; unset/non-positive values fall back to LOWER_RETENTION_DAYS.
         requested_retention_days = in_msg_meta.standard_retention_days
+        max_standard_retention_days = get_option("max_standard_retention_days", 90)
         full_fidelity_retention_days = (
-            min(requested_retention_days, 90)
+            min(requested_retention_days, max_standard_retention_days)
             if requested_retention_days > 0
             else LOWER_RETENTION_DAYS
         )

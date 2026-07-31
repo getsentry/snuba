@@ -189,19 +189,20 @@ def test_item_type_full_retention_preprod() -> None:
 
 @pytest.mark.eap
 @pytest.mark.redis_db
-@override_options("snuba", {"enable_long_term_retention_downsampling": True})
+@override_options(
+    "snuba",
+    {
+        "enable_long_term_retention_downsampling": True,
+        "max_standard_retention_days": 90,
+    },
+)
 @pytest.mark.parametrize(
     ("start_days_ago", "standard_retention_days", "expected_tier"),
     [
-        # Past default 30d, still inside a 60d standard retention.
         (50, 60, Tier.TIER_1),
-        # Past the org's 60d standard retention.
         (70, 60, Tier.TIER_8),
-        # Values above 90 are capped; 50d stays on tier 1.
         (50, 120, Tier.TIER_1),
-        # Still capped at 90, so 100d-old queries downsample.
         (100, 120, Tier.TIER_8),
-        # Non-positive values fall back to the default 30d window.
         (50, 0, Tier.TIER_8),
         (50, None, Tier.TIER_8),
     ],
@@ -218,6 +219,35 @@ def test_standard_retention_days_routing(
         standard_retention_days=standard_retention_days,
     )
     assert routing_decision.tier == expected_tier
+    assert routing_decision.can_run
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
+@override_options(
+    "snuba",
+    {
+        "enable_long_term_retention_downsampling": True,
+        "max_standard_retention_days": 45,
+    },
+)
+def test_max_standard_retention_days_option_is_honored() -> None:
+    end_time = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    routing_decision = _get_routing_decision(
+        start=end_time - timedelta(days=40),
+        end=end_time,
+        standard_retention_days=90,
+    )
+    assert routing_decision.tier == Tier.TIER_1
+    assert routing_decision.can_run
+
+    routing_decision = _get_routing_decision(
+        start=end_time - timedelta(days=50),
+        end=end_time,
+        standard_retention_days=90,
+    )
+    assert routing_decision.tier == Tier.TIER_8
     assert routing_decision.can_run
 
 
