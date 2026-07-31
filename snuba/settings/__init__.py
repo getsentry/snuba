@@ -5,6 +5,7 @@ from collections.abc import Mapping, MutableMapping, Sequence
 from pathlib import Path
 from typing import (
     Any,
+    NotRequired,
     TypedDict,
 )
 
@@ -167,6 +168,7 @@ class RedisClusterConfig(TypedDict):
     ssl: bool
     reinitialize_steps: int
     socket_timeout: float
+    shadow: NotRequired[dict[str, Any]]
 
 
 # The default cluster is configured using these global constants. If a config

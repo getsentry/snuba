@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import time
 from collections.abc import Callable, Iterable, Mapping
 from enum import Enum
@@ -13,6 +14,23 @@ from sentry_redis_tools.retrying_cluster import RetryingRedisCluster
 
 from snuba import settings
 from snuba.utils.serializable_exception import SerializableException
+
+
+class ShadowRedisCluster(RetryingRedisCluster):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        shadow_target: RedisCluster = kwargs.pop("shadow_target", None)
+        shadow_commands: list[str] = kwargs.pop("shadow_commands", [])
+        super().__init__(*args, **kwargs)
+        self.shadow_target = shadow_target
+        self.shadow_commands = shadow_commands
+
+    def execute_command(self, *args: Any, **kwargs: Any) -> Any:
+        command = args[0].lower()
+        if command in self.shadow_commands:
+            with contextlib.suppress(Exception):  # ignore shadow traffic errors
+                self.shadow_target.execute_command(*args, **kwargs)
+        return super().execute_command(*args, **kwargs)
+
 
 # We use FailoverRedis as our default redis client for single-node deployments,
 # as its additions to StrictRedis are required to work correctly under GCP
@@ -63,6 +81,27 @@ def _initialize_redis_cluster(config: settings.RedisClusterConfig) -> RedisClien
         if startup_nodes is None:
             startup_nodes = [{"host": config["host"], "port": config["port"]}]
         startup_cluster_nodes = [ClusterNode(n["host"], n["port"]) for n in startup_nodes]
+        shadow: dict[str, Any] = config.get("shadow", {})
+        if shadow:
+            shadow_commands = [c.lower() for c in shadow.get("shadow_commands", [])]
+            shadow_cluster = RedisCluster(
+                startup_nodes=shadow["cluster_startup_nodes"],
+                socket_keepalive=True,
+                password=shadow["password"],
+                max_connections_per_node=True,
+                reinitialize_steps=shadow["reinitialize_steps"],
+                socket_timeout=shadow.get("socket_timeout", settings.REDIS_SOCKET_TIMEOUT),
+            )
+            return ShadowRedisCluster(
+                startup_nodes=startup_cluster_nodes,
+                socket_keepalive=True,
+                password=config["password"],
+                max_connections_per_node=True,
+                reinitialize_steps=config["reinitialize_steps"],
+                socket_timeout=config.get("socket_timeout", settings.REDIS_SOCKET_TIMEOUT),
+                shadow_target=shadow_cluster,
+                shadow_commands=shadow_commands,
+            )
         return RetryingRedisCluster(
             startup_nodes=startup_cluster_nodes,
             socket_keepalive=True,
