@@ -52,6 +52,13 @@ DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
 # we tell clickhouse-connect to drop unrecognized settings instead of failing.
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
 
+# Process-wide: read only during client init. Default off so HTTP Native framing
+# stays plain when proxies strip client_protocol_version.
+clickhouse_connect_common.set_setting(
+    "use_protocol_version",
+    get_option("clickhouse_connect_use_protocol_version", False),
+)
+
 _NATIVE_DESYNC_MARKERS = (
     "Unrecognized ClickHouse type",
     "Stream ended unexpectedly",
@@ -126,12 +133,6 @@ class ClickhouseConnectPool(ClickhousePool):
         self.__lock = Lock()
 
     def _create_client(self) -> Client:
-        # Applied at client build time (not import): the option is only read when
-        # a client is created or rebuilt after reset.
-        clickhouse_connect_common.set_setting(
-            "use_protocol_version",
-            get_option("clickhouse_connect_use_protocol_version", False),
-        )
         pool_size = get_option("clickhouse_connect_pool_size", settings.CLICKHOUSE_MAX_POOL_SIZE)
         pool_mgr = get_pool_manager(
             ca_cert=self.ca_certs,

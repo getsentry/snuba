@@ -574,7 +574,7 @@
     "clickhouse_connect_use_protocol_version": {
       "type": "boolean",
       "default": false,
-      "description": "When true, clickhouse-connect negotiates client_protocol_version (Native block-info framing). Default false: proxies can strip the setting and desync the decoder into Unrecognized ClickHouse type errors. Flip on only if the full HTTP path preserves client_protocol_version."
+      "description": "When true, clickhouse-connect negotiates client_protocol_version (Native block-info framing). Process-wide setting applied when snuba.clickhouse.connect is imported; existing clients are unchanged until restart. Default false: proxies can strip the setting and desync the decoder into Unrecognized ClickHouse type errors."
     },
     "clickhouse_connect_pool_size": {
       "type": "integer",
