@@ -42,8 +42,6 @@ def _make_pool(client: mock.Mock) -> ClickhouseConnectPool:
         password="test",
         database="test",
     )
-    # Avoid creating a real client / connection. Seed __client so error paths
-    # that call close_connections() hit the stub without rebuilding.
     pool._ClickhouseConnectPool__client = client  # type: ignore[attr-defined]
     pool._get_client = lambda: client  # type: ignore[method-assign]
     return pool
@@ -191,8 +189,6 @@ def test_too_many_simultaneous_queries_not_retried() -> None:
 
 
 def test_operational_error_mapped_without_extra_retries() -> None:
-    # Connection-level retries are clickhouse-connect's responsibility; we only
-    # map the surfaced error onto ClickhouseError without retrying again.
     from clickhouse_connect.driver.exceptions import OperationalError
 
     client = mock.Mock()
@@ -207,9 +203,6 @@ def test_operational_error_mapped_without_extra_retries() -> None:
 
 
 def test_generic_clickhouse_error_wrapped() -> None:
-    # Any clickhouse-connect error (here a ProgrammingError) must be wrapped in
-    # a snuba ClickhouseError, matching how the native pool wraps the whole
-    # clickhouse_driver errors.Error family.
     from clickhouse_connect.driver.exceptions import ProgrammingError
 
     client = mock.Mock()
@@ -219,11 +212,8 @@ def test_generic_clickhouse_error_wrapped() -> None:
     with pytest.raises(ClickhouseError):
         pool.execute("SELECT 1")
 
-    # Real server/client errors leave the pool alone; only stream/transport
-    # failures recycle keep-alives.
-    client.close_connections.assert_not_called()
-
     assert client.query.call_count == 1
+    client.close_connections.assert_not_called()
 
 
 def test_totals_malformed_json_wrapped() -> None:
@@ -894,7 +884,6 @@ def test_connect_driver_matches_native_for_totals_and_empty_results() -> None:
 
 
 def test_use_protocol_version_disabled_by_default() -> None:
-    # Applied once at import from clickhouse_connect_use_protocol_version (default false).
     from clickhouse_connect import common as clickhouse_connect_common
 
     assert clickhouse_connect_common.get_setting("use_protocol_version") is False
@@ -914,7 +903,6 @@ def test_execute_surfaces_native_stream_desync_without_retry() -> None:
 
     assert "Unrecognized ClickHouse type" in str(excinfo.value)
     assert client.query.call_count == 1
-    # Recycle keep-alives so the next query does not reuse a poisoned socket.
     client.close_connections.assert_called_once()
 
 
