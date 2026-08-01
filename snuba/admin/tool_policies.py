@@ -31,6 +31,7 @@ class AdminTools(Enum):
     MANUAL_JOBS = "view-jobs"
     RPC_ENDPOINTS = "rpc-endpoints"
     CLUSTERS = "clusters"
+    EAP_STATS = "eap-stats"
 
 
 DEVELOPER_TOOLS: set[AdminTools] = {AdminTools.SNQL_TO_SQL, AdminTools.QUERY_TRACING}

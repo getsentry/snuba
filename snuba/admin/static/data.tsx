@@ -13,6 +13,7 @@ import SnubaExplain from "SnubaAdmin/snuba_explain";
 import Welcome from "SnubaAdmin/welcome";
 import ViewCustomJobs from "SnubaAdmin/manual_jobs";
 import RpcEndpoints from "SnubaAdmin/rpc_endpoints";
+import EapStats from "SnubaAdmin/eap_stats";
 
 const NAV_ITEMS = [
   { id: "overview", display: "🤿 Snuba Admin", component: Welcome },
@@ -75,6 +76,11 @@ const NAV_ITEMS = [
     id: "querylog",
     display: "🔍 ClickHouse Querylog",
     component: QuerylogQueries,
+  },
+  {
+    id: "eap-stats",
+    display: "📊 EAP Stats",
+    component: EapStats,
   },
   {
     id: "cardinality-analyzer",

@@ -54,6 +54,7 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import import_submodules_in_directory
 from snuba.web import QueryException, QueryResult
 from snuba.web.rpc.common.exceptions import RPCAllocationPolicyException
+from snuba.web.rpc.common.query_info import extract_query_info, extract_query_info_tags
 from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.load_retriever import LoadInfo, get_cluster_loadinfo
 
@@ -176,6 +177,7 @@ class RoutingDecision:
             "clickhouse_settings": self.clickhouse_settings,
             "result_info": query_result,
             "routed_tier": self.tier.name,
+            "query_info": extract_query_info(self.routing_context.in_msg),
             "allocation_policies_recommendations": {
                 key: quota_allowance.to_dict()
                 for key, quota_allowance in self.routing_context.allocation_policies_recommendations.items()
@@ -552,10 +554,12 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
             self.update_allocation_policies_balances(routing_decision, error)
 
             # these metrics are meant to track reject/throttle/success decisions, so they get emitted even if the query did not run successfully after routing
+            query_info_tags = extract_query_info_tags(routing_decision.routing_context.in_msg)
             tags = {
                 "strategy": self.class_name(),
                 "resource_identifier": routing_decision.strategy.resource_identifier.value,
                 "referrer": cast(str, routing_decision.routing_context.tenant_ids["referrer"]),
+                **query_info_tags,
             }
             if not routing_decision.can_run:
                 self.metrics.increment("rejected_query", tags=tags)
@@ -570,13 +574,14 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 {}, {"stats": {}, "sql": "", "experiments": {}}
             )
             profile = query_result.result.get("profile", {}) or {}
+            cost_tags = {"tier": routing_decision.tier.name, **query_info_tags}
             if elapsed := profile.get("elapsed"):
                 self._record_value_in_span_and_DD(
                     routing_context=routing_decision.routing_context,
                     metrics_backend_func=self.metrics.timing,
                     name="query_timing",
                     value=elapsed,
-                    tags={"tier": routing_decision.tier.name},
+                    tags=cost_tags,
                 )
             if bytes_scanned := profile.get("progress_bytes"):
                 self._record_value_in_span_and_DD(
@@ -584,7 +589,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                     metrics_backend_func=self.metrics.timing,
                     name="query_bytes_scanned",
                     value=bytes_scanned,
-                    tags={"tier": routing_decision.tier.name},
+                    tags=cost_tags,
                 )
             record_query(_construct_hacky_querylog_payload(self, routing_decision))
         except Exception as e:

@@ -23,6 +23,7 @@ import {
 } from "SnubaAdmin/snql_to_sql/types";
 
 import { QuerylogRequest, QuerylogResult } from "SnubaAdmin/querylog/types";
+import { EapStatsRequest, EapStatsResult } from "SnubaAdmin/eap_stats/types";
 import {
   CardinalityQueryRequest,
   CardinalityQueryResult,
@@ -52,6 +53,7 @@ interface Client {
   getPredefinedQuerylogOptions: () => Promise<[PredefinedQuery]>;
   getQuerylogSchema: () => Promise<QuerylogResult>;
   executeQuerylogQuery: (req: QuerylogRequest) => Promise<QuerylogResult>;
+  runEapStats: (req: EapStatsRequest) => Promise<EapStatsResult>;
   getPredefinedCardinalityQueryOptions: () => Promise<[PredefinedQuery]>;
   executeCardinalityQuery: (
     req: CardinalityQueryRequest,
@@ -274,6 +276,20 @@ function Client(): Client {
         headers: { "Content-Type": "application/json" },
         method: "POST",
         body: JSON.stringify(query),
+      }).then((resp) => {
+        if (resp.ok) {
+          return resp.json();
+        } else {
+          return resp.json().then(Promise.reject.bind(Promise));
+        }
+      });
+    },
+    runEapStats: (req: EapStatsRequest) => {
+      const url = baseUrl + "eap_stats";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        body: JSON.stringify(req),
       }).then((resp) => {
         if (resp.ok) {
           return resp.json();

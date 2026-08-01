@@ -33,6 +33,7 @@ from snuba.web.rpc.common.exceptions import (
     RPCRequestException,
     convert_rpc_exception_to_proto,
 )
+from snuba.web.rpc.common.query_info import extract_query_info_tags
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
     RoutingDecision,
@@ -277,7 +278,13 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         if meta is not None and (not hasattr(meta, "request_id") or not meta.request_id):
             meta.request_id = self.routing_context.query_id
 
-        self._timer.update_tags(self.__extract_request_tags(in_msg))
+        request_tags = self.__extract_request_tags(in_msg)
+        self._timer.update_tags(request_tags)
+        # Mirror the highest-signal shape tags onto the Sentry transaction so
+        # we can slice EAP traces by query type in Discover/Trace View.
+        for key in ("query_type", "trace_item_type", "filter_profile", "has_groupby"):
+            if key in request_tags:
+                sentry_sdk.set_tag(key, request_tags[key])
 
         selected_strategy = RoutingStrategySelector().select_routing_strategy(self.routing_context)
         self.routing_decision = selected_strategy.get_routing_decision(self.routing_context)
@@ -285,35 +292,38 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         self._before_execute(in_msg)
 
     def __extract_request_tags(self, in_msg: Tin) -> dict[str, str]:
-        if not hasattr(in_msg, "meta"):
-            return {}
+        tags: dict[str, str] = {}
 
-        meta = in_msg.meta
-        tags = {}
+        if hasattr(in_msg, "meta"):
+            meta = in_msg.meta
 
-        if hasattr(meta, "start_timestamp") and hasattr(meta, "end_timestamp"):
-            start = meta.start_timestamp.ToDatetime()
-            end = meta.end_timestamp.ToDatetime()
-            delta_in_hours = (end - start).total_seconds() / 3600
-            bucket = bisect_left(_TIME_PERIOD_HOURS_BUCKETS, delta_in_hours)
-            if delta_in_hours <= 1:
-                tags["time_period"] = "lte_1_hour"
-            elif delta_in_hours <= 24:
-                tags["time_period"] = "lte_1_day"
-            else:
-                tags["time_period"] = (
-                    f"lte_{_TIME_PERIOD_HOURS_BUCKETS[bucket] // 24}_days"
-                    if bucket < _BUCKETS_COUNT
-                    else f"gt_{_TIME_PERIOD_HOURS_BUCKETS[_BUCKETS_COUNT - 1] // 24}_days"
+            if hasattr(meta, "start_timestamp") and hasattr(meta, "end_timestamp"):
+                start = meta.start_timestamp.ToDatetime()
+                end = meta.end_timestamp.ToDatetime()
+                delta_in_hours = (end - start).total_seconds() / 3600
+                bucket = bisect_left(_TIME_PERIOD_HOURS_BUCKETS, delta_in_hours)
+                if delta_in_hours <= 1:
+                    tags["time_period"] = "lte_1_hour"
+                elif delta_in_hours <= 24:
+                    tags["time_period"] = "lte_1_day"
+                else:
+                    tags["time_period"] = (
+                        f"lte_{_TIME_PERIOD_HOURS_BUCKETS[bucket] // 24}_days"
+                        if bucket < _BUCKETS_COUNT
+                        else f"gt_{_TIME_PERIOD_HOURS_BUCKETS[_BUCKETS_COUNT - 1] // 24}_days"
+                    )
+
+            if hasattr(meta, "referrer"):
+                tags["referrer"] = meta.referrer
+
+            if self._uses_storage_routing(in_msg):
+                tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
+                    in_msg.meta.downsampled_storage_config.mode
                 )
 
-        if hasattr(meta, "referrer"):
-            tags["referrer"] = meta.referrer
-
-        if self._uses_storage_routing(in_msg):
-            tags["storage_routing_mode"] = DownsampledStorageConfig.Mode.Name(
-                in_msg.meta.downsampled_storage_config.mode
-            )
+        # Query-shape tags (query_type, groupby, filter profile, etc.) used to
+        # attribute RPC cost. Always attempt this even when meta is missing.
+        tags.update(extract_query_info_tags(in_msg, endpoint_name=self.__class__.__name__))
 
         return tags
 

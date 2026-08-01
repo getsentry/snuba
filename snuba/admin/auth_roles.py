@@ -85,6 +85,7 @@ TOOL_RESOURCES = {
     "querylog": ToolResource("querylog"),
     "rpc-endpoints": ToolResource("rpc-endpoints"),
     "clusters": ToolResource("clusters"),
+    "eap-stats": ToolResource("eap-stats"),
     "all": ToolResource("all"),
 }
 
@@ -170,6 +171,7 @@ ROLES = {
                     TOOL_RESOURCES["querylog"],
                     TOOL_RESOURCES["rpc-endpoints"],
                     TOOL_RESOURCES["clusters"],
+                    TOOL_RESOURCES["eap-stats"],
                 ]
             )
         },
