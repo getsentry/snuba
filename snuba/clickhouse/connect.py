@@ -33,7 +33,7 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger("snuba.clickhouse.connect")
 
-metrics = MetricsWrapper(environment.metrics, "clickhouse.connect")
+metrics = MetricsWrapper(environment.metrics, "clickhouse")
 
 # Stand-in for "no read timeout" on the HTTP path. The native driver maps a
 # profile with no timeout (``None``) to an unbounded socket, but clickhouse-connect
@@ -386,7 +386,7 @@ class ClickhouseConnectPool(ClickhousePool):
             # handling of NetworkError/SocketTimeoutError by emitting the
             # connection_error metric before surfacing the error.
             metrics.increment(
-                "connection_error",
+                "connect.connection_error",
                 tags={
                     "host": self.host,
                     "port": str(self.port),
@@ -398,7 +398,7 @@ class ClickhouseConnectPool(ClickhousePool):
         except StreamFailureError as e:
             # Not a ClickHouseError subclass; translate so it doesn't escape as a 500.
             metrics.increment(
-                "native_stream_failure",
+                "connect.stream_failure",
                 tags={
                     "host": self.host,
                     "port": str(self.port),
@@ -413,7 +413,7 @@ class ClickhouseConnectPool(ClickhousePool):
             # into ClickhouseError, preserving the server error code when present.
             if self._is_native_stream_desync(e):
                 metrics.increment(
-                    "native_stream_desync",
+                    "connect.stream_desync",
                     tags={
                         "host": self.host,
                         "port": str(self.port),
@@ -473,7 +473,7 @@ class ClickhouseConnectPool(ClickhousePool):
                 exc,
             )
             metrics.increment(
-                "native_stream_desync_retry",
+                "connect.stream_desync_retry",
                 tags={
                     "host": self.host,
                     "port": str(self.port),
