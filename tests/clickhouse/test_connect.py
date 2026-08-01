@@ -42,7 +42,9 @@ def _make_pool(client: mock.Mock) -> ClickhouseConnectPool:
         password="test",
         database="test",
     )
-    # Avoid creating a real client / connection.
+    # Avoid creating a real client / connection. Seed __client so error paths
+    # that call close_connections() hit the stub without rebuilding.
+    pool._ClickhouseConnectPool__client = client  # type: ignore[attr-defined]
     pool._get_client = lambda: client  # type: ignore[method-assign]
     return pool
 
@@ -201,6 +203,7 @@ def test_operational_error_mapped_without_extra_retries() -> None:
         pool.execute("SELECT 1", retryable=True)
 
     assert client.query.call_count == 1
+    client.close_connections.assert_called_once()
 
 
 def test_generic_clickhouse_error_wrapped() -> None:
@@ -215,6 +218,10 @@ def test_generic_clickhouse_error_wrapped() -> None:
     pool = _make_pool(client)
     with pytest.raises(ClickhouseError):
         pool.execute("SELECT 1")
+
+    # Real server/client errors leave the pool alone; only stream/transport
+    # failures recycle keep-alives.
+    client.close_connections.assert_not_called()
 
     assert client.query.call_count == 1
 
@@ -907,6 +914,8 @@ def test_execute_surfaces_native_stream_desync_without_retry() -> None:
 
     assert "Unrecognized ClickHouse type" in str(excinfo.value)
     assert client.query.call_count == 1
+    # Recycle keep-alives so the next query does not reuse a poisoned socket.
+    client.close_connections.assert_called_once()
 
 
 def test_stream_failure_error_is_translated_to_clickhouse_error() -> None:
@@ -924,3 +933,4 @@ def test_stream_failure_error_is_translated_to_clickhouse_error() -> None:
     assert excinfo.value.code == -1
     assert "Stream ended unexpectedly" in str(excinfo.value)
     assert client.query.call_count == 1
+    client.close_connections.assert_called_once()

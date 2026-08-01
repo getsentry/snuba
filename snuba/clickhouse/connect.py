@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from datetime import datetime
 from threading import Lock
 from typing import Any
@@ -171,6 +171,18 @@ class ClickhouseConnectPool(ClickhousePool):
                 if self.__client is None:
                     self.__client = self._create_client()
         return self.__client
+
+    def _reset_connections(self) -> None:
+        """Drop keep-alive sockets after a stream/transport failure.
+
+        Does not rebuild the client or retry the query — only prevents the next
+        request from reusing a connection that may still hold unread body data.
+        """
+        client = self.__client
+        if client is None:
+            return
+        with suppress(Exception):
+            client.close_connections()
 
     def _build_query_settings(
         self,
@@ -380,6 +392,7 @@ class ClickhouseConnectPool(ClickhousePool):
                     "database": self.database,
                 },
             )
+            self._reset_connections()
             raise ClickhouseError(str(e), code=getattr(e, "code", None) or -1) from e
         except StreamFailureError as e:
             # Not a ClickHouseError subclass; translate so it doesn't escape as a 500.
@@ -391,6 +404,7 @@ class ClickhouseConnectPool(ClickhousePool):
                     "database": self.database,
                 },
             )
+            self._reset_connections()
             raise ClickhouseError(str(e), code=-1) from e
         except ClickHouseError as e:
             # ClickHouseError is the base class for every clickhouse-connect
@@ -406,6 +420,7 @@ class ClickhouseConnectPool(ClickhousePool):
                         "database": self.database,
                     },
                 )
+                self._reset_connections()
             raise ClickhouseError(str(e), code=getattr(e, "code", None) or -1) from e
         except json.JSONDecodeError as e:
             # A malformed body on the JSONCompact totals path (truncation, a proxy
