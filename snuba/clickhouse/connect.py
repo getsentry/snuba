@@ -19,7 +19,7 @@ from clickhouse_connect.driver.exceptions import (
 )
 from clickhouse_connect.driver.httputil import get_pool_manager
 
-from snuba import environment, settings, state
+from snuba import environment, settings
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.native import (
     ClickhousePool,
@@ -108,10 +108,8 @@ class ClickhouseConnectPool(ClickhousePool):
     ) -> None:
         # No native connection queue here; clickhouse-connect manages its own
         # HTTP pool. ``port`` is the abstract base attribute (it holds the
-        # cluster's configured HTTP port for this driver). The pool size is not
-        # a construction parameter: it is always taken from the
-        # ``clickhouse_connect_pool_size`` runtime config (see _get_client), so
-        # it can be tuned at runtime without rebuilding pools.
+        # cluster's configured HTTP port for this driver). Pool size comes from
+        # the ``clickhouse_connect_pool_size`` sentry-option at client create.
         self.host = host
         self.port = http_port
         self.user = user
@@ -134,10 +132,7 @@ class ClickhouseConnectPool(ClickhousePool):
             "use_protocol_version",
             get_option("clickhouse_connect_use_protocol_version", False),
         )
-        pool_size = (
-            state.get_int_config("clickhouse_connect_pool_size", settings.CLICKHOUSE_MAX_POOL_SIZE)
-            or settings.CLICKHOUSE_MAX_POOL_SIZE
-        )
+        pool_size = get_option("clickhouse_connect_pool_size", settings.CLICKHOUSE_MAX_POOL_SIZE)
         pool_mgr = get_pool_manager(
             ca_cert=self.ca_certs,
             verify=bool(self.verify),

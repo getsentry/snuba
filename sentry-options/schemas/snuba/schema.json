@@ -576,6 +576,11 @@
       "default": false,
       "description": "When true, clickhouse-connect negotiates client_protocol_version (Native block-info framing). Default false: proxies can strip the setting and desync the decoder into Unrecognized ClickHouse type errors. Flip on only if the full HTTP path preserves client_protocol_version."
     },
+    "clickhouse_connect_pool_size": {
+      "type": "integer",
+      "default": 25,
+      "description": "urllib3 maxsize for the clickhouse-connect HTTP pool. Read when a connect client is created or rebuilt. Migrated from the runtime config of the same name; falls back to settings.CLICKHOUSE_MAX_POOL_SIZE only if the option store is unavailable."
+    },
     "ondemand_profiler_hostnames": {
       "type": "string",
       "default": "",
