@@ -189,16 +189,6 @@ class ClickhouseConnectPool(ClickhousePool):
         message = str(exc)
         return any(marker in message for marker in _STREAM_DESYNC_MARKERS)
 
-    def _error_tags(self, *, user: bool = False) -> dict[str, str]:
-        tags = {
-            "host": self.host,
-            "port": str(self.port),
-            "database": self.database,
-        }
-        if user:
-            tags["user"] = self.user
-        return tags
-
     def _execute_once(
         self,
         query: str,
@@ -365,16 +355,16 @@ class ClickhouseConnectPool(ClickhousePool):
         try:
             yield
         except OperationalError as e:
-            metrics.increment("connection_error", tags=self._error_tags(user=True))
+            metrics.increment("connection_error")
             self._reset_connections()
             raise ClickhouseError(str(e), code=getattr(e, "code", None) or -1) from e
         except StreamFailureError as e:
-            metrics.increment("stream_failure", tags=self._error_tags())
+            metrics.increment("stream_failure")
             self._reset_connections()
             raise ClickhouseError(str(e), code=-1) from e
         except ClickHouseError as e:
             if self._is_stream_desync(e):
-                metrics.increment("stream_desync", tags=self._error_tags())
+                metrics.increment("stream_desync")
                 self._reset_connections()
             raise ClickhouseError(str(e), code=getattr(e, "code", None) or -1) from e
         except json.JSONDecodeError as e:
