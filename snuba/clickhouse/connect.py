@@ -174,17 +174,12 @@ class ClickhouseConnectPool(ClickhousePool):
                     self.__client = self._create_client()
         return self.__client
 
-    def _reset_client(self) -> None:
-        """Drop the cached client so retries cannot reuse a poisoned connection."""
-        with self.__lock:
-            if self.__client is not None:
-                try:
-                    self.__client.close()
-                except Exception:
-                    logger.debug(
-                        "error closing clickhouse-connect client during reset", exc_info=True
-                    )
-                self.__client = None
+    def _reset_connections(self) -> None:
+        """Drop keep-alive sockets so the next query cannot reuse a poisoned connection."""
+        try:
+            self._get_client().close_connections()
+        except Exception:
+            logger.debug("error clearing clickhouse-connect connections", exc_info=True)
 
     def _build_query_settings(
         self,
@@ -442,47 +437,46 @@ class ClickhouseConnectPool(ClickhousePool):
         Execute a clickhouse query.
 
         Transport retries are handled by clickhouse-connect. Additionally retries
-        once on Native-stream desync after resetting the cached client.
+        once on Native-stream desync after clearing the HTTP connection pool.
         ``retryable=False`` skips that desync retry. Does not replicate the native
         pool's ``TOO_MANY_SIMULTANEOUS_QUERIES`` backoff.
         """
-
-        def _run(active_query_id: str | None) -> ClickhouseResult:
-            with self._translate_clickhouse_errors():
-                return self._execute_once(
-                    query,
-                    params,
-                    with_column_types,
-                    active_query_id,
-                    settings,
-                    columnar,
-                    capture_trace,
+        active_query_id = query_id
+        for attempt in (0, 1):
+            try:
+                with self._translate_clickhouse_errors():
+                    return self._execute_once(
+                        query,
+                        params,
+                        with_column_types,
+                        active_query_id,
+                        settings,
+                        columnar,
+                        capture_trace,
+                    )
+            except ClickhouseError as exc:
+                if attempt or not retryable or not self._is_native_stream_desync(exc):
+                    raise
+                logger.warning(
+                    "clickhouse-connect Native stream desync on %s:%s/%s; "
+                    "clearing connections and retrying once: %s",
+                    self.host,
+                    self.port,
+                    self.database,
+                    exc,
                 )
-
-        try:
-            return _run(query_id)
-        except ClickhouseError as exc:
-            if not retryable or not self._is_native_stream_desync(exc):
-                raise
-            logger.warning(
-                "clickhouse-connect Native stream desync on %s:%s/%s; "
-                "resetting client and retrying once: %s",
-                self.host,
-                self.port,
-                self.database,
-                exc,
-            )
-            metrics.increment(
-                "stream_desync_retry",
-                tags={
-                    "host": self.host,
-                    "port": str(self.port),
-                    "database": self.database,
-                },
-            )
-            self._reset_client()
-            retry_query_id = None if query_id is None else f"{query_id}-retry"
-            return _run(retry_query_id)
+                metrics.increment(
+                    "stream_desync_retry",
+                    tags={
+                        "host": self.host,
+                        "port": str(self.port),
+                        "database": self.database,
+                    },
+                )
+                self._reset_connections()
+                if query_id is not None:
+                    active_query_id = f"{query_id}-retry"
+        raise AssertionError("unreachable")
 
     def insert(
         self,

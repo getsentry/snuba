@@ -896,30 +896,27 @@ def test_use_protocol_version_disabled_by_default() -> None:
 def test_execute_retries_once_on_native_stream_desync() -> None:
     from clickhouse_connect.driver.exceptions import InternalError
 
-    client_fail = mock.Mock()
-    client_fail.query.side_effect = InternalError(
-        "Unrecognized ClickHouse type base: achilles-api-dotnet name: achilles-api-dotnet"
-    )
-    client_ok = mock.Mock()
-    client_ok.query.return_value = FakeQueryResult(
-        result_set=[[1]],
-        column_names=("x",),
-        column_types=(FakeColumnType("UInt8"),),
-        summary={"read_rows": "1", "read_bytes": "1", "elapsed_ns": "1000"},
-    )
+    client = mock.Mock()
+    client.query.side_effect = [
+        InternalError(
+            "Unrecognized ClickHouse type base: achilles-api-dotnet name: achilles-api-dotnet"
+        ),
+        FakeQueryResult(
+            result_set=[[1]],
+            column_names=("x",),
+            column_types=(FakeColumnType("UInt8"),),
+            summary={"read_rows": "1", "read_bytes": "1", "elapsed_ns": "1000"},
+        ),
+    ]
+    pool = _make_pool(client)
 
-    pool = ClickhouseConnectPool(host="host", user="test", password="test", database="test")
-    pool._ClickhouseConnectPool__client = client_fail  # type: ignore[attr-defined]
-    with mock.patch.object(pool, "_create_client", return_value=client_ok) as create:
-        result = pool.execute("SELECT 1", with_column_types=True, query_id="qid-1")
+    result = pool.execute("SELECT 1", with_column_types=True, query_id="qid-1")
 
-    create.assert_called_once()
-    assert client_fail.query.call_count == 1
-    assert client_ok.query.call_count == 1
-    _, kwargs = client_ok.query.call_args
+    assert client.query.call_count == 2
+    _, kwargs = client.query.call_args
     assert kwargs["settings"]["query_id"] == "qid-1-retry"
     assert result.results == [[1]]
-    client_fail.close.assert_called_once()
+    client.close_connections.assert_called_once()
 
 
 def test_execute_does_not_retry_real_server_errors() -> None:
@@ -960,11 +957,10 @@ def test_stream_failure_error_is_translated_to_clickhouse_error() -> None:
     )
     pool = _make_pool(client)
 
-    with (
-        mock.patch.object(pool, "_create_client", return_value=client),
-        pytest.raises(ClickhouseError) as excinfo,
-    ):
+    with pytest.raises(ClickhouseError) as excinfo:
         pool.execute("SELECT 1")
 
     assert excinfo.value.code == -1
     assert "Stream ended unexpectedly" in str(excinfo.value)
+    assert client.query.call_count == 2
+    client.close_connections.assert_called_once()
