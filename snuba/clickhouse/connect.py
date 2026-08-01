@@ -128,6 +128,16 @@ class ClickhouseConnectPool(ClickhousePool):
             maxsize=pool_size,
             num_pools=1,
         )
+        connect_timeout = (
+            get_option("clickhouse_connect_connect_timeout", 0) or self.connect_timeout
+        )
+        send_receive_timeout = get_option("clickhouse_connect_send_receive_timeout", 0)
+        if not send_receive_timeout:
+            send_receive_timeout = (
+                self.send_receive_timeout
+                if self.send_receive_timeout is not None
+                else UNBOUNDED_SEND_RECEIVE_TIMEOUT_SECONDS
+            )
         return clickhouse_connect.get_client(
             host=self.host,
             port=self.port,
@@ -138,12 +148,8 @@ class ClickhouseConnectPool(ClickhousePool):
             secure=self.secure,
             verify=bool(self.verify),
             ca_cert=self.ca_certs,
-            connect_timeout=self.connect_timeout,
-            send_receive_timeout=(
-                self.send_receive_timeout
-                if self.send_receive_timeout is not None
-                else UNBOUNDED_SEND_RECEIVE_TIMEOUT_SECONDS
-            ),
+            connect_timeout=connect_timeout,
+            send_receive_timeout=send_receive_timeout,
             settings=dict(self.client_settings),
             pool_mgr=pool_mgr,
             query_limit=0,

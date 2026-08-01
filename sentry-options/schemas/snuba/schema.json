@@ -581,6 +581,16 @@
       "default": 25,
       "description": "urllib3 maxsize for the clickhouse-connect HTTP pool. Read when a connect client is created or rebuilt. Migrated from the runtime config of the same name; falls back to settings.CLICKHOUSE_MAX_POOL_SIZE only if the option store is unavailable."
     },
+    "clickhouse_connect_connect_timeout": {
+      "type": "integer",
+      "default": 0,
+      "description": "TCP connect timeout in seconds for clickhouse-connect clients. 0 keeps the pool constructor value (normally 1s). Read when a client is created."
+    },
+    "clickhouse_connect_send_receive_timeout": {
+      "type": "integer",
+      "default": 0,
+      "description": "HTTP read timeout in seconds for clickhouse-connect clients (urllib3 read/send_receive_timeout). 0 keeps the per-profile constructor value (e.g. 25s for QUERY). Read when a client is created."
+    },
     "ondemand_profiler_hostnames": {
       "type": "string",
       "default": "",

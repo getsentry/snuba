@@ -279,6 +279,37 @@ def test_send_receive_timeout_unbounded_when_profile_has_none() -> None:
     assert kwargs["send_receive_timeout"] == UNBOUNDED_SEND_RECEIVE_TIMEOUT_SECONDS
 
 
+def test_timeout_options_override_constructor_values() -> None:
+    import clickhouse_connect
+    from sentry_options.testing import override_options
+
+    pool = ClickhouseConnectPool(
+        host="host",
+        user="test",
+        password="test",
+        database="test",
+        connect_timeout=1,
+        send_receive_timeout=25,
+    )
+
+    with (
+        override_options(
+            "snuba",
+            {
+                "clickhouse_connect_connect_timeout": 7,
+                "clickhouse_connect_send_receive_timeout": 99,
+            },
+        ),
+        mock.patch.object(clickhouse_connect, "get_client") as get_client,
+        mock.patch("snuba.clickhouse.connect.get_pool_manager"),
+    ):
+        pool._get_client()
+
+    _, kwargs = get_client.call_args
+    assert kwargs["connect_timeout"] == 7
+    assert kwargs["send_receive_timeout"] == 99
+
+
 def test_read_query_client_settings_use_25s_timeout() -> None:
     # Read queries (the QUERY profile) get a 25s timeout on both drivers, leaving
     # headroom under the frontend request budget.
