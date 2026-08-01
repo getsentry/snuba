@@ -138,7 +138,8 @@ class ClickhouseConnectPool(ClickhousePool):
             ca_cert=self.ca_certs,
             verify=bool(self.verify),
             maxsize=pool_size,
-            num_pools=2,
+            # Single LB origin per client; urllib3 never sees the backend query nodes.
+            num_pools=1,
         )
         return clickhouse_connect.get_client(
             host=self.host,
