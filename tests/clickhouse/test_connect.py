@@ -887,10 +887,30 @@ def test_connect_driver_matches_native_for_totals_and_empty_results() -> None:
             connect_pool.close()
 
 
-def test_use_protocol_version_disabled_for_http_driver() -> None:
+def test_use_protocol_version_reads_sentry_option() -> None:
+    import clickhouse_connect
     from clickhouse_connect import common as clickhouse_connect_common
+    from sentry_options.testing import override_options
 
+    pool = ClickhouseConnectPool(host="host", user="test", password="test", database="test")
+
+    with (
+        override_options("snuba", {"clickhouse_connect_use_protocol_version": False}),
+        mock.patch.object(clickhouse_connect, "get_client") as get_client,
+        mock.patch("snuba.clickhouse.connect.get_pool_manager"),
+    ):
+        pool._create_client()
     assert clickhouse_connect_common.get_setting("use_protocol_version") is False
+    get_client.assert_called_once()
+
+    with (
+        override_options("snuba", {"clickhouse_connect_use_protocol_version": True}),
+        mock.patch.object(clickhouse_connect, "get_client") as get_client,
+        mock.patch("snuba.clickhouse.connect.get_pool_manager"),
+    ):
+        pool._create_client()
+    assert clickhouse_connect_common.get_setting("use_protocol_version") is True
+    get_client.assert_called_once()
 
 
 def test_execute_retries_once_on_native_stream_desync() -> None:

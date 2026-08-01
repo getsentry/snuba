@@ -571,6 +571,11 @@
       "default": false,
       "description": "When true, the ClickHouse read path uses the clickhouse-connect (HTTP) driver instead of the native protocol. Lets the driver migration roll out and roll back without a deploy. Migrated from the runtime config of the same name."
     },
+    "clickhouse_connect_use_protocol_version": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, clickhouse-connect negotiates client_protocol_version (Native block-info framing). Default false: proxies can strip the setting and desync the decoder into Unrecognized ClickHouse type errors. Flip on only if the full HTTP path preserves client_protocol_version."
+    },
     "ondemand_profiler_hostnames": {
       "type": "string",
       "default": "",

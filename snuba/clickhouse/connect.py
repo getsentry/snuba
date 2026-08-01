@@ -28,6 +28,7 @@ from snuba.clickhouse.native import (
     Params,
 )
 from snuba.reader import unwrap_nullable_type
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger("snuba.clickhouse.connect")
@@ -50,10 +51,6 @@ DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
 # forwards whatever settings it is given to the server, so to preserve parity
 # we tell clickhouse-connect to drop unrecognized settings instead of failing.
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
-
-# Avoid HTTP Native block-info framing: proxies can strip client_protocol_version
-# and desync the decoder into "Unrecognized ClickHouse type base: <payload>".
-clickhouse_connect_common.set_setting("use_protocol_version", False)
 
 _NATIVE_DESYNC_MARKERS = (
     "Unrecognized ClickHouse type",
@@ -131,6 +128,12 @@ class ClickhouseConnectPool(ClickhousePool):
         self.__lock = Lock()
 
     def _create_client(self) -> Client:
+        # Applied at client build time (not import): the option is only read when
+        # a client is created or rebuilt after reset.
+        clickhouse_connect_common.set_setting(
+            "use_protocol_version",
+            get_option("clickhouse_connect_use_protocol_version", False),
+        )
         pool_size = (
             state.get_int_config("clickhouse_connect_pool_size", settings.CLICKHOUSE_MAX_POOL_SIZE)
             or settings.CLICKHOUSE_MAX_POOL_SIZE
