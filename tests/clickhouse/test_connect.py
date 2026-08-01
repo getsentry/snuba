@@ -893,58 +893,19 @@ def test_use_protocol_version_disabled_by_default() -> None:
     assert clickhouse_connect_common.get_setting("use_protocol_version") is False
 
 
-def test_execute_retries_once_on_native_stream_desync() -> None:
+def test_execute_surfaces_native_stream_desync_without_retry() -> None:
     from clickhouse_connect.driver.exceptions import InternalError
 
     client = mock.Mock()
-    client.query.side_effect = [
-        InternalError(
-            "Unrecognized ClickHouse type base: achilles-api-dotnet name: achilles-api-dotnet"
-        ),
-        FakeQueryResult(
-            result_set=[[1]],
-            column_names=("x",),
-            column_types=(FakeColumnType("UInt8"),),
-            summary={"read_rows": "1", "read_bytes": "1", "elapsed_ns": "1000"},
-        ),
-    ]
-    pool = _make_pool(client)
-
-    result = pool.execute("SELECT 1", with_column_types=True, query_id="qid-1")
-
-    assert client.query.call_count == 2
-    _, kwargs = client.query.call_args
-    assert kwargs["settings"]["query_id"] == "qid-1-retry"
-    assert result.results == [[1]]
-    client.close_connections.assert_called_once()
-
-
-def test_execute_does_not_retry_real_server_errors() -> None:
-    from clickhouse_connect.driver.exceptions import DatabaseError
-
-    client = mock.Mock()
-    client.query.side_effect = DatabaseError("Memory limit exceeded", code=241)
+    client.query.side_effect = InternalError(
+        "Unrecognized ClickHouse type base: achilles-api-dotnet name: achilles-api-dotnet"
+    )
     pool = _make_pool(client)
 
     with pytest.raises(ClickhouseError) as excinfo:
         pool.execute("SELECT 1")
 
-    assert excinfo.value.code == 241
-    assert client.query.call_count == 1
-
-
-def test_execute_does_not_retry_desync_when_not_retryable() -> None:
-    from clickhouse_connect.driver.exceptions import InternalError
-
-    client = mock.Mock()
-    client.query.side_effect = InternalError(
-        "Unrecognized ClickHouse type base: worker-foo name: worker-foo"
-    )
-    pool = _make_pool(client)
-
-    with pytest.raises(ClickhouseError):
-        pool.execute("SELECT 1", retryable=False)
-
+    assert "Unrecognized ClickHouse type" in str(excinfo.value)
     assert client.query.call_count == 1
 
 
@@ -962,5 +923,4 @@ def test_stream_failure_error_is_translated_to_clickhouse_error() -> None:
 
     assert excinfo.value.code == -1
     assert "Stream ended unexpectedly" in str(excinfo.value)
-    assert client.query.call_count == 2
-    client.close_connections.assert_called_once()
+    assert client.query.call_count == 1

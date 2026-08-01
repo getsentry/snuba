@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import logging
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from datetime import datetime
@@ -30,8 +29,6 @@ from snuba.clickhouse.native import (
 from snuba.reader import unwrap_nullable_type
 from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.wrapper import MetricsWrapper
-
-logger = logging.getLogger("snuba.clickhouse.connect")
 
 metrics = MetricsWrapper(environment.metrics, "clickhouse.connect")
 
@@ -174,13 +171,6 @@ class ClickhouseConnectPool(ClickhousePool):
                 if self.__client is None:
                     self.__client = self._create_client()
         return self.__client
-
-    def _reset_connections(self) -> None:
-        """Drop keep-alive sockets so the next query cannot reuse a poisoned connection."""
-        try:
-            self._get_client().close_connections()
-        except Exception:
-            logger.debug("error clearing clickhouse-connect connections", exc_info=True)
 
     def _build_query_settings(
         self,
@@ -437,47 +427,23 @@ class ClickhouseConnectPool(ClickhousePool):
         """
         Execute a clickhouse query.
 
-        Transport retries are handled by clickhouse-connect. Additionally retries
-        once on Native-stream desync after clearing the HTTP connection pool.
-        ``retryable=False`` skips that desync retry. Does not replicate the native
-        pool's ``TOO_MANY_SIMULTANEOUS_QUERIES`` backoff.
+        Transport retries (stale keep-alive sockets, HTTP 429/503/504) are handled
+        by clickhouse-connect. Native-stream desync is not retried. Does not
+        replicate the native pool's ``TOO_MANY_SIMULTANEOUS_QUERIES`` backoff.
+
+        The ``retryable`` argument is accepted for interface parity with the
+        native pool but has no effect here.
         """
-        active_query_id = query_id
-        for attempt in (0, 1):
-            try:
-                with self._translate_clickhouse_errors():
-                    return self._execute_once(
-                        query,
-                        params,
-                        with_column_types,
-                        active_query_id,
-                        settings,
-                        columnar,
-                        capture_trace,
-                    )
-            except ClickhouseError as exc:
-                if attempt or not retryable or not self._is_native_stream_desync(exc):
-                    raise
-                logger.warning(
-                    "clickhouse-connect Native stream desync on %s:%s/%s; "
-                    "clearing connections and retrying once: %s",
-                    self.host,
-                    self.port,
-                    self.database,
-                    exc,
-                )
-                metrics.increment(
-                    "stream_desync_retry",
-                    tags={
-                        "host": self.host,
-                        "port": str(self.port),
-                        "database": self.database,
-                    },
-                )
-                self._reset_connections()
-                if query_id is not None:
-                    active_query_id = f"{query_id}-retry"
-        raise AssertionError("unreachable")
+        with self._translate_clickhouse_errors():
+            return self._execute_once(
+                query,
+                params,
+                with_column_types,
+                query_id,
+                settings,
+                columnar,
+                capture_trace,
+            )
 
     def insert(
         self,
