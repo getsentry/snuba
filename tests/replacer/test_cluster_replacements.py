@@ -33,7 +33,6 @@ from snuba.replacers.replacer_processor import (
     ReplacementMessage,
     ReplacementMessageMetadata,
 )
-from snuba.state import set_config
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from tests.clusters.fake_cluster import (
@@ -227,7 +226,6 @@ def test_load_balancing(override_cluster: Callable[[bool], FakeClickhouseCluster
     Test running two replacements in a row and verify the queries
     are properly load balanced on different nodes.
     """
-    set_config("write_node_replacements_projects", "[1]")
     cluster = override_cluster(True)
 
     replacer = ReplacerWorker(

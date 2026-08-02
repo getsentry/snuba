@@ -14,7 +14,9 @@
     },
     "consumer.dlq_by_age_sample_rate_by_storage": {
       "type": "object",
-      "additionalProperties": { "type": "number" },
+      "additionalProperties": {
+        "type": "number"
+      },
       "default": {},
       "description": "Dict mapping storage name to the fraction of messages older than consumer.dlq_by_age_threshold_seconds (by Kafka broker timestamp) to route to the DLQ, so a backlogged consumer can catch up to fresh data. 0.0 means route none (disabled); 1.0 means route every too-old message; 0.25 means route ~25% of too-old messages and forward the rest. Storages with no entry default to 0.0 (disabled)."
     },
@@ -571,6 +573,11 @@
       "default": false,
       "description": "When true, the ClickHouse read path uses the clickhouse-connect (HTTP) driver instead of the native protocol. Lets the driver migration roll out and roll back without a deploy. Migrated from the runtime config of the same name."
     },
+    "clickhouse_connect_pool_size": {
+      "type": "integer",
+      "default": 0,
+      "description": "HTTP connection pool size used by the clickhouse-connect driver. 0 (the default) means unset: settings.CLICKHOUSE_MAX_POOL_SIZE is used instead. Migrated from runtime config clickhouse_connect_pool_size."
+    },
     "ondemand_profiler_hostnames": {
       "type": "string",
       "default": "",
@@ -608,7 +615,9 @@
     },
     "eap_items_use_indexed_name_organization_ids": {
       "type": "array",
-      "items": { "type": "integer" },
+      "items": {
+        "type": "integer"
+      },
       "default": [],
       "description": "Organization ids the eap_items indexed_name rewrite is enabled for. For each listed org, equality and IN filters on sentry.op / sentry.metric.name read the bloom-filter-indexed indexed_name column instead of the unindexed attributes_string bucket lookup. Empty (the default) disables the rewrite everywhere. Only add an org once indexed_name is fully populated across its queried retention window, otherwise rows written before it was populated are silently dropped."
     }

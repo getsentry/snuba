@@ -324,17 +324,14 @@ def test_pool_size_defaults_to_setting() -> None:
     assert kwargs["maxsize"] == settings.CLICKHOUSE_MAX_POOL_SIZE
 
 
-@pytest.mark.redis_db
-def test_pool_size_runtime_override() -> None:
+def test_pool_size_option_override() -> None:
     import clickhouse_connect
-
-    from snuba import state
-
-    state.set_config("clickhouse_connect_pool_size", 42)
+    from sentry_options.testing import override_options
 
     pool = ClickhouseConnectPool(host="host", user="test", password="test", database="test")
 
     with (
+        override_options("snuba", {"clickhouse_connect_pool_size": 42}),
         mock.patch.object(clickhouse_connect, "get_client"),
         mock.patch("snuba.clickhouse.connect.get_pool_manager") as get_pool_manager,
     ):

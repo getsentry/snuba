@@ -59,7 +59,7 @@ def get_option(key: str, default: T) -> T:
 def get_mapped_option(key: str, name: str, default: T) -> T:
     """Read entry ``name`` from a dict-typed option.
 
-    Dynamically-named runtime-config keys (one per storage/topic/dataset) are
+    Dynamically-named option keys (one per storage/topic/dataset) are
     collapsed into a single ``object`` option keyed by ``name``. Falls back to
     ``default`` when the option is unset, not a dict, or has no such entry.
     ``default`` doubles as the fallback and the type witness.

@@ -105,8 +105,9 @@ def _build_validated_pool(
     # enforces this.
     _validate_node(clickhouse_host, clickhouse_port, cluster, storage_name)
     # Go through the shared connection cache so the driver (native vs
-    # clickhouse-connect/HTTP) is selected by the runtime config, behind the
-    # abstract ClickhousePool type, just like the cluster's own connections.
+    # clickhouse-connect/HTTP) is selected by the use_clickhouse_connect_driver
+    # sentry-option, behind the abstract ClickhousePool type, just like the
+    # cluster's own connections.
     #
     # Pick the HTTP port for the clickhouse-connect (HTTP) driver. (The native
     # driver ignores http_port and talks to clickhouse_port directly, so it is

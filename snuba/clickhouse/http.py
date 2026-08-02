@@ -340,8 +340,7 @@ class HTTPBatchWriter(BatchWriter[bytes]):
 
         batch.close()
         # A 0 (the schema default) means "unset": fall back to the env-configured
-        # settings.BATCH_JOIN_TIMEOUT, preserving the prior runtime-config
-        # behavior where the option was only an override.
+        # settings.BATCH_JOIN_TIMEOUT.
         batch_join_timeout = (
             get_option("http_batch_join_timeout", 0)
         ) or settings.BATCH_JOIN_TIMEOUT

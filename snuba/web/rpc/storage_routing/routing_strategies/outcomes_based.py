@@ -67,7 +67,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
                 description=(
                     "Per-org override for the max ingested items threshold above which a query is "
                     "downsampled. When set to a positive value, takes precedence over the global "
-                    "OutcomesBasedRoutingStrategy.max_items_before_downsampling runtime config. "
+                    "OutcomesBasedRoutingStrategy.max_items_before_downsampling sentry-option. "
                     "Default 0 means no override (use global)."
                 ),
                 value_type=int,

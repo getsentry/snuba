@@ -15,7 +15,7 @@ from clickhouse_connect.driver.client import Client
 from clickhouse_connect.driver.exceptions import ClickHouseError, OperationalError
 from clickhouse_connect.driver.httputil import get_pool_manager
 
-from snuba import environment, settings, state
+from snuba import environment, settings
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.native import (
     ClickhousePool,
@@ -24,6 +24,7 @@ from snuba.clickhouse.native import (
     Params,
 )
 from snuba.reader import unwrap_nullable_type
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger("snuba.clickhouse.connect")
@@ -98,8 +99,8 @@ class ClickhouseConnectPool(ClickhousePool):
         # HTTP pool. ``port`` is the abstract base attribute (it holds the
         # cluster's configured HTTP port for this driver). The pool size is not
         # a construction parameter: it is always taken from the
-        # ``clickhouse_connect_pool_size`` runtime config (see _get_client), so
-        # it can be tuned at runtime without rebuilding pools.
+        # ``clickhouse_connect_pool_size`` sentry-option (see _get_client), so
+        # it can be tuned without rebuilding pools.
         self.host = host
         self.port = http_port
         self.user = user
@@ -121,14 +122,12 @@ class ClickhouseConnectPool(ClickhousePool):
         if self.__client is None:
             with self.__lock:
                 if self.__client is None:
-                    # Pool size always comes from the clickhouse_connect_pool_size
-                    # runtime config, falling back to the configured
-                    # CLICKHOUSE_MAX_POOL_SIZE. The value is read once, when the
-                    # (cached) client is first created.
+                    # Pool size comes from the clickhouse_connect_pool_size
+                    # sentry-option (0 means unset), falling back to the
+                    # configured CLICKHOUSE_MAX_POOL_SIZE. The value is read
+                    # once, when the (cached) client is first created.
                     pool_size = (
-                        state.get_int_config(
-                            "clickhouse_connect_pool_size", settings.CLICKHOUSE_MAX_POOL_SIZE
-                        )
+                        get_option("clickhouse_connect_pool_size", 0)
                         or settings.CLICKHOUSE_MAX_POOL_SIZE
                     )
                     pool_mgr = get_pool_manager(

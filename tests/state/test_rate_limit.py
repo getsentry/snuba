@@ -18,7 +18,6 @@ from snuba.state.rate_limit import (
     RateLimitStats,
     RateLimitStatsContainer,
     rate_limit,
-    set_rate_limit_config,
 )
 
 
@@ -106,18 +105,18 @@ class TestRateLimit:
         bucket = uuid.uuid4()
         rate_limit_params = RateLimitParameters("foo", str(bucket), 1, None)
         # Create 30 queries at time 0, should all be allowed
-        with patch.object(state.time, "time", lambda: 0):  # type: ignore[attr-defined]
+        with patch("snuba.state.rate_limit.time.time", lambda: 0):
             for _ in range(30):
                 with rate_limit(rate_limit_params) as stats:
                     assert stats is not None
 
         # Create another 30 queries at time 30, should also be allowed
-        with patch.object(state.time, "time", lambda: 30):  # type: ignore[attr-defined]
+        with patch("snuba.state.rate_limit.time.time", lambda: 30):
             for _ in range(30):
                 with rate_limit(rate_limit_params) as stats:
                     assert stats is not None
 
-        with patch.object(state.time, "time", lambda: 60):  # type: ignore[attr-defined]
+        with patch("snuba.state.rate_limit.time.time", lambda: 60):
             # 1 more query should be allowed at T60 because it does not make the previous
             # rate exceed 1/sec until it has finished.
             with rate_limit(rate_limit_params) as stats:
@@ -130,7 +129,7 @@ class TestRateLimit:
         # Another query at time 61 should be allowed because the first 30 queries
         # have fallen out of the lookback window
         with (
-            patch.object(state.time, "time", lambda: 61),  # type: ignore[attr-defined]
+            patch("snuba.state.rate_limit.time.time", lambda: 61),
             rate_limit(rate_limit_params) as stats,
         ):
             assert stats is not None
@@ -246,15 +245,3 @@ def test_rate_limit_failures(vals: tuple[int, int, int], rate_limit_shards: Any)
             bucket, now - state.rate_lookback_s, now + state.rate_lookback_s
         )
         assert count == 0
-
-
-@pytest.mark.redis_db
-def test_rate_limit_interface() -> None:
-    ps_key = "project_per_second_limit_36"
-    ct_key = "project_concurrent_limit_36"
-
-    set_rate_limit_config(ps_key, 23)
-    set_rate_limit_config(ct_key, 46)
-
-    assert state.get_uncached_config(ps_key) == 23
-    assert state.get_uncached_config(ct_key) == 46

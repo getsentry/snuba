@@ -54,7 +54,7 @@ _BUCKETS_COUNT = len(_TIME_PERIOD_HOURS_BUCKETS)
 
 def _should_log_rpc_request() -> bool:
     """
-    Determine if this RPC request should be logged based on runtime configuration.
+    Determine if this RPC request should be logged based on the rpc_logging_sample_rate option.
     """
     sample_rate = get_option("rpc_logging_sample_rate", 0.0)
 

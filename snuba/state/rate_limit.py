@@ -16,7 +16,6 @@ from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from snuba import environment, state
 from snuba.redis import RedisClientKey, get_redis_client
-from snuba.state import get_configs, set_config
 from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.serializable_exception import SerializableException
@@ -32,31 +31,6 @@ TABLE_RATE_LIMIT_NAME = "table"
 metrics = MetricsWrapper(environment.metrics, "api")
 
 rds = get_redis_client(RedisClientKey.RATE_LIMITER)
-
-
-def get_rate_limit_config(
-    per_second: tuple[str, float | None], concurrent: tuple[str, int | None]
-) -> tuple[Any, Any]:
-    """
-    This function to encapsulate how rate limit keys are fetched from Redis, since
-    that is conceptually a different process from fetching normal config keys.
-    """
-    ps_name, per_second_default = per_second
-    ct_name, concurrent_default = concurrent
-
-    per_second_value, concurrent_value = get_configs([(ps_name, None), (ct_name, None)])
-    found_per_second = per_second_value if per_second_value is not None else per_second_default
-    found_concurrent = concurrent_value if concurrent_value is not None else concurrent_default
-
-    return (found_per_second, found_concurrent)
-
-
-def set_rate_limit_config(bucket: str, value: float | int | None, copy: bool = True) -> None:
-    """
-    This function to encapsulate how rate limit keys are set in Redis, since
-    that is conceptually a different process from writing normal config keys.
-    """
-    set_config(bucket, value)
 
 
 @dataclass(frozen=True)

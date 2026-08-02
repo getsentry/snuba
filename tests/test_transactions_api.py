@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 import simplejson as json
 
-from snuba import settings, state
+from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -55,13 +55,6 @@ class TestTransactionsApi(BaseApiTest):
         self.generate_fizzbuzz_events()
 
         yield
-
-        # Reset rate limits
-        state.delete_config("global_concurrent_limit")
-        state.delete_config("global_per_second_limit")
-        state.delete_config("project_concurrent_limit")
-        state.delete_config("project_concurrent_limit_1")
-        state.delete_config("project_per_second_limit")
 
     def generate_fizzbuzz_events(self) -> None:
         """

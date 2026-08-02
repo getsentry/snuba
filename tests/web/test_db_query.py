@@ -197,7 +197,7 @@ test_data = [
 
 
 def _query_config_to_overrides(query_config: Mapping[str, Any]) -> dict[str, Any]:
-    """Translate the legacy flat runtime-config keys used by these test cases
+    """Translate the flat query_settings test keys used by these cases
     into the sentry-options dict shape _get_query_settings_from_config now reads.
     Values are stringified to match the string-typed option dicts; the
     per-prefix/per-referrer second level is JSON-encoded."""

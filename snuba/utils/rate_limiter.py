@@ -8,8 +8,7 @@ from typing import Any
 from snuba.state.sentry_options import get_mapped_option
 
 # sentry-options dict option whose keys are rate-limit bucket names and whose
-# values are the per-bucket max operations-per-second. Migrated from the
-# per-bucket runtime config keys "mem_rate_limit_per_sec_<bucket>".
+# values are the per-bucket max operations-per-second.
 RATE_LIMIT_PER_SEC_OPTION = "mem_rate_limit_per_sec"
 
 

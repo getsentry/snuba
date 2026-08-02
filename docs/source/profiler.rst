@@ -17,7 +17,7 @@ On-demand profiling
 
 For consumers who have ``SNUBA_PROFILES_SAMPLE_RATE`` set to a nonzero value,
 it is possible to capture a profile of the main thread for a fixed duration of
-time via runtime config.
+time via the ``ondemand_profiler_hostnames`` sentry-option.
 
 For example, if the deployment ``snuba-querylog`` misbehaves, you can pick a
 specific pod by ``pod_name`` like
@@ -27,15 +27,14 @@ just for that one pod.
 Since profiling has unknown amount of overhead, pick only a few pods at a time
 to minimize the risk and size of a backlog.
 
-Once you have that ``pod_name``, set the runtime config
-``ondemand_profiler_hostnames`` to that value, without quotes. Separate
-multiple values by comma.
+Once you have that ``pod_name``, set the ``ondemand_profiler_hostnames``
+sentry-option to that value, without quotes. Separate multiple values by comma.
 
 To stop profiling and send the profile to Sentry, unset the value.
 
 You should see a warning message in Sentry saying "Starting ondemand profile
-for <hostname>", and once you unset runtime config, a new profile with a
+for <hostname>", and once you unset the option, a new profile with a
 transaction name of "ondemand profile: <hostname>"
 
-Profiles are capped to 30 second runtime, so if the runtime config is set
-forever, there will be profiles sent to Sentry every 30 seconds.
+Profiles are capped to 30 second runtime, so if the option is set forever,
+there will be profiles sent to Sentry every 30 seconds.

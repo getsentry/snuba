@@ -75,7 +75,6 @@ from snuba.web.rpc.common.exceptions import (
 )
 from snuba.web.rpc.common.pagination import FlexibleTimeWindowPageWithFilters
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
-from tests.conftest import SnubaSetConfig
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import gen_item_message
 
@@ -91,8 +90,7 @@ class TestCommon:
             assert next_monday(tmp) == end
             tmp += timedelta(days=1)
 
-    @pytest.mark.redis_db
-    def test_use_sampling_factor(self, snuba_set_config: SnubaSetConfig) -> None:
+    def test_use_sampling_factor(self) -> None:
         assert use_sampling_factor(
             RequestMeta(
                 start_timestamp=Timestamp(seconds=settings.USE_SAMPLING_FACTOR_TIMESTAMP_SECONDS)
@@ -1714,8 +1712,7 @@ class TestFlexibleTimeWindowPageFilters:
 class TestAnyAttributeFilterOption:
     """The `enable_any_attribute_filter` sentry-option gates whether
     any_attribute_filter is translated into a predicate or treated as
-    always-true. It replaces the former `enable_any_attribute_filter`
-    runtime config."""
+    always-true."""
 
     @staticmethod
     def _filter() -> TraceItemFilter:

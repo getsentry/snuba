@@ -62,7 +62,6 @@ _START_ESTIMATION_MARK = "start_sampling_in_storage_estimation"
 _END_ESTIMATION_MARK = "end_sampling_in_storage_estimation"
 DEFAULT_STORAGE_ROUTING_CONFIG_PREFIX = "StorageRouting"
 MetricsBackendType = Callable[[str, int | float, dict[str, str] | None, str | None], None]
-CBRS_HASH = "cbrs"
 RoutedRequestType = TimeSeriesRequest | TraceItemTableRequest
 ClickhouseQuerySettings = dict[str, Any]
 
@@ -304,9 +303,6 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
         self._overridden_additional_config_definitions = (
             self._get_overridden_additional_config_defaults(default_config_overrides)
         )
-
-    def _get_hash(self) -> str:
-        return CBRS_HASH
 
     def _get_default_config_definitions(self) -> list[Configuration]:
         return cast(list[Configuration], self._default_config_definitions)
@@ -634,8 +630,8 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
 
     def _get_time_budget_ms(self) -> int:
         """
-        Get the time budget for the query, Each strategy can have its own
-        time budget overridden or can default to a global one set in runtime config
+        Get the time budget for the query. Each strategy can have its own
+        time budget overridden or can default to a global one set in sentry-options
         """
         default = 8000
         return (

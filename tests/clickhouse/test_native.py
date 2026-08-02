@@ -1,7 +1,5 @@
 import queue
-from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import Any
 from unittest import mock
 
 import pytest
@@ -9,7 +7,6 @@ from clickhouse_driver import errors
 from dateutil.tz import tz
 from sentry_options.testing import override_options
 
-from snuba import state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.native import ClickhouseNativePool, transform_datetime
 
@@ -82,11 +79,6 @@ def test_concurrency_limit() -> None:
 TEST_DB_NAME = "test"
 CLUSTER_HOST = "host"
 CLUSTER_PORT = 100
-
-
-def teardown_function(_: Callable[..., Any]) -> None:
-    state.delete_config("use_fallback_host_in_native_connection_pool")
-    state.delete_config(f"fallback_hosts:{CLUSTER_HOST}:{CLUSTER_PORT}")
 
 
 @pytest.mark.parametrize(
