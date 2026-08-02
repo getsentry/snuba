@@ -321,6 +321,46 @@ def get_ro_clusterless_node_connection(
     return connection
 
 
+def _strip_sql_string_literals(sql_query: str) -> str:
+    """Replace quoted string contents with empty quotes for safety checks.
+
+    Lets validators ignore disallowed tokens that only appear inside literals
+    (e.g. a referrer filter value containing ``--`` or ``delete``).
+    """
+    out: list[str] = []
+    i = 0
+    n = len(sql_query)
+    while i < n:
+        ch = sql_query[i]
+        if ch in ("'", '"'):
+            quote = ch
+            out.append(quote)
+            i += 1
+            while i < n:
+                cur = sql_query[i]
+                if cur == "\\" and i + 1 < n:
+                    # Skip escaped character inside the literal.
+                    i += 2
+                    continue
+                if cur == quote:
+                    # SQL-style doubled quote escape ('' or "").
+                    if i + 1 < n and sql_query[i + 1] == quote:
+                        i += 2
+                        continue
+                    out.append(quote)
+                    i += 1
+                    break
+                i += 1
+            else:
+                # Unbalanced quote; leave remainder as-is for the caller to reject.
+                out.append(sql_query[i:])
+                break
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
 def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) -> None:
     """
     Validates that the query is a safe read-only query.
@@ -336,7 +376,9 @@ def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) ->
     if single_quote_count % 2 != 0 or double_quote_count % 2 != 0:
         raise InvalidCustomQuery("Unbalanced quotes detected in query")
 
-    lowered = sql_query.lower()
+    # Ignore tokens that only appear inside string literals when scanning for
+    # disallowed keywords/comments. Parsing still uses the original SQL.
+    lowered = _strip_sql_string_literals(sql_query).lower()
     # Enhanced disallowed keywords to prevent SQL injection and data modification
     disallowed_keywords = [
         "insert",
@@ -363,7 +405,7 @@ def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) ->
         elif kw in lowered:
             raise InvalidCustomQuery(f"{kw} is not allowed in the query")
 
-    parsed = Parser(lowered)
+    parsed = Parser(sql_query.lower())
 
     if parsed.query_type != QueryType.SELECT:
         raise InvalidCustomQuery("Only SELECT queries are allowed")

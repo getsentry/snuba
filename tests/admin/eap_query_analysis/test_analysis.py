@@ -85,6 +85,11 @@ def test_infer_request_class() -> None:
     assert _infer_request_class(_timeseries_body()) is TimeSeriesRequest
     assert _infer_request_class({"foo": "bar"}) is None
 
+    # TimeSeriesRequest can also carry group_by; timeseries markers must win.
+    timeseries_groupby = _timeseries_body()
+    timeseries_groupby["groupBy"] = [{"name": "op", "type": "TYPE_STRING"}]
+    assert _infer_request_class(timeseries_groupby) is TimeSeriesRequest
+
 
 def test_parse_request_body() -> None:
     msg = _parse_request_body(json.dumps(_table_body()))

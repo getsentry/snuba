@@ -315,9 +315,11 @@ def _build_fetch_sql(req: EapQueryAnalysisRequest) -> str:
 
 
 def _infer_request_class(body: dict[str, Any]) -> type[ProtobufMessage] | None:
-    """Pick a protobuf request type from the shape of the stored JSON body."""
-    if "columns" in body or "groupBy" in body or "group_by" in body:
-        return TraceItemTableRequest
+    """Pick a protobuf request type from the shape of the stored JSON body.
+
+    Order matters: TimeSeriesRequest and TraceItemTableRequest both may carry
+    ``group_by``/``groupBy``, so timeseries-only markers must win first.
+    """
     if (
         "expressions" in body
         or "granularitySecs" in body
@@ -327,6 +329,8 @@ def _infer_request_class(body: dict[str, Any]) -> type[ProtobufMessage] | None:
         return TimeSeriesRequest
     if "statsTypes" in body or "stats_types" in body:
         return TraceItemStatsRequest
+    if "columns" in body or "groupBy" in body or "group_by" in body:
+        return TraceItemTableRequest
     for key in ("request", "body"):
         nested = body.get(key)
         if isinstance(nested, dict):

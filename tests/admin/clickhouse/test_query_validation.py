@@ -64,3 +64,16 @@ def test_replace_dml_rejected() -> None:
         validate_ro_query("REPLACE INTO my_table VALUES (1, 2, 3)")
     with pytest.raises(InvalidCustomQuery):
         validate_ro_query("REPLACE TABLE my_table SELECT * FROM other_table")
+
+
+def test_disallowed_tokens_inside_string_literals_allowed() -> None:
+    # Filter values may legitimately contain comment/keyword substrings.
+    validate_ro_query("SELECT * FROM my_table WHERE referrer = 'api.org--test'")
+    validate_ro_query("SELECT * FROM my_table WHERE msg = 'please delete me'")
+
+
+def test_comment_tokens_outside_literals_rejected() -> None:
+    with pytest.raises(InvalidCustomQuery):
+        validate_ro_query("SELECT * FROM my_table -- drop everything")
+    with pytest.raises(InvalidCustomQuery):
+        validate_ro_query("SELECT * FROM my_table /* bad */")
