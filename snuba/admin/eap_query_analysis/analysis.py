@@ -261,15 +261,6 @@ def _escape_literal(value: str) -> str:
     return value.replace("\\", "\\\\").replace("'", "\\'")
 
 
-def _escape_like_literal(value: str) -> str:
-    """Escape a string for use inside a SQL LIKE pattern.
-
-    Handles quote/backslash escaping plus LIKE wildcards so user input is
-    matched literally (e.g. ``eap_items`` does not match ``eapXitems``).
-    """
-    return _escape_literal(value).replace("%", "\\%").replace("_", "\\_")
-
-
 def _build_fetch_sql(req: EapQueryAnalysisRequest) -> str:
     table = _schema_table_name()
     dataset_list = ", ".join(f"'{d}'" for d in _EAP_DATASETS)
@@ -280,7 +271,12 @@ def _build_fetch_sql(req: EapQueryAnalysisRequest) -> str:
     if req.referrer:
         where.append(f"referrer = '{_escape_literal(req.referrer)}'")
     if req.referrer_contains:
-        where.append(f"referrer LIKE '%{_escape_like_literal(req.referrer_contains)}%' ESCAPE '\\'")
+        # Use positionCaseInsensitive for literal substring matching. ClickHouse
+        # 25.x does not support LIKE ... ESCAPE, and LIKE would treat _/% as
+        # wildcards for inputs like "eap_items".
+        where.append(
+            f"positionCaseInsensitive(referrer, '{_escape_literal(req.referrer_contains)}') > 0"
+        )
     if req.organization_id is not None:
         where.append(f"organization = {int(req.organization_id)}")
 
@@ -409,6 +405,16 @@ def _collect_query_ids(values: list[Any] | None) -> list[str]:
     return ids
 
 
+def _eap_profile_cluster_name() -> str | None:
+    """Resolved ClickHouse cluster name for EAP ProfileEvents lookups."""
+    try:
+        cluster = get_storage(StorageKey(_EAP_PROFILE_STORAGE)).get_cluster()
+        return cluster.get_clickhouse_cluster_name()
+    except Exception as e:
+        logger.warning("Failed to resolve EAP cluster name for ProfileEvents: %s", e)
+        return None
+
+
 def _fetch_profile_events(query_ids: list[str], hours: int) -> dict[str, dict[str, int]]:
     """Batch-fetch ProfileEvents from system.query_log on the EAP cluster.
 
@@ -428,16 +434,19 @@ def _fetch_profile_events(query_ids: list[str], hours: int) -> dict[str, dict[st
     all_ids = list({*normalized, *dashed})
     id_list = ", ".join(f"'{_escape_literal(qid)}'" for qid in all_ids)
 
-    sql_cluster = f"""
-        SELECT
-            replaceAll(toString(query_id), '-', '') AS qid,
-            ProfileEvents
-        FROM clusterAllReplicas(default, system.query_log)
-        WHERE type = 'QueryFinish'
-          AND event_time > now() - INTERVAL {int(hours)} HOUR
-          AND replaceAll(toString(query_id), '-', '') IN ({id_list})
-        SETTINGS skip_unavailable_shards = 1, max_threads = 0
-    """
+    cluster_name = _eap_profile_cluster_name()
+    sql_cluster = None
+    if cluster_name:
+        sql_cluster = f"""
+            SELECT
+                replaceAll(toString(query_id), '-', '') AS qid,
+                ProfileEvents
+            FROM clusterAllReplicas('{_escape_literal(cluster_name)}', system.query_log)
+            WHERE type = 'QueryFinish'
+              AND event_time > now() - INTERVAL {int(hours)} HOUR
+              AND replaceAll(toString(query_id), '-', '') IN ({id_list})
+            SETTINGS skip_unavailable_shards = 1, max_threads = 0
+        """
     sql_local = f"""
         SELECT
             replaceAll(toString(query_id), '-', '') AS qid,
@@ -453,10 +462,15 @@ def _fetch_profile_events(query_ids: list[str], hours: int) -> dict[str, dict[st
         connection: ClickhousePool = get_ro_query_node_connection(
             _EAP_PROFILE_STORAGE, ClickhouseClientSettings.QUERY
         )
-        try:
-            result = connection.execute(query=sql_cluster, with_column_types=True)
-        except Exception as e:
-            logger.warning("clusterAllReplicas ProfileEvents lookup failed, trying local: %s", e)
+        if sql_cluster is not None:
+            try:
+                result = connection.execute(query=sql_cluster, with_column_types=True)
+            except Exception as e:
+                logger.warning(
+                    "clusterAllReplicas ProfileEvents lookup failed, trying local: %s", e
+                )
+                result = connection.execute(query=sql_local, with_column_types=True)
+        else:
             result = connection.execute(query=sql_local, with_column_types=True)
     except Exception as e:
         logger.warning("ProfileEvents lookup failed: %s", e)

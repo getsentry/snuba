@@ -25,7 +25,6 @@ from snuba.admin.eap_query_analysis.analysis import (
     EapQueryAnalysisRequest,
     ResourceTotals,
     _build_fetch_sql,
-    _escape_like_literal,
     _escape_literal,
     _infer_request_class,
     _parse_request_body,
@@ -362,12 +361,6 @@ def test_prefers_embedded_query_info_from_stats() -> None:
     assert result.by_query_type[0].query_type == "table_cross_item"
 
 
-def test_escape_like_literal_escapes_wildcards() -> None:
-    assert _escape_literal("eap_items") == "eap_items"
-    assert _escape_like_literal("eap_items") == "eap\\_items"
-    assert _escape_like_literal("a%b_c'\\") == "a\\%b\\_c\\'\\\\"
-
-
 def test_build_fetch_sql_filters_estimation_and_duplicates() -> None:
     with patch(
         "snuba.admin.eap_query_analysis.analysis._schema_table_name",
@@ -377,5 +370,8 @@ def test_build_fetch_sql_filters_estimation_and_duplicates() -> None:
     assert "dataset IN ('eap')" in sql
     assert "storage_routing" not in sql
     assert "positionCaseInsensitive(t, 'outcomes')" in sql
-    assert "LIKE '%eap\\_items%'" in sql
-    assert "ESCAPE '\\'" in sql
+    # Literal substring match avoids LIKE wildcards and unsupported ESCAPE.
+    assert "positionCaseInsensitive(referrer, 'eap_items') > 0" in sql
+    assert "LIKE" not in sql
+    assert "ESCAPE" not in sql
+    assert _escape_literal("a'b\\c") == "a\\'b\\\\c"
