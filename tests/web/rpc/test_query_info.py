@@ -330,6 +330,12 @@ def test_unknown_endpoint_defaults() -> None:
     info = extract_query_info(_meta(), endpoint_name="SomeFutureEndpoint")
     assert info["query_type"] == "other"
 
+    # Endpoint class names must match RPCEndpoint subclasses.
+    info = extract_query_info(_meta(), endpoint_name="CreateSubscriptionRequest")
+    assert info["query_type"] == "create_subscription"
+    info = extract_query_info(_meta(), endpoint_name="AttributeValuesRequest")
+    assert info["query_type"] == "attribute_values"
+
 
 def test_groupby_bucket_overflow() -> None:
     request = TraceItemTableRequest(

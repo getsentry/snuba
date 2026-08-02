@@ -369,10 +369,11 @@ _ENDPOINT_QUERY_TYPES: dict[str, str] = {
     "EndpointGetTraces": "get_traces",
     "EndpointTraceItemDetails": "item_details",
     "EndpointTraceItemAttributeNames": "attribute_names",
-    "EndpointTraceItemAttributeValues": "attribute_values",
+    # Class names match RPCEndpoint subclasses (self.__class__.__name__).
+    "AttributeValuesRequest": "attribute_values",
     "EndpointDeleteTraceItems": "delete_items",
     "EndpointExportTraceItems": "export_items",
-    "EndpointCreateSubscription": "create_subscription",
+    "CreateSubscriptionRequest": "create_subscription",
 }
 
 

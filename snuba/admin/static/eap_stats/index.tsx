@@ -64,6 +64,15 @@ function formatPct(n: number): string {
   return `${n.toFixed(1)}%`;
 }
 
+// Prefer virtual CPU time when present; it already covers threaded work.
+function cpuTotalUs(r: {
+  cpu_user_us: number;
+  cpu_system_us: number;
+  cpu_virtual_us: number;
+}): number {
+  return r.cpu_virtual_us || r.cpu_user_us + r.cpu_system_us;
+}
+
 function ResourceCard({
   label,
   value,
@@ -193,8 +202,7 @@ function TotalsPanel({
   result: EapStatsResult;
 }) {
   const r = result.total_resources;
-  // Prefer virtual CPU time when present; it already covers threaded work.
-  const cpu = r.cpu_virtual_us || r.cpu_user_us + r.cpu_system_us;
+  const cpu = cpuTotalUs(r);
   const io = r.io_selected_bytes + r.io_read_compressed_bytes;
   const net = r.network_receive_bytes + r.network_send_bytes;
   const coverage = result.profile_coverage;
@@ -306,7 +314,7 @@ function QueryTypeTable({ buckets }: { buckets: QueryTypeBucket[] }) {
     <Accordion variant="separated" chevronPosition="left">
       {buckets.map((b) => {
         const r = b.resources;
-        const cpu = r.cpu_user_us + r.cpu_system_us + r.cpu_virtual_us;
+        const cpu = cpuTotalUs(r);
         const io = r.io_selected_bytes + r.io_read_compressed_bytes;
         const net = r.network_receive_bytes + r.network_send_bytes;
         return (
