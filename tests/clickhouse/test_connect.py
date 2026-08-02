@@ -6,7 +6,7 @@ from unittest import mock
 
 import pytest
 
-from snuba.clickhouse.connect import ClickhouseConnectPool
+from snuba.clickhouse.connect import ClickhouseConnectPool, _insert_statement
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.clusters.cluster import ClickhouseClientSettings
@@ -130,6 +130,14 @@ def test_insert_multiple_rows_build_a_matrix() -> None:
         [1, datetime(2023, 1, 2, 3, 4, 5), 10],
         [2, datetime(2023, 1, 3, 0, 0, 0), 30],
     ]
+
+
+def test_insert_statement_mirrors_what_the_driver_sends() -> None:
+    # client.insert takes a row matrix, but sends this statement on the wire.
+    assert (
+        _insert_statement("migrations_local", ["group", "migration_id"])
+        == "INSERT INTO migrations_local (`group`, `migration_id`) FORMAT Native"
+    )
 
 
 def test_insert_empty_rows_short_circuits() -> None:

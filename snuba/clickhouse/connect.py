@@ -11,6 +11,7 @@ from typing import Any
 import clickhouse_connect
 import sentry_sdk
 from clickhouse_connect import common as clickhouse_connect_common
+from clickhouse_connect.driver.binding import quote_identifier
 from clickhouse_connect.driver.client import Client
 from clickhouse_connect.driver.exceptions import ClickHouseError, OperationalError
 from clickhouse_connect.driver.httputil import get_pool_manager
@@ -46,6 +47,21 @@ def _driver_params(params: Params) -> Sequence[Any] | dict[str, Any] | None:
     if isinstance(params, Mapping):
         return dict(params)
     return params
+
+
+def _insert_statement(table: str, column_names: Sequence[str]) -> str:
+    """Rebuild the INSERT statement clickhouse-connect sends for ``client.insert``.
+
+    ``client.insert`` takes a row matrix rather than SQL, but it still builds and
+    sends ``INSERT INTO <table> (<cols>) FORMAT Native`` on the wire. Mirror it so
+    ``db.query.text`` is populated on this path too, matching the native pool,
+    where ``insert`` routes through ``execute`` with an explicit statement.
+
+    The row data is deliberately excluded: it is unbounded in size and may hold
+    PII.
+    """
+    columns = ", ".join(quote_identifier(name) for name in column_names)
+    return f"INSERT INTO {table} ({columns}) FORMAT Native"
 
 
 # Stand-in for "no read timeout" on the HTTP path. The native driver maps a
@@ -477,13 +493,14 @@ class ClickhouseConnectPool(ClickhousePool):
 
         with self._translate_clickhouse_errors():
             client = self._get_client()
-            # No DB_QUERY_TEXT here: insert goes through client.insert with a
-            # row matrix, not a SQL string.
             with traces.start_span(
                 name=f"INSERT INTO {table}",
                 attributes={
                     SENTRY_OP: "db.clickhouse",
                     sentry_sdk.consts.SPANDATA.DB_SYSTEM: "clickhouse",
+                    sentry_sdk.consts.SPANDATA.DB_QUERY_TEXT: _insert_statement(
+                        table, column_names
+                    ),
                 },
             ) as span:
                 # Always set so a missing id is obvious when inspecting the span.
