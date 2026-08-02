@@ -1,6 +1,7 @@
 import AutoReplacementsBypassProjects from "SnubaAdmin/auto_replacements_bypass_projects";
 import ClickhouseMigrations from "SnubaAdmin/clickhouse_migrations";
 import ClickhouseQueries from "SnubaAdmin/clickhouse_queries";
+import Clusters from "SnubaAdmin/clusters";
 import CopyTables from "SnubaAdmin/copy_tables";
 import TracingQueries from "SnubaAdmin/tracing";
 import SQLShellPage, { SystemShellPage } from "SnubaAdmin/sql_shell";
@@ -29,6 +30,11 @@ const NAV_ITEMS = [
     id: "snuba-explain",
     display: "🩺 Snubsplain",
     component: SnubaExplain,
+  },
+  {
+    id: "clusters",
+    display: "🗄️ ClickHouse Clusters",
+    component: Clusters,
   },
   {
     id: "system-queries",

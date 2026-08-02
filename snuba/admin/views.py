@@ -22,6 +22,7 @@ from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
 from snuba.admin.cardinality_analyzer.cardinality_analyzer import run_metrics_query
+from snuba.admin.clickhouse.clusters import get_cluster_info
 from snuba.admin.clickhouse.common import InvalidCustomQuery, InvalidNodeError
 from snuba.admin.clickhouse.copy_tables import copy_tables
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
@@ -772,6 +773,12 @@ def clickhouse_querylog_schema() -> Response:
 @check_tool_perms(tools=[AdminTools.SYSTEM_QUERIES, AdminTools.QUERY_TRACING])
 def clickhouse_nodes() -> Response:
     return Response(json.dumps(get_storage_info()), 200, {"Content-Type": "application/json"})
+
+
+@application.route("/clickhouse_clusters")
+@check_tool_perms(tools=[AdminTools.CLUSTERS])
+def clickhouse_clusters() -> Response:
+    return Response(json.dumps(get_cluster_info()), 200, {"Content-Type": "application/json"})
 
 
 @application.route("/snuba_datasets")
