@@ -321,6 +321,42 @@ def get_ro_clusterless_node_connection(
     return connection
 
 
+def _sql_quotes_are_balanced(sql_query: str) -> bool:
+    """Return True when single/double quotes are balanced, honoring escapes.
+
+    Understands backslash escapes (``\'``) and SQL-style doubled quotes (``''``),
+    so values like ``O'Brien`` escaped as ``O\'Brien`` do not look unbalanced.
+    """
+    i = 0
+    n = len(sql_query)
+    while i < n:
+        ch = sql_query[i]
+        if ch == "\\":
+            # Outside a string, skip an escaped character if present.
+            i += 2 if i + 1 < n else 1
+            continue
+        if ch not in ("'", '"'):
+            i += 1
+            continue
+        quote = ch
+        i += 1
+        while i < n:
+            cur = sql_query[i]
+            if cur == "\\" and i + 1 < n:
+                i += 2
+                continue
+            if cur == quote:
+                if i + 1 < n and sql_query[i + 1] == quote:
+                    i += 2
+                    continue
+                i += 1
+                break
+            i += 1
+        else:
+            return False
+    return True
+
+
 def _strip_sql_string_literals(sql_query: str) -> str:
     """Replace quoted string contents with empty quotes for safety checks.
 
@@ -370,10 +406,7 @@ def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) ->
 
     Raises InvalidCustomQuery if query is invalid or not allowed.
     """
-    # Check for balanced quotes to prevent injection
-    single_quote_count = sql_query.count("'")
-    double_quote_count = sql_query.count('"')
-    if single_quote_count % 2 != 0 or double_quote_count % 2 != 0:
+    if not _sql_quotes_are_balanced(sql_query):
         raise InvalidCustomQuery("Unbalanced quotes detected in query")
 
     # Ignore tokens that only appear inside string literals when scanning for

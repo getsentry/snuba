@@ -72,6 +72,14 @@ def test_disallowed_tokens_inside_string_literals_allowed() -> None:
     validate_ro_query("SELECT * FROM my_table WHERE msg = 'please delete me'")
 
 
+def test_escaped_quotes_inside_literals_allowed() -> None:
+    # Backslash-escaped and SQL-doubled quotes should not look unbalanced.
+    validate_ro_query(r"SELECT * FROM my_table WHERE referrer = 'O\'Brien'")
+    validate_ro_query("SELECT * FROM my_table WHERE referrer = 'O''Brien'")
+    with pytest.raises(InvalidCustomQuery):
+        validate_ro_query("SELECT * FROM my_table WHERE referrer = 'unterminated")
+
+
 def test_comment_tokens_outside_literals_rejected() -> None:
     with pytest.raises(InvalidCustomQuery):
         validate_ro_query("SELECT * FROM my_table -- drop everything")
