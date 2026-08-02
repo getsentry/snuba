@@ -6,7 +6,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from datetime import datetime
 from threading import Lock
-from typing import Any
+from typing import Any, cast
 
 import clickhouse_connect
 import sentry_sdk
@@ -177,7 +177,7 @@ class ClickhouseConnectPool(ClickhousePool):
         settings: Mapping[str, Any] | None,
         query_id: str | None,
         capture_trace: bool,
-    ) -> Mapping[str, Any] | None:
+    ) -> dict[str, Any] | None:
         query_settings = dict(settings) if settings else {}
         if query_id is not None:
             query_settings["query_id"] = query_id
@@ -210,9 +210,10 @@ class ClickhouseConnectPool(ClickhousePool):
             span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
             span.set_data("query_id", query_id)
             span.set_data("settings", query_settings)
+            # clickhouse-connect types parameters as Sequence|dict (not Mapping).
             query_result = client.query(
                 query,
-                parameters=params if params else None,
+                parameters=cast(Sequence[Any] | dict[str, Any] | None, params or None),
                 settings=query_settings,
                 column_oriented=columnar,
             )
@@ -296,7 +297,7 @@ class ClickhouseConnectPool(ClickhousePool):
                 span.set_data("query_id", query_id)
                 raw = client.raw_query(
                     query,
-                    parameters=params if params else None,
+                    parameters=cast(Sequence[Any] | dict[str, Any] | None, params or None),
                     settings=json_settings,
                     fmt="JSONCompact",
                 )
