@@ -3,10 +3,12 @@ from __future__ import annotations
 import time
 import uuid
 from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import patch
 
 import pytest
+import time_machine
 from sentry_options.testing import override_options
 
 from snuba import state
@@ -104,19 +106,21 @@ class TestRateLimit:
     def test_per_second_limit(self, rate_limit_shards: Any) -> None:
         bucket = uuid.uuid4()
         rate_limit_params = RateLimitParameters("foo", str(bucket), 1, None)
+        base = datetime(2020, 1, 1, tzinfo=UTC)
+
         # Create 30 queries at time 0, should all be allowed
-        with patch("snuba.state.rate_limit.time.time", lambda: 0):
+        with time_machine.travel(base, tick=False):
             for _ in range(30):
                 with rate_limit(rate_limit_params) as stats:
                     assert stats is not None
 
         # Create another 30 queries at time 30, should also be allowed
-        with patch("snuba.state.rate_limit.time.time", lambda: 30):
+        with time_machine.travel(base + timedelta(seconds=30), tick=False):
             for _ in range(30):
                 with rate_limit(rate_limit_params) as stats:
                     assert stats is not None
 
-        with patch("snuba.state.rate_limit.time.time", lambda: 60):
+        with time_machine.travel(base + timedelta(seconds=60), tick=False):
             # 1 more query should be allowed at T60 because it does not make the previous
             # rate exceed 1/sec until it has finished.
             with rate_limit(rate_limit_params) as stats:
@@ -129,7 +133,7 @@ class TestRateLimit:
         # Another query at time 61 should be allowed because the first 30 queries
         # have fallen out of the lookback window
         with (
-            patch("snuba.state.rate_limit.time.time", lambda: 61),
+            time_machine.travel(base + timedelta(seconds=61), tick=False),
             rate_limit(rate_limit_params) as stats,
         ):
             assert stats is not None
