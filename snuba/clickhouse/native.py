@@ -43,7 +43,7 @@ trace_logger.setLevel("INFO")
 # flood stdout/GCP logging on every traced query.
 trace_logger.propagate = False
 
-Params = Sequence[Any] | Mapping[str, Any] | None
+Params = Sequence[Any] | dict[str, Any] | None
 
 metrics = MetricsWrapper(environment.metrics, "clickhouse.native")
 
