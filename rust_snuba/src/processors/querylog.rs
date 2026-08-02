@@ -35,7 +35,7 @@ pub fn process_message(
     InsertBatch::from_rows([querylog_msg], None)
 }
 
-fn serialize_raw_as_str<S>(input: &Box<RawValue>, s: S) -> Result<S::Ok, S::Error>
+fn serialize_raw_as_str<S>(input: &RawValue, s: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
@@ -50,6 +50,7 @@ struct Request {
         rename(serialize = "request_body"),
         serialize_with = "serialize_raw_as_str"
     )]
+    #[schemars(with = "Value")]
     body: Box<RawValue>,
     referrer: String,
 }
