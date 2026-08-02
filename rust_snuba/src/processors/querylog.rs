@@ -5,7 +5,8 @@ use crate::config::ProcessorConfig;
 use anyhow::Context;
 use schemars::JsonSchema;
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
-use serde::{ser::Error, Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
+use serde_json::value::RawValue;
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -34,18 +35,11 @@ pub fn process_message(
     InsertBatch::from_rows([querylog_msg], None)
 }
 
-#[derive(Debug, Deserialize, Serialize, JsonSchema)]
-struct RequestBody {
-    #[serde(flatten)]
-    fields: BTreeMap<String, Value>,
-}
-
-fn serialize_json_str<S>(input: &RequestBody, s: S) -> Result<S::Ok, S::Error>
+fn serialize_raw_as_str<S>(input: &Box<RawValue>, s: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
-    let request_body = serde_json::to_string(input).map_err(S::Error::custom)?;
-    s.serialize_str(&request_body)
+    s.serialize_str(input.get())
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
@@ -54,9 +48,9 @@ struct Request {
     id: Uuid,
     #[serde(
         rename(serialize = "request_body"),
-        serialize_with = "serialize_json_str"
+        serialize_with = "serialize_raw_as_str"
     )]
-    body: RequestBody,
+    body: Box<RawValue>,
     referrer: String,
 }
 
