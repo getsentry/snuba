@@ -37,7 +37,7 @@ from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.sentry import SENTRY_OP
+from snuba.utils.sentry import SENTRY_OP, set_tag_and_attribute
 from snuba.web import (
     QueryException,
     QueryExtraData,
@@ -204,7 +204,7 @@ def _format_storage_query_and_run(
         )  # To avoid the query being truncated
         span.set_attribute("table", table_names)
         span.set_attribute("query_size_bytes", query_size_bytes)
-        sentry_sdk.set_attribute("query_size_group", get_query_size_group(query_size_bytes))
+        set_tag_and_attribute("query_size_group", get_query_size_group(query_size_bytes))
         metrics.increment(
             "execute",
             tags={

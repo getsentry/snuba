@@ -12,7 +12,6 @@ from threading import Lock
 from typing import Any, cast
 
 import rapidjson
-import sentry_sdk
 from clickhouse_driver.errors import ErrorCodes
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
 from sentry_options import OptionValue
@@ -68,7 +67,7 @@ from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.util import set_current_span_attributes, with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.sentry import SENTRY_OP
+from snuba.utils.sentry import SENTRY_OP, set_tag_and_attribute
 from snuba.utils.serializable_exception import (
     SerializableException,
     SerializableExceptionDict,
@@ -352,7 +351,7 @@ def execute_query_with_readthrough_caching(
             span_tag = "cache_wait"
         elif hit_type == SIMPLE_READTHROUGH:
             stats["cache_hit_simple"] = 1
-        sentry_sdk.set_attribute("cache_status", span_tag)
+        set_tag_and_attribute("cache_status", span_tag)
 
     cache_partition = _get_cache_partition(reader)
     metrics.increment(
@@ -541,7 +540,7 @@ def _raw_query(
 
         # The old `if scope.span:` guard is gone: in stream mode `scope.span` is
         # always None, which would have silently dropped this attribute.
-        sentry_sdk.set_attribute("slo_status", request_status.status.value)
+        set_tag_and_attribute("slo_status", request_status.status.value)
 
         stats = update_with_status(
             status=status or QueryStatus.ERROR,

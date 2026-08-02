@@ -249,17 +249,18 @@ def _trace_transaction(dataset_name: str) -> None:
     # the service span the WSGI integration opened before we got here. Dual-write
     # tags + attributes while telemetry is mid-transition: tags land on error
     # events, attributes on streamed spans.
+    # Normalize a missing Referer header once, so the transaction name and the
+    # referrer tag/attribute agree instead of the name carrying a literal "None".
+    referrer = http_request.referrer or ""
     set_tag_and_attribute("dataset", dataset_name)
-    set_tag_and_attribute("referrer", http_request.referrer or "")
+    set_tag_and_attribute("referrer", referrer)
 
     # `scope.transaction` is None in stream mode, so we can't read the current
     # name back off it. Rebuild it from the same source the Flask integration
     # uses (the endpoint, its default transaction_style) and rename the segment
     # through the scope, which does work in stream mode.
     endpoint = http_request.url_rule.endpoint if http_request.url_rule else "unknown"
-    sentry_sdk.get_current_scope().set_transaction_name(
-        f"{endpoint}__{dataset_name}__{http_request.referrer}"
-    )
+    sentry_sdk.get_current_scope().set_transaction_name(f"{endpoint}__{dataset_name}__{referrer}")
 
 
 def _set_snql_api_error_tags(body: dict[str, Any], http_referrer: str | None) -> None:
