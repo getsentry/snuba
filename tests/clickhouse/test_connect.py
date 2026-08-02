@@ -133,7 +133,6 @@ def test_insert_multiple_rows_build_a_matrix() -> None:
 
 
 def test_insert_statement_mirrors_what_the_driver_sends() -> None:
-    # client.insert takes a row matrix, but sends this statement on the wire.
     assert (
         _insert_statement("migrations_local", ["group", "migration_id"])
         == "INSERT INTO migrations_local (`group`, `migration_id`) FORMAT Native"

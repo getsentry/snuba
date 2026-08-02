@@ -145,8 +145,7 @@ class ProjectsQueryFlags:
                 name="process_redis_results", attributes={SENTRY_OP: "function"}
             ) as span:
                 flags = cls._process_redis_results(results, len(s_project_ids))
-                # Span attributes only accept scalars and homogeneous lists, so
-                # the sets/datetime here have to be converted explicitly.
+                # Attributes need scalars/homogeneous lists; convert explicitly.
                 span.set_attribute("projects", sorted(s_project_ids))
                 span.set_attribute("exclude_groups", sorted(flags.group_ids_to_exclude))
                 span.set_attribute("len(exclude_groups)", len(flags.group_ids_to_exclude))

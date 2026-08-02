@@ -538,8 +538,7 @@ def _raw_query(
         elif isinstance(cause, (TimeoutError, ExecutionTimeoutError)):
             status = QueryStatus.TIMEOUT
 
-        # The old `if scope.span:` guard is gone: in stream mode `scope.span` is
-        # always None, which would have silently dropped this attribute.
+        # No `if scope.span:` guard: scope.span is always None in stream mode.
         set_tag_and_attribute("slo_status", request_status.status.value)
 
         stats = update_with_status(
@@ -876,8 +875,7 @@ def _apply_allocation_policies_quota(
             allowance = allocation_policy.get_quota_allowance(attribution_info.tenant_ids, query_id)
             can_run &= allowance.can_run
             quota_allowances[allocation_policy.class_name()] = allowance
-            # QuotaAllowance is not a valid attribute value; serialize it rather
-            # than letting the SDK safe_repr() it.
+            # QuotaAllowance isn't a valid attribute value; serialize it.
             span.set_attribute(
                 "quota_allowance",
                 json.dumps(

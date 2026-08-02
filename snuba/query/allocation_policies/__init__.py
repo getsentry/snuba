@@ -534,9 +534,7 @@ class AllocationPolicy(ConfigurableComponent, ABC):
             # make sure we always know which storage key we rejected a query from
             allowance.explanation["storage_key"] = self._resource_identifier.value
             for k, v in allowance.to_dict().items():
-                # Span attributes only accept scalars; stringify the nested
-                # values (e.g. `explanation`) rather than letting the SDK
-                # safe_repr() them into something unreadable.
+                # Attributes only accept scalars; stringify nested values.
                 span.set_attribute(
                     f"quota_allowance.{k}",
                     v if isinstance(v, (str, int, float, bool)) else json.dumps(v, default=repr),

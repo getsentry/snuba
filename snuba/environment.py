@@ -181,15 +181,8 @@ def setup_sentry() -> None:
         release=os.getenv("SNUBA_RELEASE"),
         traces_sample_rate=settings.SENTRY_TRACE_SAMPLE_RATE,
         profiles_sample_rate=settings.SNUBA_PROFILES_SAMPLE_RATE,
-        # Send spans to Sentry in batches as they finish, instead of buffering a
-        # whole trace in memory and shipping it as a single transaction event.
-        # This removes the 1000-span-per-transaction cap, keeps memory flat in
-        # long-running consumers, and preserves the spans that already finished
-        # when a process is killed mid-trace (e.g. an OOM-kill).
-        #
-        # NOTE: this disables the legacy tracing API. `sentry_sdk.start_span()`,
-        # `start_transaction()`, `update_current_span()` and `scope.span` all
-        # silently become no-ops, so instrumentation must use `sentry_sdk.traces`.
+        # Stream spans as they finish. Disables the legacy tracing API
+        # (start_span/start_transaction/update_current_span/scope.span).
         trace_lifecycle="stream",
     )
 

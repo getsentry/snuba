@@ -35,12 +35,10 @@ metrics = MetricsWrapper(environment.metrics, "clickhouse.connect")
 
 
 def _driver_params(params: Params) -> Sequence[Any] | dict[str, Any] | None:
-    """Narrow ``Params`` to what clickhouse-connect accepts.
+    """Narrow ``Params`` to clickhouse-connect's accepted forms.
 
-    ``Params`` allows any ``Mapping``, but the driver's signature takes an
-    invariant ``dict``. Falsy params (including an empty sequence) mean "no
-    parameters" here, matching the previous ``params if params else None``.
-    Sequence params are passed through; mappings are copied to a plain ``dict``.
+    Falsy => None. Mappings are copied to a plain ``dict`` (driver wants an
+    invariant dict); sequences pass through as positional binds.
     """
     if not params:
         return None
@@ -50,15 +48,11 @@ def _driver_params(params: Params) -> Sequence[Any] | dict[str, Any] | None:
 
 
 def _insert_statement(table: str, column_names: Sequence[str]) -> str:
-    """Rebuild the INSERT statement clickhouse-connect sends for ``client.insert``.
+    """Rebuild the INSERT statement clickhouse-connect sends on the wire.
 
-    ``client.insert`` takes a row matrix rather than SQL, but it still builds and
-    sends ``INSERT INTO <table> (<cols>) FORMAT Native`` on the wire. Mirror it so
-    ``db.query.text`` is populated on this path too, matching the native pool,
-    where ``insert`` routes through ``execute`` with an explicit statement.
-
-    The row data is deliberately excluded: it is unbounded in size and may hold
-    PII.
+    ``client.insert`` takes a row matrix, not SQL, but still emits
+    ``INSERT INTO <table> (<cols>) FORMAT Native``. Row data is excluded
+    (unbounded, may hold PII).
     """
     columns = ", ".join(quote_identifier(name) for name in column_names)
     return f"INSERT INTO {table} ({columns}) FORMAT Native"
@@ -503,7 +497,6 @@ class ClickhouseConnectPool(ClickhousePool):
                     ),
                 },
             ) as span:
-                # Always set so a missing id is obvious when inspecting the span.
                 span.set_attribute(
                     "query_id",
                     query_id if query_id is not None else "unknown-query-id",

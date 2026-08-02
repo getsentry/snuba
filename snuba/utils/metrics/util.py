@@ -74,7 +74,6 @@ def with_span(op: str = "function") -> Callable[[F], F]:
 
     def decorator(func: F) -> F:
         frame_info = inspect.stack()[1]
-        # Built once at decoration time rather than on every call.
         attributes: dict[str, Any] = {SENTRY_OP: op, "filename": frame_info.filename}
 
         @wraps(func)
@@ -88,12 +87,9 @@ def with_span(op: str = "function") -> Callable[[F], F]:
 
 
 def set_current_span_attributes(attributes: Mapping[str, Any]) -> None:
-    """Set attributes on the currently active span, if there is one.
+    """Set attributes on the active stream-mode span, if any.
 
-    The stream-mode replacement for ``sentry_sdk.update_current_span()``, which
-    is a no-op once ``trace_lifecycle="stream"`` is enabled. There is no active
-    span when the surrounding code runs outside a traced request (e.g. on a
-    consumer path), or when the trace was not sampled.
+    Replaces ``sentry_sdk.update_current_span()``, a no-op under stream mode.
     """
     span = traces.get_current_span()
     if span is None:

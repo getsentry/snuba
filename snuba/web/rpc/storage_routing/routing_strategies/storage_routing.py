@@ -214,9 +214,7 @@ def get_stats_dict(
 def _construct_hacky_querylog_payload(
     strategy: BaseRoutingStrategy, routing_decision: RoutingDecision
 ) -> snuba_queries_v1.Querylog:
-    # Read the trace id off the propagation context rather than the active span:
-    # it is populated whether or not a span is active and whether or not the
-    # trace was sampled, so the querylog always gets a real id.
+    # Propagation context has a trace id even with no active/sampled span.
     propagation_context = sentry_sdk.get_current_scope().get_active_propagation_context()
     trace_id = propagation_context.trace_id if propagation_context is not None else ""
     assert routing_decision.routing_context is not None
@@ -475,8 +473,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                     routing_context.tenant_ids,
                     routing_context.query_id,
                 )
-                # QuotaAllowance is not a valid attribute value; serialize it
-                # rather than letting the SDK safe_repr() it.
+                # QuotaAllowance isn't a valid attribute value; serialize it.
                 span.set_attribute(
                     f"{allocation_policy_name}_quota_allowance",
                     json.dumps(recommendations[allocation_policy_name].to_dict(), default=repr),

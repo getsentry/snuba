@@ -86,11 +86,8 @@ def _flush_logs() -> None:
 
 
 def _set_rpc_error_tags(in_msg: ProtobufMessage) -> None:
-    # Dual-write tags + attributes while telemetry is mid-transition: tags land
-    # on error events, attributes on streamed spans.
     set_tag_and_attribute("source", "rpc_api")
 
-    # Extract and annotate fields from meta if available
     if hasattr(in_msg, "meta"):
         meta = in_msg.meta
 
@@ -206,8 +203,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     @final
     def execute(self, in_msg: Tin) -> Tout:
         scope = sentry_sdk.get_current_scope()
-        # In stream mode this renames the service span (the segment) directly,
-        # which is what the old `span.description = ...` line did separately.
+        # Renames the service span (segment) directly in stream mode.
         scope.set_transaction_name(self.config_key())
         self.routing_context = RoutingContext(
             timer=self._timer,

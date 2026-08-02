@@ -245,55 +245,36 @@ def parse_request_body(http_request: Request) -> dict[str, Any]:
 
 
 def _trace_transaction(dataset_name: str) -> None:
-    # Set on the scope so every span in this request inherits them, including
-    # the service span the WSGI integration opened before we got here. Dual-write
-    # tags + attributes while telemetry is mid-transition: tags land on error
-    # events, attributes on streamed spans.
-    # Normalize a missing Referer header once, so the transaction name and the
-    # referrer tag/attribute agree instead of the name carrying a literal "None".
+    # Scope-level so every span in the request inherits them. Normalize missing
+    # Referer once so the transaction name and referrer tag/attribute agree.
     referrer = http_request.referrer or ""
     set_tag_and_attribute("dataset", dataset_name)
     set_tag_and_attribute("referrer", referrer)
 
-    # `scope.transaction` is None in stream mode, so we can't read the current
-    # name back off it. Rebuild it from the same source the Flask integration
-    # uses (the endpoint, its default transaction_style) and rename the segment
-    # through the scope, which does work in stream mode.
+    # scope.transaction is None in stream mode; rebuild the name from the
+    # endpoint (Flask's default transaction_style) and rename via the scope.
     endpoint = http_request.url_rule.endpoint if http_request.url_rule else "unknown"
     sentry_sdk.get_current_scope().set_transaction_name(f"{endpoint}__{dataset_name}__{referrer}")
 
 
 def _set_snql_api_error_tags(body: dict[str, Any], http_referrer: str | None) -> None:
-    """Set Sentry scope tags and attributes for SnQL API error tracking.
+    """Annotate SnQL API errors with source, referrer, and tenant_ids.
 
-    Annotates all errors in the SnQL API with:
-    - source: snql_api
-    - referrer: from HTTP header or request body
-    - tenant_ids: as context and individual tags/attributes
-
-    Dual-writes tags and attributes while telemetry is mid-transition: tags
-    land on error events, attributes on streamed spans.
-
-    This function is wrapped in a try-except to ensure that any failure
-    in setting tags/attributes does not crash the API request.
+    Failures here must not crash the request.
     """
     try:
         set_tag_and_attribute("source", "snql_api")
 
-        # Extract and annotate referrer
         referrer = http_referrer or body.get("tenant_ids", {}).get("referrer", "<unknown>")
         set_tag_and_attribute("referrer", referrer)
 
-        # Extract and set tenant_ids as context for better error tracking
         tenant_ids = body.get("tenant_ids", {})
         if tenant_ids:
             sentry_sdk.set_context("tenant_ids", tenant_ids)
-            # Also set individual tenant_id tags/attributes for easier filtering
             for key, value in tenant_ids.items():
-                if key != "referrer":  # Skip referrer as it's already set above
+                if key != "referrer":
                     set_tag_and_attribute(f"tenant_id.{key}", str(value))
     except Exception as e:
-        # Log the error but don't let it crash the API request
         logger.warning("Failed to set Sentry tags/attributes for SnQL API", exc_info=e)
 
 

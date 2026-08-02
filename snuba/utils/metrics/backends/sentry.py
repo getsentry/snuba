@@ -9,16 +9,10 @@ from snuba.utils.metrics.types import Tags
 
 
 def _attributes(tags: Tags | None) -> dict[str, Any] | None:
-    """Pass ``Tags`` to the SDK's ``attributes`` parameter.
+    """Cast ``Tags`` for the SDK's invariant ``dict`` annotation.
 
-    The metrics functions annotate ``attributes`` as an invariant ``dict`` while
-    ``Tags`` is a ``Mapping``, so mypy rejects the call. The annotation is
-    narrower than the behaviour: ``_capture_metric`` only iterates ``.items()``
-    into a fresh dict, so any ``Mapping`` works and the caller's object is
-    neither retained nor mutated.
-
-    Cast rather than copy. ``dict(tags)`` would be a second copy of something the
-    SDK already copies, on a hot path.
+    The SDK only iterates ``.items()`` into a fresh dict, so a ``Mapping`` is
+    fine at runtime and copying here would be pure waste.
     """
     return cast("dict[str, Any] | None", tags)
 
@@ -56,8 +50,7 @@ class SentryMetricsBackend(MetricsBackend):
         tags: Tags | None = None,
         unit: str | None = None,
     ) -> None:
-        # The SDK dropped the dedicated `timing` API; a timing is a distribution
-        # measured in milliseconds.
+        # SDK dropped timing; emit as a millisecond distribution.
         metrics.distribution(name, value, unit or "millisecond", _attributes(tags))
 
     def distribution(

@@ -47,10 +47,8 @@ class SnubaCLI(click.MultiCommand):
         # by default. To mimic this behavior we have to do that here
         # since all of our infrastructure depends on this being the
         # case
-        # `parent_span=None` forces a service span (the stream-mode equivalent of
-        # a transaction). Note there is no stream-mode equivalent of the old
-        # `sampled=True`, so this now obeys SENTRY_TRACE_SAMPLE_RATE like every
-        # other span; the `snuba_init_time` metric below is unaffected.
+        # parent_span=None => service span. No stream-mode sampled=True; obeys
+        # SENTRY_TRACE_SAMPLE_RATE. snuba_init_time metric below is unaffected.
         with traces.start_span(
             name=f"[cli init] {name}",
             attributes={SENTRY_OP: "snuba_init"},

@@ -237,7 +237,6 @@ def _build_request(
 ) -> Request:
     org_ids = get_object_ids_in_query_ast(query, "org_id")
     if org_ids is not None and len(org_ids) == 1:
-        # Dual-write tags + attributes while telemetry is mid-transition.
         set_tag_and_attribute("snuba_org_id", org_ids.pop())
 
     query_project_id = _get_project_id(query)
