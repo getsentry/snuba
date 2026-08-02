@@ -44,9 +44,11 @@ _MAX_PROFILE_QUERY_IDS = 50_000
 # EAP Stats intentionally uses all ClickHouse cores.
 _EAP_STATS_MAX_THREADS = 0
 
-# Querylog rows we treat as EAP. `storage_routing` is the hacky payload written
-# by routing strategies; `eap` is the normal run_query path.
-_EAP_DATASETS = ("eap", "storage_routing")
+# Prefer the normal run_query path (`dataset = eap`). Storage-routed requests
+# also write a duplicate `storage_routing` row for the same request; counting
+# both roughly doubles bytes/duration/query totals. Estimation queries against
+# the outcomes table also land as `eap` and are filtered out below.
+_EAP_DATASETS = ("eap",)
 
 # Storage used to look up system.query_log ProfileEvents for EAP queries.
 _EAP_PROFILE_STORAGE = "eap_items"
@@ -159,7 +161,12 @@ class ResourceTotals:
 
     @property
     def cpu_total_us(self) -> int:
-        return self.cpu_user_us + self.cpu_system_us + self.cpu_virtual_us
+        # Prefer OSCPUVirtualTimeMicroseconds when present: it already accounts
+        # for threaded user/system work. Falling back to user+system avoids
+        # double-counting when both families are populated.
+        if self.cpu_virtual_us:
+            return self.cpu_virtual_us
+        return self.cpu_user_us + self.cpu_system_us
 
     @property
     def io_total_bytes(self) -> int:
@@ -250,7 +257,17 @@ def _schema_table_name() -> str:
 
 
 def _escape_literal(value: str) -> str:
+    """Escape a string for safe inclusion in a single-quoted SQL literal."""
     return value.replace("\\", "\\\\").replace("'", "\\'")
+
+
+def _escape_like_literal(value: str) -> str:
+    """Escape a string for use inside a SQL LIKE pattern.
+
+    Handles quote/backslash escaping plus LIKE wildcards so user input is
+    matched literally (e.g. ``eap_items`` does not match ``eapXitems``).
+    """
+    return _escape_literal(value).replace("%", "\\%").replace("_", "\\_")
 
 
 def _build_fetch_sql(req: EapQueryAnalysisRequest) -> str:
@@ -263,9 +280,17 @@ def _build_fetch_sql(req: EapQueryAnalysisRequest) -> str:
     if req.referrer:
         where.append(f"referrer = '{_escape_literal(req.referrer)}'")
     if req.referrer_contains:
-        where.append(f"referrer LIKE '%{_escape_literal(req.referrer_contains)}%'")
+        where.append(f"referrer LIKE '%{_escape_like_literal(req.referrer_contains)}%' ESCAPE '\\'")
     if req.organization_id is not None:
         where.append(f"organization = {int(req.organization_id)}")
+
+    # Drop routing estimation queries. They share dataset=eap and the customer
+    # referrer, but hit the outcomes tables purely to pick a sampling tier.
+    where.append(
+        "NOT arrayExists("
+        "t -> positionCaseInsensitive(t, 'outcomes') > 0, "
+        "clickhouse_queries.clickhouse_table)"
+    )
 
     where_sql = " AND ".join(where)
     return f"""

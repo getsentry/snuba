@@ -193,7 +193,8 @@ function TotalsPanel({
   result: EapStatsResult;
 }) {
   const r = result.total_resources;
-  const cpu = r.cpu_user_us + r.cpu_system_us + r.cpu_virtual_us;
+  // Prefer virtual CPU time when present; it already covers threaded work.
+  const cpu = r.cpu_virtual_us || r.cpu_user_us + r.cpu_system_us;
   const io = r.io_selected_bytes + r.io_read_compressed_bytes;
   const net = r.network_receive_bytes + r.network_send_bytes;
   const coverage = result.profile_coverage;
@@ -587,7 +588,7 @@ function EapStats(props: { api: Client }) {
         </SimpleGrid>
         <Space h="md" />
         <Group>
-          <ExecuteButton onClick={execute} />
+          <ExecuteButton onClick={execute} disabled={false} />
         </Group>
       </Paper>
 

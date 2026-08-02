@@ -323,7 +323,16 @@ def test_metrics_output() -> None:
                 "sampling_in_storage_query_timing": {
                     "type": "timing",
                     "value": 1.0,
-                    "tags": {"tier": "TIER_8"},
+                    "tags": {
+                        "tier": "TIER_8",
+                        "query_type": "timeseries",
+                        "trace_item_type": "span",
+                        "has_groupby": "false",
+                        "groupby_count": "0",
+                        "has_formula": "false",
+                        "has_cross_item": "false",
+                        "filter_profile": "none",
+                    },
                 },
                 "sampling_in_storage_routing_success": {
                     "type": "increment",
@@ -388,6 +397,27 @@ def test_metrics_output() -> None:
             "is_duplicate": 0,
             "consistent": False,
             "strategy": "MetricsStrategy",
+            "query_info": {
+                "query_type": "timeseries",
+                "has_groupby": "false",
+                "groupby_count": "0",
+                "has_formula": "false",
+                "has_aggregate": "true",
+                "has_cross_item": "false",
+                "has_agg_filter": "false",
+                "has_limit_by": "false",
+                "has_order_by": "false",
+                "select_count": "1",
+                "granularity": "lte_1m",
+                "filter_leaf_count": "0",
+                "filter_depth": "0",
+                "filter_profile": "none",
+                "has_or_filter": "false",
+                "has_not_filter": "false",
+                "has_like_filter": "false",
+                "has_search_filter": "false",
+                "trace_item_type": "span",
+            },
         }
         schema = get_codec("snuba-queries")
         payload_bytes = json.dumps(recorded_payload).encode("utf-8")

@@ -24,6 +24,9 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 from snuba.admin.eap_query_analysis.analysis import (
     EapQueryAnalysisRequest,
     ResourceTotals,
+    _build_fetch_sql,
+    _escape_like_literal,
+    _escape_literal,
     _infer_request_class,
     _parse_request_body,
     analyze_eap_queries,
@@ -107,6 +110,17 @@ def test_resource_totals_add_profile_events() -> None:
     assert r.network_receive_bytes == 50
     assert r.profile_events_matched == 1
     assert r.cpu_total_us == 1000
+
+    # Virtual CPU time already covers threaded user/system work; prefer it.
+    r2 = ResourceTotals()
+    r2.add_profile_events(
+        {
+            "UserTimeMicroseconds": 1000,
+            "SystemTimeMicroseconds": 500,
+            "OSCPUVirtualTimeMicroseconds": 2000,
+        }
+    )
+    assert r2.cpu_total_us == 2000
 
 
 def test_analyze_eap_queries_categorizes_and_aggregates() -> None:
@@ -311,7 +325,7 @@ def test_prefers_embedded_query_info_from_stats() -> None:
             "req-1",
             "2024-01-01 00:00:00",
             "api.x",
-            "storage_routing",
+            "eap",
             1,
             10,
             "success",
@@ -341,3 +355,22 @@ def test_prefers_embedded_query_info_from_stats() -> None:
 
     assert result.rows_categorized == 1
     assert result.by_query_type[0].query_type == "table_cross_item"
+
+
+def test_escape_like_literal_escapes_wildcards() -> None:
+    assert _escape_literal("eap_items") == "eap_items"
+    assert _escape_like_literal("eap_items") == "eap\\_items"
+    assert _escape_like_literal("a%b_c'\\") == "a\\%b\\_c\\'\\\\"
+
+
+def test_build_fetch_sql_filters_estimation_and_duplicates() -> None:
+    with patch(
+        "snuba.admin.eap_query_analysis.analysis._schema_table_name",
+        return_value="querylog_local",
+    ):
+        sql = _build_fetch_sql(EapQueryAnalysisRequest(hours=1, referrer_contains="eap_items"))
+    assert "dataset IN ('eap')" in sql
+    assert "storage_routing" not in sql
+    assert "positionCaseInsensitive(t, 'outcomes')" in sql
+    assert "LIKE '%eap\\_items%'" in sql
+    assert "ESCAPE '\\'" in sql
