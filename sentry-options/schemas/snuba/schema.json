@@ -202,8 +202,8 @@
     },
     "default_standard_retention_days": {
       "type": "integer",
-      "default": 30,
-      "description": "Default standard retention window in days used by outcomes-based routing when RequestMeta.standard_retention_days is unset or non-positive."
+      "default": 90,
+      "description": "Default standard retention window in days used by outcomes-based routing when RequestMeta.standard_retention_days is unset or non-positive. Defaults to 90 to match typical Sentry stats periods until callers send the org's standard retention on the request."
     },
     "storage_routing_config_override": {
       "type": "string",

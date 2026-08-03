@@ -42,7 +42,11 @@ from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingDecision,
 )
 
-DEFAULT_STANDARD_RETENTION_DAYS = 30
+# Match Sentry's default stats period / max standard retention so callers that
+# do not yet send RequestMeta.standard_retention_days keep tier-1 fidelity for
+# typical 90d windows. Orgs with a shorter standard window should send that
+# value on the request (clamped by max_standard_retention_days).
+DEFAULT_STANDARD_RETENTION_DAYS = 90
 MAX_STANDARD_RETENTION_DAYS = 90
 
 

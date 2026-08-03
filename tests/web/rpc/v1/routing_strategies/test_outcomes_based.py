@@ -119,8 +119,7 @@ def test_outcomes_based_routing_queries_daily_table() -> None:
 
     routing_decision = strategy.get_routing_decision(context)
 
-    # the query window starts beyond the default standard retention window,
-    # so long term retention downsampling applies
+    # 100-day window starts beyond the default 90-day standard retention window
     assert routing_decision.tier == Tier.TIER_8
     assert routing_decision.clickhouse_settings == {"max_threads": 10}
     assert routing_decision.can_run
@@ -228,8 +227,11 @@ def test_item_type_full_retention_occurrence() -> None:
         (70, 60, {}, Tier.TIER_8),
         (50, 120, {}, Tier.TIER_1),
         (100, 120, {}, Tier.TIER_8),
-        (50, 0, {}, Tier.TIER_8),
-        (50, None, {}, Tier.TIER_8),
+        # non-positive / unset falls back to the 90-day default
+        (50, 0, {}, Tier.TIER_1),
+        (50, None, {}, Tier.TIER_1),
+        (100, 0, {}, Tier.TIER_8),
+        (100, None, {}, Tier.TIER_8),
         (40, 90, {"max_standard_retention_days": 45}, Tier.TIER_1),
         (50, 90, {"max_standard_retention_days": 45}, Tier.TIER_8),
         (40, None, {"default_standard_retention_days": 45}, Tier.TIER_1),
@@ -271,8 +273,23 @@ def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
     assert routing_decision.clickhouse_settings == {"max_threads": 10}
     assert routing_decision.can_run
 
-    # request that queries last 50 days of data
+    # request that queries last 50 days of data — still within the default 90d window
     start_time = end_time - timedelta(hours=1200)  # 50 days
+    request = TraceItemTableRequest(meta=_get_request_meta(start=start_time, end=end_time))
+    request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
+    context = RoutingContext(
+        in_msg=request,
+        timer=Timer("test"),
+        query_id=uuid.uuid4().hex,
+    )
+
+    routing_decision = strategy.get_routing_decision(context)
+    assert routing_decision.tier == Tier.TIER_1
+    assert routing_decision.clickhouse_settings == {"max_threads": 10}
+    assert routing_decision.can_run
+
+    # request that queries last 100 days of data — beyond the default 90d window
+    start_time = end_time - timedelta(hours=2400)  # 100 days
     request = TraceItemTableRequest(meta=_get_request_meta(start=start_time, end=end_time))
     request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
     context = RoutingContext(
@@ -286,11 +303,11 @@ def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
     assert routing_decision.clickhouse_settings == {"max_threads": 10}
     assert routing_decision.can_run
 
-    # request(s) that query window of 30 minutes, but with timestamps 40 days ago
+    # request(s) that query a short window with timestamps 100 days ago
     # one in MODE_NORMAL, one in MODE_HIGHEST_ACCURACY (which is ignored in favor of
     # the long term retention downsampling)
-    start = datetime.now(tz=UTC) - timedelta(days=40, minutes=30)
-    end = datetime.now(tz=UTC) - timedelta(days=40)
+    start = datetime.now(tz=UTC) - timedelta(days=100, minutes=30)
+    end = datetime.now(tz=UTC) - timedelta(days=100)
 
     # normal
     request = TraceItemTableRequest(meta=_get_request_meta(start=start, end=end))
