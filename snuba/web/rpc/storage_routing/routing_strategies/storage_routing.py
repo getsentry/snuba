@@ -586,11 +586,6 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                     value=bytes_scanned,
                     tags={"tier": routing_decision.tier.name},
                 )
-            # Honor RECORD_QUERIES before building the payload. Storage routing
-            # used to call state.record_query unconditionally, which on
-            # self-hosted (RECORD_QUERIES=False, no querylog consumer) left the
-            # librdkafka producer queue filling forever and pegged a snuba-api
-            # worker core (getsentry/snuba#8181).
             if settings.RECORD_QUERIES:
                 record_query(_construct_hacky_querylog_payload(self, routing_decision))
         except Exception as e:

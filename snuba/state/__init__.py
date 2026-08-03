@@ -246,10 +246,6 @@ def _record_query_delivery_callback(error: KafkaError | None, message: KafkaMess
 
 
 def record_query(query_metadata: snuba_queries_v1.Querylog) -> None:
-    # Central gate for all querylog producers (SNQL + RPC storage routing).
-    # Self-hosted leaves RECORD_QUERIES=False and does not run a querylog
-    # consumer; producing anyway piles messages into librdkafka and burns
-    # API worker CPU (see getsentry/snuba#8181).
     if not settings.RECORD_QUERIES:
         return
 
