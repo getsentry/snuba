@@ -475,7 +475,6 @@ def test_conditional_aggregation_array_filter_uses_typed_columns() -> None:
 
 
 def test_extrapolated_sum_of_integers_is_rounded() -> None:
-    """EAP-101: sample-weighted sum of TYPE_INT attributes must round to an integer."""
     agg = AttributeConditionalAggregation(
         aggregate=Function.FUNCTION_SUM,
         key=AttributeKey(type=AttributeKey.TYPE_INT, name="custom_measurement"),
@@ -492,7 +491,6 @@ def test_extrapolated_sum_of_integers_is_rounded() -> None:
 
 
 def test_extrapolated_sum_of_doubles_is_not_rounded() -> None:
-    """Sample-weighted sum of non-integer attributes should keep its fractional value."""
     agg = AttributeConditionalAggregation(
         aggregate=Function.FUNCTION_SUM,
         key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"),

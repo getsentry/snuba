@@ -268,7 +268,6 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         measurement_count_duration = [v.val_double for v in response.column_values[4].results][0]
         measurement_p90 = [v.val_double for v in response.column_values[5].results][0]
         assert measurement_sum == 98  # weighted sum - 0*1 + 1*2 + 2*4 + 3*8 + 4*16
-        # EAP-101: sum of TYPE_INT attributes is rounded to an integer under extrapolation.
         assert measurement_sum_int == 98
         assert measurement_sum_int == int(measurement_sum_int)
         assert (
