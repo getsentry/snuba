@@ -24,11 +24,7 @@ class OutcomesQuery(PreDefinedQuery, metaclass=RegisteredClass):
 
 
 class VolumeByCategoryOverTime(OutcomesQuery):
-    """
-    Total quantity per hour for a data category over a lookback window.
-    Useful for spotting sudden volume spikes (e.g. replays category=7,
-    attachment bytes category=4, attachment counts category=22).
-    """
+    """Hourly quantity for a category (e.g. replay=7, attachment bytes=4)."""
 
     sql = """
     SELECT
@@ -44,11 +40,7 @@ class VolumeByCategoryOverTime(OutcomesQuery):
 
 
 class TopOrgsByCategory(OutcomesQuery):
-    """
-    Top organizations by quantity for a data category in a lookback window.
-    Each row is one org/hour pair, ordered by volume. Use this to find which
-    orgs are driving a spike.
-    """
+    """Top org/hour pairs by quantity for a category — find who is driving a spike."""
 
     sql = """
     SELECT
@@ -66,10 +58,7 @@ class TopOrgsByCategory(OutcomesQuery):
 
 
 class TopOrgsByCategoryAggregated(OutcomesQuery):
-    """
-    Top organizations by total quantity for a data category, aggregated across
-    the whole lookback window (not broken out by hour).
-    """
+    """Top orgs by total quantity over the full lookback window."""
 
     sql = """
     SELECT
@@ -86,10 +75,7 @@ class TopOrgsByCategoryAggregated(OutcomesQuery):
 
 
 class OrgVolumeOverTime(OutcomesQuery):
-    """
-    Quantity per hour for a specific org and data category. Drill into a noisy
-    org found via the top-orgs queries.
-    """
+    """Hourly quantity for one org and category."""
 
     sql = """
     SELECT
@@ -107,12 +93,7 @@ class OrgVolumeOverTime(OutcomesQuery):
 
 
 class OrgVolumeByReason(OutcomesQuery):
-    """
-    Quantity per hour broken down by reason for a specific org and category.
-    Reveals whether volume is accepted, filtered (e.g. network_error,
-    web-crawlers), rate limited (replay_usage_exceeded), or abuse-limited
-    (project_abuse_limit).
-    """
+    """Hourly quantity by reason/outcome for one org (abuse limits, usage exceeded, …)."""
 
     sql = """
     SELECT
@@ -132,10 +113,7 @@ class OrgVolumeByReason(OutcomesQuery):
 
 
 class OrgVolumeByProject(OutcomesQuery):
-    """
-    Quantity per project for a specific org and category over a lookback window.
-    Helps isolate which project inside an org is responsible for volume.
-    """
+    """Quantity by project for one org and category."""
 
     sql = """
     SELECT
@@ -153,11 +131,7 @@ class OrgVolumeByProject(OutcomesQuery):
 
 
 class VolumeByOutcomeOverTime(OutcomesQuery):
-    """
-    Quantity per hour broken down by outcome code for a data category.
-    Outcome: 0=accepted, 1=filtered, 2=rate_limited, 3=invalid, 4=abuse,
-    5=client_discard.
-    """
+    """Hourly quantity by outcome (0 accepted … 5 client_discard) for a category."""
 
     sql = """
     SELECT
@@ -174,11 +148,7 @@ class VolumeByOutcomeOverTime(OutcomesQuery):
 
 
 class TimeRangeTopOrgs(OutcomesQuery):
-    """
-    Top orgs for a category inside an explicit time range
-    (from_ts / to_ts as 'YYYY-MM-DD HH:MM:SS'). Use when investigating a
-    known incident window rather than a relative lookback.
-    """
+    """Top org/hour pairs for a category in an explicit from_ts/to_ts window."""
 
     sql = """
     SELECT

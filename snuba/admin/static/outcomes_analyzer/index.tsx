@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
 import { Table } from "SnubaAdmin/table";
 import QueryDisplay from "SnubaAdmin/outcomes_analyzer/query_display";
@@ -7,6 +7,14 @@ import {
   PredefinedQuery,
 } from "SnubaAdmin/outcomes_analyzer/types";
 
+function formatSQL(sql: string): string {
+  return sql
+    .split("\n")
+    .map((line) => line.substring(4))
+    .join("\n")
+    .trim();
+}
+
 function OutcomesAnalyzer(props: { api: Client }) {
   const [predefinedQueryOptions, setPredefinedQueryOptions] = useState<
     PredefinedQuery[]
@@ -14,8 +22,12 @@ function OutcomesAnalyzer(props: { api: Client }) {
 
   useEffect(() => {
     props.api.getPredefinedOutcomesQueryOptions().then((res) => {
-      res.forEach((queryOption) => (queryOption.sql = formatSQL(queryOption.sql)));
-      setPredefinedQueryOptions(res);
+      setPredefinedQueryOptions(
+        res.map((queryOption) => ({
+          ...queryOption,
+          sql: formatSQL(queryOption.sql),
+        }))
+      );
     });
   }, []);
 
@@ -30,22 +42,12 @@ function OutcomesAnalyzer(props: { api: Client }) {
     );
   }
 
-  function formatSQL(sql: string) {
-    const formatted = sql
-      .split("\n")
-      .map((line) => line.substring(4, line.length))
-      .join("\n");
-    return formatted.trim();
-  }
-
   return (
-    <div>
-      {QueryDisplay({
-        api: props.api,
-        resultDataPopulator: tablePopulator,
-        predefinedQueryOptions: predefinedQueryOptions,
-      })}
-    </div>
+    <QueryDisplay
+      api={props.api}
+      resultDataPopulator={tablePopulator}
+      predefinedQueryOptions={predefinedQueryOptions}
+    />
   );
 }
 

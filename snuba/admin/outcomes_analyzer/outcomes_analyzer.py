@@ -11,14 +11,28 @@ from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 
+_OUTCOMES_STORAGE_KEYS = (
+    StorageKey("outcomes_hourly"),
+    StorageKey("outcomes_daily"),
+    StorageKey("outcomes_raw"),
+)
+
 
 def _stringify_result(result: ClickhouseResult) -> ClickhouseResult:
-    # Match cardinality analyzer: stringify cells so large integers are not
-    # rounded by JavaScript's number type on the client.
-    result_rows = []
-    for row in result.results:
-        result_rows.append([str(col) for col in row])
-    return ClickhouseResult(result_rows, result.meta)
+    # Stringify cells so large integers are not rounded by JS Number on the client.
+    return ClickhouseResult(
+        [[str(col) for col in row] for row in result.results],
+        result.meta,
+    )
+
+
+def _allowed_tables() -> set[str]:
+    tables: set[str] = set()
+    for storage_key in _OUTCOMES_STORAGE_KEYS:
+        schema = cast(TableSchema, get_storage(storage_key).get_schema())
+        tables.add(schema.get_local_table_name())
+        tables.add(schema.get_dist_table_name())
+    return tables
 
 
 @audit_log
@@ -27,36 +41,9 @@ def run_outcomes_query(query: str, user: str) -> ClickhouseResult:
     Validates, audit logs, and executes a read-only query against outcomes
     tables. `user` is required by the audit_log decorator.
     """
-    storage_keys = {
-        StorageKey("outcomes_hourly"),
-        StorageKey("outcomes_daily"),
-        StorageKey("outcomes_raw"),
-    }
-    schemas = {get_storage(storage_key).get_schema() for storage_key in storage_keys}
-    allowed_tables = {cast(TableSchema, schema).get_table_name() for schema in schemas}
-    # Prefer the hourly/daily distributed tables; raw is allowed but expensive.
-    allowed_tables |= {
-        "outcomes_hourly_dist",
-        "outcomes_hourly_local",
-        "outcomes_daily_dist",
-        "outcomes_daily_dist_v2",
-        "outcomes_daily_local",
-        "outcomes_daily_local_v2",
-        "outcomes_raw_dist",
-        "outcomes_raw_local",
-    }
-
-    validate_ro_query(sql_query=query, allowed_tables=allowed_tables)
-    return _stringify_result(__run_query(query))
-
-
-def __run_query(query: str) -> ClickhouseResult:
+    validate_ro_query(sql_query=query, allowed_tables=_allowed_tables())
     connection = get_ro_query_node_connection(
         StorageKey("outcomes_hourly").value,
         ClickhouseClientSettings.CARDINALITY_ANALYZER,
     )
-
-    return connection.execute(
-        query=query,
-        with_column_types=True,
-    )
+    return _stringify_result(connection.execute(query=query, with_column_types=True))

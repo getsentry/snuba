@@ -3,7 +3,7 @@ from __future__ import annotations
 import io
 import sys
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import redirect_stdout
 from dataclasses import asdict
 from datetime import datetime
@@ -54,6 +54,7 @@ from snuba.admin.tool_policies import (
     get_user_allowed_tools,
 )
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.clickhouse.native import ClickhouseResult
 from snuba.datasets.factory import InvalidDatasetError, get_enabled_dataset_names
 from snuba.manual_jobs import Job, JobSpec
 from snuba.manual_jobs.runner import (
@@ -825,12 +826,10 @@ def snuba_debug() -> Response:
         explain_cleanup()
 
 
-@application.route("/cardinality_query", methods=["POST"])
-@check_tool_perms(tools=[AdminTools.CARDINALITY_ANALYZER])
-def cardinality_analyzer_query() -> Response:
-    # HACK (Volo):
-    # mostly copypasta from querylog, should not stick around for too long
-    # when production query tool gets made this should not be necessary
+def _run_admin_ro_sql_query(
+    run_query: Callable[[str, str], ClickhouseResult],
+) -> Response:
+    """Shared handler for admin tools that POST `{sql}` and run a RO ClickHouse query."""
     user = request.headers.get(USER_HEADER_KEY, "unknown")
     if user == "unknown" and settings.ADMIN_AUTH_PROVIDER != "NOOP":
         return Response(
@@ -838,40 +837,47 @@ def cardinality_analyzer_query() -> Response:
             401,
             {"Content-Type": "application/json"},
         )
-    req = json.loads(request.data)
+
     try:
-        raw_sql = req["sql"]
-    except KeyError as e:
+        raw_sql = json.loads(request.data)["sql"]
+    except (KeyError, TypeError):
         return make_response(
             jsonify(
                 {
                     "error": {
                         "type": "request",
-                        "message": f"Invalid request, missing key {e.args[0]}",
+                        "message": "Invalid request, missing key sql",
                     }
                 }
             ),
             400,
         )
+
     try:
-        result = run_metrics_query(raw_sql, user)
+        result = run_query(raw_sql, user)
         rows, columns = result.results, result.meta
-        if columns:
+        if not columns:
             return make_response(
-                jsonify({"column_names": [name for name, _ in columns], "rows": rows}),
-                200,
+                jsonify({"error": {"type": "unknown", "message": "no columns"}}),
+                500,
             )
         return make_response(
-            jsonify({"error": {"type": "unknown", "message": "no columns"}}),
-            500,
+            jsonify({"column_names": [name for name, _ in columns], "rows": rows}),
+            200,
         )
     except ClickhouseError as err:
-        details = {
-            "type": "clickhouse",
-            "message": str(err),
-            "code": err.code,
-        }
-        return make_response(jsonify({"error": details}), 400)
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "clickhouse",
+                        "message": str(err),
+                        "code": err.code,
+                    }
+                }
+            ),
+            400,
+        )
     except InvalidCustomQuery as err:
         return Response(
             json.dumps({"error": {"message": str(err)}}, indent=4),
@@ -883,63 +889,18 @@ def cardinality_analyzer_query() -> Response:
             jsonify({"error": {"type": "unknown", "message": str(err)}}),
             500,
         )
+
+
+@application.route("/cardinality_query", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.CARDINALITY_ANALYZER])
+def cardinality_analyzer_query() -> Response:
+    return _run_admin_ro_sql_query(run_metrics_query)
 
 
 @application.route("/outcomes_query", methods=["POST"])
 @check_tool_perms(tools=[AdminTools.OUTCOMES_ANALYZER])
 def outcomes_analyzer_query() -> Response:
-    user = request.headers.get(USER_HEADER_KEY, "unknown")
-    if user == "unknown" and settings.ADMIN_AUTH_PROVIDER != "NOOP":
-        return Response(
-            json.dumps({"error": "Unauthorized"}),
-            401,
-            {"Content-Type": "application/json"},
-        )
-    req = json.loads(request.data)
-    try:
-        raw_sql = req["sql"]
-    except KeyError as e:
-        return make_response(
-            jsonify(
-                {
-                    "error": {
-                        "type": "request",
-                        "message": f"Invalid request, missing key {e.args[0]}",
-                    }
-                }
-            ),
-            400,
-        )
-    try:
-        result = run_outcomes_query(raw_sql, user)
-        rows, columns = result.results, result.meta
-        if columns:
-            return make_response(
-                jsonify({"column_names": [name for name, _ in columns], "rows": rows}),
-                200,
-            )
-        return make_response(
-            jsonify({"error": {"type": "unknown", "message": "no columns"}}),
-            500,
-        )
-    except ClickhouseError as err:
-        details = {
-            "type": "clickhouse",
-            "message": str(err),
-            "code": err.code,
-        }
-        return make_response(jsonify({"error": details}), 400)
-    except InvalidCustomQuery as err:
-        return Response(
-            json.dumps({"error": {"message": str(err)}}, indent=4),
-            400,
-            {"Content-Type": "application/json"},
-        )
-    except Exception as err:
-        return make_response(
-            jsonify({"error": {"type": "unknown", "message": str(err)}}),
-            500,
-        )
+    return _run_admin_ro_sql_query(run_outcomes_query)
 
 
 @application.route("/rpc_endpoints", methods=["GET"])
