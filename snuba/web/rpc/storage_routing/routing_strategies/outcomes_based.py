@@ -42,7 +42,11 @@ from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingDecision,
 )
 
-DEFAULT_STANDARD_RETENTION_DAYS = 30
+# Match Sentry's default stats period / max standard retention so callers that
+# do not yet send RequestMeta.standard_retention_days keep tier-1 fidelity for
+# typical 90d windows. Orgs with a shorter standard window should send that
+# value on the request (clamped by max_standard_retention_days).
+DEFAULT_STANDARD_RETENTION_DAYS = 90
 MAX_STANDARD_RETENTION_DAYS = 90
 
 
@@ -253,8 +257,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         )
 
         if (
-            get_option("enable_long_term_retention_downsampling", False)
-            and standard_retention_cutoff.timestamp() > in_msg_meta.start_timestamp.seconds
+            standard_retention_cutoff.timestamp() > in_msg_meta.start_timestamp.seconds
             and in_msg_meta.trace_item_type not in ITEM_TYPE_FULL_RETENTION
         ):
             routing_decision.tier = Tier.TIER_8

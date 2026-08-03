@@ -5,6 +5,7 @@ from unittest import mock
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_options import OptionValue
 from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import GetTracesRequest
@@ -118,14 +119,14 @@ def test_outcomes_based_routing_queries_daily_table() -> None:
 
     routing_decision = strategy.get_routing_decision(context)
 
-    assert routing_decision.tier == Tier.TIER_1
+    # 100-day window starts beyond the default 90-day standard retention window
+    assert routing_decision.tier == Tier.TIER_8
     assert routing_decision.clickhouse_settings == {"max_threads": 10}
     assert routing_decision.can_run
 
 
 @pytest.mark.eap
 @pytest.mark.redis_db
-@override_options("snuba", {"enable_long_term_retention_downsampling": True})
 def test_item_type_full_retention() -> None:
     """
     Certain item types will not use the long term retention downsampling,
@@ -157,7 +158,6 @@ def test_item_type_full_retention() -> None:
 
 @pytest.mark.eap
 @pytest.mark.redis_db
-@override_options("snuba", {"enable_long_term_retention_downsampling": True})
 def test_item_type_full_retention_preprod() -> None:
     """
     PREPROD item type should not use long term retention downsampling,
@@ -189,6 +189,37 @@ def test_item_type_full_retention_preprod() -> None:
 
 @pytest.mark.eap
 @pytest.mark.redis_db
+def test_item_type_full_retention_occurrence() -> None:
+    """
+    OCCURRENCE queries need exact counts (trace meta / issue platform), so they
+    must not be forced onto the long-term retention downsample tier.
+    """
+    strategy = OutcomesBasedRoutingStrategy()
+
+    # request that queries last 50 days of data (beyond default standard retention)
+    end_time = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    start_time = end_time - timedelta(hours=1200)  # 50 days
+    request = TraceItemTableRequest(
+        meta=_get_request_meta(
+            start=start_time,
+            end=end_time,
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE,
+        )
+    )
+    request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
+    context = RoutingContext(
+        in_msg=request,
+        timer=Timer("test"),
+        query_id=uuid.uuid4().hex,
+    )
+    routing_decision = strategy.get_routing_decision(context)
+    assert routing_decision.tier == Tier.TIER_1
+    assert routing_decision.clickhouse_settings == {"max_threads": 10}
+    assert routing_decision.can_run
+
+
+@pytest.mark.eap
+@pytest.mark.redis_db
 @pytest.mark.parametrize(
     ("start_days_ago", "standard_retention_days", "option_overrides", "expected_tier"),
     [
@@ -196,8 +227,11 @@ def test_item_type_full_retention_preprod() -> None:
         (70, 60, {}, Tier.TIER_8),
         (50, 120, {}, Tier.TIER_1),
         (100, 120, {}, Tier.TIER_8),
-        (50, 0, {}, Tier.TIER_8),
-        (50, None, {}, Tier.TIER_8),
+        # non-positive / unset falls back to the 90-day default
+        (50, 0, {}, Tier.TIER_1),
+        (50, None, {}, Tier.TIER_1),
+        (100, 0, {}, Tier.TIER_8),
+        (100, None, {}, Tier.TIER_8),
         (40, 90, {"max_standard_retention_days": 45}, Tier.TIER_1),
         (50, 90, {"max_standard_retention_days": 45}, Tier.TIER_8),
         (40, None, {"default_standard_retention_days": 45}, Tier.TIER_1),
@@ -207,13 +241,10 @@ def test_item_type_full_retention_preprod() -> None:
 def test_standard_retention_days_routing(
     start_days_ago: int,
     standard_retention_days: int | None,
-    option_overrides: dict[str, int],
+    option_overrides: dict[str, OptionValue],
     expected_tier: Tier,
 ) -> None:
-    with override_options(
-        "snuba",
-        {"enable_long_term_retention_downsampling": True, **option_overrides},
-    ):
+    with override_options("snuba", option_overrides):
         routing_decision = _get_routing_decision(
             start_days_ago=start_days_ago,
             standard_retention_days=standard_retention_days,
@@ -224,7 +255,6 @@ def test_standard_retention_days_routing(
 
 @pytest.mark.eap
 @pytest.mark.redis_db
-@override_options("snuba", {"enable_long_term_retention_downsampling": True})
 def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
     strategy = OutcomesBasedRoutingStrategy()
     end_time = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -243,8 +273,23 @@ def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
     assert routing_decision.clickhouse_settings == {"max_threads": 10}
     assert routing_decision.can_run
 
-    # request that queries last 50 days of data
+    # request that queries last 50 days of data — still within the default 90d window
     start_time = end_time - timedelta(hours=1200)  # 50 days
+    request = TraceItemTableRequest(meta=_get_request_meta(start=start_time, end=end_time))
+    request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
+    context = RoutingContext(
+        in_msg=request,
+        timer=Timer("test"),
+        query_id=uuid.uuid4().hex,
+    )
+
+    routing_decision = strategy.get_routing_decision(context)
+    assert routing_decision.tier == Tier.TIER_1
+    assert routing_decision.clickhouse_settings == {"max_threads": 10}
+    assert routing_decision.can_run
+
+    # request that queries last 100 days of data — beyond the default 90d window
+    start_time = end_time - timedelta(hours=2400)  # 100 days
     request = TraceItemTableRequest(meta=_get_request_meta(start=start_time, end=end_time))
     request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
     context = RoutingContext(
@@ -258,11 +303,11 @@ def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
     assert routing_decision.clickhouse_settings == {"max_threads": 10}
     assert routing_decision.can_run
 
-    # request(s) that query window of 30 minutes, but with timestamps 40 days ago
+    # request(s) that query a short window with timestamps 100 days ago
     # one in MODE_NORMAL, one in MODE_HIGHEST_ACCURACY (which is ignored in favor of
-    # the enable_long_term_retention_downsampling)
-    start = datetime.now(tz=UTC) - timedelta(days=40, minutes=30)
-    end = datetime.now(tz=UTC) - timedelta(days=40)
+    # the long term retention downsampling)
+    start = datetime.now(tz=UTC) - timedelta(days=100, minutes=30)
+    end = datetime.now(tz=UTC) - timedelta(days=100)
 
     # normal
     request = TraceItemTableRequest(meta=_get_request_meta(start=start, end=end))

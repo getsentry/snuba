@@ -197,11 +197,6 @@
       "default": false,
       "description": "When true, the storage routing strategy fetches ClickHouse cluster load info to inform routing decisions."
     },
-    "enable_long_term_retention_downsampling": {
-      "type": "boolean",
-      "default": false,
-      "description": "When true, EAP queries older than the org's standard retention window (for non-full-retention item types) are routed to the most-downsampled tier."
-    },
     "max_standard_retention_days": {
       "type": "integer",
       "default": 90,
@@ -209,8 +204,8 @@
     },
     "default_standard_retention_days": {
       "type": "integer",
-      "default": 30,
-      "description": "Default standard retention window in days used by outcomes-based routing when RequestMeta.standard_retention_days is unset or non-positive."
+      "default": 90,
+      "description": "Default standard retention window in days used by outcomes-based routing when RequestMeta.standard_retention_days is unset or non-positive. Defaults to 90 to match typical Sentry stats periods until callers send the org's standard retention on the request."
     },
     "storage_routing_config_override": {
       "type": "string",

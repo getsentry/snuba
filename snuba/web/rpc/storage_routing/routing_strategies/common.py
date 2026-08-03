@@ -16,4 +16,7 @@ ITEM_TYPE_TO_OUTCOME_CATEGORY = {
 ITEM_TYPE_FULL_RETENTION = {
     TraceItemType.TRACE_ITEM_TYPE_UPTIME_RESULT,
     TraceItemType.TRACE_ITEM_TYPE_PREPROD,
+    # Occurrences are not outcomes-routed and need exact counts (issue/trace
+    # meta), so keep them on tier 1 for the full query window.
+    TraceItemType.TRACE_ITEM_TYPE_OCCURRENCE,
 }
