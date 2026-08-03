@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import queue
 import re
@@ -20,6 +21,7 @@ from uuid import UUID
 import sentry_sdk
 from clickhouse_driver import Client, errors
 from dateutil.tz import tz
+from sentry_sdk import traces
 from sentry_sdk.integrations.logging import ignore_logger
 
 from snuba import environment, settings
@@ -29,6 +31,7 @@ from snuba.reader import Reader, Result, build_result_transformer
 from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.gauge import ThreadSafeGauge
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.sentry import SENTRY_OP
 
 ignore_logger("clickhouse_driver.connection")
 
@@ -279,10 +282,17 @@ class ClickhouseNativePool(ClickhousePool):
                         )
 
                     def query_execute(conn: Client = conn, settings: Any = settings) -> Any:
-                        with sentry_sdk.start_span(description=query, op="db.clickhouse") as span:
-                            span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
-                            span.set_data("query_id", query_id)
-                            span.set_data("settings", settings)
+                        with traces.start_span(
+                            name="clickhouse query",
+                            attributes={
+                                SENTRY_OP: "db.clickhouse",
+                                sentry_sdk.consts.SPANDATA.DB_SYSTEM: "clickhouse",
+                                sentry_sdk.consts.SPANDATA.DB_QUERY_TEXT: query,
+                            },
+                        ) as span:
+                            if query_id is not None:
+                                span.set_attribute("query_id", query_id)
+                            span.set_attribute("settings", json.dumps(settings, default=repr))
                             return conn.execute(
                                 query,
                                 params=params,

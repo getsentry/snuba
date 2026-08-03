@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-import sentry_sdk
+from sentry_sdk import traces
 from yaml import safe_load
 
 from snuba import settings
+from snuba.utils.sentry import SENTRY_OP
 
 
 def load_configuration_data(path: str, validators: dict[str, Any]) -> dict[str, Any]:
@@ -13,12 +14,14 @@ def load_configuration_data(path: str, validators: dict[str, Any]) -> dict[str, 
     Loads a configuration file from the given path
     Returns an untyped dict of dicts
     """
-    with sentry_sdk.start_span(op="load_and_validate") as span:
-        span.set_tag("file", path)
+    with traces.start_span(
+        name="load_and_validate",
+        attributes={SENTRY_OP: "load_and_validate", "file": path},
+    ) as span:
         with open(path) as file:
             config = safe_load(file)
         assert isinstance(config, dict)
         if settings.VALIDATE_DATASET_YAMLS_ON_STARTUP:
             validators[config["kind"]](config)
-        span.description = config["name"]
+        span.name = config["name"]
         return config

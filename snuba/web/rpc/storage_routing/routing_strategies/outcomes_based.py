@@ -2,7 +2,6 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import cast
 
-import sentry_sdk
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import GetTracesRequest
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
@@ -24,7 +23,8 @@ from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array
 from snuba.query.logical import Query
 from snuba.query.query_settings import OutcomesQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.state.sentry_options import get_mapped_option
+from snuba.state.sentry_options import get_mapped_option, get_option
+from snuba.utils.metrics.util import set_current_span_attributes
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
     timestamp_in_range_condition,
@@ -41,6 +41,9 @@ from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingContext,
     RoutingDecision,
 )
+
+DEFAULT_STANDARD_RETENTION_DAYS = 30
+MAX_STANDARD_RETENTION_DAYS = 90
 
 
 def project_id_and_org_conditions(meta: RequestMeta) -> Expression:
@@ -236,14 +239,27 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
 
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
 
-        thirty_one_days_ago_ts = int((datetime.now(tz=UTC) - timedelta(days=31)).timestamp())
-        older_than_thirty_days = thirty_one_days_ago_ts > in_msg_meta.start_timestamp.seconds
+        requested_retention_days = in_msg_meta.standard_retention_days
+        standard_retention_days = (
+            min(
+                requested_retention_days,
+                get_option("max_standard_retention_days", MAX_STANDARD_RETENTION_DAYS),
+            )
+            if requested_retention_days > 0
+            else get_option("default_standard_retention_days", DEFAULT_STANDARD_RETENTION_DAYS)
+        )
+        standard_retention_cutoff = datetime.now(tz=UTC) - timedelta(
+            days=standard_retention_days + 1
+        )
 
-        if older_than_thirty_days and in_msg_meta.trace_item_type not in ITEM_TYPE_FULL_RETENTION:
+        if (
+            standard_retention_cutoff.timestamp() > in_msg_meta.start_timestamp.seconds
+            and in_msg_meta.trace_item_type not in ITEM_TYPE_FULL_RETENTION
+        ):
             routing_decision.tier = Tier.TIER_8
 
-        sentry_sdk.update_current_span(
-            attributes={
+        set_current_span_attributes(
+            {
                 "downsampling_mode": (
                     "highest_accuracy" if self._is_highest_accuracy_mode(in_msg_meta) else "normal"
                 ),
@@ -293,8 +309,8 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         elif ingested_items > max_items_before_downsampling * 100:
             routing_decision.tier = Tier.TIER_512
 
-        sentry_sdk.update_current_span(
-            attributes={
+        set_current_span_attributes(
+            {
                 "ingested_items": ingested_items,
                 "max_items_before_downsampling": max_items_before_downsampling,
                 "tier": routing_decision.tier.name,

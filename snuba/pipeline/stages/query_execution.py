@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import textwrap
 from collections import defaultdict
@@ -9,6 +10,7 @@ from math import floor
 from typing import Any
 
 import sentry_sdk
+from sentry_sdk import traces
 
 from snuba import environment
 from snuba import settings as snuba_settings
@@ -35,6 +37,7 @@ from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.sentry import SENTRY_OP, set_tag_and_attribute
 from snuba.web import (
     QueryException,
     QueryExtraData,
@@ -105,9 +108,9 @@ def _dry_run_query_runner(
     clickhouse_query: ClickhouseQuery | CompositeQuery[Table],
     cluster_name: str,
 ) -> QueryResult:
-    with sentry_sdk.start_span(description="dryrun_create_query", op="function") as span:
+    with traces.start_span(name="dryrun_create_query", attributes={SENTRY_OP: "function"}) as span:
         formatted_query = format_query(clickhouse_query)
-        span.set_data("query", formatted_query.structured())
+        span.set_attribute("query", json.dumps(formatted_query.structured(), default=repr))
 
     return QueryResult(
         {"data": [], "meta": []},
@@ -189,19 +192,19 @@ def _format_storage_query_and_run(
     visitor = TablesCollector()
     visitor.visit(from_clause)
     table_names = ",".join(sorted(visitor.get_tables()))
-    with sentry_sdk.start_span(description="create_query", op="function") as span:
+    with traces.start_span(name="create_query", attributes={SENTRY_OP: "function"}) as span:
         _apply_turbo_sampling_if_needed(clickhouse_query, query_settings)
 
         formatted_query = format_query(clickhouse_query)
 
         formatted_sql = formatted_query.get_sql()
         query_size_bytes = len(formatted_sql.encode("utf-8"))
-        span.set_data(
+        span.set_attribute(
             "query", textwrap.wrap(formatted_sql, 100, break_long_words=False)
         )  # To avoid the query being truncated
-        span.set_data("table", table_names)
-        span.set_data("query_size_bytes", query_size_bytes)
-        sentry_sdk.set_tag("query_size_group", get_query_size_group(query_size_bytes))
+        span.set_attribute("table", table_names)
+        span.set_attribute("query_size_bytes", query_size_bytes)
+        set_tag_and_attribute("query_size_group", get_query_size_group(query_size_bytes))
         metrics.increment(
             "execute",
             tags={
@@ -251,8 +254,14 @@ def _format_storage_query_and_run(
                 experiments=clickhouse_query.get_experiments(),
             ),
         ) from cause
-    with sentry_sdk.start_span(description=formatted_sql, op="function") as span:
-        span.set_tag("table", table_names)
+    with traces.start_span(
+        name="execute_query",
+        attributes={
+            SENTRY_OP: "function",
+            sentry_sdk.consts.SPANDATA.DB_QUERY_TEXT: formatted_sql,
+            "table": table_names,
+        },
+    ) as span:
 
         def execute() -> QueryResult:
             try:

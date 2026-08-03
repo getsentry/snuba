@@ -37,7 +37,7 @@ repos:
         name: validate-configs-syntax
         entry: env SNUBA_SETTINGS=test python3 -m snuba.validate_configs
         language: python
-        additional_dependencies: [ 'fastjsonschema', 'pyyaml', 'sentry_sdk' ]
+        additional_dependencies: [ 'fastjsonschema', 'pyyaml', 'sentry_sdk>=2.66.1' ]
         pass_filenames: false
         files: 'snuba/datasets/configuration/.*'
       - id: cargo-fmt

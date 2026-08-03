@@ -111,7 +111,7 @@ def test_simple() -> None:
         [
             {
                 "request_id": str(uuid.UUID("a" * 32)),
-                "request_body": '{"limit":100,"offset":50,"orderby":"event_id","project":1,"sample":0.1,"selected_columns":["event_id"]}',
+                "request_body": '{"selected_columns": ["event_id"], "orderby": "event_id", "sample": 0.1, "limit": 100, "offset": 50, "project": 1}',
                 "referrer": "search",
                 "dataset": "events",
                 "projects": [2],

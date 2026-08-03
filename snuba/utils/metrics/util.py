@@ -1,14 +1,17 @@
+from __future__ import annotations
+
 import _strptime  # NOQA fixes _strptime deferred import issue
 import inspect
+from collections.abc import Callable, Mapping
 from functools import wraps
 from typing import Any, TypeVar, cast
-from collections.abc import Callable, Mapping
 
-import sentry_sdk
+from sentry_sdk import traces
 
 from snuba import settings
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.types import Tags
+from snuba.utils.sentry import SENTRY_OP
 
 
 def create_metrics(
@@ -71,14 +74,24 @@ def with_span(op: str = "function") -> Callable[[F], F]:
 
     def decorator(func: F) -> F:
         frame_info = inspect.stack()[1]
-        filename = frame_info.filename
+        attributes: dict[str, Any] = {SENTRY_OP: op, "filename": frame_info.filename}
 
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            with sentry_sdk.start_span(description=func.__name__, op=op) as span:
-                span.set_data("filename", filename)
+            with traces.start_span(name=func.__name__, attributes=attributes):
                 return func(*args, **kwargs)
 
         return cast(F, wrapper)
 
     return decorator
+
+
+def set_current_span_attributes(attributes: Mapping[str, Any]) -> None:
+    """Set attributes on the active stream-mode span, if any.
+
+    Replaces ``sentry_sdk.update_current_span()``, a no-op under stream mode.
+    """
+    span = traces.get_current_span()
+    if span is None:
+        return
+    span.set_attributes(dict(attributes))
