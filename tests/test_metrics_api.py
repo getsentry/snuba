@@ -6,7 +6,6 @@ import pytest
 import simplejson as json
 from pytest import approx
 
-from snuba import state
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -51,15 +50,6 @@ def test_time_bucketing() -> None:
 
     one_day_bucket = timestamp_to_bucket(base_datetime, 86400)
     assert one_day_bucket.timestamp() == 1644278400
-
-
-def teardown_common() -> None:
-    # Reset rate limits
-    state.delete_config("global_concurrent_limit")
-    state.delete_config("global_per_second_limit")
-    state.delete_config("project_concurrent_limit")
-    state.delete_config("project_concurrent_limit_1")
-    state.delete_config("project_per_second_limit")
 
 
 def utc_yesterday_12_15() -> datetime:
@@ -112,8 +102,6 @@ class TestMetricsApiCounters(BaseApiTest):
         self.generate_counters()
 
         yield
-
-        teardown_common()
 
     def generate_counters(self) -> None:
         global have_generated_counters
@@ -264,9 +252,6 @@ class TestOrgMetricsApiCounters(BaseApiTest):
         )
         self.generate_counters()
 
-    def teardown_method(self, test_method: Any) -> None:
-        teardown_common()
-
     def generate_counters(self) -> None:
         events = []
         for n in range(self.seconds):
@@ -408,9 +393,6 @@ class TestMetricsApiSets(BaseApiTest):
         self.unique_set_values = 100
         self.generate_sets()
 
-    def teardown_method(self, test_method: Any) -> None:
-        teardown_common()
-
     def generate_sets(self) -> None:
         events = []
         processor = self.storage.get_table_writer().get_stream_loader().get_processor()
@@ -502,9 +484,6 @@ class TestMetricsApiDistributions(BaseApiTest):
             get_entity(EntityKey.METRICS_DISTRIBUTIONS).get_writable_storage(),
         )
         self.generate_uniform_distributions()
-
-    def teardown_method(self, test_method: Any) -> None:
-        teardown_common()
 
     def generate_uniform_distributions(self) -> None:
         global have_generated_dists

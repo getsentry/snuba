@@ -150,7 +150,7 @@ class TaskBuilderModeState:
     There are two final mode: immediate and jittered that correspond to
     two different implementations of the TaskBuilder.
 
-    The current mode is defined as runtime configuration, though we do
+    The current mode is defined as a sentry-option, though we do
     not want to transition from one mode to the other at any timestamp.
     We want for transitions to happen only at timestamps that are
     multiple of the subscription resolution.

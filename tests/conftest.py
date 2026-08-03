@@ -11,7 +11,7 @@ from typing import (
 import pytest
 from snuba_sdk.legacy import json_to_snql
 
-from snuba import settings, state
+from snuba import settings
 from snuba.clusters.cluster import (
     ClickhouseClientSettings,
     ClickhouseCluster,
@@ -150,10 +150,6 @@ def block_redis_db(monkeypatch: pytest.MonkeyPatch) -> Generator[None]:
     for key in _redis_clients:
         monkeypatch.setattr(_redis_clients[key], "execute_command", blocked)
 
-    # Patch out Snuba settings so that random config access does not hit redis
-    # (setting config still requires redis_db marker)
-    monkeypatch.setattr("snuba.state.get_raw_configs", dict)
-
     yield
 
     blocked.snuba_test_teardown()
@@ -185,10 +181,6 @@ def redis_db(request: pytest.FixtureRequest) -> Generator[None]:
 
     for redis_client in all_redis_clients():
         redis_client.flushdb()
-
-    # Drop the in-memory memoize cache of Redis-backed configs so stale entries
-    # from a prior redis_db test don't survive the flush above.
-    state.get_raw_configs.clear()  # type: ignore[attr-defined]
 
     yield
 
@@ -442,24 +434,3 @@ def _build_snql_post_methods(
         return test_app.post(endpoint, data=data, headers={"referer": referrer})
 
     return simple_post
-
-
-SnubaSetConfig = Callable[[str, Any], None]
-
-
-@pytest.fixture
-def snuba_set_config(request: pytest.FixtureRequest) -> SnubaSetConfig:
-    finalizers_registered = set()
-
-    def set_config(key: str, value: Any) -> None:
-        # should register finalizer only once because 1) we don't have to undo
-        # every single value change step-by-step 2) teardown-order via pytest
-        # finalizers is poorly understood
-        if key not in finalizers_registered:
-            finalizers_registered.add(key)
-            old_value = state.get_config(key)
-            request.addfinalizer(lambda: state.set_config(key, old_value))
-
-        state.set_config(key, value)
-
-    return set_config

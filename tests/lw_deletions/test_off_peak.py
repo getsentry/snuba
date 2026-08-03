@@ -13,25 +13,11 @@ from arroyo.types import BrokerValue, Message, Partition, Topic
 from sentry_options.testing import override_options
 
 from snuba.lw_deletions.off_peak import OffPeakProcessingStrategy
-from snuba.state import get_raw_configs
-
-
-@pytest.fixture(autouse=True)
-def _clear_state_memoize_cache() -> None:
-    """The memoize on get_raw_configs uses time.time() for TTL which
-    conflicts with time_machine. Clear it between tests."""
-    for cell in get_raw_configs.__closure__ or ():  # type: ignore[attr-defined]
-        obj = cell.cell_contents
-        if hasattr(obj, "saved"):
-            obj.saved.clear()
-            obj.at.clear()
-            break
 
 
 def _tomorrow_at(hour: int) -> datetime:
-    """Return tomorrow at the given UTC hour. Always in the future so
-    time_machine.travel moves the clock forward and the snuba.state
-    memoize cache naturally expires."""
+    """Return tomorrow at the given UTC hour so time_machine.travel moves
+    the clock forward."""
     tomorrow = datetime.now(UTC).date() + timedelta(days=1)
     return datetime(tomorrow.year, tomorrow.month, tomorrow.day, hour, tzinfo=UTC)
 

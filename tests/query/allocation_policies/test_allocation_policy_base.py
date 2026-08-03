@@ -518,7 +518,7 @@ def test_is_not_enforced() -> None:
 
 
 class TestComponentNameBackwardsCompatibility:
-    """Test that component_name() returns the same value as the old runtime_config_prefix property."""
+    """Test that component_name() keeps the historical ``{storage}.{ClassName}`` shape."""
 
     def get_all_allocation_policy_classes(self) -> list[type[AllocationPolicy]]:
         return [
@@ -547,7 +547,7 @@ class TestComponentNameBackwardsCompatibility:
     def test_component_name_equals_old_runtime_config_prefix_pattern(
         self, storage_key: StorageKey
     ) -> None:
-        """Test that component_name() follows the same pattern as the old runtime_config_prefix."""
+        """component_name() is ``{storage_key}.{ClassName}``."""
         policy_classes = self.get_all_allocation_policy_classes()
 
         for policy_class in policy_classes:
@@ -558,8 +558,6 @@ class TestComponentNameBackwardsCompatibility:
                 default_config_overrides={},
             )
 
-            # What the old runtime_config_prefix property would return
-            # https://github.com/getsentry/snuba/blob/master/snuba/query/allocation_policies/__init__.py#L430-L432
             expected_old_prefix = f"{storage_key.value}.{policy_class.__name__}"
 
             # They should be the same

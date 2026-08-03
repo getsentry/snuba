@@ -624,7 +624,6 @@ def test_get_job_types_lists_only_adhoc_allowed(admin_api: FlaskClient) -> None:
     assert isinstance(job_types, list)
     # Read-only / idempotent jobs opt in and are runnable without a manifest.
     assert "ToyJob" in job_types
-    assert "LogRuntimeConfigs" in job_types
     # Destructive jobs stay gated behind a manifest entry.
     assert "DeleteEventsByTagKeyValue" not in job_types
     assert "ScrubIpFromEAPSpans" not in job_types

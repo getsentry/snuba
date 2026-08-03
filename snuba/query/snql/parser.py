@@ -1243,8 +1243,7 @@ def _replace_time_condition(
     condition = query.get_condition()
     top_level = get_first_level_and_conditions(condition) if condition is not None else []
     # max_days defaults to 0 in the schema, which we treat as "no limit" (None)
-    # to preserve the prior runtime-config behavior where an unset value meant
-    # no clamping of the query time range.
+    # so an unset value means no clamping of the query time range.
     date_align = get_option("date_align_seconds", 1)
     max_days = (get_option("max_days", 0)) or None
 

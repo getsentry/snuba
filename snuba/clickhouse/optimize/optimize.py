@@ -313,9 +313,9 @@ def optimize_partition_runner(
     raise an exception which would be propagated to the caller.
 
     Details of execution flow:
-    1. start by reading configured_num_threads from the Snuba Admin runtime config
+    1. start by reading configured_num_threads from the optimize_parallel_threads sentry-option
     2. dispatches configured_num_threads threads to optimize configured_num_threads partitions (1 partition per thread)
-    3. as soon as one thread finishes, check configured_num_threads from runtime config again
+    3. as soon as one thread finishes, check configured_num_threads from the option again
     4. if configured_num_threads > number of currently active threads, dispatch more threads
     """
     scheduler = OptimizeScheduler(default_parallel_threads=default_parallel_threads)

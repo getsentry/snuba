@@ -15,7 +15,7 @@ from dateutil.parser import parse as parse_datetime
 from sentry_options.testing import override_options
 from sentry_sdk import Client, Hub
 
-from snuba import settings, state
+from snuba import settings
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.entities.entity_key import EntityKey
@@ -56,13 +56,6 @@ class SimpleAPITest(BaseApiTest):
         self.generate_fizzbuzz_events()
 
         yield
-
-        # Reset rate limits
-        state.delete_config("global_concurrent_limit")
-        state.delete_config("global_per_second_limit")
-        state.delete_config("project_concurrent_limit")
-        state.delete_config("project_concurrent_limit_1")
-        state.delete_config("project_per_second_limit")
 
     def write_events(self, events: Sequence[InsertEvent]) -> None:
         processor = self.storage.get_table_writer().get_stream_loader().get_processor()

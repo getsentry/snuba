@@ -216,10 +216,6 @@ RECORD_QUERIES = False
 # Record COGS
 RECORD_COGS = False
 
-# Runtime Config Options
-CONFIG_MEMOIZE_TIMEOUT = 10
-CONFIG_STATE: Mapping[str, Any | None] = {}
-
 # Sentry Options
 SENTRY_DSN: str | None = None
 SENTRY_TRACE_SAMPLE_RATE = 0
