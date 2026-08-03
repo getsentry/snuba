@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import cast
 
-import sentry_sdk
+from sentry_sdk import traces
 
 from snuba.clickhouse.query import Query
 from snuba.clusters.cluster import ClickhouseCluster
@@ -26,6 +26,7 @@ from snuba.query.logical import Query as LogicalQuery
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.state import explain_meta
+from snuba.utils.sentry import SENTRY_OP
 
 
 class EntityProcessingExecutor:
@@ -57,8 +58,8 @@ class EntityProcessingExecutor:
         self.__partition_key_column_name = partition_key_column_name
 
     def get_storage(self, query: LogicalQuery, settings: QuerySettings) -> EntityStorageConnection:
-        with sentry_sdk.start_span(
-            op="build_plan.storage_query_plan_builder", description="select_storage"
+        with traces.start_span(
+            name="select_storage", attributes={SENTRY_OP: "build_plan.storage_query_plan_builder"}
         ):
             return self.__selector.select_storage(query, settings, self.__storages)
 
@@ -66,8 +67,8 @@ class EntityProcessingExecutor:
         self, storage: ReadableStorage, query: LogicalQuery, settings: QuerySettings
     ) -> ClickhouseCluster:
         if is_storage_set_sliced(storage.get_storage_set_key()):
-            with sentry_sdk.start_span(
-                op="build_plan.sliced_storage", description="select_storage"
+            with traces.start_span(
+                name="select_storage", attributes={SENTRY_OP: "build_plan.sliced_storage"}
             ):
                 assert self.__partition_key_column_name is not None, (
                     "partition key column name must be defined for a sliced storage"
@@ -91,8 +92,8 @@ class EntityProcessingExecutor:
 
         check_storage_readiness(storage)
 
-        with sentry_sdk.start_span(
-            op="build_plan.storage_query_plan_builder", description="translate"
+        with traces.start_span(
+            name="translate", attributes={SENTRY_OP: "build_plan.storage_query_plan_builder"}
         ):
             # The QueryTranslator class should be instantiated once for each call to
             # translate_query_and_apply_mappers to avoid cache conflicts.

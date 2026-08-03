@@ -571,11 +571,6 @@
       "default": false,
       "description": "When true, the ClickHouse read path uses the clickhouse-connect (HTTP) driver instead of the native protocol. Lets the driver migration roll out and roll back without a deploy. Migrated from the runtime config of the same name."
     },
-    "ondemand_profiler_hostnames": {
-      "type": "string",
-      "default": "",
-      "description": "Comma-separated list of hostnames for which the on-demand profiler should capture a profile."
-    },
     "max_spans_per_transaction": {
       "type": "integer",
       "default": 2000,

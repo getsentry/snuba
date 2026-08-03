@@ -204,6 +204,7 @@ def consumer(
     logger.info("Consumer Starting")
 
     storage_key = StorageKey(storage_name)
+    # Tag (not attribute): consumers have no active span; tags reach errors.
     sentry_sdk.set_tag("storage", storage_name)
 
     logger.info("Checking Clickhouse connections...")

@@ -11,9 +11,11 @@ from typing import Any
 import clickhouse_connect
 import sentry_sdk
 from clickhouse_connect import common as clickhouse_connect_common
+from clickhouse_connect.driver.binding import quote_identifier
 from clickhouse_connect.driver.client import Client
 from clickhouse_connect.driver.exceptions import ClickHouseError, OperationalError
 from clickhouse_connect.driver.httputil import get_pool_manager
+from sentry_sdk import traces
 
 from snuba import environment, settings, state
 from snuba.clickhouse.errors import ClickhouseError
@@ -25,10 +27,36 @@ from snuba.clickhouse.native import (
 )
 from snuba.reader import unwrap_nullable_type
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.sentry import SENTRY_OP
 
 logger = logging.getLogger("snuba.clickhouse.connect")
 
 metrics = MetricsWrapper(environment.metrics, "clickhouse.connect")
+
+
+def _driver_params(params: Params) -> Sequence[Any] | dict[str, Any] | None:
+    """Narrow ``Params`` to clickhouse-connect's accepted forms.
+
+    Falsy => None. Mappings are copied to a plain ``dict`` (driver wants an
+    invariant dict); sequences pass through as positional binds.
+    """
+    if not params:
+        return None
+    if isinstance(params, Mapping):
+        return dict(params)
+    return params
+
+
+def _insert_statement(table: str, column_names: Sequence[str]) -> str:
+    """Rebuild the INSERT statement clickhouse-connect sends on the wire.
+
+    ``client.insert`` takes a row matrix, not SQL, but still emits
+    ``INSERT INTO <table> (<cols>) FORMAT Native``. Row data is excluded
+    (unbounded, may hold PII).
+    """
+    columns = ", ".join(quote_identifier(name) for name in column_names)
+    return f"INSERT INTO {table} ({columns}) FORMAT Native"
+
 
 # Stand-in for "no read timeout" on the HTTP path. The native driver maps a
 # profile with no timeout (``None``) to an unbounded socket, but clickhouse-connect
@@ -178,8 +206,8 @@ class ClickhouseConnectPool(ClickhousePool):
         settings: Mapping[str, Any] | None,
         query_id: str | None,
         capture_trace: bool,
-    ) -> Mapping[str, Any] | None:
-        query_settings = dict(settings) if settings else {}
+    ) -> dict[str, Any] | None:
+        query_settings: dict[str, Any] = dict(settings) if settings else {}
         if query_id is not None:
             query_settings["query_id"] = query_id
         if capture_trace:
@@ -207,13 +235,20 @@ class ClickhouseConnectPool(ClickhousePool):
         client = self._get_client()
         query_settings = self._build_query_settings(settings, query_id, capture_trace)
 
-        with sentry_sdk.start_span(description=query, op="db.clickhouse") as span:
-            span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
-            span.set_data("query_id", query_id)
-            span.set_data("settings", query_settings)
+        with traces.start_span(
+            name="clickhouse query",
+            attributes={
+                SENTRY_OP: "db.clickhouse",
+                sentry_sdk.consts.SPANDATA.DB_SYSTEM: "clickhouse",
+                sentry_sdk.consts.SPANDATA.DB_QUERY_TEXT: query,
+            },
+        ) as span:
+            if query_id is not None:
+                span.set_attribute("query_id", query_id)
+            span.set_attribute("settings", json.dumps(query_settings, default=repr))
             query_result = client.query(
                 query,
-                parameters=params if params else None,
+                parameters=_driver_params(params),
                 settings=query_settings,
                 column_oriented=columnar,
             )
@@ -292,12 +327,19 @@ class ClickhouseConnectPool(ClickhousePool):
             if query_id is not None:
                 json_settings["query_id"] = query_id
 
-            with sentry_sdk.start_span(description=query, op="db.clickhouse") as span:
-                span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
-                span.set_data("query_id", query_id)
+            with traces.start_span(
+                name="clickhouse query",
+                attributes={
+                    SENTRY_OP: "db.clickhouse",
+                    sentry_sdk.consts.SPANDATA.DB_SYSTEM: "clickhouse",
+                    sentry_sdk.consts.SPANDATA.DB_QUERY_TEXT: query,
+                },
+            ) as span:
+                if query_id is not None:
+                    span.set_attribute("query_id", query_id)
                 raw = client.raw_query(
                     query,
-                    parameters=params if params else None,
+                    parameters=_driver_params(params),
                     settings=json_settings,
                     fmt="JSONCompact",
                 )
@@ -445,11 +487,20 @@ class ClickhouseConnectPool(ClickhousePool):
 
         with self._translate_clickhouse_errors():
             client = self._get_client()
-            with sentry_sdk.start_span(
-                description=f"INSERT INTO {table}", op="db.clickhouse"
+            with traces.start_span(
+                name=f"INSERT INTO {table}",
+                attributes={
+                    SENTRY_OP: "db.clickhouse",
+                    sentry_sdk.consts.SPANDATA.DB_SYSTEM: "clickhouse",
+                    sentry_sdk.consts.SPANDATA.DB_QUERY_TEXT: _insert_statement(
+                        table, column_names
+                    ),
+                },
             ) as span:
-                span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
-                span.set_data("query_id", query_id)
+                span.set_attribute(
+                    "query_id",
+                    query_id if query_id is not None else "unknown-query-id",
+                )
                 client.insert(
                     table,
                     matrix,
@@ -506,8 +557,14 @@ class ClickhouseConnectPool(ClickhousePool):
         """
         with self._translate_clickhouse_errors():
             client = self._get_client()
-            with sentry_sdk.start_span(description=query, op="db.clickhouse") as span:
-                span.set_data(sentry_sdk.consts.SPANDATA.DB_SYSTEM, "clickhouse")
+            with traces.start_span(
+                name="clickhouse query",
+                attributes={
+                    SENTRY_OP: "db.clickhouse",
+                    sentry_sdk.consts.SPANDATA.DB_SYSTEM: "clickhouse",
+                    sentry_sdk.consts.SPANDATA.DB_QUERY_TEXT: query,
+                },
+            ):
                 output = client.command(query)
             return self._explain_result(output)
 

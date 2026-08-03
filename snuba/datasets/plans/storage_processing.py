@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TypeVar
 
-import sentry_sdk
+from sentry_sdk import traces
 
 from snuba import settings as snuba_settings
 from snuba.clickhouse.query import Query
@@ -39,6 +39,7 @@ from snuba.query.processors.physical.mandatory_condition_applier import (
 from snuba.query.query_settings import QuerySettings
 from snuba.state import explain_meta
 from snuba.utils.metrics.util import with_span
+from snuba.utils.sentry import SENTRY_OP
 
 TQuery = TypeVar("TQuery", bound=AbstractQuery)
 
@@ -143,7 +144,7 @@ def apply_storage_processors(
     )
     assert isinstance(query_plan.query, Query)
     for processor in query_plan.db_query_processors:
-        with sentry_sdk.start_span(description=type(processor).__name__, op="processor"):
+        with traces.start_span(name=type(processor).__name__, attributes={SENTRY_OP: "processor"}):
             if settings.get_dry_run():
                 with explain_meta.with_query_differ(
                     "storage_processor", type(processor).__name__, query_plan.query
