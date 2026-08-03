@@ -8,6 +8,7 @@ import SQLShellPage, { SystemShellPage } from "SnubaAdmin/sql_shell";
 import SnQLToSQL from "SnubaAdmin/snql_to_sql";
 import QuerylogQueries from "SnubaAdmin/querylog";
 import CardinalityAnalyzer from "SnubaAdmin/cardinality_analyzer";
+import OutcomesAnalyzer from "SnubaAdmin/outcomes_analyzer";
 import ProductionQueries from "SnubaAdmin/production_queries";
 import SnubaExplain from "SnubaAdmin/snuba_explain";
 import Welcome from "SnubaAdmin/welcome";
@@ -80,6 +81,11 @@ const NAV_ITEMS = [
     id: "cardinality-analyzer",
     display: "🔢 Cardinality Analyzer",
     component: CardinalityAnalyzer,
+  },
+  {
+    id: "outcomes-analyzer",
+    display: "📈 Outcomes Analyzer",
+    component: OutcomesAnalyzer,
   },
   {
     id: "production-queries",

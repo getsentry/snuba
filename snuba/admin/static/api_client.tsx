@@ -27,6 +27,10 @@ import {
   CardinalityQueryRequest,
   CardinalityQueryResult,
 } from "SnubaAdmin/cardinality_analyzer/types";
+import {
+  OutcomesQueryRequest,
+  OutcomesQueryResult,
+} from "SnubaAdmin/outcomes_analyzer/types";
 
 import { AutoReplacementsBypassProjectsData } from "SnubaAdmin/auto_replacements_bypass_projects/types";
 
@@ -56,6 +60,10 @@ interface Client {
   executeCardinalityQuery: (
     req: CardinalityQueryRequest,
   ) => Promise<CardinalityQueryResult>;
+  getPredefinedOutcomesQueryOptions: () => Promise<[PredefinedQuery]>;
+  executeOutcomesQuery: (
+    req: OutcomesQueryRequest,
+  ) => Promise<OutcomesQueryResult>;
   getAllMigrationGroups: () => Promise<MigrationGroupResult[]>;
   runMigration: (req: RunMigrationRequest) => Promise<RunMigrationResult>;
   getAllowedTools: () => Promise<AllowedTools>;
@@ -288,6 +296,24 @@ function Client(): Client {
     },
     executeCardinalityQuery: (query: CardinalityQueryRequest) => {
       const url = baseUrl + "cardinality_query";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        body: JSON.stringify(query),
+      }).then((resp) => {
+        if (resp.ok) {
+          return resp.json();
+        } else {
+          return resp.json().then(Promise.reject.bind(Promise));
+        }
+      });
+    },
+    getPredefinedOutcomesQueryOptions: () => {
+      const url = baseUrl + "outcomes_queries";
+      return fetch(url).then((resp) => resp.json());
+    },
+    executeOutcomesQuery: (query: OutcomesQueryRequest) => {
+      const url = baseUrl + "outcomes_query";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "POST",

@@ -30,6 +30,7 @@ from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_cardinality_analyzer_queries import (
     CardinalityQuery,
 )
+from snuba.admin.clickhouse.predefined_outcomes_queries import OutcomesQuery
 from snuba.admin.clickhouse.predefined_querylog_queries import QuerylogQuery
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
 from snuba.admin.clickhouse.profile_events import gather_profile_events
@@ -44,6 +45,7 @@ from snuba.admin.migrations_policies import (
     check_migration_perms,
     get_migration_group_policies,
 )
+from snuba.admin.outcomes_analyzer.outcomes_analyzer import run_outcomes_query
 from snuba.admin.production_queries.prod_queries import run_snql_query
 from snuba.admin.rpc.rpc_queries import validate_request_meta
 from snuba.admin.tool_policies import (
@@ -371,6 +373,13 @@ def querylog_queries() -> Response:
 @check_tool_perms(tools=[AdminTools.CARDINALITY_ANALYZER])
 def cardinality_queries() -> Response:
     res = [q.to_json() for q in CardinalityQuery.all_classes()]
+    return make_response(jsonify(res), 200)
+
+
+@application.route("/outcomes_queries")
+@check_tool_perms(tools=[AdminTools.OUTCOMES_ANALYZER])
+def outcomes_queries() -> Response:
+    res = [q.to_json() for q in OutcomesQuery.all_classes()]
     return make_response(jsonify(res), 200)
 
 
@@ -846,6 +855,63 @@ def cardinality_analyzer_query() -> Response:
         )
     try:
         result = run_metrics_query(raw_sql, user)
+        rows, columns = result.results, result.meta
+        if columns:
+            return make_response(
+                jsonify({"column_names": [name for name, _ in columns], "rows": rows}),
+                200,
+            )
+        return make_response(
+            jsonify({"error": {"type": "unknown", "message": "no columns"}}),
+            500,
+        )
+    except ClickhouseError as err:
+        details = {
+            "type": "clickhouse",
+            "message": str(err),
+            "code": err.code,
+        }
+        return make_response(jsonify({"error": details}), 400)
+    except InvalidCustomQuery as err:
+        return Response(
+            json.dumps({"error": {"message": str(err)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
+    except Exception as err:
+        return make_response(
+            jsonify({"error": {"type": "unknown", "message": str(err)}}),
+            500,
+        )
+
+
+@application.route("/outcomes_query", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.OUTCOMES_ANALYZER])
+def outcomes_analyzer_query() -> Response:
+    user = request.headers.get(USER_HEADER_KEY, "unknown")
+    if user == "unknown" and settings.ADMIN_AUTH_PROVIDER != "NOOP":
+        return Response(
+            json.dumps({"error": "Unauthorized"}),
+            401,
+            {"Content-Type": "application/json"},
+        )
+    req = json.loads(request.data)
+    try:
+        raw_sql = req["sql"]
+    except KeyError as e:
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "request",
+                        "message": f"Invalid request, missing key {e.args[0]}",
+                    }
+                }
+            ),
+            400,
+        )
+    try:
+        result = run_outcomes_query(raw_sql, user)
         rows, columns = result.results, result.meta
         if columns:
             return make_response(
