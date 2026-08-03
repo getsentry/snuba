@@ -586,8 +586,7 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                     value=bytes_scanned,
                     tags={"tier": routing_decision.tier.name},
                 )
-            if settings.RECORD_QUERIES:
-                record_query(_construct_hacky_querylog_payload(self, routing_decision))
+            record_query(_construct_hacky_querylog_payload(self, routing_decision))
         except Exception as e:
             self.metrics.increment("after_execute_failure")
             sentry_sdk.capture_message(f"Error in routing strategy after execute: {e}")
