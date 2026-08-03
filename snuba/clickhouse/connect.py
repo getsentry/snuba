@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import json
-import logging
 from collections.abc import Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from datetime import datetime
 from threading import Lock
 from typing import Any
@@ -13,11 +12,15 @@ import sentry_sdk
 from clickhouse_connect import common as clickhouse_connect_common
 from clickhouse_connect.driver.binding import quote_identifier
 from clickhouse_connect.driver.client import Client
-from clickhouse_connect.driver.exceptions import ClickHouseError, OperationalError
+from clickhouse_connect.driver.exceptions import (
+    ClickHouseError,
+    OperationalError,
+    StreamFailureError,
+)
 from clickhouse_connect.driver.httputil import get_pool_manager
 from sentry_sdk import traces
 
-from snuba import environment, settings, state
+from snuba import environment, settings
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.native import (
     ClickhousePool,
@@ -26,10 +29,9 @@ from snuba.clickhouse.native import (
     Params,
 )
 from snuba.reader import unwrap_nullable_type
+from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.sentry import SENTRY_OP
-
-logger = logging.getLogger("snuba.clickhouse.connect")
 
 metrics = MetricsWrapper(environment.metrics, "clickhouse.connect")
 
@@ -69,11 +71,20 @@ UNBOUNDED_SEND_RECEIVE_TIMEOUT_SECONDS = 86_400  # 24h
 # Default ClickHouse HTTP port, used when a caller does not pass one.
 DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
 
-# clickhouse-connect raises a ProgrammingError by default when it is asked to
-# send a setting it considers unknown or readonly. The native driver simply
-# forwards whatever settings it is given to the server, so to preserve parity
-# we tell clickhouse-connect to drop unrecognized settings instead of failing.
+# Match native-driver behavior: forward unknown settings instead of failing.
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
+# Process-wide; default off (plain Native framing).
+clickhouse_connect_common.set_setting(
+    "use_protocol_version",
+    get_option("clickhouse_connect_use_protocol_version", False),
+)
+
+_STREAM_DESYNC_MARKERS = (
+    "Unrecognized ClickHouse type",
+    "Stream ended unexpectedly",
+    "Stream failed during read",
+    "unrecognized data found in stream",
+)
 
 
 def _coerce_temporal(value: Any, ch_type: str) -> Any:
@@ -122,12 +133,6 @@ class ClickhouseConnectPool(ClickhousePool):
         send_receive_timeout: int | None = 35,
         client_settings: Mapping[str, Any] = {},
     ) -> None:
-        # No native connection queue here; clickhouse-connect manages its own
-        # HTTP pool. ``port`` is the abstract base attribute (it holds the
-        # cluster's configured HTTP port for this driver). The pool size is not
-        # a construction parameter: it is always taken from the
-        # ``clickhouse_connect_pool_size`` runtime config (see _get_client), so
-        # it can be tuned at runtime without rebuilding pools.
         self.host = host
         self.port = http_port
         self.user = user
@@ -143,63 +148,54 @@ class ClickhouseConnectPool(ClickhousePool):
         self.__client: Client | None = None
         self.__lock = Lock()
 
+    def _create_client(self) -> Client:
+        pool_size = get_option("clickhouse_connect_pool_size", settings.CLICKHOUSE_MAX_POOL_SIZE)
+        pool_mgr = get_pool_manager(
+            ca_cert=self.ca_certs,
+            verify=bool(self.verify),
+            maxsize=pool_size,
+            num_pools=1,
+        )
+        connect_timeout = (
+            get_option("clickhouse_connect_connect_timeout", 0) or self.connect_timeout
+        )
+        send_receive_timeout = get_option("clickhouse_connect_send_receive_timeout", 0)
+        if not send_receive_timeout:
+            send_receive_timeout = (
+                self.send_receive_timeout
+                if self.send_receive_timeout is not None
+                else UNBOUNDED_SEND_RECEIVE_TIMEOUT_SECONDS
+            )
+        return clickhouse_connect.get_client(
+            host=self.host,
+            port=self.port,
+            username=self.user,
+            password=self.password,
+            database=self.database,
+            interface="https" if self.secure else "http",
+            secure=self.secure,
+            verify=bool(self.verify),
+            ca_cert=self.ca_certs,
+            connect_timeout=connect_timeout,
+            send_receive_timeout=send_receive_timeout,
+            settings=dict(self.client_settings),
+            pool_mgr=pool_mgr,
+            query_limit=0,
+            autogenerate_session_id=False,
+            compress="lz4",
+        )
+
     def _get_client(self) -> Client:
-        # The client (and its handshake with the server) is created lazily so
-        # that simply constructing a pool does not open a connection.
         if self.__client is None:
             with self.__lock:
                 if self.__client is None:
-                    # Pool size always comes from the clickhouse_connect_pool_size
-                    # runtime config, falling back to the configured
-                    # CLICKHOUSE_MAX_POOL_SIZE. The value is read once, when the
-                    # (cached) client is first created.
-                    pool_size = (
-                        state.get_int_config(
-                            "clickhouse_connect_pool_size", settings.CLICKHOUSE_MAX_POOL_SIZE
-                        )
-                        or settings.CLICKHOUSE_MAX_POOL_SIZE
-                    )
-                    pool_mgr = get_pool_manager(
-                        ca_cert=self.ca_certs,
-                        verify=bool(self.verify),
-                        maxsize=pool_size,
-                        # All requests go to a single host, so a single pool is
-                        # enough. Keep a small margin for safety.
-                        num_pools=2,
-                    )
-                    self.__client = clickhouse_connect.get_client(
-                        host=self.host,
-                        port=self.port,
-                        username=self.user,
-                        password=self.password,
-                        database=self.database,
-                        interface="https" if self.secure else "http",
-                        secure=self.secure,
-                        verify=bool(self.verify),
-                        ca_cert=self.ca_certs,
-                        connect_timeout=self.connect_timeout,
-                        # Honor the per-profile timeout as-is, like the native
-                        # driver does (reads get 25s, migrations/DDL keep their
-                        # longer timeouts). A profile with no timeout means
-                        # "unbounded" on the native path; emulate that here with a
-                        # large finite timeout, since clickhouse-connect cannot
-                        # take None.
-                        send_receive_timeout=(
-                            self.send_receive_timeout
-                            if self.send_receive_timeout is not None
-                            else UNBOUNDED_SEND_RECEIVE_TIMEOUT_SECONDS
-                        ),
-                        settings=dict(self.client_settings),
-                        pool_mgr=pool_mgr,
-                        # The native driver applies no implicit row limit; match
-                        # that behavior here.
-                        query_limit=0,
-                        # Sessions serialize queries on the server. We share a
-                        # single client across threads, so sessions must be
-                        # disabled to allow concurrent queries.
-                        autogenerate_session_id=False,
-                    )
+                    self.__client = self._create_client()
         return self.__client
+
+    def _reset_connections(self) -> None:
+        if self.__client is not None:
+            with suppress(Exception):
+                self.__client.close_connections()
 
     def _build_query_settings(
         self,
@@ -221,6 +217,11 @@ class ClickhouseConnectPool(ClickhousePool):
             # require querying system.text_log by query_id (a separate feature).
             query_settings["send_logs_level"] = "trace"
         return query_settings or None
+
+    @staticmethod
+    def _is_stream_desync(exc: BaseException) -> bool:
+        message = str(exc)
+        return any(marker in message for marker in _STREAM_DESYNC_MARKERS)
 
     def _execute_once(
         self,
@@ -399,35 +400,22 @@ class ClickhouseConnectPool(ClickhousePool):
 
     @contextmanager
     def _translate_clickhouse_errors(self) -> Iterator[None]:
-        # Map clickhouse-connect's transport/server errors onto snuba's
-        # ClickhouseError (preserving the server error code), mirroring how the
-        # native pool wraps the clickhouse_driver error family. Shared by
-        # execute() and execute_explain() so both surface failures identically.
         try:
             yield
         except OperationalError as e:
-            # Connection/transport level failures. Mirrors the native pool's
-            # handling of NetworkError/SocketTimeoutError by emitting the
-            # connection_error metric before surfacing the error.
-            metrics.increment(
-                "connection_error",
-                tags={
-                    "host": self.host,
-                    "port": str(self.port),
-                    "user": self.user,
-                    "database": self.database,
-                },
-            )
+            metrics.increment("connection_error")
+            self._reset_connections()
             raise ClickhouseError(str(e), code=getattr(e, "code", None) or -1) from e
+        except StreamFailureError as e:
+            metrics.increment("stream_failure")
+            self._reset_connections()
+            raise ClickhouseError(str(e), code=-1) from e
         except ClickHouseError as e:
-            # ClickHouseError is the base class for every clickhouse-connect
-            # error (DatabaseError, ProgrammingError, DataError, ...). The native
-            # pool likewise wraps the whole clickhouse_driver errors.Error family
-            # into ClickhouseError, preserving the server error code when present.
+            if self._is_stream_desync(e):
+                metrics.increment("stream_desync")
+                self._reset_connections()
             raise ClickhouseError(str(e), code=getattr(e, "code", None) or -1) from e
         except json.JSONDecodeError as e:
-            # A malformed body on the JSONCompact totals path (truncation, a proxy
-            # error page) surfaces as ClickhouseError, like the native driver does.
             raise ClickhouseError(f"invalid JSON response: {e}", code=-1) from e
 
     def execute(
@@ -442,20 +430,7 @@ class ClickhouseConnectPool(ClickhousePool):
         capture_trace: bool = False,
         retryable: bool = True,
     ) -> ClickhouseResult:
-        """
-        Execute a clickhouse query.
-
-        Unlike :class:`snuba.clickhouse.native.ClickhouseNativePool`, this
-        method does not implement any retry logic of its own. Retries (stale
-        keep-alive sockets, transport errors and HTTP 429/503/504 responses)
-        are handled internally by clickhouse-connect. Notably this means the
-        native pool's ``TOO_MANY_SIMULTANEOUS_QUERIES`` backoff is *not*
-        replicated: clickhouse-connect does not retry that error, so it is
-        surfaced directly to the caller.
-
-        The ``retryable`` argument is accepted for interface parity with the
-        native pool but has no effect here.
-        """
+        """Execute a clickhouse query. ``retryable`` is accepted for interface parity only."""
         with self._translate_clickhouse_errors():
             return self._execute_once(
                 query,
