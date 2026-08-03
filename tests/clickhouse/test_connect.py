@@ -6,7 +6,7 @@ from unittest import mock
 
 import pytest
 
-from snuba.clickhouse.connect import ClickhouseConnectPool
+from snuba.clickhouse.connect import ClickhouseConnectPool, _insert_statement
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.clusters.cluster import ClickhouseClientSettings
@@ -42,7 +42,7 @@ def _make_pool(client: mock.Mock) -> ClickhouseConnectPool:
         password="test",
         database="test",
     )
-    # Avoid creating a real client / connection.
+    pool._ClickhouseConnectPool__client = client  # type: ignore[attr-defined]
     pool._get_client = lambda: client  # type: ignore[method-assign]
     return pool
 
@@ -132,6 +132,13 @@ def test_insert_multiple_rows_build_a_matrix() -> None:
     ]
 
 
+def test_insert_statement_mirrors_what_the_driver_sends() -> None:
+    assert (
+        _insert_statement("migrations_local", ["group", "migration_id"])
+        == "INSERT INTO migrations_local (`group`, `migration_id`) FORMAT Native"
+    )
+
+
 def test_insert_empty_rows_short_circuits() -> None:
     client = mock.Mock()
 
@@ -189,8 +196,6 @@ def test_too_many_simultaneous_queries_not_retried() -> None:
 
 
 def test_operational_error_mapped_without_extra_retries() -> None:
-    # Connection-level retries are clickhouse-connect's responsibility; we only
-    # map the surfaced error onto ClickhouseError without retrying again.
     from clickhouse_connect.driver.exceptions import OperationalError
 
     client = mock.Mock()
@@ -201,12 +206,10 @@ def test_operational_error_mapped_without_extra_retries() -> None:
         pool.execute("SELECT 1", retryable=True)
 
     assert client.query.call_count == 1
+    client.close_connections.assert_called_once()
 
 
 def test_generic_clickhouse_error_wrapped() -> None:
-    # Any clickhouse-connect error (here a ProgrammingError) must be wrapped in
-    # a snuba ClickhouseError, matching how the native pool wraps the whole
-    # clickhouse_driver errors.Error family.
     from clickhouse_connect.driver.exceptions import ProgrammingError
 
     client = mock.Mock()
@@ -217,6 +220,7 @@ def test_generic_clickhouse_error_wrapped() -> None:
         pool.execute("SELECT 1")
 
     assert client.query.call_count == 1
+    client.close_connections.assert_not_called()
 
 
 def test_totals_malformed_json_wrapped() -> None:
@@ -253,6 +257,7 @@ def test_timeouts_are_passed_through() -> None:
     _, kwargs = get_client.call_args
     assert kwargs["send_receive_timeout"] == 300000
     assert kwargs["connect_timeout"] == 60
+    assert kwargs["compress"] == "lz4"
 
 
 def test_send_receive_timeout_unbounded_when_profile_has_none() -> None:
@@ -279,6 +284,37 @@ def test_send_receive_timeout_unbounded_when_profile_has_none() -> None:
 
     _, kwargs = get_client.call_args
     assert kwargs["send_receive_timeout"] == UNBOUNDED_SEND_RECEIVE_TIMEOUT_SECONDS
+
+
+def test_timeout_options_override_constructor_values() -> None:
+    import clickhouse_connect
+    from sentry_options.testing import override_options
+
+    pool = ClickhouseConnectPool(
+        host="host",
+        user="test",
+        password="test",
+        database="test",
+        connect_timeout=1,
+        send_receive_timeout=25,
+    )
+
+    with (
+        override_options(
+            "snuba",
+            {
+                "clickhouse_connect_connect_timeout": 7,
+                "clickhouse_connect_send_receive_timeout": 99,
+            },
+        ),
+        mock.patch.object(clickhouse_connect, "get_client") as get_client,
+        mock.patch("snuba.clickhouse.connect.get_pool_manager"),
+    ):
+        pool._get_client()
+
+    _, kwargs = get_client.call_args
+    assert kwargs["connect_timeout"] == 7
+    assert kwargs["send_receive_timeout"] == 99
 
 
 def test_read_query_client_settings_use_25s_timeout() -> None:
@@ -309,12 +345,14 @@ def test_internal_profile_is_unbounded() -> None:
 
 def test_pool_size_defaults_to_setting() -> None:
     import clickhouse_connect
+    from sentry_options.testing import override_options
 
     from snuba import settings
 
     pool = ClickhouseConnectPool(host="host", user="test", password="test", database="test")
 
     with (
+        override_options("snuba", {}),
         mock.patch.object(clickhouse_connect, "get_client"),
         mock.patch("snuba.clickhouse.connect.get_pool_manager") as get_pool_manager,
     ):
@@ -881,3 +919,44 @@ def test_connect_driver_matches_native_for_totals_and_empty_results() -> None:
         finally:
             native_pool.close()
             connect_pool.close()
+
+
+def test_use_protocol_version_disabled_by_default() -> None:
+    from clickhouse_connect import common as clickhouse_connect_common
+
+    assert clickhouse_connect_common.get_setting("use_protocol_version") is False
+
+
+def test_execute_surfaces_native_stream_desync_without_retry() -> None:
+    from clickhouse_connect.driver.exceptions import InternalError
+
+    client = mock.Mock()
+    client.query.side_effect = InternalError(
+        "Unrecognized ClickHouse type base: achilles-api-dotnet name: achilles-api-dotnet"
+    )
+    pool = _make_pool(client)
+
+    with pytest.raises(ClickhouseError) as excinfo:
+        pool.execute("SELECT 1")
+
+    assert "Unrecognized ClickHouse type" in str(excinfo.value)
+    assert client.query.call_count == 1
+    client.close_connections.assert_called_once()
+
+
+def test_stream_failure_error_is_translated_to_clickhouse_error() -> None:
+    from clickhouse_connect.driver.exceptions import StreamFailureError
+
+    client = mock.Mock()
+    client.query.side_effect = StreamFailureError(
+        "Stream ended unexpectedly (connection closed by server)"
+    )
+    pool = _make_pool(client)
+
+    with pytest.raises(ClickhouseError) as excinfo:
+        pool.execute("SELECT 1")
+
+    assert excinfo.value.code == -1
+    assert "Stream ended unexpectedly" in str(excinfo.value)
+    assert client.query.call_count == 1
+    client.close_connections.assert_called_once()

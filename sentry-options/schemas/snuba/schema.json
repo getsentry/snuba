@@ -573,15 +573,25 @@
       "default": false,
       "description": "When true, the ClickHouse read path uses the clickhouse-connect (HTTP) driver instead of the native protocol. Lets the driver migration roll out and roll back without a deploy. Migrated from the runtime config of the same name."
     },
+    "clickhouse_connect_use_protocol_version": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, clickhouse-connect negotiates client_protocol_version (Native block-info framing). Process-wide setting applied when snuba.clickhouse.connect is imported; existing clients are unchanged until restart. Default false: proxies can strip the setting and desync the decoder into Unrecognized ClickHouse type errors."
+    },
     "clickhouse_connect_pool_size": {
       "type": "integer",
-      "default": 0,
-      "description": "HTTP connection pool size used by the clickhouse-connect driver. 0 (the default) means unset: settings.CLICKHOUSE_MAX_POOL_SIZE is used instead. Migrated from runtime config clickhouse_connect_pool_size."
+      "default": 25,
+      "description": "urllib3 maxsize for the clickhouse-connect HTTP pool. Read when a connect client is created or rebuilt. Migrated from the runtime config of the same name; falls back to settings.CLICKHOUSE_MAX_POOL_SIZE only if the option store is unavailable."
     },
-    "ondemand_profiler_hostnames": {
-      "type": "string",
-      "default": "",
-      "description": "Comma-separated list of hostnames for which the on-demand profiler should capture a profile."
+    "clickhouse_connect_connect_timeout": {
+      "type": "integer",
+      "default": 0,
+      "description": "TCP connect timeout in seconds for clickhouse-connect clients. 0 keeps the pool constructor value (normally 1s). Read when a client is created."
+    },
+    "clickhouse_connect_send_receive_timeout": {
+      "type": "integer",
+      "default": 0,
+      "description": "HTTP read timeout in seconds for clickhouse-connect clients (urllib3 read/send_receive_timeout). 0 keeps the per-profile constructor value (e.g. 25s for QUERY). Read when a client is created."
     },
     "max_spans_per_transaction": {
       "type": "integer",

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from glob import glob
 
-import sentry_sdk
+from sentry_sdk import traces
 
 from snuba import settings
 from snuba.datasets.configuration.dataset_builder import build_dataset_from_config
@@ -11,12 +11,13 @@ from snuba.datasets.entities.factory import initialize_entity_factory
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.utils.config_component_factory import ConfigComponentFactory
 from snuba.utils.metrics.util import with_span
+from snuba.utils.sentry import SENTRY_OP
 from snuba.utils.serializable_exception import SerializableException
 
 
 class _DatasetFactory(ConfigComponentFactory[Dataset, str]):
     def __init__(self) -> None:
-        with sentry_sdk.start_span(op="initialize", description="Dataset Factory"):
+        with traces.start_span(name="Dataset Factory", attributes={SENTRY_OP: "initialize"}):
             initialize_entity_factory()
             self._dataset_map: dict[str, Dataset] = {}
             self._name_map: dict[type[Dataset], str] = {}

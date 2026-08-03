@@ -249,8 +249,7 @@ class ConnectionCache:
         as well as the admin and CLI by-host helpers — goes through it and gets
         one shared, runtime-selected pool behind the abstract
         :class:`ClickhousePool` type. Pool sizing is left to the pools themselves
-        (the connect pool reads the ``clickhouse_connect_pool_size``
-        sentry-option).
+        (the connect pool reads the ``clickhouse_connect_pool_size`` sentry-option).
         """
         use_connect = use_clickhouse_connect_driver()
         with self.__lock:
