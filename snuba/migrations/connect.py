@@ -83,11 +83,6 @@ def check_clickhouse_connections(
 
         for attempt in range(max_attempts):
             try:
-                logger.debug(
-                    "Attempting to connect to Clickhouse cluster %s (attempt %d)",
-                    cluster,
-                    attempt,
-                )
                 check_clickhouse(clickhouse)
                 break
             except InvalidClickhouseVersion as e:
