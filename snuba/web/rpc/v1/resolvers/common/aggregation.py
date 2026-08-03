@@ -483,6 +483,18 @@ def _get_possible_percentiles_expression(
     )
 
 
+def _is_integer_key_aggregation(aggregation: AttributeConditionalAggregation) -> bool:
+    """True when the aggregation's source attribute is typed as integer.
+
+    Expression-based aggregations (AttributeKeyExpression formulas) are not treated
+    as integer even if every leaf is TYPE_INT, since the formula itself may produce
+    non-integers (e.g. division).
+    """
+    if aggregation.HasField("expression"):
+        return False
+    return aggregation.key.type == AttributeKey.TYPE_INT
+
+
 def get_extrapolated_function(
     aggregation: AttributeConditionalAggregation,
     field: Expression,
@@ -500,12 +512,26 @@ def get_extrapolated_function(
         use_sampling_factor,
         aggregation.extrapolation_mode,
     )
-    function_map_sample_weighted: dict[Function.ValueType, CurriedFunctionCall | FunctionCall] = {
-        Function.FUNCTION_SUM: f.sumIfOrNull(
+    # Sample-weighted sum of integers can produce a float (sum(x_i * w_i)). Round
+    # back to the nearest integer so callers never see a decimal sum of integers
+    # (EAP-101). COUNT is always rounded for the same reason.
+    if _is_integer_key_aggregation(aggregation):
+        sum_expr: CurriedFunctionCall | FunctionCall = f.round(
+            f.sumIfOrNull(
+                f.multiply(field, sampling_weight),
+                and_cond(field_exists, condition_in_aggregation),
+            ),
+            **alias_dict,
+        )
+    else:
+        sum_expr = f.sumIfOrNull(
             f.multiply(field, sampling_weight),
             and_cond(field_exists, condition_in_aggregation),
             **alias_dict,
-        ),
+        )
+
+    function_map_sample_weighted: dict[Function.ValueType, CurriedFunctionCall | FunctionCall] = {
+        Function.FUNCTION_SUM: sum_expr,
         Function.FUNCTION_AVERAGE: f.divide(
             f.sumIfOrNull(
                 f.multiply(field, sampling_weight),

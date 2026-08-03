@@ -216,6 +216,14 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 ),
                 Column(
                     aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(type=AttributeKey.TYPE_INT, name="custom_measurement"),
+                        label="sum_int(custom_measurement)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                    )
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_AVG,
                         key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"),
                         label="avg(custom_measurement)",
@@ -252,13 +260,17 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         )
         response = EndpointTraceItemTable().execute(message)
         measurement_sum = [v.val_double for v in response.column_values[0].results][0]
-        measurement_avg = [v.val_double for v in response.column_values[1].results][0]
+        measurement_sum_int = [v.val_double for v in response.column_values[1].results][0]
+        measurement_avg = [v.val_double for v in response.column_values[2].results][0]
         measurement_count_custom_measurement = [
-            v.val_double for v in response.column_values[2].results
+            v.val_double for v in response.column_values[3].results
         ][0]
-        measurement_count_duration = [v.val_double for v in response.column_values[3].results][0]
-        measurement_p90 = [v.val_double for v in response.column_values[4].results][0]
+        measurement_count_duration = [v.val_double for v in response.column_values[4].results][0]
+        measurement_p90 = [v.val_double for v in response.column_values[5].results][0]
         assert measurement_sum == 98  # weighted sum - 0*1 + 1*2 + 2*4 + 3*8 + 4*16
+        # EAP-101: sum of TYPE_INT attributes is rounded to an integer under extrapolation.
+        assert measurement_sum_int == 98
+        assert measurement_sum_int == int(measurement_sum_int)
         assert (
             abs(measurement_avg - 3.16129032) < 0.000001
         )  # weighted average - (0*1 + 1*2 + 2*4 + 3*8 + 4*16) / (1+2+4+8+16)

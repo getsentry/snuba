@@ -472,3 +472,34 @@ def test_conditional_aggregation_array_filter_uses_typed_columns() -> None:
     assert "attributes_array_float" not in cols
     assert "attributes_array_bool" not in cols
     assert "attributes_array" not in cols
+
+
+def test_extrapolated_sum_of_integers_is_rounded() -> None:
+    """EAP-101: sample-weighted sum of TYPE_INT attributes must round to an integer."""
+    agg = AttributeConditionalAggregation(
+        aggregate=Function.FUNCTION_SUM,
+        key=AttributeKey(type=AttributeKey.TYPE_INT, name="custom_measurement"),
+        label="sum(custom_measurement)",
+        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+    )
+    expr = aggregation_to_expression(agg, attribute_key_to_expression)
+    assert isinstance(expr, FunctionCall)
+    assert expr.function_name == "round"
+    assert expr.alias == "sum(custom_measurement)"
+    inner = expr.parameters[0]
+    assert isinstance(inner, FunctionCall)
+    assert inner.function_name == "sumIfOrNull"
+
+
+def test_extrapolated_sum_of_doubles_is_not_rounded() -> None:
+    """Sample-weighted sum of non-integer attributes should keep its fractional value."""
+    agg = AttributeConditionalAggregation(
+        aggregate=Function.FUNCTION_SUM,
+        key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"),
+        label="sum(custom_measurement)",
+        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+    )
+    expr = aggregation_to_expression(agg, attribute_key_to_expression)
+    assert isinstance(expr, FunctionCall)
+    assert expr.function_name == "sumIfOrNull"
+    assert expr.alias == "sum(custom_measurement)"
