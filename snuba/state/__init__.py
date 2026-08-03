@@ -246,6 +246,9 @@ def _record_query_delivery_callback(error: KafkaError | None, message: KafkaMess
 
 
 def record_query(query_metadata: snuba_queries_v1.Querylog) -> None:
+    if not settings.RECORD_QUERIES:
+        return
+
     try:
         producer = _kafka_producer()
         data = safe_dumps(query_metadata)
