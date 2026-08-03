@@ -6,8 +6,8 @@ from random import random
 from typing import Any
 from uuid import UUID
 
-import sentry_sdk
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
+from sentry_sdk import traces
 from usageaccountant import UsageUnit
 
 from snuba import environment, settings, state
@@ -24,6 +24,7 @@ from snuba.request import Request
 from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.sentry import set_tag_and_attribute
 from snuba.web import QueryException, QueryResult
 
 metrics = MetricsWrapper(environment.metrics, "api")
@@ -222,19 +223,19 @@ def _add_tags(
     experiments: Mapping[str, Any] | None = None,
     metadata: SnubaQueryMetadata | None = None,
 ) -> None:
-    if sentry_sdk.get_current_span():
+    if traces.get_current_span() is not None:
         duration_group = timer.get_duration_group()
-        sentry_sdk.set_tag("duration_group", duration_group)
+        set_tag_and_attribute("duration_group", duration_group)
         if duration_group == ">30s":
-            sentry_sdk.set_tag("timeout", "too_long")
+            set_tag_and_attribute("timeout", "too_long")
         if experiments is not None:
             for name, value in experiments.items():
-                sentry_sdk.set_tag(name, str(value))
+                set_tag_and_attribute(name, str(value))
         if metadata is not None:
             for query_data in metadata.query_list:
                 max_threads = query_data.stats.get("max_threads")
                 if max_threads is not None:
-                    sentry_sdk.set_tag("max_threads", max_threads)
+                    set_tag_and_attribute("max_threads", max_threads)
                     break
 
 

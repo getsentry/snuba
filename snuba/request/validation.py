@@ -7,6 +7,7 @@ from collections.abc import MutableMapping
 from typing import Any, Protocol
 
 import sentry_sdk
+from sentry_sdk import traces
 
 from snuba import environment, settings
 from snuba.attribution import get_app_id
@@ -34,6 +35,7 @@ from snuba.request.schema import RequestParts, RequestSchema
 from snuba.state.sentry_options import get_mapped_option, get_option
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.sentry import SENTRY_OP, set_tag_and_attribute
 
 metrics = MetricsWrapper(environment.metrics, "snuba.validation")
 
@@ -109,7 +111,7 @@ def build_request(
     referrer: str,
     custom_processing: CustomProcessors | None = None,
 ) -> Request:
-    with sentry_sdk.start_span(description="build_request", op="validate") as span:
+    with traces.start_span(name="build_request", attributes={SENTRY_OP: "validate"}) as span:
         try:
             dataset_name = get_dataset_name(dataset)
             if get_mapped_option(
@@ -151,11 +153,11 @@ def build_request(
             )
             raise exception
 
-        span.set_data(
+        span.set_attribute(
             "snuba_query_parsed",
             repr(query).split("\n"),
         )
-        span.set_data(
+        span.set_attribute(
             "snuba_query_raw",
             textwrap.wrap(repr(request.original_body), 100, break_long_words=False),
         )
@@ -235,11 +237,11 @@ def _build_request(
 ) -> Request:
     org_ids = get_object_ids_in_query_ast(query, "org_id")
     if org_ids is not None and len(org_ids) == 1:
-        sentry_sdk.set_tag("snuba_org_id", org_ids.pop())
+        set_tag_and_attribute("snuba_org_id", org_ids.pop())
 
     query_project_id = _get_project_id(query)
     if query_project_id:
-        sentry_sdk.set_tag("snuba_project_id", query_project_id)
+        set_tag_and_attribute("snuba_project_id", query_project_id)
 
     attribution_info = _get_attribution_info(request_parts, referrer, query_project_id)
 

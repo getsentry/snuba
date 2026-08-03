@@ -93,7 +93,7 @@ expression: snapshot_payload
       123123123
     ],
     "referrer": "search",
-    "request_body": "{\"app_id\":\"legacy\",\"dataset\":\"discover\",\"legacy\":true,\"parent_api\":\"/api/0/organizations/{organization_slug}/issues-count/\",\"query\":\"redacted\",\"tenant_ids\":{\"legacy\":\"legacy\"}}",
+    "request_body": "{\n      \"legacy\": true,\n      \"query\": \"redacted\",\n      \"dataset\": \"discover\",\n      \"app_id\": \"legacy\",\n      \"tenant_ids\": {\n        \"legacy\": \"legacy\"\n      },\n      \"parent_api\": \"/api/0/organizations/{organization_slug}/issues-count/\"\n    }",
     "request_id": "db4e2fc4-8df3-4d69-be0a-da66ab2ed2bd",
     "status": "rate-limited",
     "timestamp": 1677884153

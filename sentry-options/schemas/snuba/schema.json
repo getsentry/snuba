@@ -591,11 +591,6 @@
       "default": 0,
       "description": "HTTP read timeout in seconds for clickhouse-connect clients (urllib3 read/send_receive_timeout). 0 keeps the per-profile constructor value (e.g. 25s for QUERY). Read when a client is created."
     },
-    "ondemand_profiler_hostnames": {
-      "type": "string",
-      "default": "",
-      "description": "Comma-separated list of hostnames for which the on-demand profiler should capture a profile."
-    },
     "max_spans_per_transaction": {
       "type": "integer",
       "default": 2000,

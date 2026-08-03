@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import random
 import uuid
@@ -11,10 +12,10 @@ from threading import Lock
 from typing import Any, cast
 
 import rapidjson
-import sentry_sdk
 from clickhouse_driver.errors import ErrorCodes
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
 from sentry_options import OptionValue
+from sentry_sdk import traces
 from sentry_sdk.api import configure_scope
 
 from snuba import environment, settings
@@ -64,8 +65,9 @@ from snuba.state.sentry_options import get_mapped_option, get_option
 from snuba.util import force_bytes
 from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.metrics.timer import Timer
-from snuba.utils.metrics.util import with_span
+from snuba.utils.metrics.util import set_current_span_attributes, with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.sentry import SENTRY_OP, set_tag_and_attribute
 from snuba.utils.serializable_exception import (
     SerializableException,
     SerializableExceptionDict,
@@ -323,7 +325,7 @@ def execute_query_with_readthrough_caching(
     ):
         query_id = f"randomized-{uuid.uuid4().hex}"
         clickhouse_query_settings["query_id"] = query_id
-        sentry_sdk.update_current_span(attributes={"query_id": query_id})
+        set_current_span_attributes({"query_id": query_id})
         return execute_query(
             clickhouse_query,
             query_settings,
@@ -337,7 +339,7 @@ def execute_query_with_readthrough_caching(
 
     clickhouse_query_settings["query_id"] = f"randomized-{uuid.uuid4().hex}"
 
-    sentry_sdk.update_current_span(attributes={"query_id": query_id})
+    set_current_span_attributes({"query_id": query_id})
 
     def record_cache_hit_type(hit_type: int) -> None:
         span_tag = "cache_miss"
@@ -349,8 +351,7 @@ def execute_query_with_readthrough_caching(
             span_tag = "cache_wait"
         elif hit_type == SIMPLE_READTHROUGH:
             stats["cache_hit_simple"] = 1
-        sentry_sdk.set_tag("cache_status", span_tag)
-        sentry_sdk.update_current_span(attributes={"cache_status": span_tag})
+        set_tag_and_attribute("cache_status", span_tag)
 
     cache_partition = _get_cache_partition(reader)
     metrics.increment(
@@ -537,9 +538,8 @@ def _raw_query(
         elif isinstance(cause, (TimeoutError, ExecutionTimeoutError)):
             status = QueryStatus.TIMEOUT
 
-        with configure_scope() as scope:
-            if scope.span:
-                sentry_sdk.set_tag("slo_status", request_status.status.value)
+        # No `if scope.span:` guard: scope.span is always None in stream mode.
+        set_tag_and_attribute("slo_status", request_status.status.value)
 
         stats = update_with_status(
             status=status or QueryStatus.ERROR,
@@ -867,16 +867,20 @@ def _apply_allocation_policies_quota(
     rejection_quota_and_policy = None
     throttle_quota_and_policy = None
     min_threads_across_policies = MAX_THRESHOLD
-    with sentry_sdk.start_span(
-        op="allocation_policy", description="_apply_allocation_policies_quota"
+    with traces.start_span(
+        name="_apply_allocation_policies_quota",
+        attributes={SENTRY_OP: "allocation_policy"},
     ) as span:
         for allocation_policy in allocation_policies:
             allowance = allocation_policy.get_quota_allowance(attribution_info.tenant_ids, query_id)
             can_run &= allowance.can_run
             quota_allowances[allocation_policy.class_name()] = allowance
-            span.set_data(
+            # QuotaAllowance isn't a valid attribute value; serialize it.
+            span.set_attribute(
                 "quota_allowance",
-                quota_allowances[allocation_policy.class_name()],
+                json.dumps(
+                    quota_allowances[allocation_policy.class_name()].to_dict(), default=repr
+                ),
             )
             if allowance.is_throttled and allowance.max_threads < min_threads_across_policies:
                 throttle_quota_and_policy = _QuotaAndPolicy(
@@ -919,8 +923,8 @@ def _apply_allocation_policies_quota(
                 if rejection_quota_and_policy is not None
                 else "unknown"
             )
-            span.set_data("policy", rejecting_policy)
-            span.set_data("action", "rejected")
+            span.set_attribute("policy", rejecting_policy)
+            span.set_attribute("action", "rejected")
             metrics.increment(
                 "rejected_query",
                 tags={
@@ -932,8 +936,8 @@ def _apply_allocation_policies_quota(
 
         if throttle_quota_and_policy is not None:
             throttling_policy = throttle_quota_and_policy.policy.class_name()
-            span.set_data("policy", throttling_policy)
-            span.set_data("action", "throttled")
+            span.set_attribute("policy", throttling_policy)
+            span.set_attribute("action", "throttled")
             metrics.increment(
                 "throttled_query",
                 tags={
@@ -947,5 +951,5 @@ def _apply_allocation_policies_quota(
                 tags={"storage_key": allocation_policies[0].resource_identifier.value},
             )
         max_threads = min_threads_across_policies
-        span.set_data("max_threads", max_threads)
+        span.set_attribute("max_threads", max_threads)
         query_settings.set_resource_quota(ResourceQuota(max_threads=max_threads))
