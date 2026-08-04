@@ -663,7 +663,7 @@ def test_tick_consumer_falls_back_when_received_p99_missing() -> None:
         if offset == 0:
             clock.sleep(1)
 
-    assert consumer.poll() is None  # seeds previous state only
+    assert consumer.poll() is None
 
     tick_message = consumer.poll()
     assert tick_message is not None
@@ -672,7 +672,6 @@ def test_tick_consumer_falls_back_when_received_p99_missing() -> None:
         offsets=Interval(0, 1),
         timestamps=Interval(epoch.timestamp(), epoch.timestamp() + 1),
     )
-    # Fallback once per side of the interval (previous + current).
     assert metrics.calls.count(Increment("subscriptions.scheduler.sync_ts_fallback", 1, None)) == 2
 
 

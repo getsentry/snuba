@@ -186,7 +186,6 @@ class CommitLogTickConsumer(Consumer[Tick]):
         return result
 
     def __sync_timestamp(self, orig_message_ts: float, received_p99: float | None) -> float:
-        """Return the scheduling clock ts, falling back when received_p99 is null."""
         if self.__synchronization_timestamp == "orig_message_ts":
             return orig_message_ts
         if received_p99 is None:

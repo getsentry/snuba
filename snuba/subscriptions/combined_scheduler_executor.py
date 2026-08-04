@@ -273,8 +273,6 @@ class ForwardToExecutor(ProcessingStrategy[Tick]):
         assert tick.partition is not None
 
         encoded_tasks: list[KafkaPayload] = []
-        # Stale ticks intentionally produce no work, but still need a commit so
-        # the commit-log consumer can advance (same as the separate scheduler).
         if (
             self.__stale_threshold_seconds is None
             or time.time() - tick.timestamps.lower <= self.__stale_threshold_seconds

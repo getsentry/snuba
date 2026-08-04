@@ -71,7 +71,6 @@ impl PythonTransformStep {
                 offsets,
             ) = py_message;
 
-            // origin_timestamp feeds received_p99 so schedulers can form ticks.
             let received_p99: Vec<_> = origin_timestamp.iter().copied().collect();
             let commit_log_offsets = offsets
                 .iter()
