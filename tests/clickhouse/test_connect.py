@@ -207,6 +207,7 @@ def test_operational_error_mapped_without_extra_retries() -> None:
 
     assert client.query.call_count == 1
     client.close_connections.assert_called_once()
+    client.close.assert_not_called()
 
 
 def test_generic_clickhouse_error_wrapped() -> None:
@@ -942,6 +943,7 @@ def test_execute_surfaces_native_stream_desync_without_retry() -> None:
     assert "Unrecognized ClickHouse type" in str(excinfo.value)
     assert client.query.call_count == 1
     client.close_connections.assert_called_once()
+    client.close.assert_not_called()
 
 
 def test_stream_failure_error_is_translated_to_clickhouse_error() -> None:
@@ -960,3 +962,4 @@ def test_stream_failure_error_is_translated_to_clickhouse_error() -> None:
     assert "Stream ended unexpectedly" in str(excinfo.value)
     assert client.query.call_count == 1
     client.close_connections.assert_called_once()
+    client.close.assert_not_called()
