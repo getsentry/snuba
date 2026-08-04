@@ -637,22 +637,13 @@ def test_tick_consumer_non_monotonic() -> None:
 
 
 def test_tick_consumer_falls_back_when_received_p99_missing() -> None:
-    """
-    Commit-log messages may omit received_p99 (null). When the entity is
-    configured to synchronize on received_p99, fall back to orig_message_ts so
-    the scheduler keeps forming ticks instead of stalling forever.
-    """
     clock = MockedClock()
     broker: Broker[KafkaPayload] = Broker(MemoryMessageStorage(), clock)
-
     epoch = datetime.fromtimestamp(clock.time())
-
     topic = Topic("messages")
     followed_consumer_group = "events"
     partition = Partition(topic, 0)
-
     broker.create_topic(topic, partitions=1)
-
     producer = broker.get_producer()
     metrics = TestingMetricsBackend()
 
@@ -662,40 +653,17 @@ def test_tick_consumer_falls_back_when_received_p99_missing() -> None:
         metrics,
         "received_p99",
     )
-
     consumer.subscribe([topic])
 
-    # received_p99 deliberately left as None on both messages
-    producer.produce(
-        partition,
-        commit_codec.encode(
-            Commit(
-                followed_consumer_group,
-                partition,
-                0,
-                epoch.timestamp(),
-                None,
-            )
-        ),
-    ).result()
+    for offset, ts in ((0, epoch.timestamp()), (1, epoch.timestamp() + 1)):
+        producer.produce(
+            partition,
+            commit_codec.encode(Commit(followed_consumer_group, partition, offset, ts, None)),
+        ).result()
+        if offset == 0:
+            clock.sleep(1)
 
-    clock.sleep(1)
-
-    producer.produce(
-        partition,
-        commit_codec.encode(
-            Commit(
-                followed_consumer_group,
-                partition,
-                1,
-                epoch.timestamp() + 1,
-                None,
-            )
-        ),
-    ).result()
-
-    # First message seeds previous state and does not yield a tick
-    assert consumer.poll() is None
+    assert consumer.poll() is None  # seeds previous state only
 
     tick_message = consumer.poll()
     assert tick_message is not None
@@ -704,8 +672,7 @@ def test_tick_consumer_falls_back_when_received_p99_missing() -> None:
         offsets=Interval(0, 1),
         timestamps=Interval(epoch.timestamp(), epoch.timestamp() + 1),
     )
-
-    # One fallback per side of the interval (previous + current message)
+    # Fallback once per side of the interval (previous + current).
     assert metrics.calls.count(Increment("subscriptions.scheduler.sync_ts_fallback", 1, None)) == 2
 
 

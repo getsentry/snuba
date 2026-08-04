@@ -11,7 +11,7 @@ from arroyo.commit import ONCE_PER_SECOND
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
-from arroyo.types import BrokerValue, Commit
+from arroyo.types import Commit
 
 from snuba import settings
 from snuba.datasets.dataset import Dataset
@@ -268,35 +268,28 @@ class ForwardToExecutor(ProcessingStrategy[Tick]):
 
     def submit(self, message: Message[Tick]) -> None:
         assert not self.__closed
-        assert isinstance(message.value, BrokerValue)
 
         tick = message.payload
         assert tick.partition is not None
 
-        # Mirror ProduceScheduledSubscriptionMessage: stale ticks produce no work
-        # and must still advance the commit-log consumer offset.
+        encoded_tasks: list[KafkaPayload] = []
+        # Stale ticks intentionally produce no work, but still need a commit so
+        # the commit-log consumer can advance (same as the separate scheduler).
         if (
-            self.__stale_threshold_seconds is not None
-            and time.time() - tick.timestamps.lower > self.__stale_threshold_seconds
+            self.__stale_threshold_seconds is None
+            or time.time() - tick.timestamps.lower <= self.__stale_threshold_seconds
         ):
-            encoded_tasks: list[KafkaPayload] = []
-        else:
-            tasks = []
             for entity_scheduler in self.__schedulers:
-                tasks.extend(list(entity_scheduler[tick.partition].find(tick)))
-            encoded_tasks = [self.__encoder.encode(task) for task in tasks]
+                for task in entity_scheduler[tick.partition].find(tick):
+                    encoded_tasks.append(self.__encoder.encode(task))
 
-        # If there is nothing to execute, commit immediately. Otherwise the
-        # combined scheduler-executor never stages offsets (ExecuteQuery only
-        # commits after producing a result) and the consumer appears stuck
-        # with CURRENT-OFFSET=- while lag stays non-zero.
-        if len(encoded_tasks) == 0:
+        if not encoded_tasks:
             logger.info("Committing offset - no subscriptions: %r", message.committable)
             self.__commit(message.committable)
             return
 
-        for task in encoded_tasks:
-            self.__next_step.submit(message.replace(task))
+        for encoded_task in encoded_tasks:
+            self.__next_step.submit(message.replace(encoded_task))
 
     def close(self) -> None:
         self.__closed = True

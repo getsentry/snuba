@@ -102,10 +102,6 @@ def test_combined_scheduler_and_executor(tmpdir: Path) -> None:
 
 @pytest.mark.redis_db
 def test_combined_scheduler_commits_when_no_subscriptions() -> None:
-    """
-    With no matching subscriptions the combined consumer must still commit the
-    commit-log offset. Otherwise CURRENT-OFFSET stays unset and lag never drains.
-    """
     epoch = datetime.now()
 
     topic = Topic("snuba-commit-log")

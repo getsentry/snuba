@@ -186,22 +186,12 @@ class CommitLogTickConsumer(Consumer[Tick]):
         return result
 
     def __sync_timestamp(self, orig_message_ts: float, received_p99: float | None) -> float:
-        """
-        Resolve the timestamp used as the subscription scheduling clock.
-
-        Prefer the configured synchronization timestamp, but fall back to
-        orig_message_ts when received_p99 is missing. Several commit-log
-        producers historically emit received_p99=null; treating that as a hard
-        failure permanently stalls the tick consumer because the previous
-        message is left with a null lower bound.
-        """
+        """Return the scheduling clock ts, falling back when received_p99 is null."""
         if self.__synchronization_timestamp == "orig_message_ts":
             return orig_message_ts
-
         if received_p99 is None:
             self.__metrics.increment("subscriptions.scheduler.sync_ts_fallback")
             return orig_message_ts
-
         return received_p99
 
     def pause(self, partitions: Sequence[Partition]) -> None:
