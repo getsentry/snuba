@@ -137,8 +137,14 @@ def test_combined_scheduler_commits_when_no_subscriptions() -> None:
     )
     strategy.submit(message)
 
-    assert commit.call_count == 1
-    assert commit.call_args.args[0] == {partition: 5}
+    # Empty ticks commit through the executor chain on poll so they stay ordered
+    # behind any in-flight subscription queries.
+    for _ in range(5):
+        strategy.poll()
+        if any(call.args and call.args[0] == {partition: 5} for call in commit.call_args_list):
+            break
+
+    assert any(call.args and call.args[0] == {partition: 5} for call in commit.call_args_list)
 
     strategy.close()
     strategy.join()

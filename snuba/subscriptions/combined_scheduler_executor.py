@@ -1,4 +1,3 @@
-import logging
 import time
 from collections.abc import Mapping, Sequence
 from datetime import timedelta
@@ -11,7 +10,7 @@ from arroyo.commit import ONCE_PER_SECOND
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
-from arroyo.types import Commit
+from arroyo.types import Commit, FilteredPayload
 
 from snuba import settings
 from snuba.datasets.dataset import Dataset
@@ -31,7 +30,6 @@ from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.configuration_builder import build_kafka_consumer_configuration
 
-logger = logging.getLogger(__name__)
 redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 
 
@@ -239,7 +237,6 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
             ForwardToExecutor(
                 self.__schedulers,
                 execute_step,
-                commit,
                 self.__stale_threshold_seconds,
             ),
             self.__metrics,
@@ -250,12 +247,10 @@ class ForwardToExecutor(ProcessingStrategy[Tick]):
     def __init__(
         self,
         schedulers: Sequence[Mapping[int, SubscriptionScheduler]],
-        next_step: ProcessingStrategy[KafkaPayload],
-        commit: Commit,
+        next_step: ProcessingStrategy[FilteredPayload | KafkaPayload],
         stale_threshold_seconds: int | None = None,
     ) -> None:
         self.__next_step = next_step
-        self.__commit = commit
         self.__stale_threshold_seconds = stale_threshold_seconds
 
         self.__schedulers = schedulers
@@ -281,9 +276,10 @@ class ForwardToExecutor(ProcessingStrategy[Tick]):
                 for task in entity_scheduler[tick.partition].find(tick):
                     encoded_tasks.append(self.__encoder.encode(task))
 
+        # Route empty ticks through the executor as FilteredPayload so commits
+        # stay ordered behind any in-flight subscription queries.
         if not encoded_tasks:
-            logger.info("Committing offset - no subscriptions: %r", message.committable)
-            self.__commit(message.committable)
+            self.__next_step.submit(message.replace(FilteredPayload()))
             return
 
         for encoded_task in encoded_tasks:
