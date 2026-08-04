@@ -483,6 +483,32 @@ def _get_possible_percentiles_expression(
     )
 
 
+def _is_integer_key_aggregation(aggregation: AttributeConditionalAggregation) -> bool:
+    if aggregation.HasField("expression"):
+        return False
+    return aggregation.key.type == AttributeKey.TYPE_INT
+
+
+def _get_extrapolated_sum(
+    aggregation: AttributeConditionalAggregation,
+    field: Expression,
+    field_exists: Expression,
+    condition_in_aggregation: Expression,
+    sampling_weight: Expression,
+    alias: str | None,
+) -> CurriedFunctionCall | FunctionCall:
+    alias_dict = {"alias": alias} if alias else {}
+    round_to_int = _is_integer_key_aggregation(aggregation)
+    sum_expr = f.sumIfOrNull(
+        f.multiply(field, sampling_weight),
+        and_cond(field_exists, condition_in_aggregation),
+        **({} if round_to_int else alias_dict),
+    )
+    if round_to_int:
+        return f.round(sum_expr, **alias_dict)
+    return sum_expr
+
+
 def get_extrapolated_function(
     aggregation: AttributeConditionalAggregation,
     field: Expression,
@@ -501,10 +527,13 @@ def get_extrapolated_function(
         aggregation.extrapolation_mode,
     )
     function_map_sample_weighted: dict[Function.ValueType, CurriedFunctionCall | FunctionCall] = {
-        Function.FUNCTION_SUM: f.sumIfOrNull(
-            f.multiply(field, sampling_weight),
-            and_cond(field_exists, condition_in_aggregation),
-            **alias_dict,
+        Function.FUNCTION_SUM: _get_extrapolated_sum(
+            aggregation,
+            field,
+            field_exists,
+            condition_in_aggregation,
+            sampling_weight,
+            alias,
         ),
         Function.FUNCTION_AVERAGE: f.divide(
             f.sumIfOrNull(
