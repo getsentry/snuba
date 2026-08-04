@@ -39,23 +39,6 @@ schema:
   dist_table_name: group_attributes_dist
   not_deleted_mandatory_condition: deleted
 
-allocation_policies:
-  - name: ConcurrentRateLimitAllocationPolicy
-    args:
-      required_tenant_types:
-        - organization_id
-        - referrer
-        - project_id
-      default_config_overrides:
-        is_enforced: 0
-  - name: ReferrerGuardRailPolicy
-    args:
-      required_tenant_types:
-        - referrer
-      default_config_overrides:
-        is_enforced: 0
-        is_active: 0
-
 query_processors:
   - processor: ConsistencyEnforcerProcessor
 
