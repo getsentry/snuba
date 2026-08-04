@@ -1,3 +1,5 @@
+import logging
+import time
 from collections.abc import Mapping, Sequence
 from datetime import timedelta
 from typing import NamedTuple
@@ -9,7 +11,7 @@ from arroyo.commit import ONCE_PER_SECOND
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategy
 from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
-from arroyo.types import Commit
+from arroyo.types import BrokerValue, Commit
 
 from snuba import settings
 from snuba.datasets.dataset import Dataset
@@ -29,6 +31,7 @@ from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.configuration_builder import build_kafka_consumer_configuration
 
+logger = logging.getLogger(__name__)
 redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 
 
@@ -165,6 +168,7 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
         self.__partitions = partitions
         self.__entity_names = entity_names
         self.__metrics = metrics
+        self.__stale_threshold_seconds = stale_threshold_seconds
 
         entity_keys = [EntityKey(entity_name) for entity_name in self.__entity_names]
 
@@ -232,7 +236,12 @@ class CombinedSchedulerExecutorFactory(ProcessingStrategyFactory[Tick]):
             self.__mode,
             self.__partitions,
             self.__buffer_size,
-            ForwardToExecutor(self.__schedulers, execute_step),
+            ForwardToExecutor(
+                self.__schedulers,
+                execute_step,
+                commit,
+                self.__stale_threshold_seconds,
+            ),
             self.__metrics,
         )
 
@@ -242,8 +251,12 @@ class ForwardToExecutor(ProcessingStrategy[Tick]):
         self,
         schedulers: Sequence[Mapping[int, SubscriptionScheduler]],
         next_step: ProcessingStrategy[KafkaPayload],
+        commit: Commit,
+        stale_threshold_seconds: int | None = None,
     ) -> None:
         self.__next_step = next_step
+        self.__commit = commit
+        self.__stale_threshold_seconds = stale_threshold_seconds
 
         self.__schedulers = schedulers
         self.__encoder = SubscriptionScheduledTaskEncoder()
@@ -255,15 +268,32 @@ class ForwardToExecutor(ProcessingStrategy[Tick]):
 
     def submit(self, message: Message[Tick]) -> None:
         assert not self.__closed
+        assert isinstance(message.value, BrokerValue)
 
         tick = message.payload
         assert tick.partition is not None
 
-        tasks = []
-        for entity_scheduler in self.__schedulers:
-            tasks.extend(list(entity_scheduler[tick.partition].find(tick)))
+        # Mirror ProduceScheduledSubscriptionMessage: stale ticks produce no work
+        # and must still advance the commit-log consumer offset.
+        if (
+            self.__stale_threshold_seconds is not None
+            and time.time() - tick.timestamps.lower > self.__stale_threshold_seconds
+        ):
+            encoded_tasks: list[KafkaPayload] = []
+        else:
+            tasks = []
+            for entity_scheduler in self.__schedulers:
+                tasks.extend(list(entity_scheduler[tick.partition].find(tick)))
+            encoded_tasks = [self.__encoder.encode(task) for task in tasks]
 
-        encoded_tasks = [self.__encoder.encode(task) for task in tasks]
+        # If there is nothing to execute, commit immediately. Otherwise the
+        # combined scheduler-executor never stages offsets (ExecuteQuery only
+        # commits after producing a result) and the consumer appears stuck
+        # with CURRENT-OFFSET=- while lag stays non-zero.
+        if len(encoded_tasks) == 0:
+            logger.info("Committing offset - no subscriptions: %r", message.committable)
+            self.__commit(message.committable)
+            return
 
         for task in encoded_tasks:
             self.__next_step.submit(message.replace(task))

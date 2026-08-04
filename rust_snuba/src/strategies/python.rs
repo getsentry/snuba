@@ -71,6 +71,12 @@ impl PythonTransformStep {
                 offsets,
             ) = py_message;
 
+            // Populate received_p99 from the processor's origin_timestamp so
+            // subscription schedulers configured with received_p99 can form ticks.
+            // Leaving this empty produces commit-log messages with received_p99=null,
+            // which previously stalled the tick consumer.
+            let received_p99: Vec<_> = origin_timestamp.iter().copied().collect();
+
             let commit_log_offsets = offsets
                 .iter()
                 .map(|((_t, p), o)| {
@@ -79,7 +85,7 @@ impl PythonTransformStep {
                         CommitLogEntry {
                             offset: *o,
                             orig_message_ts: message_timestamp,
-                            received_p99: Vec::new(),
+                            received_p99: received_p99.clone(),
                         },
                     )
                 })
