@@ -71,38 +71,39 @@ def get_clusters_for_readiness_states(
 
 def check_clickhouse_connections(
     clusters: Sequence[ClickhouseCluster],
+    *,
+    max_attempts: int = 60,
+    retry_delay_seconds: float = 1.0,
 ) -> None:
     """
     Ensure that we can establish a connection with every cluster.
     """
-    attempts = 0
-
     for cluster in clusters:
         clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
 
-        while True:
+        for attempt in range(max_attempts):
             try:
-                logger.debug(
-                    "Attempting to connect to Clickhouse cluster %s (attempt %d)",
-                    cluster,
-                    attempts,
-                )
                 check_clickhouse(clickhouse)
                 break
             except InvalidClickhouseVersion as e:
                 logger.error(e)
                 raise
             except Exception as e:
-                logger.error(
+                logger.debug(
                     "Connection to Clickhouse cluster %s failed (attempt %d)",
                     cluster,
-                    attempts,
+                    attempt,
                     exc_info=e,
                 )
-                attempts += 1
-                if attempts == 60:
+                if attempt + 1 >= max_attempts:
+                    logger.error(
+                        "Connection to Clickhouse cluster %s failed after %d attempts",
+                        cluster,
+                        max_attempts,
+                        exc_info=e,
+                    )
                     raise
-                time.sleep(1)
+                time.sleep(retry_delay_seconds)
 
 
 def check_clickhouse(clickhouse: ClickhousePool) -> None:
