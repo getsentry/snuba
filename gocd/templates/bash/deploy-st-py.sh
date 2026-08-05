@@ -2,10 +2,7 @@
 
 eval $(regions-project-env-vars --region="${SENTRY_REGION}")
 
-IMAGE_TAG="${GO_REVISION_SNUBA_REPO}"
-if [ "${SENTRY_REGION}" = "disney" ]; then
-  IMAGE_TAG="${GO_REVISION_SNUBA_REPO}-distroless"
-fi
+IMAGE_TAG="${GO_REVISION_SNUBA_REPO}-distroless"
 
 /devinfra/scripts/get-cluster-credentials
 
