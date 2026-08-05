@@ -1,4 +1,3 @@
-import json
 import logging
 import uuid
 from collections.abc import Mapping
@@ -64,7 +63,6 @@ _DEFAULT_RETENTION_DAYS_CONFIG: dict[str, dict[str, int]] = {
         "max": MAX_DOWNSAMPLED_RETENTION_DAYS,
     },
 }
-_DEFAULT_RETENTION_DAYS_OPTION = json.dumps(_DEFAULT_RETENTION_DAYS_CONFIG, separators=(",", ":"))
 
 
 def _positive_int(value: Any, fallback: int) -> int:
@@ -87,14 +85,14 @@ def _retention_bucket(
 
 def get_retention_days_config() -> dict[str, dict[str, int]]:
     """Load the nested retention_days option, falling back to code defaults."""
-    raw = get_option("retention_days", _DEFAULT_RETENTION_DAYS_OPTION)
-    try:
-        parsed: Any = json.loads(raw) if isinstance(raw, str) else raw
-    except (TypeError, ValueError):
-        logger.warning("Invalid retention_days option %r; using defaults", raw, exc_info=True)
-        parsed = None
+    # Nested object option; cast because OptionValue's static type is only one level deep.
+    raw = cast(
+        Any,
+        get_option("retention_days", cast(Any, _DEFAULT_RETENTION_DAYS_CONFIG)),
+    )
 
-    if not isinstance(parsed, Mapping):
+    if not isinstance(raw, Mapping):
+        logger.warning("Invalid retention_days option %r; using defaults", raw)
         return {
             "standard": dict(_DEFAULT_RETENTION_DAYS_CONFIG["standard"]),
             "downsampled": dict(_DEFAULT_RETENTION_DAYS_CONFIG["downsampled"]),
@@ -102,10 +100,10 @@ def get_retention_days_config() -> dict[str, dict[str, int]]:
 
     return {
         "standard": _retention_bucket(
-            parsed, "standard", _DEFAULT_RETENTION_DAYS_CONFIG["standard"]
+            raw, "standard", _DEFAULT_RETENTION_DAYS_CONFIG["standard"]
         ),
         "downsampled": _retention_bucket(
-            parsed, "downsampled", _DEFAULT_RETENTION_DAYS_CONFIG["downsampled"]
+            raw, "downsampled", _DEFAULT_RETENTION_DAYS_CONFIG["downsampled"]
         ),
     }
 

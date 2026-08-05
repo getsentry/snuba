@@ -5,7 +5,6 @@ from unittest import mock
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
-from sentry_options import OptionValue
 from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import GetTracesRequest
@@ -236,7 +235,10 @@ def test_item_type_full_retention_occurrence() -> None:
             40,
             90,
             {
-                "retention_days": '{"standard":{"default":30,"max":45},"downsampled":{"default":396,"max":396}}'
+                "retention_days": {
+                    "standard": {"default": 30, "max": 45},
+                    "downsampled": {"default": 396, "max": 396},
+                }
             },
             Tier.TIER_1,
         ),
@@ -244,7 +246,10 @@ def test_item_type_full_retention_occurrence() -> None:
             50,
             90,
             {
-                "retention_days": '{"standard":{"default":30,"max":45},"downsampled":{"default":396,"max":396}}'
+                "retention_days": {
+                    "standard": {"default": 30, "max": 45},
+                    "downsampled": {"default": 396, "max": 396},
+                }
             },
             Tier.TIER_8,
         ),
@@ -252,7 +257,10 @@ def test_item_type_full_retention_occurrence() -> None:
             40,
             None,
             {
-                "retention_days": '{"standard":{"default":45,"max":90},"downsampled":{"default":396,"max":396}}'
+                "retention_days": {
+                    "standard": {"default": 45, "max": 90},
+                    "downsampled": {"default": 396, "max": 396},
+                }
             },
             Tier.TIER_1,
         ),
@@ -260,7 +268,10 @@ def test_item_type_full_retention_occurrence() -> None:
             50,
             None,
             {
-                "retention_days": '{"standard":{"default":45,"max":90},"downsampled":{"default":396,"max":396}}'
+                "retention_days": {
+                    "standard": {"default": 45, "max": 90},
+                    "downsampled": {"default": 396, "max": 396},
+                }
             },
             Tier.TIER_8,
         ),
@@ -269,10 +280,11 @@ def test_item_type_full_retention_occurrence() -> None:
 def test_standard_retention_days_routing(
     start_days_ago: int,
     standard_retention_days: int | None,
-    option_overrides: dict[str, OptionValue],
+    option_overrides: dict[str, Any],
     expected_tier: Tier,
 ) -> None:
-    with override_options("snuba", option_overrides):
+    # Nested retention_days values are valid at runtime; OptionValue's static type is only one level deep.
+    with override_options("snuba", option_overrides):  # type: ignore[arg-type]
         routing_decision = _get_routing_decision(
             start_days_ago=start_days_ago,
             standard_retention_days=standard_retention_days,
