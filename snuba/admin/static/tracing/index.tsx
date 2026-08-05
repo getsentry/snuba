@@ -305,7 +305,8 @@ function TracingQueries(props: { api: Client }) {
                             </tr>
                           </thead>
                           <tbody>
-                            {event.rows.length > 0 &&
+                            {event.rows &&
+                              event.rows.length > 0 &&
                               Object.entries(
                                 JSON.parse(event.rows[0]) as Record<
                                   string,
