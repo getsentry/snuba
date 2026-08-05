@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, cast
@@ -79,10 +79,13 @@ def run_query_and_get_trace(
         trace_output = reconstruct_trace_from_system_logs(connection, storage_name, query_id)
 
     summarized_trace_output = summarize_trace_output(trace_output)
-    if not summarized_trace_output.query_summaries:
-        # Even if text_log was empty/disabled, query_log usually has the finish
-        # row once logs flush. Build a minimal summary from that.
-        summarized_trace_output = summarize_from_query_log(connection, storage_name, query_id)
+    # Always merge query_log finish rows. text_log can arrive partially (or only
+    # for the initiator) before distributed children flush; query_log is the
+    # source of truth for per-node totals and missing nodes.
+    summarized_trace_output = merge_query_log_summary(
+        summarized_trace_output,
+        summarize_from_query_log(connection, storage_name, query_id),
+    )
 
     return TraceOutput(
         trace_output=trace_output,
@@ -121,8 +124,18 @@ def _system_log_source(storage_name: str, table: str) -> str:
 def _poll_system_query(
     connection: ClickhousePool,
     sql: str,
+    *,
+    accept_result: Callable[[ClickhouseResult], bool] | None = None,
 ) -> ClickhouseResult | None:
-    """Poll a system-table query until it returns rows or attempts are exhausted."""
+    """
+    Poll a system-table query until it returns an acceptable result or attempts
+    are exhausted.
+
+    ``accept_result``, when provided, is called with the latest ClickhouseResult
+    and should return True when polling can stop. Defaults to "any non-empty
+    result set".
+    """
+    is_acceptable = accept_result or (lambda result: bool(result and result.results))
     wait_time = 1
     last_result: ClickhouseResult | None = None
     for attempt in range(PROFILE_EVENTS_MAX_ATTEMPTS):
@@ -136,7 +149,7 @@ def _poll_system_query(
             )
             last_result = None
 
-        if last_result is not None and last_result.results:
+        if last_result is not None and is_acceptable(last_result):
             return last_result
 
         if attempt + 1 < PROFILE_EVENTS_MAX_ATTEMPTS:
@@ -185,15 +198,30 @@ def _related_query_ids(
     storage_name: str,
     query_id: str,
 ) -> list[str]:
-    """Return the root query_id plus any distributed child ids from query_log."""
+    """
+    Return the root query_id plus any distributed child ids from query_log.
+
+    Wait until the initiator's QueryFinish row is present before treating the
+    set as complete. Returning on the first QueryStart-only row would miss
+    distributed children that have not flushed yet.
+    """
     source = _system_log_source(storage_name, "query_log")
     sql = f"""
-        SELECT DISTINCT query_id
+        SELECT
+            query_id,
+            max(type = 'QueryFinish' AND query_id = '{query_id}') AS root_finished
         FROM {source}
         WHERE event_date >= yesterday()
           AND (query_id = '{query_id}' OR initial_query_id = '{query_id}')
+        GROUP BY query_id
     """
-    result = _poll_system_query(connection, sql)
+
+    def _root_finished(result: ClickhouseResult) -> bool:
+        if not result.results:
+            return False
+        return any(bool(row[1]) for row in result.results if row)
+
+    result = _poll_system_query(connection, sql, accept_result=_root_finished)
     if result is None or not result.results:
         return [query_id]
     ids = [str(row[0]) for row in result.results if row and row[0]]
@@ -252,9 +280,9 @@ def summarize_from_query_log(
     """
     Build a TracingSummary from system.query_log finish rows.
 
-    This is the fallback when neither the native log stream nor text_log is
-    available. query_log still carries duration/rows/bytes per node, which is
-    enough for the formatted "Total" section in the tracing UI.
+    Used both as a full fallback when text_log is empty and as a merge source
+    when text_log only partially covered the query. query_log carries
+    duration/rows/bytes per node for the formatted "Total" section.
     """
     source = _system_log_source(storage_name, "query_log")
     sql = f"""
@@ -271,7 +299,15 @@ def summarize_from_query_log(
           AND (query_id = '{query_id}' OR initial_query_id = '{query_id}')
         ORDER BY is_initial_query DESC, event_time
     """
-    result = _poll_system_query(connection, sql)
+
+    def _root_finish_present(result: ClickhouseResult) -> bool:
+        if not result.results:
+            return False
+        # Wait for the initiator finish row so we don't stop on a single early
+        # shard finish while the root (or other shards) are still flushing.
+        return any(bool(row[2]) for row in result.results if row)
+
+    result = _poll_system_query(connection, sql, accept_result=_root_finish_present)
     summary = TracingSummary({})
     if result is None or not result.results:
         return summary
@@ -308,6 +344,32 @@ def summarize_from_query_log(
                 existing.execute_summaries.append(execute)
 
     return summary
+
+
+def merge_query_log_summary(base: TracingSummary, from_query_log: TracingSummary) -> TracingSummary:
+    """
+    Merge query_log-derived node summaries into a (possibly partial) base summary.
+
+    - Nodes only present in query_log are added.
+    - Nodes already present keep richer text_log-derived detail, but gain an
+      execute_summary from query_log when they don't already have one.
+    """
+    if not from_query_log.query_summaries:
+        return base
+    if not base.query_summaries:
+        return from_query_log
+
+    merged = TracingSummary(dict(base.query_summaries))
+    for node_name, log_summary in from_query_log.query_summaries.items():
+        existing = merged.query_summaries.get(node_name)
+        if existing is None:
+            merged.query_summaries[node_name] = log_summary
+            continue
+        if not existing.execute_summaries and log_summary.execute_summaries:
+            existing.execute_summaries = list(log_summary.execute_summaries)
+        if log_summary.is_distributed:
+            existing.is_distributed = True
+    return merged
 
 
 def is_hex(value: Any) -> bool:
