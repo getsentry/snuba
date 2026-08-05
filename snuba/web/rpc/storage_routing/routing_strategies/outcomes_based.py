@@ -42,11 +42,15 @@ from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingDecision,
 )
 
-# Default when RequestMeta.standard_retention_days is unset/non-positive.
+# Effective fallback when RequestMeta.standard_retention_days is unset/non-positive.
 # Callers should send the org's actual standard retention; values are clamped
 # by max_standard_retention_days (90).
 DEFAULT_STANDARD_RETENTION_DAYS = 30
 MAX_STANDARD_RETENTION_DAYS = 90
+# Schema default for default_standard_retention_days. Schema evolution forbids
+# changing a live option's default, so 90 is treated as "unset" and resolves to
+# DEFAULT_STANDARD_RETENTION_DAYS; any other value is an explicit override.
+SCHEMA_DEFAULT_STANDARD_RETENTION_DAYS = 90
 
 
 def project_id_and_org_conditions(meta: RequestMeta) -> Expression:
@@ -243,14 +247,22 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
 
         requested_retention_days = in_msg_meta.standard_retention_days
-        standard_retention_days = (
-            min(
+        if requested_retention_days > 0:
+            standard_retention_days = min(
                 requested_retention_days,
                 get_option("max_standard_retention_days", MAX_STANDARD_RETENTION_DAYS),
             )
-            if requested_retention_days > 0
-            else get_option("default_standard_retention_days", DEFAULT_STANDARD_RETENTION_DAYS)
-        )
+        else:
+            option_days = get_option(
+                "default_standard_retention_days",
+                SCHEMA_DEFAULT_STANDARD_RETENTION_DAYS,
+            )
+            # Schema default means unset; see SCHEMA_DEFAULT_STANDARD_RETENTION_DAYS.
+            standard_retention_days = (
+                DEFAULT_STANDARD_RETENTION_DAYS
+                if option_days == SCHEMA_DEFAULT_STANDARD_RETENTION_DAYS
+                else option_days
+            )
         standard_retention_cutoff = datetime.now(tz=UTC) - timedelta(
             days=standard_retention_days + 1
         )

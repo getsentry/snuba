@@ -204,8 +204,8 @@
     },
     "default_standard_retention_days": {
       "type": "integer",
-      "default": 30,
-      "description": "Default standard retention window in days used by outcomes-based routing when RequestMeta.standard_retention_days is unset or non-positive. Defaults to 30; max_standard_retention_days (90) is the upper bound when a value is provided on the request."
+      "default": 90,
+      "description": "Fallback standard retention window in days used by outcomes-based routing when RequestMeta.standard_retention_days is unset or non-positive. The schema default of 90 is treated as unset and resolves to 30 days in code (schema evolution forbids changing a live option default); set any other positive value to override. max_standard_retention_days (90) still clamps values sent on the request."
     },
     "storage_routing_config_override": {
       "type": "string",
