@@ -283,8 +283,7 @@ def test_standard_retention_days_routing(
     option_overrides: dict[str, Any],
     expected_tier: Tier,
 ) -> None:
-    # Nested retention_days values are valid at runtime; OptionValue's static type is only one level deep.
-    with override_options("snuba", option_overrides):  # type: ignore[arg-type]
+    with override_options("snuba", option_overrides):
         routing_decision = _get_routing_decision(
             start_days_ago=start_days_ago,
             standard_retention_days=standard_retention_days,
