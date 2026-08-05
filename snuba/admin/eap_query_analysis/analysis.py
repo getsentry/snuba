@@ -148,7 +148,7 @@ class ResourceTotals:
     def add_profile_events(self, events: dict[str, int]) -> None:
         matched = False
         for pe_key, field_name in _PROFILE_EVENT_MAP.items():
-            value = int(events.get(pe_key, 0) or 0)
+            value = int(events.get(pe_key) or 0)
             if value:
                 matched = True
             setattr(self, field_name, getattr(self, field_name) + value)

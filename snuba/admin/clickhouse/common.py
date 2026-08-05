@@ -321,6 +321,34 @@ def get_ro_clusterless_node_connection(
     return connection
 
 
+def _end_of_sql_string_literal(sql_query: str, start: int) -> int | None:
+    """Return the index just past a string literal that starts at ``start``.
+
+    ``start`` must point at the opening ``'`` or ``"``. Walks forward handling:
+    - backslash escapes (``\'``, ``\"``)
+    - SQL-style doubled quotes (``''``, ``""``)
+
+    Returns ``None`` when no matching closer is found.
+    """
+    quote = sql_query[start]
+    i = start + 1
+    n = len(sql_query)
+    while i < n:
+        ch = sql_query[i]
+        if ch == "\\" and i + 1 < n:
+            # Skip the escaped character (e.g. \' keeps the quote inside).
+            i += 2
+            continue
+        if ch == quote:
+            # Doubled quote is an escaped quote, not a terminator.
+            if i + 1 < n and sql_query[i + 1] == quote:
+                i += 2
+                continue
+            return i + 1
+        i += 1
+    return None
+
+
 def _sql_quotes_are_balanced(sql_query: str) -> bool:
     """Return True when single/double quotes are balanced, honoring escapes.
 
@@ -335,25 +363,13 @@ def _sql_quotes_are_balanced(sql_query: str) -> bool:
             # Outside a string, skip an escaped character if present.
             i += 2 if i + 1 < n else 1
             continue
-        if ch not in ("'", '"'):
-            i += 1
+        if ch in ("'", '"'):
+            end = _end_of_sql_string_literal(sql_query, i)
+            if end is None:
+                return False
+            i = end
             continue
-        quote = ch
         i += 1
-        while i < n:
-            cur = sql_query[i]
-            if cur == "\\" and i + 1 < n:
-                i += 2
-                continue
-            if cur == quote:
-                if i + 1 < n and sql_query[i + 1] == quote:
-                    i += 2
-                    continue
-                i += 1
-                break
-            i += 1
-        else:
-            return False
     return True
 
 
@@ -369,28 +385,15 @@ def _strip_sql_string_literals(sql_query: str) -> str:
     while i < n:
         ch = sql_query[i]
         if ch in ("'", '"'):
-            quote = ch
-            out.append(quote)
-            i += 1
-            while i < n:
-                cur = sql_query[i]
-                if cur == "\\" and i + 1 < n:
-                    # Skip escaped character inside the literal.
-                    i += 2
-                    continue
-                if cur == quote:
-                    # SQL-style doubled quote escape ('' or "").
-                    if i + 1 < n and sql_query[i + 1] == quote:
-                        i += 2
-                        continue
-                    out.append(quote)
-                    i += 1
-                    break
-                i += 1
-            else:
+            end = _end_of_sql_string_literal(sql_query, i)
+            if end is None:
                 # Unbalanced quote; leave remainder as-is for the caller to reject.
                 out.append(sql_query[i:])
                 break
+            # Keep the delimiters so surrounding SQL shape is preserved, drop contents.
+            out.append(ch)
+            out.append(ch)
+            i = end
             continue
         out.append(ch)
         i += 1
