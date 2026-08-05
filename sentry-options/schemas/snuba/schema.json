@@ -197,15 +197,10 @@
       "default": false,
       "description": "When true, the storage routing strategy fetches ClickHouse cluster load info to inform routing decisions."
     },
-    "max_standard_retention_days": {
-      "type": "integer",
-      "default": 90,
-      "description": "Upper bound on RequestMeta.standard_retention_days when deciding the standard retention window for long-term retention downsampling. Values above this cap are clamped."
-    },
-    "default_standard_retention_days": {
-      "type": "integer",
-      "default": 90,
-      "description": "Fallback standard retention window in days used by outcomes-based routing when RequestMeta.standard_retention_days is unset or non-positive. The schema default of 90 is treated as unset and resolves to 30 days in code (schema evolution forbids changing a live option default); set any other positive value to override. max_standard_retention_days (90) still clamps values sent on the request."
+    "retention_days": {
+      "type": "string",
+      "default": "{\"standard\":{\"default\":30,\"max\":90},\"downsampled\":{\"default\":395,\"max\":395}}",
+      "description": "JSON object of retention windows in days: {standard:{default,max}, downsampled:{default,max}}. standard.default (30) is the fallback when RequestMeta.standard_retention_days is unset/non-positive; standard.max (90) clamps positive request values. downsampled.default/max (395, ~13 months) configure long-term downsampled retention. Stored as a JSON string because nested objects are not a supported option value type."
     },
     "storage_routing_config_override": {
       "type": "string",

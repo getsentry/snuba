@@ -232,13 +232,38 @@ def test_item_type_full_retention_occurrence() -> None:
         (20, None, {}, Tier.TIER_1),
         (40, 0, {}, Tier.TIER_8),
         (40, None, {}, Tier.TIER_8),
-        # schema default (90) is treated as unset and still resolves to 30 days
-        (20, None, {"default_standard_retention_days": 90}, Tier.TIER_1),
-        (40, None, {"default_standard_retention_days": 90}, Tier.TIER_8),
-        (40, 90, {"max_standard_retention_days": 45}, Tier.TIER_1),
-        (50, 90, {"max_standard_retention_days": 45}, Tier.TIER_8),
-        (40, None, {"default_standard_retention_days": 45}, Tier.TIER_1),
-        (50, None, {"default_standard_retention_days": 45}, Tier.TIER_8),
+        (
+            40,
+            90,
+            {
+                "retention_days": '{"standard":{"default":30,"max":45},"downsampled":{"default":395,"max":395}}'
+            },
+            Tier.TIER_1,
+        ),
+        (
+            50,
+            90,
+            {
+                "retention_days": '{"standard":{"default":30,"max":45},"downsampled":{"default":395,"max":395}}'
+            },
+            Tier.TIER_8,
+        ),
+        (
+            40,
+            None,
+            {
+                "retention_days": '{"standard":{"default":45,"max":90},"downsampled":{"default":395,"max":395}}'
+            },
+            Tier.TIER_1,
+        ),
+        (
+            50,
+            None,
+            {
+                "retention_days": '{"standard":{"default":45,"max":90},"downsampled":{"default":395,"max":395}}'
+            },
+            Tier.TIER_8,
+        ),
     ],
 )
 def test_standard_retention_days_routing(

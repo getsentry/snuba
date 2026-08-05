@@ -1,6 +1,8 @@
+import json
+import logging
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import cast
+from typing import Any, Mapping, cast
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import GetTracesRequest
@@ -42,15 +44,69 @@ from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingDecision,
 )
 
-# Effective fallback when RequestMeta.standard_retention_days is unset/non-positive.
-# Callers should send the org's actual standard retention; values are clamped
-# by max_standard_retention_days (90).
+logger = logging.getLogger(__name__)
+
+# Fallback when RequestMeta.standard_retention_days is unset/non-positive.
 DEFAULT_STANDARD_RETENTION_DAYS = 30
 MAX_STANDARD_RETENTION_DAYS = 90
-# Schema default for default_standard_retention_days. Schema evolution forbids
-# changing a live option's default, so 90 is treated as "unset" and resolves to
-# DEFAULT_STANDARD_RETENTION_DAYS; any other value is an explicit override.
-SCHEMA_DEFAULT_STANDARD_RETENTION_DAYS = 90
+# ~13 months; used for long-term downsampled retention bounds.
+DEFAULT_DOWNSAMPLED_RETENTION_DAYS = 395
+MAX_DOWNSAMPLED_RETENTION_DAYS = 395
+
+_DEFAULT_RETENTION_DAYS_CONFIG: dict[str, dict[str, int]] = {
+    "standard": {
+        "default": DEFAULT_STANDARD_RETENTION_DAYS,
+        "max": MAX_STANDARD_RETENTION_DAYS,
+    },
+    "downsampled": {
+        "default": DEFAULT_DOWNSAMPLED_RETENTION_DAYS,
+        "max": MAX_DOWNSAMPLED_RETENTION_DAYS,
+    },
+}
+_DEFAULT_RETENTION_DAYS_OPTION = json.dumps(
+    _DEFAULT_RETENTION_DAYS_CONFIG, separators=(",", ":")
+)
+
+
+def _positive_int(value: Any, fallback: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        return fallback
+    return value
+
+
+def _retention_bucket(config: Mapping[str, Any], name: str, fallback: Mapping[str, int]) -> dict[str, int]:
+    raw = config.get(name, fallback)
+    if not isinstance(raw, Mapping):
+        return dict(fallback)
+    return {
+        "default": _positive_int(raw.get("default"), fallback["default"]),
+        "max": _positive_int(raw.get("max"), fallback["max"]),
+    }
+
+
+def get_retention_days_config() -> dict[str, dict[str, int]]:
+    """Load the nested retention_days option, falling back to code defaults."""
+    raw = get_option("retention_days", _DEFAULT_RETENTION_DAYS_OPTION)
+    try:
+        parsed: Any = json.loads(raw) if isinstance(raw, str) else raw
+    except (TypeError, ValueError):
+        logger.warning("Invalid retention_days option %r; using defaults", raw, exc_info=True)
+        parsed = None
+
+    if not isinstance(parsed, Mapping):
+        return {
+            "standard": dict(_DEFAULT_RETENTION_DAYS_CONFIG["standard"]),
+            "downsampled": dict(_DEFAULT_RETENTION_DAYS_CONFIG["downsampled"]),
+        }
+
+    return {
+        "standard": _retention_bucket(
+            parsed, "standard", _DEFAULT_RETENTION_DAYS_CONFIG["standard"]
+        ),
+        "downsampled": _retention_bucket(
+            parsed, "downsampled", _DEFAULT_RETENTION_DAYS_CONFIG["downsampled"]
+        ),
+    }
 
 
 def project_id_and_org_conditions(meta: RequestMeta) -> Expression:
@@ -246,23 +302,14 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
 
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
 
+        retention_days = get_retention_days_config()
+        standard_retention = retention_days["standard"]
         requested_retention_days = in_msg_meta.standard_retention_days
-        if requested_retention_days > 0:
-            standard_retention_days = min(
-                requested_retention_days,
-                get_option("max_standard_retention_days", MAX_STANDARD_RETENTION_DAYS),
-            )
-        else:
-            option_days = get_option(
-                "default_standard_retention_days",
-                SCHEMA_DEFAULT_STANDARD_RETENTION_DAYS,
-            )
-            # Schema default means unset; see SCHEMA_DEFAULT_STANDARD_RETENTION_DAYS.
-            standard_retention_days = (
-                DEFAULT_STANDARD_RETENTION_DAYS
-                if option_days == SCHEMA_DEFAULT_STANDARD_RETENTION_DAYS
-                else option_days
-            )
+        standard_retention_days = (
+            min(requested_retention_days, standard_retention["max"])
+            if requested_retention_days > 0
+            else standard_retention["default"]
+        )
         standard_retention_cutoff = datetime.now(tz=UTC) - timedelta(
             days=standard_retention_days + 1
         )
