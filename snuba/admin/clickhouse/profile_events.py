@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import socket
 import time
@@ -9,12 +11,16 @@ from flask import g
 from snuba.admin.clickhouse.common import InvalidNodeError
 from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
 from snuba.admin.clickhouse.tracing import QueryTraceData, TraceOutput
+from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.utils.constants import (
     PROFILE_EVENTS_MAX_ATTEMPTS,
     PROFILE_EVENTS_MAX_WAIT_SECONDS,
 )
 
 logger = structlog.get_logger().bind(module=__name__)
+
+_DEFAULT_NATIVE_PORT = 9000
 
 
 def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
@@ -30,7 +36,7 @@ def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
         "SELECT ProfileEvents FROM system.query_log WHERE query_id = '{}' AND type = 'QueryFinish'"
     )
 
-    for query_trace_data in parse_trace_for_query_ids(query_trace):
+    for query_trace_data in parse_trace_for_query_ids(query_trace, storage):
         sql = profile_events_raw_sql.format(query_trace_data.query_id)
 
         system_query_result = None
@@ -66,12 +72,13 @@ def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
             query_trace.profile_events_profile = cast(dict[str, int], system_query_result.profile)
             columns = system_query_result.meta
             if columns:
-                res = {}
+                res: dict[str, object] = {}
                 res["column_names"] = [name for name, _ in columns]
-                res["rows"] = []
+                rows: list[str] = []
                 for query_result in system_query_result.results:
                     if query_result[0]:
-                        res["rows"].append(json.dumps(query_result[0]))
+                        rows.append(json.dumps(query_result[0]))
+                res["rows"] = rows
                 query_trace.profile_events_results[query_trace_data.node_name] = res
 
 
@@ -84,18 +91,81 @@ def hostname_resolves(hostname: str) -> bool:
         return True
 
 
-def parse_trace_for_query_ids(trace_output: TraceOutput) -> list[QueryTraceData]:
+def _cluster_host_ports(storage: str) -> dict[str, int]:
+    try:
+        cluster = get_storage(StorageKey(storage)).get_cluster()
+        nodes = [
+            cluster.get_query_node(),
+            *cluster.get_local_nodes(),
+            *cluster.get_distributed_nodes(),
+        ]
+        return {node.host_name: node.native_port for node in nodes}
+    except Exception:
+        logger.warning(
+            "Could not resolve cluster nodes for profile event hosts",
+            storage=storage,
+            exc_info=True,
+        )
+        return {}
+
+
+def _query_node_trace_data(storage: str, query_id: str) -> QueryTraceData | None:
+    try:
+        query_node = get_storage(StorageKey(storage)).get_cluster().get_query_node()
+        return QueryTraceData(
+            host=query_node.host_name,
+            port=query_node.native_port,
+            query_id=query_id,
+            node_name=query_node.host_name,
+        )
+    except Exception:
+        logger.warning(
+            "Could not resolve query node for profile events fallback",
+            storage=storage,
+            exc_info=True,
+        )
+        return None
+
+
+def parse_trace_for_query_ids(
+    trace_output: TraceOutput, storage: str | None = None
+) -> list[QueryTraceData]:
     summarized_trace_output = trace_output.summarized_trace_output
     node_name_to_query_id = {
         node_name: query_summary.query_id
         for node_name, query_summary in summarized_trace_output.query_summaries.items()
     }
-    return [
-        QueryTraceData(
-            host=node_name if hostname_resolves(node_name) else "127.0.0.1",
-            port=9000,
-            query_id=query_id,
-            node_name=node_name,
+
+    if not node_name_to_query_id:
+        # No parseable node map (common on the HTTP driver when text_log is
+        # empty). Fall back to the storage query node + the known root query_id
+        # so ProfileEvents for the initiator can still be recovered.
+        if trace_output.query_id and storage:
+            fallback = _query_node_trace_data(storage, trace_output.query_id)
+            return [fallback] if fallback is not None else []
+        return []
+
+    host_ports = _cluster_host_ports(storage) if storage else {}
+
+    results: list[QueryTraceData] = []
+    for node_name, query_id in node_name_to_query_id.items():
+        if node_name in host_ports:
+            host = node_name
+            port = host_ports[node_name]
+        elif hostname_resolves(node_name):
+            host = node_name
+            port = _DEFAULT_NATIVE_PORT
+        else:
+            # Historical local/dev fallback when log hostnames don't match DNS.
+            host = "127.0.0.1"
+            port = _DEFAULT_NATIVE_PORT
+
+        results.append(
+            QueryTraceData(
+                host=host,
+                port=port,
+                query_id=query_id,
+                node_name=node_name,
+            )
         )
-        for node_name, query_id in node_name_to_query_id.items()
-    ]
+    return results
