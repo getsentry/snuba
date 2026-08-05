@@ -97,6 +97,60 @@ def test_summarize_from_query_log() -> None:
     assert local.execute_summaries[0].seconds == 0.1
 
 
+def test_merge_query_log_summary_clears_false_distributed_flag() -> None:
+    # text_log first-line heuristic wrongly marked a storage node distributed.
+    base = TracingSummary(
+        {
+            "storage-node": QuerySummary(
+                node_name="storage-node",
+                is_distributed=True,
+                query_id="qid-2",
+            ),
+            "query-node": QuerySummary(
+                node_name="query-node",
+                is_distributed=False,
+                query_id="qid-1",
+            ),
+        }
+    )
+    from_log = TracingSummary(
+        {
+            "query-node": QuerySummary(
+                node_name="query-node",
+                is_distributed=True,
+                query_id="qid-1",
+                execute_summaries=[
+                    ExecuteSummary(
+                        rows_read=10,
+                        memory_size="1.00 KiB",
+                        seconds=0.1,
+                        rows_per_second=100.0,
+                        bytes_per_second="10.00 KiB",
+                    )
+                ],
+            ),
+            "storage-node": QuerySummary(
+                node_name="storage-node",
+                is_distributed=False,
+                query_id="qid-2",
+                execute_summaries=[
+                    ExecuteSummary(
+                        rows_read=5,
+                        memory_size="512 B",
+                        seconds=0.05,
+                        rows_per_second=100.0,
+                        bytes_per_second="10.00 KiB",
+                    )
+                ],
+            ),
+        }
+    )
+
+    merged = merge_query_log_summary(base, from_log)
+    assert merged.query_summaries["query-node"].is_distributed is True
+    assert merged.query_summaries["storage-node"].is_distributed is False
+
+
 def test_merge_query_log_summary_adds_missing_nodes_and_execute() -> None:
     base = TracingSummary(
         {

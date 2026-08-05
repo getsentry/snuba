@@ -353,6 +353,10 @@ def merge_query_log_summary(base: TracingSummary, from_query_log: TracingSummary
     - Nodes only present in query_log are added.
     - Nodes already present keep richer text_log-derived detail, but gain an
       execute_summary from query_log when they don't already have one.
+    - ``is_distributed`` is taken from query_log when available. text_log parsing
+      marks whichever node appeared first as distributed, which is wrong when
+      partial logs start on a storage node; query_log's ``is_initial_query`` is
+      authoritative and keeps the UI from dropping a second "distributed" node.
     """
     if not from_query_log.query_summaries:
         return base
@@ -367,8 +371,24 @@ def merge_query_log_summary(base: TracingSummary, from_query_log: TracingSummary
             continue
         if not existing.execute_summaries and log_summary.execute_summaries:
             existing.execute_summaries = list(log_summary.execute_summaries)
-        if log_summary.is_distributed:
-            existing.is_distributed = True
+        # Prefer query_log's is_initial_query over text_log's first-line heuristic.
+        existing.is_distributed = log_summary.is_distributed
+
+    # If query_log identified a distributed initiator, clear any leftover
+    # first-line false positives on nodes query_log did not mark distributed.
+    query_log_has_distributed = any(
+        summary.is_distributed for summary in from_query_log.query_summaries.values()
+    )
+    if query_log_has_distributed:
+        for node_name, summary in merged.query_summaries.items():
+            query_log_node = from_query_log.query_summaries.get(node_name)
+            if query_log_node is not None:
+                summary.is_distributed = query_log_node.is_distributed
+            else:
+                # Node only seen in text_log; if another node is the confirmed
+                # initiator, this one is not distributed.
+                summary.is_distributed = False
+
     return merged
 
 
