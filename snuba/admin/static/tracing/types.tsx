@@ -35,12 +35,12 @@ type QuerySummary = {
   node_name: string;
   is_distributed: boolean;
   query_id: string;
-  execute_summaries?: Array<ExecuteSummary> | null;
-  select_summaries?: Array<SelectSummary> | null;
-  index_summaries?: Array<IndexSummary> | null;
-  stream_summaries?: Array<StreamSummary> | null;
-  aggregation_summaries?: Array<AggregationSummary> | null;
-  sorting_summaries?: Array<SortingSummary> | null;
+  execute_summaries?: Array<ExecuteSummary>;
+  select_summaries?: Array<SelectSummary>;
+  index_summaries?: Array<IndexSummary>;
+  stream_summaries?: Array<StreamSummary>;
+  aggregation_summaries?: Array<AggregationSummary>;
+  sorting_summaries?: Array<SortingSummary>;
 };
 
 type IndexSummary = {
