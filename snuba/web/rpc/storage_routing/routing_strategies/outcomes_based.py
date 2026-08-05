@@ -99,9 +99,7 @@ def get_retention_days_config() -> dict[str, dict[str, int]]:
         }
 
     return {
-        "standard": _retention_bucket(
-            raw, "standard", _DEFAULT_RETENTION_DAYS_CONFIG["standard"]
-        ),
+        "standard": _retention_bucket(raw, "standard", _DEFAULT_RETENTION_DAYS_CONFIG["standard"]),
         "downsampled": _retention_bucket(
             raw, "downsampled", _DEFAULT_RETENTION_DAYS_CONFIG["downsampled"]
         ),
