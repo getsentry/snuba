@@ -236,7 +236,7 @@ def test_item_type_full_retention_occurrence() -> None:
             40,
             90,
             {
-                "retention_days": '{"standard":{"default":30,"max":45},"downsampled":{"default":395,"max":395}}'
+                "retention_days": '{"standard":{"default":30,"max":45},"downsampled":{"default":396,"max":396}}'
             },
             Tier.TIER_1,
         ),
@@ -244,7 +244,7 @@ def test_item_type_full_retention_occurrence() -> None:
             50,
             90,
             {
-                "retention_days": '{"standard":{"default":30,"max":45},"downsampled":{"default":395,"max":395}}'
+                "retention_days": '{"standard":{"default":30,"max":45},"downsampled":{"default":396,"max":396}}'
             },
             Tier.TIER_8,
         ),
@@ -252,7 +252,7 @@ def test_item_type_full_retention_occurrence() -> None:
             40,
             None,
             {
-                "retention_days": '{"standard":{"default":45,"max":90},"downsampled":{"default":395,"max":395}}'
+                "retention_days": '{"standard":{"default":45,"max":90},"downsampled":{"default":396,"max":396}}'
             },
             Tier.TIER_1,
         ),
@@ -260,7 +260,7 @@ def test_item_type_full_retention_occurrence() -> None:
             50,
             None,
             {
-                "retention_days": '{"standard":{"default":45,"max":90},"downsampled":{"default":395,"max":395}}'
+                "retention_days": '{"standard":{"default":45,"max":90},"downsampled":{"default":396,"max":396}}'
             },
             Tier.TIER_8,
         ),

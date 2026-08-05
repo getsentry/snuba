@@ -50,9 +50,9 @@ logger = logging.getLogger(__name__)
 # Fallback when RequestMeta.standard_retention_days is unset/non-positive.
 DEFAULT_STANDARD_RETENTION_DAYS = 30
 MAX_STANDARD_RETENTION_DAYS = 90
-# ~13 months; used for long-term downsampled retention bounds.
-DEFAULT_DOWNSAMPLED_RETENTION_DAYS = 395
-MAX_DOWNSAMPLED_RETENTION_DAYS = 395
+# 13 months (30.46d * 13); used for long-term downsampled retention bounds.
+DEFAULT_DOWNSAMPLED_RETENTION_DAYS = 396
+MAX_DOWNSAMPLED_RETENTION_DAYS = 396
 
 _DEFAULT_RETENTION_DAYS_CONFIG: dict[str, dict[str, int]] = {
     "standard": {
