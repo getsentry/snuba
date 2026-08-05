@@ -4,6 +4,15 @@ export type TracingRequest = {
   gather_profile_events: boolean;
 };
 
+type ProfileEventValue = {
+  column_names: string[];
+  rows: string[];
+};
+
+type ProfileEventsResults = {
+  [host_name: string]: ProfileEventValue;
+};
+
 type TracingResult = {
   input_query?: string;
   timestamp: number;
@@ -11,8 +20,8 @@ type TracingResult = {
   summarized_trace_output?: TracingSummary;
   cols?: Array<Array<string>>;
   num_rows_result?: number;
-  result?: Array<Array<any>>,
-  profile_events_results?: Map<Map<string, string>, Object>;
+  result?: Array<Array<any>>;
+  profile_events_results?: ProfileEventsResults;
   profile_events_meta?: Array<Object>;
   profile_events_profile?: {};
   error?: string;
@@ -26,12 +35,12 @@ type QuerySummary = {
   node_name: string;
   is_distributed: boolean;
   query_id: string;
-  execute_summaries: Array<ExecuteSummary>;
-  select_summaries: Array<SelectSummary>;
-  index_summaries: Array<IndexSummary>;
-  stream_summaries: Array<StreamSummary>;
-  aggregation_summaries: Array<AggregationSummary>;
-  sorting_summaries: Array<SortingSummary>;
+  execute_summaries?: Array<ExecuteSummary> | null;
+  select_summaries?: Array<SelectSummary> | null;
+  index_summaries?: Array<IndexSummary> | null;
+  stream_summaries?: Array<StreamSummary> | null;
+  aggregation_summaries?: Array<AggregationSummary> | null;
+  sorting_summaries?: Array<SortingSummary> | null;
 };
 
 type IndexSummary = {
@@ -112,4 +121,6 @@ export {
   AggregationSummary,
   StreamSummary,
   SortingSummary,
+  ProfileEventValue,
+  ProfileEventsResults,
 };
