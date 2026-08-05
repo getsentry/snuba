@@ -89,6 +89,21 @@ def _get_routing_decision(
     )
 
 
+def _retention_days_override(
+    *,
+    standard_default: int = 30,
+    standard_max: int = 90,
+    downsampled_default: int = 396,
+    downsampled_max: int = 396,
+) -> dict[str, Any]:
+    return {
+        "retention_days": {
+            "standard": {"default": standard_default, "max": standard_max},
+            "downsampled": {"default": downsampled_default, "max": downsampled_max},
+        }
+    }
+
+
 @pytest.fixture
 def store_outcomes_fixture(eap: Any) -> None:
     # Generate 24 hours of outcomes data with 1M outcomes per hour
@@ -231,50 +246,10 @@ def test_item_type_full_retention_occurrence() -> None:
         (20, None, {}, Tier.TIER_1),
         (40, 0, {}, Tier.TIER_8),
         (40, None, {}, Tier.TIER_8),
-        (
-            40,
-            90,
-            {
-                "retention_days": {
-                    "standard": {"default": 30, "max": 45},
-                    "downsampled": {"default": 396, "max": 396},
-                }
-            },
-            Tier.TIER_1,
-        ),
-        (
-            50,
-            90,
-            {
-                "retention_days": {
-                    "standard": {"default": 30, "max": 45},
-                    "downsampled": {"default": 396, "max": 396},
-                }
-            },
-            Tier.TIER_8,
-        ),
-        (
-            40,
-            None,
-            {
-                "retention_days": {
-                    "standard": {"default": 45, "max": 90},
-                    "downsampled": {"default": 396, "max": 396},
-                }
-            },
-            Tier.TIER_1,
-        ),
-        (
-            50,
-            None,
-            {
-                "retention_days": {
-                    "standard": {"default": 45, "max": 90},
-                    "downsampled": {"default": 396, "max": 396},
-                }
-            },
-            Tier.TIER_8,
-        ),
+        (40, 90, _retention_days_override(standard_max=45), Tier.TIER_1),
+        (50, 90, _retention_days_override(standard_max=45), Tier.TIER_8),
+        (40, None, _retention_days_override(standard_default=45), Tier.TIER_1),
+        (50, None, _retention_days_override(standard_default=45), Tier.TIER_8),
     ],
 )
 def test_standard_retention_days_routing(

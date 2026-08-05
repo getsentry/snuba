@@ -46,34 +46,23 @@ from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
 
 logger = logging.getLogger(__name__)
 
-# Fallback when RequestMeta.standard_retention_days is unset/non-positive.
-DEFAULT_STANDARD_RETENTION_DAYS = 30
-MAX_STANDARD_RETENTION_DAYS = 90
-# 13 months (30.46d * 13); used for long-term downsampled retention bounds.
-DEFAULT_DOWNSAMPLED_RETENTION_DAYS = 396
-MAX_DOWNSAMPLED_RETENTION_DAYS = 396
-
-_DEFAULT_RETENTION_DAYS_CONFIG: dict[str, dict[str, int]] = {
-    "standard": {
-        "default": DEFAULT_STANDARD_RETENTION_DAYS,
-        "max": MAX_STANDARD_RETENTION_DAYS,
-    },
-    "downsampled": {
-        "default": DEFAULT_DOWNSAMPLED_RETENTION_DAYS,
-        "max": MAX_DOWNSAMPLED_RETENTION_DAYS,
-    },
+# Mirrors the retention_days sentry-option default.
+# standard: fallback when RequestMeta.standard_retention_days is unset/non-positive.
+# downsampled: 13 months (≈30.46d * 13).
+DEFAULT_RETENTION_DAYS: dict[str, dict[str, int]] = {
+    "standard": {"default": 30, "max": 90},
+    "downsampled": {"default": 396, "max": 396},
 }
 
 
-def _positive_int(value: Any, fallback: int) -> int:
+def _positive_int(value: object, fallback: int) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         return fallback
     return value
 
 
-def _retention_bucket(
-    config: Mapping[str, Any], name: str, fallback: Mapping[str, int]
-) -> dict[str, int]:
+def _retention_bucket(config: Mapping[str, object], name: str) -> dict[str, int]:
+    fallback = DEFAULT_RETENTION_DAYS[name]
     raw = config.get(name, fallback)
     if not isinstance(raw, Mapping):
         return dict(fallback)
@@ -86,24 +75,12 @@ def _retention_bucket(
 def get_retention_days_config() -> dict[str, dict[str, int]]:
     """Load the nested retention_days option, falling back to code defaults."""
     # Nested object option; cast because OptionValue's static type is only one level deep.
-    raw = cast(
-        Any,
-        get_option("retention_days", cast(Any, _DEFAULT_RETENTION_DAYS_CONFIG)),
-    )
-
+    raw: object = get_option("retention_days", cast(Any, DEFAULT_RETENTION_DAYS))
     if not isinstance(raw, Mapping):
         logger.warning("Invalid retention_days option %r; using defaults", raw)
-        return {
-            "standard": dict(_DEFAULT_RETENTION_DAYS_CONFIG["standard"]),
-            "downsampled": dict(_DEFAULT_RETENTION_DAYS_CONFIG["downsampled"]),
-        }
+        return {name: dict(bucket) for name, bucket in DEFAULT_RETENTION_DAYS.items()}
 
-    return {
-        "standard": _retention_bucket(raw, "standard", _DEFAULT_RETENTION_DAYS_CONFIG["standard"]),
-        "downsampled": _retention_bucket(
-            raw, "downsampled", _DEFAULT_RETENTION_DAYS_CONFIG["downsampled"]
-        ),
-    }
+    return {name: _retention_bucket(raw, name) for name in DEFAULT_RETENTION_DAYS}
 
 
 def project_id_and_org_conditions(meta: RequestMeta) -> Expression:
@@ -299,14 +276,12 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
 
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
 
-        retention_days = get_retention_days_config()
-        standard_retention = retention_days["standard"]
+        standard_retention = get_retention_days_config()["standard"]
         requested_retention_days = in_msg_meta.standard_retention_days
-        standard_retention_days = (
-            min(requested_retention_days, standard_retention["max"])
-            if requested_retention_days > 0
-            else standard_retention["default"]
-        )
+        if requested_retention_days > 0:
+            standard_retention_days = min(requested_retention_days, standard_retention["max"])
+        else:
+            standard_retention_days = standard_retention["default"]
         standard_retention_cutoff = datetime.now(tz=UTC) - timedelta(
             days=standard_retention_days + 1
         )
