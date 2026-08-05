@@ -839,14 +839,55 @@ def _run_admin_ro_sql_query(
         )
 
     try:
-        raw_sql = json.loads(request.data)["sql"]
-    except (KeyError, TypeError):
+        req = json.loads(request.data)
+    except json.JSONDecodeError:
         return make_response(
             jsonify(
                 {
                     "error": {
                         "type": "request",
-                        "message": "Invalid request, missing key sql",
+                        "message": "Invalid request, body must be valid JSON",
+                    }
+                }
+            ),
+            400,
+        )
+
+    if not isinstance(req, dict):
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "request",
+                        "message": "Invalid request, body must be a JSON object",
+                    }
+                }
+            ),
+            400,
+        )
+
+    try:
+        raw_sql = req["sql"]
+    except KeyError as e:
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "request",
+                        "message": f"Invalid request, missing key {e.args[0]}",
+                    }
+                }
+            ),
+            400,
+        )
+
+    if not isinstance(raw_sql, str):
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "request",
+                        "message": "Invalid request, sql must be a string",
                     }
                 }
             ),

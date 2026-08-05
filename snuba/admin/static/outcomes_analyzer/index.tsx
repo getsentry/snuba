@@ -7,27 +7,15 @@ import {
   PredefinedQuery,
 } from "SnubaAdmin/outcomes_analyzer/types";
 
-function formatSQL(sql: string): string {
-  return sql
-    .split("\n")
-    .map((line) => line.substring(4))
-    .join("\n")
-    .trim();
-}
-
 function OutcomesAnalyzer(props: { api: Client }) {
   const [predefinedQueryOptions, setPredefinedQueryOptions] = useState<
     PredefinedQuery[]
   >([]);
 
   useEffect(() => {
+    // Backend already strips class-body indentation from predefined SQL.
     props.api.getPredefinedOutcomesQueryOptions().then((res) => {
-      setPredefinedQueryOptions(
-        res.map((queryOption) => ({
-          ...queryOption,
-          sql: formatSQL(queryOption.sql),
-        }))
-      );
+      setPredefinedQueryOptions(res);
     });
   }, []);
 

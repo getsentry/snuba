@@ -1,14 +1,9 @@
 from __future__ import annotations
 
-from snuba.admin.clickhouse.common import PreDefinedQuery
+from snuba.admin.clickhouse.common import PreDefinedQuery, format_predefined_sql
 from snuba.utils.registered_class import RegisteredClass
 
 
-# Every line of a `sql` body below must start with at least the 4 spaces of class
-# indentation: the frontend de-indents predefined queries with
-# `line.substring(4)` before putting them in the editor. Indentation *beyond*
-# those 4 spaces is preserved.
-#
 # Common DataCategory values (from Relay):
 #   1 = error, 2 = transaction, 3 = security, 4 = attachment,
 #   5 = default, 6 = session, 7 = replay, 8 = profile,
@@ -21,6 +16,12 @@ class OutcomesQuery(PreDefinedQuery, metaclass=RegisteredClass):
     @classmethod
     def config_key(cls) -> str:
         return cls.__name__
+
+    @classmethod
+    def to_json(cls) -> dict[str, str]:
+        payload = super().to_json()
+        payload["sql"] = format_predefined_sql(cls.sql)
+        return payload
 
 
 class VolumeByCategoryOverTime(OutcomesQuery):

@@ -2,7 +2,7 @@ from unittest import mock
 
 import pytest
 
-from snuba.admin.clickhouse.common import InvalidCustomQuery
+from snuba.admin.clickhouse.common import InvalidCustomQuery, format_predefined_sql
 from snuba.admin.clickhouse.predefined_outcomes_queries import OutcomesQuery
 from snuba.admin.outcomes_analyzer.outcomes_analyzer import (
     _allowed_tables,
@@ -26,6 +26,20 @@ def test_predefined_query_json_shape() -> None:
     payload = next(cls.to_json() for cls in OutcomesQuery.all_classes())
     assert set(payload.keys()) == {"sql", "description", "name"}
     assert "{{" in payload["sql"]
+    # Backend strips class-body indent so the FE can use sql as-is.
+    assert not payload["sql"].startswith(" ")
+    assert payload["sql"].startswith("SELECT")
+
+
+def test_format_predefined_sql_preserves_inner_indent() -> None:
+    raw = """
+    SELECT
+        org_id,
+        sum(quantity)
+    FROM outcomes_hourly_dist
+    """
+    formatted = format_predefined_sql(raw)
+    assert formatted == "SELECT\n    org_id,\n    sum(quantity)\nFROM outcomes_hourly_dist"
 
 
 def test_allowed_tables_include_hourly_dist() -> None:
