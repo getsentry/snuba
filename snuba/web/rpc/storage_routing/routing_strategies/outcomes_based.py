@@ -1,8 +1,9 @@
 import json
 import logging
 import uuid
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
-from typing import Any, Mapping, cast
+from typing import Any, cast
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import GetTracesRequest
@@ -63,9 +64,7 @@ _DEFAULT_RETENTION_DAYS_CONFIG: dict[str, dict[str, int]] = {
         "max": MAX_DOWNSAMPLED_RETENTION_DAYS,
     },
 }
-_DEFAULT_RETENTION_DAYS_OPTION = json.dumps(
-    _DEFAULT_RETENTION_DAYS_CONFIG, separators=(",", ":")
-)
+_DEFAULT_RETENTION_DAYS_OPTION = json.dumps(_DEFAULT_RETENTION_DAYS_CONFIG, separators=(",", ":"))
 
 
 def _positive_int(value: Any, fallback: int) -> int:
@@ -74,7 +73,9 @@ def _positive_int(value: Any, fallback: int) -> int:
     return value
 
 
-def _retention_bucket(config: Mapping[str, Any], name: str, fallback: Mapping[str, int]) -> dict[str, int]:
+def _retention_bucket(
+    config: Mapping[str, Any], name: str, fallback: Mapping[str, int]
+) -> dict[str, int]:
     raw = config.get(name, fallback)
     if not isinstance(raw, Mapping):
         return dict(fallback)
