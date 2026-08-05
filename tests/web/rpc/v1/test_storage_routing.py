@@ -187,11 +187,16 @@ ROUTING_CONTEXT = RoutingContext(
 
 @pytest.mark.redis_db
 def test_target_tier_is_tier_1_if_routing_strategy_fails_to_decide_tier() -> None:
-    with mock.patch("snuba.settings.RAISE_ON_ROUTING_STRATEGY_FAILURES", False):
+    with (
+        mock.patch("snuba.settings.RAISE_ON_ROUTING_STRATEGY_FAILURES", False),
+        mock.patch("sentry_sdk.capture_exception") as capture_exception,
+    ):
         routing_decision = RoutingStrategyFailsToSelectTier().get_routing_decision(
             deepcopy(ROUTING_CONTEXT)
         )
         assert routing_decision.tier == Tier.TIER_1
+        capture_exception.assert_called_once()
+        assert isinstance(capture_exception.call_args.args[0], Exception)
 
 
 @pytest.mark.redis_db
