@@ -4,9 +4,14 @@ import pytest
 
 from snuba.clickhouse.native import ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.manual_jobs import JobSpec
+from snuba.manual_jobs import Job, JobSpec
 from snuba.manual_jobs.create_eap_received_at_version_test import (
-    CreateEAPReceivedAtVersionTest,
+    AddEAPReceivedAtColumn,
+    CreateEAPReceivedAtVersionTestMaterializedView,
+    CreateEAPReceivedAtVersionTestTable,
+    _add_received_at_query,
+    _create_table_query,
+    _create_view_query,
 )
 
 _COLUMNS = [
@@ -23,14 +28,15 @@ _COLUMNS = [
     ("server_sample_rate", "Float64", "", "", "", "", ""),
     ("attributes_string_0", "Map(String, String)", "", "", "", "ZSTD(1)", ""),
 ]
+_DESTINATION_COLUMNS = [*_COLUMNS, ("received_at", "UInt64", "", "", "", "", "")]
 
 
-def _build_job(monkeypatch: pytest.MonkeyPatch) -> CreateEAPReceivedAtVersionTest:
+def _build_job(monkeypatch: pytest.MonkeyPatch, job_type: type[Job]) -> Job:
     monkeypatch.setattr("snuba.manual_jobs._set_job_type", Mock())
-    return CreateEAPReceivedAtVersionTest(
+    return job_type(
         JobSpec(
-            job_id="create-eap-received-at-version-test",
-            job_type="CreateEAPReceivedAtVersionTest",
+            job_id="eap-received-at-version-test",
+            job_type=job_type.__name__,
         )
     )
 
@@ -40,23 +46,41 @@ def _build_cluster(*, single_node: bool) -> Mock:
     cluster.is_single_node.return_value = single_node
     cluster.get_clickhouse_cluster_name.return_value = "eap_cluster"
     cluster.get_database.return_value = "default"
+    cluster.get_local_nodes.return_value = ["local-node"]
     return cluster
 
 
-def test_job_requires_manifest() -> None:
-    assert not CreateEAPReceivedAtVersionTest.allow_adhoc_run
+def _patch_cluster(monkeypatch: pytest.MonkeyPatch, connection: Mock) -> Mock:
+    cluster = _build_cluster(single_node=False)
+    cluster.get_node_connection.return_value = connection
+    monkeypatch.setattr(
+        "snuba.manual_jobs.create_eap_received_at_version_test.get_cluster",
+        Mock(return_value=cluster),
+    )
+    return cluster
 
 
-def test_multi_node_queries(monkeypatch: pytest.MonkeyPatch) -> None:
-    job = _build_job(monkeypatch)
+@pytest.mark.parametrize(
+    "job_type",
+    [
+        AddEAPReceivedAtColumn,
+        CreateEAPReceivedAtVersionTestTable,
+        CreateEAPReceivedAtVersionTestMaterializedView,
+    ],
+)
+def test_jobs_require_manifest(job_type: type[Job]) -> None:
+    assert not job_type.allow_adhoc_run
+
+
+def test_multi_node_queries() -> None:
     cluster = _build_cluster(single_node=False)
 
-    assert job._add_received_at_query(cluster) == (
+    assert _add_received_at_query(cluster) == (
         "ALTER TABLE eap_items_1_local ON CLUSTER 'eap_cluster' "
         "ADD COLUMN IF NOT EXISTS received_at UInt64"
     )
 
-    create_table = job._create_table_query(cluster, _COLUMNS)
+    create_table = _create_table_query(cluster, _COLUMNS)
     assert create_table.startswith(
         "CREATE TABLE IF NOT EXISTS "
         "eap_items_1_downsample_8_timestamp_versioned_test_local "
@@ -80,7 +104,7 @@ def test_multi_node_queries(monkeypatch: pytest.MonkeyPatch) -> None:
         "enable_block_offset_column=1"
     ) in create_table
 
-    create_view = job._create_view_query(cluster, _COLUMNS)
+    create_view = _create_view_query(cluster, _DESTINATION_COLUMNS)
     assert create_view.startswith(
         "CREATE MATERIALIZED VIEW IF NOT EXISTS "
         "eap_items_1_downsample_8_timestamp_versioned_test_mv "
@@ -92,53 +116,71 @@ def test_multi_node_queries(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "downsampled_retention_days AS retention_days" in create_view
     assert "server_sample_rate / 8 AS server_sample_rate" in create_view
     assert "attributes_string_0, received_at FROM eap_items_1_local" in create_view
-    assert create_view.endswith("WHERE (cityHash64(item_id) % 8) = 0")
+    assert create_view.endswith("WHERE received_at != 0 AND (cityHash64(item_id) % 8) = 0")
 
 
-def test_single_node_uses_non_replicated_engine(monkeypatch: pytest.MonkeyPatch) -> None:
-    job = _build_job(monkeypatch)
-    cluster = _build_cluster(single_node=True)
+def test_single_node_uses_non_replicated_engine() -> None:
+    create_table = _create_table_query(_build_cluster(single_node=True), _COLUMNS)
 
-    create_table = job._create_table_query(cluster, _COLUMNS)
     assert "ON CLUSTER" not in create_table
     assert "ENGINE = ReplacingMergeTree(received_at)" in create_table
     assert "ReplicatedReplacingMergeTree" not in create_table
 
 
-def test_execute_uses_eap_local_cluster(monkeypatch: pytest.MonkeyPatch) -> None:
-    job = _build_job(monkeypatch)
+def test_add_column_job_executes_only_source_alter(monkeypatch: pytest.MonkeyPatch) -> None:
+    job = _build_job(monkeypatch, AddEAPReceivedAtColumn)
     connection = Mock()
-    connection.execute.side_effect = [
-        ClickhouseResult(),
-        ClickhouseResult(results=_COLUMNS),
-        ClickhouseResult(),
-        ClickhouseResult(),
-    ]
-    cluster = _build_cluster(single_node=False)
-    cluster.get_local_nodes.return_value = ["local-node"]
-    cluster.get_node_connection.return_value = connection
-    monkeypatch.setattr(
-        "snuba.manual_jobs.create_eap_received_at_version_test.get_cluster",
-        Mock(return_value=cluster),
-    )
+    cluster = _patch_cluster(monkeypatch, connection)
 
     job.execute(Mock())
 
     cluster.get_node_connection.assert_called_once_with(
         ClickhouseClientSettings.MIGRATE, "local-node"
     )
-    assert connection.execute.call_args_list[0] == call(query=job._add_received_at_query(cluster))
-    assert connection.execute.call_args_list[1] == call(query=job._get_columns_query())
-    assert connection.execute.call_args_list[2] == call(
-        query=job._create_table_query(cluster, _COLUMNS)
-    )
-    assert connection.execute.call_args_list[3] == call(
-        query=job._create_view_query(cluster, _COLUMNS)
-    )
+    connection.execute.assert_called_once_with(query=_add_received_at_query(cluster))
 
 
-def test_rejects_empty_source_schema(monkeypatch: pytest.MonkeyPatch) -> None:
-    job = _build_job(monkeypatch)
+def test_create_table_job_does_not_create_view(monkeypatch: pytest.MonkeyPatch) -> None:
+    job = _build_job(monkeypatch, CreateEAPReceivedAtVersionTestTable)
+    connection = Mock()
+    connection.execute.side_effect = [ClickhouseResult(results=_COLUMNS), ClickhouseResult()]
+    cluster = _patch_cluster(monkeypatch, connection)
 
-    with pytest.raises(AssertionError, match="has no columns"):
-        job._create_table_query(_build_cluster(single_node=True), [])
+    job.execute(Mock())
+
+    assert connection.execute.call_args_list == [
+        call(
+            query="DESCRIBE TABLE eap_items_1_downsample_8_local "
+            "SETTINGS describe_include_subcolumns = 0"
+        ),
+        call(query=_create_table_query(cluster, _COLUMNS)),
+    ]
+
+
+def test_create_view_job_uses_destination_schema(monkeypatch: pytest.MonkeyPatch) -> None:
+    job = _build_job(monkeypatch, CreateEAPReceivedAtVersionTestMaterializedView)
+    connection = Mock()
+    connection.execute.side_effect = [
+        ClickhouseResult(results=_DESTINATION_COLUMNS),
+        ClickhouseResult(),
+    ]
+    cluster = _patch_cluster(monkeypatch, connection)
+
+    job.execute(Mock())
+
+    assert connection.execute.call_args_list == [
+        call(
+            query="DESCRIBE TABLE eap_items_1_downsample_8_timestamp_versioned_test_local "
+            "SETTINGS describe_include_subcolumns = 0"
+        ),
+        call(query=_create_view_query(cluster, _DESTINATION_COLUMNS)),
+    ]
+
+
+def test_rejects_empty_schemas() -> None:
+    cluster = _build_cluster(single_node=True)
+
+    with pytest.raises(AssertionError, match="downsample_8_local has no columns"):
+        _create_table_query(cluster, [])
+    with pytest.raises(AssertionError, match="versioned_test_local has no columns"):
+        _create_view_query(cluster, [])
