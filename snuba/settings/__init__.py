@@ -218,7 +218,14 @@ RECORD_COGS = False
 
 # Sentry Options
 SENTRY_DSN: str | None = None
-SENTRY_TRACE_SAMPLE_RATE = 0
+# None (default) keeps tracing disabled for local roots so we only continue
+# incoming sampled traces under trace_lifecycle="stream". A numeric 0 still
+# enables tracing and emits Sample Rate client discards for every unsampled
+# local root. Set via env only when intentionally enabling local sampling.
+_raw_trace_sample_rate = os.environ.get("SENTRY_TRACE_SAMPLE_RATE")
+SENTRY_TRACE_SAMPLE_RATE: float | None = (
+    float(_raw_trace_sample_rate) if _raw_trace_sample_rate else None
+)
 
 # Snuba Admin Options
 SLACK_API_TOKEN = os.environ.get("SLACK_API_TOKEN")

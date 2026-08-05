@@ -179,6 +179,10 @@ def setup_sentry() -> None:
         # the value for release is also computed in rust-snuba, please keep the
         # logic in sync
         release=os.getenv("SNUBA_RELEASE"),
+        # None (default) disables local root creation while still allowing
+        # continue-only participation in upstream-sampled traces under stream
+        # mode. A numeric 0 still enables tracing and floods Sample Rate
+        # client discards for every unsampled local root.
         traces_sample_rate=settings.SENTRY_TRACE_SAMPLE_RATE,
         profiles_sample_rate=settings.SNUBA_PROFILES_SAMPLE_RATE,
         # Stream spans as they finish. Disables the legacy tracing API
