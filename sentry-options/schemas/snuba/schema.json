@@ -67,6 +67,11 @@
       "default": {},
       "description": "Dict mapping storage name to a grace period in minutes; eap-items messages from before the current partition older than this are routed to the DLQ. Storages with no entry have no grace-period dropping. Migrated from per-storage runtime config eap_items_dlq_grace_period_min:<storage>."
     },
+    "eap_items_emit_received_at": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the EAP items consumer writes the Kafka broker timestamp in epoch milliseconds to the received_at column."
+    },
     "quantized_rebalance_consumer_group_delay_secs": {
       "type": "object",
       "additionalProperties": {
