@@ -45,8 +45,10 @@ def _build_cluster(*, single_node: bool) -> Mock:
     cluster = Mock()
     cluster.is_single_node.return_value = single_node
     cluster.get_clickhouse_cluster_name.return_value = "eap_cluster"
+    cluster.get_clickhouse_distributed_cluster_name.return_value = "eap_dist_cluster"
     cluster.get_database.return_value = "default"
     cluster.get_local_nodes.return_value = ["local-node"]
+    cluster.get_distributed_nodes.return_value = ["distributed-node"]
     return cluster
 
 
@@ -75,8 +77,12 @@ def test_jobs_require_manifest(job_type: type[Job]) -> None:
 def test_multi_node_queries() -> None:
     cluster = _build_cluster(single_node=False)
 
-    assert _add_received_at_query(cluster) == (
+    assert _add_received_at_query(cluster, "eap_items_1_local") == (
         "ALTER TABLE eap_items_1_local ON CLUSTER 'eap_cluster' "
+        "ADD COLUMN IF NOT EXISTS received_at UInt64"
+    )
+    assert _add_received_at_query(cluster, "eap_items_1_dist", distributed=True) == (
+        "ALTER TABLE eap_items_1_dist ON CLUSTER 'eap_dist_cluster' "
         "ADD COLUMN IF NOT EXISTS received_at UInt64"
     )
 
@@ -127,17 +133,49 @@ def test_single_node_uses_non_replicated_engine() -> None:
     assert "ReplicatedReplacingMergeTree" not in create_table
 
 
-def test_add_column_job_executes_only_source_alter(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_add_column_job_alters_local_and_distributed_tables(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    job = _build_job(monkeypatch, AddEAPReceivedAtColumn)
+    local_connection = Mock()
+    distributed_connection = Mock()
+    cluster = _patch_cluster(monkeypatch, local_connection)
+    cluster.get_node_connection.side_effect = [local_connection, distributed_connection]
+
+    job.execute(Mock())
+
+    assert cluster.get_node_connection.call_args_list == [
+        call(ClickhouseClientSettings.MIGRATE, "local-node"),
+        call(ClickhouseClientSettings.MIGRATE, "distributed-node"),
+    ]
+    local_connection.execute.assert_called_once_with(
+        query=_add_received_at_query(cluster, "eap_items_1_local")
+    )
+    distributed_connection.execute.assert_called_once_with(
+        query=_add_received_at_query(cluster, "eap_items_1_dist", distributed=True)
+    )
+
+
+def test_add_column_job_skips_dist_table_on_single_node(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     job = _build_job(monkeypatch, AddEAPReceivedAtColumn)
     connection = Mock()
-    cluster = _patch_cluster(monkeypatch, connection)
+    cluster = _build_cluster(single_node=True)
+    cluster.get_node_connection.return_value = connection
+    monkeypatch.setattr(
+        "snuba.manual_jobs.create_eap_received_at_version_test.get_cluster",
+        Mock(return_value=cluster),
+    )
 
     job.execute(Mock())
 
     cluster.get_node_connection.assert_called_once_with(
         ClickhouseClientSettings.MIGRATE, "local-node"
     )
-    connection.execute.assert_called_once_with(query=_add_received_at_query(cluster))
+    connection.execute.assert_called_once_with(
+        query=_add_received_at_query(cluster, "eap_items_1_local")
+    )
 
 
 def test_create_table_job_does_not_create_view(monkeypatch: pytest.MonkeyPatch) -> None:

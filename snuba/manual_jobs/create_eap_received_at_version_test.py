@@ -8,6 +8,7 @@ from snuba.manual_jobs import Job, JobLogger
 from snuba.migrations.table_engines import ReplacingMergeTree
 
 _SOURCE_TABLE = "eap_items_1_local"
+_DISTRIBUTED_SOURCE_TABLE = "eap_items_1_dist"
 _SCHEMA_SOURCE_TABLE = "eap_items_1_downsample_8_local"
 _DESTINATION_TABLE = "eap_items_1_downsample_8_timestamp_versioned_test_local"
 _VIEW_NAME = "eap_items_1_downsample_8_timestamp_versioned_test_mv"
@@ -35,10 +36,14 @@ def _column_definition(column: ColumnDescription) -> str:
     return " ".join(clauses)
 
 
-def _on_cluster(cluster: ClickhouseCluster) -> str:
+def _on_cluster(cluster: ClickhouseCluster, *, distributed: bool = False) -> str:
     if cluster.is_single_node():
         return ""
-    cluster_name = cluster.get_clickhouse_cluster_name()
+    cluster_name = (
+        cluster.get_clickhouse_distributed_cluster_name()
+        if distributed
+        else cluster.get_clickhouse_cluster_name()
+    )
     assert cluster_name is not None
     return f" ON CLUSTER {escape_string(cluster_name)}"
 
@@ -68,9 +73,11 @@ def _get_columns(connection: ClickhousePool, table_name: str) -> list[ColumnDesc
     ]
 
 
-def _add_received_at_query(cluster: ClickhouseCluster) -> str:
+def _add_received_at_query(
+    cluster: ClickhouseCluster, table_name: str, *, distributed: bool = False
+) -> str:
     return (
-        f"ALTER TABLE {_SOURCE_TABLE}{_on_cluster(cluster)} "
+        f"ALTER TABLE {table_name}{_on_cluster(cluster, distributed=distributed)} "
         "ADD COLUMN IF NOT EXISTS received_at UInt64"
     )
 
@@ -122,9 +129,19 @@ class AddEAPReceivedAtColumn(Job):
 
     def execute(self, logger: JobLogger) -> None:
         cluster, connection = _get_connection()
-        query = _add_received_at_query(cluster)
+        query = _add_received_at_query(cluster, _SOURCE_TABLE)
         logger.info(f"Executing query: {query}")
         connection.execute(query=query)
+
+        if not cluster.is_single_node():
+            distributed_nodes = cluster.get_distributed_nodes()
+            assert distributed_nodes, "EAP distributed cluster has no nodes"
+            distributed_connection = cluster.get_node_connection(
+                ClickhouseClientSettings.MIGRATE, distributed_nodes[0]
+            )
+            query = _add_received_at_query(cluster, _DISTRIBUTED_SOURCE_TABLE, distributed=True)
+            logger.info(f"Executing query: {query}")
+            distributed_connection.execute(query=query)
         logger.info("complete")
 
 
