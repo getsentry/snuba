@@ -93,7 +93,9 @@ function TracingQueries(props: { api: Client }) {
 
     const profileEventRows: Array<string> = [];
     for (const [k, v] of Object.entries(profileEventResults || {})) {
-      profileEventRows.push(k + "=>" + v.rows[0]);
+      if (v.rows && v.rows.length > 0) {
+        profileEventRows.push(k + "=>" + v.rows[0]);
+      }
     }
 
     return (
