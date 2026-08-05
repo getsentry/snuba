@@ -2,16 +2,18 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, cast
 from unittest.mock import patch
 
 import pytest
 import sentry_kafka_schemas
+from sentry_options.testing import override_options
 
 import rust_snuba
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors import DatasetMessageProcessor
+from snuba.datasets.processors.eap_items_processor import EAPItemsProcessor
 from snuba.datasets.processors.errors_processor import ErrorsProcessor
 from snuba.datasets.processors.metrics_bucket_processor import (
     PolymorphicMetricsProcessor,
@@ -142,3 +144,17 @@ def test_replays_message_processor() -> None:
             # rust message and overly the python message. This fill in the gaps of the python
             # message.
             assert parsed_rust_message | parsed_python_message == parsed_rust_message
+
+
+def test_eap_items_received_at_from_broker_timestamp() -> None:
+    payload = next(iter(sentry_kafka_schemas.iter_examples("snuba-items"))).load()
+    broker_timestamp = datetime.fromtimestamp(1_745_562_493.123, tz=UTC)
+
+    with override_options("snuba", {"eap_items_emit_received_at": True}):
+        processed = EAPItemsProcessor().process_message(
+            payload,
+            KafkaMessageMetadata(offset=1, partition=0, timestamp=broker_timestamp),
+        )
+
+    assert isinstance(processed, InsertBatch)
+    assert processed.rows[0]["received_at"] == 1_745_562_493_123
