@@ -17,7 +17,8 @@ def test_scrub() -> None:
 
 def test_summarize_from_query_log() -> None:
     connection = MagicMock()
-    # Columns already formatted by ClickHouse (formatReadableSize / duration math).
+    # Columns already formatted by ClickHouse (formatReadableSize / duration math),
+    # matching ExecuteSummary fields parsed from native wire logs.
     connection.execute.return_value = ClickhouseResult(
         results=[
             ("query-node", "qid-1", 1, 100, "2.00 KiB", 0.25, 400.0, "8.00 KiB"),
@@ -30,6 +31,11 @@ def test_summarize_from_query_log() -> None:
         patch("snuba.admin.clickhouse.tracing.time.sleep"),
     ):
         summary = summarize_from_query_log(connection, "errors_ro", "qid-1")
+
+    sql = connection.execute.call_args.kwargs["query"]
+    assert "formatReadableSize(read_bytes)" in sql
+    assert "now() - INTERVAL 5 MINUTE" in sql
+    assert "initial_query_id" in sql
 
     assert set(summary.query_summaries) == {"query-node", "storage-node"}
     dist = summary.query_summaries["query-node"]
@@ -47,8 +53,13 @@ def test_summarize_from_query_log() -> None:
     local = summary.query_summaries["storage-node"]
     assert local.is_distributed is False
     assert local.execute_summaries is not None
-    assert local.execute_summaries[0].rows_read == 80
-    assert local.execute_summaries[0].seconds == 0.1
+    assert local.execute_summaries[0] == ExecuteSummary(
+        rows_read=80,
+        memory_size="1.00 KiB",
+        seconds=0.1,
+        rows_per_second=800.0,
+        bytes_per_second="10.00 KiB",
+    )
 
 
 def test_format_trace_output_from_summary() -> None:
@@ -87,10 +98,15 @@ def test_format_trace_output_from_summary() -> None:
 
     output = format_trace_output_from_summary(summary)
     lines = output.splitlines()
-    assert lines[0].startswith("[ query-node ] {qid-1} <Debug> executeQuery (Distributed):")
-    assert "Read 100 rows, 2.00 KiB in 0.25 sec." in lines[0]
-    assert lines[1].startswith("[ storage-node ] {qid-2} <Debug> executeQuery (Local):")
-    assert "Read 80 rows, 1.00 KiB in 0.1 sec." in lines[1]
+    # Same field order the UI / log parser use for execute lines.
+    assert lines[0] == (
+        "[ query-node ] {qid-1} <Debug> executeQuery (Distributed): "
+        "Read 100 rows, 2.00 KiB in 0.25 sec., 400.0 rows/sec., 8.00 KiB/sec."
+    )
+    assert lines[1] == (
+        "[ storage-node ] {qid-2} <Debug> executeQuery (Local): "
+        "Read 80 rows, 1.00 KiB in 0.1 sec., 800.0 rows/sec., 10.00 KiB/sec."
+    )
 
 
 def test_merge_query_log_summary_clears_false_distributed_flag() -> None:

@@ -20,6 +20,7 @@ def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
     id_list = ", ".join(f"'{query_id}'" for query_id in query_ids)
     sql = f"""
         SELECT
+            query_id,
             hostname() AS host,
             ProfileEvents
         FROM {source}
@@ -32,20 +33,36 @@ def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
     if result is None or not result.results:
         return
 
-    query_trace.profile_events_meta.append(result.meta)
+    # Keep the historical single-column ProfileEvents meta the frontend expects.
+    query_trace.profile_events_meta.append(
+        [col for col in (result.meta or []) if col[0] == "ProfileEvents"] or result.meta
+    )
     if result.profile is not None:
         query_trace.profile_events_profile = cast(dict[str, int], result.profile)
 
-    columns = result.meta or []
-    column_names = [name for name, _ in columns]
+    # Prefer summary node_name keys (same as the old per-host path) when we can
+    # map by query_id; otherwise fall back to hostname().
+    query_id_to_node = {
+        summary.query_id: node_name
+        for node_name, summary in query_trace.summarized_trace_output.query_summaries.items()
+        if summary.query_id
+    }
+
     for row in result.results:
-        if len(row) < 2 or not row[1]:
+        if len(row) < 3 or not row[2]:
             continue
-        host = str(row[0])
-        query_trace.profile_events_results[host] = {
-            "column_names": column_names,
-            "rows": [json.dumps(row[1])],
-        }
+        row_query_id = str(row[0])
+        hostname = str(row[1])
+        profile_events = row[2]
+        node_name = query_id_to_node.get(row_query_id, hostname)
+        host_result = query_trace.profile_events_results.setdefault(
+            node_name,
+            {
+                "column_names": ["ProfileEvents"],
+                "rows": [],
+            },
+        )
+        cast(list[str], host_result["rows"]).append(json.dumps(profile_events))
 
 
 def _profile_event_query_ids(query_trace: TraceOutput) -> list[str]:

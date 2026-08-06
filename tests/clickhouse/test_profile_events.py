@@ -32,7 +32,14 @@ def test_profile_event_query_ids_root_only() -> None:
     assert _profile_event_query_ids(trace_output) == ["root-query-id"]
 
 
-def test_gather_profile_events() -> None:
+def test_gather_profile_events_matches_legacy_payload_shape() -> None:
+    """
+    Frontend expects:
+      profile_events_results[node_name] = {
+        "column_names": ["ProfileEvents"],
+        "rows": [json.dumps(profile_events_map), ...],
+      }
+    """
     trace_output = MagicMock()
     trace_output.summarized_trace_output.query_summaries = {
         "host1": MagicMock(query_id="query1"),
@@ -41,11 +48,19 @@ def test_gather_profile_events() -> None:
     trace_output.profile_events_meta = []
     trace_output.profile_events_results = {}
 
+    profile_map = {"SelectedRows": 1, "Query": 1}
     mock_connection = MagicMock()
     mock_connection.execute.return_value = ClickhouseResult(
-        results=[("host1", {"SelectedRows": 1})],
-        meta=[("host", "String"), ("ProfileEvents", "Map(String, UInt64)")],
-        profile=ClickhouseProfile(bytes=0, progress_bytes=0, blocks=0, rows=1, elapsed=0.1),
+        results=[
+            ("query1", "host1.internal", profile_map),
+            ("query2", "host2.internal", {"SelectedRows": 2}),
+        ],
+        meta=[
+            ("query_id", "String"),
+            ("host", "String"),
+            ("ProfileEvents", "Map(String, UInt64)"),
+        ],
+        profile=ClickhouseProfile(bytes=0, progress_bytes=0, blocks=0, rows=2, elapsed=0.1),
     )
 
     with (
@@ -60,23 +75,74 @@ def test_gather_profile_events() -> None:
     ):
         gather_profile_events(trace_output, "test_storage")
 
-    mock_connection.execute.assert_called_once()
     sql = mock_connection.execute.call_args.kwargs["query"]
+    assert "SELECT" in sql
+    assert "hostname() AS host" in sql
     assert "ProfileEvents" in sql
     assert "query_id IN ('query1')" in sql
-    assert trace_output.profile_events_meta == [
-        [("host", "String"), ("ProfileEvents", "Map(String, UInt64)")]
-    ]
+    assert "now() - INTERVAL 5 MINUTE" in sql
+
+    assert trace_output.profile_events_meta == [[("ProfileEvents", "Map(String, UInt64)")]]
     assert trace_output.profile_events_profile == {
         "bytes": 0,
         "progress_bytes": 0,
         "blocks": 0,
-        "rows": 1,
+        "rows": 2,
         "elapsed": 0.1,
     }
+    # Keys use summary node_name when query_id maps; otherwise hostname().
+    assert trace_output.profile_events_results == {
+        "host1": {
+            "column_names": ["ProfileEvents"],
+            "rows": [json.dumps(profile_map)],
+        },
+        "host2.internal": {
+            "column_names": ["ProfileEvents"],
+            "rows": [json.dumps({"SelectedRows": 2})],
+        },
+    }
+
+
+def test_gather_profile_events_appends_multiple_rows_per_host() -> None:
+    trace_output = MagicMock()
+    trace_output.summarized_trace_output.query_summaries = {
+        "host1": MagicMock(query_id="query1"),
+    }
+    trace_output.query_id = "query1"
+    trace_output.profile_events_meta = []
+    trace_output.profile_events_results = {}
+
+    mock_connection = MagicMock()
+    mock_connection.execute.return_value = ClickhouseResult(
+        results=[
+            ("query1", "host1", {"SelectedRows": 1}),
+            ("query1", "host1", {"SelectedRows": 2}),
+        ],
+        meta=[
+            ("query_id", "String"),
+            ("host", "String"),
+            ("ProfileEvents", "Map(String, UInt64)"),
+        ],
+    )
+
+    with (
+        patch(
+            "snuba.admin.clickhouse.profile_events.get_ro_query_node_connection",
+            return_value=mock_connection,
+        ),
+        patch(
+            "snuba.admin.clickhouse.profile_events.system_log_source",
+            return_value="system.query_log",
+        ),
+    ):
+        gather_profile_events(trace_output, "test_storage")
+
     assert trace_output.profile_events_results["host1"] == {
-        "column_names": ["host", "ProfileEvents"],
-        "rows": [json.dumps({"SelectedRows": 1})],
+        "column_names": ["ProfileEvents"],
+        "rows": [
+            json.dumps({"SelectedRows": 1}),
+            json.dumps({"SelectedRows": 2}),
+        ],
     }
 
 
@@ -91,8 +157,12 @@ def test_gather_profile_events_retry_logic() -> None:
 
     empty_result = ClickhouseResult(results=[])
     success_result = ClickhouseResult(
-        results=[("host1", {"SelectedRows": 1})],
-        meta=[("host", "String"), ("ProfileEvents", "Map(String, UInt64)")],
+        results=[("query1", "host1", {"SelectedRows": 1})],
+        meta=[
+            ("query_id", "String"),
+            ("host", "String"),
+            ("ProfileEvents", "Map(String, UInt64)"),
+        ],
         profile=ClickhouseProfile(bytes=0, progress_bytes=0, blocks=0, rows=1, elapsed=0.1),
     )
 
@@ -116,3 +186,5 @@ def test_gather_profile_events_retry_logic() -> None:
     assert mock_sleep.call_count == 2
     assert mock_sleep.call_args_list[0][0][0] == 2
     assert mock_sleep.call_args_list[1][0][0] == 4
+    assert trace_output.profile_events_results["host1"]["column_names"] == ["ProfileEvents"]
+    assert trace_output.profile_events_results["host1"]["rows"] == [json.dumps({"SelectedRows": 1})]
