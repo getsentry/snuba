@@ -50,9 +50,6 @@ class TraceOutput:
     profile_events_results: dict[str, Any]
     profile_events_meta: list[Any]
     profile_events_profile: dict[str, int]
-    # Stable query id used for the traced statement. Populated so profile-event
-    # collection can still find the query when the HTTP driver leaves
-    # ``trace_output`` empty (no parseable node/query-id map).
     query_id: str = ""
 
 
@@ -61,11 +58,6 @@ def run_query_and_get_trace(
 ) -> TraceOutput:
     validate_ro_query(query)
     connection = get_ro_query_node_connection(storage_name, ClickhouseClientSettings.TRACING)
-    # Let the driver/server assign the query_id. clickhouse-connect autogenerates
-    # one and returns it on ClickhouseResult.query_id; the native driver only
-    # knows an id when one is supplied, so on that path we fall back to whatever
-    # summarize_trace_output parsed from the wire logs. We do not rely on
-    # system.text_log — it is not enabled in our environments.
     query_result = connection.execute(
         query=query,
         capture_trace=True,
@@ -77,8 +69,6 @@ def run_query_and_get_trace(
     summarized_trace_output = summarize_trace_output(trace_output)
     query_id = query_result.query_id or ""
     if not query_id:
-        # Native-driver path with no caller-supplied id: take the initiator id
-        # from the parsed wire-trace summary when present.
         for summary in summarized_trace_output.query_summaries.values():
             if summary.is_distributed and summary.query_id:
                 query_id = summary.query_id
@@ -86,10 +76,6 @@ def run_query_and_get_trace(
         if not query_id and summarized_trace_output.query_summaries:
             query_id = next(iter(summarized_trace_output.query_summaries.values())).query_id
 
-    # query_log is the durable source of per-node duration/rows/bytes. On the
-    # HTTP driver the wire trace is empty, so this is the entire summary. On the
-    # native driver it still fills missing execute totals and corrects the
-    # distributed-node flag via is_initial_query.
     if query_id:
         query_log_summary = summarize_from_query_log(connection, storage_name, query_id)
         summarized_trace_output = merge_query_log_summary(
@@ -98,8 +84,6 @@ def run_query_and_get_trace(
         )
 
     if not trace_output.strip() and summarized_trace_output.query_summaries:
-        # Raw UI mode still needs something to show when the driver left the
-        # wire trace empty. Synthesize simple execute lines from query_log.
         trace_output = format_trace_output_from_summary(summarized_trace_output)
 
     return TraceOutput(
@@ -116,11 +100,6 @@ def run_query_and_get_trace(
 
 
 def _system_log_source(storage_name: str, table: str) -> str:
-    """
-    Prefer clusterAllReplicas so distributed child queries on storage nodes are
-    included. Fall back to the local system table when the storage is single-node
-    or has no cluster name configured.
-    """
     try:
         cluster = get_storage(StorageKey(storage_name)).get_cluster()
         cluster_name = cluster.get_clickhouse_cluster_name()
@@ -142,14 +121,6 @@ def _poll_system_query(
     *,
     accept_result: Callable[[ClickhouseResult], bool] | None = None,
 ) -> ClickhouseResult | None:
-    """
-    Poll a system-table query until it returns an acceptable result or attempts
-    are exhausted.
-
-    ``accept_result``, when provided, is called with the latest ClickhouseResult
-    and should return True when polling can stop. Defaults to "any non-empty
-    result set".
-    """
     is_acceptable = accept_result or (lambda result: bool(result and result.results))
     wait_time = 1
     last_result: ClickhouseResult | None = None
@@ -191,14 +162,6 @@ def summarize_from_query_log(
     storage_name: str,
     query_id: str,
 ) -> TracingSummary:
-    """
-    Build a TracingSummary from system.query_log finish rows.
-
-    This is the primary recovery path when the clickhouse-connect (HTTP) driver
-    leaves the wire trace empty. query_log carries duration/rows/bytes per node
-    for the formatted "Total" section, including distributed children via
-    initial_query_id.
-    """
     source = _system_log_source(storage_name, "query_log")
     sql = f"""
         SELECT
@@ -218,8 +181,6 @@ def summarize_from_query_log(
     def _root_finish_present(result: ClickhouseResult) -> bool:
         if not result.results:
             return False
-        # Wait for the initiator finish row so we don't stop on a single early
-        # shard finish while the root (or other shards) are still flushing.
         return any(bool(row[2]) for row in result.results if row)
 
     result = _poll_system_query(connection, sql, accept_result=_root_finish_present)
@@ -262,12 +223,7 @@ def summarize_from_query_log(
 
 
 def format_trace_output_from_summary(summary: TracingSummary) -> str:
-    """
-    Build a simple multi-line trace string from query_log-derived summaries so
-    the raw tracing UI is not blank when the HTTP driver has no wire logs.
-    """
     lines: list[str] = []
-    # Stable order: distributed initiator first, then others by name.
     nodes = sorted(
         summary.query_summaries.values(),
         key=lambda s: (not s.is_distributed, s.node_name),
@@ -288,16 +244,6 @@ def format_trace_output_from_summary(summary: TracingSummary) -> str:
 
 
 def merge_query_log_summary(base: TracingSummary, from_query_log: TracingSummary) -> TracingSummary:
-    """
-    Merge query_log-derived node summaries into a (possibly partial) base summary.
-
-    - Nodes only present in query_log are added.
-    - Nodes already present keep richer native-driver wire-trace detail, but gain
-      an execute_summary from query_log when they don't already have one.
-    - ``is_distributed`` is taken from query_log when available. Wire-trace
-      parsing marks whichever node appeared first as distributed; query_log's
-      ``is_initial_query`` is authoritative.
-    """
     if not from_query_log.query_summaries:
         return base
     if not base.query_summaries:
@@ -322,8 +268,6 @@ def merge_query_log_summary(base: TracingSummary, from_query_log: TracingSummary
             if query_log_node is not None:
                 summary.is_distributed = query_log_node.is_distributed
             else:
-                # Node only seen in the wire trace; if another node is the
-                # confirmed initiator, this one is not distributed.
                 summary.is_distributed = False
 
     return merged

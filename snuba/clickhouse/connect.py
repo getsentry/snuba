@@ -207,12 +207,8 @@ class ClickhouseConnectPool(ClickhousePool):
         if query_id is not None:
             query_settings["query_id"] = query_id
         if capture_trace:
-            # Ask the server to emit trace logs. Unlike the native driver,
-            # clickhouse-connect does not surface them on the wire (it only
-            # reads the X-ClickHouse-Summary header), so ``trace_output`` from
-            # this pool is always empty. The snuba-admin tracing tool recovers
-            # performance data after the fact from system.query_log using the
-            # assigned query_id (system.text_log is not enabled in our envs).
+            # clickhouse-connect does not surface send_logs_level output; tracing
+            # recovers performance data from system.query_log instead.
             query_settings["send_logs_level"] = "trace"
         return query_settings or None
 
@@ -253,9 +249,6 @@ class ClickhouseConnectPool(ClickhousePool):
             )
 
         summary = query_result.summary or {}
-        # Prefer the id the driver/server actually used. clickhouse-connect
-        # autogenerates one when the caller omits it, and surfaces it via
-        # QueryResult.query_id (summary["query_id"] or the client-side value).
         result_query_id = str(query_result.query_id or query_id or "")
 
         def _int(key: str) -> int:
@@ -281,10 +274,6 @@ class ClickhouseConnectPool(ClickhousePool):
 
         results: Sequence[Any] = query_result.result_set
 
-        # trace_output is always empty here: clickhouse-connect has no mechanism
-        # for capturing the server's send_logs_level output (it only parses the
-        # X-ClickHouse-Summary header for the profile above). Callers that need
-        # the full trace (snuba-admin tracing) reconstruct it from system logs.
         if not with_column_types:
             return ClickhouseResult(
                 results=results,
