@@ -20,6 +20,7 @@ from snuba.admin.clickhouse.trace_log_parsing import (
     TracingSummary,
     summarize_trace_output,
 )
+from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.native import ClickhousePool, ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages.factory import get_storage
@@ -168,7 +169,7 @@ def summarize_from_query_log(
         FROM {source}
         WHERE event_time >= now() - INTERVAL 5 MINUTE
           AND type = 'QueryFinish'
-          AND (query_id = '{query_id}' OR initial_query_id = '{query_id}')
+          AND (query_id = {escape_string(query_id)} OR initial_query_id = {escape_string(query_id)})
         ORDER BY is_initial_query DESC, event_time
     """
 

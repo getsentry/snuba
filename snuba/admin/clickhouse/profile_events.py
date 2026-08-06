@@ -5,6 +5,7 @@ import structlog
 
 from snuba.admin.clickhouse.common import get_ro_query_node_connection
 from snuba.admin.clickhouse.tracing import TraceOutput, poll_system_query, system_log_source
+from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.native import ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings
 
@@ -18,7 +19,7 @@ def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
 
     connection = get_ro_query_node_connection(storage, ClickhouseClientSettings.QUERY)
     source = system_log_source(storage, "query_log")
-    id_list = ", ".join(f"'{query_id}'" for query_id in query_ids)
+    id_list = ", ".join(escape_string(query_id) for query_id in query_ids)
     sql = f"""
         SELECT
             query_id,

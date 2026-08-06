@@ -146,6 +146,38 @@ def test_gather_profile_events_appends_multiple_rows_per_host() -> None:
     }
 
 
+def test_gather_profile_events_escapes_query_ids() -> None:
+    trace_output = MagicMock()
+    # Attacker-controlled trace_logs can put quotes/SQL into the parsed query_id.
+    malicious_id = "x' OR 1=1 --"
+    trace_output.summarized_trace_output.query_summaries = {
+        "host1": MagicMock(query_id=malicious_id),
+    }
+    trace_output.query_id = malicious_id
+    trace_output.profile_events_meta = []
+    trace_output.profile_events_results = {}
+
+    mock_connection = MagicMock()
+    mock_connection.execute.return_value = ClickhouseResult(results=[])
+
+    with (
+        patch(
+            "snuba.admin.clickhouse.profile_events.get_ro_query_node_connection",
+            return_value=mock_connection,
+        ),
+        patch(
+            "snuba.admin.clickhouse.profile_events.system_log_source",
+            return_value="system.query_log",
+        ),
+        patch("snuba.admin.clickhouse.tracing.time.sleep"),
+    ):
+        gather_profile_events(trace_output, "test_storage")
+
+    sql = mock_connection.execute.call_args.kwargs["query"]
+    assert "x' OR 1=1 --" not in sql
+    assert r"'x\' OR 1=1 --'" in sql
+
+
 def test_gather_profile_events_waits_for_all_query_ids() -> None:
     trace_output = MagicMock()
     trace_output.summarized_trace_output.query_summaries = {
