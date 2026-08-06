@@ -211,8 +211,8 @@ class ClickhouseConnectPool(ClickhousePool):
             # clickhouse-connect does not surface them on the wire (it only
             # reads the X-ClickHouse-Summary header), so ``trace_output`` from
             # this pool is always empty. The snuba-admin tracing tool recovers
-            # performance data after the fact by querying system.text_log /
-            # system.query_log with the assigned query_id.
+            # performance data after the fact from system.query_log using the
+            # assigned query_id (system.text_log is not enabled in our envs).
             query_settings["send_logs_level"] = "trace"
         return query_settings or None
 

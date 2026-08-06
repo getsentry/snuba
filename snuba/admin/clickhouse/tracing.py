@@ -62,8 +62,9 @@ def run_query_and_get_trace(
     validate_ro_query(query)
     connection = get_ro_query_node_connection(storage_name, ClickhouseClientSettings.TRACING)
     # Always assign a query_id so we can recover performance data from
-    # system.query_log / system.text_log when the driver cannot surface the
-    # server's send_logs_level stream (clickhouse-connect/HTTP).
+    # system.query_log when the driver cannot surface the server's
+    # send_logs_level stream (clickhouse-connect/HTTP). We do not rely on
+    # system.text_log — it is not enabled in our environments.
     query_id = str(uuid4())
     query_result = connection.execute(
         query=query,
@@ -74,18 +75,22 @@ def run_query_and_get_trace(
     )
 
     trace_output = query_result.trace_output or ""
-    if not trace_output.strip():
-        # HTTP path: reconstruct whatever the server persisted for this query_id.
-        trace_output = reconstruct_trace_from_system_logs(connection, storage_name, query_id)
-
     summarized_trace_output = summarize_trace_output(trace_output)
-    # Always merge query_log finish rows. text_log can arrive partially (or only
-    # for the initiator) before distributed children flush; query_log is the
-    # source of truth for per-node totals and missing nodes.
+
+    # query_log is the durable source of per-node duration/rows/bytes. On the
+    # HTTP driver the wire trace is empty, so this is the entire summary. On the
+    # native driver it still fills missing execute totals and corrects the
+    # distributed-node flag via is_initial_query.
+    query_log_summary = summarize_from_query_log(connection, storage_name, query_id)
     summarized_trace_output = merge_query_log_summary(
         summarized_trace_output,
-        summarize_from_query_log(connection, storage_name, query_id),
+        query_log_summary,
     )
+
+    if not trace_output.strip() and summarized_trace_output.query_summaries:
+        # Raw UI mode still needs something to show when the driver left the
+        # wire trace empty. Synthesize simple execute lines from query_log.
+        trace_output = format_trace_output_from_summary(summarized_trace_output)
 
     return TraceOutput(
         trace_output=trace_output,
@@ -171,107 +176,6 @@ def _format_bytes(num_bytes: int | float) -> str:
     return f"{num_bytes} B"
 
 
-def _level_name(level: Any) -> str:
-    if isinstance(level, str):
-        # Enum string form is often 'Debug' or '3'.
-        return level.split(".")[-1] if level[:1].isdigit() is False else level
-    try:
-        # ClickHouse text_log level Enum8 values.
-        mapping = {
-            1: "Fatal",
-            2: "Critical",
-            3: "Error",
-            4: "Warning",
-            5: "Notice",
-            6: "Information",
-            7: "Debug",
-            8: "Trace",
-            9: "Test",
-        }
-        return mapping.get(int(level), str(level))
-    except (TypeError, ValueError):
-        return str(level)
-
-
-def _related_query_ids(
-    connection: ClickhousePool,
-    storage_name: str,
-    query_id: str,
-) -> list[str]:
-    """
-    Return the root query_id plus any distributed child ids from query_log.
-
-    Wait until the initiator's QueryFinish row is present before treating the
-    set as complete. Returning on the first QueryStart-only row would miss
-    distributed children that have not flushed yet.
-    """
-    source = _system_log_source(storage_name, "query_log")
-    sql = f"""
-        SELECT
-            query_id,
-            max(type = 'QueryFinish' AND query_id = '{query_id}') AS root_finished
-        FROM {source}
-        WHERE event_date >= yesterday()
-          AND (query_id = '{query_id}' OR initial_query_id = '{query_id}')
-        GROUP BY query_id
-    """
-
-    def _root_finished(result: ClickhouseResult) -> bool:
-        if not result.results:
-            return False
-        return any(bool(row[1]) for row in result.results if row)
-
-    result = _poll_system_query(connection, sql, accept_result=_root_finished)
-    if result is None or not result.results:
-        return [query_id]
-    ids = [str(row[0]) for row in result.results if row and row[0]]
-    return ids or [query_id]
-
-
-def reconstruct_trace_from_system_logs(
-    connection: ClickhousePool,
-    storage_name: str,
-    query_id: str,
-) -> str:
-    """
-    Rebuild the native-driver style multi-line trace string from system.text_log.
-
-    clickhouse-connect cannot capture send_logs_level output on the wire, but
-    when text_log is enabled the same lines are persisted server-side and can be
-    pulled back by query_id (including distributed children via initial_query_id).
-    """
-    related_ids = _related_query_ids(connection, storage_name, query_id)
-    id_list = ", ".join(f"'{qid}'" for qid in related_ids)
-    source = _system_log_source(storage_name, "text_log")
-    # Bound by event_date so ClickHouse can prune parts; tracing is interactive
-    # so "today and yesterday" is plenty of headroom across midnight.
-    sql = f"""
-        SELECT
-            hostname() AS host,
-            thread_id,
-            query_id,
-            level,
-            logger_name,
-            message
-        FROM {source}
-        WHERE event_date >= yesterday()
-          AND query_id IN ({id_list})
-        ORDER BY event_time, microseconds
-    """
-    result = _poll_system_query(connection, sql)
-    if result is None or not result.results:
-        return ""
-
-    lines: list[str] = []
-    for row in result.results:
-        host, thread_id, row_query_id, level, logger_name, message = row
-        lines.append(
-            f"[ {host} ] [ {thread_id} ] {{{row_query_id}}} "
-            f"<{_level_name(level)}> {logger_name}: {message}"
-        )
-    return "\n".join(lines)
-
-
 def summarize_from_query_log(
     connection: ClickhousePool,
     storage_name: str,
@@ -280,9 +184,10 @@ def summarize_from_query_log(
     """
     Build a TracingSummary from system.query_log finish rows.
 
-    Used both as a full fallback when text_log is empty and as a merge source
-    when text_log only partially covered the query. query_log carries
-    duration/rows/bytes per node for the formatted "Total" section.
+    This is the primary recovery path when the clickhouse-connect (HTTP) driver
+    leaves the wire trace empty. query_log carries duration/rows/bytes per node
+    for the formatted "Total" section, including distributed children via
+    initial_query_id.
     """
     source = _system_log_source(storage_name, "query_log")
     sql = f"""
@@ -346,17 +251,42 @@ def summarize_from_query_log(
     return summary
 
 
+def format_trace_output_from_summary(summary: TracingSummary) -> str:
+    """
+    Build a simple multi-line trace string from query_log-derived summaries so
+    the raw tracing UI is not blank when the HTTP driver has no wire logs.
+    """
+    lines: list[str] = []
+    # Stable order: distributed initiator first, then others by name.
+    nodes = sorted(
+        summary.query_summaries.values(),
+        key=lambda s: (not s.is_distributed, s.node_name),
+    )
+    for node in nodes:
+        role = "Distributed" if node.is_distributed else "Local"
+        if node.execute_summaries:
+            for execute in node.execute_summaries:
+                lines.append(
+                    f"[ {node.node_name} ] {{{node.query_id}}} <Debug> executeQuery "
+                    f"({role}): Read {execute.rows_read} rows, {execute.memory_size} in "
+                    f"{execute.seconds} sec., {execute.rows_per_second} rows/sec., "
+                    f"{execute.bytes_per_second}/sec."
+                )
+        else:
+            lines.append(f"[ {node.node_name} ] {{{node.query_id}}} <Debug> executeQuery ({role})")
+    return "\n".join(lines)
+
+
 def merge_query_log_summary(base: TracingSummary, from_query_log: TracingSummary) -> TracingSummary:
     """
     Merge query_log-derived node summaries into a (possibly partial) base summary.
 
     - Nodes only present in query_log are added.
-    - Nodes already present keep richer text_log-derived detail, but gain an
-      execute_summary from query_log when they don't already have one.
-    - ``is_distributed`` is taken from query_log when available. text_log parsing
-      marks whichever node appeared first as distributed, which is wrong when
-      partial logs start on a storage node; query_log's ``is_initial_query`` is
-      authoritative and keeps the UI from dropping a second "distributed" node.
+    - Nodes already present keep richer native-driver wire-trace detail, but gain
+      an execute_summary from query_log when they don't already have one.
+    - ``is_distributed`` is taken from query_log when available. Wire-trace
+      parsing marks whichever node appeared first as distributed; query_log's
+      ``is_initial_query`` is authoritative.
     """
     if not from_query_log.query_summaries:
         return base
@@ -371,11 +301,8 @@ def merge_query_log_summary(base: TracingSummary, from_query_log: TracingSummary
             continue
         if not existing.execute_summaries and log_summary.execute_summaries:
             existing.execute_summaries = list(log_summary.execute_summaries)
-        # Prefer query_log's is_initial_query over text_log's first-line heuristic.
         existing.is_distributed = log_summary.is_distributed
 
-    # If query_log identified a distributed initiator, clear any leftover
-    # first-line false positives on nodes query_log did not mark distributed.
     query_log_has_distributed = any(
         summary.is_distributed for summary in from_query_log.query_summaries.values()
     )
@@ -385,8 +312,8 @@ def merge_query_log_summary(base: TracingSummary, from_query_log: TracingSummary
             if query_log_node is not None:
                 summary.is_distributed = query_log_node.is_distributed
             else:
-                # Node only seen in text_log; if another node is the confirmed
-                # initiator, this one is not distributed.
+                # Node only seen in the wire trace; if another node is the
+                # confirmed initiator, this one is not distributed.
                 summary.is_distributed = False
 
     return merged
