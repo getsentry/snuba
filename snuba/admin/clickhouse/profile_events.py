@@ -5,6 +5,7 @@ import structlog
 
 from snuba.admin.clickhouse.common import get_ro_query_node_connection
 from snuba.admin.clickhouse.tracing import TraceOutput, poll_system_query, system_log_source
+from snuba.clickhouse.native import ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings
 
 logger = structlog.get_logger().bind(module=__name__)
@@ -29,7 +30,16 @@ def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
           AND query_id IN ({id_list})
     """
 
-    result = poll_system_query(connection, sql)
+    expected_query_ids = set(query_ids)
+
+    def _all_query_ids_present(result: ClickhouseResult) -> bool:
+        if not result.results:
+            return False
+        seen = {str(row[0]) for row in result.results if row}
+        return expected_query_ids.issubset(seen)
+
+    # Wait until every requested query_id has flushed, not just the first node.
+    result = poll_system_query(connection, sql, accept_result=_all_query_ids_present)
     if result is None or not result.results:
         return
 

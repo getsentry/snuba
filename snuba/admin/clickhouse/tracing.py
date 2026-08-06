@@ -255,18 +255,9 @@ def merge_query_log_summary(base: TracingSummary, from_query_log: TracingSummary
             continue
         if not existing.execute_summaries and log_summary.execute_summaries:
             existing.execute_summaries = list(log_summary.execute_summaries)
+        # Only overwrite flags for nodes query_log actually returned. Missing
+        # hosts may be a hostname mismatch, not proof the node is non-distributed.
         existing.is_distributed = log_summary.is_distributed
-
-    query_log_has_distributed = any(
-        summary.is_distributed for summary in from_query_log.query_summaries.values()
-    )
-    if query_log_has_distributed:
-        for node_name, summary in merged.query_summaries.items():
-            query_log_node = from_query_log.query_summaries.get(node_name)
-            if query_log_node is not None:
-                summary.is_distributed = query_log_node.is_distributed
-            else:
-                summary.is_distributed = False
 
     return merged
 

@@ -146,28 +146,39 @@ def test_gather_profile_events_appends_multiple_rows_per_host() -> None:
     }
 
 
-def test_gather_profile_events_retry_logic() -> None:
+def test_gather_profile_events_waits_for_all_query_ids() -> None:
     trace_output = MagicMock()
     trace_output.summarized_trace_output.query_summaries = {
         "host1": MagicMock(query_id="query1"),
+        "host2": MagicMock(query_id="query2"),
     }
     trace_output.query_id = "query1"
     trace_output.profile_events_meta = []
     trace_output.profile_events_results = {}
 
-    empty_result = ClickhouseResult(results=[])
-    success_result = ClickhouseResult(
+    partial_result = ClickhouseResult(
         results=[("query1", "host1", {"SelectedRows": 1})],
         meta=[
             ("query_id", "String"),
             ("host", "String"),
             ("ProfileEvents", "Map(String, UInt64)"),
         ],
-        profile=ClickhouseProfile(bytes=0, progress_bytes=0, blocks=0, rows=1, elapsed=0.1),
+    )
+    complete_result = ClickhouseResult(
+        results=[
+            ("query1", "host1", {"SelectedRows": 1}),
+            ("query2", "host2", {"SelectedRows": 2}),
+        ],
+        meta=[
+            ("query_id", "String"),
+            ("host", "String"),
+            ("ProfileEvents", "Map(String, UInt64)"),
+        ],
+        profile=ClickhouseProfile(bytes=0, progress_bytes=0, blocks=0, rows=2, elapsed=0.1),
     )
 
     mock_connection = MagicMock()
-    mock_connection.execute.side_effect = [empty_result, empty_result, success_result]
+    mock_connection.execute.side_effect = [partial_result, complete_result]
 
     with (
         patch(
@@ -182,9 +193,8 @@ def test_gather_profile_events_retry_logic() -> None:
     ):
         gather_profile_events(trace_output, "test_storage")
 
-    assert mock_connection.execute.call_count == 3
-    assert mock_sleep.call_count == 2
-    assert mock_sleep.call_args_list[0][0][0] == 2
-    assert mock_sleep.call_args_list[1][0][0] == 4
-    assert trace_output.profile_events_results["host1"]["column_names"] == ["ProfileEvents"]
+    assert mock_connection.execute.call_count == 2
+    assert mock_sleep.call_count == 1
+    assert set(trace_output.profile_events_results) == {"host1", "host2"}
     assert trace_output.profile_events_results["host1"]["rows"] == [json.dumps({"SelectedRows": 1})]
+    assert trace_output.profile_events_results["host2"]["rows"] == [json.dumps({"SelectedRows": 2})]

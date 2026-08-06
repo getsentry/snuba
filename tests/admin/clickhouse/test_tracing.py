@@ -109,7 +109,7 @@ def test_format_trace_output_from_summary() -> None:
     )
 
 
-def test_merge_query_log_summary_clears_false_distributed_flag() -> None:
+def test_merge_query_log_summary_overwrites_flags_only_for_shared_nodes() -> None:
     # Wire-trace first-line heuristic wrongly marked a storage node distributed.
     base = TracingSummary(
         {
@@ -122,6 +122,12 @@ def test_merge_query_log_summary_clears_false_distributed_flag() -> None:
                 node_name="query-node",
                 is_distributed=False,
                 query_id="qid-1",
+            ),
+            # Present only in the wire trace / under a different hostname key.
+            "trace-only-node": QuerySummary(
+                node_name="trace-only-node",
+                is_distributed=True,
+                query_id="qid-3",
             ),
         }
     )
@@ -161,6 +167,8 @@ def test_merge_query_log_summary_clears_false_distributed_flag() -> None:
     merged = merge_query_log_summary(base, from_log)
     assert merged.query_summaries["query-node"].is_distributed is True
     assert merged.query_summaries["storage-node"].is_distributed is False
+    # Missing from query_log must not force-clear the existing flag.
+    assert merged.query_summaries["trace-only-node"].is_distributed is True
 
 
 def test_merge_query_log_summary_adds_missing_nodes_and_execute() -> None:
