@@ -30,6 +30,7 @@ from snuba.query.expressions import (
     Expression,
     FunctionCall,
 )
+from snuba.state.sentry_options import get_option
 from snuba.web.rpc.common.common import (
     get_field_existence_expression,
     trace_item_filters_to_expression,
@@ -518,6 +519,12 @@ def get_extrapolated_function(
 ) -> CurriedFunctionCall | FunctionCall | None:
     alias = aggregation.label or None
     alias_dict = {"alias": alias} if alias else {}
+
+    if aggregation.aggregate == Function.FUNCTION_COLLECT_UNIQUE:
+        raise BadSnubaRPCRequestException(
+            f"Extrapolation is not supported for {Function.Name(aggregation.aggregate)} function."
+        )
+
     condition_in_aggregation = _get_condition_in_aggregation(
         aggregation, attribute_key_to_expression
     )
@@ -867,6 +874,7 @@ def aggregation_to_expression(
     condition_in_aggregation = _get_condition_in_aggregation(
         aggregation, attribute_key_to_expression
     )
+    max_array_size = get_option("snuba_query_max_array_size", 1000)
 
     if aggregation.key.type in ARRAY_TYPES:
         return _array_aggregation_to_expression(
@@ -926,6 +934,10 @@ def aggregation_to_expression(
             field,
             and_cond(field_exists, condition_in_aggregation),
         ),
+        Function.FUNCTION_COLLECT_UNIQUE: cf.groupUniqArrayIf(max_array_size)(
+            field,
+            and_cond(field_exists, condition_in_aggregation),
+        ),
     }
 
     if aggregation.extrapolation_mode in [
@@ -943,12 +955,13 @@ def aggregation_to_expression(
     else:
         agg_func_expr = function_map.get(aggregation.aggregate)
         if agg_func_expr is not None:
-            # Don't apply round() to FUNCTION_ANY since it can return non-numeric types (e.g., strings)
             if aggregation.aggregate == Function.FUNCTION_ANY:
                 agg_func_expr = f.anyIfOrNull(
-                    field,
-                    and_cond(field_exists, condition_in_aggregation),
-                    **alias_dict,
+                    field, and_cond(field_exists, condition_in_aggregation), **alias_dict
+                )
+            elif aggregation.aggregate == Function.FUNCTION_COLLECT_UNIQUE:
+                agg_func_expr = cf.groupUniqArrayIf(max_array_size)(
+                    field, and_cond(field_exists, condition_in_aggregation), **alias_dict
                 )
             else:
                 agg_func_expr = f.round(agg_func_expr, _FLOATING_POINT_PRECISION, **alias_dict)

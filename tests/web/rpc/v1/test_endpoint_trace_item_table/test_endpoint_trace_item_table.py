@@ -4202,6 +4202,150 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
         assert by_name["cols"].results[0].WhichOneof("value") == "val_array"
         assert [e.val_int for e in by_name["cols"].results[0].val_array.values] == [1, 3]
 
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    def test_collect_unique_aggregation_returns_val_array(self) -> None:
+        """FUNCTION_COLLECT_UNIQUE gathers each group's distinct scalar values into a
+        val_array, unlike every other aggregation, which reduces a group to a number."""
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        items_storage = get_writable_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,
+            [
+                gen_item_message(
+                    span_ts,
+                    attributes={
+                        "color": AnyValue(string_value=color),
+                        "location": AnyValue(string_value=location),
+                        "tags": _str_array(*tags),
+                    },
+                )
+                for color, location, tags in (
+                    ("red", "mobile", ("alpha", "beta")),
+                    ("red", "backend", ("beta", "gamma")),
+                    ("blue", "frontend", ("alpha",)),
+                )
+            ],
+        )
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_COLLECT_UNIQUE,
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location"),
+                        label="collect_unique(location)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
+                # An array-string attribute in the same aggregating query. It can't be
+                # selected or grouped on directly (array group_by is rejected), so it
+                # goes through the one aggregation arrays already support: uniq counts
+                # distinct elements flattened across each group's arrays.
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_UNIQ,
+                        key=AttributeKey(type=AttributeKey.TYPE_ARRAY_STRING, name="tags"),
+                        label="uniq(tags)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="color")],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color"))
+                )
+            ],
+            limit=10,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        by_name = {cv.attribute_name: cv for cv in response.column_values}
+        assert [v.val_str for v in by_name["color"].results] == ["blue", "red"]
+
+        collected = by_name["collect_unique(location)"].results
+        assert [v.WhichOneof("value") for v in collected] == ["val_array", "val_array"]
+        # groupArray gives no ordering guarantee for the elements within a group.
+        assert [sorted(e.val_str for e in v.val_array.values) for v in collected] == [
+            ["frontend"],
+            ["backend", "mobile"],
+        ]
+
+        # blue: {alpha}; red: {alpha, beta} | {beta, gamma} = {alpha, beta, gamma}
+        assert [v.val_double for v in by_name["uniq(tags)"].results] == [1, 3]
+
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    def test_conditional_collect_unique_filters_by_another_column(self) -> None:
+        """FUNCTION_COLLECT_UNIQUE as a conditional aggregation collects each group's
+        distinct values of one column, restricted to rows matching a filter on a
+        different column (e.g. all unique locations where color is red)."""
+        span_ts = BASE_TIME - timedelta(minutes=1)
+        items_storage = get_writable_storage(StorageKey("eap_items"))
+        write_raw_unprocessed_events(
+            items_storage,
+            [
+                gen_item_message(
+                    span_ts,
+                    attributes={
+                        "color": AnyValue(string_value=color),
+                        "location": AnyValue(string_value=location),
+                    },
+                )
+                for color, location in (
+                    ("red", "mobile"),
+                    ("red", "backend"),
+                    ("red", "mobile"),  # duplicate, collapsed by collect_unique
+                    ("blue", "frontend"),  # excluded by the color=red filter
+                )
+            ],
+        )
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    conditional_aggregation=AttributeConditionalAggregation(
+                        aggregate=Function.FUNCTION_COLLECT_UNIQUE,
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location"),
+                        label="collect_unique(location) where color=red",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                        filter=TraceItemFilter(
+                            comparison_filter=ComparisonFilter(
+                                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color"),
+                                op=ComparisonFilter.OP_EQUALS,
+                                value=AttributeValue(val_str="red"),
+                            )
+                        ),
+                    ),
+                ),
+            ],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        by_name = {cv.attribute_name: cv for cv in response.column_values}
+
+        collected = by_name["collect_unique(location) where color=red"].results
+        assert [v.WhichOneof("value") for v in collected] == ["val_array"]
+        # Only red rows contribute; "mobile" appears once despite two red occurrences,
+        # and "frontend" (blue) is filtered out. groupUniqArray gives no element ordering.
+        assert sorted(e.val_str for e in collected[0].val_array.values) == ["backend", "mobile"]
+
 
 class TestArrayOperationsRejected:
     """Array attributes support select + filter (and uniq, for crash-free rate), but not
