@@ -227,6 +227,7 @@ impl<N> RowBinaryWriterStep<N>
 where
     N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         next_step: N,
         cluster_config: ClickhouseConfig,
