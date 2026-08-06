@@ -33,14 +33,6 @@ logger = structlog.get_logger().bind(module=__name__)
 
 
 @dataclass
-class QueryTraceData:
-    host: str
-    port: int
-    query_id: str
-    node_name: str
-
-
-@dataclass
 class TraceOutput:
     trace_output: str
     summarized_trace_output: TracingSummary
@@ -99,7 +91,7 @@ def run_query_and_get_trace(
     )
 
 
-def _system_log_source(storage_name: str, table: str) -> str:
+def system_log_source(storage_name: str, table: str) -> str:
     try:
         cluster = get_storage(StorageKey(storage_name)).get_cluster()
         cluster_name = cluster.get_clickhouse_cluster_name()
@@ -150,7 +142,7 @@ def summarize_from_query_log(
     storage_name: str,
     query_id: str,
 ) -> TracingSummary:
-    source = _system_log_source(storage_name, "query_log")
+    source = system_log_source(storage_name, "query_log")
     sql = f"""
         SELECT
             hostname() AS host,

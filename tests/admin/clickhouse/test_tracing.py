@@ -26,7 +26,7 @@ def test_summarize_from_query_log() -> None:
     )
 
     with (
-        patch("snuba.admin.clickhouse.tracing._system_log_source", return_value="system.query_log"),
+        patch("snuba.admin.clickhouse.tracing.system_log_source", return_value="system.query_log"),
         patch("snuba.admin.clickhouse.tracing.time.sleep"),
     ):
         summary = summarize_from_query_log(connection, "errors_ro", "qid-1")
@@ -215,7 +215,7 @@ def test_summarize_from_query_log_waits_for_root_finish() -> None:
     ]
 
     with (
-        patch("snuba.admin.clickhouse.tracing._system_log_source", return_value="system.query_log"),
+        patch("snuba.admin.clickhouse.tracing.system_log_source", return_value="system.query_log"),
         patch("snuba.admin.clickhouse.tracing.time.sleep") as mock_sleep,
     ):
         summary = summarize_from_query_log(connection, "errors_ro", "qid-1")

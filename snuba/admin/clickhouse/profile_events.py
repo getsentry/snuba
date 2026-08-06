@@ -3,13 +3,11 @@ import time
 from typing import cast
 
 import structlog
-from flask import g
 
-from snuba.admin.clickhouse.common import InvalidNodeError
-from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
-from snuba.admin.clickhouse.tracing import QueryTraceData, TraceOutput
-from snuba.datasets.storages.factory import get_storage
-from snuba.datasets.storages.storage_key import StorageKey
+from snuba.admin.clickhouse.common import get_ro_query_node_connection
+from snuba.admin.clickhouse.tracing import TraceOutput, system_log_source
+from snuba.clickhouse.native import ClickhousePool, ClickhouseResult
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.utils.constants import (
     PROFILE_EVENTS_MAX_ATTEMPTS,
     PROFILE_EVENTS_MAX_WAIT_SECONDS,
@@ -19,132 +17,76 @@ logger = structlog.get_logger().bind(module=__name__)
 
 
 def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
-    profile_events_raw_sql = (
-        "SELECT ProfileEvents FROM system.query_log WHERE query_id = '{}' AND type = 'QueryFinish'"
-    )
+    """
+    Collect ProfileEvents from system.query_log for the traced query.
 
-    for query_trace_data in parse_trace_for_query_ids(query_trace, storage):
-        sql = profile_events_raw_sql.format(query_trace_data.query_id)
+    Uses the storage query-node connection and clusterAllReplicas when
+    available, so this path stays driver-agnostic: no per-host native/HTTP
+    ports are chosen here.
+    """
+    query_ids = _profile_event_query_ids(query_trace)
+    if not query_ids:
+        return
 
-        system_query_result = None
-        attempt = 0
-        wait_time = 1
-        while attempt < PROFILE_EVENTS_MAX_ATTEMPTS:
-            try:
-                system_query_result = run_system_query_on_host_with_sql(
-                    query_trace_data.host,
-                    int(query_trace_data.port),
-                    storage,
-                    sql,
-                    False,
-                    False,
-                    g.user,
-                )
-            except InvalidNodeError as exc:
-                logger.error(exc, exc_info=True)
-                break
+    connection = get_ro_query_node_connection(storage, ClickhouseClientSettings.QUERY)
+    source = system_log_source(storage, "query_log")
+    id_list = ", ".join(f"'{query_id}'" for query_id in query_ids)
+    sql = f"""
+        SELECT
+            hostname() AS host,
+            ProfileEvents
+        FROM {source}
+        WHERE event_date >= yesterday()
+          AND type = 'QueryFinish'
+          AND query_id IN ({id_list})
+    """
 
-            if system_query_result.results:
-                break
+    result = _poll_profile_events(connection, sql)
+    if result is None or not result.results:
+        return
 
+    query_trace.profile_events_meta.append(result.meta)
+    if result.profile is not None:
+        query_trace.profile_events_profile = cast(dict[str, int], result.profile)
+
+    columns = result.meta or []
+    column_names = [name for name, _ in columns]
+    for row in result.results:
+        if len(row) < 2 or not row[1]:
+            continue
+        host = str(row[0])
+        query_trace.profile_events_results[host] = {
+            "column_names": column_names,
+            "rows": [json.dumps(row[1])],
+        }
+
+
+def _profile_event_query_ids(query_trace: TraceOutput) -> list[str]:
+    ids = {
+        query_summary.query_id
+        for query_summary in query_trace.summarized_trace_output.query_summaries.values()
+        if query_summary.query_id
+    }
+    if query_trace.query_id:
+        ids.add(query_trace.query_id)
+    return sorted(ids)
+
+
+def _poll_profile_events(connection: ClickhousePool, sql: str) -> ClickhouseResult | None:
+    wait_time = 1
+    last_result: ClickhouseResult | None = None
+    for attempt in range(PROFILE_EVENTS_MAX_ATTEMPTS):
+        try:
+            last_result = connection.execute(query=sql, with_column_types=True)
+        except Exception:
+            logger.warning("Profile events poll failed", attempt=attempt, exc_info=True)
+            last_result = None
+
+        if last_result is not None and last_result.results:
+            return last_result
+
+        if attempt + 1 < PROFILE_EVENTS_MAX_ATTEMPTS:
             wait_time = min(wait_time * 2, PROFILE_EVENTS_MAX_WAIT_SECONDS)
             time.sleep(wait_time)
-            attempt += 1
 
-        if system_query_result is not None and len(system_query_result.results) > 0:
-            query_trace.profile_events_meta.append(system_query_result.meta)
-            query_trace.profile_events_profile = cast(dict[str, int], system_query_result.profile)
-            columns = system_query_result.meta
-            if columns:
-                res: dict[str, object] = {}
-                res["column_names"] = [name for name, _ in columns]
-                rows: list[str] = []
-                for query_result in system_query_result.results:
-                    if query_result[0]:
-                        rows.append(json.dumps(query_result[0]))
-                res["rows"] = rows
-                query_trace.profile_events_results[query_trace_data.node_name] = res
-
-
-def _cluster_host_ports(storage: str) -> dict[str, int]:
-    try:
-        cluster = get_storage(StorageKey(storage)).get_cluster()
-        nodes = [
-            cluster.get_query_node(),
-            *cluster.get_local_nodes(),
-            *cluster.get_distributed_nodes(),
-        ]
-        return {node.host_name: node.native_port for node in nodes}
-    except Exception:
-        logger.warning(
-            "Could not resolve cluster nodes for profile event hosts",
-            storage=storage,
-            exc_info=True,
-        )
-        return {}
-
-
-def _query_node_trace_data(storage: str, query_id: str) -> QueryTraceData | None:
-    try:
-        query_node = get_storage(StorageKey(storage)).get_cluster().get_query_node()
-        return QueryTraceData(
-            host=query_node.host_name,
-            port=query_node.native_port,
-            query_id=query_id,
-            node_name=query_node.host_name,
-        )
-    except Exception:
-        logger.warning(
-            "Could not resolve query node for profile events fallback",
-            storage=storage,
-            exc_info=True,
-        )
-        return None
-
-
-def parse_trace_for_query_ids(
-    trace_output: TraceOutput, storage: str | None = None
-) -> list[QueryTraceData]:
-    summarized_trace_output = trace_output.summarized_trace_output
-    node_name_to_query_id = {
-        node_name: query_summary.query_id
-        for node_name, query_summary in summarized_trace_output.query_summaries.items()
-    }
-
-    if not node_name_to_query_id:
-        if trace_output.query_id and storage:
-            fallback = _query_node_trace_data(storage, trace_output.query_id)
-            return [fallback] if fallback is not None else []
-        return []
-
-    if not storage:
-        return []
-
-    host_ports = _cluster_host_ports(storage)
-    results: list[QueryTraceData] = []
-    for node_name, query_id in node_name_to_query_id.items():
-        # Only open connections to hosts we can validate against the cluster.
-        # is_valid_node keys off native_port; inventing 9000/8123 for unknown
-        # hostnames just fails validation.
-        if node_name not in host_ports:
-            logger.warning(
-                "Skipping profile events for unknown host",
-                host=node_name,
-                storage=storage,
-            )
-            continue
-        results.append(
-            QueryTraceData(
-                host=node_name,
-                port=host_ports[node_name],
-                query_id=query_id,
-                node_name=node_name,
-            )
-        )
-
-    if not results and trace_output.query_id:
-        fallback = _query_node_trace_data(storage, trace_output.query_id)
-        if fallback is not None:
-            return [fallback]
-
-    return results
+    return last_result
