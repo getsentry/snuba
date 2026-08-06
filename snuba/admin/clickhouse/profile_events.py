@@ -23,7 +23,7 @@ def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
             hostname() AS host,
             ProfileEvents
         FROM {source}
-        WHERE event_date >= yesterday()
+        WHERE event_time >= now() - INTERVAL 5 MINUTE
           AND type = 'QueryFinish'
           AND query_id IN ({id_list})
     """

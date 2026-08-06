@@ -166,7 +166,7 @@ def summarize_from_query_log(
                 '0.00 B'
             ) AS bytes_per_second
         FROM {source}
-        WHERE event_date >= yesterday()
+        WHERE event_time >= now() - INTERVAL 5 MINUTE
           AND type = 'QueryFinish'
           AND (query_id = '{query_id}' OR initial_query_id = '{query_id}')
         ORDER BY is_initial_query DESC, event_time
