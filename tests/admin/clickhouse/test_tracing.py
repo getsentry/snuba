@@ -2,7 +2,6 @@ from unittest.mock import MagicMock, patch
 
 from snuba.admin.clickhouse.trace_log_parsing import ExecuteSummary, QuerySummary, TracingSummary
 from snuba.admin.clickhouse.tracing import (
-    _format_bytes,
     format_trace_output_from_summary,
     merge_query_log_summary,
     run_query_and_get_trace,
@@ -16,18 +15,13 @@ def test_scrub() -> None:
     assert scrub_row((1, 2, 3, "release name")) == (1, 2, 3, "<scrubbed: str>")
 
 
-def test_format_bytes() -> None:
-    assert _format_bytes(512) == "512 B"
-    assert _format_bytes(2048) == "2.00 KiB"
-    assert _format_bytes(5 * 1024 * 1024) == "5.00 MiB"
-
-
 def test_summarize_from_query_log() -> None:
     connection = MagicMock()
+    # Columns already formatted by ClickHouse (formatReadableSize / duration math).
     connection.execute.return_value = ClickhouseResult(
         results=[
-            ("query-node", "qid-1", 1, 100, 2048, 250),
-            ("storage-node", "qid-2", 0, 80, 1024, 100),
+            ("query-node", "qid-1", 1, 100, "2.00 KiB", 0.25, 400.0, "8.00 KiB"),
+            ("storage-node", "qid-2", 0, 80, "1.00 KiB", 0.1, 800.0, "10.00 KiB"),
         ]
     )
 
@@ -209,11 +203,13 @@ def test_summarize_from_query_log_waits_for_root_finish() -> None:
     # First poll only has a shard finish (is_initial_query=0).
     # Second poll includes the root finish.
     connection.execute.side_effect = [
-        ClickhouseResult(results=[("storage-node", "qid-2", 0, 80, 1024, 100)]),
+        ClickhouseResult(
+            results=[("storage-node", "qid-2", 0, 80, "1.00 KiB", 0.1, 800.0, "10.00 KiB")]
+        ),
         ClickhouseResult(
             results=[
-                ("query-node", "qid-1", 1, 100, 2048, 250),
-                ("storage-node", "qid-2", 0, 80, 1024, 100),
+                ("query-node", "qid-1", 1, 100, "2.00 KiB", 0.25, 400.0, "8.00 KiB"),
+                ("storage-node", "qid-2", 0, 80, "1.00 KiB", 0.1, 800.0, "10.00 KiB"),
             ]
         ),
     ]

@@ -145,18 +145,6 @@ def _poll_system_query(
     return last_result
 
 
-def _format_bytes(num_bytes: int | float) -> str:
-    units = ["B", "KiB", "MiB", "GiB", "TiB"]
-    value = float(num_bytes)
-    for unit in units:
-        if abs(value) < 1024.0 or unit == units[-1]:
-            if unit == "B":
-                return f"{int(value)} {unit}"
-            return f"{value:.2f} {unit}"
-        value /= 1024.0
-    return f"{num_bytes} B"
-
-
 def summarize_from_query_log(
     connection: ClickhousePool,
     storage_name: str,
@@ -169,8 +157,14 @@ def summarize_from_query_log(
             query_id,
             is_initial_query,
             read_rows,
-            read_bytes,
-            query_duration_ms
+            formatReadableSize(read_bytes) AS memory_size,
+            query_duration_ms / 1000.0 AS seconds,
+            if(query_duration_ms > 0, read_rows / (query_duration_ms / 1000.0), 0) AS rows_per_second,
+            if(
+                query_duration_ms > 0,
+                formatReadableSize(read_bytes / (query_duration_ms / 1000.0)),
+                '0.00 B'
+            ) AS bytes_per_second
         FROM {source}
         WHERE event_date >= yesterday()
           AND type = 'QueryFinish'
@@ -189,20 +183,24 @@ def summarize_from_query_log(
         return summary
 
     for row in result.results:
-        host, row_query_id, is_initial_query, read_rows, read_bytes, duration_ms = row
+        (
+            host,
+            row_query_id,
+            is_initial_query,
+            read_rows,
+            memory_size,
+            seconds,
+            rows_per_second,
+            bytes_per_second,
+        ) = row
         node_name = str(host)
-        seconds = float(duration_ms or 0) / 1000.0
-        rows = int(read_rows or 0)
-        nbytes = int(read_bytes or 0)
-        rows_per_second = (rows / seconds) if seconds > 0 else 0.0
-        bytes_per_second = _format_bytes(nbytes / seconds) if seconds > 0 else "0 B"
 
         execute = ExecuteSummary(
-            rows_read=rows,
-            memory_size=_format_bytes(nbytes),
-            seconds=seconds,
-            rows_per_second=rows_per_second,
-            bytes_per_second=bytes_per_second,
+            rows_read=int(read_rows or 0),
+            memory_size=str(memory_size),
+            seconds=float(seconds or 0),
+            rows_per_second=float(rows_per_second or 0),
+            bytes_per_second=str(bytes_per_second),
         )
 
         existing = summary.query_summaries.get(node_name)
