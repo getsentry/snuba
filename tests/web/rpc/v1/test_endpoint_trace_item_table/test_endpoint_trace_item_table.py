@@ -4247,10 +4247,6 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     ),
                 ),
-                # An array-string attribute in the same aggregating query. It can't be
-                # selected or grouped on directly (array group_by is rejected), so it
-                # goes through the one aggregation arrays already support: uniq counts
-                # distinct elements flattened across each group's arrays.
                 Column(
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_UNIQ,
@@ -4274,6 +4270,7 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
 
         collected = by_name["collect_unique(location)"].results
         assert [v.WhichOneof("value") for v in collected] == ["val_array", "val_array"]
+
         # groupArray gives no ordering guarantee for the elements within a group.
         assert [sorted(e.val_str for e in v.val_array.values) for v in collected] == [
             ["frontend"],
@@ -4305,6 +4302,9 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
                     ("red", "mobile"),
                     ("red", "backend"),
                     ("red", "mobile"),  # duplicate, collapsed by collect_unique
+                    ("red", "desktop"),
+                    ("red", "tablet"),
+                    ("red", "desktop"),  # duplicate, collapsed by collect_unique
                     ("blue", "frontend"),  # excluded by the color=red filter
                 )
             ],
@@ -4341,10 +4341,12 @@ class TestTraceItemTableArrayColumn(BaseApiTest):
         by_name = {cv.attribute_name: cv for cv in response.column_values}
 
         collected = by_name["collect_unique(location) where color=red"].results
-        assert [v.WhichOneof("value") for v in collected] == ["val_array"]
-        # Only red rows contribute; "mobile" appears once despite two red occurrences,
-        # and "frontend" (blue) is filtered out. groupUniqArray gives no element ordering.
-        assert sorted(e.val_str for e in collected[0].val_array.values) == ["backend", "mobile"]
+
+        assert collected
+        assert collected[0].WhichOneof("value") == "val_array"
+
+        returned = sorted(e.val_str for e in collected[0].val_array.values)
+        assert returned == ["backend", "desktop", "mobile", "tablet"]
 
 
 class TestArrayOperationsRejected:
