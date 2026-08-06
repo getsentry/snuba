@@ -108,7 +108,7 @@ def test_gather_profile_events_retry_logic() -> None:
             "snuba.admin.clickhouse.profile_events.system_log_source",
             return_value="system.query_log",
         ),
-        patch("time.sleep") as mock_sleep,
+        patch("snuba.admin.clickhouse.tracing.time.sleep") as mock_sleep,
     ):
         gather_profile_events(trace_output, "test_storage")
 

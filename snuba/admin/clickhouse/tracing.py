@@ -59,20 +59,12 @@ def run_query_and_get_trace(
 
     trace_output = query_result.trace_output or ""
     summarized_trace_output = summarize_trace_output(trace_output)
-    query_id = query_result.query_id or ""
-    if not query_id:
-        for summary in summarized_trace_output.query_summaries.values():
-            if summary.is_distributed and summary.query_id:
-                query_id = summary.query_id
-                break
-        if not query_id and summarized_trace_output.query_summaries:
-            query_id = next(iter(summarized_trace_output.query_summaries.values())).query_id
+    query_id = _resolve_query_id(query_result, summarized_trace_output)
 
     if query_id:
-        query_log_summary = summarize_from_query_log(connection, storage_name, query_id)
         summarized_trace_output = merge_query_log_summary(
             summarized_trace_output,
-            query_log_summary,
+            summarize_from_query_log(connection, storage_name, query_id),
         )
 
     if not trace_output.strip() and summarized_trace_output.query_summaries:
@@ -91,6 +83,22 @@ def run_query_and_get_trace(
     )
 
 
+def _resolve_query_id(
+    query_result: ClickhouseResult, summarized_trace_output: TracingSummary
+) -> str:
+    if query_result.query_id:
+        return query_result.query_id
+
+    for summary in summarized_trace_output.query_summaries.values():
+        if summary.is_distributed and summary.query_id:
+            return summary.query_id
+
+    if summarized_trace_output.query_summaries:
+        return next(iter(summarized_trace_output.query_summaries.values())).query_id
+
+    return ""
+
+
 def system_log_source(storage_name: str, table: str) -> str:
     try:
         cluster = get_storage(StorageKey(storage_name)).get_cluster()
@@ -107,7 +115,7 @@ def system_log_source(storage_name: str, table: str) -> str:
     return f"system.{table}"
 
 
-def _poll_system_query(
+def poll_system_query(
     connection: ClickhousePool,
     sql: str,
     *,
@@ -131,8 +139,8 @@ def _poll_system_query(
             return last_result
 
         if attempt + 1 < PROFILE_EVENTS_MAX_ATTEMPTS:
-            time.sleep(min(wait_time, PROFILE_EVENTS_MAX_WAIT_SECONDS))
-            wait_time *= 2
+            wait_time = min(wait_time * 2, PROFILE_EVENTS_MAX_WAIT_SECONDS)
+            time.sleep(wait_time)
 
     return last_result
 
@@ -169,7 +177,7 @@ def summarize_from_query_log(
             return False
         return any(bool(row[2]) for row in result.results if row)
 
-    result = _poll_system_query(connection, sql, accept_result=_root_finish_present)
+    result = poll_system_query(connection, sql, accept_result=_root_finish_present)
     summary = TracingSummary({})
     if result is None or not result.results:
         return summary
