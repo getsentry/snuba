@@ -16,9 +16,28 @@ use crate::config::ClickhouseConfig;
 use crate::options::{get_load_balancing_config, get_max_insert_block_size};
 use crate::types::{BytesInsertBatch, RowData};
 
+async fn send_with_timeout(
+    client: &ClickhouseClient,
+    body: Vec<u8>,
+    retry_config: RetryConfig,
+    timeout: Option<Duration>,
+) -> anyhow::Result<Response> {
+    let send = client.send(body, retry_config);
+    match timeout {
+        Some(timeout) => tokio::time::timeout(timeout, send).await.map_err(|_| {
+            anyhow::anyhow!(
+                "ClickHouse batch write timed out after {}ms",
+                timeout.as_millis()
+            )
+        })?,
+        None => send.await,
+    }
+}
+
 fn clickhouse_task_runner(
     client: Arc<ClickhouseClient>,
     skip_write: bool,
+    batch_write_timeout: Option<Duration>,
 ) -> impl TaskRunner<BytesInsertBatch<RowData>, BytesInsertBatch<()>, anyhow::Error> {
     move |message: Message<BytesInsertBatch<RowData>>| -> RunTaskFunc<BytesInsertBatch<()>, anyhow::Error> {
         let skip_write = skip_write;
@@ -46,10 +65,14 @@ fn clickhouse_task_runner(
             } else {
                 tracing::debug!("performing write");
 
-                let response = client
-                    .send(encoded_rows, RetryConfig::default())
-                    .await
-                    .map_err(RunTaskError::Other)?;
+                let response = send_with_timeout(
+                    &client,
+                    encoded_rows,
+                    RetryConfig::default(),
+                    batch_write_timeout,
+                )
+                .await
+                .map_err(RunTaskError::Other)?;
 
                 tracing::debug!(?response);
                 tracing::info!("Inserted {} rows", batch_len);
@@ -98,6 +121,7 @@ fn build_writer_inner<N>(
     cluster_config: ClickhouseConfig,
     table: String,
     skip_write: bool,
+    batch_write_timeout: Option<Duration>,
     concurrency: &ConcurrencyConfig,
     storage_name: String,
     format: InsertFormat,
@@ -117,6 +141,7 @@ where
                 columns,
             )),
             skip_write,
+            batch_write_timeout,
         ),
         concurrency,
         Some("clickhouse"),
@@ -169,6 +194,7 @@ where
         cluster_config: ClickhouseConfig,
         table: String,
         skip_write: bool,
+        batch_write_timeout: Option<Duration>,
         concurrency: &ConcurrencyConfig,
         storage_name: String,
     ) -> Self {
@@ -178,6 +204,7 @@ where
                 cluster_config,
                 table,
                 skip_write,
+                batch_write_timeout,
                 concurrency,
                 storage_name,
                 InsertFormat::JsonEachRow,
@@ -205,6 +232,7 @@ where
         cluster_config: ClickhouseConfig,
         table: String,
         skip_write: bool,
+        batch_write_timeout: Option<Duration>,
         concurrency: &ConcurrencyConfig,
         storage_name: String,
         columns: &'static [&'static str],
@@ -215,6 +243,7 @@ where
                 cluster_config,
                 table,
                 skip_write,
+                batch_write_timeout,
                 concurrency,
                 storage_name,
                 InsertFormat::RowBinary,
@@ -736,16 +765,17 @@ mod tests {
         );
 
         let start_time = Instant::now();
-        let result = client
-            .send(
-                b"test data".to_vec(),
-                RetryConfig {
-                    initial_backoff_ms: 100.0,
-                    max_retries: 4,
-                    jitter_factor: 0.1,
-                },
-            )
-            .await;
+        let result = send_with_timeout(
+            &client,
+            b"test data".to_vec(),
+            RetryConfig {
+                initial_backoff_ms: 100.0,
+                max_retries: 4,
+                jitter_factor: 0.1,
+            },
+            None,
+        )
+        .await;
         let elapsed = start_time.elapsed();
 
         // Should fail after all retries
@@ -758,5 +788,45 @@ mod tests {
         // Error message should mention the number of attempts
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("after 5 attempts"));
+    }
+
+    #[tokio::test]
+    async fn test_batch_write_timeout_bounds_retries() {
+        crate::testutils::initialize_python();
+        let config = ClickhouseConfig {
+            host: "127.0.0.1".to_string(),
+            port: 9000,
+            secure: false,
+            http_port: 9999,
+            user: "default".to_string(),
+            password: "".to_string(),
+            database: "default".to_string(),
+        };
+        let client = ClickhouseClient::new(
+            &config,
+            "test_table",
+            "test_storage".to_string(),
+            InsertFormat::JsonEachRow,
+            None,
+        );
+
+        let start_time = Instant::now();
+        let result = send_with_timeout(
+            &client,
+            b"test data".to_vec(),
+            RetryConfig {
+                initial_backoff_ms: 1_000.0,
+                max_retries: 4,
+                jitter_factor: 0.0,
+            },
+            Some(Duration::from_millis(50)),
+        )
+        .await;
+
+        assert!(start_time.elapsed() < Duration::from_millis(500));
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "ClickHouse batch write timed out after 50ms"
+        );
     }
 }

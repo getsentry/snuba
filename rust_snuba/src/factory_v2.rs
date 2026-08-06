@@ -168,6 +168,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     self.storage_config.clickhouse_cluster.clone(),
                     self.storage_config.clickhouse_table_name.clone(),
                     false,
+                    self.batch_write_timeout,
                     &self.clickhouse_concurrency,
                     self.storage_config.name.clone(),
                     columns,
@@ -178,6 +179,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     self.storage_config.clickhouse_cluster.clone(),
                     self.storage_config.clickhouse_table_name.clone(),
                     false,
+                    self.batch_write_timeout,
                     &self.clickhouse_concurrency,
                     self.storage_config.name.clone(),
                 ))
