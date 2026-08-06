@@ -11,6 +11,10 @@ from flask import g
 from snuba.admin.clickhouse.common import InvalidNodeError
 from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
 from snuba.admin.clickhouse.tracing import QueryTraceData, TraceOutput
+from snuba.clusters.cluster import (
+    DEFAULT_CLICKHOUSE_HTTP_PORT,
+    use_clickhouse_connect_driver,
+)
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.utils.constants import (
@@ -21,6 +25,21 @@ from snuba.utils.constants import (
 logger = structlog.get_logger().bind(module=__name__)
 
 _DEFAULT_NATIVE_PORT = 9000
+
+
+def _default_clickhouse_port() -> int:
+    """
+    Fallback port when a hostname is not in the cluster node map.
+
+    Admin by-host helpers still identify nodes by native_port for validation,
+    and the connection cache picks the real transport from
+    ``use_clickhouse_connect_driver``. For hosts we only know by name, prefer
+    the default for whichever driver is active so local/dev fallbacks land on
+    a listener that is actually up.
+    """
+    if use_clickhouse_connect_driver():
+        return DEFAULT_CLICKHOUSE_HTTP_PORT
+    return _DEFAULT_NATIVE_PORT
 
 
 def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
@@ -92,6 +111,14 @@ def hostname_resolves(hostname: str) -> bool:
 
 
 def _cluster_host_ports(storage: str) -> dict[str, int]:
+    """
+    Map host -> port used to open admin by-host connections.
+
+    Always keyed by ``native_port``: ``is_valid_node`` / ``_build_validated_pool``
+    identify cluster members by native port, then the connection cache selects
+    native vs HTTP from ``use_clickhouse_connect_driver`` and attaches the right
+    ``http_port`` on the pool.
+    """
     try:
         cluster = get_storage(StorageKey(storage)).get_cluster()
         nodes = [
@@ -114,6 +141,8 @@ def _query_node_trace_data(storage: str, query_id: str) -> QueryTraceData | None
         query_node = get_storage(StorageKey(storage)).get_cluster().get_query_node()
         return QueryTraceData(
             host=query_node.host_name,
+            # native_port is the node identity for admin validation; the connect
+            # driver option chooses the actual transport inside the pool.
             port=query_node.native_port,
             query_id=query_id,
             node_name=query_node.host_name,
@@ -137,15 +166,16 @@ def parse_trace_for_query_ids(
     }
 
     if not node_name_to_query_id:
-        # No parseable node map (common on the HTTP driver when text_log is
-        # empty). Fall back to the storage query node + the known root query_id
-        # so ProfileEvents for the initiator can still be recovered.
+        # No parseable node map (common on the HTTP driver when the wire trace
+        # is empty). Fall back to the storage query node + the known root
+        # query_id so ProfileEvents for the initiator can still be recovered.
         if trace_output.query_id and storage:
             fallback = _query_node_trace_data(storage, trace_output.query_id)
             return [fallback] if fallback is not None else []
         return []
 
     host_ports = _cluster_host_ports(storage) if storage else {}
+    default_port = _default_clickhouse_port()
 
     results: list[QueryTraceData] = []
     for node_name, query_id in node_name_to_query_id.items():
@@ -154,11 +184,11 @@ def parse_trace_for_query_ids(
             port = host_ports[node_name]
         elif hostname_resolves(node_name):
             host = node_name
-            port = _DEFAULT_NATIVE_PORT
+            port = default_port
         else:
             # Historical local/dev fallback when log hostnames don't match DNS.
             host = "127.0.0.1"
-            port = _DEFAULT_NATIVE_PORT
+            port = default_port
 
         results.append(
             QueryTraceData(

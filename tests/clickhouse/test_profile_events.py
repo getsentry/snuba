@@ -23,7 +23,13 @@ def test_parse_trace_for_query_ids() -> None:
     }
     trace_output.query_id = ""
 
-    with patch("snuba.admin.clickhouse.profile_events.hostname_resolves") as mock_resolve:
+    with (
+        patch("snuba.admin.clickhouse.profile_events.hostname_resolves") as mock_resolve,
+        patch(
+            "snuba.admin.clickhouse.profile_events.use_clickhouse_connect_driver",
+            return_value=False,
+        ),
+    ):
         mock_resolve.return_value = True
         result = parse_trace_for_query_ids(trace_output)
 
@@ -45,6 +51,26 @@ def test_parse_trace_for_query_ids() -> None:
         assert result[1] == QueryTraceData(
             host="127.0.0.1", port=9000, query_id="query2", node_name="host2"
         )
+
+
+def test_parse_trace_for_query_ids_uses_http_default_when_connect_driver() -> None:
+    """Unknown hosts fall back to the default for the active driver."""
+    trace_output = MagicMock()
+    trace_output.summarized_trace_output.query_summaries = {
+        "host1": MagicMock(query_id="query1"),
+    }
+    trace_output.query_id = ""
+
+    with (
+        patch("snuba.admin.clickhouse.profile_events.hostname_resolves", return_value=True),
+        patch(
+            "snuba.admin.clickhouse.profile_events.use_clickhouse_connect_driver",
+            return_value=True,
+        ),
+    ):
+        result = parse_trace_for_query_ids(trace_output)
+
+    assert result == [QueryTraceData(host="host1", port=8123, query_id="query1", node_name="host1")]
 
 
 def test_parse_trace_for_query_ids_falls_back_to_query_node() -> None:
