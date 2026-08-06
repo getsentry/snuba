@@ -231,10 +231,12 @@ def test_summarize_from_query_log_waits_for_root_finish() -> None:
 
 def test_run_query_and_get_trace_uses_query_log_when_wire_trace_empty() -> None:
     connection = MagicMock()
+    # Driver/server assigned the id; tracing should not invent one.
     connection.execute.return_value = ClickhouseResult(
         results=[(1,)],
         meta=[("count()", "UInt64")],
         trace_output="",
+        query_id="qid",
     )
 
     query_log_summary = TracingSummary(
@@ -280,13 +282,10 @@ def test_run_query_and_get_trace_uses_query_log_when_wire_trace_empty() -> None:
             "snuba.admin.clickhouse.tracing.summarize_from_query_log",
             return_value=query_log_summary,
         ) as mock_summary,
-        patch(
-            "snuba.admin.clickhouse.tracing.uuid4", return_value=MagicMock(__str__=lambda s: "qid")
-        ),
     ):
         output = run_query_and_get_trace("errors_ro", "SELECT 1")
 
-    mock_summary.assert_called_once()
+    mock_summary.assert_called_once_with(connection, "errors_ro", "qid")
     assert output.query_id == "qid"
     assert set(output.summarized_trace_output.query_summaries) == {
         "query-node",
@@ -294,7 +293,8 @@ def test_run_query_and_get_trace_uses_query_log_when_wire_trace_empty() -> None:
     }
     assert "[ query-node ] {qid} <Debug> executeQuery (Distributed):" in output.trace_output
     assert "[ storage-node ] {child} <Debug> executeQuery (Local):" in output.trace_output
-    assert connection.execute.call_args.kwargs["query_id"] == "qid"
+    # No client-side query_id was forced onto the execute call.
+    assert connection.execute.call_args.kwargs.get("query_id") in (None, "")
     assert connection.execute.call_args.kwargs["capture_trace"] is True
 
 
@@ -304,10 +304,12 @@ def test_run_query_and_get_trace_keeps_native_wire_trace() -> None:
         "[ query-node ] [ 1 ] {qid} <Debug> executeQuery: "
         "Read 1 rows, 1.00 B in 0.001 sec., 1000 rows/sec., 1.00 KiB/sec."
     )
+    # Native driver did not surface a query_id; recover it from the wire trace.
     connection.execute.return_value = ClickhouseResult(
         results=[(1,)],
         meta=[("count()", "UInt64")],
         trace_output=wire_trace,
+        query_id="",
     )
 
     with (
@@ -319,12 +321,11 @@ def test_run_query_and_get_trace_keeps_native_wire_trace() -> None:
         patch(
             "snuba.admin.clickhouse.tracing.summarize_from_query_log",
             return_value=TracingSummary({}),
-        ),
-        patch(
-            "snuba.admin.clickhouse.tracing.uuid4", return_value=MagicMock(__str__=lambda s: "qid")
-        ),
+        ) as mock_summary,
     ):
         output = run_query_and_get_trace("errors_ro", "SELECT 1")
 
     assert output.trace_output == wire_trace
+    assert output.query_id == "qid"
     assert "query-node" in output.summarized_trace_output.query_summaries
+    mock_summary.assert_called_once_with(connection, "errors_ro", "qid")

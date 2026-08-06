@@ -253,6 +253,10 @@ class ClickhouseConnectPool(ClickhousePool):
             )
 
         summary = query_result.summary or {}
+        # Prefer the id the driver/server actually used. clickhouse-connect
+        # autogenerates one when the caller omits it, and surfaces it via
+        # QueryResult.query_id (summary["query_id"] or the client-side value).
+        result_query_id = str(query_result.query_id or query_id or "")
 
         def _int(key: str) -> int:
             value = summary.get(key)
@@ -286,6 +290,7 @@ class ClickhouseConnectPool(ClickhousePool):
                 results=results,
                 profile=profile_data,
                 trace_output="",
+                query_id=result_query_id,
             )
 
         meta: list[tuple[str, str]] = [
@@ -300,6 +305,7 @@ class ClickhouseConnectPool(ClickhousePool):
             meta=meta,
             profile=profile_data,
             trace_output="",
+            query_id=result_query_id,
         )
 
     def execute_with_totals(

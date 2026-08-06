@@ -6,7 +6,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, cast
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import structlog
 
@@ -61,31 +61,41 @@ def run_query_and_get_trace(
 ) -> TraceOutput:
     validate_ro_query(query)
     connection = get_ro_query_node_connection(storage_name, ClickhouseClientSettings.TRACING)
-    # Always assign a query_id so we can recover performance data from
-    # system.query_log when the driver cannot surface the server's
-    # send_logs_level stream (clickhouse-connect/HTTP). We do not rely on
+    # Let the driver/server assign the query_id. clickhouse-connect autogenerates
+    # one and returns it on ClickhouseResult.query_id; the native driver only
+    # knows an id when one is supplied, so on that path we fall back to whatever
+    # summarize_trace_output parsed from the wire logs. We do not rely on
     # system.text_log — it is not enabled in our environments.
-    query_id = str(uuid4())
     query_result = connection.execute(
         query=query,
         capture_trace=True,
         with_column_types=True,
         settings=settings or {},
-        query_id=query_id,
     )
 
     trace_output = query_result.trace_output or ""
     summarized_trace_output = summarize_trace_output(trace_output)
+    query_id = query_result.query_id or ""
+    if not query_id:
+        # Native-driver path with no caller-supplied id: take the initiator id
+        # from the parsed wire-trace summary when present.
+        for summary in summarized_trace_output.query_summaries.values():
+            if summary.is_distributed and summary.query_id:
+                query_id = summary.query_id
+                break
+        if not query_id and summarized_trace_output.query_summaries:
+            query_id = next(iter(summarized_trace_output.query_summaries.values())).query_id
 
     # query_log is the durable source of per-node duration/rows/bytes. On the
     # HTTP driver the wire trace is empty, so this is the entire summary. On the
     # native driver it still fills missing execute totals and corrects the
     # distributed-node flag via is_initial_query.
-    query_log_summary = summarize_from_query_log(connection, storage_name, query_id)
-    summarized_trace_output = merge_query_log_summary(
-        summarized_trace_output,
-        query_log_summary,
-    )
+    if query_id:
+        query_log_summary = summarize_from_query_log(connection, storage_name, query_id)
+        summarized_trace_output = merge_query_log_summary(
+            summarized_trace_output,
+            query_log_summary,
+        )
 
     if not trace_output.strip() and summarized_trace_output.query_summaries:
         # Raw UI mode still needs something to show when the driver left the
