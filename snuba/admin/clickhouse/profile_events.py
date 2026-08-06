@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import socket
 import time
 from typing import cast
 
@@ -11,10 +10,6 @@ from flask import g
 from snuba.admin.clickhouse.common import InvalidNodeError
 from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
 from snuba.admin.clickhouse.tracing import QueryTraceData, TraceOutput
-from snuba.clusters.cluster import (
-    DEFAULT_CLICKHOUSE_HTTP_PORT,
-    use_clickhouse_connect_driver,
-)
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.utils.constants import (
@@ -23,14 +18,6 @@ from snuba.utils.constants import (
 )
 
 logger = structlog.get_logger().bind(module=__name__)
-
-_DEFAULT_NATIVE_PORT = 9000
-
-
-def _default_clickhouse_port() -> int:
-    if use_clickhouse_connect_driver():
-        return DEFAULT_CLICKHOUSE_HTTP_PORT
-    return _DEFAULT_NATIVE_PORT
 
 
 def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
@@ -79,15 +66,6 @@ def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
                         rows.append(json.dumps(query_result[0]))
                 res["rows"] = rows
                 query_trace.profile_events_results[query_trace_data.node_name] = res
-
-
-def hostname_resolves(hostname: str) -> bool:
-    try:
-        socket.gethostbyname(hostname)
-    except OSError:
-        return False
-    else:
-        return True
 
 
 def _cluster_host_ports(storage: str) -> dict[str, int]:
@@ -141,27 +119,34 @@ def parse_trace_for_query_ids(
             return [fallback] if fallback is not None else []
         return []
 
-    host_ports = _cluster_host_ports(storage) if storage else {}
-    default_port = _default_clickhouse_port()
+    if not storage:
+        return []
 
+    host_ports = _cluster_host_ports(storage)
     results: list[QueryTraceData] = []
     for node_name, query_id in node_name_to_query_id.items():
-        if node_name in host_ports:
-            host = node_name
-            port = host_ports[node_name]
-        elif hostname_resolves(node_name):
-            host = node_name
-            port = default_port
-        else:
-            host = "127.0.0.1"
-            port = default_port
-
+        # Only open connections to hosts we can validate against the cluster.
+        # is_valid_node keys off native_port; inventing 9000/8123 for unknown
+        # hostnames just fails validation.
+        if node_name not in host_ports:
+            logger.warning(
+                "Skipping profile events for unknown host",
+                host=node_name,
+                storage=storage,
+            )
+            continue
         results.append(
             QueryTraceData(
-                host=host,
-                port=port,
+                host=node_name,
+                port=host_ports[node_name],
                 query_id=query_id,
                 node_name=node_name,
             )
         )
+
+    if not results and trace_output.query_id:
+        fallback = _query_node_trace_data(storage, trace_output.query_id)
+        if fallback is not None:
+            return [fallback]
+
     return results
