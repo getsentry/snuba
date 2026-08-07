@@ -478,13 +478,13 @@ wheels = [
 
 [[package]]
 name = "httplib2"
-version = "0.22.0"
+version = "0.32.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
     { name = "pyparsing" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/httplib2-0.22.0-py3-none-any.whl", hash = "sha256:14ae0a53c1ba8f3d37e9e27cf37eabb0fb9980f435ba405d546948b009dd64dc" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/httplib2-0.32.0-py3-none-any.whl", hash = "sha256:dc6705cacdf3fb0a2aba7629fa33c90fd93e30035db0c157325826be177e4816" },
 ]
 
 [[package]]
