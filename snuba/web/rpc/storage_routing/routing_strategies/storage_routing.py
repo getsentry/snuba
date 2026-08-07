@@ -313,18 +313,13 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
     def _get_default_config_definitions(self) -> list[Configuration]:
         return cast(list[Configuration], self._default_config_definitions)
 
-    def _report_routing_failure(
+    def _capture_routing_failure(
         self,
         error: Exception,
-        metric_name: str,
         fingerprint_key: str,
         failure_type_tag: str,
     ) -> None:
         exception_name = type(error).__name__
-        self.metrics.increment(metric_name, tags={"exception_name": exception_name})
-        if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
-            raise error
-
         with sentry_sdk.push_scope() as scope:
             scope.set_tag("routing_strategy", self.class_name())
             scope.set_tag(failure_type_tag, exception_name)
@@ -550,9 +545,15 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 )
 
             except Exception as e:
-                self._report_routing_failure(
+                self.metrics.increment(
+                    "estimation_failure",
+                    tags={"exception_name": type(e).__name__},
+                )
+                if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
+                    raise e
+
+                self._capture_routing_failure(
                     e,
-                    metric_name="estimation_failure",
                     fingerprint_key="routing-estimation-failure",
                     failure_type_tag="estimation_failure_type",
                 )
@@ -609,9 +610,15 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 )
             record_query(_construct_hacky_querylog_payload(self, routing_decision))
         except Exception as e:
-            self._report_routing_failure(
+            self.metrics.increment(
+                "after_execute_failure",
+                tags={"exception_name": type(e).__name__},
+            )
+            if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
+                raise e
+
+            self._capture_routing_failure(
                 e,
-                metric_name="after_execute_failure",
                 fingerprint_key="routing-after-execute-failure",
                 failure_type_tag="after_execute_failure_type",
             )
