@@ -344,11 +344,13 @@ def test_internal_profile_is_unbounded() -> None:
     assert ClickhouseClientSettings.INTERNAL.value.timeout is None
 
 
-def test_pool_size_defaults_to_setting() -> None:
+def test_pool_size_defaults_to_process_concurrency() -> None:
+    # A granian blocking thread runs one query at a time, so a pool larger than
+    # the thread count can never be fully checked out.
     import clickhouse_connect
     from sentry_options.testing import override_options
 
-    from snuba import settings
+    from snuba.utils.concurrency import process_query_concurrency
 
     pool = ClickhouseConnectPool(host="host", user="test", password="test", database="test")
 
@@ -360,7 +362,49 @@ def test_pool_size_defaults_to_setting() -> None:
         pool._get_client()
 
     _, kwargs = get_pool_manager.call_args
-    assert kwargs["maxsize"] == settings.CLICKHOUSE_MAX_POOL_SIZE
+    assert kwargs["maxsize"] == process_query_concurrency()
+
+
+def test_legacy_pool_size_option_defers_to_derived_size() -> None:
+    # The option keeps its historical default (schema evolution forbids changing
+    # it), so that value must mean "unset" or it would pin every pool back at 25.
+    import clickhouse_connect
+    from sentry_options.testing import override_options
+
+    from snuba.clickhouse.connect import LEGACY_CONNECT_POOL_SIZE
+    from snuba.utils.concurrency import process_query_concurrency
+
+    pool = ClickhouseConnectPool(host="host", user="test", password="test", database="test")
+
+    with (
+        override_options("snuba", {"clickhouse_connect_pool_size": LEGACY_CONNECT_POOL_SIZE}),
+        mock.patch.object(clickhouse_connect, "get_client"),
+        mock.patch("snuba.clickhouse.connect.get_pool_manager") as get_pool_manager,
+    ):
+        pool._get_client()
+
+    _, kwargs = get_pool_manager.call_args
+    assert kwargs["maxsize"] == process_query_concurrency()
+
+
+def test_explicit_setting_pins_pool_size() -> None:
+    import clickhouse_connect
+    from sentry_options.testing import override_options
+
+    from snuba import settings
+
+    pool = ClickhouseConnectPool(host="host", user="test", password="test", database="test")
+
+    with (
+        override_options("snuba", {}),
+        mock.patch.object(settings, "CLICKHOUSE_MAX_POOL_SIZE", 3),
+        mock.patch.object(clickhouse_connect, "get_client"),
+        mock.patch("snuba.clickhouse.connect.get_pool_manager") as get_pool_manager,
+    ):
+        pool._get_client()
+
+    _, kwargs = get_pool_manager.call_args
+    assert kwargs["maxsize"] == 3
 
 
 def test_pool_size_option_override() -> None:

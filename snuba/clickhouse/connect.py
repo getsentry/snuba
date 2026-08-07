@@ -30,6 +30,7 @@ from snuba.clickhouse.native import (
 )
 from snuba.reader import unwrap_nullable_type
 from snuba.state.sentry_options import get_option
+from snuba.utils.concurrency import process_query_concurrency
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.sentry import SENTRY_OP
 
@@ -70,6 +71,11 @@ UNBOUNDED_SEND_RECEIVE_TIMEOUT_SECONDS = 86_400  # 24h
 
 # Default ClickHouse HTTP port, used when a caller does not pass one.
 DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
+
+# The clickhouse_connect_pool_size schema default, from when pool sizes were a
+# flat constant. Pool size now derives from the process's query concurrency, but
+# a live option's default cannot be changed, so this value means "not set".
+LEGACY_CONNECT_POOL_SIZE = 25
 
 # Match native-driver behavior: forward unknown settings instead of failing.
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
@@ -149,7 +155,14 @@ class ClickhouseConnectPool(ClickhousePool):
         self.__lock = Lock()
 
     def _create_client(self) -> Client:
-        pool_size = get_option("clickhouse_connect_pool_size", settings.CLICKHOUSE_MAX_POOL_SIZE)
+        # The option keeps its historical default, which schema evolution will not
+        # let us change, so that value means "unset" and defers to the derived
+        # size. Any other positive value is an explicit operator override.
+        option_pool_size = get_option("clickhouse_connect_pool_size", LEGACY_CONNECT_POOL_SIZE)
+        if option_pool_size > 0 and option_pool_size != LEGACY_CONNECT_POOL_SIZE:
+            pool_size = option_pool_size
+        else:
+            pool_size = settings.CLICKHOUSE_MAX_POOL_SIZE or process_query_concurrency()
         pool_mgr = get_pool_manager(
             ca_cert=self.ca_certs,
             verify=bool(self.verify),
