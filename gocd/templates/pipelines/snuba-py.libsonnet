@@ -40,8 +40,6 @@ local migrate_stage(stage_name, region) = [
   },
 ];
 
-// Region-scoped deploy-pipeline monitors from datadog-terraform#630
-// us/de crashloop + high API error rate gates.
 local saas_datadog_monitor_ids = {
   us: '311884335 311884334',
   de: '311884404 311884405',
