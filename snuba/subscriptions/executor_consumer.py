@@ -19,7 +19,7 @@ from arroyo.processing.strategies.abstract import ProcessingStrategyFactory
 from arroyo.processing.strategies.commit import CommitOffsets
 from arroyo.processing.strategies.healthcheck import Healthcheck
 from arroyo.processing.strategies.produce import Produce
-from arroyo.types import Commit
+from arroyo.types import Commit, FilteredPayload
 
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.consumers.utils import get_partition_count
@@ -189,7 +189,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         self,
         commit: Commit,
         partitions: Mapping[Partition, int],
-    ) -> ProcessingStrategy[KafkaPayload]:
+    ) -> ProcessingStrategy[FilteredPayload | KafkaPayload]:
         calculated_max_concurrent_queries = calculate_max_concurrent_queries(
             len(partitions),
             self.__total_partition_count,
@@ -197,7 +197,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         )
         self.__metrics.gauge("calculated_max_concurrent_queries", calculated_max_concurrent_queries)
 
-        strategy: ProcessingStrategy[KafkaPayload] = ExecuteQuery(
+        strategy: ProcessingStrategy[FilteredPayload | KafkaPayload] = ExecuteQuery(
             self.__dataset,
             self.__entity_names,
             calculated_max_concurrent_queries,
@@ -212,7 +212,7 @@ class SubscriptionExecutorProcessingFactory(ProcessingStrategyFactory[KafkaPaylo
         return strategy
 
 
-class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
+class ExecuteQuery(ProcessingStrategy[FilteredPayload | KafkaPayload]):
     """
     Decodes a scheduled subscription task from the Kafka payload, builds
     the request and executes the ClickHouse query.
@@ -225,7 +225,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         max_concurrent_queries: int,
         stale_threshold_seconds: int | None,
         metrics: MetricsBackend,
-        next_step: ProcessingStrategy[KafkaPayload],
+        next_step: ProcessingStrategy[FilteredPayload | KafkaPayload],
     ) -> None:
         self.__dataset = dataset
         self.__entity_names = set(entity_names)
@@ -238,7 +238,12 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         self.__encoder = SubscriptionScheduledTaskEncoder()
         self.__result_encoder = SubscriptionTaskResultEncoder()
 
-        self.__queue: deque[tuple[Message[KafkaPayload], SubscriptionTaskResultFuture]] = deque()
+        self.__queue: deque[
+            tuple[
+                Message[FilteredPayload | KafkaPayload],
+                SubscriptionTaskResultFuture | None,
+            ]
+        ] = deque()
 
         self.__closed = False
 
@@ -279,10 +284,17 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
     def poll(self) -> None:
         while self.__queue:
-            if not self.__queue[0][1].future.done():
+            message, result_future = self.__queue[0]
+
+            if result_future is None:
+                self.__queue.popleft()
+                self.__next_step.submit(message)
+                continue
+
+            if not result_future.future.done():
                 break
 
-            message, result_future = self.__queue.popleft()
+            self.__queue.popleft()
 
             try:
                 transformed_message = message.replace(
@@ -318,7 +330,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
         self.__next_step.poll()
 
-    def submit(self, message: Message[KafkaPayload]) -> None:
+    def submit(self, message: Message[FilteredPayload | KafkaPayload]) -> None:
         assert not self.__closed
 
         # If there are max_concurrent_queries + 10 pending futures in the queue,
@@ -331,6 +343,12 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         # the queue
         if len(self.__queue) >= max_queue_size:
             raise MessageRejected
+
+        # Empty ticks are forwarded as FilteredPayload so CommitOffsets still
+        # advances, but only after earlier in-flight queries complete.
+        if isinstance(message.payload, FilteredPayload):
+            self.__queue.append((message, None))
+            return
 
         task = self.__encoder.decode(message.payload)
 
@@ -381,6 +399,10 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
                 break
 
             message, result_future = self.__queue.popleft()
+
+            if result_future is None:
+                self.__next_step.submit(message)
+                continue
 
             try:
                 result = result_future.future.result(remaining)
