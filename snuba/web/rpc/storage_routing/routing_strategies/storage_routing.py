@@ -315,6 +315,19 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
     def _get_default_config_definitions(self) -> list[Configuration]:
         return cast(list[Configuration], self._default_config_definitions)
 
+    def _capture_routing_failure(
+        self,
+        error: Exception,
+        fingerprint_key: str,
+        failure_type_tag: str,
+    ) -> None:
+        exception_name = type(error).__name__
+        with sentry_sdk.push_scope() as scope:
+            scope.set_tag("routing_strategy", self.class_name())
+            scope.set_tag(failure_type_tag, exception_name)
+            scope.fingerprint = [fingerprint_key, exception_name]
+            sentry_sdk.capture_exception(error)
+
     def _get_default_routing_decision_tier(self) -> Tier:
         tier_int = get_option("default_tier", 1)
 
@@ -534,18 +547,24 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 )
 
             except Exception as e:
-                # log some error metrics
-                self.metrics.increment("estimation_failure")
-                sentry_sdk.capture_message(f"Error getting routing decision: {e}")
+                self.metrics.increment(
+                    "estimation_failure",
+                    tags={"exception_name": type(e).__name__},
+                )
+                if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
+                    raise e
+
+                self._capture_routing_failure(
+                    e,
+                    fingerprint_key="routing-estimation-failure",
+                    failure_type_tag="estimation_failure_type",
+                )
                 routing_decision = RoutingDecision(
                     routing_context=routing_context,
                     strategy=OutcomesBasedRoutingStrategy(),
                     tier=default_tier,
                     can_run=True,
                 )
-
-                if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
-                    raise e
             span.set_attribute("decided_tier", routing_decision.tier.name)
             return routing_decision
 
@@ -596,10 +615,18 @@ class BaseRoutingStrategy(ConfigurableComponent, ABC):
                 )
             record_query(_construct_hacky_querylog_payload(self, routing_decision))
         except Exception as e:
-            self.metrics.increment("after_execute_failure")
-            sentry_sdk.capture_message(f"Error in routing strategy after execute: {e}")
+            self.metrics.increment(
+                "after_execute_failure",
+                tags={"exception_name": type(e).__name__},
+            )
             if settings.RAISE_ON_ROUTING_STRATEGY_FAILURES:
                 raise e
+
+            self._capture_routing_failure(
+                e,
+                fingerprint_key="routing-after-execute-failure",
+                failure_type_tag="after_execute_failure_type",
+            )
 
     @final
     def update_allocation_policies_balances(
