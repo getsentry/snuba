@@ -77,6 +77,7 @@ TOOL_RESOURCES = {
     "snql-to-sql": ToolResource("snql-to-sql"),
     "tracing": ToolResource("tracing"),
     "cardinality-analyzer": ToolResource("cardinality-analyzer"),
+    "outcomes-analyzer": ToolResource("outcomes-analyzer"),
     "production-queries": ToolResource("production-queries"),
     "system-queries": ToolResource("system-queries"),
     "sudo-system-queries": ToolResource("system-queries"),
@@ -168,6 +169,7 @@ ROLES = {
                     TOOL_RESOURCES["clickhouse-migrations"],
                     TOOL_RESOURCES["snuba-explain"],
                     TOOL_RESOURCES["querylog"],
+                    TOOL_RESOURCES["outcomes-analyzer"],
                     TOOL_RESOURCES["rpc-endpoints"],
                     TOOL_RESOURCES["clusters"],
                 ]
@@ -177,6 +179,10 @@ ROLES = {
     "CardinalityAnalyzer": Role(
         name="cardinality-analyzer",
         actions={InteractToolAction([TOOL_RESOURCES["cardinality-analyzer"]])},
+    ),
+    "OutcomesAnalyzer": Role(
+        name="outcomes-analyzer",
+        actions={InteractToolAction([TOOL_RESOURCES["outcomes-analyzer"]])},
     ),
     "AllMigrationsExecutor": Role(
         name="AllMigrationsExecutor",

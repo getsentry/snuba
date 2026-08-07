@@ -395,6 +395,19 @@ def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) ->
         )
 
 
+def format_predefined_sql(sql: str) -> str:
+    """Strip the 4-space class-body indent from predefined SQL multiline strings.
+
+    Predefined query SQL is authored inside class bodies, so every line carries at
+    least four leading spaces from Python indentation. Callers should send the
+    result of this helper to the frontend so the editor does not need to guess
+    how much to strip. Indentation beyond those four spaces is preserved.
+    """
+    return "\n".join(
+        line[4:] if line.startswith("    ") else line for line in sql.split("\n")
+    ).strip()
+
+
 class PreDefinedQuery:
     sql: str
 
