@@ -65,6 +65,7 @@ class ClickhouseResult:
     meta: Sequence[Any] | None = None
     profile: ClickhouseProfile | None = None
     trace_output: str = ""
+    query_id: str = ""
 
 
 @contextmanager
@@ -319,12 +320,14 @@ class ClickhouseNativePool(ClickhousePool):
                         progress_bytes=getattr(conn.last_query.progress, "bytes", 0),
                         rows=getattr(conn.last_query.profile_info, "rows", 0),
                     )
+                    result_query_id = query_id or ""
                     if with_column_types:
                         result = ClickhouseResult(
                             results=result_data[0],
                             meta=result_data[1],
                             profile=profile_data,
                             trace_output=trace_output,
+                            query_id=result_query_id,
                         )
                     else:
                         if not isinstance(result_data, (list, tuple)):
@@ -333,6 +336,7 @@ class ClickhouseNativePool(ClickhousePool):
                             results=result_data,
                             profile=profile_data,
                             trace_output=trace_output,
+                            query_id=result_query_id,
                         )
 
                     return result
