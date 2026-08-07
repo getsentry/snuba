@@ -538,6 +538,11 @@
       "default": 1,
       "description": "Granularity in seconds to which query time-range bounds are aligned (truncated). Must be non-zero. Migrated from runtime config date_align_seconds."
     },
+    "snuba_query_max_array_size": {
+      "type": "integer",
+      "default": 1000,
+      "description": "Maximum number of elements an array-returning aggregation (FUNCTION_COLLECT_UNIQUE, which maps to ClickHouse groupUniqArray) may accumulate per group. Unlike uniq, groupUniqArray holds every distinct value on the aggregating node, so this bounds its memory: a group with more distinct values than this is truncated rather than allowed to grow. Lower it if a collect query is hurting a cluster."
+    },
     "lightweight_deletes_sync": {
       "type": "integer",
       "default": -1,
