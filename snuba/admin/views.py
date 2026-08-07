@@ -41,6 +41,11 @@ from snuba.admin.clickhouse.system_queries import (
 )
 from snuba.admin.clickhouse.trace_log_parsing import summarize_trace_output
 from snuba.admin.clickhouse.tracing import TraceOutput, run_query_and_get_trace
+from snuba.admin.eap_query_analysis import (
+    EapQueryAnalysisRequest,
+    analyze_eap_queries,
+    result_to_dict,
+)
 from snuba.admin.migrations_policies import (
     check_migration_perms,
     get_migration_group_policies,
@@ -738,6 +743,47 @@ def clickhouse_querylog_query() -> Response:
             {"Content-Type": "application/json"},
         )
     except Exception as err:
+        return make_response(
+            jsonify({"error": {"type": "unknown", "message": str(err)}}),
+            500,
+        )
+
+
+@application.route("/eap_stats", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.EAP_STATS])
+def eap_stats() -> Response:
+    """Categorize recent EAP querylog traffic and aggregate resource usage."""
+    user = request.headers.get(USER_HEADER_KEY, "unknown")
+    if user == "unknown" and settings.ADMIN_AUTH_PROVIDER != "NOOP":
+        return Response(
+            json.dumps({"error": "Unauthorized"}),
+            401,
+            {"Content-Type": "application/json"},
+        )
+    try:
+        body = json.loads(request.data) if request.data else {}
+    except Exception:
+        return make_response(jsonify({"error": {"message": "Invalid JSON body"}}), 400)
+
+    try:
+        analysis_req = EapQueryAnalysisRequest.from_dict(body)
+        result = analyze_eap_queries(analysis_req, user)
+        return make_response(jsonify(result_to_dict(result)), 200)
+    except InvalidCustomQuery as err:
+        return Response(
+            json.dumps({"error": {"message": str(err)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
+    except ClickhouseError as err:
+        details = {
+            "type": "clickhouse",
+            "message": str(err),
+            "code": err.code,
+        }
+        return make_response(jsonify({"error": details}), 400)
+    except Exception as err:
+        logger.error(err, exc_info=True)
         return make_response(
             jsonify({"error": {"type": "unknown", "message": str(err)}}),
             500,

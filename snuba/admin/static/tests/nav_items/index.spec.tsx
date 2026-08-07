@@ -54,4 +54,5 @@ it("should only display all tools", async () => {
   expect(getByText("ClickHouse Migrations", { exact: false })).toBeTruthy();
   expect(getByText("ClickHouse Tracing", { exact: false })).toBeTruthy();
   expect(getByText("ClickHouse Querylog", { exact: false })).toBeTruthy();
+  expect(getByText("EAP Stats", { exact: false })).toBeTruthy();
 });
