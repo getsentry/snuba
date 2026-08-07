@@ -1,5 +1,6 @@
 from datetime import timedelta
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
@@ -20,6 +21,7 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue
 
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_trace_item_stats import EndpointTraceItemStats
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -211,6 +213,36 @@ class TestTraceItemAttributesStats(BaseApiTest):
         assert bucket_matches(duration_dist.buckets[0], "30", 84)
         assert bucket_matches(duration_dist.buckets[1], "50", 18)
         assert bucket_matches(duration_dist.buckets[2], "10", 6)
+
+    @patch(
+        "snuba.web.rpc.v1.resolvers.R_eap_items.resolver_trace_item_stats.MAX_REQUEST_ATTRIBUTES", 2
+    )
+    def test_allow_list_too_many_attributes(self) -> None:
+        message = TraceItemStatsRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            stats_types=[
+                StatsType(
+                    attribute_distributions=AttributeDistributionsRequest(
+                        max_buckets=10,
+                        max_attributes=100,
+                        attributes=[
+                            AttributeKey(name=f"attr_{i}", type=AttributeKey.TYPE_STRING)
+                            for i in range(3)
+                        ],
+                    )
+                )
+            ],
+        )
+        with pytest.raises(BadSnubaRPCRequestException, match="Max allowed attributes is 2."):
+            EndpointTraceItemStats().execute(message)
 
     def test_with_filter(self, setup_teardown: Any) -> None:
         message = TraceItemStatsRequest(
