@@ -40,6 +40,13 @@ local migrate_stage(stage_name, region) = [
   },
 ];
 
+// Region-scoped deploy-pipeline monitors from datadog-terraform#630
+// us/de crashloop + high API error rate gates.
+local saas_datadog_monitor_ids = {
+  us: '311884335 311884334',
+  de: '311884404 311884405',
+};
+
 // Snuba deploy to ST is blocked till SaaS deploy is healthy
 local saas_health_check(region) =
   if region == 'us' || region == 'de' then
@@ -52,6 +59,7 @@ local saas_health_check(region) =
                 SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
                 DATADOG_API_KEY: '{{SECRET:[devinfra][sentry_datadog_api_key]}}',
                 DATADOG_APP_KEY: '{{SECRET:[devinfra][sentry_datadog_app_key]}}',
+                DATADOG_MONITOR_IDS: std.get(saas_datadog_monitor_ids, region, ''),
                 LABEL_SELECTOR: 'service=snuba',
                 SENTRY_ENVIRONMENT: region,
               },
