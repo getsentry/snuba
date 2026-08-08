@@ -52,12 +52,11 @@ fn clickhouse_task_runner(
 
                 // Timed on both paths: recording only successes dropped the
                 // slowest writes from the metric, so it read healthy while
-                // writes hung. Filter `outcome:success` for the old semantics.
-                let outcome = if result.is_ok() { "success" } else { "error" };
+                // writes hung. Filter `success:true` for the old semantics.
                 timer!(
                     "insertions.batch_write_ms",
                     write_start.elapsed(),
-                    "outcome" => outcome
+                    "success" => result.is_ok()
                 );
 
                 let response = result.map_err(RunTaskError::Other)?;
@@ -426,10 +425,9 @@ impl ClickhouseClient {
             let elapsed_ms = started.elapsed().as_millis();
 
             let last = attempt + 1 == attempts;
-            let retried = if last { "false" } else { "true" };
             counter!(
                 "rust_consumer.clickhouse_insert_error", 1,
-                "status" => failure.status, "retried" => retried
+                "status" => failure.status, "retried" => !last
             );
 
             if last {
