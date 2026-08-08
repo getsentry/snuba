@@ -75,9 +75,10 @@ pub struct ClickhouseWriteClientTimeouts {
     /// clusters) and under any proxy idle timeout, or the pool hands out
     /// connections the far end already closed.
     pub pool_idle: Duration,
-    /// Keepalive idle/interval/retries. Surfaces a dropped flow as a transport
-    /// error in ~30s rather than leaving it to sit until `request` expires.
-    /// Pinned because the host defaults (75s x 9) take 11 minutes.
+    /// Keepalive idle/interval/retries: a dropped flow surfaces as a transport
+    /// error in `idle + interval * retries`, ~30s here, rather than sitting
+    /// until `request` expires. Only the interval differs from reqwest's own
+    /// 15s/15s/3, which would take ~60s.
     pub tcp_keepalive: Duration,
     pub tcp_keepalive_interval: Duration,
     pub tcp_keepalive_retries: u32,
