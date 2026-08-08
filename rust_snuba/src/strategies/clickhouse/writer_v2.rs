@@ -18,42 +18,21 @@ use crate::options::{
 };
 use crate::types::{BytesInsertBatch, RowData};
 
-/// Bounds the TCP connect and TLS handshake for a single attempt. Reaching
-/// ClickHouse is an intra-cluster hop that normally completes in milliseconds;
-/// this exists so a black-holed SYN fails into the retry loop quickly instead
-/// of inheriting the kernel's multi-minute connect backoff.
+/// Connect is an intra-cluster hop; this only exists so a black-holed SYN
+/// fails into the retry loop instead of inheriting the kernel's backoff.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// How long an unused connection may sit in the pool before being discarded.
-///
-/// Must stay below ClickHouse's `keep_alive_timeout`, which the EAP clusters
-/// set to 60s. `reqwest` defaults to 90s, which leaves a 60-90s window where
-/// the server has already closed a connection the pool still considers good —
-/// handing one out produces exactly the "connection closed before message
-/// completed" this writer has been logging. Retiring them first closes that
-/// window.
-///
-/// The margin matters here: with `--max-batch-time-ms 50000` a write slot is
-/// idle for around 50s between batches, so connections routinely sit close to
-/// the server's limit and any hiccup pushes them past it.
+/// Must stay under ClickHouse's `keep_alive_timeout` (60s on the EAP
+/// clusters). reqwest's 90s default leaves a window where the pool hands out
+/// connections the server already closed, which surfaces as "connection closed
+/// before message completed".
 const POOL_IDLE_TIMEOUT: Duration = Duration::from_secs(45);
 
-/// TCP keepalive: idle time before the kernel starts probing, then the spacing
-/// and count of the probes. Detection lands at roughly `idle + interval *
-/// retries`, so ~30s here.
-///
-/// Load balancers and NAT gateways drop idle flows, often without a RST. The
-/// probes surface such a connection as a transport error, which fails the
-/// attempt quickly instead of leaving it to sit until the write deadline —
-/// cheaper than a timeout, and it frees the retry to dial a fresh connection
-/// sooner.
-///
-/// Left unset, interval and count come from the host's
-/// `net.ipv4.tcp_keepalive_{intvl,probes}` sysctls, whose 75s x 9 defaults take
-/// over 11 minutes — useless against the stall this guards. Probing this
-/// aggressively is safe: a peer's TCP stack answers keepalives regardless of
-/// what the application is doing, so a slow ClickHouse is never mistaken for a
-/// dead one.
+/// Surfaces a dropped flow as a transport error in ~30s (`idle + interval *
+/// retries`) rather than leaving it to sit until the write deadline. Interval
+/// and count are pinned because the host defaults (75s x 9) take 11 minutes.
+/// Safe to probe this hard: a peer's TCP stack answers regardless of what the
+/// application is doing, so a slow ClickHouse is never taken for a dead one.
 const TCP_KEEPALIVE: Duration = Duration::from_secs(15);
 const TCP_KEEPALIVE_INTERVAL: Duration = Duration::from_secs(5);
 const TCP_KEEPALIVE_RETRIES: u32 = 3;
@@ -90,11 +69,9 @@ fn clickhouse_task_runner(
 
                 let result = client.send(encoded_rows, RetryConfig::default()).await;
 
-                // Record the latency on both paths. Timing only successes hid
-                // exactly the writes worth seeing: a stalled INSERT never
-                // reaches the success arm, so the slowest writes were dropped
-                // from the timer and the metric stayed healthy while writes
-                // hung. Filter to `outcome:success` for the old semantics.
+                // Timed on both paths: recording only successes dropped the
+                // slowest writes from the metric, so it read healthy while
+                // writes hung. Filter `outcome:success` for the old semantics.
                 let outcome = if result.is_ok() { "success" } else { "error" };
                 timer!(
                     "insertions.batch_write_ms",
@@ -277,32 +254,10 @@ impl_writer_delegate!(RowBinaryWriterStep);
 
 /// Retry schedule for [`ClickhouseClient::send`].
 ///
-/// `reqwest::retry` (new in 0.13) covers most of what this loop does and adds a
-/// token budget this has no equivalent of, so it is worth saying why it is not
-/// used: **it cannot retry a timeout**, and retrying timeouts is the entire
-/// reason this loop exists.
-///
-/// `reqwest` builds `total_timeout` and `read_timeout` in `execute_request` and
-/// polls them in `PendingRequest::poll` *above* `in_flight` — and `in_flight` is
-/// where its retry layer runs. A deadline firing there returns straight to the
-/// caller, so the classifier never sees it. That makes its deadlines cumulative
-/// over the whole sequence, and a stalled connection consumes the budget having
-/// made a single attempt.
-///
-/// Measured, not inferred: against a server that accepts and never answers, one
-/// policy makes 3 attempts with no deadline set and exactly 1 with one. The
-/// write this module exists to rescue — a black-holed connection where a fresh
-/// one would succeed — is precisely the write that arrangement stops retrying.
-///
-/// TCP keepalive narrows the gap but cannot close it: if the kernel spots the
-/// dead connection you get a retryable transport error, and if it does not you
-/// get a timeout. Every write that actually times out is by definition one
-/// keepalive missed.
-///
-/// Revisit if upstream ever applies deadlines inside the retry layer. Body
-/// replay and metrics both port over cleanly (the body is `Bytes`, so
-/// `try_clone` succeeds at any size, and the classifier closure can emit
-/// `rust_consumer.clickhouse_insert_error`).
+/// Hand-rolled rather than `reqwest::retry` because that cannot retry a
+/// timeout: reqwest applies its deadlines above its retry layer, so one firing
+/// returns straight to the caller and a stalled connection gets a single
+/// attempt. Retrying timeouts on a fresh connection is the point of this loop.
 pub struct RetryConfig {
     initial_backoff_ms: f64,
     max_retries: usize,
@@ -371,17 +326,8 @@ impl ClickhouseClient {
             fmt = format.as_str(),
         );
 
-        // `Client::new()` applies no timeouts whatsoever, which leaves a
-        // request on a dead connection hanging until the kernel stops
-        // retransmitting.
-        //
-        // `read_timeout` is the stall detector: it bounds the wait for the next
-        // byte of the response, so a connection that goes quiet fails instead of
-        // hanging. It is a client-level setting, so it snapshots the option at
-        // startup; `send` additionally applies the same value as a per-request
-        // total deadline, re-read each attempt, which both catches a response
-        // that trickles forever and lets the deadline be lowered at runtime.
-        //
+        // `Client::new()` applies no timeouts at all, leaving a request on a
+        // dead connection to hang until the kernel stops retransmitting.
         let client = Client::builder()
             .connect_timeout(CONNECT_TIMEOUT)
             .read_timeout(get_clickhouse_request_timeout(&storage_name))
@@ -476,16 +422,10 @@ impl ClickhouseClient {
                     }
                 }
                 Err(e) => {
-                    // Distinguish a timeout from other transport failures. A
-                    // connection error means the request demonstrably went
-                    // nowhere; a timeout means the request was still
-                    // outstanding at the deadline, so the insert may yet land
-                    // server-side. Retrying either is safe: ClickHouse
-                    // deduplicates identical insert blocks, and nothing on this
-                    // path overrides `insert_deduplicate`. They do point at
-                    // different faults though, so they get different `status`
-                    // tags — a rise in `timeout` means connections are stalling,
-                    // `network_error` means they are being refused or reset.
+                    // Tagged apart because they point at different faults:
+                    // `timeout` means writes are stalling, `network_error` that
+                    // connections are refused or reset. Retrying either is safe
+                    // — ClickHouse deduplicates identical insert blocks.
                     let status = if e.is_timeout() {
                         "timeout"
                     } else {
@@ -884,13 +824,9 @@ mod tests {
         assert!(error_msg.contains("after 5 attempts"));
     }
 
-    /// Binds a listener that accepts connections and then never answers, and
-    /// runs a full `send` against it. Reproduces a black-holed request: the
-    /// peer is reachable, the body goes out, and no response ever comes back.
-    /// Returns the error, how long the call took, and how many connections the
-    /// server saw — that last one being the attempt count.
-    ///
-    /// The caller must already hold an `override_options` guard covering
+    /// Accepts connections and never answers, reproducing a black-holed
+    /// request. Returns the error, the elapsed time, and the connection count
+    /// (i.e. attempts). Caller must hold an `override_options` guard for
     /// `storage_name`.
     async fn send_against_hung_server(
         storage_name: &str,
@@ -946,30 +882,16 @@ mod tests {
         )
     }
 
-    /// Regression test for SNUBA-CCY: a peer that accepts the connection and
-    /// then never answers used to hang the write indefinitely, because
-    /// `reqwest` applies no timeouts of its own. The retry loop was unreachable
-    /// — the first attempt simply never returned.
-    ///
-    /// The connection count is the point of this test, and the reason the loop
-    /// is hand-rolled rather than `reqwest::retry`. A timed-out attempt has to
-    /// be *retried on a fresh connection*, and only a deadline the loop owns
-    /// can do that: `reqwest` applies its own timeouts above its retry layer,
-    /// so a deadline firing there ends the write with a single attempt. Three
-    /// connections here is exactly the behaviour that arrangement cannot
-    /// produce.
-    ///
-    /// Covers both wire formats. `JsonWriterStep` and `RowBinaryWriterStep`
-    /// share one `ClickhouseClient` via `build_writer_inner`, so they cannot
-    /// drift today — this pins that, so a future per-format client cannot
-    /// quietly reintroduce an untimed one.
+    /// Regression test for SNUBA-CCY, where a peer that never answers hung the
+    /// write indefinitely. The connection count is the point: each timed-out
+    /// attempt must be retried on a *fresh* connection, which is what
+    /// `reqwest::retry` cannot do. Both formats, since they share one client.
     #[tokio::test]
     async fn test_hung_server_times_out_for_both_wire_formats() {
         crate::testutils::initialize_python();
         init_options();
 
-        // One guard covering both storages: the override replaces the whole
-        // dict, so splitting these across tests would let them race.
+        // One guard for both: the override replaces the whole dict.
         let _guard = override_options(&[(
             "snuba",
             "clickhouse_request_timeout_ms",
@@ -999,8 +921,7 @@ mod tests {
                 "{format:?}: each timed-out attempt must be retried on a new \
                  connection, so the hung server should see one per attempt"
             );
-            // Three 300ms attempts plus ~30ms of backoff. Without the deadline
-            // this call would not have returned at all within the bound.
+            // 3 x 300ms plus backoff; without the deadline it never returns.
             assert!(
                 elapsed >= Duration::from_millis(900),
                 "{format:?}: took {elapsed:?}"

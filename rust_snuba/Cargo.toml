@@ -41,19 +41,11 @@ prost = "0.14"
 pyo3 = { version = "0.24.1", features = ["chrono"] }
 rand = "0.9.3"
 regex = "1.11.1"
-# 0.13 for `ClientBuilder::read_timeout` and the explicit TCP keepalive probe
-# schedule, both of which the ClickHouse writer relies on to detect a stalled
-# INSERT. This is also the version `sentry` already pulls in, so the tree
-# builds one reqwest instead of two.
-#
-# `query` and `charset` were unconditional in 0.11 and are features here.
-#
-# `native-tls` is declared even though `sentry`'s `transport` feature already
-# turns it on: it is what `CLICKHOUSE_SECURE` deployments validate certificates
-# with, so it should not rest on another crate's feature graph. No backend is
-# selected in code — `TlsBackend::default()` resolves to native-tls whenever
-# `__native-tls` is enabled, which is both the 0.11 behavior and the only
-# backend compiled here.
+# 0.13 for `read_timeout` and the TCP keepalive probe schedule, both used by
+# the ClickHouse writer; it is also the version `sentry` pulls in, so the tree
+# builds one reqwest instead of two. `query` and `charset` were unconditional
+# in 0.11. `native-tls` is declared rather than inherited from `sentry`'s
+# `transport` feature, since it is what `CLICKHOUSE_SECURE` validates with.
 reqwest = { version = "0.13", default-features = false, features = [
     "charset",
     "http2",
