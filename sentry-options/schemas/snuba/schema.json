@@ -93,6 +93,28 @@
       "default": {},
       "description": "Dict mapping storage name to HTTP client timeout overrides for that storage's consumer writer. Each field is optional and falls back to its default independently; non-positive values fall back too. Only request_ms is re-read per attempt, the rest apply on consumer restart."
     },
+    "clickhouse_write_retry": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "initial_backoff_ms": {
+            "type": "number",
+            "optional": true
+          },
+          "max_retries": {
+            "type": "integer",
+            "optional": true
+          },
+          "jitter_factor": {
+            "type": "number",
+            "optional": true
+          }
+        }
+      },
+      "default": {},
+      "description": "Dict mapping storage name to retry overrides for that storage's consumer writer. Each field is optional and falls back to its default independently. Zero is honoured (no retries, no backoff, no jitter); negative values and a jitter_factor outside 0-1 fall back. Read per write, so changes apply without a redeploy."
+    },
     "eap_items_dlq_grace_period_min": {
       "type": "object",
       "additionalProperties": {

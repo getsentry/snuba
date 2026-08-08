@@ -132,6 +132,70 @@ pub fn get_clickhouse_write_client_timeouts(storage_name: &str) -> ClickhouseWri
     }
 }
 
+/// Retry schedule for a storage's ClickHouse writer.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ClickhouseWriteRetry {
+    /// Delay before the first retry; doubles each attempt.
+    pub initial_backoff_ms: f64,
+    /// Retries on top of the original attempt. Zero disables retrying.
+    pub max_retries: usize,
+    /// Fraction of the delay to jitter by, so consumers that failed together
+    /// do not retry together. Between 0 and 1.
+    pub jitter_factor: f64,
+}
+
+impl Default for ClickhouseWriteRetry {
+    fn default() -> Self {
+        Self {
+            initial_backoff_ms: 500.0,
+            max_retries: 4,
+            jitter_factor: 0.2,
+        }
+    }
+}
+
+impl ClickhouseWriteRetry {
+    /// Exponential backoff, jittered.
+    pub fn backoff(&self, attempt: usize) -> Duration {
+        let base_ms = self.initial_backoff_ms * 2f64.powi(attempt as i32);
+        let jitter = rand::random::<f64>() * self.jitter_factor - self.jitter_factor / 2.0;
+        Duration::from_millis((base_ms * (1.0 + jitter)).round() as u64)
+    }
+}
+
+/// Retry schedule for `storage_name`, from the `clickhouse_write_retry` dict.
+/// Each field is optional and falls back to its default independently. Unlike
+/// the timeouts, zero is meaningful here — no retries, no backoff, no jitter —
+/// so only negative and out-of-range values are rejected.
+pub fn get_clickhouse_write_retry(storage_name: &str) -> ClickhouseWriteRetry {
+    let defaults = ClickhouseWriteRetry::default();
+    let Some(entry) = options("snuba")
+        .ok()
+        .and_then(|o| o.get("clickhouse_write_retry").ok())
+        .and_then(|v| v.get(storage_name).cloned())
+    else {
+        return defaults;
+    };
+
+    ClickhouseWriteRetry {
+        initial_backoff_ms: entry
+            .get("initial_backoff_ms")
+            .and_then(|n| n.as_f64())
+            .filter(|ms| ms.is_finite() && *ms >= 0.0)
+            .unwrap_or(defaults.initial_backoff_ms),
+        max_retries: entry
+            .get("max_retries")
+            .and_then(|n| n.as_u64())
+            .and_then(|n| usize::try_from(n).ok())
+            .unwrap_or(defaults.max_retries),
+        jitter_factor: entry
+            .get("jitter_factor")
+            .and_then(|n| n.as_f64())
+            .filter(|f| (0.0..=1.0).contains(f))
+            .unwrap_or(defaults.jitter_factor),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -248,6 +312,57 @@ mod tests {
                 tcp_keepalive_interval: Duration::from_millis(2_000),
                 tcp_keepalive_retries: 5,
             }
+        );
+    }
+
+    #[test]
+    fn test_write_retry_default_when_unset() {
+        init_options();
+        assert_eq!(
+            get_clickhouse_write_retry("retry_unset_test"),
+            ClickhouseWriteRetry::default()
+        );
+    }
+
+    #[test]
+    fn test_write_retry_partial_override_and_zero_is_honoured() {
+        init_options();
+        let _guard = override_options(&[(
+            "snuba",
+            "clickhouse_write_retry",
+            json!({ "retry_partial_test": { "max_retries": 0, "jitter_factor": 0.0 } }),
+        )])
+        .unwrap();
+
+        let defaults = ClickhouseWriteRetry::default();
+        let retry = get_clickhouse_write_retry("retry_partial_test");
+
+        // Zero is a real choice here — no retries, no jitter — unlike the
+        // timeouts, where it would mean no deadline at all.
+        assert_eq!(retry.max_retries, 0);
+        assert_eq!(retry.jitter_factor, 0.0);
+        assert_eq!(retry.initial_backoff_ms, defaults.initial_backoff_ms);
+
+        assert_eq!(get_clickhouse_write_retry("retry_other_storage"), defaults);
+    }
+
+    #[test]
+    fn test_write_retry_rejects_out_of_range() {
+        init_options();
+        let _guard = override_options(&[(
+            "snuba",
+            "clickhouse_write_retry",
+            json!({
+                "retry_range_test": { "initial_backoff_ms": -1.0, "jitter_factor": 5.0 }
+            }),
+        )])
+        .unwrap();
+
+        // A negative delay and a jitter above 1 would both produce nonsense
+        // delays, so they fall back rather than being honoured.
+        assert_eq!(
+            get_clickhouse_write_retry("retry_range_test"),
+            ClickhouseWriteRetry::default()
         );
     }
 

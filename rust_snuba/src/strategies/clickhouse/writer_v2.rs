@@ -14,7 +14,8 @@ use sentry_arroyo::{counter, timer};
 
 use crate::config::ClickhouseConfig;
 use crate::options::{
-    get_clickhouse_write_client_timeouts, get_load_balancing_config, get_max_insert_block_size,
+    get_clickhouse_write_client_timeouts, get_clickhouse_write_retry, get_load_balancing_config,
+    get_max_insert_block_size,
 };
 use crate::types::{BytesInsertBatch, RowData};
 
@@ -48,7 +49,7 @@ fn clickhouse_task_runner(
             } else {
                 tracing::debug!("performing write");
 
-                let result = client.send(encoded_rows, RetryConfig::default()).await;
+                let result = client.send(encoded_rows).await;
 
                 timer!(
                     "insertions.batch_write_ms",
@@ -229,39 +230,15 @@ where
 
 impl_writer_delegate!(RowBinaryWriterStep);
 
-/// Retry schedule for [`ClickhouseClient::send`].
-pub struct RetryConfig {
-    initial_backoff_ms: f64,
-    max_retries: usize,
-    jitter_factor: f64, // between 0 and 1
-}
-
 /// A failed attempt, normalized so the retry loop does not care whether
-/// ClickHouse answered with an error or never answered at all. `status` is the
-/// metric tag; `detail` is the human-readable cause.
+/// ClickHouse answered with an error or never answered at all. `status` and
+/// `timeout` are metric tags; `detail` is the human-readable cause.
 struct FailedAttempt {
     status: String,
+    /// Whether the deadline fired, as opposed to the connection failing
+    /// outright. Distinguishes writes that stall from ones that are refused.
+    timeout: bool,
     detail: String,
-}
-
-impl RetryConfig {
-    /// Exponential backoff, jittered so consumers that failed together do not
-    /// retry together.
-    fn backoff(&self, attempt: usize) -> Duration {
-        let base_ms = self.initial_backoff_ms * 2f64.powi(attempt as i32);
-        let jitter = rand::random::<f64>() * self.jitter_factor - self.jitter_factor / 2.0;
-        Duration::from_millis((base_ms * (1.0 + jitter)).round() as u64)
-    }
-}
-
-impl Default for RetryConfig {
-    fn default() -> Self {
-        Self {
-            initial_backoff_ms: 500.0,
-            max_retries: 4,
-            jitter_factor: 0.2,
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -372,32 +349,29 @@ impl ClickhouseClient {
                     .text()
                     .await
                     .unwrap_or_else(|_| "unknown error".to_string());
-                Err(FailedAttempt { status, detail })
+                Err(FailedAttempt {
+                    status,
+                    timeout: false,
+                    detail,
+                })
             }
-            // Timeouts are tagged apart from other transport failures because
-            // they point at different faults: `timeout` means writes are
-            // stalling, `network_error` that connections are refused or reset.
-            // Retrying either is safe — ClickHouse deduplicates identical
-            // insert blocks.
             Err(e) => Err(FailedAttempt {
-                status: if e.is_timeout() {
-                    "timeout".to_string()
-                } else {
-                    "network_error".to_string()
-                },
+                status: "network_error".to_string(),
+                timeout: e.is_timeout(),
                 detail: e.to_string(),
             }),
         }
     }
 
-    pub async fn send(&self, body: Vec<u8>, retry_config: RetryConfig) -> anyhow::Result<Response> {
+    pub async fn send(&self, body: Vec<u8>) -> anyhow::Result<Response> {
         // Compress once — the body is identical across attempts and `Bytes` makes
         // each retry's clone a refcount bump. Drop frees the uncompressed copy
         // rather than holding it for the life of the retries.
         let body_bytes = bytes::Bytes::from(lz4_compress(&body));
         drop(body);
 
-        let attempts = retry_config.max_retries + 1;
+        let retry = get_clickhouse_write_retry(&self.storage_name);
+        let attempts = retry.max_retries + 1;
         let mut attempt = 0;
         loop {
             let started = Instant::now();
@@ -410,7 +384,9 @@ impl ClickhouseClient {
             let last = attempt + 1 == attempts;
             counter!(
                 "rust_consumer.clickhouse_insert_error", 1,
-                "status" => failure.status, "retried" => !last
+                "status" => failure.status,
+                "timeout" => failure.timeout,
+                "retried" => !last
             );
 
             if last {
@@ -427,7 +403,7 @@ impl ClickhouseClient {
                 failure.detail
             );
 
-            tokio::time::sleep(retry_config.backoff(attempt)).await;
+            tokio::time::sleep(retry.backoff(attempt)).await;
             attempt += 1;
         }
     }
@@ -546,7 +522,7 @@ mod tests {
         );
 
         client
-            .send(b"[]".to_vec(), RetryConfig::default())
+            .send(b"[]".to_vec())
             .await
             .expect("compressed INSERT rejected by ClickHouse");
     }
@@ -734,6 +710,20 @@ mod tests {
     #[tokio::test]
     async fn test_retry_with_exponential_backoff() {
         crate::testutils::initialize_python();
+        init_options();
+        let _guard = override_options(&[(
+            "snuba",
+            "clickhouse_write_retry",
+            json!({
+                "retry_backoff_test": {
+                    "initial_backoff_ms": 100.0,
+                    "max_retries": 4,
+                    "jitter_factor": 0.1
+                }
+            }),
+        )])
+        .unwrap();
+
         // Test that retry logic works by using a non-existent server
         // This will trigger network errors that should be retried
         let config = ClickhouseConfig {
@@ -749,22 +739,13 @@ mod tests {
         let client = ClickhouseClient::new(
             &config,
             "test_table",
-            "test_storage".to_string(),
+            "retry_backoff_test".to_string(),
             InsertFormat::JsonEachRow,
             None,
         );
 
         let start_time = Instant::now();
-        let result = client
-            .send(
-                b"test data".to_vec(),
-                RetryConfig {
-                    initial_backoff_ms: 100.0,
-                    max_retries: 4,
-                    jitter_factor: 0.1,
-                },
-            )
-            .await;
+        let result = client.send(b"test data".to_vec()).await;
         let elapsed = start_time.elapsed();
 
         // Should fail after all retries
@@ -818,16 +799,7 @@ mod tests {
         );
 
         let start_time = Instant::now();
-        let result = client
-            .send(
-                b"test data".to_vec(),
-                RetryConfig {
-                    initial_backoff_ms: 10.0,
-                    max_retries: 2,
-                    jitter_factor: 0.0,
-                },
-            )
-            .await;
+        let result = client.send(b"test data".to_vec()).await;
         let elapsed = start_time.elapsed();
 
         (
@@ -847,14 +819,25 @@ mod tests {
         init_options();
 
         // One guard for both: the override replaces the whole dict.
-        let _guard = override_options(&[(
-            "snuba",
-            "clickhouse_write_client_timeouts",
-            json!({
-                "hung_server_json_test": { "request_ms": 300 },
-                "hung_server_rowbinary_test": { "request_ms": 300 }
-            }),
-        )])
+        let retry = json!({ "initial_backoff_ms": 10.0, "max_retries": 2, "jitter_factor": 0.0 });
+        let _guard = override_options(&[
+            (
+                "snuba",
+                "clickhouse_write_client_timeouts",
+                json!({
+                    "hung_server_json_test": { "request_ms": 300 },
+                    "hung_server_rowbinary_test": { "request_ms": 300 }
+                }),
+            ),
+            (
+                "snuba",
+                "clickhouse_write_retry",
+                json!({
+                    "hung_server_json_test": retry,
+                    "hung_server_rowbinary_test": retry
+                }),
+            ),
+        ])
         .unwrap();
 
         let cases: [(&str, InsertFormat, Option<&[&str]>); 2] = [
