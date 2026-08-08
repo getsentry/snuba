@@ -432,10 +432,14 @@ impl ClickhouseClient {
                 Err(e) => {
                     // Distinguish a timeout from other transport failures. A
                     // connection error means the request demonstrably went
-                    // nowhere; a timeout means it was still outstanding at the
-                    // deadline, so the insert may yet land server-side and the
-                    // retry can duplicate rows. They warrant different
-                    // responses, so they get different `status` tags.
+                    // nowhere; a timeout means the request was still
+                    // outstanding at the deadline, so the insert may yet land
+                    // server-side. Retrying either is safe: ClickHouse
+                    // deduplicates identical insert blocks, and nothing on this
+                    // path overrides `insert_deduplicate`. They do point at
+                    // different faults though, so they get different `status`
+                    // tags — a rise in `timeout` means connections are stalling,
+                    // `network_error` means they are being refused or reset.
                     let status = if e.is_timeout() {
                         "timeout"
                     } else {
