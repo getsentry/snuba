@@ -50,9 +50,6 @@ fn clickhouse_task_runner(
 
                 let result = client.send(encoded_rows, RetryConfig::default()).await;
 
-                // Timed on both paths: recording only successes dropped the
-                // slowest writes from the metric, so it read healthy while
-                // writes hung. Filter `success:true` for the old semantics.
                 timer!(
                     "insertions.batch_write_ms",
                     write_start.elapsed(),
@@ -233,11 +230,6 @@ where
 impl_writer_delegate!(RowBinaryWriterStep);
 
 /// Retry schedule for [`ClickhouseClient::send`].
-///
-/// Hand-rolled rather than `reqwest::retry` because that cannot retry a
-/// timeout: reqwest applies its deadlines above its retry layer, so one firing
-/// returns straight to the caller and a stalled connection gets a single
-/// attempt. Retrying timeouts on a fresh connection is the point of this loop.
 pub struct RetryConfig {
     initial_backoff_ms: f64,
     max_retries: usize,
