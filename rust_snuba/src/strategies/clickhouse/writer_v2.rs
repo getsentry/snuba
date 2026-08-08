@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant};
 
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, Response};
@@ -13,7 +13,9 @@ use sentry_arroyo::types::Message;
 use sentry_arroyo::{counter, timer};
 
 use crate::config::ClickhouseConfig;
-use crate::options::{get_load_balancing_config, get_max_insert_block_size};
+use crate::options::{
+    get_clickhouse_write_client_timeouts, get_load_balancing_config, get_max_insert_block_size,
+};
 use crate::types::{BytesInsertBatch, RowData};
 
 fn clickhouse_task_runner(
@@ -31,7 +33,7 @@ fn clickhouse_task_runner(
             let encoded_rows = rows.into_encoded_rows();
             let num_bytes = encoded_rows.len();
 
-            let write_start = SystemTime::now();
+            let write_start = Instant::now();
 
             // we can receive empty batches since we configure Reduce to flush empty batches, in
             // order to still be able to commit. in that case we want to skip the I/O to clickhouse
@@ -46,17 +48,22 @@ fn clickhouse_task_runner(
             } else {
                 tracing::debug!("performing write");
 
-                let response = client
-                    .send(encoded_rows, RetryConfig::default())
-                    .await
-                    .map_err(RunTaskError::Other)?;
+                let result = client.send(encoded_rows, RetryConfig::default()).await;
+
+                // Timed on both paths: recording only successes dropped the
+                // slowest writes from the metric, so it read healthy while
+                // writes hung. Filter `outcome:success` for the old semantics.
+                let outcome = if result.is_ok() { "success" } else { "error" };
+                timer!(
+                    "insertions.batch_write_ms",
+                    write_start.elapsed(),
+                    "outcome" => outcome
+                );
+
+                let response = result.map_err(RunTaskError::Other)?;
 
                 tracing::debug!(?response);
                 tracing::info!("Inserted {} rows", batch_len);
-                let write_finish = SystemTime::now();
-                if let Ok(elapsed) = write_finish.duration_since(write_start) {
-                    timer!("insertions.batch_write_ms", elapsed);
-                }
             }
 
 
@@ -226,10 +233,34 @@ where
 
 impl_writer_delegate!(RowBinaryWriterStep);
 
+/// Retry schedule for [`ClickhouseClient::send`].
+///
+/// Hand-rolled rather than `reqwest::retry` because that cannot retry a
+/// timeout: reqwest applies its deadlines above its retry layer, so one firing
+/// returns straight to the caller and a stalled connection gets a single
+/// attempt. Retrying timeouts on a fresh connection is the point of this loop.
 pub struct RetryConfig {
     initial_backoff_ms: f64,
     max_retries: usize,
     jitter_factor: f64, // between 0 and 1
+}
+
+/// A failed attempt, normalized so the retry loop does not care whether
+/// ClickHouse answered with an error or never answered at all. `status` is the
+/// metric tag; `detail` is the human-readable cause.
+struct FailedAttempt {
+    status: String,
+    detail: String,
+}
+
+impl RetryConfig {
+    /// Exponential backoff, jittered so consumers that failed together do not
+    /// retry together.
+    fn backoff(&self, attempt: usize) -> Duration {
+        let base_ms = self.initial_backoff_ms * 2f64.powi(attempt as i32);
+        let jitter = rand::random::<f64>() * self.jitter_factor - self.jitter_factor / 2.0;
+        Duration::from_millis((base_ms * (1.0 + jitter)).round() as u64)
+    }
 }
 
 impl Default for RetryConfig {
@@ -294,8 +325,23 @@ impl ClickhouseClient {
             fmt = format.as_str(),
         );
 
+        // `Client::new()` applies no timeouts at all, leaving a request on a
+        // dead connection to hang until the kernel stops retransmitting. These
+        // are fixed for the client's lifetime; only `request` is re-read per
+        // attempt, in `send`.
+        let timeouts = get_clickhouse_write_client_timeouts(&storage_name);
+        let client = Client::builder()
+            .connect_timeout(timeouts.connect)
+            .read_timeout(timeouts.request)
+            .pool_idle_timeout(timeouts.pool_idle)
+            .tcp_keepalive(timeouts.tcp_keepalive)
+            .tcp_keepalive_interval(timeouts.tcp_keepalive_interval)
+            .tcp_keepalive_retries(timeouts.tcp_keepalive_retries)
+            .build()
+            .expect("failed to build ClickHouse HTTP client");
+
         ClickhouseClient {
-            client: Client::new(),
+            client,
             headers,
             base_url,
             storage_name,
@@ -318,6 +364,46 @@ impl ClickhouseClient {
         url
     }
 
+    /// One INSERT attempt. Both an HTTP error and a transport error come back
+    /// as [`FailedAttempt`] so the retry loop can treat them the same.
+    async fn send_once(&self, body: bytes::Bytes) -> Result<Response, FailedAttempt> {
+        let res = self
+            .client
+            .post(self.build_url())
+            .headers(self.headers.clone())
+            // Re-read per attempt so the deadline can be retuned at runtime.
+            .timeout(get_clickhouse_write_client_timeouts(&self.storage_name).request)
+            .query(&[("query", &self.query)])
+            .body(reqwest::Body::from(body))
+            .send()
+            .await;
+
+        match res {
+            Ok(response) if response.status() == reqwest::StatusCode::OK => Ok(response),
+            Ok(response) => {
+                let status = response.status().to_string();
+                let detail = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "unknown error".to_string());
+                Err(FailedAttempt { status, detail })
+            }
+            // Timeouts are tagged apart from other transport failures because
+            // they point at different faults: `timeout` means writes are
+            // stalling, `network_error` that connections are refused or reset.
+            // Retrying either is safe — ClickHouse deduplicates identical
+            // insert blocks.
+            Err(e) => Err(FailedAttempt {
+                status: if e.is_timeout() {
+                    "timeout".to_string()
+                } else {
+                    "network_error".to_string()
+                },
+                detail: e.to_string(),
+            }),
+        }
+    }
+
     pub async fn send(&self, body: Vec<u8>, retry_config: RetryConfig) -> anyhow::Result<Response> {
         // Compress once before the retry loop — the encoded body is identical
         // across attempts, so paying the LZ4 cost per attempt would be wasted
@@ -329,87 +415,40 @@ impl ClickhouseClient {
         // ~1× the batch size resident per slot for no reason.
         drop(body);
 
-        for attempt in 0..=retry_config.max_retries {
-            let url = self.build_url();
-            let res = self
-                .client
-                .post(&url)
-                .headers(self.headers.clone())
-                .query(&[("query", &self.query)])
-                .body(reqwest::Body::from(body_bytes.clone()))
-                .send()
-                .await;
+        let attempts = retry_config.max_retries + 1;
+        let mut attempt = 0;
+        loop {
+            let started = Instant::now();
+            let failure = match self.send_once(body_bytes.clone()).await {
+                Ok(response) => return Ok(response),
+                Err(failure) => failure,
+            };
+            let elapsed_ms = started.elapsed().as_millis();
 
-            match res {
-                Ok(response) => {
-                    if response.status() == reqwest::StatusCode::OK {
-                        return Ok(response);
-                    } else {
-                        let status = response.status().to_string();
-                        let error_text = response
-                            .text()
-                            .await
-                            .unwrap_or_else(|_| "unknown error".to_string());
+            let last = attempt + 1 == attempts;
+            let retried = if last { "false" } else { "true" };
+            counter!(
+                "rust_consumer.clickhouse_insert_error", 1,
+                "status" => failure.status, "retried" => retried
+            );
 
-                        if attempt == retry_config.max_retries {
-                            counter!("rust_consumer.clickhouse_insert_error", 1, "status" => status, "retried" => "false");
-                            anyhow::bail!(
-                                "error writing to clickhouse after {} attempts: {}",
-                                retry_config.max_retries + 1,
-                                error_text
-                            );
-                        }
-
-                        counter!("rust_consumer.clickhouse_insert_error", 1, "status" => status, "retried" => "true");
-                        tracing::warn!(
-                            "ClickHouse write failed (attempt {}/{}): status={}, error={}",
-                            attempt + 1,
-                            retry_config.max_retries + 1,
-                            status,
-                            error_text
-                        );
-                    }
-                }
-                Err(e) => {
-                    if attempt == retry_config.max_retries {
-                        counter!("rust_consumer.clickhouse_insert_error", 1, "status" => "network_error", "retried" => "false");
-                        anyhow::bail!(
-                            "error writing to clickhouse after {} attempts: {}",
-                            retry_config.max_retries + 1,
-                            e
-                        );
-                    }
-                    counter!("rust_consumer.clickhouse_insert_error", 1, "status" => "network_error", "retried" => "true");
-
-                    tracing::warn!(
-                        "ClickHouse write failed (attempt {}/{}): {}",
-                        attempt + 1,
-                        retry_config.max_retries + 1,
-                        e
-                    );
-                }
-            }
-
-            // Calculate exponential backoff delay
-            if attempt < retry_config.max_retries {
-                let backoff_ms =
-                    retry_config.initial_backoff_ms * (2_u64.pow(attempt as u32) as f64);
-                // add/subtract up to 10% jitter (by default) to avoid every consumer retrying at the same time
-                // causing too many simultaneous queries
-                let jitter = rand::random::<f64>() * retry_config.jitter_factor
-                    - retry_config.jitter_factor / 2.0; // Random value between (-jitter_factor/2, jitter_factor/2)
-                let delay = Duration::from_millis((backoff_ms * (1.0 + jitter)).round() as u64);
-                tracing::debug!(
-                    "Retrying in {:?} (attempt {}/{})",
-                    delay,
-                    attempt + 1,
-                    retry_config.max_retries
+            if last {
+                anyhow::bail!(
+                    "error writing to clickhouse after {attempts} attempts ({elapsed_ms}ms on the final attempt): {}",
+                    failure.detail
                 );
-                tokio::time::sleep(delay).await;
             }
-        }
 
-        unreachable!("Loop should always return or bail before reaching here");
+            tracing::warn!(
+                "ClickHouse write failed (attempt {}/{attempts}) after {elapsed_ms}ms: status={}, error={}",
+                attempt + 1,
+                failure.status,
+                failure.detail
+            );
+
+            tokio::time::sleep(retry_config.backoff(attempt)).await;
+            attempt += 1;
+        }
     }
 }
 
@@ -480,6 +519,7 @@ mod tests {
     use super::*;
     use sentry_options::testing::override_options;
     use serde_json::json;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Once;
     use tokio::time::Instant;
 
@@ -758,5 +798,117 @@ mod tests {
         // Error message should mention the number of attempts
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("after 5 attempts"));
+    }
+
+    /// Accepts connections and never answers, reproducing a black-holed
+    /// request. Returns the error, the elapsed time, and the connection count
+    /// (i.e. attempts). Caller must hold an `override_options` guard for
+    /// `storage_name`.
+    async fn send_against_hung_server(
+        storage_name: &str,
+        format: InsertFormat,
+        columns: Option<&[&str]>,
+    ) -> (String, Duration, usize) {
+        let conns = Arc::new(AtomicUsize::new(0));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let counter = conns.clone();
+        tokio::spawn(async move {
+            let mut accepted = Vec::new();
+            while let Ok((stream, _)) = listener.accept().await {
+                counter.fetch_add(1, Ordering::SeqCst);
+                accepted.push(stream);
+            }
+        });
+
+        let config = ClickhouseConfig {
+            host: "127.0.0.1".to_string(),
+            port: 9000,
+            secure: false,
+            http_port: port,
+            user: "default".to_string(),
+            password: "".to_string(),
+            database: "default".to_string(),
+        };
+        let client = ClickhouseClient::new(
+            &config,
+            "test_table",
+            storage_name.to_string(),
+            format,
+            columns,
+        );
+
+        let start_time = Instant::now();
+        let result = client
+            .send(
+                b"test data".to_vec(),
+                RetryConfig {
+                    initial_backoff_ms: 10.0,
+                    max_retries: 2,
+                    jitter_factor: 0.0,
+                },
+            )
+            .await;
+        let elapsed = start_time.elapsed();
+
+        (
+            result.unwrap_err().to_string(),
+            elapsed,
+            conns.load(Ordering::SeqCst),
+        )
+    }
+
+    /// Regression test for SNUBA-CCY, where a peer that never answers hung the
+    /// write indefinitely. The connection count is the point: each timed-out
+    /// attempt must be retried on a *fresh* connection, which is what
+    /// `reqwest::retry` cannot do. Both formats, since they share one client.
+    #[tokio::test]
+    async fn test_hung_server_times_out_for_both_wire_formats() {
+        crate::testutils::initialize_python();
+        init_options();
+
+        // One guard for both: the override replaces the whole dict.
+        let _guard = override_options(&[(
+            "snuba",
+            "clickhouse_write_client_timeouts",
+            json!({
+                "hung_server_json_test": { "request_ms": 300 },
+                "hung_server_rowbinary_test": { "request_ms": 300 }
+            }),
+        )])
+        .unwrap();
+
+        let cases: [(&str, InsertFormat, Option<&[&str]>); 2] = [
+            ("hung_server_json_test", InsertFormat::JsonEachRow, None),
+            (
+                "hung_server_rowbinary_test",
+                InsertFormat::RowBinary,
+                Some(&["organization_id", "timestamp"]),
+            ),
+        ];
+
+        for (storage_name, format, columns) in cases {
+            let (error_msg, elapsed, attempts) =
+                send_against_hung_server(storage_name, format, columns).await;
+
+            assert!(
+                error_msg.contains("after 3 attempts"),
+                "{format:?}: unexpected error: {error_msg}"
+            );
+            assert_eq!(
+                attempts, 3,
+                "{format:?}: each timed-out attempt must be retried on a new \
+                 connection, so the hung server should see one per attempt"
+            );
+            // 3 x 300ms plus backoff; without the deadline it never returns.
+            assert!(
+                elapsed >= Duration::from_millis(900),
+                "{format:?}: took {elapsed:?}"
+            );
+            assert!(
+                elapsed < Duration::from_secs(10),
+                "{format:?}: took {elapsed:?}"
+            );
+        }
     }
 }
