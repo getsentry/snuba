@@ -255,6 +255,24 @@ where
 
 impl_writer_delegate!(RowBinaryWriterStep);
 
+/// Retry schedule for [`ClickhouseClient::send`].
+///
+/// `reqwest::retry` (new in 0.13) covers most of what this loop does, and does
+/// two things better: it classifies failures declaratively, and it enforces a
+/// token budget capping retries at a percentage of extra load, which this has
+/// no equivalent of. It is deliberately not used yet, for one reason — it has
+/// no backoff. Its `tower::retry::Policy` impl sets
+/// `type Future = std::future::Ready<()>` next to a `// TODO? backoff futures`,
+/// so retries fire back-to-back with no spacing, and the knob to change that
+/// (`//backoff: Backoff`) is still commented out upstream.
+///
+/// That spacing is the point of this loop. Against a shard that is transiently
+/// refusing work — see the `TOO_MANY_SIMULTANEOUS_QUERIES` this cluster serves
+/// — instant retries would burn every attempt within milliseconds and fail a
+/// batch that backing off would have landed. Revisit once upstream implements
+/// backoff; body replay and metrics both port over cleanly (the body is
+/// `Bytes`, so `try_clone` succeeds at any size, and the classifier closure can
+/// emit `rust_consumer.clickhouse_insert_error`).
 pub struct RetryConfig {
     initial_backoff_ms: f64,
     max_retries: usize,
