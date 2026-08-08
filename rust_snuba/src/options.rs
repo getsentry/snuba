@@ -64,10 +64,16 @@ pub fn get_max_insert_block_size(storage_name: &str) -> Option<u64> {
 /// roughly 15 minutes with the default `tcp_retries2`. For that whole window the
 /// write is neither failing nor progressing, so the retry loop never runs.
 ///
-/// Sized well above any healthy insert — normal writes complete in well under a
-/// second — so it fires only on genuinely stuck requests, and leaves a hopeless
-/// write bounded at about five minutes across all attempts and backoff.
-pub const DEFAULT_CLICKHOUSE_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+/// A healthy INSERT can legitimately take up to a minute, so this is set at
+/// double that. The deadline exists to catch a connection that has stopped
+/// responding altogether, not to cap a slow-but-progressing write — cutting off
+/// real work would turn a merely slow shard into a retry storm against it.
+///
+/// Deliberately not a cumulative budget: it applies per attempt, and each retry
+/// starts a fresh one. A fully black-holed endpoint therefore costs
+/// `max_retries + 1` of these plus backoff — around ten minutes at the defaults
+/// — before the writer gives up and the consumer exits.
+pub const DEFAULT_CLICKHOUSE_REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// Per-attempt INSERT deadline for `storage_name`, overridable via the
 /// `clickhouse_request_timeout_ms` dict in the `snuba` options namespace.

@@ -65,7 +65,7 @@
         "type": "integer"
       },
       "default": {},
-      "description": "Dict mapping storage name to the deadline in milliseconds for a single ClickHouse INSERT attempt by that storage's consumer writer, covering connect through response headers. Exceeding it fails the attempt into the writer's retry loop. Storages with no entry, or a non-positive value, use the 60000ms default."
+      "description": "Dict mapping storage name to the deadline in milliseconds for a single ClickHouse INSERT attempt by that storage's consumer writer, covering connect through response headers. Exceeding it fails the attempt into the writer's retry loop. Storages with no entry, or a non-positive value, use the 120000ms default. Applies per attempt: each retry starts a fresh deadline, so there is no cumulative cap across the retry loop."
     },
     "eap_items_dlq_grace_period_min": {
       "type": "object",
