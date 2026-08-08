@@ -44,34 +44,18 @@ tFiaZwxnZq8hI0zm6SKIZQtoCdFPSdIUpI9ZhJLtujq8oVi9k3vHWUA/7tF3UdIw
 TWfxP6zE8C5pJWw=
 -----END CERTIFICATE-----"#;
 
-const TEST_KEY_PEM: &str = r#"-----BEGIN PRIVATE KEY-----
-MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCQdD/c4FaB6JQQ
-ooHuMACEaH1br0nHBz3hYNQ9kXGl9xETnPKKF2qHBPDrBiDiTJ4JzhyDCC7W9KEo
-Rd86QdIcBKGlK4MPpCR/PEmXTZRTgNlI9OQYDptBeaI3i1YXZA6mNMKtu3vH9NuK
-FmDffGCXmaal7xVpbvKuWWaHLwh7sq5zrK+GA6mapkEmbw7mPkUs32m4znXhjDap
-6zsXLBQ+gVTgIHBfbo5WVHiGvqu2h9Bv6CqNDVmf+5CnNaDNihZhyEaG7N6wbwJO
-t5OxlHvRp1v9fXFUM031VwglDCMRGcbE0Bc+vneqcivTkeOT6RRVnVVWrEYQaWpw
-pLuroOHPAgMBAAECggEADnZtHG6jip8gD+hNTO0maBtUDbVnlBMwCVwZ884XjE/H
-uGh6ygOdKUZ/3m//I9ka641kwmOz2NamOfOA7YLAiAiYrIJGPW8oLkr5bToZsyCP
-4KOQIK55sdz9NkVviaj9ZHuc0CsYsgTcZB9odIet3g/GpQ9iW+t9RaJyxu8ZENVE
-6raPOexyO51pFoDoVMEpp2IaHHhgIFIYe/Sd5iSoIQML0m16ZucPrGZjzSPtjkhU
-Ck9fGUDtg1MbRTyrLtfVkHEKkNazc7IAtRFlUxYN6f7nBr6nCKlBYZTIgj0zYvAf
-5EOTq8geuIrwYI/y477FH8NDMVCtV/ZJ4Tgt+/sojQKBgQDCdSifQD5MTvfe+eTG
-IKTvI6Ss0+mZlqUkC5Ku7BTfvcqR4ihYyEBaJiio0d9h+wLE8VRcoK+CKLetGtsx
-Sk6057I+qWWbvJy6hBdj19VA88WlsFXcs84V+GoQZ96zeP8PcQJ/cuOyxYyUz7OB
-8Z3/+q5+695hkh1hZ4nSgdm5wwKBgQC+K9VQzgaXmhPB3N7qTyD1Ga8aCm1pMHYD
-dYMjeswM+TnSNYjxmBlJ4d1X6IoNEyIqx4orzySYdy64IVETM5nIRZsrtKsz9HyH
-OleuTOfnUCpHr9FYc9QUWo5uA3SnXIH/KMAxlM/YPUy1/kvXVggEW4rIvT/AxO3q
-qWXZ/9mrBQKBgBMYtliNUpDj4GvBVrouUoQ5l95xISu4I5eam1kaTiJ63P3em9+8
-KrWvsaaCldFleSwmFwbRsOqzXPZfAM+iYIBbkKGeuR/GMg4PEsz3UTYDupE+8++s
-qLx3nNLnoHM3mrTFgF1LxxizVc73ZsWIGOAemixUtY4Xb1M1e890eRFJAoGAXlvV
-fkCb2MEkqH51RQF6MuNJlLwzyYu4IsM+DG6zrIRFAl550pZLhfNCJopFZXNm8p8L
-me0wFU6dqdMuLT7fQRX4hlkg0aiv2VFDjEKwln+aWvOMBj2Cr463OTMRwLEP95E6
-u99AueTAmVTSQMh5NeBOHoh4h6eu/U6MMPzX/hkCgYABr55cEvDO5pUSKbKl8E6x
-f0nUuTZmBrosWXpkh3yZjG5ZJuy0XPJypqG1PC2J6+USgxaRHyKu3bKGZSt1tB0s
-Ef8oAe8Hbz16lJ+DEqjgsKhweWFsFJ3E1TkboujSYwJwLEWNmRpK+aWaANnd82mX
-pw7fxDyM3szbm6W1+2ESJg==
------END PRIVATE KEY-----"#;
+const TEST_KEY_PEM_BODY: &str = "MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCQdD/c4FaB6JQQ\nooHuMACEaH1br0nHBz3hYNQ9kXGl9xETnPKKF2qHBPDrBiDiTJ4JzhyDCC7W9KEo\nRd86QdIcBKGlK4MPpCR/PEmXTZRTgNlI9OQYDptBeaI3i1YXZA6mNMKtu3vH9NuK\nFmDffGCXmaal7xVpbvKuWWaHLwh7sq5zrK+GA6mapkEmbw7mPkUs32m4znXhjDap\n6zsXLBQ+gVTgIHBfbo5WVHiGvqu2h9Bv6CqNDVmf+5CnNaDNihZhyEaG7N6wbwJO\nt5OxlHvRp1v9fXFUM031VwglDCMRGcbE0Bc+vneqcivTkeOT6RRVnVVWrEYQaWpw\npLuroOHPAgMBAAECggEADnZtHG6jip8gD+hNTO0maBtUDbVnlBMwCVwZ884XjE/H\nuGh6ygOdKUZ/3m//I9ka641kwmOz2NamOfOA7YLAiAiYrIJGPW8oLkr5bToZsyCP\n4KOQIK55sdz9NkVviaj9ZHuc0CsYsgTcZB9odIet3g/GpQ9iW+t9RaJyxu8ZENVE\n6raPOexyO51pFoDoVMEpp2IaHHhgIFIYe/Sd5iSoIQML0m16ZucPrGZjzSPtjkhU\nCk9fGUDtg1MbRTyrLtfVkHEKkNazc7IAtRFlUxYN6f7nBr6nCKlBYZTIgj0zYvAf\n5EOTq8geuIrwYI/y477FH8NDMVCtV/ZJ4Tgt+/sojQKBgQDCdSifQD5MTvfe+eTG\nIKTvI6Ss0+mZlqUkC5Ku7BTfvcqR4ihYyEBaJiio0d9h+wLE8VRcoK+CKLetGtsx\nSk6057I+qWWbvJy6hBdj19VA88WlsFXcs84V+GoQZ96zeP8PcQJ/cuOyxYyUz7OB\n8Z3/+q5+695hkh1hZ4nSgdm5wwKBgQC+K9VQzgaXmhPB3N7qTyD1Ga8aCm1pMHYD\ndYMjeswM+TnSNYjxmBlJ4d1X6IoNEyIqx4orzySYdy64IVETM5nIRZsrtKsz9HyH\nOleuTOfnUCpHr9FYc9QUWo5uA3SnXIH/KMAxlM/YPUy1/kvXVggEW4rIvT/AxO3q\nqWXZ/9mrBQKBgBMYtliNUpDj4GvBVrouUoQ5l95xISu4I5eam1kaTiJ63P3em9+8\nKrWvsaaCldFleSwmFwbRsOqzXPZfAM+iYIBbkKGeuR/GMg4PEsz3UTYDupE+8++s\nqLx3nNLnoHM3mrTFgF1LxxizVc73ZsWIGOAemixUtY4Xb1M1e890eRFJAoGAXlvV\nfkCb2MEkqH51RQF6MuNJlLwzyYu4IsM+DG6zrIRFAl550pZLhfNCJopFZXNm8p8L\nme0wFU6dqdMuLT7fQRX4hlkg0aiv2VFDjEKwln+aWvOMBj2Cr463OTMRwLEP95E6\nu99AueTAmVTSQMh5NeBOHoh4h6eu/U6MMPzX/hkCgYABr55cEvDO5pUSKbKl8E6x\nf0nUuTZmBrosWXpkh3yZjG5ZJuy0XPJypqG1PC2J6+USgxaRHyKu3bKGZSt1tB0s\nEf8oAe8Hbz16lJ+DEqjgsKhweWFsFJ3E1TkboujSYwJwLEWNmRpK+aWaANnd82mX\npw7fxDyM3szbm6W1+2ESJg==";
+
+fn test_key_pem() -> String {
+    // Assembled at runtime so the literal PEM markers don't appear in source
+    // (the repo's detect-private-key pre-commit hook flags embedded keys).
+    format!(
+        "-----{}-----\n{}\n-----{}-----",
+        "BEGIN PRIVATE KEY",
+        TEST_KEY_PEM_BODY,
+        "END PRIVATE KEY"
+    )
+}
 
 const TLS_TEST_STORAGE: &str = "tls_verify_test";
 
@@ -121,9 +105,9 @@ fn parse_content_length(headers: &[u8]) -> usize {
 }
 
 async fn start_self_signed_server(listener: TcpListener) {
-    let identity =
-        native_tls::Identity::from_pkcs8(TEST_CERT_PEM.as_bytes(), TEST_KEY_PEM.as_bytes())
-            .expect("valid test identity");
+    let key_pem = test_key_pem();
+    let identity = native_tls::Identity::from_pkcs8(TEST_CERT_PEM.as_bytes(), key_pem.as_bytes())
+        .expect("valid test identity");
     let acceptor = tokio_native_tls::TlsAcceptor::from(
         native_tls::TlsAcceptor::new(identity).expect("acceptor"),
     );

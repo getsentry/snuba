@@ -76,9 +76,7 @@ def test_consumer_config_includes_verify() -> None:
     # must carry the verify field as a JSON boolean.
     payload = json.dumps(asdict(resolved))
     assert '"verify":' in payload
-    assert isinstance(
-        json.loads(payload)["storages"][0]["clickhouse_cluster"]["verify"], bool
-    )
+    assert isinstance(json.loads(payload)["storages"][0]["clickhouse_cluster"]["verify"], bool)
 
 
 @pytest.mark.parametrize(
