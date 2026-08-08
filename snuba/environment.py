@@ -64,6 +64,16 @@ def setup_logging(level: str | None = None) -> None:
     # with zero user impact), so drop everything below ERROR for this logger. (SNUBA-8P5)
     logging.getLogger("google_auth_httplib2").setLevel(logging.ERROR)
 
+    # clickhouse-connect's type registry logs `Unrecognized ClickHouse type
+    # base: <x> name: <y>` at ERROR and *then* raises the same text. On a Native
+    # stream desync <x>/<y> are whatever row payload the decoder misread --
+    # customer span descriptions, SQL, user agents -- so each occurrence became
+    # its own Sentry issue titled with that payload (SNUBA-CCP, SNUBA-BN3,
+    # SNUBA-BSA and ~20 more). snuba.clickhouse.connect retries the read and
+    # reports what survives, so this duplicate record (the registry's only log
+    # call) is pure noise.
+    logging.getLogger("clickhouse_connect.datatypes.registry").setLevel(logging.CRITICAL)
+
     structlog.configure(
         cache_logger_on_first_use=True,
         wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),

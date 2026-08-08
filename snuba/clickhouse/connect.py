@@ -92,6 +92,30 @@ _STREAM_DESYNC_MARKERS = (
     "unrecognized data found in stream",
 )
 
+# What the driver reports when the Native decoder loses its place. It formats
+# the bytes it misread into ``Unrecognized ClickHouse type base: <payload> name:
+# <payload>``, and that payload is customer data -- span descriptions (which
+# routinely contain SQL), user agents, attribute values -- so a message built
+# from it differs on every occurrence. That is how one bug became 20+ Sentry
+# issues titled with customer SQL. Report this instead; the driver exception
+# stays chained, so the verbatim text is still on the event.
+_DESYNC_MESSAGE = (
+    "ClickHouse Native response stream desynchronized: the decoder read row "
+    "payload where a column header was expected; payload omitted from this "
+    "message, see the chained driver exception"
+)
+
+# Statements safe to re-run after a desync. A desync is a *decode* failure: the
+# server already ran the statement, so re-running anything that mutates state
+# (INSERT, ALTER, OPTIMIZE, DDL) would apply it twice. Anything that doesn't
+# start with one of these -- including a query behind a leading comment -- just
+# isn't retried, which is the safe direction to be wrong in.
+_READ_ONLY_PREFIXES = ("SELECT", "WITH", "EXPLAIN", "SHOW", "DESC")
+
+
+def _is_read_only_statement(query: str) -> bool:
+    return query.lstrip("( \t\r\n").upper().startswith(_READ_ONLY_PREFIXES)
+
 
 def _coerce_temporal(value: Any, ch_type: str) -> Any:
     """
@@ -427,6 +451,8 @@ class ClickhouseConnectPool(ClickhousePool):
             if self._is_stream_desync(e):
                 metrics.increment("stream_desync")
                 self._reset_connections()
+                # Deliberately not ``str(e)``: see _DESYNC_MESSAGE.
+                raise ClickhouseError(_DESYNC_MESSAGE, code=-1) from e
             raise ClickhouseError(str(e), code=getattr(e, "code", None) or -1) from e
         except json.JSONDecodeError as e:
             raise ClickhouseError(f"invalid JSON response: {e}", code=-1) from e
@@ -443,17 +469,34 @@ class ClickhouseConnectPool(ClickhousePool):
         capture_trace: bool = False,
         retryable: bool = True,
     ) -> ClickhouseResult:
-        """Execute a clickhouse query. ``retryable`` is accepted for interface parity only."""
+        """Execute a clickhouse query, retrying a read once if its response fails to decode.
+
+        A desync is transient and connection-scoped, so the retry drops the
+        pooled keep-alive sockets and asks again. It reuses ``query_id``:
+        clickhouse-connect always sends ``wait_end_of_query=1``, so the query
+        has finished server-side (and released its id) before the client reads
+        a byte. ``retryable=False`` opts out; it has no other effect on this
+        driver, which delegates transport-level retries to clickhouse-connect.
+        """
+        attempts = 2 if retryable and _is_read_only_statement(query) else 1
         with self._translate_clickhouse_errors():
-            return self._execute_once(
-                query,
-                params,
-                with_column_types,
-                query_id,
-                settings,
-                columnar,
-                capture_trace,
-            )
+            for attempt in range(attempts):
+                try:
+                    return self._execute_once(
+                        query,
+                        params,
+                        with_column_types,
+                        query_id,
+                        settings,
+                        columnar,
+                        capture_trace,
+                    )
+                except (ClickHouseError, StreamFailureError) as e:
+                    if attempt == attempts - 1 or not self._is_stream_desync(e):
+                        raise
+                    metrics.increment("stream_desync_retry")
+                    self._reset_connections()
+            raise AssertionError("unreachable: the loop always returns or raises")
 
     def insert(
         self,

@@ -972,22 +972,87 @@ def test_use_protocol_version_disabled_by_default() -> None:
     assert clickhouse_connect_common.get_setting("use_protocol_version") is False
 
 
-def test_execute_surfaces_native_stream_desync_without_retry() -> None:
+def _desync_error(payload: str = "achilles-api-dotnet") -> Exception:
     from clickhouse_connect.driver.exceptions import InternalError
 
+    return InternalError(f"Unrecognized ClickHouse type base: {payload} name: {payload}")
+
+
+@pytest.mark.parametrize(
+    "query, read_only",
+    [
+        ("SELECT 1", True),
+        ("  \n select 1", True),
+        ("(SELECT 1) UNION ALL (SELECT 2)", True),
+        ("WITH x AS (SELECT 1) SELECT * FROM x", True),
+        ("EXPLAIN SELECT 1", True),
+        ("DESCRIBE TABLE t", True),
+        ("INSERT INTO t SELECT * FROM s", False),
+        ("ALTER TABLE t DROP PARTITION '1'", False),
+        ("OPTIMIZE TABLE t FINAL", False),
+        ("CREATE TABLE t (a UInt8) ENGINE = Memory", False),
+        ("SYSTEM FLUSH LOGS", False),
+        ("", False),
+    ],
+)
+def test_read_only_statement_detection(query: str, read_only: bool) -> None:
+    from snuba.clickhouse.connect import _is_read_only_statement
+
+    assert _is_read_only_statement(query) is read_only
+
+
+def test_execute_retries_read_after_stream_desync() -> None:
     client = mock.Mock()
-    client.query.side_effect = InternalError(
-        "Unrecognized ClickHouse type base: achilles-api-dotnet name: achilles-api-dotnet"
-    )
+    client.query.side_effect = [_desync_error(), FakeQueryResult(result_set=[[1]])]
+    pool = _make_pool(client)
+
+    assert pool.execute("SELECT 1").results == [[1]]
+    assert client.query.call_count == 2
+    # Keep-alive sockets are dropped so the retry can't land on the same
+    # desynced connection.
+    client.close_connections.assert_called_once()
+    client.close.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "query, kwargs",
+    [
+        # The server already ran it; a second attempt would apply it twice.
+        ("INSERT INTO t SELECT * FROM s", {}),
+        ("SELECT 1", {"retryable": False}),
+    ],
+)
+def test_execute_does_not_retry_desync(query: str, kwargs: dict[str, object]) -> None:
+    client = mock.Mock()
+    client.query.side_effect = _desync_error()
+    pool = _make_pool(client)
+
+    with pytest.raises(ClickhouseError):
+        pool.execute(query, **kwargs)  # type: ignore[arg-type]
+
+    assert client.query.call_count == 1
+
+
+def test_exhausted_desync_retry_reports_without_the_misread_payload() -> None:
+    # The payload the decoder misreads is customer data (span descriptions, SQL,
+    # user agents) and differs on every occurrence. Keeping it out of the
+    # reported message is what collapses the issue-per-payload explosion in
+    # Sentry; the driver exception stays chained for debugging.
+    payload = "SELECT secret FROM customers WHERE token = 'hunter2'"
+    client = mock.Mock()
+    client.query.side_effect = _desync_error(payload)
     pool = _make_pool(client)
 
     with pytest.raises(ClickhouseError) as excinfo:
         pool.execute("SELECT 1")
 
-    assert "Unrecognized ClickHouse type" in str(excinfo.value)
-    assert client.query.call_count == 1
-    client.close_connections.assert_called_once()
-    client.close.assert_not_called()
+    message = str(excinfo.value)
+    assert excinfo.value.code == -1
+    assert "hunter2" not in message
+    assert "desynchronized" in message
+    assert isinstance(excinfo.value.__cause__, Exception)
+    assert payload in str(excinfo.value.__cause__)
+    assert client.query.call_count == 2
 
 
 def test_stream_failure_error_is_translated_to_clickhouse_error() -> None:
@@ -1004,6 +1069,19 @@ def test_stream_failure_error_is_translated_to_clickhouse_error() -> None:
 
     assert excinfo.value.code == -1
     assert "Stream ended unexpectedly" in str(excinfo.value)
-    assert client.query.call_count == 1
-    client.close_connections.assert_called_once()
+    assert client.query.call_count == 2
     client.close.assert_not_called()
+
+
+def test_server_error_is_not_retried() -> None:
+    from clickhouse_connect.driver.exceptions import DatabaseError
+
+    client = mock.Mock()
+    client.query.side_effect = DatabaseError("Code: 241. DB::Exception: Memory limit exceeded")
+    pool = _make_pool(client)
+
+    with pytest.raises(ClickhouseError) as excinfo:
+        pool.execute("SELECT 1")
+
+    assert "Memory limit exceeded" in str(excinfo.value)
+    assert client.query.call_count == 1
