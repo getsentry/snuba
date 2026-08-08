@@ -56,29 +56,80 @@ pub fn get_max_insert_block_size(storage_name: &str) -> Option<u64> {
         .filter(|&n| n >= CLICKHOUSE_DEFAULT_MAX_INSERT_BLOCK_SIZE)
 }
 
-/// Per-attempt deadline for a ClickHouse INSERT. Without one, a black-holed
-/// connection blocks until the kernel stops retransmitting (~15 min), so the
-/// retry loop never runs.
+/// HTTP client timeouts for a storage's ClickHouse writer.
 ///
-/// Sits just above ClickHouse's own 60s `http_receive_timeout`/`http_send_timeout`
-/// so the server always answers first with something retryable, and this only
-/// fires when nothing came back at all. Per attempt, not cumulative: five
-/// attempts plus backoff is ~330s, under the deployed 450s max-poll-interval.
-pub const DEFAULT_CLICKHOUSE_REQUEST_TIMEOUT: Duration = Duration::from_secs(65);
+/// Defaults are chosen against the deployed ClickHouse and its fronting proxy,
+/// not from first principles — see each field.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ClickhouseWriteClientTimeouts {
+    /// Connect is an intra-cluster hop; this only exists so a black-holed SYN
+    /// fails fast instead of inheriting the kernel's connect backoff.
+    pub connect: Duration,
+    /// Per-attempt INSERT deadline. Without one, a black-holed connection
+    /// blocks until the kernel stops retransmitting (~15 min) and the retry
+    /// loop never runs. Sits just above ClickHouse's own 60s
+    /// `http_receive_timeout`/`http_send_timeout` so the server answers first
+    /// with something retryable, and this only fires when nothing came back.
+    pub request: Duration,
+    /// Must stay under ClickHouse's `keep_alive_timeout` (60s on the EAP
+    /// clusters) and under any proxy idle timeout, or the pool hands out
+    /// connections the far end already closed.
+    pub pool_idle: Duration,
+    /// Keepalive idle/interval/retries. Surfaces a dropped flow as a transport
+    /// error in ~30s rather than leaving it to sit until `request` expires.
+    /// Pinned because the host defaults (75s x 9) take 11 minutes.
+    pub tcp_keepalive: Duration,
+    pub tcp_keepalive_interval: Duration,
+    pub tcp_keepalive_retries: u32,
+}
 
-/// Per-attempt INSERT deadline for `storage_name`, from the
-/// `clickhouse_request_timeout_ms` dict. Applied as both `read_timeout`
-/// (snapshotted at startup) and a per-request deadline (re-read each attempt,
-/// so lowering it needs no redeploy). Absent or non-positive falls back to the
-/// default.
-pub fn get_clickhouse_request_timeout(storage_name: &str) -> Duration {
-    options("snuba")
+impl Default for ClickhouseWriteClientTimeouts {
+    fn default() -> Self {
+        Self {
+            connect: Duration::from_secs(5),
+            request: Duration::from_secs(65),
+            pool_idle: Duration::from_secs(45),
+            tcp_keepalive: Duration::from_secs(15),
+            tcp_keepalive_interval: Duration::from_secs(5),
+            tcp_keepalive_retries: 3,
+        }
+    }
+}
+
+/// Writer timeouts for `storage_name`, from the `clickhouse_write_client_timeouts`
+/// dict. Every field falls back to its default independently, so an entry may
+/// override only what it needs; non-positive values fall back too.
+///
+/// Read fresh on each call (like [`get_load_balancing_config`]). Only `request`
+/// is consulted per attempt — the rest configure the shared HTTP client and so
+/// take effect on restart.
+pub fn get_clickhouse_write_client_timeouts(storage_name: &str) -> ClickhouseWriteClientTimeouts {
+    let defaults = ClickhouseWriteClientTimeouts::default();
+    let Some(entry) = options("snuba")
         .ok()
-        .and_then(|o| o.get("clickhouse_request_timeout_ms").ok())
-        .and_then(|v| v.get(storage_name).and_then(|n| n.as_u64()))
-        .filter(|&ms| ms > 0)
-        .map(Duration::from_millis)
-        .unwrap_or(DEFAULT_CLICKHOUSE_REQUEST_TIMEOUT)
+        .and_then(|o| o.get("clickhouse_write_client_timeouts").ok())
+        .and_then(|v| v.get(storage_name).cloned())
+    else {
+        return defaults;
+    };
+
+    let positive = |field: &str| entry.get(field).and_then(|n| n.as_u64()).filter(|&n| n > 0);
+    let millis =
+        |field: &str, fallback: Duration| positive(field).map_or(fallback, Duration::from_millis);
+
+    ClickhouseWriteClientTimeouts {
+        connect: millis("connect_ms", defaults.connect),
+        request: millis("request_ms", defaults.request),
+        pool_idle: millis("pool_idle_ms", defaults.pool_idle),
+        tcp_keepalive: millis("tcp_keepalive_ms", defaults.tcp_keepalive),
+        tcp_keepalive_interval: millis(
+            "tcp_keepalive_interval_ms",
+            defaults.tcp_keepalive_interval,
+        ),
+        tcp_keepalive_retries: positive("tcp_keepalive_retries")
+            .and_then(|n| u32::try_from(n).ok())
+            .unwrap_or(defaults.tcp_keepalive_retries),
+    }
 }
 
 #[cfg(test)]
@@ -125,49 +176,96 @@ mod tests {
     }
 
     #[test]
-    fn test_clickhouse_request_timeout_default() {
+    fn test_write_client_timeouts_default_when_unset() {
         init_options();
         assert_eq!(
-            get_clickhouse_request_timeout("request_timeout_defaults_test"),
-            DEFAULT_CLICKHOUSE_REQUEST_TIMEOUT
+            get_clickhouse_write_client_timeouts("timeouts_unset_test"),
+            ClickhouseWriteClientTimeouts::default()
         );
     }
 
     #[test]
-    fn test_clickhouse_request_timeout_override() {
+    fn test_write_client_timeouts_partial_override() {
         init_options();
         let _guard = override_options(&[(
             "snuba",
-            "clickhouse_request_timeout_ms",
-            json!({ "request_timeout_overrides_test": 5_000 }),
+            "clickhouse_write_client_timeouts",
+            json!({ "timeouts_partial_test": { "request_ms": 30_000 } }),
         )])
         .unwrap();
 
+        let defaults = ClickhouseWriteClientTimeouts::default();
+        let timeouts = get_clickhouse_write_client_timeouts("timeouts_partial_test");
+
+        // The point of the per-field fallback: setting one value must not
+        // silently reset the other five.
+        assert_eq!(timeouts.request, Duration::from_millis(30_000));
+        assert_eq!(timeouts.connect, defaults.connect);
+        assert_eq!(timeouts.pool_idle, defaults.pool_idle);
+        assert_eq!(timeouts.tcp_keepalive, defaults.tcp_keepalive);
         assert_eq!(
-            get_clickhouse_request_timeout("request_timeout_overrides_test"),
-            Duration::from_millis(5_000)
+            timeouts.tcp_keepalive_interval,
+            defaults.tcp_keepalive_interval
         );
-        // A different storage keeps the default.
         assert_eq!(
-            get_clickhouse_request_timeout("request_timeout_other_storage"),
-            DEFAULT_CLICKHOUSE_REQUEST_TIMEOUT
+            timeouts.tcp_keepalive_retries,
+            defaults.tcp_keepalive_retries
+        );
+
+        // A different storage is unaffected.
+        assert_eq!(
+            get_clickhouse_write_client_timeouts("timeouts_other_storage"),
+            defaults
         );
     }
 
     #[test]
-    fn test_clickhouse_request_timeout_rejects_zero() {
+    fn test_write_client_timeouts_full_override() {
         init_options();
         let _guard = override_options(&[(
             "snuba",
-            "clickhouse_request_timeout_ms",
-            json!({ "request_timeout_zero_test": 0 }),
+            "clickhouse_write_client_timeouts",
+            json!({
+                "timeouts_full_test": {
+                    "connect_ms": 1_000,
+                    "request_ms": 20_000,
+                    "pool_idle_ms": 25_000,
+                    "tcp_keepalive_ms": 7_000,
+                    "tcp_keepalive_interval_ms": 2_000,
+                    "tcp_keepalive_retries": 5
+                }
+            }),
         )])
         .unwrap();
 
-        // Zero would mean no deadline, the exact behavior this prevents.
         assert_eq!(
-            get_clickhouse_request_timeout("request_timeout_zero_test"),
-            DEFAULT_CLICKHOUSE_REQUEST_TIMEOUT
+            get_clickhouse_write_client_timeouts("timeouts_full_test"),
+            ClickhouseWriteClientTimeouts {
+                connect: Duration::from_millis(1_000),
+                request: Duration::from_millis(20_000),
+                pool_idle: Duration::from_millis(25_000),
+                tcp_keepalive: Duration::from_millis(7_000),
+                tcp_keepalive_interval: Duration::from_millis(2_000),
+                tcp_keepalive_retries: 5,
+            }
+        );
+    }
+
+    #[test]
+    fn test_write_client_timeouts_reject_non_positive() {
+        init_options();
+        let _guard = override_options(&[(
+            "snuba",
+            "clickhouse_write_client_timeouts",
+            json!({ "timeouts_zero_test": { "request_ms": 0, "tcp_keepalive_retries": 0 } }),
+        )])
+        .unwrap();
+
+        // Zero would mean no deadline / no probes, the exact behavior these
+        // exist to prevent, so it falls back rather than being honoured.
+        assert_eq!(
+            get_clickhouse_write_client_timeouts("timeouts_zero_test"),
+            ClickhouseWriteClientTimeouts::default()
         );
     }
 }

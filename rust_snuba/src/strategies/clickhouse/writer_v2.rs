@@ -14,28 +14,9 @@ use sentry_arroyo::{counter, timer};
 
 use crate::config::ClickhouseConfig;
 use crate::options::{
-    get_clickhouse_request_timeout, get_load_balancing_config, get_max_insert_block_size,
+    get_clickhouse_write_client_timeouts, get_load_balancing_config, get_max_insert_block_size,
 };
 use crate::types::{BytesInsertBatch, RowData};
-
-/// Connect is an intra-cluster hop; this only exists so a black-holed SYN
-/// fails into the retry loop instead of inheriting the kernel's backoff.
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
-
-/// Must stay under ClickHouse's `keep_alive_timeout` (60s on the EAP
-/// clusters). reqwest's 90s default leaves a window where the pool hands out
-/// connections the server already closed, which surfaces as "connection closed
-/// before message completed".
-const POOL_IDLE_TIMEOUT: Duration = Duration::from_secs(45);
-
-/// Surfaces a dropped flow as a transport error in ~30s (`idle + interval *
-/// retries`) rather than leaving it to sit until the write deadline. Interval
-/// and count are pinned because the host defaults (75s x 9) take 11 minutes.
-/// Safe to probe this hard: a peer's TCP stack answers regardless of what the
-/// application is doing, so a slow ClickHouse is never taken for a dead one.
-const TCP_KEEPALIVE: Duration = Duration::from_secs(15);
-const TCP_KEEPALIVE_INTERVAL: Duration = Duration::from_secs(5);
-const TCP_KEEPALIVE_RETRIES: u32 = 3;
 
 fn clickhouse_task_runner(
     client: Arc<ClickhouseClient>,
@@ -327,14 +308,17 @@ impl ClickhouseClient {
         );
 
         // `Client::new()` applies no timeouts at all, leaving a request on a
-        // dead connection to hang until the kernel stops retransmitting.
+        // dead connection to hang until the kernel stops retransmitting. These
+        // are fixed for the client's lifetime; only `request` is re-read per
+        // attempt, in `send`.
+        let timeouts = get_clickhouse_write_client_timeouts(&storage_name);
         let client = Client::builder()
-            .connect_timeout(CONNECT_TIMEOUT)
-            .read_timeout(get_clickhouse_request_timeout(&storage_name))
-            .pool_idle_timeout(POOL_IDLE_TIMEOUT)
-            .tcp_keepalive(TCP_KEEPALIVE)
-            .tcp_keepalive_interval(TCP_KEEPALIVE_INTERVAL)
-            .tcp_keepalive_retries(TCP_KEEPALIVE_RETRIES)
+            .connect_timeout(timeouts.connect)
+            .read_timeout(timeouts.request)
+            .pool_idle_timeout(timeouts.pool_idle)
+            .tcp_keepalive(timeouts.tcp_keepalive)
+            .tcp_keepalive_interval(timeouts.tcp_keepalive_interval)
+            .tcp_keepalive_retries(timeouts.tcp_keepalive_retries)
             .build()
             .expect("failed to build ClickHouse HTTP client");
 
@@ -376,7 +360,7 @@ impl ClickhouseClient {
         for attempt in 0..=retry_config.max_retries {
             let url = self.build_url();
             // Re-read per attempt so the deadline can be retuned at runtime.
-            let request_timeout = get_clickhouse_request_timeout(&self.storage_name);
+            let request_timeout = get_clickhouse_write_client_timeouts(&self.storage_name).request;
             let attempt_start = Instant::now();
             let res = self
                 .client
@@ -894,8 +878,11 @@ mod tests {
         // One guard for both: the override replaces the whole dict.
         let _guard = override_options(&[(
             "snuba",
-            "clickhouse_request_timeout_ms",
-            json!({ "hung_server_json_test": 300, "hung_server_rowbinary_test": 300 }),
+            "clickhouse_write_client_timeouts",
+            json!({
+                "hung_server_json_test": { "request_ms": 300 },
+                "hung_server_rowbinary_test": { "request_ms": 300 }
+            }),
         )])
         .unwrap();
 
