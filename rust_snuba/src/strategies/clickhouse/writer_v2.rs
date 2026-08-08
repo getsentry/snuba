@@ -14,8 +14,8 @@ use sentry_arroyo::{counter, timer};
 
 use crate::config::ClickhouseConfig;
 use crate::options::{
-    get_clickhouse_write_client_timeouts, get_clickhouse_write_retry, get_load_balancing_config,
-    get_max_insert_block_size,
+    get_clickhouse_write_client_timeouts, get_clickhouse_write_retry_policy,
+    get_load_balancing_config, get_max_insert_block_size,
 };
 use crate::types::{BytesInsertBatch, RowData};
 
@@ -370,8 +370,8 @@ impl ClickhouseClient {
         let body_bytes = bytes::Bytes::from(lz4_compress(&body));
         drop(body);
 
-        let retry = get_clickhouse_write_retry(&self.storage_name);
-        let attempts = retry.max_retries + 1;
+        let retry_policy = get_clickhouse_write_retry_policy(&self.storage_name);
+        let attempts = retry_policy.max_retries + 1;
         let mut attempt = 0;
         loop {
             let started = Instant::now();
@@ -404,7 +404,7 @@ impl ClickhouseClient {
                 failure.detail
             );
 
-            tokio::time::sleep(retry.backoff(attempt)).await;
+            tokio::time::sleep(retry_policy.backoff(attempt)).await;
             attempt += 1;
         }
     }
@@ -714,7 +714,7 @@ mod tests {
         init_options();
         let _guard = override_options(&[(
             "snuba",
-            "clickhouse_write_retry",
+            "clickhouse_write_retry_policy",
             json!({
                 "retry_backoff_test": {
                     "initial_backoff_ms": 100.0,
@@ -820,7 +820,8 @@ mod tests {
         init_options();
 
         // One guard for both: the override replaces the whole dict.
-        let retry = json!({ "initial_backoff_ms": 10.0, "max_retries": 2, "jitter_factor": 0.0 });
+        let retry_policy =
+            json!({ "initial_backoff_ms": 10.0, "max_retries": 2, "jitter_factor": 0.0 });
         let _guard = override_options(&[
             (
                 "snuba",
@@ -832,10 +833,10 @@ mod tests {
             ),
             (
                 "snuba",
-                "clickhouse_write_retry",
+                "clickhouse_write_retry_policy",
                 json!({
-                    "hung_server_json_test": retry,
-                    "hung_server_rowbinary_test": retry
+                    "hung_server_json_test": retry_policy,
+                    "hung_server_rowbinary_test": retry_policy
                 }),
             ),
         ])

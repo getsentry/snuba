@@ -93,7 +93,7 @@
       "default": {},
       "description": "Dict mapping storage name to HTTP client timeout overrides for that storage's consumer writer. Each field is optional and falls back to its default independently; non-positive values fall back too. Only request_ms is re-read per attempt, the rest apply on consumer restart."
     },
-    "clickhouse_write_retry": {
+    "clickhouse_write_retry_policy": {
       "type": "object",
       "additionalProperties": {
         "type": "object",

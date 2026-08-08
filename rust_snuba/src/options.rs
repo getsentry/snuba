@@ -164,15 +164,15 @@ impl ClickhouseWriteRetryPolicy {
     }
 }
 
-/// Retry schedule for `storage_name`, from the `clickhouse_write_retry` dict.
+/// Retry schedule for `storage_name`, from the `clickhouse_write_retry_policy` dict.
 /// Each field is optional and falls back to its default independently. Unlike
 /// the timeouts, zero is meaningful here — no retries, no backoff, no jitter —
 /// so only negative and out-of-range values are rejected.
-pub fn get_clickhouse_write_retry(storage_name: &str) -> ClickhouseWriteRetryPolicy {
+pub fn get_clickhouse_write_retry_policy(storage_name: &str) -> ClickhouseWriteRetryPolicy {
     let defaults = ClickhouseWriteRetryPolicy::default();
     let Some(entry) = options("snuba")
         .ok()
-        .and_then(|o| o.get("clickhouse_write_retry").ok())
+        .and_then(|o| o.get("clickhouse_write_retry_policy").ok())
         .and_then(|v| v.get(storage_name).cloned())
     else {
         return defaults;
@@ -317,42 +317,45 @@ mod tests {
     }
 
     #[test]
-    fn test_write_retry_default_when_unset() {
+    fn test_write_retry_policy_default_when_unset() {
         init_options();
         assert_eq!(
-            get_clickhouse_write_retry("retry_unset_test"),
+            get_clickhouse_write_retry_policy("retry_unset_test"),
             ClickhouseWriteRetryPolicy::default()
         );
     }
 
     #[test]
-    fn test_write_retry_partial_override_and_zero_is_honoured() {
+    fn test_write_retry_policy_partial_override_and_zero_is_honoured() {
         init_options();
         let _guard = override_options(&[(
             "snuba",
-            "clickhouse_write_retry",
+            "clickhouse_write_retry_policy",
             json!({ "retry_partial_test": { "max_retries": 0, "jitter_factor": 0.0 } }),
         )])
         .unwrap();
 
         let defaults = ClickhouseWriteRetryPolicy::default();
-        let retry = get_clickhouse_write_retry("retry_partial_test");
+        let policy = get_clickhouse_write_retry_policy("retry_partial_test");
 
         // Zero is a real choice here — no retries, no jitter — unlike the
         // timeouts, where it would mean no deadline at all.
-        assert_eq!(retry.max_retries, 0);
-        assert_eq!(retry.jitter_factor, 0.0);
-        assert_eq!(retry.initial_backoff_ms, defaults.initial_backoff_ms);
+        assert_eq!(policy.max_retries, 0);
+        assert_eq!(policy.jitter_factor, 0.0);
+        assert_eq!(policy.initial_backoff_ms, defaults.initial_backoff_ms);
 
-        assert_eq!(get_clickhouse_write_retry("retry_other_storage"), defaults);
+        assert_eq!(
+            get_clickhouse_write_retry_policy("retry_other_storage"),
+            defaults
+        );
     }
 
     #[test]
-    fn test_write_retry_rejects_out_of_range() {
+    fn test_write_retry_policy_rejects_out_of_range() {
         init_options();
         let _guard = override_options(&[(
             "snuba",
-            "clickhouse_write_retry",
+            "clickhouse_write_retry_policy",
             json!({
                 "retry_range_test": { "initial_backoff_ms": -1.0, "jitter_factor": 5.0 }
             }),
@@ -362,7 +365,7 @@ mod tests {
         // A negative delay and a jitter above 1 would both produce nonsense
         // delays, so they fall back rather than being honoured.
         assert_eq!(
-            get_clickhouse_write_retry("retry_range_test"),
+            get_clickhouse_write_retry_policy("retry_range_test"),
             ClickhouseWriteRetryPolicy::default()
         );
     }
