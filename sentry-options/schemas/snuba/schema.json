@@ -59,13 +59,13 @@
       "default": {},
       "description": "Dict mapping storage name to a max_insert_block_size override for that storage's INSERTs. Values below ClickHouse's default (1048449) are ignored. Storages with no entry use the server default. Migrated from per-storage runtime config clickhouse_max_insert_block_size:<storage>."
     },
-    "clickhouse_request_timeout_ms": {
+    "clickhouse_write_timeout_ms": {
       "type": "object",
       "additionalProperties": {
         "type": "integer"
       },
       "default": {},
-      "description": "Dict mapping storage name to the deadline in milliseconds for a single ClickHouse INSERT attempt by that storage's consumer writer, covering connect through response headers. Exceeding it fails the attempt into the writer's retry loop. Storages with no entry, or a non-positive value, use the 120000ms default. Applies per attempt: each retry starts a fresh deadline, so there is no cumulative cap across the retry loop."
+      "description": "Dict mapping storage name to the deadline in milliseconds for one logical ClickHouse write by that storage's consumer writer. Cumulative: it covers every retry attempt reqwest makes internally, and does not reset between them, so a stalled connection consumes the whole budget without retrying. Storages with no entry, or a non-positive value, use the 300000ms default."
     },
     "eap_items_dlq_grace_period_min": {
       "type": "object",
