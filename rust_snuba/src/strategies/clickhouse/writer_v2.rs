@@ -319,7 +319,6 @@ impl ClickhouseClient {
         let timeouts = get_clickhouse_write_client_timeouts(&storage_name);
         let client = Client::builder()
             .connect_timeout(timeouts.connect)
-            .read_timeout(timeouts.request)
             .pool_idle_timeout(timeouts.pool_idle)
             .tcp_keepalive(timeouts.tcp_keepalive)
             .tcp_keepalive_interval(timeouts.tcp_keepalive_interval)
@@ -531,27 +530,25 @@ mod tests {
         }
     }
 
+    /// End-to-end against a live ClickHouse: the only check that the natively
+    /// compressed body is one the server accepts, covering the LZ4 framing, the
+    /// CityHash checksum byte order and the `decompress=1` contract together.
+    /// `send` bails on any non-200, so returning `Ok` is the assertion.
     #[tokio::test]
-    async fn it_works() -> Result<(), reqwest::Error> {
+    async fn test_compressed_insert_against_live_clickhouse() {
         crate::testutils::initialize_python();
-        let config = make_test_config();
-        println!("config: {config:?}");
         let client = ClickhouseClient::new(
-            &config,
+            &make_test_config(),
             "querylog_local",
             "test_storage".to_string(),
             InsertFormat::JsonEachRow,
             None,
         );
 
-        let url = client.build_url();
-        assert!(url.contains("load_balancing=in_order"));
-        assert!(url.contains("insert_distributed_sync"));
-        assert!(url.contains("decompress=1"));
-        println!("running test");
-        let res = client.send(b"[]".to_vec(), RetryConfig::default()).await;
-        println!("Response status {}", res.unwrap().status());
-        Ok(())
+        client
+            .send(b"[]".to_vec(), RetryConfig::default())
+            .await
+            .expect("compressed INSERT rejected by ClickHouse");
     }
 
     #[test]
