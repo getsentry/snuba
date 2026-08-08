@@ -46,10 +46,14 @@ regex = "1.11.1"
 # INSERT. This is also the version `sentry` already pulls in, so the tree
 # builds one reqwest instead of two.
 #
-# `query` and `charset` were unconditional in 0.11 but are features here, and
-# 0.13 flipped `default-tls` from native-tls to rustls — `native-tls` plus the
-# explicit `use_native_tls()` in the writer keeps certificate validation on the
-# same backend it has always used for `CLICKHOUSE_SECURE` deployments.
+# `query` and `charset` were unconditional in 0.11 and are features here.
+#
+# `native-tls` is declared even though `sentry`'s `transport` feature already
+# turns it on: it is what `CLICKHOUSE_SECURE` deployments validate certificates
+# with, so it should not rest on another crate's feature graph. No backend is
+# selected in code — `TlsBackend::default()` resolves to native-tls whenever
+# `__native-tls` is enabled, which is both the 0.11 behavior and the only
+# backend compiled here.
 reqwest = { version = "0.13", default-features = false, features = [
     "charset",
     "http2",

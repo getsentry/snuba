@@ -368,15 +368,12 @@ impl ClickhouseClient {
         // total deadline, re-read each attempt, which both catches a response
         // that trickles forever and lets the deadline be lowered at runtime.
         //
-        // `use_native_tls` is explicit because 0.13 made rustls the default and
-        // feature unification compiles both backends into the tree.
         let client = Client::builder()
             .connect_timeout(CONNECT_TIMEOUT)
             .read_timeout(get_clickhouse_request_timeout(&storage_name))
             .tcp_keepalive(TCP_KEEPALIVE)
             .tcp_keepalive_interval(TCP_KEEPALIVE_INTERVAL)
             .tcp_keepalive_retries(TCP_KEEPALIVE_RETRIES)
-            .use_native_tls()
             .build()
             .expect("failed to build ClickHouse HTTP client");
 
