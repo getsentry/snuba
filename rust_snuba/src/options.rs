@@ -135,7 +135,7 @@ pub fn get_clickhouse_write_client_timeouts(storage_name: &str) -> ClickhouseWri
 
 /// Retry schedule for a storage's ClickHouse writer.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct ClickhouseWriteRetry {
+pub struct ClickhouseWriteRetryPolicy {
     /// Delay before the first retry; doubles each attempt.
     pub initial_backoff_ms: f64,
     /// Retries on top of the original attempt. Zero disables retrying.
@@ -145,7 +145,7 @@ pub struct ClickhouseWriteRetry {
     pub jitter_factor: f64,
 }
 
-impl Default for ClickhouseWriteRetry {
+impl Default for ClickhouseWriteRetryPolicy {
     fn default() -> Self {
         Self {
             initial_backoff_ms: 500.0,
@@ -155,7 +155,7 @@ impl Default for ClickhouseWriteRetry {
     }
 }
 
-impl ClickhouseWriteRetry {
+impl ClickhouseWriteRetryPolicy {
     /// Exponential backoff, jittered.
     pub fn backoff(&self, attempt: usize) -> Duration {
         let base_ms = self.initial_backoff_ms * 2f64.powi(attempt as i32);
@@ -168,8 +168,8 @@ impl ClickhouseWriteRetry {
 /// Each field is optional and falls back to its default independently. Unlike
 /// the timeouts, zero is meaningful here — no retries, no backoff, no jitter —
 /// so only negative and out-of-range values are rejected.
-pub fn get_clickhouse_write_retry(storage_name: &str) -> ClickhouseWriteRetry {
-    let defaults = ClickhouseWriteRetry::default();
+pub fn get_clickhouse_write_retry(storage_name: &str) -> ClickhouseWriteRetryPolicy {
+    let defaults = ClickhouseWriteRetryPolicy::default();
     let Some(entry) = options("snuba")
         .ok()
         .and_then(|o| o.get("clickhouse_write_retry").ok())
@@ -178,7 +178,7 @@ pub fn get_clickhouse_write_retry(storage_name: &str) -> ClickhouseWriteRetry {
         return defaults;
     };
 
-    ClickhouseWriteRetry {
+    ClickhouseWriteRetryPolicy {
         initial_backoff_ms: entry
             .get("initial_backoff_ms")
             .and_then(|n| n.as_f64())
@@ -321,7 +321,7 @@ mod tests {
         init_options();
         assert_eq!(
             get_clickhouse_write_retry("retry_unset_test"),
-            ClickhouseWriteRetry::default()
+            ClickhouseWriteRetryPolicy::default()
         );
     }
 
@@ -335,7 +335,7 @@ mod tests {
         )])
         .unwrap();
 
-        let defaults = ClickhouseWriteRetry::default();
+        let defaults = ClickhouseWriteRetryPolicy::default();
         let retry = get_clickhouse_write_retry("retry_partial_test");
 
         // Zero is a real choice here — no retries, no jitter — unlike the
@@ -363,7 +363,7 @@ mod tests {
         // delays, so they fall back rather than being honoured.
         assert_eq!(
             get_clickhouse_write_retry("retry_range_test"),
-            ClickhouseWriteRetry::default()
+            ClickhouseWriteRetryPolicy::default()
         );
     }
 
