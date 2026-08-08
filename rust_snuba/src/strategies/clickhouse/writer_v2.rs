@@ -316,10 +316,6 @@ impl ClickhouseClient {
             fmt = format.as_str(),
         );
 
-        // `Client::new()` applies no timeouts at all, leaving a request on a
-        // dead connection to hang until the kernel stops retransmitting. These
-        // are fixed for the client's lifetime; only `request` is re-read per
-        // attempt, in `send`.
         let timeouts = get_clickhouse_write_client_timeouts(&storage_name);
         let client = Client::builder()
             .connect_timeout(timeouts.connect)
