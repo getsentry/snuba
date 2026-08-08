@@ -1,0 +1,65 @@
+---
+source: src/processors/mod.rs
+description: "[\n  2,\n  \"insert\",\n  {\n    \"group_id\": 1,\n    \"group_ids\": [],\n    \"event_id\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n    \"organization_id\": 1,\n    \"project_id\": 1,\n    \"message\": \" Monitor failure: run-some-task\",\n    \"platform\": \"other\",\n    \"datetime\": \"2023-06-27T00:00:00.000000Z\",\n    \"data\": {\n      \"event_id\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n      \"level\": \"error\",\n      \"version\": \"3\",\n      \"type\": \"generic\",\n      \"logger\": \"\",\n      \"platform\": \"other\",\n      \"timestamp\": 1687800000.0,\n      \"received\": 1687800001.0,\n      \"environment\": \"production\",\n      \"contexts\": {\n        \"monitor\": {\n          \"config\": {\n            \"checkin_margin\": null,\n            \"max_runtime\": null,\n            \"schedule\": [1, \"minute\"],\n            \"schedule_type\": 2\n          },\n          \"name\": \"run-some-task\",\n          \"slug\": \"run-some-task\",\n          \"status\": \"missed_checkin\",\n          \"type\": \"cron_job\"\n        },\n        \"geo\": {}\n      },\n      \"tags\": [\n        [\"level\", \"error\"],\n        [\"environment\", \"production\"]\n      ],\n      \"project\": 1,\n      \"metadata\": {},\n      \"culprit\": \"\",\n      \"title\": \"<untitled>\",\n      \"location\": null,\n      \"_metrics\": { \"bytes.stored.event\": 793 },\n      \"nodestore_insert\": 1687800001.0\n    },\n    \"primary_hash\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\n    \"retention_days\": 90,\n    \"occurrence_id\": \"cccccccccccccccccccccccccccccccc\",\n    \"occurrence_data\": {\n      \"id\": \"cccccccccccccccccccccccccccccccc\",\n      \"project_id\": 6633039,\n      \"event_id\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n      \"fingerprint\": [\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\"],\n      \"issue_title\": \"Monitor failure: run-some-task\",\n      \"subtitle\": \"\",\n      \"resource_id\": null,\n      \"type\": 4001,\n      \"detection_time\": 1687800000.0,\n      \"level\": \"error\",\n      \"culprit\": \"error\"\n    }\n  },\n  {\n    \"is_new\": false,\n    \"is_regression\": false,\n    \"is_new_group_environment\": false,\n    \"queue\": \"post_process_issue_platform\",\n    \"skip_consume\": false,\n    \"group_states\": [\n      {\n        \"id\": 1,\n        \"is_new\": false,\n        \"is_regression\": false,\n        \"is_new_group_environment\": false\n      }\n    ]\n  }\n]\n"
+expression: snapshot_payload
+---
+[
+  {
+    "client_timestamp": 1687824000,
+    "contexts.key": [
+      "monitor.name",
+      "monitor.slug",
+      "monitor.status"
+    ],
+    "contexts.value": [
+      "run-some-task",
+      "run-some-task",
+      "missed_checkin"
+    ],
+    "culprit": "error",
+    "detection_timestamp": 1687800000,
+    "dist": null,
+    "environment": "production",
+    "event_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "fingerprint": [
+      "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    ],
+    "group_first_seen": null,
+    "group_id": 1,
+    "http_method": null,
+    "http_referer": null,
+    "level": "error",
+    "message": " Monitor failure: run-some-task",
+    "message_timestamp": "<event timestamp>",
+    "occurrence_id": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+    "occurrence_type_id": 4001,
+    "offset": 1,
+    "organization_id": 1,
+    "partition": 0,
+    "platform": "other",
+    "primary_hash": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    "project_id": 1,
+    "receive_timestamp": 1687800001,
+    "release": null,
+    "resource_id": null,
+    "retention_days": 90,
+    "sdk_name": null,
+    "sdk_version": null,
+    "search_title": "Monitor failure: run-some-task",
+    "subtitle": "",
+    "tags.key": [
+      "environment",
+      "level"
+    ],
+    "tags.value": [
+      "production",
+      "error"
+    ],
+    "timestamp_ms": 1687824000000,
+    "transaction_duration": 0,
+    "user": null,
+    "user_email": null,
+    "user_id": null,
+    "user_name": null
+  }
+]

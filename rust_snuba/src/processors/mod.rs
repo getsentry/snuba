@@ -11,6 +11,7 @@ mod profiles;
 mod querylog;
 mod release_health_metrics;
 mod replays;
+mod search_issues;
 pub mod utils;
 
 use crate::config::ProcessorConfig;
@@ -64,6 +65,7 @@ define_processing_functions! {
     ("PolymorphicMetricsProcessor", "snuba-metrics", ProcessingFunctionType::ProcessingFunction(release_health_metrics::process_metrics_message)),
     ("ErrorsProcessor", "events", ProcessingFunctionType::ProcessingFunctionWithReplacements(errors::process_message_with_replacement)),
     ("ProfileChunksProcessor", "snuba-profile-chunks", ProcessingFunctionType::ProcessingFunction(profile_chunks::process_message)),
+    ("SearchIssuesMessageProcessor", "generic-events", ProcessingFunctionType::ProcessingFunction(search_issues::process_message)),
     ("EAPItemsProcessor", "snuba-items", ProcessingFunctionType::ProcessingFunction(eap_items::process_message)),
     ("LlmProxyCostProcessor", "snuba-llm-proxy-cost", ProcessingFunctionType::ProcessingFunction(llm_proxy_cost::process_message)),
 }
@@ -155,6 +157,10 @@ mod tests {
                 }
 
                 if *topic_name == "events" {
+                    settings.add_redaction(".*.message_timestamp", "<event timestamp>");
+                }
+
+                if *topic_name == "generic-events" {
                     settings.add_redaction(".*.message_timestamp", "<event timestamp>");
                 }
 
