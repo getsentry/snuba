@@ -245,6 +245,24 @@ pub struct RetryConfig {
     jitter_factor: f64, // between 0 and 1
 }
 
+/// A failed attempt, normalized so the retry loop does not care whether
+/// ClickHouse answered with an error or never answered at all. `status` is the
+/// metric tag; `detail` is the human-readable cause.
+struct FailedAttempt {
+    status: String,
+    detail: String,
+}
+
+impl RetryConfig {
+    /// Exponential backoff, jittered so consumers that failed together do not
+    /// retry together.
+    fn backoff(&self, attempt: usize) -> Duration {
+        let base_ms = self.initial_backoff_ms * 2f64.powi(attempt as i32);
+        let jitter = rand::random::<f64>() * self.jitter_factor - self.jitter_factor / 2.0;
+        Duration::from_millis((base_ms * (1.0 + jitter)).round() as u64)
+    }
+}
+
 impl Default for RetryConfig {
     fn default() -> Self {
         Self {
@@ -346,6 +364,46 @@ impl ClickhouseClient {
         url
     }
 
+    /// One INSERT attempt. Both an HTTP error and a transport error come back
+    /// as [`FailedAttempt`] so the retry loop can treat them the same.
+    async fn send_once(&self, body: bytes::Bytes) -> Result<Response, FailedAttempt> {
+        let res = self
+            .client
+            .post(self.build_url())
+            .headers(self.headers.clone())
+            // Re-read per attempt so the deadline can be retuned at runtime.
+            .timeout(get_clickhouse_write_client_timeouts(&self.storage_name).request)
+            .query(&[("query", &self.query)])
+            .body(reqwest::Body::from(body))
+            .send()
+            .await;
+
+        match res {
+            Ok(response) if response.status() == reqwest::StatusCode::OK => Ok(response),
+            Ok(response) => {
+                let status = response.status().to_string();
+                let detail = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "unknown error".to_string());
+                Err(FailedAttempt { status, detail })
+            }
+            // Timeouts are tagged apart from other transport failures because
+            // they point at different faults: `timeout` means writes are
+            // stalling, `network_error` that connections are refused or reset.
+            // Retrying either is safe — ClickHouse deduplicates identical
+            // insert blocks.
+            Err(e) => Err(FailedAttempt {
+                status: if e.is_timeout() {
+                    "timeout".to_string()
+                } else {
+                    "network_error".to_string()
+                },
+                detail: e.to_string(),
+            }),
+        }
+    }
+
     pub async fn send(&self, body: Vec<u8>, retry_config: RetryConfig) -> anyhow::Result<Response> {
         // Compress once before the retry loop — the encoded body is identical
         // across attempts, so paying the LZ4 cost per attempt would be wasted
@@ -357,106 +415,40 @@ impl ClickhouseClient {
         // ~1× the batch size resident per slot for no reason.
         drop(body);
 
-        for attempt in 0..=retry_config.max_retries {
-            let url = self.build_url();
-            // Re-read per attempt so the deadline can be retuned at runtime.
-            let request_timeout = get_clickhouse_write_client_timeouts(&self.storage_name).request;
-            let attempt_start = Instant::now();
-            let res = self
-                .client
-                .post(&url)
-                .headers(self.headers.clone())
-                .query(&[("query", &self.query)])
-                .timeout(request_timeout)
-                .body(reqwest::Body::from(body_bytes.clone()))
-                .send()
-                .await;
-            let elapsed_ms = attempt_start.elapsed().as_millis();
+        let attempts = retry_config.max_retries + 1;
+        let mut attempt = 0;
+        loop {
+            let started = Instant::now();
+            let failure = match self.send_once(body_bytes.clone()).await {
+                Ok(response) => return Ok(response),
+                Err(failure) => failure,
+            };
+            let elapsed_ms = started.elapsed().as_millis();
 
-            match res {
-                Ok(response) => {
-                    if response.status() == reqwest::StatusCode::OK {
-                        return Ok(response);
-                    } else {
-                        let status = response.status().to_string();
-                        let error_text = response
-                            .text()
-                            .await
-                            .unwrap_or_else(|_| "unknown error".to_string());
+            let last = attempt + 1 == attempts;
+            let retried = if last { "false" } else { "true" };
+            counter!(
+                "rust_consumer.clickhouse_insert_error", 1,
+                "status" => failure.status, "retried" => retried
+            );
 
-                        if attempt == retry_config.max_retries {
-                            counter!("rust_consumer.clickhouse_insert_error", 1, "status" => status, "retried" => "false");
-                            anyhow::bail!(
-                                "error writing to clickhouse after {} attempts ({}ms on the final attempt): {}",
-                                retry_config.max_retries + 1,
-                                elapsed_ms,
-                                error_text
-                            );
-                        }
-
-                        counter!("rust_consumer.clickhouse_insert_error", 1, "status" => status, "retried" => "true");
-                        tracing::warn!(
-                            "ClickHouse write failed (attempt {}/{}) after {}ms: status={}, error={}",
-                            attempt + 1,
-                            retry_config.max_retries + 1,
-                            elapsed_ms,
-                            status,
-                            error_text
-                        );
-                    }
-                }
-                Err(e) => {
-                    // Tagged apart because they point at different faults:
-                    // `timeout` means writes are stalling, `network_error` that
-                    // connections are refused or reset. Retrying either is safe
-                    // — ClickHouse deduplicates identical insert blocks.
-                    let status = if e.is_timeout() {
-                        "timeout"
-                    } else {
-                        "network_error"
-                    };
-
-                    if attempt == retry_config.max_retries {
-                        counter!("rust_consumer.clickhouse_insert_error", 1, "status" => status, "retried" => "false");
-                        anyhow::bail!(
-                            "error writing to clickhouse after {} attempts ({}ms on the final attempt): {}",
-                            retry_config.max_retries + 1,
-                            elapsed_ms,
-                            e
-                        );
-                    }
-                    counter!("rust_consumer.clickhouse_insert_error", 1, "status" => status, "retried" => "true");
-
-                    tracing::warn!(
-                        "ClickHouse write failed (attempt {}/{}) after {}ms: {}",
-                        attempt + 1,
-                        retry_config.max_retries + 1,
-                        elapsed_ms,
-                        e
-                    );
-                }
-            }
-
-            // Calculate exponential backoff delay
-            if attempt < retry_config.max_retries {
-                let backoff_ms =
-                    retry_config.initial_backoff_ms * (2_u64.pow(attempt as u32) as f64);
-                // add/subtract up to 10% jitter (by default) to avoid every consumer retrying at the same time
-                // causing too many simultaneous queries
-                let jitter = rand::random::<f64>() * retry_config.jitter_factor
-                    - retry_config.jitter_factor / 2.0; // Random value between (-jitter_factor/2, jitter_factor/2)
-                let delay = Duration::from_millis((backoff_ms * (1.0 + jitter)).round() as u64);
-                tracing::debug!(
-                    "Retrying in {:?} (attempt {}/{})",
-                    delay,
-                    attempt + 1,
-                    retry_config.max_retries
+            if last {
+                anyhow::bail!(
+                    "error writing to clickhouse after {attempts} attempts ({elapsed_ms}ms on the final attempt): {}",
+                    failure.detail
                 );
-                tokio::time::sleep(delay).await;
             }
-        }
 
-        unreachable!("Loop should always return or bail before reaching here");
+            tracing::warn!(
+                "ClickHouse write failed (attempt {}/{attempts}) after {elapsed_ms}ms: status={}, error={}",
+                attempt + 1,
+                failure.status,
+                failure.detail
+            );
+
+            tokio::time::sleep(retry_config.backoff(attempt)).await;
+            attempt += 1;
+        }
     }
 }
 
