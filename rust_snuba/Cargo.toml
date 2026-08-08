@@ -41,7 +41,22 @@ prost = "0.14"
 pyo3 = { version = "0.24.1", features = ["chrono"] }
 rand = "0.9.3"
 regex = "1.11.1"
-reqwest = { version = "0.11.11", features = ["stream"] }
+# 0.13 for `ClientBuilder::read_timeout` and the explicit TCP keepalive probe
+# schedule, both of which the ClickHouse writer relies on to detect a stalled
+# INSERT. This is also the version `sentry` already pulls in, so the tree
+# builds one reqwest instead of two.
+#
+# `query` and `charset` were unconditional in 0.11 but are features here, and
+# 0.13 flipped `default-tls` from native-tls to rustls — `native-tls` plus the
+# explicit `use_native_tls()` in the writer keeps certificate validation on the
+# same backend it has always used for `CLICKHOUSE_SECURE` deployments.
+reqwest = { version = "0.13", default-features = false, features = [
+    "charset",
+    "http2",
+    "native-tls",
+    "query",
+    "system-proxy",
+] }
 schemars = { version = "0.8.16", features = ["uuid1"] }
 sentry = { version = "0.48.5", default-features = false, features = [
     # default features, except `release-health` is disabled

@@ -30,6 +30,14 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 /// pool, rather than leaving the next INSERT to discover it by hanging.
 const TCP_KEEPALIVE: Duration = Duration::from_secs(30);
 
+/// Spacing and count for those probes. Left unset these come from the host's
+/// `net.ipv4.tcp_keepalive_{intvl,probes}` sysctls, whose defaults (75s × 9)
+/// take over 11 minutes to declare a connection dead — useless as a guard
+/// against the stall this is meant to catch. Pinning them bounds detection at
+/// roughly `TCP_KEEPALIVE + intvl * retries`, about a minute, on any host.
+const TCP_KEEPALIVE_INTERVAL: Duration = Duration::from_secs(10);
+const TCP_KEEPALIVE_RETRIES: u32 = 3;
+
 fn clickhouse_task_runner(
     client: Arc<ClickhouseClient>,
     skip_write: bool,
@@ -317,12 +325,24 @@ impl ClickhouseClient {
 
         // `Client::new()` applies no timeouts whatsoever, which leaves a
         // request on a dead connection hanging until the kernel stops
-        // retransmitting. The per-attempt response deadline is set on each
-        // request in `send` so it stays runtime-tunable; connect and keepalive
-        // are transport-level and can only be configured here.
+        // retransmitting.
+        //
+        // `read_timeout` is the stall detector: it bounds the wait for the next
+        // byte of the response, so a connection that goes quiet fails instead of
+        // hanging. It is a client-level setting, so it snapshots the option at
+        // startup; `send` additionally applies the same value as a per-request
+        // total deadline, re-read each attempt, which both catches a response
+        // that trickles forever and lets the deadline be lowered at runtime.
+        //
+        // `use_native_tls` is explicit because 0.13 made rustls the default and
+        // feature unification compiles both backends into the tree.
         let client = Client::builder()
             .connect_timeout(CONNECT_TIMEOUT)
+            .read_timeout(get_clickhouse_request_timeout(&storage_name))
             .tcp_keepalive(TCP_KEEPALIVE)
+            .tcp_keepalive_interval(TCP_KEEPALIVE_INTERVAL)
+            .tcp_keepalive_retries(TCP_KEEPALIVE_RETRIES)
+            .use_native_tls()
             .build()
             .expect("failed to build ClickHouse HTTP client");
 
@@ -813,19 +833,18 @@ mod tests {
         assert!(error_msg.contains("after 5 attempts"));
     }
 
-    /// Regression test for SNUBA-CCY: a peer that accepts the connection and
-    /// then never answers used to hang the write indefinitely, because
-    /// `reqwest` applies no request timeout by default. The retry loop was
-    /// unreachable — the first attempt simply never returned. With a
-    /// per-attempt deadline the stall is converted into an ordinary retryable
-    /// error, and the loop terminates with the usual "after N attempts" bail.
-    #[tokio::test]
-    async fn test_hung_server_times_out_and_retries() {
-        crate::testutils::initialize_python();
-        init_options();
-
-        // Accept connections and hold them open without ever writing a
-        // response, reproducing a black-holed request.
+    /// Binds a listener that accepts connections and then never answers, and
+    /// runs a full `send` against it. Reproduces a black-holed request: the
+    /// peer is reachable, the body goes out, and no response ever comes back.
+    ///
+    /// The caller must already hold an `override_options` guard covering
+    /// `storage_name`, because the client reads its `read_timeout` at
+    /// construction.
+    async fn send_against_hung_server(
+        storage_name: &str,
+        format: InsertFormat,
+        columns: Option<&[&str]>,
+    ) -> (String, Duration) {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
         tokio::spawn(async move {
@@ -834,13 +853,6 @@ mod tests {
                 accepted.push(stream);
             }
         });
-
-        let _guard = override_options(&[(
-            "snuba",
-            "clickhouse_request_timeout_ms",
-            json!({ "hung_server_test": 300 }),
-        )])
-        .unwrap();
 
         let config = ClickhouseConfig {
             host: "127.0.0.1".to_string(),
@@ -854,9 +866,9 @@ mod tests {
         let client = ClickhouseClient::new(
             &config,
             "test_table",
-            "hung_server_test".to_string(),
-            InsertFormat::JsonEachRow,
-            None,
+            storage_name.to_string(),
+            format,
+            columns,
         );
 
         let start_time = Instant::now();
@@ -872,15 +884,61 @@ mod tests {
             .await;
         let elapsed = start_time.elapsed();
 
-        let error_msg = result.unwrap_err().to_string();
-        assert!(
-            error_msg.contains("after 3 attempts"),
-            "unexpected error: {error_msg}"
-        );
+        (result.unwrap_err().to_string(), elapsed)
+    }
 
-        // Three 300ms attempts plus ~30ms of backoff. Without the deadline
-        // this call would not have returned at all within the bound.
-        assert!(elapsed >= Duration::from_millis(900), "took {elapsed:?}");
-        assert!(elapsed < Duration::from_secs(10), "took {elapsed:?}");
+    /// Regression test for SNUBA-CCY: a peer that accepts the connection and
+    /// then never answers used to hang the write indefinitely, because
+    /// `reqwest` applies no timeouts of its own. The retry loop was unreachable
+    /// — the first attempt simply never returned. With a deadline the stall
+    /// becomes an ordinary retryable error and the loop terminates with the
+    /// usual "after N attempts" bail.
+    ///
+    /// Covers both wire formats. `JsonWriterStep` and `RowBinaryWriterStep`
+    /// share one `ClickhouseClient` via `build_writer_inner`, so they cannot
+    /// drift today — this pins that, so a future per-format client cannot
+    /// quietly reintroduce an untimed one.
+    #[tokio::test]
+    async fn test_hung_server_times_out_for_both_wire_formats() {
+        crate::testutils::initialize_python();
+        init_options();
+
+        // One guard covering both storages: the override replaces the whole
+        // dict, so splitting these across tests would let them race.
+        let _guard = override_options(&[(
+            "snuba",
+            "clickhouse_request_timeout_ms",
+            json!({ "hung_server_json_test": 300, "hung_server_rowbinary_test": 300 }),
+        )])
+        .unwrap();
+
+        let cases: [(&str, InsertFormat, Option<&[&str]>); 2] = [
+            ("hung_server_json_test", InsertFormat::JsonEachRow, None),
+            (
+                "hung_server_rowbinary_test",
+                InsertFormat::RowBinary,
+                Some(&["organization_id", "timestamp"]),
+            ),
+        ];
+
+        for (storage_name, format, columns) in cases {
+            let (error_msg, elapsed) =
+                send_against_hung_server(storage_name, format, columns).await;
+
+            assert!(
+                error_msg.contains("after 3 attempts"),
+                "{format:?}: unexpected error: {error_msg}"
+            );
+            // Three 300ms attempts plus ~30ms of backoff. Without the deadline
+            // this call would not have returned at all within the bound.
+            assert!(
+                elapsed >= Duration::from_millis(900),
+                "{format:?}: took {elapsed:?}"
+            );
+            assert!(
+                elapsed < Duration::from_secs(10),
+                "{format:?}: took {elapsed:?}"
+            );
+        }
     }
 }

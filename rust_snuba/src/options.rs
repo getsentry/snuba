@@ -56,26 +56,31 @@ pub fn get_max_insert_block_size(storage_name: &str) -> Option<u64> {
         .filter(|&n| n >= CLICKHOUSE_DEFAULT_MAX_INSERT_BLOCK_SIZE)
 }
 
-/// Deadline for a single ClickHouse INSERT attempt, spanning connect through
-/// response headers.
+/// Deadline for a single ClickHouse INSERT attempt.
 ///
-/// `reqwest` has no request timeout by default, so an attempt whose connection
-/// has been silently black-holed (a load balancer or NAT gateway dropping the
-/// flow without sending a RST) blocks until the kernel gives up retransmitting
-/// — roughly 15 minutes with the default `tcp_retries2`. For that whole window
-/// the write is neither failing nor progressing, so the retry loop never runs.
+/// `reqwest` applies no timeouts of its own, so an attempt whose connection has
+/// been silently black-holed (a load balancer or NAT gateway dropping the flow
+/// without sending a RST) blocks until the kernel gives up retransmitting —
+/// roughly 15 minutes with the default `tcp_retries2`. For that whole window the
+/// write is neither failing nor progressing, so the retry loop never runs.
 ///
 /// Sized well above any healthy insert — normal writes complete in well under a
 /// second — so it fires only on genuinely stuck requests, and leaves a hopeless
 /// write bounded at about five minutes across all attempts and backoff.
 pub const DEFAULT_CLICKHOUSE_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// Per-attempt request timeout for `storage_name`, overridable at runtime via
-/// the `clickhouse_request_timeout_ms` dict in the `snuba` options namespace.
+/// Per-attempt INSERT deadline for `storage_name`, overridable via the
+/// `clickhouse_request_timeout_ms` dict in the `snuba` options namespace.
 ///
-/// Read once per attempt (like [`get_load_balancing_config`]) rather than baked
-/// into the HTTP client, so the deadline can be retuned during an incident
-/// without a redeploy. Absent or non-positive values fall back to
+/// The writer applies this in two places. As `read_timeout` it bounds the wait
+/// for the next byte of the response, which is what catches a stalled
+/// connection; that is a client-level setting, so it is snapshotted when the
+/// consumer starts. As a per-request total deadline it is re-read on every
+/// attempt (like [`get_load_balancing_config`]), so lowering the option takes
+/// effect on a running consumer without a redeploy — raising it past the value
+/// seen at startup needs a restart to lift the `read_timeout` with it.
+///
+/// Absent or non-positive values fall back to
 /// [`DEFAULT_CLICKHOUSE_REQUEST_TIMEOUT`].
 pub fn get_clickhouse_request_timeout(storage_name: &str) -> Duration {
     options("snuba")
