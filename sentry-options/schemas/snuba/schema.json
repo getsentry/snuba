@@ -91,7 +91,7 @@
         }
       },
       "default": {},
-      "description": "Dict mapping storage name to HTTP client timeout overrides for that storage's consumer writer: connect_ms (5000), request_ms (65000), pool_idle_ms (45000), tcp_keepalive_ms (15000), tcp_keepalive_interval_ms (5000), tcp_keepalive_retries (3). Each field is optional and falls back to its default independently; non-positive values fall back too. Only request_ms is re-read per attempt, the rest apply on consumer restart."
+      "description": "Dict mapping storage name to HTTP client timeout overrides for that storage's consumer writer. Each field is optional and falls back to its default independently; non-positive values fall back too. Only request_ms is re-read per attempt, the rest apply on consumer restart."
     },
     "eap_items_dlq_grace_period_min": {
       "type": "object",
