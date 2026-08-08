@@ -396,14 +396,10 @@ impl ClickhouseClient {
     }
 
     pub async fn send(&self, body: Vec<u8>, retry_config: RetryConfig) -> anyhow::Result<Response> {
-        // Compress once before the retry loop — the encoded body is identical
-        // across attempts, so paying the LZ4 cost per attempt would be wasted
-        // work. `bytes::Bytes` makes the per-attempt clone cheap (refcount bump).
+        // Compress once — the body is identical across attempts and `Bytes` makes
+        // each retry's clone a refcount bump. Drop frees the uncompressed copy
+        // rather than holding it for the life of the retries.
         let body_bytes = bytes::Bytes::from(lz4_compress(&body));
-        // Free the uncompressed buffer before entering the retry loop. With
-        // `insert_distributed_sync=1` against a slow shard the loop can hold
-        // each in-flight slot for seconds — dragging `body` through it kept
-        // ~1× the batch size resident per slot for no reason.
         drop(body);
 
         let attempts = retry_config.max_retries + 1;
