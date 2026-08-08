@@ -102,6 +102,18 @@ pub struct ClickhouseConfig {
     pub user: String,
     pub password: String,
     pub database: String,
+    // When false, HTTPS encryption stays on but certificate-chain validation
+    // and hostname verification are both disabled. This makes the connection
+    // vulnerable to man-in-the-middle attacks and must only be used when the
+    // server certificate cannot be made trusted (e.g. Consul SANs vs Kubernetes
+    // DNS). Defaults to true so older payloads that omit the field keep the
+    // previous always-verify behavior.
+    #[serde(default = "default_verify")]
+    pub verify: bool,
+}
+
+fn default_verify() -> bool {
+    true
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -152,5 +164,72 @@ mod tests {
             topic_config.broker_config["queued.max.messages.kbytes"],
             "10000"
         );
+    }
+
+    fn base_clickhouse_json(verify: Option<bool>) -> String {
+        let verify_field = match verify {
+            Some(v) => format!(", \"verify\": {v}"),
+            None => String::new(),
+        };
+        format!(
+            "{{\"host\": \"ch.local\", \"port\": 9440, \"secure\": true, \"http_port\": 8443, \"user\": \"snuba\", \"password\": \"secret\", \"database\": \"default\"{verify_field}}}"
+        )
+    }
+
+    #[test]
+    fn test_clickhouse_config_verify_true() {
+        let raw = base_clickhouse_json(Some(true));
+        let cfg: ClickhouseConfig = serde_json::from_str(&raw).unwrap();
+        assert!(cfg.verify);
+        assert!(cfg.secure);
+        assert_eq!(cfg.user, "snuba");
+        assert_eq!(cfg.password, "secret");
+        assert_eq!(cfg.database, "default");
+        assert_eq!(cfg.host, "ch.local");
+        assert_eq!(cfg.http_port, 8443);
+    }
+
+    #[test]
+    fn test_clickhouse_config_verify_false() {
+        let raw = base_clickhouse_json(Some(false));
+        let cfg: ClickhouseConfig = serde_json::from_str(&raw).unwrap();
+        assert!(!cfg.verify);
+    }
+
+    #[test]
+    fn test_clickhouse_config_verify_absent_defaults_to_true() {
+        // Backward compatibility: older payloads that omit `verify` must still
+        // deserialize, defaulting to verification ON (the previous behavior of
+        // the Rust consumer, which always verified with Client::new()).
+        let raw = base_clickhouse_json(None);
+        let cfg: ClickhouseConfig = serde_json::from_str(&raw).unwrap();
+        assert!(cfg.verify);
+    }
+
+    #[test]
+    fn test_storage_config_includes_verify() {
+        // Ensures verify flows through the full StorageConfig (with
+        // deny_unknown_fields) the way the Python side serializes it.
+        let raw = r#"{
+            "name": "errors",
+            "clickhouse_table_name": "errors_local",
+            "clickhouse_cluster": {
+                "host": "ch.local",
+                "port": 9440,
+                "secure": true,
+                "http_port": 8443,
+                "user": "snuba",
+                "password": "secret",
+                "database": "default",
+                "verify": false
+            },
+            "message_processor": {
+                "python_class_name": "ErrorsProcessor",
+                "python_module": "snuba.consumers"
+            }
+        }"#;
+        let storage: StorageConfig = serde_json::from_str(raw).unwrap();
+        assert!(!storage.clickhouse_cluster.verify);
+        assert!(storage.clickhouse_cluster.secure);
     }
 }

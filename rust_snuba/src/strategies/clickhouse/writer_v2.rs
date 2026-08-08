@@ -126,26 +126,23 @@ fn build_writer_inner<N>(
     storage_name: String,
     format: InsertFormat,
     columns: Option<&'static [&'static str]>,
-) -> WriterInner<N>
+) -> Result<WriterInner<N>, reqwest::Error>
 where
     N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
 {
-    RunTaskInThreads::new(
+    let client = ClickhouseClient::new(
+        &cluster_config,
+        &table,
+        storage_name,
+        format,
+        columns,
+    )?;
+    Ok(RunTaskInThreads::new(
         next_step,
-        clickhouse_task_runner(
-            Arc::new(ClickhouseClient::new(
-                &cluster_config,
-                &table,
-                storage_name,
-                format,
-                columns,
-            )),
-            skip_write,
-            batch_write_timeout,
-        ),
+        clickhouse_task_runner(Arc::new(client), skip_write, batch_write_timeout),
         concurrency,
         Some("clickhouse"),
-    )
+    ))
 }
 
 /// `ProcessingStrategy` impl delegating to the inner `RunTaskInThreads`.
@@ -197,8 +194,8 @@ where
         batch_write_timeout: Option<Duration>,
         concurrency: &ConcurrencyConfig,
         storage_name: String,
-    ) -> Self {
-        JsonWriterStep {
+    ) -> Result<Self, reqwest::Error> {
+        Ok(JsonWriterStep {
             inner: build_writer_inner(
                 next_step,
                 cluster_config,
@@ -209,8 +206,8 @@ where
                 storage_name,
                 InsertFormat::JsonEachRow,
                 None,
-            ),
-        }
+            )?,
+        })
     }
 }
 
@@ -237,8 +234,8 @@ where
         concurrency: &ConcurrencyConfig,
         storage_name: String,
         columns: &'static [&'static str],
-    ) -> Self {
-        RowBinaryWriterStep {
+    ) -> Result<Self, reqwest::Error> {
+        Ok(RowBinaryWriterStep {
             inner: build_writer_inner(
                 next_step,
                 cluster_config,
@@ -249,8 +246,8 @@ where
                 storage_name,
                 InsertFormat::RowBinary,
                 Some(columns),
-            ),
-        }
+            )?,
+        })
     }
 }
 
@@ -288,7 +285,7 @@ impl ClickhouseClient {
         storage_name: String,
         format: InsertFormat,
         columns: Option<&[&str]>,
-    ) -> ClickhouseClient {
+    ) -> Result<ClickhouseClient, reqwest::Error> {
         let mut headers = HeaderMap::with_capacity(6);
         headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
         headers.insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip,deflate"));
@@ -324,13 +321,25 @@ impl ClickhouseClient {
             fmt = format.as_str(),
         );
 
-        ClickhouseClient {
-            client: Client::new(),
+        // Only disable TLS verification when secure is on but verify is false.
+        // This keeps HTTPS encryption but disables both certificate-chain
+        // validation and hostname verification, making the connection
+        // vulnerable to MITM attacks. See ClickhouseConfig::verify.
+        let mut builder = Client::builder();
+        if config.secure && !config.verify {
+            builder = builder
+                .danger_accept_invalid_certs(true)
+                .danger_accept_invalid_hostnames(true);
+        }
+        let client = builder.build()?;
+
+        Ok(ClickhouseClient {
+            client,
             headers,
             base_url,
             storage_name,
             query,
-        }
+        })
     }
 
     fn build_url(&self) -> String {
@@ -536,6 +545,10 @@ mod tests {
             user: std::env::var("CLICKHOUSE_USER").unwrap_or("default".to_string()),
             password: std::env::var("CLICKHOUSE_PASSWORD").unwrap_or("".to_string()),
             database: std::env::var("CLICKHOUSE_DATABASE").unwrap_or("default".to_string()),
+            verify: std::env::var("CLICKHOUSE_VERIFY")
+                .unwrap_or("false".to_string())
+                .to_lowercase()
+                == "true",
         }
     }
 
@@ -550,7 +563,8 @@ mod tests {
             "test_storage".to_string(),
             InsertFormat::JsonEachRow,
             None,
-        );
+        )
+        .unwrap();
 
         let url = client.build_url();
         assert!(url.contains("load_balancing=in_order"));
@@ -573,7 +587,8 @@ mod tests {
             "writer_v2_lb_test".to_string(),
             InsertFormat::JsonEachRow,
             None,
-        );
+        )
+        .unwrap();
 
         // Default: in_order
         let url = client.build_url();
@@ -611,14 +626,16 @@ mod tests {
             "writer_v2_block_size_test".to_string(),
             InsertFormat::JsonEachRow,
             None,
-        );
+        )
+        .unwrap();
         let other_client = ClickhouseClient::new(
             &config,
             "test_table",
             "writer_v2_other_storage".to_string(),
             InsertFormat::JsonEachRow,
             None,
-        );
+        )
+        .unwrap();
 
         // Default (key absent): no suffix.
         assert!(!client.build_url().contains("max_insert_block_size"));
@@ -755,6 +772,7 @@ mod tests {
             user: "default".to_string(),
             password: "".to_string(),
             database: "default".to_string(),
+            verify: false,
         };
 
         let client = ClickhouseClient::new(
@@ -763,7 +781,8 @@ mod tests {
             "test_storage".to_string(),
             InsertFormat::JsonEachRow,
             None,
-        );
+        )
+        .unwrap();
 
         let start_time = Instant::now();
         let result = send_with_timeout(
@@ -802,6 +821,7 @@ mod tests {
             user: "default".to_string(),
             password: "".to_string(),
             database: "default".to_string(),
+            verify: false,
         };
         let client = ClickhouseClient::new(
             &config,
@@ -809,7 +829,8 @@ mod tests {
             "test_storage".to_string(),
             InsertFormat::JsonEachRow,
             None,
-        );
+        )
+        .unwrap();
 
         let start_time = Instant::now();
         let result = send_with_timeout(
@@ -830,4 +851,111 @@ mod tests {
             "ClickHouse batch write timed out after 50ms"
         );
     }
+
+    fn make_secure_config(verify: bool) -> ClickhouseConfig {
+        ClickhouseConfig {
+            host: "127.0.0.1".to_string(),
+            port: 9440,
+            secure: true,
+            http_port: 8443,
+            user: "snuba_user".to_string(),
+            password: "snuba_pass".to_string(),
+            database: "snuba_db".to_string(),
+            verify,
+        }
+    }
+
+    #[test]
+    fn test_https_scheme_selected_when_secure() {
+        // HTTPS must remain selected when secure is true, regardless of verify.
+        for verify in [true, false] {
+            let config = make_secure_config(verify);
+            let client = ClickhouseClient::new(
+                &config,
+                "errors_local",
+                "errors".to_string(),
+                InsertFormat::JsonEachRow,
+                None,
+            )
+            .unwrap();
+            assert!(
+                client.base_url.starts_with("https://"),
+                "expected https base_url, got {} (verify={verify})",
+                client.base_url
+            );
+        }
+    }
+
+    #[test]
+    fn test_http_scheme_selected_when_not_secure() {
+        let config = ClickhouseConfig {
+            host: "127.0.0.1".to_string(),
+            port: 9000,
+            secure: false,
+            http_port: 8123,
+            user: "default".to_string(),
+            password: "".to_string(),
+            database: "default".to_string(),
+            verify: true,
+        };
+        let client = ClickhouseClient::new(
+            &config,
+            "t",
+            "s".to_string(),
+            InsertFormat::JsonEachRow,
+            None,
+        )
+        .unwrap();
+        assert!(client.base_url.starts_with("http://"));
+    }
+
+    #[test]
+    fn test_auth_headers_preserved() {
+        // Username, password and database headers must remain unchanged.
+        let config = make_secure_config(false);
+        let client = ClickhouseClient::new(
+            &config,
+            "errors_local",
+            "errors".to_string(),
+            InsertFormat::JsonEachRow,
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            client.headers.get("X-Clickhouse-User").unwrap(),
+            "snuba_user"
+        );
+        assert_eq!(
+            client.headers.get("X-ClickHouse-Key").unwrap(),
+            "snuba_pass"
+        );
+        assert_eq!(
+            client.headers.get("X-ClickHouse-Database").unwrap(),
+            "snuba_db"
+        );
+    }
+
+    #[test]
+    fn test_client_construction_succeeds_both_modes() {
+        // Both verified and unverified clients must build without error.
+        for verify in [true, false] {
+            let config = make_secure_config(verify);
+            let result = ClickhouseClient::new(
+                &config,
+                "errors_local",
+                "errors".to_string(),
+                InsertFormat::JsonEachRow,
+                None,
+            );
+            assert!(
+                result.is_ok(),
+                "client construction failed for verify={verify}: {:?}",
+                result.err()
+            );
+        }
+    }
 }
+
+#[cfg(test)]
+#[path = "tls_test.rs"]
+mod tls_test;
