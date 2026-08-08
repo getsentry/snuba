@@ -1,6 +1,8 @@
+import logging
 import uuid
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
-from typing import cast
+from typing import Any, cast
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import GetTracesRequest
@@ -43,12 +45,43 @@ from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     RoutingDecision,
 )
 
-# Match Sentry's default stats period / max standard retention so callers that
-# do not yet send RequestMeta.standard_retention_days keep tier-1 fidelity for
-# typical 90d windows. Orgs with a shorter standard window should send that
-# value on the request (clamped by max_standard_retention_days).
-DEFAULT_STANDARD_RETENTION_DAYS = 90
-MAX_STANDARD_RETENTION_DAYS = 90
+logger = logging.getLogger(__name__)
+
+# Mirrors the retention_days sentry-option default.
+# standard: fallback when RequestMeta.standard_retention_days is unset/non-positive.
+# downsampled: 13 months (≈30.46d * 13).
+DEFAULT_RETENTION_DAYS: dict[str, dict[str, int]] = {
+    "standard": {"default": 30, "max": 90},
+    "downsampled": {"default": 396, "max": 396},
+}
+
+
+def _positive_int(value: object, fallback: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        return fallback
+    return value
+
+
+def _retention_bucket(config: Mapping[str, object], name: str) -> dict[str, int]:
+    fallback = DEFAULT_RETENTION_DAYS[name]
+    raw = config.get(name, fallback)
+    if not isinstance(raw, Mapping):
+        return dict(fallback)
+    return {
+        "default": _positive_int(raw.get("default"), fallback["default"]),
+        "max": _positive_int(raw.get("max"), fallback["max"]),
+    }
+
+
+def get_retention_days_config() -> dict[str, dict[str, int]]:
+    """Load the nested retention_days option, falling back to code defaults."""
+    # Nested object option; cast because OptionValue's static type is only one level deep.
+    raw: object = get_option("retention_days", cast(Any, DEFAULT_RETENTION_DAYS))
+    if not isinstance(raw, Mapping):
+        logger.warning("Invalid retention_days option %r; using defaults", raw)
+        return {name: dict(bucket) for name, bucket in DEFAULT_RETENTION_DAYS.items()}
+
+    return {name: _retention_bucket(raw, name) for name in DEFAULT_RETENTION_DAYS}
 
 
 def project_id_and_org_conditions(meta: RequestMeta) -> Expression:
@@ -244,15 +277,12 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
 
         in_msg_meta = extract_message_meta(routing_decision.routing_context.in_msg)
 
+        standard_retention = get_retention_days_config()["standard"]
         requested_retention_days = in_msg_meta.standard_retention_days
-        standard_retention_days = (
-            min(
-                requested_retention_days,
-                get_option("max_standard_retention_days", MAX_STANDARD_RETENTION_DAYS),
-            )
-            if requested_retention_days > 0
-            else get_option("default_standard_retention_days", DEFAULT_STANDARD_RETENTION_DAYS)
-        )
+        if requested_retention_days > 0:
+            standard_retention_days = min(requested_retention_days, standard_retention["max"])
+        else:
+            standard_retention_days = standard_retention["default"]
         standard_retention_cutoff = datetime.now(tz=UTC) - timedelta(
             days=standard_retention_days + 1
         )

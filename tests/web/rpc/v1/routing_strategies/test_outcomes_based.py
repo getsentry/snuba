@@ -5,7 +5,6 @@ from unittest import mock
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
-from sentry_options import OptionValue
 from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig
 from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import GetTracesRequest
@@ -90,6 +89,21 @@ def _get_routing_decision(
     )
 
 
+def _retention_days_override(
+    *,
+    standard_default: int = 30,
+    standard_max: int = 90,
+    downsampled_default: int = 396,
+    downsampled_max: int = 396,
+) -> dict[str, Any]:
+    return {
+        "retention_days": {
+            "standard": {"default": standard_default, "max": standard_max},
+            "downsampled": {"default": downsampled_default, "max": downsampled_max},
+        }
+    }
+
+
 @pytest.fixture
 def store_outcomes_fixture(eap: Any) -> None:
     # Generate 24 hours of outcomes data with 1M outcomes per hour
@@ -119,7 +133,7 @@ def test_outcomes_based_routing_queries_daily_table() -> None:
 
     routing_decision = strategy.get_routing_decision(context)
 
-    # 100-day window starts beyond the default 90-day standard retention window
+    # 100-day window starts beyond the default 30-day standard retention window
     assert routing_decision.tier == Tier.TIER_8
     assert routing_decision.clickhouse_settings == {"max_threads": 10}
     assert routing_decision.can_run
@@ -227,21 +241,21 @@ def test_item_type_full_retention_occurrence() -> None:
         (70, 60, {}, Tier.TIER_8),
         (50, 120, {}, Tier.TIER_1),
         (100, 120, {}, Tier.TIER_8),
-        # non-positive / unset falls back to the 90-day default
-        (50, 0, {}, Tier.TIER_1),
-        (50, None, {}, Tier.TIER_1),
-        (100, 0, {}, Tier.TIER_8),
-        (100, None, {}, Tier.TIER_8),
-        (40, 90, {"max_standard_retention_days": 45}, Tier.TIER_1),
-        (50, 90, {"max_standard_retention_days": 45}, Tier.TIER_8),
-        (40, None, {"default_standard_retention_days": 45}, Tier.TIER_1),
-        (50, None, {"default_standard_retention_days": 45}, Tier.TIER_8),
+        # non-positive / unset falls back to the 30-day default
+        (20, 0, {}, Tier.TIER_1),
+        (20, None, {}, Tier.TIER_1),
+        (40, 0, {}, Tier.TIER_8),
+        (40, None, {}, Tier.TIER_8),
+        (40, 90, _retention_days_override(standard_max=45), Tier.TIER_1),
+        (50, 90, _retention_days_override(standard_max=45), Tier.TIER_8),
+        (40, None, _retention_days_override(standard_default=45), Tier.TIER_1),
+        (50, None, _retention_days_override(standard_default=45), Tier.TIER_8),
     ],
 )
 def test_standard_retention_days_routing(
     start_days_ago: int,
     standard_retention_days: int | None,
-    option_overrides: dict[str, OptionValue],
+    option_overrides: dict[str, Any],
     expected_tier: Tier,
 ) -> None:
     with override_options("snuba", option_overrides):
@@ -273,7 +287,7 @@ def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
     assert routing_decision.clickhouse_settings == {"max_threads": 10}
     assert routing_decision.can_run
 
-    # request that queries last 50 days of data — still within the default 90d window
+    # request that queries last 50 days of data — beyond the default 30d window
     start_time = end_time - timedelta(hours=1200)  # 50 days
     request = TraceItemTableRequest(meta=_get_request_meta(start=start_time, end=end_time))
     request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
@@ -284,11 +298,11 @@ def test_outcomes_based_routing_sampled_data_past_thirty_days() -> None:
     )
 
     routing_decision = strategy.get_routing_decision(context)
-    assert routing_decision.tier == Tier.TIER_1
+    assert routing_decision.tier == Tier.TIER_8
     assert routing_decision.clickhouse_settings == {"max_threads": 10}
     assert routing_decision.can_run
 
-    # request that queries last 100 days of data — beyond the default 90d window
+    # request that queries last 100 days of data — beyond the default 30d window
     start_time = end_time - timedelta(hours=2400)  # 100 days
     request = TraceItemTableRequest(meta=_get_request_meta(start=start_time, end=end_time))
     request.meta.downsampled_storage_config.mode = DownsampledStorageConfig.MODE_NORMAL
