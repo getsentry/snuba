@@ -21,6 +21,7 @@ class ClickhouseClusterConfig:
     password: str
     database: str
     secure: bool
+    verify: bool
 
 
 @dataclass(frozen=True)
@@ -281,6 +282,21 @@ def resolve_consumer_config(
     )
 
 
+def _coerce_verify(value: Any) -> bool:
+    """Coerce a ClickHouse ``verify`` setting to a real ``bool``.
+
+    The setting is sourced from the ``CLICKHOUSE_VERIFY`` environment variable,
+    so it may arrive as a string (e.g. ``"true"``/``"false"``/``"1"``) or
+    ``None`` rather than a real boolean. Returning a plain ``bool`` keeps the
+    JSON payload serialized for the Rust consumer cleanly typed.
+    """
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in ("true", "1", "yes")
+
+
 def resolve_storage_config(storage_name: str, storage: WritableTableStorage) -> StorageConfig:
     cluster = storage.get_cluster()
     user, password = cluster.get_credentials()
@@ -292,6 +308,7 @@ def resolve_storage_config(storage_name: str, storage: WritableTableStorage) -> 
         password=password,
         secure=cluster.get_secure(),
         database=cluster.get_database(),
+        verify=_coerce_verify(cluster.get_verify()),
     )
 
     processor = storage.get_table_writer().get_stream_loader().get_processor()

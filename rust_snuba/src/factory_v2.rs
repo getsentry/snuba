@@ -172,7 +172,8 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     &self.clickhouse_concurrency,
                     self.storage_config.name.clone(),
                     columns,
-                ))
+                )
+                .expect("failed to build ClickHouse HTTP client"))
             } else {
                 Box::new(JsonWriterStep::new(
                     next_step,
@@ -182,7 +183,8 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     self.batch_write_timeout,
                     &self.clickhouse_concurrency,
                     self.storage_config.name.clone(),
-                ))
+                )
+                .expect("failed to build ClickHouse HTTP client"))
             };
 
         #[allow(clippy::result_large_err)]
