@@ -64,16 +64,26 @@ pub fn get_max_insert_block_size(storage_name: &str) -> Option<u64> {
 /// roughly 15 minutes with the default `tcp_retries2`. For that whole window the
 /// write is neither failing nor progressing, so the retry loop never runs.
 ///
-/// A healthy INSERT can legitimately take up to a minute, so this is set at
-/// double that. The deadline exists to catch a connection that has stopped
-/// responding altogether, not to cap a slow-but-progressing write — cutting off
-/// real work would turn a merely slow shard into a retry storm against it.
+/// Sized to sit just above ClickHouse's own HTTP timeout rather than above
+/// observed write latency. The EAP clusters set `http_receive_timeout` and
+/// `http_send_timeout` to 60s, so the server gives up on a slow write at 60s
+/// and answers — which is also why writes are seen taking "up to a minute";
+/// that ceiling is the server's timeout, not a latency distribution.
+///
+/// Five seconds of headroom keeps that ordering intact: the server's timeout
+/// always fires first and returns something the writer can classify and retry,
+/// and this deadline only fires when nothing came back at all. That is exactly
+/// the black-holed connection it exists for, and nothing else.
+///
+/// Anything much larger just delays detection — the extra time can only be
+/// spent waiting on a response that is never coming, since a live server would
+/// have answered by 60s.
 ///
 /// Deliberately not a cumulative budget: it applies per attempt, and each retry
 /// starts a fresh one. A fully black-holed endpoint therefore costs
-/// `max_retries + 1` of these plus backoff — around ten minutes at the defaults
-/// — before the writer gives up and the consumer exits.
-pub const DEFAULT_CLICKHOUSE_REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
+/// `max_retries + 1` of these plus backoff, about 330s at the defaults, which
+/// stays under the 450s `--max-poll-interval-ms` the deployments set.
+pub const DEFAULT_CLICKHOUSE_REQUEST_TIMEOUT: Duration = Duration::from_secs(65);
 
 /// Per-attempt INSERT deadline for `storage_name`, overridable via the
 /// `clickhouse_request_timeout_ms` dict in the `snuba` options namespace.

@@ -24,6 +24,20 @@ use crate::types::{BytesInsertBatch, RowData};
 /// of inheriting the kernel's multi-minute connect backoff.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// How long an unused connection may sit in the pool before being discarded.
+///
+/// Must stay below ClickHouse's `keep_alive_timeout`, which the EAP clusters
+/// set to 60s. `reqwest` defaults to 90s, which leaves a 60-90s window where
+/// the server has already closed a connection the pool still considers good —
+/// handing one out produces exactly the "connection closed before message
+/// completed" this writer has been logging. Retiring them first closes that
+/// window.
+///
+/// The margin matters here: with `--max-batch-time-ms 50000` a write slot is
+/// idle for around 50s between batches, so connections routinely sit close to
+/// the server's limit and any hiccup pushes them past it.
+const POOL_IDLE_TIMEOUT: Duration = Duration::from_secs(45);
+
 /// TCP keepalive: idle time before the kernel starts probing, then the spacing
 /// and count of the probes. Detection lands at roughly `idle + interval *
 /// retries`, so ~30s here.
@@ -371,6 +385,7 @@ impl ClickhouseClient {
         let client = Client::builder()
             .connect_timeout(CONNECT_TIMEOUT)
             .read_timeout(get_clickhouse_request_timeout(&storage_name))
+            .pool_idle_timeout(POOL_IDLE_TIMEOUT)
             .tcp_keepalive(TCP_KEEPALIVE)
             .tcp_keepalive_interval(TCP_KEEPALIVE_INTERVAL)
             .tcp_keepalive_retries(TCP_KEEPALIVE_RETRIES)
