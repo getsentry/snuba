@@ -1142,5 +1142,16 @@ def run_job_by_type(job_type: str) -> Response:
         # The runner records status/logs under job_id before raising, so hand
         # it back to let operators inspect the failed run's logs.
         return make_response(jsonify({"error": str(e), "job_id": job_id}), 500)
+    finally:
+        audit_log.record(
+            g.user.email,
+            AuditLogAction.RAN_ADHOC_MANUAL_JOB,
+            {
+                "job_id": job_id,
+                "job_type": job_type,
+                "params": json.dumps(params, sort_keys=True),
+            },
+            notify=True,
+        )
 
     return make_response(jsonify({"job_id": job_id, "status": job_status}), 200)

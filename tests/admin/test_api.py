@@ -13,8 +13,11 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
 )
 
 from snuba import settings
+from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.auth import USER_HEADER_KEY
+from snuba.admin.auth_roles import DEFAULT_ROLES
 from snuba.admin.clickhouse.clusters import TABLES_DATABASE
+from snuba.admin.user import AdminUser
 from snuba.datasets.factory import get_enabled_dataset_names
 from snuba.web.rpc import RPCEndpoint
 
@@ -641,6 +644,58 @@ def test_run_job_by_type_is_repeatable(admin_api: FlaskClient) -> None:
         job_ids.add(body["job_id"])
     # A fresh job id per run is what makes it repeatable.
     assert len(job_ids) == 2
+
+
+@pytest.mark.redis_db
+def test_run_job_by_type_reports_parameters_and_user(admin_api: FlaskClient) -> None:
+    params = {"message": "hello", "nested": {"enabled": True}}
+    user = AdminUser(email="operator@sentry.io", id="123", roles=DEFAULT_ROLES)
+    with (
+        mock.patch("snuba.admin.views.audit_log") as audit_log,
+        mock.patch("snuba.admin.views.authorize_request", return_value=user),
+    ):
+        response = admin_api.post(
+            "/job-types/ToyJob/run",
+            data=json.dumps({"params": params}),
+            headers={"Content-Type": "application/json"},
+        )
+
+    assert response.status_code == 200
+    job_id = json.loads(response.data)["job_id"]
+    audit_log.record.assert_called_once_with(
+        "operator@sentry.io",
+        AuditLogAction.RAN_ADHOC_MANUAL_JOB,
+        {
+            "job_id": job_id,
+            "job_type": "ToyJob",
+            "params": json.dumps(params, sort_keys=True),
+        },
+        notify=True,
+    )
+
+
+@pytest.mark.redis_db
+def test_failed_run_job_by_type_is_reported(admin_api: FlaskClient) -> None:
+    params = {"fail": True}
+    with mock.patch("snuba.admin.views.audit_log") as audit_log:
+        response = admin_api.post(
+            "/job-types/ToyJob/run",
+            data=json.dumps({"params": params}),
+            headers={"Content-Type": "application/json"},
+        )
+
+    assert response.status_code == 500
+    job_id = json.loads(response.data)["job_id"]
+    audit_log.record.assert_called_once_with(
+        "unknown",
+        AuditLogAction.RAN_ADHOC_MANUAL_JOB,
+        {
+            "job_id": job_id,
+            "job_type": "ToyJob",
+            "params": json.dumps(params, sort_keys=True),
+        },
+        notify=True,
+    )
 
 
 @pytest.mark.redis_db
