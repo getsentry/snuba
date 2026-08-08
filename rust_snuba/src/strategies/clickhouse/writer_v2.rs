@@ -386,7 +386,8 @@ impl ClickhouseClient {
                 "rust_consumer.clickhouse_insert_error", 1,
                 "status" => failure.status,
                 "timeout" => failure.timeout,
-                "retried" => !last
+                "attempt" => attempt + 1,
+                "max_attempts" => attempts
             );
 
             if last {
