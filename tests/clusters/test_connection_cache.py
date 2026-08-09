@@ -93,12 +93,23 @@ def test_close_drops_pools_and_closes_clients() -> None:
 
 def test_fork_handler_is_registered_on_the_cache() -> None:
     # One handler for the whole stack, registered where the state is owned.
+    #
+    # Asserts the effect rather than a call count: test_cluster.py reloads the
+    # cluster module between its tests, and each reload re-runs
+    # os.register_at_fork, so by the time the full suite reaches this test
+    # several handlers are registered. They all resolve the same cache and the
+    # reset is idempotent, so what matters is that the child comes up clear.
     from snuba.clusters.cluster import connection_cache
 
-    with mock.patch.object(connection_cache, "reset_after_fork") as reset:
+    cache = connection_cache._ConnectionCache__cache  # type: ignore[attr-defined]
+    cache["inherited"] = mock.Mock()
+    try:
         pid = os.fork()
         if pid == 0:
-            os._exit(0 if reset.call_count == 1 else 1)
+            inherited = connection_cache._ConnectionCache__cache  # type: ignore[attr-defined]
+            os._exit(0 if inherited == {} else 1)
         _, status = os.waitpid(pid, 0)
+    finally:
+        cache.pop("inherited", None)
 
     assert os.WEXITSTATUS(status) == 0
