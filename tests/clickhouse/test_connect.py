@@ -347,7 +347,7 @@ def test_internal_profile_is_unbounded() -> None:
     assert ClickhouseClientSettings.INTERNAL.value.timeout is None
 
 
-def _pool_size_under(options: dict[str, object], **settings_overrides: object) -> int:
+def _pool_size_under(options: dict[str, Any], **settings_overrides: Any) -> int:
     """The number of clients a pool built under these options would hold."""
     from sentry_options.testing import override_options
 
@@ -1136,4 +1136,4 @@ def test_a_client_failing_to_build_does_not_leak_its_slot() -> None:
         with pytest.raises(ClickhouseError):
             pool.execute("SELECT 1")
 
-    assert pool._create_client.call_count == 3  # type: ignore[attr-defined]
+    assert pool._create_client.call_count == 3
