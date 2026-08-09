@@ -5,7 +5,7 @@ import os
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
 from datetime import datetime
-from threading import Lock
+from threading import Lock, local
 from typing import Any, NamedTuple
 
 import clickhouse_connect
@@ -125,15 +125,20 @@ class ClientKey(NamedTuple):
 class ClickhouseClientManager:
     """Process-wide owner of the ClickHouse HTTP clients and the sockets behind them.
 
-    One manager per process holds one urllib3 pool manager -- the socket pool --
-    and hands out a shared :class:`Client` per :class:`ClientKey`. urllib3
-    multiplexes that pool per host and lends a connection for the length of a
-    request, so clients are safe to share across threads and a process holds
-    ``max_pool_size`` sockets per endpoint rather than per pool object.
+    One manager per process owns the urllib3 pool manager -- the socket pool --
+    and hands out a :class:`Client` per :class:`ClientKey`, **per thread**.
 
-    Sharing is only safe because every request drains its response before
-    returning (see ``ClickhouseConnectPool._execute_once``); a half-read socket
-    going back into the pool is what makes the next request decode another
+    Clients are thread-local rather than shared, so a client only ever has one
+    query in flight: a granian blocking thread serves one request at a time, so
+    queries are serialized per thread by construction and nothing has to
+    coordinate access to a client's response stream. That is cheap because a
+    client owns no sockets of its own -- every client draws from the one shared
+    pool manager, which urllib3 multiplexes per host. The socket ceiling is
+    therefore the query concurrency per endpoint, not the number of clients.
+
+    Sockets are still only reusable because every request drains its response
+    before returning (see ``ClickhouseConnectPool._execute_once``); a half-read
+    socket going back to the pool is what makes the next request decode another
     request's bytes.
 
     A separate pool manager is kept per TLS configuration, since urllib3 fixes
@@ -142,7 +147,7 @@ class ClickhouseClientManager:
 
     def __init__(self) -> None:
         self.__lock = Lock()
-        self.__clients: dict[ClientKey, Client] = {}
+        self.__local = local()
         self.__pool_managers: dict[tuple[str | None, bool], PoolManager] = {}
 
     def _pool_manager(self, ca_certs: str | None, verify: bool) -> PoolManager:
@@ -161,16 +166,16 @@ class ClickhouseClientManager:
         return manager
 
     def get_client(self, key: ClientKey) -> Client:
-        client = self.__clients.get(key)
-        if client is not None:
-            return client
-        with self.__lock:
-            # Re-check: another thread may have built it while we waited.
-            client = self.__clients.get(key)
-            if client is None:
-                client = self._build_client(key)
-                self.__clients[key] = client
-            return client
+        # Thread-local, so no locking and no chance of two threads landing on
+        # one client. The dict dies with the thread; the sockets do not, because
+        # they belong to the shared pool manager below.
+        clients: dict[ClientKey, Client] | None = getattr(self.__local, "clients", None)
+        if clients is None:
+            clients = self.__local.clients = {}
+        client = clients.get(key)
+        if client is None:
+            client = clients[key] = self._build_client(key)
+        return client
 
     def _build_client(self, key: ClientKey) -> Client:
         return clickhouse_connect.get_client(
@@ -188,28 +193,36 @@ class ClickhouseClientManager:
             # No `settings=`: profile settings are per query, not per client.
             pool_mgr=self._pool_manager(key.ca_certs, key.verify),
             query_limit=0,
+            # A client is used by one thread, one query at a time, so let the
+            # driver stamp the query id when the caller has not supplied one.
+            # That makes every request identifiable client-side -- including the
+            # insert, explain and migration paths, which pass no id -- instead
+            # of only being findable by whatever ClickHouse assigned it.
+            autogenerate_query_id=True,
+            # Server-side sessions would serialize per thread too, but they are
+            # ClickHouse state with their own limits (max_sessions_for_user);
+            # thread-local clients already give the serialization without it.
             autogenerate_session_id=False,
             compress="lz4",
         )
 
     def close(self) -> None:
-        """Drop every client and close the sockets behind them.
+        """Close every socket this process holds.
 
-        ``Client.close`` only tears down a pool manager the client created
-        itself, and we hand ours in, so closing the clients would leave the
-        sockets open and leave the managers pinned in clickhouse-connect's
-        module-level ``all_managers``. Clear them here instead.
+        Clearing the pool managers is what actually releases resources: clients
+        own no sockets, so a client left behind on another thread holds nothing
+        and is collected with that thread. ``Client.close`` would not help here
+        anyway -- it only tears down a pool manager the client created itself,
+        and we hand ours in, which also leaves them pinned in
+        clickhouse-connect's module-level ``all_managers``.
         """
         with self.__lock:
-            for client in self.__clients.values():
-                with suppress(Exception):
-                    client.close()
-            self.__clients.clear()
             for manager in self.__pool_managers.values():
                 with suppress(Exception):
                     manager.clear()
                 all_managers.pop(manager, None)
             self.__pool_managers.clear()
+        self.__local = local()
 
 
 # One per process, by construction: module state.
@@ -264,9 +277,10 @@ class ClickhouseConnectPool(ClickhousePool):
 
     This class is the per-profile face of a shared resource. It holds no client
     and no socket of its own: it knows *where* to connect and *with which
-    settings*, and asks :data:`CLIENT_MANAGER` for the client matching its
+    settings*, and asks :data:`CLIENT_MANAGER` for this thread's client for its
     endpoint and socket timeout. Many pools -- one per profile per node --
-    therefore share a handful of clients, and all of them share one socket pool.
+    therefore collapse onto a handful of clients per thread, and every thread
+    draws from one process-wide socket pool.
 
     Two rules make that sharing safe, and both live here:
 

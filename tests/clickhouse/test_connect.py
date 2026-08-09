@@ -1078,24 +1078,28 @@ def _managed_pool(manager: Any, **kwargs: Any) -> ClickhouseConnectPool:
     )
 
 
-def test_clients_are_shared_across_threads() -> None:
-    # Sharing is the point: one client serves every thread, and urllib3 lends a
-    # socket per in-flight request. The barrier only clears if both requests are
-    # inside query() at once, so this fails rather than passes vacuously if the
-    # design ever serializes requests behind a checkout.
+def test_each_thread_gets_its_own_client() -> None:
+    # Queries are serialized per thread by giving each thread its own client, so
+    # a client never has two queries in flight and nothing has to coordinate
+    # access to its response stream. The barrier makes the two requests overlap,
+    # so this would fail if they were handed the same client.
     import threading
 
     from snuba.clickhouse.connect import ClickhouseClientManager
 
     both_inside = threading.Barrier(2, timeout=5)
-    client = mock.Mock()
-    client.query.side_effect = lambda *a, **k: (
-        both_inside.wait(),
-        FakeQueryResult(result_set=[[1]]),
-    )[1]
+    seen: list[Any] = []
+
+    def build(key: Any) -> Any:
+        client = mock.Mock()
+        client.query.side_effect = lambda *a, **k: (
+            both_inside.wait(),
+            FakeQueryResult(result_set=[[1]]),
+        )[1]
+        return client
 
     manager = ClickhouseClientManager()
-    manager._build_client = lambda key: client  # type: ignore[method-assign]
+    manager._build_client = build  # type: ignore[method-assign]
     pool = _managed_pool(manager)
 
     failures: list[BaseException] = []
@@ -1103,6 +1107,7 @@ def test_clients_are_shared_across_threads() -> None:
     def run() -> None:
         try:
             pool.execute("SELECT 1")
+            seen.append(pool._get_client())
         except BaseException as error:  # noqa: BLE001 - surfaced by the assert
             failures.append(error)
 
@@ -1113,12 +1118,57 @@ def test_clients_are_shared_across_threads() -> None:
         thread.join(timeout=10)
 
     assert not failures
-    assert client.query.call_count == 2
+    assert len(seen) == 2
+    assert seen[0] is not seen[1]
+
+
+def test_a_thread_reuses_its_own_client() -> None:
+    # Thread-local, not per-request: the same thread must not rebuild a client
+    # for every query, or the pool churns connections under normal load.
+    from snuba.clickhouse.connect import ClickhouseClientManager
+
+    built = []
+
+    def build(key: Any) -> Any:
+        built.append(key)
+        client = mock.Mock()
+        client.query.return_value = FakeQueryResult(result_set=[])
+        return client
+
+    manager = ClickhouseClientManager()
+    manager._build_client = build  # type: ignore[method-assign]
+    pool = _managed_pool(manager)
+
+    pool.execute("SELECT 1")
+    pool.execute("SELECT 2")
+    pool.execute("SELECT 3")
+
+    assert len(built) == 1
+
+
+def test_driver_stamps_the_query_id() -> None:
+    # With one query in flight per client, the driver can own the query id, so
+    # paths that pass none (insert, explain, migrations) are still identifiable
+    # client-side rather than only by whatever ClickHouse assigned.
+    import clickhouse_connect
+
+    from snuba.clickhouse.connect import ClickhouseClientManager
+
+    pool = _bare_pool()
+    with (
+        mock.patch.object(clickhouse_connect, "get_client") as get_client,
+        mock.patch("snuba.clickhouse.connect.get_pool_manager"),
+    ):
+        ClickhouseClientManager().get_client(pool._client_key())
+
+    _, kwargs = get_client.call_args
+    assert kwargs["autogenerate_query_id"] is True
 
 
 def test_one_client_per_endpoint_and_timeout() -> None:
-    # Profiles that differ only in settings collapse onto one client; a different
-    # socket timeout is a different client, because the timeout is baked in.
+    # Within a thread, profiles that differ only in settings collapse onto one
+    # client; a different socket timeout is a different client, because the
+    # timeout is baked in at construction.
     from snuba.clickhouse.connect import ClickhouseClientManager
 
     built: list[Any] = []
@@ -1215,15 +1265,11 @@ def test_manager_close_releases_sockets_and_unpins_the_pool_manager() -> None:
 
     manager = ClickhouseClientManager()
     pool_manager = mock.Mock()
-    client = mock.Mock()
     all_managers[pool_manager] = 0
-    key = _bare_pool()._client_key()
-    manager._ClickhouseClientManager__clients[key] = client  # type: ignore[attr-defined]
     manager._ClickhouseClientManager__pool_managers[(None, False)] = pool_manager  # type: ignore[attr-defined]
 
     manager.close()
 
-    client.close.assert_called_once()
     pool_manager.clear.assert_called_once()
     assert pool_manager not in all_managers
 
