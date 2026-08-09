@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import json
+import queue
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
 from datetime import datetime
-from threading import Lock
 from typing import Any
 
 import clickhouse_connect
@@ -93,6 +93,17 @@ _STREAM_DESYNC_MARKERS = (
 )
 
 
+def _resolve_pool_size() -> int:
+    """How many clients -- and so how many connections -- this pool may hold."""
+    # The option keeps its historical default, which schema evolution will not
+    # let us change, so that value means "unset" and defers to the derived
+    # size. Any other positive value is an explicit operator override.
+    option_pool_size = get_option("clickhouse_connect_pool_size", LEGACY_CONNECT_POOL_SIZE)
+    if option_pool_size > 0 and option_pool_size != LEGACY_CONNECT_POOL_SIZE:
+        return int(option_pool_size)
+    return settings.CLICKHOUSE_MAX_POOL_SIZE or process_query_concurrency()
+
+
 def _coerce_temporal(value: Any, ch_type: str) -> Any:
     """
     Parse a ``Date``/``DateTime`` string from JSONCompact into the ``date``/``datetime``
@@ -119,10 +130,12 @@ class ClickhouseConnectPool(ClickhousePool):
     the connection cache (see :mod:`snuba.clusters.cluster`), one level above
     the individual drivers.
 
-    Unlike the native pool, this class does not maintain its own queue of
-    connections: ``clickhouse-connect`` manages an HTTP connection pool (via
-    ``urllib3``) for us. A single :class:`Client` is created lazily and reused
-    across threads, with the underlying pool sized to ``max_pool_size``.
+    Like the native pool, a request borrows one :class:`Client` -- and so one
+    connection -- for its duration and gives it back afterwards. Each client
+    owns a ``urllib3`` pool of exactly one connection, so "which socket is this
+    request using" has a single answer, and a client whose stream may be left
+    mid-response is closed instead of returned. A shared client would instead
+    recycle that connection into an unrelated later request.
     """
 
     def __init__(
@@ -138,6 +151,8 @@ class ClickhouseConnectPool(ClickhousePool):
         connect_timeout: int = 1,
         send_receive_timeout: int | None = 35,
         client_settings: Mapping[str, Any] = {},
+        max_pool_size: int | None = None,
+        pool_get_timeout_seconds: float = settings.CLICKHOUSE_POOL_GET_TIMEOUT_SECONDS,
     ) -> None:
         self.host = host
         self.port = http_port
@@ -150,23 +165,24 @@ class ClickhouseConnectPool(ClickhousePool):
         self.connect_timeout = connect_timeout
         self.send_receive_timeout = send_receive_timeout
         self.client_settings = client_settings
+        self.pool_get_timeout_seconds = pool_get_timeout_seconds
 
-        self.__client: Client | None = None
-        self.__lock = Lock()
+        self.max_pool_size = max_pool_size if max_pool_size is not None else _resolve_pool_size()
+        # Mirrors ClickhousePool: a fixed number of slots seeded empty, so
+        # clients are built lazily and only as far as demand actually goes.
+        self.__pool: queue.LifoQueue[Client | None] = queue.LifoQueue(self.max_pool_size)
+        for _ in range(self.max_pool_size):
+            self.__pool.put(None)
 
     def _create_client(self) -> Client:
-        # The option keeps its historical default, which schema evolution will not
-        # let us change, so that value means "unset" and defers to the derived
-        # size. Any other positive value is an explicit operator override.
-        option_pool_size = get_option("clickhouse_connect_pool_size", LEGACY_CONNECT_POOL_SIZE)
-        if option_pool_size > 0 and option_pool_size != LEGACY_CONNECT_POOL_SIZE:
-            pool_size = option_pool_size
-        else:
-            pool_size = settings.CLICKHOUSE_MAX_POOL_SIZE or process_query_concurrency()
+        # One connection per client: the pool above bounds how many exist, and a
+        # borrowed client is used by one request at a time, so urllib3 never has
+        # to choose between sockets and can never hand this request a socket
+        # another one left dirty.
         pool_mgr = get_pool_manager(
             ca_cert=self.ca_certs,
             verify=bool(self.verify),
-            maxsize=pool_size,
+            maxsize=1,
             num_pools=1,
         )
         connect_timeout = (
@@ -198,17 +214,42 @@ class ClickhouseConnectPool(ClickhousePool):
             compress="lz4",
         )
 
-    def _get_client(self) -> Client:
-        if self.__client is None:
-            with self.__lock:
-                if self.__client is None:
-                    self.__client = self._create_client()
-        return self.__client
+    @contextmanager
+    def _checkout(self) -> Iterator[Client]:
+        """Lend one client, and so one connection, to a single request.
 
-    def _reset_connections(self) -> None:
-        if self.__client is not None:
-            with suppress(Exception):
-                self.__client.close_connections()
+        The slot is always returned, but the *client* is only returned when its
+        connection is known to be clean. A transport failure, a truncated
+        stream, or a Native decode desync all mean the response may be
+        half-consumed, so that client is closed and its slot re-seeded empty --
+        the damage dies with the request that caused it. Ordinary server-side
+        errors (bad SQL, memory limits) arrive on an intact stream and keep
+        their client.
+        """
+        try:
+            client = self.__pool.get(block=True, timeout=self.pool_get_timeout_seconds)
+        except queue.Empty:
+            metrics.increment("pool_get_timeout")
+            raise
+
+        reusable = True
+        try:
+            if client is None:
+                client = self._create_client()
+            yield client
+        except (OperationalError, StreamFailureError):
+            reusable = False
+            raise
+        except ClickHouseError as e:
+            reusable = not self._is_stream_desync(e)
+            raise
+        finally:
+            if client is not None and not reusable:
+                metrics.increment("client_discarded")
+                with suppress(Exception):
+                    client.close()
+                client = None
+            self.__pool.put(client, block=False)
 
     def _build_query_settings(
         self,
@@ -238,6 +279,7 @@ class ClickhouseConnectPool(ClickhousePool):
 
     def _execute_once(
         self,
+        client: Client,
         query: str,
         params: Params,
         with_column_types: bool,
@@ -246,7 +288,6 @@ class ClickhouseConnectPool(ClickhousePool):
         columnar: bool,
         capture_trace: bool,
     ) -> ClickhouseResult:
-        client = self._get_client()
         query_settings = self._build_query_settings(settings, query_id, capture_trace)
 
         with traces.start_span(
@@ -333,8 +374,7 @@ class ClickhouseConnectPool(ClickhousePool):
         the trailing result row, the shape the reader expects. ``capture_trace``/``robust``
         are accepted for interface parity but unused on this path.
         """
-        with self._translate_clickhouse_errors():
-            client = self._get_client()
+        with self._translate_clickhouse_errors(), self._checkout() as client:
             json_settings: dict[str, Any] = dict(settings) if settings else {}
             # 64-bit ints as JSON numbers, matching the native driver's Python ints.
             json_settings["output_format_json_quote_64bit_integers"] = 0
@@ -413,20 +453,20 @@ class ClickhouseConnectPool(ClickhousePool):
 
     @contextmanager
     def _translate_clickhouse_errors(self) -> Iterator[None]:
+        # Disposing of the affected client is _checkout's job -- it is the only
+        # thing that knows which one this request borrowed. This wraps it, so by
+        # the time an error arrives here that has already happened.
         try:
             yield
         except OperationalError as e:
             metrics.increment("connection_error")
-            self._reset_connections()
             raise ClickhouseError(str(e), code=getattr(e, "code", None) or -1) from e
         except StreamFailureError as e:
             metrics.increment("stream_failure")
-            self._reset_connections()
             raise ClickhouseError(str(e), code=-1) from e
         except ClickHouseError as e:
             if self._is_stream_desync(e):
                 metrics.increment("stream_desync")
-                self._reset_connections()
             raise ClickhouseError(str(e), code=getattr(e, "code", None) or -1) from e
         except json.JSONDecodeError as e:
             raise ClickhouseError(f"invalid JSON response: {e}", code=-1) from e
@@ -444,8 +484,9 @@ class ClickhouseConnectPool(ClickhousePool):
         retryable: bool = True,
     ) -> ClickhouseResult:
         """Execute a clickhouse query. ``retryable`` is accepted for interface parity only."""
-        with self._translate_clickhouse_errors():
+        with self._translate_clickhouse_errors(), self._checkout() as client:
             return self._execute_once(
+                client,
                 query,
                 params,
                 with_column_types,
@@ -473,9 +514,10 @@ class ClickhouseConnectPool(ClickhousePool):
         if query_id is not None:
             insert_settings["query_id"] = query_id
 
-        with self._translate_clickhouse_errors():
-            client = self._get_client()
-            with traces.start_span(
+        with (
+            self._translate_clickhouse_errors(),
+            self._checkout() as client,
+            traces.start_span(
                 name=f"INSERT INTO {table}",
                 attributes={
                     SENTRY_OP: "db.clickhouse",
@@ -484,17 +526,18 @@ class ClickhouseConnectPool(ClickhousePool):
                         table, column_names
                     ),
                 },
-            ) as span:
-                span.set_attribute(
-                    "query_id",
-                    query_id if query_id is not None else "unknown-query-id",
-                )
-                client.insert(
-                    table,
-                    matrix,
-                    column_names=column_names,
-                    settings=insert_settings or None,
-                )
+            ) as span,
+        ):
+            span.set_attribute(
+                "query_id",
+                query_id if query_id is not None else "unknown-query-id",
+            )
+            client.insert(
+                table,
+                matrix,
+                column_names=column_names,
+                settings=insert_settings or None,
+            )
 
     def execute_robust(
         self,
@@ -543,8 +586,7 @@ class ClickhouseConnectPool(ClickhousePool):
         SYNTAX / PLAN / PIPELINE (the kinds admin system-query validation issues);
         the multi-column EXPLAIN ESTIMATE is not used on this path.
         """
-        with self._translate_clickhouse_errors():
-            client = self._get_client()
+        with self._translate_clickhouse_errors(), self._checkout() as client:
             with traces.start_span(
                 name="clickhouse query",
                 attributes={
@@ -584,10 +626,16 @@ class ClickhouseConnectPool(ClickhousePool):
         )
 
     def close(self) -> None:
-        # Take the same lock _get_client uses so a concurrent lazy init can't
-        # race with teardown (one thread closing the client while another is
-        # creating or about to use it).
-        with self.__lock:
-            if self.__client is not None:
-                self.__client.close()
-                self.__client = None
+        # Drain the slots rather than reaching for a client reference: only
+        # checked-in clients are ours to close, and a borrowed one belongs to the
+        # request still using it. Each slot is re-seeded empty, so the pool stays
+        # usable and simply builds fresh clients on demand.
+        for _ in range(self.max_pool_size):
+            try:
+                client = self.__pool.get(block=False)
+            except queue.Empty:
+                break
+            if client is not None:
+                with suppress(Exception):
+                    client.close()
+            self.__pool.put(None, block=False)

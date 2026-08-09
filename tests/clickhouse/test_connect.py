@@ -35,15 +35,17 @@ class FakeQueryResult:
         self.summary = summary or {}
 
 
-def _make_pool(client: mock.Mock) -> ClickhouseConnectPool:
+def _make_pool(client: mock.Mock, max_pool_size: int = 1) -> ClickhouseConnectPool:
+    # The pool seeds its slots empty and builds a client on first checkout, so
+    # stubbing the factory is enough to hand every request the same mock.
     pool = ClickhouseConnectPool(
         host="host",
         user="test",
         password="test",
         database="test",
+        max_pool_size=max_pool_size,
     )
-    pool._ClickhouseConnectPool__client = client  # type: ignore[attr-defined]
-    pool._get_client = lambda: client  # type: ignore[method-assign]
+    pool._create_client = lambda: client  # type: ignore[method-assign]
     return pool
 
 
@@ -206,8 +208,8 @@ def test_operational_error_mapped_without_extra_retries() -> None:
         pool.execute("SELECT 1", retryable=True)
 
     assert client.query.call_count == 1
-    client.close_connections.assert_called_once()
-    client.close.assert_not_called()
+    # The client may be mid-stream, so it is discarded rather than reused.
+    client.close.assert_called_once()
 
 
 def test_generic_clickhouse_error_wrapped() -> None:
@@ -221,7 +223,8 @@ def test_generic_clickhouse_error_wrapped() -> None:
         pool.execute("SELECT 1")
 
     assert client.query.call_count == 1
-    client.close_connections.assert_not_called()
+    # An intact stream: the client goes back in the pool.
+    client.close.assert_not_called()
 
 
 def test_totals_malformed_json_wrapped() -> None:
@@ -253,7 +256,7 @@ def test_timeouts_are_passed_through() -> None:
         mock.patch.object(clickhouse_connect, "get_client") as get_client,
         mock.patch("snuba.clickhouse.connect.get_pool_manager"),
     ):
-        pool._get_client()
+        pool._create_client()
 
     _, kwargs = get_client.call_args
     assert kwargs["send_receive_timeout"] == 300000
@@ -281,7 +284,7 @@ def test_send_receive_timeout_unbounded_when_profile_has_none() -> None:
         mock.patch.object(clickhouse_connect, "get_client") as get_client,
         mock.patch("snuba.clickhouse.connect.get_pool_manager"),
     ):
-        pool._get_client()
+        pool._create_client()
 
     _, kwargs = get_client.call_args
     assert kwargs["send_receive_timeout"] == UNBOUNDED_SEND_RECEIVE_TIMEOUT_SECONDS
@@ -311,7 +314,7 @@ def test_timeout_options_override_constructor_values() -> None:
         mock.patch.object(clickhouse_connect, "get_client") as get_client,
         mock.patch("snuba.clickhouse.connect.get_pool_manager"),
     ):
-        pool._get_client()
+        pool._create_client()
 
     _, kwargs = get_client.call_args
     assert kwargs["connect_timeout"] == 7
@@ -344,84 +347,79 @@ def test_internal_profile_is_unbounded() -> None:
     assert ClickhouseClientSettings.INTERNAL.value.timeout is None
 
 
-def test_pool_size_defaults_to_process_concurrency() -> None:
-    # A granian blocking thread runs one query at a time, so a pool larger than
-    # the thread count can never be fully checked out.
-    import clickhouse_connect
+def _pool_size_under(options: dict[str, object], **settings_overrides: object) -> int:
+    """The number of clients a pool built under these options would hold."""
     from sentry_options.testing import override_options
 
+    from snuba import settings
+
+    with override_options("snuba", options), mock.patch.multiple(settings, **settings_overrides):
+        pool = ClickhouseConnectPool(host="host", user="test", password="test", database="test")
+    return pool.max_pool_size
+
+
+def test_pool_size_defaults_to_process_concurrency() -> None:
+    # A granian blocking thread runs one query at a time, so a pool larger than
+    # the thread count can never be fully checked out. Pool size is now a count
+    # of clients, since each client owns exactly one connection.
     from snuba.utils.concurrency import process_query_concurrency
 
-    pool = ClickhouseConnectPool(host="host", user="test", password="test", database="test")
-
-    with (
-        override_options("snuba", {}),
-        mock.patch.object(clickhouse_connect, "get_client"),
-        mock.patch("snuba.clickhouse.connect.get_pool_manager") as get_pool_manager,
-    ):
-        pool._get_client()
-
-    _, kwargs = get_pool_manager.call_args
-    assert kwargs["maxsize"] == process_query_concurrency()
+    assert _pool_size_under({}, CLICKHOUSE_MAX_POOL_SIZE=None) == process_query_concurrency()
 
 
 def test_legacy_pool_size_option_defers_to_derived_size() -> None:
     # The option keeps its historical default (schema evolution forbids changing
     # it), so that value must mean "unset" or it would pin every pool back at 25.
-    import clickhouse_connect
-    from sentry_options.testing import override_options
-
     from snuba.clickhouse.connect import LEGACY_CONNECT_POOL_SIZE
     from snuba.utils.concurrency import process_query_concurrency
 
-    pool = ClickhouseConnectPool(host="host", user="test", password="test", database="test")
-
-    with (
-        override_options("snuba", {"clickhouse_connect_pool_size": LEGACY_CONNECT_POOL_SIZE}),
-        mock.patch.object(clickhouse_connect, "get_client"),
-        mock.patch("snuba.clickhouse.connect.get_pool_manager") as get_pool_manager,
-    ):
-        pool._get_client()
-
-    _, kwargs = get_pool_manager.call_args
-    assert kwargs["maxsize"] == process_query_concurrency()
+    assert (
+        _pool_size_under(
+            {"clickhouse_connect_pool_size": LEGACY_CONNECT_POOL_SIZE},
+            CLICKHOUSE_MAX_POOL_SIZE=None,
+        )
+        == process_query_concurrency()
+    )
 
 
 def test_explicit_setting_pins_pool_size() -> None:
+    assert _pool_size_under({}, CLICKHOUSE_MAX_POOL_SIZE=3) == 3
+
+
+def test_pool_size_option_override() -> None:
+    assert (
+        _pool_size_under({"clickhouse_connect_pool_size": 42}, CLICKHOUSE_MAX_POOL_SIZE=None) == 42
+    )
+
+
+def test_non_positive_pool_size_option_falls_back_to_derived() -> None:
+    from snuba.utils.concurrency import process_query_concurrency
+
+    assert (
+        _pool_size_under({"clickhouse_connect_pool_size": 0}, CLICKHOUSE_MAX_POOL_SIZE=None)
+        == process_query_concurrency()
+    )
+
+
+def test_each_client_owns_exactly_one_connection() -> None:
+    # The pool bounds how many clients exist; each client is a single connection,
+    # so borrowing a client borrows a specific socket and urllib3 is never in a
+    # position to hand this request one another request left mid-response.
     import clickhouse_connect
     from sentry_options.testing import override_options
-
-    from snuba import settings
 
     pool = ClickhouseConnectPool(host="host", user="test", password="test", database="test")
 
     with (
         override_options("snuba", {}),
-        mock.patch.object(settings, "CLICKHOUSE_MAX_POOL_SIZE", 3),
         mock.patch.object(clickhouse_connect, "get_client"),
         mock.patch("snuba.clickhouse.connect.get_pool_manager") as get_pool_manager,
     ):
-        pool._get_client()
+        pool._create_client()
 
     _, kwargs = get_pool_manager.call_args
-    assert kwargs["maxsize"] == 3
-
-
-def test_pool_size_option_override() -> None:
-    import clickhouse_connect
-    from sentry_options.testing import override_options
-
-    pool = ClickhouseConnectPool(host="host", user="test", password="test", database="test")
-
-    with (
-        override_options("snuba", {"clickhouse_connect_pool_size": 42}),
-        mock.patch.object(clickhouse_connect, "get_client"),
-        mock.patch("snuba.clickhouse.connect.get_pool_manager") as get_pool_manager,
-    ):
-        pool._get_client()
-
-    _, kwargs = get_pool_manager.call_args
-    assert kwargs["maxsize"] == 42
+    assert kwargs["maxsize"] == 1
+    assert kwargs["num_pools"] == 1
 
 
 def test_clickhouse_reader_wraps_connect_pool() -> None:
@@ -772,7 +770,7 @@ def test_execute_explain_error_wrapped_and_preserves_code() -> None:
 
 
 def test_execute_explain_wraps_client_init_errors() -> None:
-    # _get_client() opens the connection on first use and can raise on an
+    # Building a client opens the connection on first use and can raise on an
     # unreachable host. Like the normal execute() path, execute_explain must run
     # it inside the error-translation context, so the failure surfaces as a snuba
     # ClickhouseError rather than a raw clickhouse-connect error -- the
@@ -780,7 +778,7 @@ def test_execute_explain_wraps_client_init_errors() -> None:
     from clickhouse_connect.driver.exceptions import OperationalError
 
     pool = _make_pool(mock.Mock())
-    pool._get_client = mock.Mock(  # type: ignore[method-assign]
+    pool._create_client = mock.Mock(  # type: ignore[method-assign]
         side_effect=OperationalError("connection refused")
     )
 
@@ -986,8 +984,8 @@ def test_execute_surfaces_native_stream_desync_without_retry() -> None:
 
     assert "Unrecognized ClickHouse type" in str(excinfo.value)
     assert client.query.call_count == 1
-    client.close_connections.assert_called_once()
-    client.close.assert_not_called()
+    # The client may be mid-stream, so it is discarded rather than reused.
+    client.close.assert_called_once()
 
 
 def test_stream_failure_error_is_translated_to_clickhouse_error() -> None:
@@ -1005,5 +1003,137 @@ def test_stream_failure_error_is_translated_to_clickhouse_error() -> None:
     assert excinfo.value.code == -1
     assert "Stream ended unexpectedly" in str(excinfo.value)
     assert client.query.call_count == 1
-    client.close_connections.assert_called_once()
-    client.close.assert_not_called()
+    # The client may be mid-stream, so it is discarded rather than reused.
+    client.close.assert_called_once()
+
+
+def test_concurrent_requests_never_share_a_client() -> None:
+    # The point of the borrow model: two in-flight requests hold two different
+    # clients, and so two different sockets. The barrier only clears if both are
+    # inside query() at once, so a shared client would deadlock it rather than
+    # quietly pass.
+    import threading
+
+    created: list[mock.Mock] = []
+    both_inside = threading.Barrier(2, timeout=5)
+
+    def make_client() -> mock.Mock:
+        client = mock.Mock()
+        client.query.side_effect = lambda *a, **k: (
+            both_inside.wait(),
+            FakeQueryResult(result_set=[[1]]),
+        )[1]
+        created.append(client)
+        return client
+
+    pool = ClickhouseConnectPool(
+        host="host", user="test", password="test", database="test", max_pool_size=2
+    )
+    pool._create_client = make_client  # type: ignore[method-assign]
+
+    failures: list[BaseException] = []
+
+    def run() -> None:
+        try:
+            pool.execute("SELECT 1")
+        except BaseException as error:  # noqa: BLE001 - reported via the assert below
+            failures.append(error)
+
+    threads = [threading.Thread(target=run) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+
+    assert not failures
+    assert len(created) == 2
+    assert created[0] is not created[1]
+
+
+def _desync_error(payload: str = "achilles-api-dotnet") -> Exception:
+    from clickhouse_connect.driver.exceptions import InternalError
+
+    return InternalError(f"Unrecognized ClickHouse type base: {payload} name: {payload}")
+
+
+def test_a_desynced_client_is_discarded_and_replaced() -> None:
+    # A desync means the response may be half-read, so that connection must not
+    # be handed to the next request -- which is how one poisoned socket used to
+    # surface as errors on unrelated queries.
+    created: list[mock.Mock] = []
+
+    def make_client() -> mock.Mock:
+        client = mock.Mock()
+        if not created:
+            client.query.side_effect = _desync_error()
+        else:
+            client.query.return_value = FakeQueryResult(result_set=[[1]])
+        created.append(client)
+        return client
+
+    pool = ClickhouseConnectPool(
+        host="host", user="test", password="test", database="test", max_pool_size=1
+    )
+    pool._create_client = make_client  # type: ignore[method-assign]
+
+    with pytest.raises(ClickhouseError):
+        pool.execute("SELECT 1")
+
+    assert pool.execute("SELECT 1").results == [[1]]
+    assert len(created) == 2
+    assert created[0] is not created[1]
+    created[0].close.assert_called_once()
+
+
+def test_discarding_a_client_does_not_leak_its_slot() -> None:
+    # The slot is the pool's capacity and must always come back, even when the
+    # client does not -- otherwise repeated transport failures drain the pool to
+    # nothing and every later query blocks until it times out.
+    from clickhouse_connect.driver.exceptions import OperationalError
+
+    def make_client() -> mock.Mock:
+        client = mock.Mock()
+        client.query.side_effect = OperationalError("connection refused")
+        return client
+
+    pool = ClickhouseConnectPool(
+        host="host",
+        user="test",
+        password="test",
+        database="test",
+        max_pool_size=1,
+        pool_get_timeout_seconds=0.1,
+    )
+    pool._create_client = make_client  # type: ignore[method-assign]
+
+    for _ in range(3):
+        with pytest.raises(ClickhouseError):
+            pool.execute("SELECT 1")
+
+    # A leaked slot surfaces here as queue.Empty rather than the driver error.
+    with pytest.raises(ClickhouseError):
+        pool.execute("SELECT 1")
+
+
+def test_a_client_failing_to_build_does_not_leak_its_slot() -> None:
+    # Same invariant on the other failure path: the slot is taken before the
+    # client exists, so a constructor that raises must still give it back.
+    from clickhouse_connect.driver.exceptions import OperationalError
+
+    pool = ClickhouseConnectPool(
+        host="host",
+        user="test",
+        password="test",
+        database="test",
+        max_pool_size=1,
+        pool_get_timeout_seconds=0.1,
+    )
+    pool._create_client = mock.Mock(  # type: ignore[method-assign]
+        side_effect=OperationalError("connection refused")
+    )
+
+    for _ in range(3):
+        with pytest.raises(ClickhouseError):
+            pool.execute("SELECT 1")
+
+    assert pool._create_client.call_count == 3  # type: ignore[attr-defined]
