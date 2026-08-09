@@ -246,7 +246,7 @@ class ConnectionCache:
         self.__lock = Lock()
         # Built on first use of the connect driver, so the native path neither
         # imports clickhouse-connect nor allocates a socket pool.
-        self.__client_manager: "ClickhouseClientManager | None" = None
+        self.__client_manager: ClickhouseClientManager | None = None
 
     def _client_manager(self) -> "ClickhouseClientManager":
         # Callers hold self.__lock.
@@ -368,7 +368,6 @@ class ConnectionCache:
 
 
 connection_cache = ConnectionCache()
-
 
 
 def _reset_connections_after_fork() -> None:
