@@ -3,7 +3,7 @@ from __future__ import annotations
 import io
 import sys
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import redirect_stdout
 from dataclasses import asdict
 from datetime import datetime
@@ -30,6 +30,7 @@ from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_cardinality_analyzer_queries import (
     CardinalityQuery,
 )
+from snuba.admin.clickhouse.predefined_outcomes_queries import OutcomesQuery
 from snuba.admin.clickhouse.predefined_querylog_queries import QuerylogQuery
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
 from snuba.admin.clickhouse.profile_events import gather_profile_events
@@ -40,10 +41,16 @@ from snuba.admin.clickhouse.system_queries import (
 )
 from snuba.admin.clickhouse.trace_log_parsing import summarize_trace_output
 from snuba.admin.clickhouse.tracing import TraceOutput, run_query_and_get_trace
+from snuba.admin.eap_query_analysis import (
+    EapQueryAnalysisRequest,
+    analyze_eap_queries,
+    result_to_dict,
+)
 from snuba.admin.migrations_policies import (
     check_migration_perms,
     get_migration_group_policies,
 )
+from snuba.admin.outcomes_analyzer.outcomes_analyzer import run_outcomes_query
 from snuba.admin.production_queries.prod_queries import run_snql_query
 from snuba.admin.rpc.rpc_queries import validate_request_meta
 from snuba.admin.tool_policies import (
@@ -52,6 +59,7 @@ from snuba.admin.tool_policies import (
     get_user_allowed_tools,
 )
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.clickhouse.native import ClickhouseResult
 from snuba.datasets.factory import InvalidDatasetError, get_enabled_dataset_names
 from snuba.manual_jobs import Job, JobSpec
 from snuba.manual_jobs.runner import (
@@ -371,6 +379,13 @@ def querylog_queries() -> Response:
 @check_tool_perms(tools=[AdminTools.CARDINALITY_ANALYZER])
 def cardinality_queries() -> Response:
     res = [q.to_json() for q in CardinalityQuery.all_classes()]
+    return make_response(jsonify(res), 200)
+
+
+@application.route("/outcomes_queries")
+@check_tool_perms(tools=[AdminTools.OUTCOMES_ANALYZER])
+def outcomes_queries() -> Response:
+    res = [q.to_json() for q in OutcomesQuery.all_classes()]
     return make_response(jsonify(res), 200)
 
 
@@ -734,6 +749,47 @@ def clickhouse_querylog_query() -> Response:
         )
 
 
+@application.route("/eap_stats", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.EAP_STATS])
+def eap_stats() -> Response:
+    """Categorize recent EAP querylog traffic and aggregate resource usage."""
+    user = request.headers.get(USER_HEADER_KEY, "unknown")
+    if user == "unknown" and settings.ADMIN_AUTH_PROVIDER != "NOOP":
+        return Response(
+            json.dumps({"error": "Unauthorized"}),
+            401,
+            {"Content-Type": "application/json"},
+        )
+    try:
+        body = json.loads(request.data) if request.data else {}
+    except Exception:
+        return make_response(jsonify({"error": {"message": "Invalid JSON body"}}), 400)
+
+    try:
+        analysis_req = EapQueryAnalysisRequest.from_dict(body)
+        result = analyze_eap_queries(analysis_req, user)
+        return make_response(jsonify(result_to_dict(result)), 200)
+    except InvalidCustomQuery as err:
+        return Response(
+            json.dumps({"error": {"message": str(err)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
+    except ClickhouseError as err:
+        details = {
+            "type": "clickhouse",
+            "message": str(err),
+            "code": err.code,
+        }
+        return make_response(jsonify({"error": details}), 400)
+    except Exception as err:
+        logger.error(err, exc_info=True)
+        return make_response(
+            jsonify({"error": {"type": "unknown", "message": str(err)}}),
+            500,
+        )
+
+
 @application.route("/clickhouse_querylog_schema", methods=["GET"])
 @check_tool_perms(tools=[AdminTools.QUERYLOG])
 def clickhouse_querylog_schema() -> Response:
@@ -816,12 +872,10 @@ def snuba_debug() -> Response:
         explain_cleanup()
 
 
-@application.route("/cardinality_query", methods=["POST"])
-@check_tool_perms(tools=[AdminTools.CARDINALITY_ANALYZER])
-def cardinality_analyzer_query() -> Response:
-    # HACK (Volo):
-    # mostly copypasta from querylog, should not stick around for too long
-    # when production query tool gets made this should not be necessary
+def _run_admin_ro_sql_query(
+    run_query: Callable[[str, str], ClickhouseResult],
+) -> Response:
+    """Shared handler for admin tools that POST `{sql}` and run a RO ClickHouse query."""
     user = request.headers.get(USER_HEADER_KEY, "unknown")
     if user == "unknown" and settings.ADMIN_AUTH_PROVIDER != "NOOP":
         return Response(
@@ -829,7 +883,35 @@ def cardinality_analyzer_query() -> Response:
             401,
             {"Content-Type": "application/json"},
         )
-    req = json.loads(request.data)
+
+    try:
+        req = json.loads(request.data)
+    except json.JSONDecodeError:
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "request",
+                        "message": "Invalid request, body must be valid JSON",
+                    }
+                }
+            ),
+            400,
+        )
+
+    if not isinstance(req, dict):
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "request",
+                        "message": "Invalid request, body must be a JSON object",
+                    }
+                }
+            ),
+            400,
+        )
+
     try:
         raw_sql = req["sql"]
     except KeyError as e:
@@ -844,25 +926,45 @@ def cardinality_analyzer_query() -> Response:
             ),
             400,
         )
+
+    if not isinstance(raw_sql, str):
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "request",
+                        "message": "Invalid request, sql must be a string",
+                    }
+                }
+            ),
+            400,
+        )
+
     try:
-        result = run_metrics_query(raw_sql, user)
+        result = run_query(raw_sql, user)
         rows, columns = result.results, result.meta
-        if columns:
+        if not columns:
             return make_response(
-                jsonify({"column_names": [name for name, _ in columns], "rows": rows}),
-                200,
+                jsonify({"error": {"type": "unknown", "message": "no columns"}}),
+                500,
             )
         return make_response(
-            jsonify({"error": {"type": "unknown", "message": "no columns"}}),
-            500,
+            jsonify({"column_names": [name for name, _ in columns], "rows": rows}),
+            200,
         )
     except ClickhouseError as err:
-        details = {
-            "type": "clickhouse",
-            "message": str(err),
-            "code": err.code,
-        }
-        return make_response(jsonify({"error": details}), 400)
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "clickhouse",
+                        "message": str(err),
+                        "code": err.code,
+                    }
+                }
+            ),
+            400,
+        )
     except InvalidCustomQuery as err:
         return Response(
             json.dumps({"error": {"message": str(err)}}, indent=4),
@@ -874,6 +976,18 @@ def cardinality_analyzer_query() -> Response:
             jsonify({"error": {"type": "unknown", "message": str(err)}}),
             500,
         )
+
+
+@application.route("/cardinality_query", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.CARDINALITY_ANALYZER])
+def cardinality_analyzer_query() -> Response:
+    return _run_admin_ro_sql_query(run_metrics_query)
+
+
+@application.route("/outcomes_query", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.OUTCOMES_ANALYZER])
+def outcomes_analyzer_query() -> Response:
+    return _run_admin_ro_sql_query(run_outcomes_query)
 
 
 @application.route("/rpc_endpoints", methods=["GET"])

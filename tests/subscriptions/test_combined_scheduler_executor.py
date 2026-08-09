@@ -98,3 +98,53 @@ def test_combined_scheduler_and_executor(tmpdir: Path) -> None:
         assert (tmpdir / "health.txt").exists()
         strategy.close()
         strategy.join()
+
+
+@pytest.mark.redis_db
+def test_combined_scheduler_commits_when_no_subscriptions() -> None:
+    epoch = datetime.now()
+
+    topic = Topic("snuba-commit-log")
+    partitions = {Partition(topic, 0): 0}
+    partition = Partition(topic, 0)
+    commit = mock.Mock()
+
+    factory = CombinedSchedulerExecutorFactory(
+        dataset=get_dataset("events"),
+        entity_names=["events"],
+        partitions=1,
+        total_concurrent_queries=2,
+        producer=mock.Mock(),
+        metrics=TestingMetricsBackend(),
+        stale_threshold_seconds=None,
+        result_topic="events-subscription-results",
+        schedule_ttl=60,
+    )
+
+    strategy = factory.create_with_partitions(commit, partitions)
+
+    message = Message(
+        BrokerValue(
+            Tick(
+                0,
+                offsets=Interval(1, 3),
+                timestamps=Interval(epoch.timestamp(), epoch.timestamp() + 60),
+            ),
+            partition,
+            4,
+            epoch,
+        )
+    )
+    strategy.submit(message)
+
+    # Empty ticks commit through the executor chain on poll so they stay ordered
+    # behind any in-flight subscription queries.
+    for _ in range(5):
+        strategy.poll()
+        if any(call.args and call.args[0] == {partition: 5} for call in commit.call_args_list):
+            break
+
+    assert any(call.args and call.args[0] == {partition: 5} for call in commit.call_args_list)
+
+    strategy.close()
+    strategy.join()

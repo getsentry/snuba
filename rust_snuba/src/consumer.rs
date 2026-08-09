@@ -329,7 +329,7 @@ type PyInsert = PyObject;
 /// replacement: (key/project_id, value)
 type PyReplacement = (PyObject, PyObject);
 
-#[pyfunction]
+#[pyfunction(signature = (name, value, partition, offset, millis_since_epoch, eap_items_emit_received_at=false))]
 pub fn process_message(
     py: Python,
     name: &str,
@@ -337,6 +337,7 @@ pub fn process_message(
     partition: u16,
     offset: u64,
     millis_since_epoch: i64,
+    eap_items_emit_received_at: bool,
 ) -> PyResult<(Option<PyInsert>, Option<PyReplacement>)> {
     // XXX: Currently only takes the message payload and metadata. This assumes
     // key and headers are not used for message processing
@@ -351,10 +352,14 @@ pub fn process_message(
         offset,
         timestamp,
     };
+    let processor_config = config::ProcessorConfig {
+        eap_items_emit_received_at: name == "EAPItemsProcessor" && eap_items_emit_received_at,
+        ..Default::default()
+    };
 
     match func {
         processors::ProcessingFunctionType::ProcessingFunction(f) => {
-            let res = f(payload, meta, &config::ProcessorConfig::default())
+            let res = f(payload, meta, &processor_config)
                 .map_err(|e| SnubaRustError::new_err(format!("invalid message: {e:?}")))?;
 
             let payload = PyBytes::new(py, &res.rows.into_encoded_rows()).into();
@@ -362,7 +367,7 @@ pub fn process_message(
             Ok((Some(payload), None))
         }
         processors::ProcessingFunctionType::ProcessingFunctionWithReplacements(f) => {
-            let res = f(payload, meta, &config::ProcessorConfig::default())
+            let res = f(payload, meta, &processor_config)
                 .map_err(|e| SnubaRustError::new_err(format!("invalid message: {e:?}")))?;
 
             match res {

@@ -8,11 +8,13 @@ import SQLShellPage, { SystemShellPage } from "SnubaAdmin/sql_shell";
 import SnQLToSQL from "SnubaAdmin/snql_to_sql";
 import QuerylogQueries from "SnubaAdmin/querylog";
 import CardinalityAnalyzer from "SnubaAdmin/cardinality_analyzer";
+import OutcomesAnalyzer from "SnubaAdmin/outcomes_analyzer";
 import ProductionQueries from "SnubaAdmin/production_queries";
 import SnubaExplain from "SnubaAdmin/snuba_explain";
 import Welcome from "SnubaAdmin/welcome";
 import ViewCustomJobs from "SnubaAdmin/manual_jobs";
 import RpcEndpoints from "SnubaAdmin/rpc_endpoints";
+import EapStats from "SnubaAdmin/eap_stats";
 
 const NAV_ITEMS = [
   { id: "overview", display: "🤿 Snuba Admin", component: Welcome },
@@ -77,9 +79,19 @@ const NAV_ITEMS = [
     component: QuerylogQueries,
   },
   {
+    id: "eap-stats",
+    display: "📊 EAP Stats",
+    component: EapStats,
+  },
+  {
     id: "cardinality-analyzer",
     display: "🔢 Cardinality Analyzer",
     component: CardinalityAnalyzer,
+  },
+  {
+    id: "outcomes-analyzer",
+    display: "📈 Outcomes Analyzer",
+    component: OutcomesAnalyzer,
   },
   {
     id: "production-queries",

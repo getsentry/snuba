@@ -160,6 +160,13 @@ def test_metrics() -> None:
             "referrer": "something",
             "endpoint_name": "MyRPC",
             "version": "v1",
+            "query_type": "timeseries",
+            "trace_item_type": "span",
+            "has_groupby": "false",
+            "groupby_count": "0",
+            "has_formula": "false",
+            "has_cross_item": "false",
+            "filter_profile": "none",
         }
         for _ in range(len(metrics_backend.calls))
     ]
@@ -180,13 +187,19 @@ def test_error_metrics() -> None:
         with pytest.raises(RPCException):
             rpc_call.execute(_get_in_msg())
         metric_tags = [m.tags for m in metrics_backend.calls]
-        # the last tags set only contains endpoint_name and version because in __after_execute's metrics_backend.increment, we don't pass in the other tags
         assert metric_tags == [
             {
                 "time_period": "lte_1_day",
                 "referrer": "something",
                 "endpoint_name": "ErrorRPC",
                 "version": "v1",
+                "query_type": "timeseries",
+                "trace_item_type": "span",
+                "has_groupby": "false",
+                "groupby_count": "0",
+                "has_formula": "false",
+                "has_cross_item": "false",
+                "filter_profile": "none",
             }
             for _ in range(len(metrics_backend.calls))
         ]
@@ -272,6 +285,13 @@ def test_tagged_metrics(hours: int, expected_time_bucket: str) -> None:
             "version": "v1",
             "time_period": expected_time_bucket,
             "referrer": _REFERRER,
+            "query_type": "table_samples",
+            "trace_item_type": "span",
+            "has_groupby": "false",
+            "groupby_count": "0",
+            "has_formula": "false",
+            "has_cross_item": "false",
+            "filter_profile": "none",
         }
         for _ in range(len(metrics_backend.calls))
     ]

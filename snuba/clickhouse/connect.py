@@ -351,14 +351,8 @@ class ClickhouseConnectPool(ClickhousePool):
         if query_id is not None:
             query_settings["query_id"] = query_id
         if capture_trace:
-            # We still ask the server to emit trace logs, but unlike the native
-            # driver clickhouse-connect does not surface them (it only reads the
-            # X-ClickHouse-Summary header), so ``trace_output`` ends up empty on
-            # this path. See the note in _execute_once. Practically this means
-            # the snuba-admin trace view and its profile-events parsing return
-            # nothing when the HTTP driver is enabled; every other admin query
-            # path is driver-agnostic. Reconstructing traces over HTTP would
-            # require querying system.text_log by query_id (a separate feature).
+            # clickhouse-connect does not surface send_logs_level output; tracing
+            # recovers performance data from system.query_log instead.
             query_settings["send_logs_level"] = "trace"
         return query_settings or None
 
@@ -414,6 +408,7 @@ class ClickhouseConnectPool(ClickhousePool):
 
     def _consume(self, query_result: Any, with_column_types: bool) -> ClickhouseResult:
         summary = query_result.summary or {}
+        result_query_id = str(query_result.query_id or query_id or "")
 
         def _int(key: str) -> int:
             value = summary.get(key)
@@ -438,15 +433,12 @@ class ClickhouseConnectPool(ClickhousePool):
 
         results: Sequence[Any] = query_result.result_set
 
-        # trace_output is always empty here: clickhouse-connect has no mechanism
-        # for capturing the server's send_logs_level output (it only parses the
-        # X-ClickHouse-Summary header for the profile above). This is a known,
-        # accepted limitation of the HTTP path — see _build_query_settings.
         if not with_column_types:
             return ClickhouseResult(
                 results=results,
                 profile=profile_data,
                 trace_output="",
+                query_id=result_query_id,
             )
 
         meta: list[tuple[str, str]] = [
@@ -461,6 +453,7 @@ class ClickhouseConnectPool(ClickhousePool):
             meta=meta,
             profile=profile_data,
             trace_output="",
+            query_id=result_query_id,
         )
 
     def execute_with_totals(

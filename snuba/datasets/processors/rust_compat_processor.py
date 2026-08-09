@@ -9,6 +9,7 @@ import simplejson as json
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.processor import InsertBatch, ProcessedMessage, ReplacementBatch
+from snuba.state.sentry_options import get_option
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,8 @@ class RustCompatProcessor(DatasetMessageProcessor):
             metadata.partition,
             metadata.offset,
             int(metadata.timestamp.replace(tzinfo=UTC).timestamp() * 1000),
+            self.__processor_name == "EAPItemsProcessor"
+            and get_option("eap_items_emit_received_at", False),
         )
 
         if insert_payload is not None:

@@ -33,7 +33,8 @@ jobs:
     needs: cli-version
     name: Validate Schema Evolution
     uses: getsentry/sentry-options/.github/workflows/validate-schema.yml@main
-    secrets: inherit
+    secrets:
+      SENTRY_INTERNAL_APP_PRIVATE_KEY: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
     with:
       schemas-path: sentry-options/schemas
       cli-version: ${{ needs.cli-version.outputs.version }}

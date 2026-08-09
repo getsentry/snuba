@@ -35,6 +35,7 @@ from snuba.web.rpc.storage_routing.routing_strategies.common import (
     ITEM_TYPE_FULL_RETENTION,
     ITEM_TYPE_TO_OUTCOME_CATEGORY,
     Outcome,
+    num_items_from_outcomes_result,
 )
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
@@ -203,7 +204,7 @@ class OutcomesBasedRoutingStrategy(BaseRoutingStrategy):
             timer=routing_context.timer,
         )
         routing_context.extra_info["estimation_sql"] = res.extra.get("sql", "")
-        return cast(int, res.result.get("data", [{}])[0].get("num_items", 0))
+        return num_items_from_outcomes_result(res.result)
 
     def _get_max_items_before_downsampling(self, organization_id: int) -> int:
         per_org_override = self.get_config_value(
