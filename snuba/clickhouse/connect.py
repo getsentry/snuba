@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import json
-import queue
+import os
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
 from datetime import datetime
-from typing import Any
-from weakref import WeakKeyDictionary
+from threading import Lock
+from typing import Any, NamedTuple
 
 import clickhouse_connect
 import sentry_sdk
@@ -79,6 +79,11 @@ DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
 # a live option's default cannot be changed, so this value means "not set".
 LEGACY_CONNECT_POOL_SIZE = 25
 
+# urllib3 keeps one connection pool per host; this bounds how many it retains
+# before evicting the least-recently-used one. A process talks to the nodes of a
+# handful of clusters, so this is slack, not a budget.
+_MAX_ENDPOINTS_PER_PROCESS = 64
+
 # Match native-driver behavior: forward unknown settings instead of failing.
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
 # Process-wide; default off (plain Native framing).
@@ -95,35 +100,133 @@ _STREAM_DESYNC_MARKERS = (
 )
 
 
-# The urllib3 manager backing each client we build. clickhouse-connect only
-# tears a manager down in ``Client.close`` when the client created it itself
-# (``owns_pool_manager``), and we hand ours in -- so for our clients ``close``
-# does nothing: the socket stays open, and ``httputil.all_managers`` holds a
-# strong reference that keeps the manager alive for the life of the process.
-# Keeping our own handle lets _dispose_client finish the job. Weak keys so this
-# never becomes the thing holding a client alive.
-_CLIENT_POOL_MANAGERS: WeakKeyDictionary[Client, PoolManager] = WeakKeyDictionary()
+class ClientKey(NamedTuple):
+    """What makes two clients interchangeable.
 
-
-def _dispose_client(client: Client) -> None:
-    """Tear a client down completely, including the manager it does not own.
-
-    Without this every discarded client would leak its connection -- and leak it
-    hardest under the transport and desync failures that cause discards in the
-    first place.
+    Everything that is baked into a :class:`Client` at construction: where it
+    connects, who it connects as, and the socket timeout it reads with. Notably
+    *not* the profile's query settings -- those vary per request and are applied
+    per query instead (see ``_build_query_settings``), which is what lets one
+    client serve every profile that shares a timeout.
     """
-    with suppress(Exception):
-        client.close()
-    manager = _CLIENT_POOL_MANAGERS.pop(client, None)
-    if manager is None:
-        return
-    with suppress(Exception):
-        manager.clear()  # closes this client's socket
-    all_managers.pop(manager, None)  # let the manager itself be collected
+
+    host: str
+    port: int
+    database: str
+    user: str
+    password: str
+    secure: bool
+    ca_certs: str | None
+    verify: bool
+    connect_timeout: int
+    send_receive_timeout: int
+
+
+class ClickhouseClientManager:
+    """Process-wide owner of the ClickHouse HTTP clients and the sockets behind them.
+
+    One manager per process holds one urllib3 pool manager -- the socket pool --
+    and hands out a shared :class:`Client` per :class:`ClientKey`. urllib3
+    multiplexes that pool per host and lends a connection for the length of a
+    request, so clients are safe to share across threads and a process holds
+    ``max_pool_size`` sockets per endpoint rather than per pool object.
+
+    Sharing is only safe because every request drains its response before
+    returning (see ``ClickhouseConnectPool._execute_once``); a half-read socket
+    going back into the pool is what makes the next request decode another
+    request's bytes.
+
+    A separate pool manager is kept per TLS configuration, since urllib3 fixes
+    cert verification at manager level. Deployments normally have exactly one.
+    """
+
+    def __init__(self) -> None:
+        self.__lock = Lock()
+        self.__clients: dict[ClientKey, Client] = {}
+        self.__pool_managers: dict[tuple[str | None, bool], PoolManager] = {}
+
+    def _pool_manager(self, ca_certs: str | None, verify: bool) -> PoolManager:
+        key = (ca_certs, verify)
+        manager = self.__pool_managers.get(key)
+        if manager is None:
+            manager = get_pool_manager(
+                ca_cert=ca_certs,
+                verify=verify,
+                # Per host, and a granian blocking thread runs one query at a
+                # time, so this is the most sockets one endpoint can need.
+                maxsize=_resolve_pool_size(),
+                num_pools=_MAX_ENDPOINTS_PER_PROCESS,
+            )
+            self.__pool_managers[key] = manager
+        return manager
+
+    def get_client(self, key: ClientKey) -> Client:
+        client = self.__clients.get(key)
+        if client is not None:
+            return client
+        with self.__lock:
+            # Re-check: another thread may have built it while we waited.
+            client = self.__clients.get(key)
+            if client is None:
+                client = self._build_client(key)
+                self.__clients[key] = client
+            return client
+
+    def _build_client(self, key: ClientKey) -> Client:
+        return clickhouse_connect.get_client(
+            host=key.host,
+            port=key.port,
+            username=key.user,
+            password=key.password,
+            database=key.database,
+            interface="https" if key.secure else "http",
+            secure=key.secure,
+            verify=key.verify,
+            ca_cert=key.ca_certs,
+            connect_timeout=key.connect_timeout,
+            send_receive_timeout=key.send_receive_timeout,
+            # No `settings=`: profile settings are per query, not per client.
+            pool_mgr=self._pool_manager(key.ca_certs, key.verify),
+            query_limit=0,
+            autogenerate_session_id=False,
+            compress="lz4",
+        )
+
+    def close(self) -> None:
+        """Drop every client and close the sockets behind them.
+
+        ``Client.close`` only tears down a pool manager the client created
+        itself, and we hand ours in, so closing the clients would leave the
+        sockets open and leave the managers pinned in clickhouse-connect's
+        module-level ``all_managers``. Clear them here instead.
+        """
+        with self.__lock:
+            for client in self.__clients.values():
+                with suppress(Exception):
+                    client.close()
+            self.__clients.clear()
+            for manager in self.__pool_managers.values():
+                with suppress(Exception):
+                    manager.clear()
+                all_managers.pop(manager, None)
+            self.__pool_managers.clear()
+
+
+# One per process, by construction: module state.
+CLIENT_MANAGER = ClickhouseClientManager()
+
+
+def _reset_client_manager_after_fork() -> None:
+    # A forked child inherits the parent's sockets. Drop the references rather
+    # than closing them -- the file descriptors belong to the parent.
+    CLIENT_MANAGER.__init__()  # type: ignore[misc]
+
+
+os.register_at_fork(after_in_child=_reset_client_manager_after_fork)
 
 
 def _resolve_pool_size() -> int:
-    """How many clients -- and so how many connections -- this pool may hold."""
+    """How many sockets urllib3 may hold open per ClickHouse endpoint."""
     # The option keeps its historical default, which schema evolution will not
     # let us change, so that value means "unset" and defers to the derived
     # size. Any other positive value is an explicit operator override.
@@ -159,12 +262,21 @@ class ClickhouseConnectPool(ClickhousePool):
     the connection cache (see :mod:`snuba.clusters.cluster`), one level above
     the individual drivers.
 
-    Like the native pool, a request borrows one :class:`Client` -- and so one
-    connection -- for its duration and gives it back afterwards. Each client
-    owns a ``urllib3`` pool of exactly one connection, so "which socket is this
-    request using" has a single answer, and a client whose stream may be left
-    mid-response is closed instead of returned. A shared client would instead
-    recycle that connection into an unrelated later request.
+    This class is the per-profile face of a shared resource. It holds no client
+    and no socket of its own: it knows *where* to connect and *with which
+    settings*, and asks :data:`CLIENT_MANAGER` for the client matching its
+    endpoint and socket timeout. Many pools -- one per profile per node --
+    therefore share a handful of clients, and all of them share one socket pool.
+
+    Two rules make that sharing safe, and both live here:
+
+    * The profile's ClickHouse settings are applied **per query**, never baked
+      into the client, so profiles that share a timeout (QUERY and TRACING) do
+      not leak settings into each other.
+    * Every request **drains its response** before returning, so the socket
+      going back to urllib3 has nothing left on it. A half-read socket returned
+      to the pool is precisely how one request ends up decoding the tail of
+      another request's response.
     """
 
     def __init__(
@@ -180,8 +292,7 @@ class ClickhouseConnectPool(ClickhousePool):
         connect_timeout: int = 1,
         send_receive_timeout: int | None = 35,
         client_settings: Mapping[str, Any] = {},
-        max_pool_size: int | None = None,
-        pool_get_timeout_seconds: float = settings.CLICKHOUSE_POOL_GET_TIMEOUT_SECONDS,
+        client_manager: ClickhouseClientManager | None = None,
     ) -> None:
         self.host = host
         self.port = http_port
@@ -193,27 +304,14 @@ class ClickhouseConnectPool(ClickhousePool):
         self.verify = verify
         self.connect_timeout = connect_timeout
         self.send_receive_timeout = send_receive_timeout
+        # The profile's ClickHouse settings. Applied per query rather than baked
+        # into the client, so profiles that differ only in settings (QUERY and
+        # TRACING, say, which share a 25s timeout) can share one client without
+        # TRACING's `readonly` leaking onto QUERY's queries.
         self.client_settings = client_settings
-        self.pool_get_timeout_seconds = pool_get_timeout_seconds
+        self.__client_manager = client_manager if client_manager is not None else CLIENT_MANAGER
 
-        self.max_pool_size = max_pool_size if max_pool_size is not None else _resolve_pool_size()
-        # Mirrors ClickhousePool: a fixed number of slots seeded empty, so
-        # clients are built lazily and only as far as demand actually goes.
-        self.__pool: queue.LifoQueue[Client | None] = queue.LifoQueue(self.max_pool_size)
-        for _ in range(self.max_pool_size):
-            self.__pool.put(None)
-
-    def _create_client(self) -> Client:
-        # One connection per client: the pool above bounds how many exist, and a
-        # borrowed client is used by one request at a time, so urllib3 never has
-        # to choose between sockets and can never hand this request a socket
-        # another one left dirty.
-        pool_mgr = get_pool_manager(
-            ca_cert=self.ca_certs,
-            verify=bool(self.verify),
-            maxsize=1,
-            num_pools=1,
-        )
+    def _client_key(self) -> ClientKey:
         connect_timeout = (
             get_option("clickhouse_connect_connect_timeout", 0) or self.connect_timeout
         )
@@ -224,62 +322,21 @@ class ClickhouseConnectPool(ClickhousePool):
                 if self.send_receive_timeout is not None
                 else UNBOUNDED_SEND_RECEIVE_TIMEOUT_SECONDS
             )
-        client = clickhouse_connect.get_client(
+        return ClientKey(
             host=self.host,
             port=self.port,
-            username=self.user,
-            password=self.password,
             database=self.database,
-            interface="https" if self.secure else "http",
+            user=self.user,
+            password=self.password,
             secure=self.secure,
+            ca_certs=self.ca_certs,
             verify=bool(self.verify),
-            ca_cert=self.ca_certs,
             connect_timeout=connect_timeout,
             send_receive_timeout=send_receive_timeout,
-            settings=dict(self.client_settings),
-            pool_mgr=pool_mgr,
-            query_limit=0,
-            autogenerate_session_id=False,
-            compress="lz4",
         )
-        _CLIENT_POOL_MANAGERS[client] = pool_mgr
-        return client
 
-    @contextmanager
-    def _checkout(self) -> Iterator[Client]:
-        """Lend one client, and so one connection, to a single request.
-
-        The slot is always returned, but the *client* is only returned when its
-        connection is known to be clean. A transport failure, a truncated
-        stream, or a Native decode desync all mean the response may be
-        half-consumed, so that client is closed and its slot re-seeded empty --
-        the damage dies with the request that caused it. Ordinary server-side
-        errors (bad SQL, memory limits) arrive on an intact stream and keep
-        their client.
-        """
-        try:
-            client = self.__pool.get(block=True, timeout=self.pool_get_timeout_seconds)
-        except queue.Empty:
-            metrics.increment("pool_get_timeout")
-            raise
-
-        reusable = True
-        try:
-            if client is None:
-                client = self._create_client()
-            yield client
-        except (OperationalError, StreamFailureError):
-            reusable = False
-            raise
-        except ClickHouseError as e:
-            reusable = not self._is_stream_desync(e)
-            raise
-        finally:
-            if client is not None and not reusable:
-                metrics.increment("client_discarded")
-                _dispose_client(client)
-                client = None
-            self.__pool.put(client, block=False)
+    def _get_client(self) -> Client:
+        return self.__client_manager.get_client(self._client_key())
 
     def _build_query_settings(
         self,
@@ -287,7 +344,10 @@ class ClickhouseConnectPool(ClickhousePool):
         query_id: str | None,
         capture_trace: bool,
     ) -> dict[str, Any] | None:
-        query_settings: dict[str, Any] = dict(settings) if settings else {}
+        # Profile settings first so an explicit per-query setting still wins.
+        query_settings: dict[str, Any] = dict(self.client_settings)
+        if settings:
+            query_settings.update(settings)
         if query_id is not None:
             query_settings["query_id"] = query_id
         if capture_trace:
@@ -338,6 +398,21 @@ class ClickhouseConnectPool(ClickhousePool):
                 column_oriented=columnar,
             )
 
+        try:
+            return self._consume(query_result, with_column_types)
+        finally:
+            # The single most important line for a shared client. `query()`
+            # returns a lazy result over a live socket; `QueryResult.close()`
+            # drains whatever is left of the response and hands the connection
+            # back clean. Reading `result_set` happens to do this today, via
+            # StreamContext.__exit__, but only if nothing raises first and only
+            # for as long as that stays true -- and a socket returned to the
+            # pool with bytes still on it is exactly how one request ends up
+            # decoding another request's response.
+            with suppress(Exception):
+                query_result.close()
+
+    def _consume(self, query_result: Any, with_column_types: bool) -> ClickhouseResult:
         summary = query_result.summary or {}
 
         def _int(key: str) -> int:
@@ -404,7 +479,8 @@ class ClickhouseConnectPool(ClickhousePool):
         the trailing result row, the shape the reader expects. ``capture_trace``/``robust``
         are accepted for interface parity but unused on this path.
         """
-        with self._translate_clickhouse_errors(), self._checkout() as client:
+        with self._translate_clickhouse_errors():
+            client = self._get_client()
             json_settings: dict[str, Any] = dict(settings) if settings else {}
             # 64-bit ints as JSON numbers, matching the native driver's Python ints.
             json_settings["output_format_json_quote_64bit_integers"] = 0
@@ -483,9 +559,9 @@ class ClickhouseConnectPool(ClickhousePool):
 
     @contextmanager
     def _translate_clickhouse_errors(self) -> Iterator[None]:
-        # Disposing of the affected client is _checkout's job -- it is the only
-        # thing that knows which one this request borrowed. This wraps it, so by
-        # the time an error arrives here that has already happened.
+        # No client disposal here. Clients are shared, and a request that
+        # drains its response leaves the socket clean whatever the outcome; a
+        # broken connection is urllib3's to drop, not ours to blanket-reset.
         try:
             yield
         except OperationalError as e:
@@ -514,7 +590,8 @@ class ClickhouseConnectPool(ClickhousePool):
         retryable: bool = True,
     ) -> ClickhouseResult:
         """Execute a clickhouse query. ``retryable`` is accepted for interface parity only."""
-        with self._translate_clickhouse_errors(), self._checkout() as client:
+        with self._translate_clickhouse_errors():
+            client = self._get_client()
             return self._execute_once(
                 client,
                 query,
@@ -544,10 +621,9 @@ class ClickhouseConnectPool(ClickhousePool):
         if query_id is not None:
             insert_settings["query_id"] = query_id
 
-        with (
-            self._translate_clickhouse_errors(),
-            self._checkout() as client,
-            traces.start_span(
+        with self._translate_clickhouse_errors():
+            client = self._get_client()
+            with traces.start_span(
                 name=f"INSERT INTO {table}",
                 attributes={
                     SENTRY_OP: "db.clickhouse",
@@ -556,18 +632,17 @@ class ClickhouseConnectPool(ClickhousePool):
                         table, column_names
                     ),
                 },
-            ) as span,
-        ):
-            span.set_attribute(
-                "query_id",
-                query_id if query_id is not None else "unknown-query-id",
-            )
-            client.insert(
-                table,
-                matrix,
-                column_names=column_names,
-                settings=insert_settings or None,
-            )
+            ) as span:
+                span.set_attribute(
+                    "query_id",
+                    query_id if query_id is not None else "unknown-query-id",
+                )
+                client.insert(
+                    table,
+                    matrix,
+                    column_names=column_names,
+                    settings=insert_settings or None,
+                )
 
     def execute_robust(
         self,
@@ -616,7 +691,8 @@ class ClickhouseConnectPool(ClickhousePool):
         SYNTAX / PLAN / PIPELINE (the kinds admin system-query validation issues);
         the multi-column EXPLAIN ESTIMATE is not used on this path.
         """
-        with self._translate_clickhouse_errors(), self._checkout() as client:
+        with self._translate_clickhouse_errors():
+            client = self._get_client()
             with traces.start_span(
                 name="clickhouse query",
                 attributes={
@@ -656,15 +732,8 @@ class ClickhouseConnectPool(ClickhousePool):
         )
 
     def close(self) -> None:
-        # Drain the slots rather than reaching for a client reference: only
-        # checked-in clients are ours to close, and a borrowed one belongs to the
-        # request still using it. Each slot is re-seeded empty, so the pool stays
-        # usable and simply builds fresh clients on demand.
-        for _ in range(self.max_pool_size):
-            try:
-                client = self.__pool.get(block=False)
-            except queue.Empty:
-                break
-            if client is not None:
-                _dispose_client(client)
-            self.__pool.put(None, block=False)
+        # Clients belong to the process-wide manager, not to this pool -- other
+        # pools (other profiles against the same endpoint) share them. Tearing
+        # them down is the manager's call; a single pool going away is not a
+        # reason to close sockets others are using.
+        pass
