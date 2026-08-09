@@ -1317,3 +1317,78 @@ def test_every_path_applies_the_profile_settings(
     settings = settings_from(client)
     assert settings["alter_sync"] == 2
     assert settings["load_balancing"] == "in_order"
+
+
+def test_pool_manager_is_created_once_under_concurrent_first_use() -> None:
+    # Clients are thread-local and need no lock, but the pool-manager map is
+    # shared. Losing this race is not benign: two managers for one key means two
+    # socket pools, each with its own maxsize, so the process-wide ceiling stops
+    # holding, and the loser stays pinned in all_managers out of close()'s reach.
+    import threading
+    import time
+
+    import clickhouse_connect
+
+    from snuba.clickhouse.connect import ClickhouseClientManager
+
+    created: list[Any] = []
+    start = threading.Barrier(4, timeout=5)
+
+    def slow_factory(**kwargs: Any) -> Any:
+        created.append(kwargs)
+        time.sleep(0.05)  # widen the window a real race would need
+        return mock.Mock()
+
+    manager = ClickhouseClientManager()
+    key = _bare_pool()._client_key()
+    failures: list[BaseException] = []
+
+    def run() -> None:
+        try:
+            start.wait()
+            manager.get_client(key)
+        except BaseException as error:  # noqa: BLE001 - surfaced by the assert
+            failures.append(error)
+
+    with (
+        mock.patch("snuba.clickhouse.connect.get_pool_manager", slow_factory),
+        mock.patch.object(clickhouse_connect, "get_client"),
+    ):
+        threads = [threading.Thread(target=run) for _ in range(4)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=10)
+
+    assert not failures
+    assert len(created) == 1
+
+
+def test_fork_drops_inherited_managers_without_closing_them() -> None:
+    # A child must not use the parent's sockets, but must not close them either
+    # -- the descriptors are shared. Dropping the references is enough. The easy
+    # miss is all_managers: it is process-global and inherited too, so clearing
+    # only our own map leaves the parent's managers pinned in the child forever.
+    from clickhouse_connect.driver.httputil import all_managers
+
+    from snuba.clickhouse.connect import ClickhouseClientManager
+
+    manager = ClickhouseClientManager()
+    inherited = mock.Mock()
+    all_managers[inherited] = 0
+    manager._ClickhouseClientManager__pool_managers[(None, False)] = inherited  # type: ignore[attr-defined]
+
+    manager.reset_after_fork()
+
+    assert inherited not in all_managers
+    assert manager._ClickhouseClientManager__pool_managers == {}  # type: ignore[attr-defined]
+    inherited.clear.assert_not_called()  # the parent is still using that socket
+
+
+def test_fork_reset_is_registered() -> None:
+    from snuba.clickhouse.connect import CLIENT_MANAGER, _reset_client_manager_after_fork
+
+    with mock.patch.object(CLIENT_MANAGER, "reset_after_fork") as reset:
+        _reset_client_manager_after_fork()
+
+    reset.assert_called_once()

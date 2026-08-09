@@ -153,17 +153,28 @@ class ClickhouseClientManager:
     def _pool_manager(self, ca_certs: str | None, verify: bool) -> PoolManager:
         key = (ca_certs, verify)
         manager = self.__pool_managers.get(key)
-        if manager is None:
-            manager = get_pool_manager(
-                ca_cert=ca_certs,
-                verify=verify,
-                # Per host, and a granian blocking thread runs one query at a
-                # time, so this is the most sockets one endpoint can need.
-                maxsize=_resolve_pool_size(),
-                num_pools=_MAX_ENDPOINTS_PER_PROCESS,
-            )
-            self.__pool_managers[key] = manager
-        return manager
+        if manager is not None:
+            return manager
+        with self.__lock:
+            # Re-check under the lock. Clients are thread-local and need no
+            # locking, but this map is shared, and losing this race is not
+            # benign: two managers for one key means two socket pools, each with
+            # its own maxsize, so the process-wide ceiling stops holding. The
+            # loser is also unreachable for close() while still pinned in
+            # clickhouse-connect's all_managers, and the thread that built it
+            # keeps using it for as long as it lives.
+            manager = self.__pool_managers.get(key)
+            if manager is None:
+                manager = get_pool_manager(
+                    ca_cert=ca_certs,
+                    verify=verify,
+                    # Per host, and a granian blocking thread runs one query at
+                    # a time, so this is the most sockets one endpoint can need.
+                    maxsize=_resolve_pool_size(),
+                    num_pools=_MAX_ENDPOINTS_PER_PROCESS,
+                )
+                self.__pool_managers[key] = manager
+            return manager
 
     def get_client(self, key: ClientKey) -> Client:
         # Thread-local, so no locking and no chance of two threads landing on
@@ -206,6 +217,28 @@ class ClickhouseClientManager:
             compress="lz4",
         )
 
+    def reset_after_fork(self) -> None:
+        """Drop everything the child inherited from the parent.
+
+        The child must not use the parent's sockets, and must not close them
+        either -- the descriptors are shared, so closing here would be reaching
+        into the parent's connections. Dropping the references is enough; the
+        child rebuilds on next use.
+
+        Popping the managers out of clickhouse-connect's ``all_managers`` is the
+        part that is easy to miss: that registry is process-global and is
+        inherited too, so clearing only our own map would leave the parent's
+        managers pinned in the child for the life of the process.
+
+        The lock is rebuilt as well: a lock held by another thread at fork time
+        is inherited held, and no thread exists in the child to release it.
+        """
+        for manager in self.__pool_managers.values():
+            all_managers.pop(manager, None)
+        self.__pool_managers = {}
+        self.__local = local()
+        self.__lock = Lock()
+
     def close(self) -> None:
         """Close every socket this process holds.
 
@@ -230,9 +263,7 @@ CLIENT_MANAGER = ClickhouseClientManager()
 
 
 def _reset_client_manager_after_fork() -> None:
-    # A forked child inherits the parent's sockets. Drop the references rather
-    # than closing them -- the file descriptors belong to the parent.
-    CLIENT_MANAGER.__init__()  # type: ignore[misc]
+    CLIENT_MANAGER.reset_after_fork()
 
 
 os.register_at_fork(after_in_child=_reset_client_manager_after_fork)
