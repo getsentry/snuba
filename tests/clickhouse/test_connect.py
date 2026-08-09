@@ -58,8 +58,8 @@ class FakeClientManager:
 
 
 def _make_pool(client: mock.Mock, **kwargs: Any) -> ClickhouseConnectPool:
-    # Clients come from the process-wide manager, so a fake manager is all it
-    # takes to hand every request the same mock.
+    # The pool is given its manager, so a fake one is all it takes to hand every
+    # request the same mock -- no global to patch.
     return ClickhouseConnectPool(
         host="host",
         user="test",
@@ -71,13 +71,14 @@ def _make_pool(client: mock.Mock, **kwargs: Any) -> ClickhouseConnectPool:
 
 
 def _build_client_for(pool: ClickhouseConnectPool) -> Any:
-    """Drive real client construction for this pool's key, via a fresh manager."""
-    from snuba.clickhouse.connect import ClickhouseClientManager
-
-    return ClickhouseClientManager().get_client(pool._client_key())
+    """Drive real client construction through the pool's own manager."""
+    return pool._get_client()
 
 
 def _bare_pool(**kwargs: Any) -> ClickhouseConnectPool:
+    from snuba.clickhouse.connect import ClickhouseClientManager
+
+    kwargs.setdefault("client_manager", ClickhouseClientManager())
     return ClickhouseConnectPool(
         host="host", user="test", password="test", database="test", **kwargs
     )
@@ -310,14 +311,7 @@ def test_timeouts_are_passed_through() -> None:
 
     # The per-profile timeout is honored as-is (no capping), the same way the
     # native driver uses it. A large timeout (e.g. from MIGRATE) is preserved.
-    pool = ClickhouseConnectPool(
-        host="host",
-        user="test",
-        password="test",
-        database="test",
-        connect_timeout=60,
-        send_receive_timeout=300000,
-    )
+    pool = _bare_pool(connect_timeout=60, send_receive_timeout=300000)
 
     with (
         mock.patch.object(clickhouse_connect, "get_client") as get_client,
@@ -339,13 +333,7 @@ def test_send_receive_timeout_unbounded_when_profile_has_none() -> None:
     # A profile with no timeout (None) means "unbounded" on the native path; over
     # HTTP that maps to a large finite timeout, since clickhouse-connect can't
     # take None.
-    pool = ClickhouseConnectPool(
-        host="host",
-        user="test",
-        password="test",
-        database="test",
-        send_receive_timeout=None,
-    )
+    pool = _bare_pool(send_receive_timeout=None)
 
     with (
         mock.patch.object(clickhouse_connect, "get_client") as get_client,
@@ -374,14 +362,7 @@ def test_timeout_options_override_constructor_values() -> None:
     ):
         # Built inside the override: the timeouts are part of the client key, so
         # they are resolved when the pool is constructed, not per request.
-        pool = ClickhouseConnectPool(
-            host="host",
-            user="test",
-            password="test",
-            database="test",
-            connect_timeout=1,
-            send_receive_timeout=25,
-        )
+        pool = _bare_pool(connect_timeout=1, send_receive_timeout=25)
         _build_client_for(pool)
 
     _, kwargs = get_client.call_args
@@ -896,12 +877,15 @@ def test_connect_driver_matches_native_for_totals_and_empty_results() -> None:
     native_pool = ClickhouseNativePool(
         conf["host"], conf["port"], conf["user"], conf["password"], conf["database"]
     )
+    from snuba.clickhouse.connect import ClickhouseClientManager
+
     connect_pool = ClickhouseConnectPool(
         conf["host"],
         conf["user"],
         conf["password"],
         conf["database"],
         http_port=conf["http_port"],
+        client_manager=ClickhouseClientManager(),
     )
 
     # Unique table name so parallel (xdist) workers don't collide.
@@ -1403,10 +1387,15 @@ def test_fork_drops_inherited_managers_without_closing_them() -> None:
     inherited.clear.assert_not_called()  # the parent is still using that socket
 
 
-def test_fork_reset_is_registered() -> None:
-    from snuba.clickhouse.connect import CLIENT_MANAGER, _reset_client_manager_after_fork
+def test_manager_is_not_a_singleton() -> None:
+    # Pools are given their manager rather than reaching for a module global, so
+    # a test can build a real one without touching state another test shares.
+    import snuba.clickhouse.connect as connect_module
 
-    with mock.patch.object(CLIENT_MANAGER, "reset_after_fork") as reset:
-        _reset_client_manager_after_fork()
+    assert not hasattr(connect_module, "CLIENT_MANAGER")
 
-    reset.assert_called_once()
+    manager = mock.Mock()
+    pool = _managed_pool(manager)
+    pool._get_client()
+
+    manager.get_client.assert_called_once_with(pool._client_key())

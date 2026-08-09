@@ -1,9 +1,11 @@
+import os
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
 from threading import Lock
 from typing import (
+    TYPE_CHECKING,
     Any,
     Generic,
     NamedTuple,
@@ -29,6 +31,9 @@ from snuba.state.sentry_options import get_option
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.serializable_exception import SerializableException
 from snuba.writer import BatchWriter
+
+if TYPE_CHECKING:
+    from snuba.clickhouse.connect import ClickhouseClientManager
 
 logger = structlog.get_logger().bind(module=__name__)
 
@@ -220,9 +225,61 @@ CacheKey = tuple[
 
 
 class ConnectionCache:
+    """The process-wide owner of every ClickHouse connection.
+
+    One object owns the whole stack: the pools, keyed by node and profile and
+    driver; the HTTP clients those pools query through; and the sockets behind
+    the clients. Each layer exists because it is cached differently -- pools are
+    per profile, clients are per endpoint and timeout (so QUERY and TRACING
+    share one), sockets are per host -- but there is a single owner, so there is
+    a single place to reset at fork and a single place to close.
+
+    The client and socket layers live in :mod:`snuba.clickhouse.connect`, next
+    to the pool that uses them, and are held here as a
+    :class:`~snuba.clickhouse.connect.ClickhouseClientManager` built on first
+    use of the connect driver. Keeping them there rather than inlining them is
+    what lets the native path run without importing clickhouse-connect at all.
+    """
+
     def __init__(self) -> None:
         self.__cache: MutableMapping[CacheKey, ClickhousePool] = {}
         self.__lock = Lock()
+        # Built on first use of the connect driver, so the native path neither
+        # imports clickhouse-connect nor allocates a socket pool.
+        self.__client_manager: "ClickhouseClientManager | None" = None
+
+    def _client_manager(self) -> "ClickhouseClientManager":
+        # Callers hold self.__lock.
+        if self.__client_manager is None:
+            from snuba.clickhouse.connect import ClickhouseClientManager
+
+            self.__client_manager = ClickhouseClientManager()
+        return self.__client_manager
+
+    def reset_after_fork(self) -> None:
+        """Drop what the child inherited, without closing it.
+
+        Pools and clients hold the parent's sockets. The child must not use
+        them -- two processes on one connection is a corrupt stream -- and must
+        not close them either, since the descriptors are shared and closing here
+        reaches into a parent that is still using them. Dropping the references
+        is enough; the child rebuilds lazily on next use.
+
+        The lock is rebuilt rather than taken: a lock held by another thread at
+        fork time is inherited held, with no thread left in the child to release
+        it, so acquiring it here would deadlock the child forever.
+        """
+        self.__lock = Lock()
+        self.__cache = {}
+        if self.__client_manager is not None:
+            self.__client_manager.reset_after_fork()
+
+    def close(self) -> None:
+        """Drop every pool and close every socket this process holds."""
+        with self.__lock:
+            self.__cache.clear()
+            if self.__client_manager is not None:
+                self.__client_manager.close()
 
     def get_node_connection(
         self,
@@ -290,6 +347,7 @@ class ConnectionCache:
                         secure=secure,
                         ca_certs=ca_certs,
                         verify=verify,
+                        client_manager=self._client_manager(),
                     )
                 else:
                     pool = ClickhouseNativePool(
@@ -310,6 +368,19 @@ class ConnectionCache:
 
 
 connection_cache = ConnectionCache()
+
+
+
+def _reset_connections_after_fork() -> None:
+    connection_cache.reset_after_fork()
+
+
+# Registered here rather than next to the client manager, because the cache is
+# what owns the inherited state -- native pools hold sockets too, and they were
+# never reset before. Indirected through a function so the handler resolves the
+# method at call time rather than capturing a bound method at import.
+os.register_at_fork(after_in_child=_reset_connections_after_fork)
+
 _DEFAULT_MAX_CONNECTIONS = 1
 
 

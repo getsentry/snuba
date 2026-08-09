@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
 from datetime import datetime
@@ -123,10 +122,17 @@ class ClientKey(NamedTuple):
 
 
 class ClickhouseClientManager:
-    """Process-wide owner of the ClickHouse HTTP clients and the sockets behind them.
+    """Owner of the ClickHouse HTTP clients and the sockets behind them.
 
-    One manager per process owns the urllib3 pool manager -- the socket pool --
-    and hands out a :class:`Client` per :class:`ClientKey`, **per thread**.
+    Owned by :class:`~snuba.clusters.cluster.ConnectionCache`, which builds one
+    on first use of the connect driver and hands it to every pool it creates.
+    That is what makes it process-wide: the cache is the process-wide owner of
+    connections, and this is the part of it that knows about HTTP. It is not a
+    singleton of its own, and pools are given one rather than reaching for a
+    global, so tests get a real manager without touching shared state.
+
+    It owns the urllib3 pool manager -- the socket pool -- and hands out a
+    :class:`Client` per :class:`ClientKey`, **per thread**.
 
     Clients are thread-local rather than shared, so a client only ever has one
     query in flight: a granian blocking thread serves one request at a time, so
@@ -258,17 +264,6 @@ class ClickhouseClientManager:
         self.__local = local()
 
 
-# One per process, by construction: module state.
-CLIENT_MANAGER = ClickhouseClientManager()
-
-
-def _reset_client_manager_after_fork() -> None:
-    CLIENT_MANAGER.reset_after_fork()
-
-
-os.register_at_fork(after_in_child=_reset_client_manager_after_fork)
-
-
 def _resolve_pool_size() -> int:
     """How many sockets urllib3 may hold open per ClickHouse endpoint."""
     # The option keeps its historical default, which schema evolution will not
@@ -308,8 +303,10 @@ class ClickhouseConnectPool(ClickhousePool):
 
     This class is the per-profile face of a shared resource. It holds no client
     and no socket of its own: it knows *where* to connect and *with which
-    settings*, and asks :data:`CLIENT_MANAGER` for this thread's client for its
-    endpoint and socket timeout. Many pools -- one per profile per node --
+    settings*, and asks the :class:`ClickhouseClientManager` it was given for
+    this thread's client for its endpoint and socket timeout. That manager
+    belongs to the :class:`~snuba.clusters.cluster.ConnectionCache` that built
+    this pool. Many pools -- one per profile per node --
     therefore collapse onto a handful of clients per thread, and every thread
     draws from one process-wide socket pool.
 
@@ -337,7 +334,8 @@ class ClickhouseConnectPool(ClickhousePool):
         connect_timeout: int = 1,
         send_receive_timeout: int | None = 35,
         client_settings: Mapping[str, Any] = {},
-        client_manager: ClickhouseClientManager | None = None,
+        *,
+        client_manager: ClickhouseClientManager,
     ) -> None:
         self.host = host
         self.port = http_port
@@ -354,7 +352,7 @@ class ClickhouseConnectPool(ClickhousePool):
         # TRACING, say, which share a 25s timeout) can share one client without
         # TRACING's `readonly` leaking onto QUERY's queries.
         self.client_settings = client_settings
-        self.__client_manager = client_manager if client_manager is not None else CLIENT_MANAGER
+        self.__client_manager = client_manager
 
         # Resolved once, here, because the timeouts are part of the client key:
         # reading the options per request would mint a new key -- and so a new
