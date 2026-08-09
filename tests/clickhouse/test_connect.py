@@ -237,6 +237,16 @@ def test_totals_malformed_json_wrapped() -> None:
     with pytest.raises(ClickhouseError):
         pool.execute_with_totals("SELECT g, sum(v) FROM t GROUP BY g WITH TOTALS")
 
+    # The client survives: unlike query(), raw_query() is a non-streaming request
+    # (clickhouse-connect sends it with preload_content=True), so urllib3 has read
+    # the whole body and released the connection before we ever call json.loads.
+    # A body that will not parse means the *content* was bad -- a proxy error page
+    # -- not that the stream is half-consumed, so discarding the connection here
+    # would just churn healthy sockets every time the load balancer returns a 502.
+    # If this path ever moves to raw_stream(), that reasoning stops holding and
+    # _checkout has to treat JSONDecodeError as poisoning.
+    client.close.assert_not_called()
+
 
 def test_timeouts_are_passed_through() -> None:
     import clickhouse_connect
