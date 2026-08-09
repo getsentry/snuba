@@ -482,7 +482,11 @@ class ClickhouseConnectPool(ClickhousePool):
         """
         with self._translate_clickhouse_errors():
             client = self._get_client()
-            json_settings: dict[str, Any] = dict(settings) if settings else {}
+            # Profile settings first, exactly as on the execute() path: they
+            # used to ride on the client and so applied to every operation.
+            json_settings: dict[str, Any] = dict(self.client_settings)
+            if settings:
+                json_settings.update(settings)
             # 64-bit ints as JSON numbers, matching the native driver's Python ints.
             json_settings["output_format_json_quote_64bit_integers"] = 0
             if query_id is not None:
@@ -618,7 +622,9 @@ class ClickhouseConnectPool(ClickhousePool):
         column_names = list(rows[0].keys())
         matrix = [list(row.values()) for row in rows]
 
-        insert_settings = dict(settings) if settings else {}
+        insert_settings: dict[str, Any] = dict(self.client_settings)
+        if settings:
+            insert_settings.update(settings)
         if query_id is not None:
             insert_settings["query_id"] = query_id
 
@@ -702,7 +708,7 @@ class ClickhouseConnectPool(ClickhousePool):
                     sentry_sdk.consts.SPANDATA.DB_QUERY_TEXT: query,
                 },
             ):
-                output = client.command(query)
+                output = client.command(query, settings=dict(self.client_settings) or None)
             return self._explain_result(output)
 
     @staticmethod

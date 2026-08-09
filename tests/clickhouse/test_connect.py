@@ -1226,3 +1226,48 @@ def test_manager_close_releases_sockets_and_unpins_the_pool_manager() -> None:
     client.close.assert_called_once()
     pool_manager.clear.assert_called_once()
     assert pool_manager not in all_managers
+
+
+@pytest.mark.parametrize(
+    "run, settings_from",
+    [
+        pytest.param(
+            lambda pool: pool.execute("SELECT 1"),
+            lambda client: client.query.call_args.kwargs["settings"],
+            id="execute",
+        ),
+        pytest.param(
+            lambda pool: pool.execute_with_totals("SELECT g FROM t GROUP BY g WITH TOTALS"),
+            lambda client: client.raw_query.call_args.kwargs["settings"],
+            id="execute_with_totals",
+        ),
+        pytest.param(
+            lambda pool: pool.insert("t", [{"a": 1}]),
+            lambda client: client.insert.call_args.kwargs["settings"],
+            id="insert",
+        ),
+        pytest.param(
+            lambda pool: pool.execute_explain("EXPLAIN AST SELECT 1"),
+            lambda client: client.command.call_args.kwargs["settings"],
+            id="execute_explain",
+        ),
+    ],
+)
+def test_every_path_applies_the_profile_settings(
+    run: Any, settings_from: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Profile settings used to ride on the Client, so they reached every
+    # operation. Now that clients are shared and settings travel per request,
+    # each entry point has to apply them -- otherwise profiles like MIGRATE
+    # silently lose alter_sync and friends on everything except execute().
+    client = mock.Mock()
+    client.query.return_value = FakeQueryResult(result_set=[])
+    client.raw_query.return_value = json.dumps({"meta": [], "data": [], "totals": []}).encode()
+    client.command.return_value = "explain output"
+
+    pool = _make_pool(client, client_settings={"alter_sync": 2, "load_balancing": "in_order"})
+    run(pool)
+
+    settings = settings_from(client)
+    assert settings["alter_sync"] == 2
+    assert settings["load_balancing"] == "in_order"
