@@ -361,15 +361,6 @@ def test_timeout_options_override_constructor_values() -> None:
     import clickhouse_connect
     from sentry_options.testing import override_options
 
-    pool = ClickhouseConnectPool(
-        host="host",
-        user="test",
-        password="test",
-        database="test",
-        connect_timeout=1,
-        send_receive_timeout=25,
-    )
-
     with (
         override_options(
             "snuba",
@@ -381,11 +372,38 @@ def test_timeout_options_override_constructor_values() -> None:
         mock.patch.object(clickhouse_connect, "get_client") as get_client,
         mock.patch("snuba.clickhouse.connect.get_pool_manager"),
     ):
+        # Built inside the override: the timeouts are part of the client key, so
+        # they are resolved when the pool is constructed, not per request.
+        pool = ClickhouseConnectPool(
+            host="host",
+            user="test",
+            password="test",
+            database="test",
+            connect_timeout=1,
+            send_receive_timeout=25,
+        )
         _build_client_for(pool)
 
     _, kwargs = get_client.call_args
     assert kwargs["connect_timeout"] == 7
     assert kwargs["send_receive_timeout"] == 99
+
+
+def test_client_key_is_stable_across_option_changes() -> None:
+    # The key must not move under a running pool. If it did, every option change
+    # would mint a new key, and so a new entry in the thread-local client cache
+    # that nothing ever evicts. Both options are documented as "read when a
+    # client is created", so a change lands on restart.
+    from sentry_options.testing import override_options
+
+    with override_options("snuba", {"clickhouse_connect_send_receive_timeout": 11}):
+        pool = _bare_pool(send_receive_timeout=25)
+        before = pool._client_key()
+
+    with override_options("snuba", {"clickhouse_connect_send_receive_timeout": 99}):
+        assert pool._client_key() == before
+
+    assert before.send_receive_timeout == 11
 
 
 def test_read_query_client_settings_use_25s_timeout() -> None:

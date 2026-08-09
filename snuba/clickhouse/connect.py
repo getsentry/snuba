@@ -356,17 +356,26 @@ class ClickhouseConnectPool(ClickhousePool):
         self.client_settings = client_settings
         self.__client_manager = client_manager if client_manager is not None else CLIENT_MANAGER
 
-    def _client_key(self) -> ClientKey:
-        connect_timeout = (
-            get_option("clickhouse_connect_connect_timeout", 0) or self.connect_timeout
+        # Resolved once, here, because the timeouts are part of the client key:
+        # reading the options per request would mint a new key -- and so a new
+        # cached client -- every time an operator changed one, and nothing ever
+        # evicts the old one. Both options are documented as "read when a client
+        # is created", so resolving at construction is also what they promise.
+        # Pools are cached for the process lifetime, so a change takes effect on
+        # restart, as it did before.
+        self.__connect_timeout = (
+            get_option("clickhouse_connect_connect_timeout", 0) or connect_timeout
         )
-        send_receive_timeout = get_option("clickhouse_connect_send_receive_timeout", 0)
-        if not send_receive_timeout:
-            send_receive_timeout = (
-                self.send_receive_timeout
-                if self.send_receive_timeout is not None
+        resolved_send_receive = get_option("clickhouse_connect_send_receive_timeout", 0)
+        if not resolved_send_receive:
+            resolved_send_receive = (
+                send_receive_timeout
+                if send_receive_timeout is not None
                 else UNBOUNDED_SEND_RECEIVE_TIMEOUT_SECONDS
             )
+        self.__send_receive_timeout = resolved_send_receive
+
+    def _client_key(self) -> ClientKey:
         return ClientKey(
             host=self.host,
             port=self.port,
@@ -376,8 +385,8 @@ class ClickhouseConnectPool(ClickhousePool):
             secure=self.secure,
             ca_certs=self.ca_certs,
             verify=bool(self.verify),
-            connect_timeout=connect_timeout,
-            send_receive_timeout=send_receive_timeout,
+            connect_timeout=self.__connect_timeout,
+            send_receive_timeout=self.__send_receive_timeout,
         )
 
     def _get_client(self) -> Client:
