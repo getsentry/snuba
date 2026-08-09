@@ -393,7 +393,7 @@ class ClickhouseConnectPool(ClickhousePool):
             )
 
         try:
-            return self._consume(query_result, with_column_types)
+            return self._consume(query_result, with_column_types, query_id)
         finally:
             # The single most important line for a shared client. `query()`
             # returns a lazy result over a live socket; `QueryResult.close()`
@@ -406,7 +406,15 @@ class ClickhouseConnectPool(ClickhousePool):
             with suppress(Exception):
                 query_result.close()
 
-    def _consume(self, query_result: Any, with_column_types: bool) -> ClickhouseResult:
+    def _consume(
+        self, query_result: Any, with_column_types: bool, query_id: str | None
+    ) -> ClickhouseResult:
+        """Turn a QueryResult into a ClickhouseResult. Never leaves the response open.
+
+        Split out of ``_execute_once`` so the drain can sit in a ``finally``
+        around it; ``query_id`` is threaded through because the server-reported
+        id falls back to the one we sent.
+        """
         summary = query_result.summary or {}
         result_query_id = str(query_result.query_id or query_id or "")
 
