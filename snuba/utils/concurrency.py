@@ -21,6 +21,26 @@ def _positive_int_env(name: str) -> int | None:
     return value if value > 0 else None
 
 
+def declare_query_concurrency(concurrency: int) -> None:
+    """Record this process's query concurrency for pool sizing.
+
+    For entry points that know their own thread count but are not launched
+    through the ``granian`` CLI, so none of the ``GRANIAN_*`` env vars that
+    :func:`process_query_concurrency` reads are set: the ``snuba api`` /
+    ``snuba admin`` commands (which construct ``Granian`` programmatically) and
+    the subscription executors (which run their own ``ThreadPoolExecutor``).
+    Without this they fall through to ``_DEFAULT_QUERY_CONCURRENCY`` and size
+    their pools well below the number of threads actually running queries.
+
+    Must be called before the first ClickHouse pool is created. An explicitly
+    set ``SNUBA_QUERY_CONCURRENCY`` stays authoritative.
+    """
+    os.environ.setdefault("SNUBA_QUERY_CONCURRENCY", str(max(1, concurrency)))
+    # The value is cached on first read, so drop it here rather than leave this
+    # silently dependent on nothing having asked yet.
+    process_query_concurrency.cache_clear()
+
+
 @lru_cache(maxsize=1)
 def process_query_concurrency() -> int:
     """

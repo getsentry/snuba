@@ -120,3 +120,78 @@ def test_non_positive_api_threads_falls_back(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(settings, "API_THREADS", 0, raising=False)
     process_query_concurrency.cache_clear()
     assert process_query_concurrency() == concurrency._DEFAULT_QUERY_CONCURRENCY
+
+
+def test_declare_query_concurrency_is_read_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    concurrency.declare_query_concurrency(32)
+    assert process_query_concurrency() == 32
+
+
+def test_declare_query_concurrency_does_not_override_explicit_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    set_env(monkeypatch, {"SNUBA_QUERY_CONCURRENCY": "4"})
+    concurrency.declare_query_concurrency(32)
+    assert process_query_concurrency() == 4
+
+
+def test_declare_query_concurrency_invalidates_a_warm_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Without the cache_clear this is silently order-dependent, which is the
+    # class of bug the declaration exists to prevent.
+    assert process_query_concurrency() == concurrency._DEFAULT_QUERY_CONCURRENCY
+    concurrency.declare_query_concurrency(32)
+    assert process_query_concurrency() == 32
+
+
+@pytest.mark.parametrize(
+    "threads, backlog, processes",
+    [
+        pytest.param(None, 128, 1, id="snuba admin defaults"),
+        pytest.param(None, 128, 1, id="snuba api, 1 process"),
+        pytest.param(None, 256, 4, id="snuba api, 4 processes"),
+        pytest.param(None, 1024, 3, id="uneven division"),
+        pytest.param(None, 64, 1, id="below granian's backlog floor"),
+        pytest.param(8, 128, 1, id="explicit threads"),
+        pytest.param(1, 128, 8, id="explicit threads, many processes"),
+    ],
+)
+def test_resolve_blocking_threads_matches_granian(
+    threads: int | None, backlog: int, processes: int
+) -> None:
+    # The whole point of resolving the thread count ourselves is to hand granian
+    # and the ClickHouse pools the same number, so pin our arithmetic against
+    # what granian actually computes rather than against a copy of the formula.
+    from granian import Granian
+    from granian.constants import Interfaces
+
+    from snuba.utils.server import resolve_blocking_threads
+
+    granian_server = Granian(
+        target="snuba.web.wsgi:application",
+        interface=Interfaces.WSGI,
+        backlog=backlog,
+        workers=processes,
+        blocking_threads=threads,
+    )
+
+    assert resolve_blocking_threads(threads, backlog, processes) == granian_server.blocking_threads
+
+
+def test_serve_gives_granian_and_the_pools_the_same_thread_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The regression: `snuba api` with API_THREADS unset left blocking_threads
+    # as None, granian derived 64 from the backlog, and the pools -- seeing no
+    # GRANIAN_* env var -- sized to 8.
+    from unittest import mock
+
+    from snuba.utils import server
+
+    with mock.patch.object(server, "Granian") as granian:
+        server.serve("snuba.web.wsgi:application", "127.0.0.1:1218", processes=1, backlog=128)
+
+    _, kwargs = granian.call_args
+    assert kwargs["blocking_threads"] == 64
+    assert process_query_concurrency() == 64

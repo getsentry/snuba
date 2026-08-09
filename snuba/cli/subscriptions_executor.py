@@ -15,6 +15,7 @@ from snuba.datasets.factory import get_enabled_dataset_names
 from snuba.environment import setup_logging, setup_sentry
 from snuba.migrations.connect import check_clickhouse_connections
 from snuba.subscriptions.executor_consumer import build_executor_consumer
+from snuba.utils.concurrency import declare_query_concurrency
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
@@ -106,6 +107,13 @@ def subscriptions_executor(
     """
     setup_logging(log_level)
     setup_sentry()
+
+    # ExecuteQuery runs a ThreadPoolExecutor sized from this, and nothing here
+    # sets the GRANIAN_* env vars, so without this the pools would size to the
+    # default 8. This is the ceiling -- one replica holding every partition; a
+    # replica assigned fewer partitions uses proportionally less. Before
+    # check_clickhouse_connections below, which is what first builds a pool.
+    declare_query_concurrency(total_concurrent_queries)
 
     logger = structlog.get_logger().bind(module=__name__)
 
