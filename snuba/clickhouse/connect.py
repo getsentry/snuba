@@ -6,6 +6,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
 from datetime import datetime
 from typing import Any
+from weakref import WeakKeyDictionary
 
 import clickhouse_connect
 import sentry_sdk
@@ -17,8 +18,9 @@ from clickhouse_connect.driver.exceptions import (
     OperationalError,
     StreamFailureError,
 )
-from clickhouse_connect.driver.httputil import get_pool_manager
+from clickhouse_connect.driver.httputil import all_managers, get_pool_manager
 from sentry_sdk import traces
+from urllib3.poolmanager import PoolManager
 
 from snuba import environment, settings
 from snuba.clickhouse.errors import ClickhouseError
@@ -91,6 +93,33 @@ _STREAM_DESYNC_MARKERS = (
     "Stream failed during read",
     "unrecognized data found in stream",
 )
+
+
+# The urllib3 manager backing each client we build. clickhouse-connect only
+# tears a manager down in ``Client.close`` when the client created it itself
+# (``owns_pool_manager``), and we hand ours in -- so for our clients ``close``
+# does nothing: the socket stays open, and ``httputil.all_managers`` holds a
+# strong reference that keeps the manager alive for the life of the process.
+# Keeping our own handle lets _dispose_client finish the job. Weak keys so this
+# never becomes the thing holding a client alive.
+_CLIENT_POOL_MANAGERS: WeakKeyDictionary[Client, PoolManager] = WeakKeyDictionary()
+
+
+def _dispose_client(client: Client) -> None:
+    """Tear a client down completely, including the manager it does not own.
+
+    Without this every discarded client would leak its connection -- and leak it
+    hardest under the transport and desync failures that cause discards in the
+    first place.
+    """
+    with suppress(Exception):
+        client.close()
+    manager = _CLIENT_POOL_MANAGERS.pop(client, None)
+    if manager is None:
+        return
+    with suppress(Exception):
+        manager.clear()  # closes this client's socket
+    all_managers.pop(manager, None)  # let the manager itself be collected
 
 
 def _resolve_pool_size() -> int:
@@ -195,7 +224,7 @@ class ClickhouseConnectPool(ClickhousePool):
                 if self.send_receive_timeout is not None
                 else UNBOUNDED_SEND_RECEIVE_TIMEOUT_SECONDS
             )
-        return clickhouse_connect.get_client(
+        client = clickhouse_connect.get_client(
             host=self.host,
             port=self.port,
             username=self.user,
@@ -213,6 +242,8 @@ class ClickhouseConnectPool(ClickhousePool):
             autogenerate_session_id=False,
             compress="lz4",
         )
+        _CLIENT_POOL_MANAGERS[client] = pool_mgr
+        return client
 
     @contextmanager
     def _checkout(self) -> Iterator[Client]:
@@ -246,8 +277,7 @@ class ClickhouseConnectPool(ClickhousePool):
         finally:
             if client is not None and not reusable:
                 metrics.increment("client_discarded")
-                with suppress(Exception):
-                    client.close()
+                _dispose_client(client)
                 client = None
             self.__pool.put(client, block=False)
 
@@ -636,6 +666,5 @@ class ClickhouseConnectPool(ClickhousePool):
             except queue.Empty:
                 break
             if client is not None:
-                with suppress(Exception):
-                    client.close()
+                _dispose_client(client)
             self.__pool.put(None, block=False)

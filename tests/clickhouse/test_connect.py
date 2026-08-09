@@ -1147,3 +1147,70 @@ def test_a_client_failing_to_build_does_not_leak_its_slot() -> None:
             pool.execute("SELECT 1")
 
     assert pool._create_client.call_count == 3
+
+
+def test_disposing_a_client_tears_down_the_pool_manager_it_does_not_own() -> None:
+    # clickhouse-connect only clears the urllib3 manager in Client.close() when
+    # the client built it itself (owns_pool_manager). We hand ours in, so close()
+    # alone leaves the socket open *and* leaves the manager in the driver's
+    # module-level all_managers, whose strong reference keeps it alive for the
+    # life of the process. Every discard would leak a connection, worst under the
+    # error pressure that causes discards.
+    from clickhouse_connect.driver.httputil import all_managers
+
+    from snuba.clickhouse.connect import _CLIENT_POOL_MANAGERS, _dispose_client
+
+    client = mock.Mock()
+    manager = mock.Mock()
+    all_managers[manager] = 0
+    _CLIENT_POOL_MANAGERS[client] = manager
+
+    _dispose_client(client)
+
+    client.close.assert_called_once()
+    manager.clear.assert_called_once()
+    assert manager not in all_managers
+    assert client not in _CLIENT_POOL_MANAGERS
+
+
+def test_disposal_survives_a_client_with_no_tracked_manager() -> None:
+    from snuba.clickhouse.connect import _dispose_client
+
+    client = mock.Mock()
+    client.close.side_effect = RuntimeError("already torn down")
+
+    _dispose_client(client)  # must not raise
+
+    client.close.assert_called_once()
+
+
+def test_discarding_a_client_releases_its_connection() -> None:
+    # The wiring, not just the helper: a desync must actually reach disposal.
+    from clickhouse_connect.driver.httputil import all_managers
+
+    from snuba.clickhouse.connect import _CLIENT_POOL_MANAGERS
+
+    managers: list[mock.Mock] = []
+
+    def make_client() -> mock.Mock:
+        client = mock.Mock()
+        client.query.side_effect = _desync_error()
+        manager = mock.Mock()
+        all_managers[manager] = 0
+        _CLIENT_POOL_MANAGERS[client] = manager
+        managers.append(manager)
+        return client
+
+    pool = ClickhouseConnectPool(
+        host="host", user="test", password="test", database="test", max_pool_size=1
+    )
+    pool._create_client = make_client  # type: ignore[method-assign]
+
+    for _ in range(3):
+        with pytest.raises(ClickhouseError):
+            pool.execute("SELECT 1")
+
+    assert len(managers) == 3
+    for manager in managers:
+        manager.clear.assert_called_once()
+        assert manager not in all_managers
