@@ -326,6 +326,7 @@ impl ClickhouseClient {
         &self,
         body: bytes::Bytes,
         attempt: usize,
+        max_retries: usize,
     ) -> Result<Response, FailedAttempt> {
         let started = Instant::now();
         let res = self
@@ -360,7 +361,7 @@ impl ClickhouseClient {
         };
 
         let elapsed_ms = started.elapsed().as_millis();
-        let attempts = get_clickhouse_write_retry_policy(&self.storage_name).attempts();
+        let attempts = max_retries + 1;
         counter!(
             "rust_consumer.clickhouse_insert_error", 1,
             "status" => failure.status,
@@ -385,21 +386,28 @@ impl ClickhouseClient {
         let retry_policy = get_clickhouse_write_retry_policy(&self.storage_name);
 
         for attempt in 0..retry_policy.max_retries {
-            if let Ok(response) = self.send_once(body_bytes.clone(), attempt).await {
+            if let Ok(response) = self
+                .send_once(body_bytes.clone(), attempt, retry_policy.max_retries)
+                .await
+            {
                 return Ok(response);
             }
             tokio::time::sleep(retry_policy.backoff(attempt)).await;
         }
 
-        self.send_once(body_bytes, retry_policy.max_retries)
-            .await
-            .map_err(|failure| {
-                anyhow::anyhow!(
-                    "error writing to clickhouse after {} attempts: {}",
-                    retry_policy.attempts(),
-                    failure.detail
-                )
-            })
+        self.send_once(
+            body_bytes,
+            retry_policy.max_retries,
+            retry_policy.max_retries,
+        )
+        .await
+        .map_err(|failure| {
+            anyhow::anyhow!(
+                "error writing to clickhouse after {} attempts: {}",
+                retry_policy.max_retries + 1,
+                failure.detail
+            )
+        })
     }
 }
 

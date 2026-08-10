@@ -132,10 +132,6 @@ impl Default for ClickhouseWriteRetryPolicy {
 }
 
 impl ClickhouseWriteRetryPolicy {
-    pub fn attempts(&self) -> usize {
-        self.max_retries + 1
-    }
-
     pub fn backoff(&self, attempt: usize) -> Duration {
         let base_ms = self.initial_backoff_ms * 2f64.powi(attempt as i32);
         let jitter = rand::random::<f64>() * self.jitter_factor - self.jitter_factor / 2.0;
