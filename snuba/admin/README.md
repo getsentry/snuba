@@ -14,7 +14,7 @@ snuba admin
 
 The server should be running on http://127.0.0.1:1219
 
-note: from the Sentry repository, run `devservices up` and `devservices toggle snuba local` to start Snuba's dependencies for local development. Run `devservices toggle snuba containerized` to switch back to the containerized deployment.
+note: from the Snuba repository, run `devservices up` to start Snuba's dependencies (ClickHouse, Redis, Kafka) before `snuba admin`.
 
 # Developing the Javascript
 
