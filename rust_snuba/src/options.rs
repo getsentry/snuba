@@ -57,28 +57,11 @@ pub fn get_max_insert_block_size(storage_name: &str) -> Option<u64> {
 }
 
 /// HTTP client timeouts for a storage's ClickHouse writer.
-///
-/// Defaults are chosen against the deployed ClickHouse and its fronting proxy,
-/// not from first principles — see each field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ClickhouseWriteClientTimeouts {
-    /// Connect is an intra-cluster hop; this only exists so a black-holed SYN
-    /// fails fast instead of inheriting the kernel's connect backoff.
     pub connect: Duration,
-    /// Per-attempt INSERT deadline. Without one, a black-holed connection
-    /// blocks until the kernel stops retransmitting (~15 min) and the retry
-    /// loop never runs. Sits just above ClickHouse's own 60s
-    /// `http_receive_timeout`/`http_send_timeout` so the server answers first
-    /// with something retryable, and this only fires when nothing came back.
     pub request: Duration,
-    /// Must stay under ClickHouse's `keep_alive_timeout` (60s on the EAP
-    /// clusters) and under any proxy idle timeout, or the pool hands out
-    /// connections the far end already closed.
     pub pool_idle: Duration,
-    /// Keepalive idle/interval/retries: a dropped flow surfaces as a transport
-    /// error in `idle + interval * retries`, ~30s here, rather than sitting
-    /// until `request` expires. Only the interval differs from reqwest's own
-    /// 15s/15s/3, which would take ~60s.
     pub tcp_keepalive: Duration,
     pub tcp_keepalive_interval: Duration,
     pub tcp_keepalive_retries: u32,
@@ -98,12 +81,8 @@ impl Default for ClickhouseWriteClientTimeouts {
 }
 
 /// Writer timeouts for `storage_name`, from the `clickhouse_write_client_timeouts`
-/// dict. Every field falls back to its default independently, so an entry may
-/// override only what it needs; non-positive values fall back too.
-///
-/// Read fresh on each call (like [`get_load_balancing_config`]). Only `request`
-/// is consulted per attempt — the rest configure the shared HTTP client and so
-/// take effect on restart.
+/// dict. Every field falls back to its default independently; non-positive
+/// values fall back too.
 pub fn get_clickhouse_write_client_timeouts(storage_name: &str) -> ClickhouseWriteClientTimeouts {
     let defaults = ClickhouseWriteClientTimeouts::default();
     let Some(entry) = options("snuba")
@@ -136,12 +115,9 @@ pub fn get_clickhouse_write_client_timeouts(storage_name: &str) -> ClickhouseWri
 /// Retry schedule for a storage's ClickHouse writer.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ClickhouseWriteRetryPolicy {
-    /// Delay before the first retry; doubles each attempt.
     pub initial_backoff_ms: f64,
-    /// Retries on top of the original attempt. Zero disables retrying.
     pub max_retries: usize,
-    /// Fraction of the delay to jitter by, so consumers that failed together
-    /// do not retry together. Between 0 and 1.
+    /// Fraction of the delay to jitter by. Between 0 and 1.
     pub jitter_factor: f64,
 }
 
@@ -156,7 +132,6 @@ impl Default for ClickhouseWriteRetryPolicy {
 }
 
 impl ClickhouseWriteRetryPolicy {
-    /// Exponential backoff, jittered.
     pub fn backoff(&self, attempt: usize) -> Duration {
         let base_ms = self.initial_backoff_ms * 2f64.powi(attempt as i32);
         let jitter = rand::random::<f64>() * self.jitter_factor - self.jitter_factor / 2.0;
@@ -164,10 +139,9 @@ impl ClickhouseWriteRetryPolicy {
     }
 }
 
-/// Retry schedule for `storage_name`, from the `clickhouse_write_retry_policy` dict.
-/// Each field is optional and falls back to its default independently. Unlike
-/// the timeouts, zero is meaningful here — no retries, no backoff, no jitter —
-/// so only negative and out-of-range values are rejected.
+/// Retry schedule for `storage_name`, from the `clickhouse_write_retry_policy`
+/// dict. Every field falls back to its default independently. Zero is
+/// honoured; only negative and out-of-range values fall back.
 pub fn get_clickhouse_write_retry_policy(storage_name: &str) -> ClickhouseWriteRetryPolicy {
     let defaults = ClickhouseWriteRetryPolicy::default();
     let Some(entry) = options("snuba")
@@ -262,8 +236,6 @@ mod tests {
         let defaults = ClickhouseWriteClientTimeouts::default();
         let timeouts = get_clickhouse_write_client_timeouts("timeouts_partial_test");
 
-        // The point of the per-field fallback: setting one value must not
-        // silently reset the other five.
         assert_eq!(timeouts.request, Duration::from_millis(30_000));
         assert_eq!(timeouts.connect, defaults.connect);
         assert_eq!(timeouts.pool_idle, defaults.pool_idle);
@@ -277,7 +249,6 @@ mod tests {
             defaults.tcp_keepalive_retries
         );
 
-        // A different storage is unaffected.
         assert_eq!(
             get_clickhouse_write_client_timeouts("timeouts_other_storage"),
             defaults
@@ -338,8 +309,6 @@ mod tests {
         let defaults = ClickhouseWriteRetryPolicy::default();
         let policy = get_clickhouse_write_retry_policy("retry_partial_test");
 
-        // Zero is a real choice here — no retries, no jitter — unlike the
-        // timeouts, where it would mean no deadline at all.
         assert_eq!(policy.max_retries, 0);
         assert_eq!(policy.jitter_factor, 0.0);
         assert_eq!(policy.initial_backoff_ms, defaults.initial_backoff_ms);
@@ -362,8 +331,6 @@ mod tests {
         )])
         .unwrap();
 
-        // A negative delay and a jitter above 1 would both produce nonsense
-        // delays, so they fall back rather than being honoured.
         assert_eq!(
             get_clickhouse_write_retry_policy("retry_range_test"),
             ClickhouseWriteRetryPolicy::default()
@@ -380,8 +347,6 @@ mod tests {
         )])
         .unwrap();
 
-        // Zero would mean no deadline / no probes, the exact behavior these
-        // exist to prevent, so it falls back rather than being honoured.
         assert_eq!(
             get_clickhouse_write_client_timeouts("timeouts_zero_test"),
             ClickhouseWriteClientTimeouts::default()

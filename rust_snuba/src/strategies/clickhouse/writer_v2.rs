@@ -230,13 +230,8 @@ where
 
 impl_writer_delegate!(RowBinaryWriterStep);
 
-/// A failed attempt, normalized so the retry loop does not care whether
-/// ClickHouse answered with an error or never answered at all. `status` and
-/// `timeout` are metric tags; `detail` is the human-readable cause.
 struct FailedAttempt {
     status: String,
-    /// Whether the deadline fired, as opposed to the connection failing
-    /// outright. Distinguishes writes that stall from ones that are refused.
     timeout: bool,
     detail: String,
 }
@@ -327,14 +322,11 @@ impl ClickhouseClient {
         url
     }
 
-    /// One INSERT attempt. Both an HTTP error and a transport error come back
-    /// as [`FailedAttempt`] so the retry loop can treat them the same.
     async fn send_once(&self, body: bytes::Bytes) -> Result<Response, FailedAttempt> {
         let res = self
             .client
             .post(self.build_url())
             .headers(self.headers.clone())
-            // Re-read per attempt so the deadline can be retuned at runtime.
             .timeout(get_clickhouse_write_client_timeouts(&self.storage_name).request)
             .query(&[("query", &self.query)])
             .body(reqwest::Body::from(body))
@@ -364,16 +356,14 @@ impl ClickhouseClient {
     }
 
     pub async fn send(&self, body: Vec<u8>) -> anyhow::Result<Response> {
-        // Compress once — the body is identical across attempts and `Bytes` makes
-        // each retry's clone a refcount bump. Drop frees the uncompressed copy
-        // rather than holding it for the life of the retries.
         let body_bytes = bytes::Bytes::from(lz4_compress(&body));
         drop(body);
 
         let retry_policy = get_clickhouse_write_retry_policy(&self.storage_name);
         let attempts = retry_policy.max_retries + 1;
-        let mut attempt = 0;
-        loop {
+        let mut last_failure = None;
+
+        for attempt in 0..attempts {
             let started = Instant::now();
             let failure = match self.send_once(body_bytes.clone()).await {
                 Ok(response) => return Ok(response),
@@ -381,7 +371,6 @@ impl ClickhouseClient {
             };
             let elapsed_ms = started.elapsed().as_millis();
 
-            let last = attempt + 1 == attempts;
             counter!(
                 "rust_consumer.clickhouse_insert_error", 1,
                 "status" => failure.status,
@@ -390,13 +379,6 @@ impl ClickhouseClient {
                 "max_attempts" => attempts
             );
 
-            if last {
-                anyhow::bail!(
-                    "error writing to clickhouse after {attempts} attempts ({elapsed_ms}ms on the final attempt): {}",
-                    failure.detail
-                );
-            }
-
             tracing::warn!(
                 "ClickHouse write failed (attempt {}/{attempts}) after {elapsed_ms}ms: status={}, error={}",
                 attempt + 1,
@@ -404,9 +386,18 @@ impl ClickhouseClient {
                 failure.detail
             );
 
-            tokio::time::sleep(retry_policy.backoff(attempt)).await;
-            attempt += 1;
+            last_failure = Some((failure, elapsed_ms));
+
+            if attempt + 1 < attempts {
+                tokio::time::sleep(retry_policy.backoff(attempt)).await;
+            }
         }
+
+        let (failure, elapsed_ms) = last_failure.expect("at least one attempt is made");
+        anyhow::bail!(
+            "error writing to clickhouse after {attempts} attempts ({elapsed_ms}ms on the final attempt): {}",
+            failure.detail
+        )
     }
 }
 
@@ -507,10 +498,6 @@ mod tests {
         }
     }
 
-    /// End-to-end against a live ClickHouse: the only check that the natively
-    /// compressed body is one the server accepts, covering the LZ4 framing, the
-    /// CityHash checksum byte order and the `decompress=1` contract together.
-    /// `send` bails on any non-200, so returning `Ok` is the assertion.
     #[tokio::test]
     async fn test_compressed_insert_against_live_clickhouse() {
         crate::testutils::initialize_python();
@@ -761,10 +748,8 @@ mod tests {
         assert!(error_msg.contains("after 5 attempts"));
     }
 
-    /// Accepts connections and never answers, reproducing a black-holed
-    /// request. Returns the error, the elapsed time, and the connection count
-    /// (i.e. attempts). Caller must hold an `override_options` guard for
-    /// `storage_name`.
+    /// Accepts connections and never answers. Returns the error, the elapsed
+    /// time and the connection count.
     async fn send_against_hung_server(
         storage_name: &str,
         format: InsertFormat,
@@ -810,16 +795,11 @@ mod tests {
         )
     }
 
-    /// Regression test for SNUBA-CCY, where a peer that never answers hung the
-    /// write indefinitely. The connection count is the point: each timed-out
-    /// attempt must be retried on a *fresh* connection, which is what
-    /// `reqwest::retry` cannot do. Both formats, since they share one client.
     #[tokio::test]
     async fn test_hung_server_times_out_for_both_wire_formats() {
         crate::testutils::initialize_python();
         init_options();
 
-        // One guard for both: the override replaces the whole dict.
         let retry_policy =
             json!({ "initial_backoff_ms": 10.0, "max_retries": 2, "jitter_factor": 0.0 });
         let _guard = override_options(&[
@@ -864,7 +844,6 @@ mod tests {
                 "{format:?}: each timed-out attempt must be retried on a new \
                  connection, so the hung server should see one per attempt"
             );
-            // 3 x 300ms plus backoff; without the deadline it never returns.
             assert!(
                 elapsed >= Duration::from_millis(900),
                 "{format:?}: took {elapsed:?}"
