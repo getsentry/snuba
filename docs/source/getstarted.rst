@@ -20,9 +20,14 @@ in ``~/.sentry/sentry.conf.py``::
 
     SENTRY_EVENTSTREAM = "sentry.eventstream.kafka.KafkaEventStream"
 
-And then use::
+Then start the services and switch Snuba to local development::
 
-    devservices up --exclude=snuba
+    devservices up
+    devservices toggle snuba local
+
+To switch Snuba back to a containerized deployment, use::
+
+    devservices toggle snuba containerized
 
 Note that Snuba assumes that everything is running on UTC time. Otherwise
 you may experience issues with timezone mismatches.
