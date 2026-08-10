@@ -139,6 +139,11 @@ impl ClickhouseWriteRetryPolicy {
     }
 }
 
+/// Largest accepted `max_retries`. Past ~1024 the doubling in
+/// [`ClickhouseWriteRetryPolicy::backoff`] overflows to infinity and the delay
+/// saturates to `u64::MAX` ms, which parks the write forever.
+const MAX_CLICKHOUSE_WRITE_RETRIES: u64 = 20;
+
 /// Retry schedule for `storage_name`, from the `clickhouse_write_retry_policy`
 /// dict. Every field falls back to its default independently. Zero is
 /// honoured; only negative and out-of-range values fall back.
@@ -161,6 +166,7 @@ pub fn get_clickhouse_write_retry_policy(storage_name: &str) -> ClickhouseWriteR
         max_retries: entry
             .get("max_retries")
             .and_then(|n| n.as_u64())
+            .filter(|&n| n <= MAX_CLICKHOUSE_WRITE_RETRIES)
             .and_then(|n| usize::try_from(n).ok())
             .unwrap_or(defaults.max_retries),
         jitter_factor: entry
@@ -326,7 +332,11 @@ mod tests {
             "snuba",
             "clickhouse_write_retry_policy",
             json!({
-                "retry_range_test": { "initial_backoff_ms": -1.0, "jitter_factor": 5.0 }
+                "retry_range_test": {
+                    "initial_backoff_ms": -1.0,
+                    "max_retries": 10_000,
+                    "jitter_factor": 5.0
+                }
             }),
         )])
         .unwrap();
