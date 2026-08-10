@@ -407,6 +407,29 @@ def test_routing_query_is_exempt_from_allocation_policies() -> None:
     assert tenant_ids["cross_org_query"] == 1
 
 
+@pytest.mark.redis_db
+def test_empty_outcomes_result_counts_as_zero_items() -> None:
+    strategy = OutcomesBasedRoutingStrategy()
+    request = TraceItemTableRequest(meta=_get_request_meta())
+
+    with mock.patch(
+        "snuba.web.rpc.storage_routing.routing_strategies.outcomes_based.run_query",
+        return_value=QueryResult(
+            result={"data": []},
+            extra={"stats": {}, "sql": "", "experiments": {}},
+        ),
+    ):
+        ingested_items = strategy.get_ingested_items_for_timerange(
+            RoutingContext(
+                in_msg=request,
+                timer=Timer("test"),
+                query_id=uuid.uuid4().hex,
+            )
+        )
+
+    assert ingested_items == 0
+
+
 @pytest.mark.eap
 @pytest.mark.redis_db
 def test_outcomes_based_routing_downsample(store_outcomes_fixture: Any) -> None:

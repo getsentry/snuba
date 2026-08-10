@@ -59,6 +59,62 @@
       "default": {},
       "description": "Dict mapping storage name to a max_insert_block_size override for that storage's INSERTs. Values below ClickHouse's default (1048449) are ignored. Storages with no entry use the server default. Migrated from per-storage runtime config clickhouse_max_insert_block_size:<storage>."
     },
+    "clickhouse_write_client_timeouts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "connect_ms": {
+            "type": "integer",
+            "optional": true
+          },
+          "request_ms": {
+            "type": "integer",
+            "optional": true
+          },
+          "pool_idle_ms": {
+            "type": "integer",
+            "optional": true
+          },
+          "tcp_keepalive_ms": {
+            "type": "integer",
+            "optional": true
+          },
+          "tcp_keepalive_interval_ms": {
+            "type": "integer",
+            "optional": true
+          },
+          "tcp_keepalive_retries": {
+            "type": "integer",
+            "optional": true
+          }
+        }
+      },
+      "default": {},
+      "description": "Dict mapping storage name to HTTP client timeout overrides for that storage's consumer writer. Each field is optional and falls back to its default independently; non-positive values fall back too. Only request_ms is re-read per attempt, the rest apply on consumer restart."
+    },
+    "clickhouse_write_retry_policy": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "initial_backoff_ms": {
+            "type": "number",
+            "optional": true
+          },
+          "max_retries": {
+            "type": "integer",
+            "optional": true
+          },
+          "jitter_factor": {
+            "type": "number",
+            "optional": true
+          }
+        }
+      },
+      "default": {},
+      "description": "Dict mapping storage name to retry overrides for that storage's consumer writer. Each field is optional and falls back to its default independently. Zero is honoured (no retries, no backoff, no jitter); negative values and a jitter_factor outside 0-1 fall back. Read per write, so changes apply without a redeploy."
+    },
     "eap_items_dlq_grace_period_min": {
       "type": "object",
       "additionalProperties": {
@@ -66,6 +122,11 @@
       },
       "default": {},
       "description": "Dict mapping storage name to a grace period in minutes; eap-items messages from before the current partition older than this are routed to the DLQ. Storages with no entry have no grace-period dropping. Migrated from per-storage runtime config eap_items_dlq_grace_period_min:<storage>."
+    },
+    "eap_items_emit_received_at": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the EAP items consumer writes the Kafka broker timestamp in epoch milliseconds to the received_at column."
     },
     "quantized_rebalance_consumer_group_delay_secs": {
       "type": "object",
@@ -546,6 +607,11 @@
       "type": "integer",
       "default": 1,
       "description": "Granularity in seconds to which query time-range bounds are aligned (truncated). Must be non-zero. Migrated from runtime config date_align_seconds."
+    },
+    "snuba_query_max_array_size": {
+      "type": "integer",
+      "default": 1000,
+      "description": "Maximum number of elements an array-returning aggregation (FUNCTION_COLLECT_UNIQUE, which maps to ClickHouse groupUniqArray) may accumulate per group. Unlike uniq, groupUniqArray holds every distinct value on the aggregating node, so this bounds its memory: a group with more distinct values than this is truncated rather than allowed to grow. Lower it if a collect query is hurting a cluster."
     },
     "lightweight_deletes_sync": {
       "type": "integer",

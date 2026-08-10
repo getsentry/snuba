@@ -1,10 +1,9 @@
-import React, { useState } from "react";
+import React from "react";
 import { Accordion, Stack, Title, Text, Group, Table } from "@mantine/core";
 
 import Client from "SnubaAdmin/api_client";
 import QueryDisplay from "SnubaAdmin/tracing/query_display";
 import {
-  LogLine,
   TracingResult,
   TracingSummary,
   QuerySummary,
@@ -14,53 +13,14 @@ import {
   StreamSummary,
   AggregationSummary,
   SortingSummary,
+  ProfileEventsResults,
 } from "SnubaAdmin/tracing/types";
 
-type ProfileEventValue = {
-  column_names: string[];
-  rows: string[];
-};
-
-type ProfileEvent = {
-  [host_name: string]: ProfileEventValue;
-};
-
-enum MessageCategory {
-  housekeeping,
-  select_execution,
-  aggregation,
-  memory_tracker,
-  unknown,
-}
-
-let collapsibleStyle = {
+const collapsibleStyle = {
   listStyleType: "none",
   fontFamily: "Monaco",
   width: "fit-content",
 };
-
-function getMessageCategory(logLine: LogLine): MessageCategory {
-  const component = logLine.component;
-  if (
-    component.match(/^ContextAccess|AccessRightsContext|^executeQuery/) &&
-    !logLine.message.startsWith("Read")
-  ) {
-    return MessageCategory.housekeeping;
-  } else if (component.match(/\(SelectExecutor\)|MergeTreeSelectProcessor/)) {
-    return MessageCategory.select_execution;
-  } else if (
-    component.match(/^InterpreterSelectQuery|AggregatingTransform|Aggregator/)
-  ) {
-    return MessageCategory.aggregation;
-  } else if (
-    component.match(/MemoryTracker/) ||
-    (component.match(/^executeQuery/) && logLine.message.startsWith("Read"))
-  ) {
-    return MessageCategory.memory_tracker;
-  } else {
-    return MessageCategory.unknown;
-  }
-}
 
 function TracingQueries(props: { api: Client }) {
   function tablePopulator(queryResult: TracingResult, showFormatted: boolean) {
@@ -98,7 +58,10 @@ function TracingQueries(props: { api: Client }) {
                   <br />
                   <b>Number of rows in result set:</b> {value.num_rows_result}
                   <br />
-                  {summarizedTraceDisplay(value.summarized_trace_output, value.profile_events_results)}
+                  {summarizedTraceDisplay(
+                    value.summarized_trace_output,
+                    value.profile_events_results
+                  )}
                 </div>
               );
             } else {
@@ -107,7 +70,11 @@ function TracingQueries(props: { api: Client }) {
                   <br />
                   <b>Number of rows in result set:</b> {value.num_rows_result}
                   <br />
-                  {rawTraceDisplay(title, value.trace_output, value.profile_events_results)}
+                  {rawTraceDisplay(
+                    title,
+                    value.trace_output,
+                    value.profile_events_results
+                  )}
                 </div>
               );
             }
@@ -117,27 +84,39 @@ function TracingQueries(props: { api: Client }) {
     );
   }
 
-  function rawTraceDisplay(title: string, value: any, profileEventResults: ProfileEvent): JSX.Element | undefined {
-    const parsedLines: Array<string> = value.split(/\n/);
+  function rawTraceDisplay(
+    title: string,
+    value?: string,
+    profileEventResults?: ProfileEventsResults
+  ): JSX.Element | undefined {
+    const parsedLines: Array<string> = (value || "").split(/\n/);
 
     const profileEventRows: Array<string> = [];
-    for (const [k, v] of Object.entries(profileEventResults)) {
-      profileEventRows.push(k + '=>' + v.rows[0]);
+    for (const [k, v] of Object.entries(profileEventResults || {})) {
+      if (v.rows && v.rows.length > 0) {
+        profileEventRows.push(k + "=>" + v.rows[0]);
+      }
     }
 
     return (
       <ol style={collapsibleStyle} key={title + "-root"}>
-        <Title order={4}>Profile Events Output</Title>
-        {profileEventRows.map((line, index) => {
-          const node_name = line.split("=>")[0];
-          const row = line.split("=>")[1];
-          return (
-            <li key={title + index}>
-              <Text>[ {node_name} ] {row}</Text>
-            </li>
-          );
-        })}
-        <br />
+        {profileEventRows.length > 0 && (
+          <>
+            <Title order={4}>Profile Events Output</Title>
+            {profileEventRows.map((line, index) => {
+              const node_name = line.split("=>")[0];
+              const row = line.split("=>")[1];
+              return (
+                <li key={title + index}>
+                  <Text>
+                    [ {node_name} ] {row}
+                  </Text>
+                </li>
+              );
+            })}
+            <br />
+          </>
+        )}
         <Title order={4}>Trace Output</Title>
         {parsedLines.map((line, index) => {
           return (
@@ -221,8 +200,7 @@ function TracingQueries(props: { api: Client }) {
   }
 
   function querySummary(value: QuerySummary): JSX.Element {
-    const execute = value.execute_summaries ?
-      value.execute_summaries[0] : null;
+    const execute = value.execute_summaries?.[0] || null;
     const dist = value.is_distributed ? " (Distributed)" : "";
     const index_summaries = value.index_summaries
       ? value.index_summaries.map((s) => indexSummary(s))
@@ -259,7 +237,7 @@ function TracingQueries(props: { api: Client }) {
             {aggregation_summaries}
             {sorting_summaries}
             <Title order={4}>Total</Title>
-            {value.execute_summaries && value.execute_summaries.map((e) => executeSummary(e))}
+            {value.execute_summaries?.map((e) => executeSummary(e))}
           </Stack>
         </Accordion.Panel>
       </Accordion.Item>
@@ -267,64 +245,89 @@ function TracingQueries(props: { api: Client }) {
   }
 
   function summarizedTraceDisplay(
-    value: TracingSummary,
-    profileEventResults: ProfileEvent
+    value?: TracingSummary,
+    profileEventResults?: ProfileEventsResults
   ): JSX.Element | undefined {
-    let dist_node;
-    let nodes = [];
-    for (const [host, summary] of Object.entries(value.query_summaries)) {
+    if (!value || !value.query_summaries) {
+      return <Text>No trace data available</Text>;
+    }
+
+    let dist_node: QuerySummary | undefined;
+    const nodes: QuerySummary[] = [];
+    for (const [, summary] of Object.entries(value.query_summaries)) {
+      if (!summary) {
+        continue;
+      }
       if (summary.is_distributed) {
         dist_node = summary;
       } else {
         nodes.push(summary);
       }
     }
+
+    const profileEvents = profileEventResults || {};
+    const hasProfileEvents = Object.keys(profileEvents).length > 0;
+
     return (
       <Stack>
-        <Accordion chevronPosition="left">
-          {querySummary(dist_node as QuerySummary)}
-        </Accordion>
-        <Accordion chevronPosition="left">
-          {nodes
-            .filter((q: QuerySummary) => !q.is_distributed)
-            .map((q: QuerySummary) => querySummary(q))}
-        </Accordion>
-        <Accordion chevronPosition="left">
-          <Accordion.Item value="profile-events" key="profile-events">
-            <Accordion.Control>
-              <Title order={4}>Profile Events Output</Title>
-            </Accordion.Control>
-            <Accordion.Panel>
-              {Object.entries(profileEventResults).map(([host, event]) => (
-                <Accordion chevronPosition="left" key={host}>
-                  <Accordion.Item value={host}>
-                    <Accordion.Control>
-                      <Title order={5}>{host}</Title>
-                    </Accordion.Control>
-                    <Accordion.Panel>
-                      <Table>
-                        <thead>
-                          <tr>
-                            <th>Event</th>
-                            <th>Number of Events</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {event.rows.length > 0 && Object.entries(JSON.parse(event.rows[0]) as Record<string, number>).map(([key, value], rowIndex) => (
-                            <tr key={rowIndex}>
-                              <td>{key}</td>
-                              <td>{value}</td>
+        {dist_node && (
+          <Accordion chevronPosition="left">
+            {querySummary(dist_node)}
+          </Accordion>
+        )}
+        {nodes.length > 0 && (
+          <Accordion chevronPosition="left">
+            {nodes.map((q: QuerySummary) => querySummary(q))}
+          </Accordion>
+        )}
+        {!dist_node && nodes.length === 0 && (
+          <Text>No query summaries available</Text>
+        )}
+        {hasProfileEvents && (
+          <Accordion chevronPosition="left">
+            <Accordion.Item value="profile-events" key="profile-events">
+              <Accordion.Control>
+                <Title order={4}>Profile Events Output</Title>
+              </Accordion.Control>
+              <Accordion.Panel>
+                {Object.entries(profileEvents).map(([host, event]) => (
+                  <Accordion chevronPosition="left" key={host}>
+                    <Accordion.Item value={host}>
+                      <Accordion.Control>
+                        <Title order={5}>{host}</Title>
+                      </Accordion.Control>
+                      <Accordion.Panel>
+                        <Table>
+                          <thead>
+                            <tr>
+                              <th>Event</th>
+                              <th>Number of Events</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </Table>
-                    </Accordion.Panel>
-                  </Accordion.Item>
-                </Accordion>
-              ))}
-            </Accordion.Panel>
-          </Accordion.Item>
-        </Accordion>
+                          </thead>
+                          <tbody>
+                            {event.rows &&
+                              event.rows.length > 0 &&
+                              Object.entries(
+                                JSON.parse(event.rows[0]) as Record<
+                                  string,
+                                  number
+                                >
+                              ).map(([key, eventValue], rowIndex) => (
+                                <tr key={rowIndex}>
+                                  <td>{key}</td>
+                                  <td>{eventValue}</td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </Table>
+                      </Accordion.Panel>
+                    </Accordion.Item>
+                  </Accordion>
+                ))}
+              </Accordion.Panel>
+            </Accordion.Item>
+          </Accordion>
+        )}
       </Stack>
     );
   }

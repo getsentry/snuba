@@ -155,8 +155,10 @@ class CommitLogTickConsumer(Consumer[Tick]):
         if previous_message is not None:
             try:
                 time_interval = Interval(
-                    getattr(previous_message, self.__synchronization_timestamp),
-                    getattr(commit, self.__synchronization_timestamp),
+                    self.__sync_timestamp(
+                        previous_message.orig_message_ts, previous_message.received_p99
+                    ),
+                    self.__sync_timestamp(commit.orig_message_ts, commit.received_p99),
                 )
                 offset_interval = Interval(previous_message.offset, commit.offset)
             except InvalidRangeError:
@@ -182,6 +184,14 @@ class CommitLogTickConsumer(Consumer[Tick]):
         )
 
         return result
+
+    def __sync_timestamp(self, orig_message_ts: float, received_p99: float | None) -> float:
+        if self.__synchronization_timestamp == "orig_message_ts":
+            return orig_message_ts
+        if received_p99 is None:
+            self.__metrics.increment("subscriptions.scheduler.sync_ts_fallback")
+            return orig_message_ts
+        return received_p99
 
     def pause(self, partitions: Sequence[Partition]) -> None:
         self.__consumer.pause(partitions)

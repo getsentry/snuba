@@ -90,6 +90,14 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
     }
 
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
+        let processor_name = self
+            .storage_config
+            .message_processor
+            .python_class_name
+            .as_str();
+        let eap_items_emit_received_at = processor_name == "EAPItemsProcessor"
+            && crate::processors::eap_items::emit_received_at();
+
         // RowBinary storages: the processor swap (JSON → RowBinary sibling) and
         // the column list the RowBinary writer needs, both used below.
         let (process_fn_override, insert_columns): (
@@ -97,18 +105,15 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
             Option<&'static [&'static str]>,
         ) = if self.use_row_binary {
             tracing::info!("Using RowBinary wire format");
-            let processor_name = self
-                .storage_config
-                .message_processor
-                .python_class_name
-                .as_str();
             let (func, columns): (
                 crate::processors::ProcessingFunction,
                 &'static [&'static str],
             ) = match processor_name {
                 "EAPItemsProcessor" => (
                     crate::processors::eap_items::process_message_row_binary,
-                    crate::processors::eap_items::EAPItemRow::COLUMN_NAMES,
+                    crate::processors::eap_items::EAPItemRow::column_names(
+                        eap_items_emit_received_at,
+                    ),
                 ),
                 name => panic!("RowBinary not supported for processor: {name}"),
             };
@@ -251,6 +256,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     config::ProcessorConfig {
                         env_config: self.env_config.clone(),
                         storage_name: self.storage_config.name.clone(),
+                        eap_items_emit_received_at,
                     },
                     self.stop_at_timestamp,
                 )
@@ -269,6 +275,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     config::ProcessorConfig {
                         env_config: self.env_config.clone(),
                         storage_name: self.storage_config.name.clone(),
+                        eap_items_emit_received_at,
                     },
                     self.stop_at_timestamp,
                 )

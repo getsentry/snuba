@@ -1,6 +1,5 @@
 import math
 import uuid
-from typing import cast
 
 import sentry_sdk
 from google.protobuf.json_format import MessageToDict
@@ -31,6 +30,7 @@ from snuba.web.rpc.storage_routing.common import extract_message_meta
 from snuba.web.rpc.storage_routing.routing_strategies.common import (
     ITEM_TYPE_TO_OUTCOME_CATEGORY,
     Outcome,
+    num_items_from_outcomes_result,
 )
 from snuba.web.rpc.storage_routing.routing_strategies.storage_routing import (
     BaseRoutingStrategy,
@@ -119,6 +119,7 @@ class OutcomesFlexTimeRoutingStrategy(BaseRoutingStrategy):
                 tenant_ids={
                     "organization_id": in_msg_meta.organization_id,
                     "referrer": "eap.route_outcomes",
+                    "cross_org_query": 1,
                 },
                 app_id=AppID("eap"),
                 parent_api="eap.route_outcomes",
@@ -131,7 +132,7 @@ class OutcomesFlexTimeRoutingStrategy(BaseRoutingStrategy):
             timer=routing_context.timer,
         )
         routing_context.extra_info["estimation_sql"] = res.extra.get("sql", "")
-        return cast(int, res.result.get("data", [{}])[0].get("num_items", 0))
+        return num_items_from_outcomes_result(res.result)
 
     def _adjust_time_window(self, routing_context: RoutingContext) -> TimeWindow:
         """Adjust the time window to ensure we don't exceed MAX_ITEMS_TO_QUERY."""

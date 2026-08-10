@@ -1,5 +1,7 @@
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any
+from unittest import mock
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -9,6 +11,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_relay.consts import DataCategory
 
 from snuba.utils.metrics.timer import Timer
+from snuba.web import QueryResult
 from snuba.web.rpc.common.pagination import FlexibleTimeWindowPageWithFilters
 from snuba.web.rpc.storage_routing.routing_strategies.outcomes_flex_time import (
     OutcomesFlexTimeRoutingStrategy,
@@ -130,3 +133,71 @@ def test_outcomes_flex_time_routing_strategy_with_data_and_page_token() -> None:
     assert (
         routing_decision.time_window.end_timestamp.seconds == page_token_end_timestamp.timestamp()
     )
+
+
+@pytest.mark.redis_db
+def test_routing_query_is_exempt_from_allocation_policies() -> None:
+    strategy = OutcomesFlexTimeRoutingStrategy()
+    request = TraceItemTableRequest(
+        meta=_get_request_meta(BASE_TIME - timedelta(hours=24), BASE_TIME)
+    )
+    request.meta.trace_item_type = TraceItemType.TRACE_ITEM_TYPE_LOG
+
+    captured_requests = []
+
+    def fake_run_query(dataset: Any, request: Any, timer: Any) -> Any:
+        captured_requests.append(request)
+        return QueryResult(
+            result={"data": [{"num_items": 0}]},
+            extra={"stats": {}, "sql": "", "experiments": {}},
+        )
+
+    with mock.patch(
+        "snuba.web.rpc.storage_routing.routing_strategies.outcomes_flex_time.run_query",
+        side_effect=fake_run_query,
+    ):
+        strategy.get_ingested_items_for_timerange(
+            RoutingContext(
+                in_msg=request,
+                timer=Timer("test"),
+                query_id=uuid.uuid4().hex,
+            ),
+            TimeWindow(
+                start_timestamp=request.meta.start_timestamp,
+                end_timestamp=request.meta.end_timestamp,
+            ),
+        )
+
+    assert len(captured_requests) == 1
+    tenant_ids = captured_requests[0].attribution_info.tenant_ids
+    assert tenant_ids["cross_org_query"] == 1
+
+
+@pytest.mark.redis_db
+def test_empty_outcomes_result_counts_as_zero_items() -> None:
+    strategy = OutcomesFlexTimeRoutingStrategy()
+    request = TraceItemTableRequest(
+        meta=_get_request_meta(BASE_TIME - timedelta(hours=24), BASE_TIME)
+    )
+    request.meta.trace_item_type = TraceItemType.TRACE_ITEM_TYPE_LOG
+
+    with mock.patch(
+        "snuba.web.rpc.storage_routing.routing_strategies.outcomes_flex_time.run_query",
+        return_value=QueryResult(
+            result={"data": []},
+            extra={"stats": {}, "sql": "", "experiments": {}},
+        ),
+    ):
+        ingested_items = strategy.get_ingested_items_for_timerange(
+            RoutingContext(
+                in_msg=request,
+                timer=Timer("test"),
+                query_id=uuid.uuid4().hex,
+            ),
+            TimeWindow(
+                start_timestamp=request.meta.start_timestamp,
+                end_timestamp=request.meta.end_timestamp,
+            ),
+        )
+
+    assert ingested_items == 0

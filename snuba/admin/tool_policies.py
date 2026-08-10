@@ -27,10 +27,12 @@ class AdminTools(Enum):
     QUERYLOG = "querylog"
     PRODUCTION_QUERIES = "production-queries"
     CARDINALITY_ANALYZER = "cardinality-analyzer"
+    OUTCOMES_ANALYZER = "outcomes-analyzer"
     SNUBA_EXPLAIN = "snuba-explain"
     MANUAL_JOBS = "view-jobs"
     RPC_ENDPOINTS = "rpc-endpoints"
     CLUSTERS = "clusters"
+    EAP_STATS = "eap-stats"
 
 
 DEVELOPER_TOOLS: set[AdminTools] = {AdminTools.SNQL_TO_SQL, AdminTools.QUERY_TRACING}
