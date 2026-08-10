@@ -361,6 +361,8 @@ impl ClickhouseClient {
 
         let retry_policy = get_clickhouse_write_retry_policy(&self.storage_name);
         let attempts = retry_policy.max_retries + 1;
+        let mut last_error =
+            anyhow::anyhow!("clickhouse write not attempted: retry policy allows no attempts");
 
         for attempt in 0..attempts {
             let started = Instant::now();
@@ -378,13 +380,6 @@ impl ClickhouseClient {
                 "max_attempts" => attempts
             );
 
-            if attempt + 1 == attempts {
-                anyhow::bail!(
-                    "error writing to clickhouse after {attempts} attempts ({elapsed_ms}ms on the final attempt): {}",
-                    failure.detail
-                );
-            }
-
             tracing::warn!(
                 "ClickHouse write failed (attempt {}/{attempts}) after {elapsed_ms}ms: status={}, error={}",
                 attempt + 1,
@@ -392,10 +387,18 @@ impl ClickhouseClient {
                 failure.detail
             );
 
-            tokio::time::sleep(retry_policy.backoff(attempt)).await;
+            last_error = anyhow::anyhow!(
+                "error writing to clickhouse after {} attempts ({elapsed_ms}ms on the final attempt): {}",
+                attempt + 1,
+                failure.detail
+            );
+
+            if attempt + 1 < attempts {
+                tokio::time::sleep(retry_policy.backoff(attempt)).await;
+            }
         }
 
-        anyhow::bail!("clickhouse write not attempted: retry policy allows {attempts} attempts")
+        Err(last_error)
     }
 }
 
