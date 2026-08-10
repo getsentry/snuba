@@ -78,7 +78,7 @@ and, in another terminal::
     git checkout master
     git pull
     devservices up
-    docker stop snuba-snuba-1 snuba-clickhouse-1
+    devservices toggle snuba local
 
 This will get the most recent version of Sentry on master, and bring up all snuba's dependencies.
 
