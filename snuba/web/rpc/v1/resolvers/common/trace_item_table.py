@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import re
 from collections import defaultdict
 from collections.abc import Callable, Iterable
@@ -19,7 +21,9 @@ from snuba.protos.common import ARRAY_TYPES, PROTO_ARRAY_TYPE_TO_COLUMN
 from snuba.web.rpc.common.common import merge_typed_array_subcolumns
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_get_trace import convert_to_attribute_value
-from snuba.web.rpc.v1.resolvers.common.aggregation import ExtrapolationContext
+from snuba.web.rpc.v1.resolvers.common.aggregation import (
+    ExtrapolationContext,
+)
 
 
 def _array_raw_to_attribute_value(raw: Any) -> AttributeValue:
@@ -31,7 +35,7 @@ def _array_raw_to_attribute_value(raw: Any) -> AttributeValue:
 
 
 def _get_converter_for_type(
-    key_type: "AttributeKey.Type.ValueType",
+    key_type: AttributeKey.Type.ValueType,
 ) -> Callable[[Any], AttributeValue]:
     """Returns a converter function for the given attribute type."""
     if key_type == AttributeKey.TYPE_BOOLEAN:
@@ -56,26 +60,33 @@ def _get_double_converter() -> Callable[[Any], AttributeValue]:
     return lambda x: AttributeValue(val_double=float(x))
 
 
+def _get_aggregate_converter(
+    aggregate: Function.ValueType,
+    key_type: AttributeKey.Type.ValueType,
+) -> Callable[[Any], AttributeValue]:
+    """Returns a converter that properly converts aggregations."""
+    match aggregate:
+        case Function.FUNCTION_COLLECT_UNIQUE:
+            return _array_raw_to_attribute_value
+        case Function.FUNCTION_ANY:
+            return _get_converter_for_type(key_type)
+
+    return _get_double_converter()
+
+
 def _add_converter(column: Column, converters: dict[str, Callable[[Any], AttributeValue]]) -> None:
     if column.HasField("key"):
         converters[column.label] = _get_converter_for_type(column.key.type)
     elif column.HasField("aggregation"):
-        # For FUNCTION_ANY, the result type matches the key type since it returns actual values
-        if column.aggregation.aggregate == Function.FUNCTION_ANY:
-            converters[column.label] = _get_converter_for_type(column.aggregation.key.type)
-        else:
-            # Other aggregation functions return numeric values
-            converters[column.label] = _get_double_converter()
+        converters[column.label] = _get_aggregate_converter(
+            column.aggregation.aggregate, column.aggregation.key.type
+        )
     elif column.HasField("conditional_aggregation"):
-        # For FUNCTION_ANY, the result type matches the key type since it returns actual values
         # Note: AggregationToConditionalAggregationVisitor converts aggregation -> conditional_aggregation
-        if column.conditional_aggregation.aggregate == Function.FUNCTION_ANY:
-            converters[column.label] = _get_converter_for_type(
-                column.conditional_aggregation.key.type
-            )
-        else:
-            # Other aggregation functions return numeric values
-            converters[column.label] = _get_double_converter()
+        converters[column.label] = _get_aggregate_converter(
+            column.conditional_aggregation.aggregate,
+            column.conditional_aggregation.key.type,
+        )
     elif column.HasField("formula"):
         converters[column.label] = _get_double_converter()
         _add_converter(column.formula.left, converters)

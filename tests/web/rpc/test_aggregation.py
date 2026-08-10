@@ -16,6 +16,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import ComparisonFilter, Trace
 
 from snuba.query.expressions import (
     Column,
+    CurriedFunctionCall,
     Expression,
     FunctionCall,
     Literal,
@@ -387,6 +388,60 @@ def test_aggregation_to_expression_sum_type_array_raises() -> None:
     )
     with pytest.raises(BadSnubaRPCRequestException, match="not supported for array attribute"):
         aggregation_to_expression(agg, attribute_key_to_expression)
+
+
+def _collect_unique_aggregation(
+    extrapolation_mode: ExtrapolationMode.ValueType,
+) -> AttributeConditionalAggregation:
+    return AttributeConditionalAggregation(
+        aggregate=Function.FUNCTION_COLLECT_UNIQUE,
+        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location"),
+        label="collect_unique(location)",
+        extrapolation_mode=extrapolation_mode,
+    )
+
+
+@pytest.mark.parametrize(
+    "extrapolation_mode",
+    [
+        ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+        ExtrapolationMode.EXTRAPOLATION_MODE_CLIENT_ONLY,
+        ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY,
+    ],
+)
+def test_collect_unique_rejects_extrapolation(
+    extrapolation_mode: ExtrapolationMode.ValueType,
+) -> None:
+    """Extrapolation scales a numeric aggregate by the sampling weight, which is
+    meaningless for a set of values, so get_extrapolated_function has no entry for
+    FUNCTION_COLLECT_UNIQUE and the request is rejected.
+    """
+    with pytest.raises(
+        BadSnubaRPCRequestException,
+        match="Extrapolation is not supported for FUNCTION_COLLECT_UNIQUE function.",
+    ):
+        aggregation_to_expression(
+            _collect_unique_aggregation(extrapolation_mode), attribute_key_to_expression
+        )
+
+
+@pytest.mark.parametrize(
+    "extrapolation_mode",
+    [
+        ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+        ExtrapolationMode.EXTRAPOLATION_MODE_UNSPECIFIED,
+    ],
+)
+def test_collect_unique_without_extrapolation(
+    extrapolation_mode: ExtrapolationMode.ValueType,
+) -> None:
+    agg = _collect_unique_aggregation(extrapolation_mode)
+    assert get_confidence_interval_column(agg, attribute_key_to_expression) is None
+
+    expr = aggregation_to_expression(agg, attribute_key_to_expression)
+    assert isinstance(expr, CurriedFunctionCall)
+    assert expr.internal_function.function_name == "groupUniqArrayIf"
+    assert expr.alias == "collect_unique(location)"
 
 
 def test_conditional_aggregation_uses_has_for_in_sets() -> None:
