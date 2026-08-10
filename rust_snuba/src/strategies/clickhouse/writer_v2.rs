@@ -15,7 +15,7 @@ use sentry_arroyo::{counter, timer};
 use crate::config::ClickhouseConfig;
 use crate::options::{
     get_clickhouse_write_client_timeouts, get_clickhouse_write_retry_policy,
-    get_load_balancing_config, get_max_insert_block_size, ClickhouseWriteRetryPolicy,
+    get_load_balancing_config, get_max_insert_block_size,
 };
 use crate::types::{BytesInsertBatch, RowData};
 
@@ -326,7 +326,6 @@ impl ClickhouseClient {
         &self,
         body: bytes::Bytes,
         attempt: usize,
-        retry_policy: &ClickhouseWriteRetryPolicy,
     ) -> Result<Response, FailedAttempt> {
         let started = Instant::now();
         let res = self
@@ -361,17 +360,17 @@ impl ClickhouseClient {
         };
 
         let elapsed_ms = started.elapsed().as_millis();
+        let attempts = get_clickhouse_write_retry_policy(&self.storage_name).attempts();
         counter!(
             "rust_consumer.clickhouse_insert_error", 1,
             "status" => failure.status,
             "timeout" => failure.timeout,
             "attempt" => attempt + 1,
-            "max_attempts" => retry_policy.attempts()
+            "max_attempts" => attempts
         );
         tracing::warn!(
-            "ClickHouse write failed (attempt {}/{}) after {elapsed_ms}ms: status={}, error={}",
+            "ClickHouse write failed (attempt {}/{attempts}) after {elapsed_ms}ms: status={}, error={}",
             attempt + 1,
-            retry_policy.attempts(),
             failure.status,
             failure.detail
         );
@@ -386,16 +385,13 @@ impl ClickhouseClient {
         let retry_policy = get_clickhouse_write_retry_policy(&self.storage_name);
 
         for attempt in 0..retry_policy.max_retries {
-            if let Ok(response) = self
-                .send_once(body_bytes.clone(), attempt, &retry_policy)
-                .await
-            {
+            if let Ok(response) = self.send_once(body_bytes.clone(), attempt).await {
                 return Ok(response);
             }
             tokio::time::sleep(retry_policy.backoff(attempt)).await;
         }
 
-        self.send_once(body_bytes, retry_policy.max_retries, &retry_policy)
+        self.send_once(body_bytes, retry_policy.max_retries)
             .await
             .map_err(|failure| {
                 anyhow::anyhow!(
