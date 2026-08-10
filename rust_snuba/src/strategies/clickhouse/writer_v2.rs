@@ -322,7 +322,13 @@ impl ClickhouseClient {
         url
     }
 
-    async fn send_once(&self, body: bytes::Bytes) -> Result<Response, FailedAttempt> {
+    async fn send_once(
+        &self,
+        body: bytes::Bytes,
+        attempt: usize,
+        attempts: usize,
+    ) -> Result<Response, FailedAttempt> {
+        let started = Instant::now();
         let res = self
             .client
             .post(self.build_url())
@@ -333,26 +339,43 @@ impl ClickhouseClient {
             .send()
             .await;
 
-        match res {
-            Ok(response) if response.status() == reqwest::StatusCode::OK => Ok(response),
+        let failure = match res {
+            Ok(response) if response.status() == reqwest::StatusCode::OK => return Ok(response),
             Ok(response) => {
                 let status = response.status().to_string();
                 let detail = response
                     .text()
                     .await
                     .unwrap_or_else(|_| "unknown error".to_string());
-                Err(FailedAttempt {
+                FailedAttempt {
                     status,
                     timeout: false,
                     detail,
-                })
+                }
             }
-            Err(e) => Err(FailedAttempt {
+            Err(e) => FailedAttempt {
                 status: "network_error".to_string(),
                 timeout: e.is_timeout(),
                 detail: e.to_string(),
-            }),
-        }
+            },
+        };
+
+        let elapsed_ms = started.elapsed().as_millis();
+        counter!(
+            "rust_consumer.clickhouse_insert_error", 1,
+            "status" => failure.status,
+            "timeout" => failure.timeout,
+            "attempt" => attempt + 1,
+            "max_attempts" => attempts
+        );
+        tracing::warn!(
+            "ClickHouse write failed (attempt {}/{attempts}) after {elapsed_ms}ms: status={}, error={}",
+            attempt + 1,
+            failure.status,
+            failure.detail
+        );
+
+        Err(failure)
     }
 
     pub async fn send(&self, body: Vec<u8>) -> anyhow::Result<Response> {
@@ -361,44 +384,22 @@ impl ClickhouseClient {
 
         let retry_policy = get_clickhouse_write_retry_policy(&self.storage_name);
         let attempts = retry_policy.max_retries + 1;
-        let mut last_error =
-            anyhow::anyhow!("clickhouse write not attempted: retry policy allows no attempts");
 
-        for attempt in 0..attempts {
-            let started = Instant::now();
-            let failure = match self.send_once(body_bytes.clone()).await {
-                Ok(response) => return Ok(response),
-                Err(failure) => failure,
-            };
-            let elapsed_ms = started.elapsed().as_millis();
-
-            counter!(
-                "rust_consumer.clickhouse_insert_error", 1,
-                "status" => failure.status,
-                "timeout" => failure.timeout,
-                "attempt" => attempt + 1,
-                "max_attempts" => attempts
-            );
-
-            tracing::warn!(
-                "ClickHouse write failed (attempt {}/{attempts}) after {elapsed_ms}ms: status={}, error={}",
-                attempt + 1,
-                failure.status,
-                failure.detail
-            );
-
-            last_error = anyhow::anyhow!(
-                "error writing to clickhouse after {} attempts ({elapsed_ms}ms on the final attempt): {}",
-                attempt + 1,
-                failure.detail
-            );
-
-            if attempt + 1 < attempts {
-                tokio::time::sleep(retry_policy.backoff(attempt)).await;
+        for attempt in 0..retry_policy.max_retries {
+            if let Ok(response) = self.send_once(body_bytes.clone(), attempt, attempts).await {
+                return Ok(response);
             }
+            tokio::time::sleep(retry_policy.backoff(attempt)).await;
         }
 
-        Err(last_error)
+        self.send_once(body_bytes, retry_policy.max_retries, attempts)
+            .await
+            .map_err(|failure| {
+                anyhow::anyhow!(
+                    "error writing to clickhouse after {attempts} attempts: {}",
+                    failure.detail
+                )
+            })
     }
 }
 
