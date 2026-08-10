@@ -59,6 +59,62 @@
       "default": {},
       "description": "Dict mapping storage name to a max_insert_block_size override for that storage's INSERTs. Values below ClickHouse's default (1048449) are ignored. Storages with no entry use the server default. Migrated from per-storage runtime config clickhouse_max_insert_block_size:<storage>."
     },
+    "clickhouse_write_client_timeouts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "connect_ms": {
+            "type": "integer",
+            "optional": true
+          },
+          "request_ms": {
+            "type": "integer",
+            "optional": true
+          },
+          "pool_idle_ms": {
+            "type": "integer",
+            "optional": true
+          },
+          "tcp_keepalive_ms": {
+            "type": "integer",
+            "optional": true
+          },
+          "tcp_keepalive_interval_ms": {
+            "type": "integer",
+            "optional": true
+          },
+          "tcp_keepalive_retries": {
+            "type": "integer",
+            "optional": true
+          }
+        }
+      },
+      "default": {},
+      "description": "Dict mapping storage name to HTTP client timeout overrides for that storage's consumer writer. Each field is optional and falls back to its default independently; non-positive values fall back too. Only request_ms is re-read per attempt, the rest apply on consumer restart."
+    },
+    "clickhouse_write_retry_policy": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "initial_backoff_ms": {
+            "type": "number",
+            "optional": true
+          },
+          "max_retries": {
+            "type": "integer",
+            "optional": true
+          },
+          "jitter_factor": {
+            "type": "number",
+            "optional": true
+          }
+        }
+      },
+      "default": {},
+      "description": "Dict mapping storage name to retry overrides for that storage's consumer writer. Each field is optional and falls back to its default independently. Zero is honoured (no retries, no backoff, no jitter); negative values and a jitter_factor outside 0-1 fall back. Read per write, so changes apply without a redeploy."
+    },
     "eap_items_dlq_grace_period_min": {
       "type": "object",
       "additionalProperties": {

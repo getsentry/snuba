@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant};
 
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, Response};
@@ -13,7 +13,10 @@ use sentry_arroyo::types::Message;
 use sentry_arroyo::{counter, timer};
 
 use crate::config::ClickhouseConfig;
-use crate::options::{get_load_balancing_config, get_max_insert_block_size};
+use crate::options::{
+    get_clickhouse_write_client_timeouts, get_clickhouse_write_retry_policy,
+    get_load_balancing_config, get_max_insert_block_size,
+};
 use crate::types::{BytesInsertBatch, RowData};
 
 fn clickhouse_task_runner(
@@ -31,7 +34,7 @@ fn clickhouse_task_runner(
             let encoded_rows = rows.into_encoded_rows();
             let num_bytes = encoded_rows.len();
 
-            let write_start = SystemTime::now();
+            let write_start = Instant::now();
 
             // we can receive empty batches since we configure Reduce to flush empty batches, in
             // order to still be able to commit. in that case we want to skip the I/O to clickhouse
@@ -46,17 +49,18 @@ fn clickhouse_task_runner(
             } else {
                 tracing::debug!("performing write");
 
-                let response = client
-                    .send(encoded_rows, RetryConfig::default())
-                    .await
-                    .map_err(RunTaskError::Other)?;
+                let result = client.send(encoded_rows).await;
+
+                timer!(
+                    "insertions.batch_write_ms",
+                    write_start.elapsed(),
+                    "success" => result.is_ok()
+                );
+
+                let response = result.map_err(RunTaskError::Other)?;
 
                 tracing::debug!(?response);
                 tracing::info!("Inserted {} rows", batch_len);
-                let write_finish = SystemTime::now();
-                if let Ok(elapsed) = write_finish.duration_since(write_start) {
-                    timer!("insertions.batch_write_ms", elapsed);
-                }
             }
 
 
@@ -226,20 +230,10 @@ where
 
 impl_writer_delegate!(RowBinaryWriterStep);
 
-pub struct RetryConfig {
-    initial_backoff_ms: f64,
-    max_retries: usize,
-    jitter_factor: f64, // between 0 and 1
-}
-
-impl Default for RetryConfig {
-    fn default() -> Self {
-        Self {
-            initial_backoff_ms: 500.0,
-            max_retries: 4,
-            jitter_factor: 0.2,
-        }
-    }
+struct FailedAttempt {
+    status: String,
+    timeout: bool,
+    detail: String,
 }
 
 #[derive(Clone)]
@@ -294,8 +288,18 @@ impl ClickhouseClient {
             fmt = format.as_str(),
         );
 
+        let timeouts = get_clickhouse_write_client_timeouts(&storage_name);
+        let client = Client::builder()
+            .connect_timeout(timeouts.connect)
+            .pool_idle_timeout(timeouts.pool_idle)
+            .tcp_keepalive(timeouts.tcp_keepalive)
+            .tcp_keepalive_interval(timeouts.tcp_keepalive_interval)
+            .tcp_keepalive_retries(timeouts.tcp_keepalive_retries)
+            .build()
+            .expect("failed to build ClickHouse HTTP client");
+
         ClickhouseClient {
-            client: Client::new(),
+            client,
             headers,
             base_url,
             storage_name,
@@ -318,98 +322,92 @@ impl ClickhouseClient {
         url
     }
 
-    pub async fn send(&self, body: Vec<u8>, retry_config: RetryConfig) -> anyhow::Result<Response> {
-        // Compress once before the retry loop — the encoded body is identical
-        // across attempts, so paying the LZ4 cost per attempt would be wasted
-        // work. `bytes::Bytes` makes the per-attempt clone cheap (refcount bump).
+    async fn send_once(
+        &self,
+        body: bytes::Bytes,
+        attempt: usize,
+        max_retries: usize,
+    ) -> Result<Response, FailedAttempt> {
+        let started = Instant::now();
+        let res = self
+            .client
+            .post(self.build_url())
+            .headers(self.headers.clone())
+            .timeout(get_clickhouse_write_client_timeouts(&self.storage_name).request)
+            .query(&[("query", &self.query)])
+            .body(reqwest::Body::from(body))
+            .send()
+            .await;
+
+        let failure = match res {
+            Ok(response) if response.status() == reqwest::StatusCode::OK => return Ok(response),
+            Ok(response) => {
+                let status = response.status().to_string();
+                let detail = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "unknown error".to_string());
+                FailedAttempt {
+                    status,
+                    timeout: false,
+                    detail,
+                }
+            }
+            Err(e) => FailedAttempt {
+                status: "network_error".to_string(),
+                timeout: e.is_timeout(),
+                detail: e.to_string(),
+            },
+        };
+
+        let elapsed_ms = started.elapsed().as_millis();
+        let attempts = max_retries + 1;
+        counter!(
+            "rust_consumer.clickhouse_insert_error", 1,
+            "status" => failure.status,
+            "timeout" => failure.timeout,
+            "attempt" => attempt + 1,
+            "max_attempts" => attempts
+        );
+        tracing::warn!(
+            "ClickHouse write failed (attempt {}/{attempts}) after {elapsed_ms}ms: status={}, error={}",
+            attempt + 1,
+            failure.status,
+            failure.detail
+        );
+
+        Err(failure)
+    }
+
+    pub async fn send(&self, body: Vec<u8>) -> anyhow::Result<Response> {
         let body_bytes = bytes::Bytes::from(lz4_compress(&body));
-        // Free the uncompressed buffer before entering the retry loop. With
-        // `insert_distributed_sync=1` against a slow shard the loop can hold
-        // each in-flight slot for seconds — dragging `body` through it kept
-        // ~1× the batch size resident per slot for no reason.
         drop(body);
 
-        for attempt in 0..=retry_config.max_retries {
-            let url = self.build_url();
-            let res = self
-                .client
-                .post(&url)
-                .headers(self.headers.clone())
-                .query(&[("query", &self.query)])
-                .body(reqwest::Body::from(body_bytes.clone()))
-                .send()
-                .await;
+        let retry_policy = get_clickhouse_write_retry_policy(&self.storage_name);
 
-            match res {
-                Ok(response) => {
-                    if response.status() == reqwest::StatusCode::OK {
-                        return Ok(response);
-                    } else {
-                        let status = response.status().to_string();
-                        let error_text = response
-                            .text()
-                            .await
-                            .unwrap_or_else(|_| "unknown error".to_string());
-
-                        if attempt == retry_config.max_retries {
-                            counter!("rust_consumer.clickhouse_insert_error", 1, "status" => status, "retried" => "false");
-                            anyhow::bail!(
-                                "error writing to clickhouse after {} attempts: {}",
-                                retry_config.max_retries + 1,
-                                error_text
-                            );
-                        }
-
-                        counter!("rust_consumer.clickhouse_insert_error", 1, "status" => status, "retried" => "true");
-                        tracing::warn!(
-                            "ClickHouse write failed (attempt {}/{}): status={}, error={}",
-                            attempt + 1,
-                            retry_config.max_retries + 1,
-                            status,
-                            error_text
-                        );
-                    }
-                }
-                Err(e) => {
-                    if attempt == retry_config.max_retries {
-                        counter!("rust_consumer.clickhouse_insert_error", 1, "status" => "network_error", "retried" => "false");
-                        anyhow::bail!(
-                            "error writing to clickhouse after {} attempts: {}",
-                            retry_config.max_retries + 1,
-                            e
-                        );
-                    }
-                    counter!("rust_consumer.clickhouse_insert_error", 1, "status" => "network_error", "retried" => "true");
-
-                    tracing::warn!(
-                        "ClickHouse write failed (attempt {}/{}): {}",
-                        attempt + 1,
-                        retry_config.max_retries + 1,
-                        e
-                    );
-                }
+        for attempt in 0..retry_policy.max_retries {
+            if let Ok(response) = self
+                .send_once(body_bytes.clone(), attempt, retry_policy.max_retries)
+                .await
+            {
+                return Ok(response);
             }
-
-            // Calculate exponential backoff delay
-            if attempt < retry_config.max_retries {
-                let backoff_ms =
-                    retry_config.initial_backoff_ms * (2_u64.pow(attempt as u32) as f64);
-                // add/subtract up to 10% jitter (by default) to avoid every consumer retrying at the same time
-                // causing too many simultaneous queries
-                let jitter = rand::random::<f64>() * retry_config.jitter_factor
-                    - retry_config.jitter_factor / 2.0; // Random value between (-jitter_factor/2, jitter_factor/2)
-                let delay = Duration::from_millis((backoff_ms * (1.0 + jitter)).round() as u64);
-                tracing::debug!(
-                    "Retrying in {:?} (attempt {}/{})",
-                    delay,
-                    attempt + 1,
-                    retry_config.max_retries
-                );
-                tokio::time::sleep(delay).await;
-            }
+            tokio::time::sleep(retry_policy.backoff(attempt)).await;
         }
 
-        unreachable!("Loop should always return or bail before reaching here");
+        self.send_once(
+            body_bytes,
+            retry_policy.max_retries,
+            retry_policy.max_retries,
+        )
+        .await
+        .map_err(|failure| {
+            anyhow::anyhow!(
+                "error writing to clickhouse after {} attempts: {}",
+                retry_policy.max_retries + 1,
+                failure.detail
+            )
+        })
     }
 }
 
@@ -480,6 +478,7 @@ mod tests {
     use super::*;
     use sentry_options::testing::override_options;
     use serde_json::json;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Once;
     use tokio::time::Instant;
 
@@ -510,26 +509,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn it_works() -> Result<(), reqwest::Error> {
+    async fn test_compressed_insert_against_live_clickhouse() {
         crate::testutils::initialize_python();
-        let config = make_test_config();
-        println!("config: {config:?}");
         let client = ClickhouseClient::new(
-            &config,
+            &make_test_config(),
             "querylog_local",
             "test_storage".to_string(),
             InsertFormat::JsonEachRow,
             None,
         );
 
-        let url = client.build_url();
-        assert!(url.contains("load_balancing=in_order"));
-        assert!(url.contains("insert_distributed_sync"));
-        assert!(url.contains("decompress=1"));
-        println!("running test");
-        let res = client.send(b"[]".to_vec(), RetryConfig::default()).await;
-        println!("Response status {}", res.unwrap().status());
-        Ok(())
+        client
+            .send(b"[]".to_vec())
+            .await
+            .expect("compressed INSERT rejected by ClickHouse");
     }
 
     #[test]
@@ -715,6 +708,20 @@ mod tests {
     #[tokio::test]
     async fn test_retry_with_exponential_backoff() {
         crate::testutils::initialize_python();
+        init_options();
+        let _guard = override_options(&[(
+            "snuba",
+            "clickhouse_write_retry_policy",
+            json!({
+                "retry_backoff_test": {
+                    "initial_backoff_ms": 100.0,
+                    "max_retries": 4,
+                    "jitter_factor": 0.1
+                }
+            }),
+        )])
+        .unwrap();
+
         // Test that retry logic works by using a non-existent server
         // This will trigger network errors that should be retried
         let config = ClickhouseConfig {
@@ -730,22 +737,13 @@ mod tests {
         let client = ClickhouseClient::new(
             &config,
             "test_table",
-            "test_storage".to_string(),
+            "retry_backoff_test".to_string(),
             InsertFormat::JsonEachRow,
             None,
         );
 
         let start_time = Instant::now();
-        let result = client
-            .send(
-                b"test data".to_vec(),
-                RetryConfig {
-                    initial_backoff_ms: 100.0,
-                    max_retries: 4,
-                    jitter_factor: 0.1,
-                },
-            )
-            .await;
+        let result = client.send(b"test data".to_vec()).await;
         let elapsed = start_time.elapsed();
 
         // Should fail after all retries
@@ -758,5 +756,112 @@ mod tests {
         // Error message should mention the number of attempts
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("after 5 attempts"));
+    }
+
+    /// Accepts connections and never answers. Returns the error, the elapsed
+    /// time and the connection count.
+    async fn send_against_hung_server(
+        storage_name: &str,
+        format: InsertFormat,
+        columns: Option<&[&str]>,
+    ) -> (String, Duration, usize) {
+        let conns = Arc::new(AtomicUsize::new(0));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let counter = conns.clone();
+        tokio::spawn(async move {
+            let mut accepted = Vec::new();
+            while let Ok((stream, _)) = listener.accept().await {
+                counter.fetch_add(1, Ordering::SeqCst);
+                accepted.push(stream);
+            }
+        });
+
+        let config = ClickhouseConfig {
+            host: "127.0.0.1".to_string(),
+            port: 9000,
+            secure: false,
+            http_port: port,
+            user: "default".to_string(),
+            password: "".to_string(),
+            database: "default".to_string(),
+        };
+        let client = ClickhouseClient::new(
+            &config,
+            "test_table",
+            storage_name.to_string(),
+            format,
+            columns,
+        );
+
+        let start_time = Instant::now();
+        let result = client.send(b"test data".to_vec()).await;
+        let elapsed = start_time.elapsed();
+
+        (
+            result.unwrap_err().to_string(),
+            elapsed,
+            conns.load(Ordering::SeqCst),
+        )
+    }
+
+    #[tokio::test]
+    async fn test_hung_server_times_out_for_both_wire_formats() {
+        crate::testutils::initialize_python();
+        init_options();
+
+        let retry_policy =
+            json!({ "initial_backoff_ms": 10.0, "max_retries": 2, "jitter_factor": 0.0 });
+        let _guard = override_options(&[
+            (
+                "snuba",
+                "clickhouse_write_client_timeouts",
+                json!({
+                    "hung_server_json_test": { "request_ms": 300 },
+                    "hung_server_rowbinary_test": { "request_ms": 300 }
+                }),
+            ),
+            (
+                "snuba",
+                "clickhouse_write_retry_policy",
+                json!({
+                    "hung_server_json_test": retry_policy,
+                    "hung_server_rowbinary_test": retry_policy
+                }),
+            ),
+        ])
+        .unwrap();
+
+        let cases: [(&str, InsertFormat, Option<&[&str]>); 2] = [
+            ("hung_server_json_test", InsertFormat::JsonEachRow, None),
+            (
+                "hung_server_rowbinary_test",
+                InsertFormat::RowBinary,
+                Some(&["organization_id", "timestamp"]),
+            ),
+        ];
+
+        for (storage_name, format, columns) in cases {
+            let (error_msg, elapsed, attempts) =
+                send_against_hung_server(storage_name, format, columns).await;
+
+            assert!(
+                error_msg.contains("after 3 attempts"),
+                "{format:?}: unexpected error: {error_msg}"
+            );
+            assert_eq!(
+                attempts, 3,
+                "{format:?}: each timed-out attempt must be retried on a new \
+                 connection, so the hung server should see one per attempt"
+            );
+            assert!(
+                elapsed >= Duration::from_millis(900),
+                "{format:?}: took {elapsed:?}"
+            );
+            assert!(
+                elapsed < Duration::from_secs(10),
+                "{format:?}: took {elapsed:?}"
+            );
+        }
     }
 }

@@ -41,7 +41,18 @@ prost = "0.14"
 pyo3 = { version = "0.24.1", features = ["chrono"] }
 rand = "0.9.3"
 regex = "1.11.1"
-reqwest = { version = "0.11.11", features = ["stream"] }
+# 0.13 for `read_timeout` and the TCP keepalive probe schedule, both used by
+# the ClickHouse writer; it is also the version `sentry` pulls in, so the tree
+# builds one reqwest instead of two. `query` and `charset` were unconditional
+# in 0.11. `native-tls` is declared rather than inherited from `sentry`'s
+# `transport` feature, since it is what `CLICKHOUSE_SECURE` validates with.
+reqwest = { version = "0.13", default-features = false, features = [
+    "charset",
+    "http2",
+    "native-tls",
+    "query",
+    "system-proxy",
+] }
 schemars = { version = "0.8.16", features = ["uuid1"] }
 sentry = { version = "0.48.5", default-features = false, features = [
     # default features, except `release-health` is disabled
