@@ -44,11 +44,11 @@ Add/change the following lines in ``~/.sentry/sentry.conf.py``::
 
 Run::
 
-    sentry devservices up
+    devservices up
 
 Access raw clickhouse client (similar to psql)::
 
-    docker exec -it sentry_clickhouse clickhouse-client
+    docker exec -it snuba-clickhouse-1 clickhouse-client
 
 Data is written into the table `sentry_local`: `select count() from sentry_local;`
 
