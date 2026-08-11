@@ -227,18 +227,15 @@ CacheKey = tuple[
 class ConnectionCache:
     """The process-wide owner of every ClickHouse connection.
 
-    One object owns the whole stack: the pools, keyed by node and profile and
-    driver; the HTTP clients those pools query through; and the sockets behind
-    the clients. Each layer exists because it is cached differently -- pools are
-    per profile, clients are per endpoint and timeout (so QUERY and TRACING
-    share one), sockets are per host -- but there is a single owner, so there is
-    a single place to reset at fork and a single place to close.
+    One object owns the whole stack: pools keyed by node, profile and driver;
+    the HTTP clients they query through; and the sockets behind those clients.
+    Each layer is cached differently -- pools per profile, clients per endpoint
+    and timeout, sockets per host -- but one owner means one place to reset at
+    fork and one place to close.
 
-    The client and socket layers live in :mod:`snuba.clickhouse.connect`, next
-    to the pool that uses them, and are held here as a
-    :class:`~snuba.clickhouse.connect.ClickhouseClientManager` built on first
-    use of the connect driver. Keeping them there rather than inlining them is
-    what lets the native path run without importing clickhouse-connect at all.
+    The client and socket layers stay in :mod:`snuba.clickhouse.connect` rather
+    than being inlined here, which is what lets the native path run without
+    importing clickhouse-connect.
     """
 
     def __init__(self) -> None:
@@ -259,15 +256,12 @@ class ConnectionCache:
     def reset_after_fork(self) -> None:
         """Drop what the child inherited, without closing it.
 
-        Pools and clients hold the parent's sockets. The child must not use
-        them -- two processes on one connection is a corrupt stream -- and must
-        not close them either, since the descriptors are shared and closing here
-        reaches into a parent that is still using them. Dropping the references
-        is enough; the child rebuilds lazily on next use.
+        Two processes on one connection is a corrupt stream, but the descriptors
+        are shared, so closing here would reach into a parent still using them.
+        Dropping the references is enough; the child rebuilds lazily.
 
-        The lock is rebuilt rather than taken: a lock held by another thread at
-        fork time is inherited held, with no thread left in the child to release
-        it, so acquiring it here would deadlock the child forever.
+        The lock is rebuilt rather than taken: one held at fork time is
+        inherited held, with no thread left in the child to release it.
         """
         self.__lock = Lock()
         self.__cache = {}
@@ -374,9 +368,8 @@ def _reset_connections_after_fork() -> None:
     connection_cache.reset_after_fork()
 
 
-# Registered here rather than next to the client manager, because the cache is
-# what owns the inherited state -- native pools hold sockets too, and they were
-# never reset before. Indirected through a function so the handler resolves the
+# Registered here because the cache owns the inherited state -- native pools
+# hold sockets too. Indirected through a function so the handler resolves the
 # method at call time rather than capturing a bound method at import.
 os.register_at_fork(after_in_child=_reset_connections_after_fork)
 

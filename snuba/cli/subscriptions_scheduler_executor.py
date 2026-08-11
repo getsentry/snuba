@@ -99,9 +99,7 @@ def subscriptions_scheduler_executor(
     setup_logging(log_level)
     setup_sentry()
 
-    # Same reasoning as snuba/cli/subscriptions_executor.py: the executor half
-    # of this process runs a ThreadPoolExecutor sized from this, and no
-    # GRANIAN_* env var is set here to size the pools from.
+    # Same reasoning as snuba/cli/subscriptions_executor.py.
     declare_query_concurrency(total_concurrent_queries)
 
     logger = structlog.get_logger().bind(module=__name__)

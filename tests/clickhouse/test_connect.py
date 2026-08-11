@@ -295,14 +295,10 @@ def test_totals_malformed_json_wrapped() -> None:
     with pytest.raises(ClickhouseError):
         pool.execute_with_totals("SELECT g, sum(v) FROM t GROUP BY g WITH TOTALS")
 
-    # The client survives: unlike query(), raw_query() is a non-streaming request
-    # (clickhouse-connect sends it with preload_content=True), so urllib3 has read
-    # the whole body and released the connection before we ever call json.loads.
-    # A body that will not parse means the *content* was bad -- a proxy error page
-    # -- not that the stream is half-consumed, so discarding the connection here
-    # would just churn healthy sockets every time the load balancer returns a 502.
-    # If this path ever moves to raw_stream(), that reasoning stops holding and
-    # _checkout has to treat JSONDecodeError as poisoning.
+    # raw_query() is non-streaming, so urllib3 has read the whole body and
+    # released the connection before json.loads runs: an unparseable body means
+    # bad content (a proxy error page), not a half-consumed stream. If this ever
+    # moves to raw_stream(), JSONDecodeError has to poison the connection.
     client.close.assert_not_called()
 
 
@@ -371,10 +367,8 @@ def test_timeout_options_override_constructor_values() -> None:
 
 
 def test_client_key_is_stable_across_option_changes() -> None:
-    # The key must not move under a running pool. If it did, every option change
-    # would mint a new key, and so a new entry in the thread-local client cache
-    # that nothing ever evicts. Both options are documented as "read when a
-    # client is created", so a change lands on restart.
+    # If the key moved, every option change would mint a cache entry nothing
+    # evicts. Both options are "read when a client is created".
     from sentry_options.testing import override_options
 
     with override_options("snuba", {"clickhouse_connect_send_receive_timeout": 11}):
@@ -406,10 +400,8 @@ def test_tracing_client_settings_use_25s_timeout() -> None:
 
 
 def test_internal_profile_is_unbounded() -> None:
-    # The 30s read timeout must not leak onto internal/maintenance queries
-    # (topology discovery, routing load lookups, delete throttling checks, the
-    # span-export job, table copies). They use the INTERNAL profile, which stays
-    # unbounded so long-running operations aren't capped at 30s.
+    # INTERNAL stays unbounded so maintenance work (topology discovery, table
+    # copies, the span-export job) is not capped at 30s.
     assert ClickhouseClientSettings.INTERNAL.value.timeout is None
 
 
@@ -610,13 +602,9 @@ def test_non_empty_non_totals_query_does_not_refetch() -> None:
 
 
 def test_connect_type_names_drive_reader_transforms() -> None:
-    # The connect pool exposes clickhouse-connect's column_type.name in the
-    # result meta, and the driver-agnostic ClickhouseReader runs that through
-    # the same Date / DateTime / UUID regex transforms used for the native
-    # driver. This pins that clickhouse-connect's type-name format matches what
-    # those regexes expect (including parametrized types like DateTime('UTC')
-    # and Nullable(UUID)), so transformations are not silently skipped on the
-    # HTTP path.
+    # ClickhouseReader runs the connect pool's column_type.name through the same
+    # Date/DateTime/UUID regexes as the native driver. Pins that the type-name
+    # format matches, so transforms are not silently skipped on the HTTP path.
     from datetime import date, datetime
     from uuid import UUID as UUIDClass
 
@@ -628,10 +616,8 @@ def test_connect_type_names_drive_reader_transforms() -> None:
         def get_sql(self) -> str:
             return "SELECT d, dt, dt_tz, uid, nuid"
 
-    # Column types named exactly as clickhouse-connect produces them. The
-    # assertion documents that clickhouse-connect uses the canonical ClickHouse
-    # type strings (the same the native driver returns), so the reader regexes
-    # match identically for both drivers.
+    # clickhouse-connect emits the canonical type strings, the same as the
+    # native driver, so the reader regexes match for both.
     col_types = [
         get_from_name("Date"),
         get_from_name("DateTime"),
@@ -674,13 +660,9 @@ def test_connect_type_names_drive_reader_transforms() -> None:
 
 
 def test_execute_explain_uses_command_and_returns_text_rows() -> None:
-    # execute_explain serves EXPLAIN via command() -- which sends the statement
-    # verbatim, no "FORMAT Native" appended -- not the Native query() path.
-    # query() would append "FORMAT Native", the inner query swallows it, and the
-    # EXPLAIN output returns as text that the Native reader misparses (the
-    # snuba-admin "Unrecognized ClickHouse type base: essionList ..." failure, a
-    # fragment of the EXPLAIN AST dump read as a column type). command() returns
-    # the decoded text, exposed as one single-column row per line.
+    # EXPLAIN goes through command(), which sends the statement verbatim.
+    # query() would append "FORMAT Native", the inner query would swallow it, and
+    # the AST dump would come back as text the Native reader misparses.
     client = mock.Mock()
     # command() strips the trailing newline and (no tabs) returns the whole dump
     # as a single string.
@@ -710,10 +692,8 @@ def test_execute_explain_uses_command_and_returns_text_rows() -> None:
 
 
 def test_execute_does_not_route_explain_to_command() -> None:
-    # The EXPLAIN handling lives behind the dedicated execute_explain() entry
-    # point; the generic execute() does not sniff query text. Even an EXPLAIN
-    # passed to execute() goes through the Native query() path -- callers that
-    # need EXPLAIN over HTTP must use execute_explain instead.
+    # execute() does not sniff query text: EXPLAIN passed to it still goes
+    # through the Native query() path.
     client = mock.Mock()
     client.query.return_value = FakeQueryResult(
         result_set=[[1]],
@@ -761,11 +741,8 @@ def test_execute_explain_error_wrapped_and_preserves_code() -> None:
 
 
 def test_execute_explain_wraps_client_init_errors() -> None:
-    # Building a client opens the connection on first use and can raise on an
-    # unreachable host. Like the normal execute() path, execute_explain must run
-    # it inside the error-translation context, so the failure surfaces as a snuba
-    # ClickhouseError rather than a raw clickhouse-connect error -- the
-    # system-query validator's error handling relies on that contract.
+    # Building a client can raise on an unreachable host, so it must happen
+    # inside the error-translation context, as on the execute() path.
     from clickhouse_connect.driver.exceptions import OperationalError
 
     pool = _make_pool(mock.Mock())
@@ -866,10 +843,9 @@ def test_reader_routes_with_totals_through_execute_with_totals() -> None:
 
 @pytest.mark.clickhouse_db
 def test_connect_driver_matches_native_for_totals_and_empty_results() -> None:
-    # End-to-end vs a real ClickHouse: the connect (HTTP) pool must produce the same
-    # reader output as the native pool for the two shapes that broke when the HTTP
-    # driver was enabled -- WITH TOTALS and zero-row queries. Mocked tests can't catch
-    # these; they hinge on the real server's Native/HTTP serialization.
+    # Against a real ClickHouse: both pools must agree on the two shapes that
+    # broke when HTTP was enabled -- WITH TOTALS and zero-row queries. These
+    # hinge on real Native/HTTP serialization, so mocks cannot catch them.
     from snuba import settings
     from snuba.clickhouse.native import ClickhouseNativePool, ClickhouseReader
 
@@ -1081,10 +1057,8 @@ def _managed_pool(manager: Any, **kwargs: Any) -> ClickhouseConnectPool:
 
 
 def test_each_thread_gets_its_own_client() -> None:
-    # Queries are serialized per thread by giving each thread its own client, so
-    # a client never has two queries in flight and nothing has to coordinate
-    # access to its response stream. The barrier makes the two requests overlap,
-    # so this would fail if they were handed the same client.
+    # Each thread gets its own client, so none ever has two queries in flight.
+    # The barrier forces the requests to overlap, so sharing one would fail.
     import threading
 
     from snuba.clickhouse.connect import ClickhouseClientManager
@@ -1304,10 +1278,9 @@ def test_manager_close_releases_sockets_and_unpins_the_pool_manager() -> None:
 def test_every_path_applies_the_profile_settings(
     run: Any, settings_from: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Profile settings used to ride on the Client, so they reached every
-    # operation. Now that clients are shared and settings travel per request,
-    # each entry point has to apply them -- otherwise profiles like MIGRATE
-    # silently lose alter_sync and friends on everything except execute().
+    # Settings used to ride on the Client and so reached every operation. Now
+    # they travel per request, every entry point has to apply them, or MIGRATE
+    # silently loses alter_sync on everything but execute().
     client = mock.Mock()
     client.query.return_value = FakeQueryResult(result_set=[])
     client.raw_query.return_value = json.dumps({"meta": [], "data": [], "totals": []}).encode()
@@ -1322,10 +1295,9 @@ def test_every_path_applies_the_profile_settings(
 
 
 def test_pool_manager_is_created_once_under_concurrent_first_use() -> None:
-    # Clients are thread-local and need no lock, but the pool-manager map is
-    # shared. Losing this race is not benign: two managers for one key means two
-    # socket pools, each with its own maxsize, so the process-wide ceiling stops
-    # holding, and the loser stays pinned in all_managers out of close()'s reach.
+    # The pool-manager map is shared even though clients are not. Two managers
+    # for one key would be two socket pools, each with its own maxsize, so the
+    # process-wide ceiling would stop holding.
     import threading
     import time
 
@@ -1367,10 +1339,8 @@ def test_pool_manager_is_created_once_under_concurrent_first_use() -> None:
 
 
 def test_fork_drops_inherited_managers_without_closing_them() -> None:
-    # A child must not use the parent's sockets, but must not close them either
-    # -- the descriptors are shared. Dropping the references is enough. The easy
-    # miss is all_managers: it is process-global and inherited too, so clearing
-    # only our own map leaves the parent's managers pinned in the child forever.
+    # The descriptors are shared, so the child drops references without closing.
+    # all_managers is the easy miss: process-global and inherited too.
     from clickhouse_connect.driver.httputil import all_managers
 
     from snuba.clickhouse.connect import ClickhouseClientManager

@@ -92,13 +92,9 @@ def test_close_drops_pools_and_closes_clients() -> None:
 
 
 def test_fork_handler_is_registered_on_the_cache() -> None:
-    # One handler for the whole stack, registered where the state is owned.
-    #
-    # Asserts the effect rather than a call count: test_cluster.py reloads the
-    # cluster module between its tests, and each reload re-runs
-    # os.register_at_fork, so by the time the full suite reaches this test
-    # several handlers are registered. They all resolve the same cache and the
-    # reset is idempotent, so what matters is that the child comes up clear.
+    # Asserts the effect, not a call count: test_cluster.py reloads the cluster
+    # module between tests, so several handlers end up registered by the time the
+    # full suite gets here. They are idempotent; what matters is a clear child.
     from snuba.clusters.cluster import connection_cache
 
     cache = connection_cache._ConnectionCache__cache  # type: ignore[attr-defined]

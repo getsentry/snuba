@@ -36,9 +36,8 @@ def serve(
     max_rss: int | None = None,
 ) -> None:
     host, port = bind.rsplit(":", maxsplit=1)
-    # Resolve the thread count here and hand granian the same number the pools
-    # size from, so the two cannot drift. Deployments that run the granian CLI
-    # directly set GRANIAN_* themselves and never come through here.
+    # Hand granian the same number the pools size from, so the two cannot
+    # drift. The granian CLI sets GRANIAN_* itself and never comes through here.
     threads = resolve_blocking_threads(threads, backlog, processes)
     declare_query_concurrency(threads)
     server = Granian(

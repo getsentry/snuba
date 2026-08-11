@@ -36,8 +36,7 @@ def declare_query_concurrency(concurrency: int) -> None:
     set ``SNUBA_QUERY_CONCURRENCY`` stays authoritative.
     """
     os.environ.setdefault("SNUBA_QUERY_CONCURRENCY", str(max(1, concurrency)))
-    # The value is cached on first read, so drop it here rather than leave this
-    # silently dependent on nothing having asked yet.
+    # The value is cached on first read, so drop it here.
     process_query_concurrency.cache_clear()
 
 
@@ -59,9 +58,8 @@ def process_query_concurrency() -> int:
     )
 
     if concurrency is None:
-        # Mirror granian's own default rather than guess: it computes
-        # blocking_threads as backpressure // 2, and backpressure as
-        # backlog // workers.
+        # Mirror granian: blocking_threads is backpressure // 2, and
+        # backpressure is backlog // workers.
         backpressure = _positive_int_env("GRANIAN_BACKPRESSURE")
         if backpressure is None:
             backlog = _positive_int_env("GRANIAN_BACKLOG")
@@ -75,8 +73,7 @@ def process_query_concurrency() -> int:
         # Lazy import: snuba.settings would otherwise cycle back through here.
         from snuba import settings
 
-        # The `snuba api` CLI passes API_THREADS to granian as blocking_threads.
-        # It is None unless a settings module sets it.
+        # `snuba api` passes API_THREADS to granian as blocking_threads.
         concurrency = settings.API_THREADS or _DEFAULT_QUERY_CONCURRENCY
 
     if concurrency <= 0:

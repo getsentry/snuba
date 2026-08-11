@@ -108,11 +108,9 @@ def subscriptions_executor(
     setup_logging(log_level)
     setup_sentry()
 
-    # ExecuteQuery runs a ThreadPoolExecutor sized from this, and nothing here
-    # sets the GRANIAN_* env vars, so without this the pools would size to the
-    # default 8. This is the ceiling -- one replica holding every partition; a
-    # replica assigned fewer partitions uses proportionally less. Before
-    # check_clickhouse_connections below, which is what first builds a pool.
+    # No GRANIAN_* env vars here, so declare the executor's thread count or the
+    # pools size to the default 8. Must precede check_clickhouse_connections,
+    # which builds the first pool.
     declare_query_concurrency(total_concurrent_queries)
 
     logger = structlog.get_logger().bind(module=__name__)
