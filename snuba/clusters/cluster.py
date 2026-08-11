@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from enum import Enum
 from threading import Lock
 from typing import (
-    TYPE_CHECKING,
     Any,
     Generic,
     NamedTuple,
@@ -31,9 +30,6 @@ from snuba.state.sentry_options import get_option
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.serializable_exception import SerializableException
 from snuba.writer import BatchWriter
-
-if TYPE_CHECKING:
-    from snuba.clickhouse.connect import ClickhouseClientManager
 
 logger = structlog.get_logger().bind(module=__name__)
 
@@ -225,55 +221,16 @@ CacheKey = tuple[
 
 
 class ConnectionCache:
-    """The process-wide owner of every ClickHouse connection.
-
-    Owns driver façades (keyed by node, profile, and driver), and — for the
-    HTTP path — one :class:`~snuba.clickhouse.connect.ClickhouseClientManager`
-    that caches clients by endpoint and socket timeout on a shared urllib3
-    socket pool. One owner means one place to reset at fork and one place to
-    close.
-
-    The client and socket layers stay in :mod:`snuba.clickhouse.connect` rather
-    than being inlined here, which is what lets the native path run without
-    importing clickhouse-connect.
-    """
+    """Process-wide cache of ClickHouse driver pools (native queue or HTTP façade)."""
 
     def __init__(self) -> None:
         self.__cache: MutableMapping[CacheKey, ClickhousePool] = {}
         self.__lock = Lock()
-        # Built on first use of the connect driver, so the native path neither
-        # imports clickhouse-connect nor allocates a socket pool.
-        self.__client_manager: ClickhouseClientManager | None = None
-
-    def _client_manager(self) -> "ClickhouseClientManager":
-        # Callers hold self.__lock.
-        if self.__client_manager is None:
-            from snuba.clickhouse.connect import ClickhouseClientManager
-
-            self.__client_manager = ClickhouseClientManager()
-        return self.__client_manager
 
     def reset_after_fork(self) -> None:
-        """Drop what the child inherited, without closing it.
-
-        Two processes on one connection is a corrupt stream, but the descriptors
-        are shared, so closing here would reach into a parent still using them.
-        Dropping the references is enough; the child rebuilds lazily.
-
-        The lock is rebuilt rather than taken: one held at fork time is
-        inherited held, with no thread left in the child to release it.
-        """
+        """Drop inherited pool refs without closing parent FDs."""
         self.__lock = Lock()
         self.__cache = {}
-        if self.__client_manager is not None:
-            self.__client_manager.reset_after_fork()
-
-    def close(self) -> None:
-        """Drop every pool and close every socket this process holds."""
-        with self.__lock:
-            self.__cache.clear()
-            if self.__client_manager is not None:
-                self.__client_manager.close()
 
     def get_node_connection(
         self,
@@ -287,21 +244,8 @@ class ConnectionCache:
         verify: bool | None,
     ) -> ClickhousePool:
         """
-        Return a cached connection pool for the node, typed as the abstract
-        :class:`ClickhousePool`. The driver is decided here, from the
-        ``use_clickhouse_connect_driver`` sentry-option: when it is enabled the
-        clickhouse-connect (HTTP) pool is built (connecting on the node's
-        ``http_port``), otherwise the native one (connecting on the node's
-        ``native_port``). Both variants are cached side by side (the driver is
-        part of the cache key).
-
-        This is the single place driver façades are instantiated and the single
-        place the driver is selected, so every caller — the cluster query/node
-        connections as well as the admin and CLI by-host helpers — goes through
-        it and gets one runtime-selected façade behind the abstract
-        :class:`ClickhousePool` type. On the HTTP path, clients and sockets are
-        cached on the shared client manager (sized from process query
-        concurrency); the native path still owns its own connection queue.
+        Return a cached connection pool for the node. Driver is chosen from
+        ``use_clickhouse_connect_driver`` (HTTP vs native).
         """
         use_connect = use_clickhouse_connect_driver()
         with self.__lock:
@@ -320,15 +264,10 @@ class ConnectionCache:
             if cache_key not in self.__cache:
                 pool: ClickhousePool
                 if use_connect:
-                    # Imported here so that the native code path never imports
-                    # clickhouse-connect.
                     from snuba.clickhouse.connect import ClickhouseConnectPool
 
                     pool = ClickhouseConnectPool(
                         host=node.host_name,
-                        # Fall back to the default HTTP port only for nodes that
-                        # were built without one (e.g. by-host helpers that have
-                        # no cluster http_port to draw on).
                         http_port=(
                             node.http_port
                             if node.http_port is not None
@@ -342,7 +281,6 @@ class ConnectionCache:
                         secure=secure,
                         ca_certs=ca_certs,
                         verify=verify,
-                        client_manager=self._client_manager(),
                     )
                 else:
                     pool = ClickhouseNativePool(
@@ -369,9 +307,6 @@ def _reset_connections_after_fork() -> None:
     connection_cache.reset_after_fork()
 
 
-# Registered here because the cache owns the inherited state -- native pools
-# hold sockets too. Indirected through a function so the handler resolves the
-# method at call time rather than capturing a bound method at import.
 os.register_at_fork(after_in_child=_reset_connections_after_fork)
 
 _DEFAULT_MAX_CONNECTIONS = 1

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
 from datetime import datetime
-from threading import RLock
-from typing import Any, NamedTuple
+from threading import Lock
+from typing import Any
 
 import clickhouse_connect
 import sentry_sdk
@@ -39,11 +40,7 @@ metrics = MetricsWrapper(environment.metrics, "clickhouse.connect")
 
 
 def _driver_params(params: Params) -> Sequence[Any] | dict[str, Any] | None:
-    """Narrow ``Params`` to clickhouse-connect's accepted forms.
-
-    Falsy => None. Mappings are copied to a plain ``dict`` (driver wants an
-    invariant dict); sequences pass through as positional binds.
-    """
+    """Narrow ``Params`` to clickhouse-connect's accepted forms."""
     if not params:
         return None
     if isinstance(params, Mapping):
@@ -52,38 +49,18 @@ def _driver_params(params: Params) -> Sequence[Any] | dict[str, Any] | None:
 
 
 def _insert_statement(table: str, column_names: Sequence[str]) -> str:
-    """Rebuild the INSERT statement clickhouse-connect sends on the wire.
-
-    ``client.insert`` takes a row matrix, not SQL, but still emits
-    ``INSERT INTO <table> (<cols>) FORMAT Native``. Row data is excluded
-    (unbounded, may hold PII).
-    """
     columns = ", ".join(quote_identifier(name) for name in column_names)
     return f"INSERT INTO {table} ({columns}) FORMAT Native"
 
 
-# Stand-in for "no read timeout" on the HTTP path. The native driver maps a
-# profile with no timeout (``None``) to an unbounded socket, but clickhouse-connect
-# cannot safely take ``None`` (its progress-interval computation does arithmetic
-# on the value and would fail), so we pass a very large finite timeout instead —
-# effectively unbounded for any real operation. Per-profile timeouts that are set
-# (e.g. 25s for reads, longer for migrations) are honored as-is.
+# clickhouse-connect cannot take None for read timeout (progress-interval math).
 UNBOUNDED_SEND_RECEIVE_TIMEOUT_SECONDS = 86_400  # 24h
-
-# Default ClickHouse HTTP port, used when a caller does not pass one.
 DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
-
-# The clickhouse_connect_pool_size schema default. A live option's default
-# cannot be changed, so this value means "not set".
+# Live option default cannot change; 25 means "unset".
 LEGACY_CONNECT_POOL_SIZE = 25
-
-# How many per-host connection pools urllib3 retains before evicting the
-# least-recently-used. Slack, not a budget.
 _MAX_ENDPOINTS_PER_PROCESS = 64
 
-# Match native-driver behavior: forward unknown settings instead of failing.
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
-# Process-wide; default off (plain Native framing).
 clickhouse_connect_common.set_setting(
     "use_protocol_version",
     get_option("clickhouse_connect_use_protocol_version", False),
@@ -96,178 +73,69 @@ _STREAM_DESYNC_MARKERS = (
     "unrecognized data found in stream",
 )
 
-
-class ClientKey(NamedTuple):
-    """What makes two clients interchangeable.
-
-    Everything baked into a :class:`Client` at construction. Notably *not* the
-    profile's query settings, which are applied per query instead -- that is
-    what lets one client serve every profile sharing a timeout.
-    """
-
-    host: str
-    port: int
-    database: str
-    user: str
-    password: str
-    secure: bool
-    ca_certs: str | None
-    verify: bool
-    connect_timeout: int
-    send_receive_timeout: int
+_pool_lock = Lock()
+_pool_managers: dict[tuple[str | None, bool], PoolManager] = {}
 
 
-class ClickhouseClientManager:
-    """Process-wide cache of clickhouse-connect clients and their sockets.
-
-    Built and held by :class:`~snuba.clusters.cluster.ConnectionCache`, which
-    hands one to every connect-driver façade it creates.
-
-    One :class:`Client` per endpoint and socket timeout is enough: without
-    ClickHouse sessions the driver is safe for concurrent ``query()`` calls,
-    and each call checks a socket out of a shared urllib3 pool manager (kept
-    per TLS config, since urllib3 fixes cert verification at that level).
-    ``maxsize`` on that manager is the process query concurrency, so the
-    socket ceiling matches the number of threads that can actually run a
-    query. Profile settings never live on the client -- they ride per request.
-    """
-
-    def __init__(self) -> None:
-        self.__lock = RLock()
-        self.__clients: dict[ClientKey, Client] = {}
-        self.__pool_managers: dict[tuple[str | None, bool], PoolManager] = {}
-
-    def _pool_manager(self, ca_certs: str | None, verify: bool) -> PoolManager:
-        key = (ca_certs, verify)
-        manager = self.__pool_managers.get(key)
-        if manager is not None:
-            return manager
-        with self.__lock:
-            # Two managers for one key would be two socket pools, each with its
-            # own maxsize, so the process-wide ceiling would stop holding.
-            manager = self.__pool_managers.get(key)
-            if manager is None:
-                manager = get_pool_manager(
-                    ca_cert=ca_certs,
-                    verify=verify,
-                    maxsize=_resolve_pool_size(),
-                    num_pools=_MAX_ENDPOINTS_PER_PROCESS,
-                )
-                self.__pool_managers[key] = manager
-            return manager
-
-    def get_client(self, key: ClientKey) -> Client:
-        client = self.__clients.get(key)
-        if client is not None:
-            return client
-        with self.__lock:
-            client = self.__clients.get(key)
-            if client is None:
-                # Build under the lock so concurrent first use cannot orphan a
-                # second client (and a second handshake) for the same key.
-                client = self.__clients[key] = self._build_client(key)
-            return client
-
-    def _build_client(self, key: ClientKey) -> Client:
-        return clickhouse_connect.get_client(
-            host=key.host,
-            port=key.port,
-            username=key.user,
-            password=key.password,
-            database=key.database,
-            interface="https" if key.secure else "http",
-            secure=key.secure,
-            verify=key.verify,
-            ca_cert=key.ca_certs,
-            connect_timeout=key.connect_timeout,
-            send_receive_timeout=key.send_receive_timeout,
-            # No `settings=`: profile settings are per query, not per client.
-            pool_mgr=self._pool_manager(key.ca_certs, key.verify),
-            query_limit=0,
-            # Covers insert, explain and migrations, which pass none.
-            autogenerate_query_id=True,
-            # Sessions would serialize concurrent queries on this client and
-            # take ClickHouse state (max_sessions_for_user). Off on purpose.
-            autogenerate_session_id=False,
-            compress="lz4",
-        )
-
-    def reset_after_fork(self) -> None:
-        """Drop what the child inherited, without closing it.
-
-        The descriptors are shared, so closing here would reach into a parent
-        still using them. ``all_managers`` is process-global and inherited too,
-        so clearing only our own map would pin the parent's managers in the
-        child. A lock held at fork time is inherited held, so it is rebuilt.
-        """
-        for manager in self.__pool_managers.values():
-            all_managers.pop(manager, None)
-        self.__pool_managers = {}
-        self.__clients = {}
-        self.__lock = RLock()
-
-    def close(self) -> None:
-        """Close every socket this process holds.
-
-        Clearing the pool managers is what releases them: clients own no
-        sockets, and ``Client.close`` only tears down a manager the client
-        created itself, not one handed in.
-        """
-        with self.__lock:
-            for manager in self.__pool_managers.values():
-                with suppress(Exception):
-                    manager.clear()
-                all_managers.pop(manager, None)
-            self.__pool_managers.clear()
-            self.__clients.clear()
-
-
-def _resolve_pool_size() -> int:
-    """How many sockets urllib3 may hold open per ClickHouse endpoint."""
-    # The historical default means "unset" and defers to the derived size; any
-    # other positive value is an explicit operator override.
-    option_pool_size = get_option("clickhouse_connect_pool_size", LEGACY_CONNECT_POOL_SIZE)
-    if option_pool_size > 0 and option_pool_size != LEGACY_CONNECT_POOL_SIZE:
-        return int(option_pool_size)
+def _pool_size() -> int:
+    option = get_option("clickhouse_connect_pool_size", LEGACY_CONNECT_POOL_SIZE)
+    if option > 0 and option != LEGACY_CONNECT_POOL_SIZE:
+        return int(option)
     return settings.CLICKHOUSE_MAX_POOL_SIZE or process_query_concurrency()
 
 
+def _shared_pool(ca_certs: str | None, verify: bool) -> PoolManager:
+    """One urllib3 pool manager per TLS config for the whole process."""
+    key = (ca_certs, verify)
+    manager = _pool_managers.get(key)
+    if manager is not None:
+        return manager
+    with _pool_lock:
+        manager = _pool_managers.get(key)
+        if manager is None:
+            manager = get_pool_manager(
+                ca_cert=ca_certs,
+                verify=verify,
+                maxsize=_pool_size(),
+                num_pools=_MAX_ENDPOINTS_PER_PROCESS,
+            )
+            _pool_managers[key] = manager
+        return manager
+
+
+def reset_pools_after_fork() -> None:
+    """Drop inherited sockets without closing parent FDs."""
+    global _pool_managers, _pool_lock
+    for manager in _pool_managers.values():
+        all_managers.pop(manager, None)
+    _pool_managers = {}
+    _pool_lock = Lock()
+
+
+def close_pools() -> None:
+    with _pool_lock:
+        for manager in _pool_managers.values():
+            with suppress(Exception):
+                manager.clear()
+            all_managers.pop(manager, None)
+        _pool_managers.clear()
+
+
+os.register_at_fork(after_in_child=reset_pools_after_fork)
+
+
 def _coerce_temporal(value: Any, ch_type: str) -> Any:
-    """
-    Parse a ``Date``/``DateTime`` string from JSONCompact into the ``date``/``datetime``
-    object the reader's transforms expect -- they call date/datetime methods on it and
-    would crash on a raw string. Other types (and non-strings) pass through unchanged.
-    """
     if not isinstance(value, str):
         return value
     _, inner = unwrap_nullable_type(ch_type)
-    if not inner.startswith("Date"):  # Date, Date32, DateTime, DateTime64
+    if not inner.startswith("Date"):
         return value
     parsed = datetime.fromisoformat(value)
-    # DateTime/DateTime64 keep the time; Date/Date32 want a bare date.
     return parsed if inner.startswith("DateTime") else parsed.date()
 
 
 class ClickhouseConnectPool(ClickhousePool):
-    """
-    HTTP ClickHouse driver backed by ``clickhouse-connect``.
-
-    Drop-in for :class:`snuba.clickhouse.native.ClickhousePool`. It is not a
-    pool: it holds no client and no socket. It knows *where* to connect and
-    *with which profile settings*, and asks the process-wide
-    :class:`ClickhouseClientManager` for the cached client for its endpoint
-    and socket timeout. The manager (and the shared urllib3 socket pool under
-    it) belongs to :class:`~snuba.clusters.cluster.ConnectionCache`.
-
-    Two rules make sharing one client across profiles safe:
-
-    * Profile ClickHouse settings are applied **per query**, never baked into
-      the client, so QUERY and TRACING (same 25s timeout) cannot leak
-      ``readonly`` into each other.
-    * Every streaming response is **drained** before return
-      (``QueryResult.close``), so the urllib3 socket goes back clean. A
-      half-read socket is how one request ends up decoding another's body.
-    """
+    """HTTP ClickHouse driver: new client per query, shared process socket pool."""
 
     def __init__(
         self,
@@ -282,8 +150,6 @@ class ClickhouseConnectPool(ClickhousePool):
         connect_timeout: int = 1,
         send_receive_timeout: int | None = 35,
         client_settings: Mapping[str, Any] = {},
-        *,
-        client_manager: ClickhouseClientManager,
     ) -> None:
         self.host = host
         self.port = http_port
@@ -295,42 +161,38 @@ class ClickhouseConnectPool(ClickhousePool):
         self.verify = verify
         self.connect_timeout = connect_timeout
         self.send_receive_timeout = send_receive_timeout
-        # Applied per query rather than baked into the client, so profiles that
-        # differ only in settings can share one client.
         self.client_settings = client_settings
-        self.__client_manager = client_manager
 
-        # Resolved once: the timeouts are part of the client key, so reading the
-        # options per request would mint a new cached client on every change.
-        # Both are documented as "read when a client is created".
-        self.__connect_timeout = (
-            get_option("clickhouse_connect_connect_timeout", 0) or connect_timeout
+    def _new_client(self) -> Client:
+        connect_timeout = (
+            get_option("clickhouse_connect_connect_timeout", 0) or self.connect_timeout
         )
-        resolved_send_receive = get_option("clickhouse_connect_send_receive_timeout", 0)
-        if not resolved_send_receive:
-            resolved_send_receive = (
-                send_receive_timeout
-                if send_receive_timeout is not None
+        send_receive_timeout = get_option("clickhouse_connect_send_receive_timeout", 0)
+        if not send_receive_timeout:
+            send_receive_timeout = (
+                self.send_receive_timeout
+                if self.send_receive_timeout is not None
                 else UNBOUNDED_SEND_RECEIVE_TIMEOUT_SECONDS
             )
-        self.__send_receive_timeout = resolved_send_receive
-
-    def _client_key(self) -> ClientKey:
-        return ClientKey(
+        return clickhouse_connect.get_client(
             host=self.host,
             port=self.port,
-            database=self.database,
-            user=self.user,
+            username=self.user,
             password=self.password,
+            database=self.database,
+            interface="https" if self.secure else "http",
             secure=self.secure,
-            ca_certs=self.ca_certs,
             verify=bool(self.verify),
-            connect_timeout=self.__connect_timeout,
-            send_receive_timeout=self.__send_receive_timeout,
+            ca_cert=self.ca_certs,
+            connect_timeout=connect_timeout,
+            send_receive_timeout=send_receive_timeout,
+            settings=dict(self.client_settings),
+            pool_mgr=_shared_pool(self.ca_certs, bool(self.verify)),
+            query_limit=0,
+            autogenerate_query_id=True,
+            autogenerate_session_id=False,
+            compress="lz4",
         )
-
-    def _get_client(self) -> Client:
-        return self.__client_manager.get_client(self._client_key())
 
     def _build_query_settings(
         self,
@@ -338,15 +200,10 @@ class ClickhouseConnectPool(ClickhousePool):
         query_id: str | None,
         capture_trace: bool,
     ) -> dict[str, Any] | None:
-        # Profile settings first so an explicit per-query setting still wins.
-        query_settings: dict[str, Any] = dict(self.client_settings)
-        if settings:
-            query_settings.update(settings)
+        query_settings: dict[str, Any] = dict(settings) if settings else {}
         if query_id is not None:
             query_settings["query_id"] = query_id
         if capture_trace:
-            # clickhouse-connect does not surface send_logs_level output; tracing
-            # recovers performance data from system.query_log instead.
             query_settings["send_logs_level"] = "trace"
         return query_settings or None
 
@@ -357,7 +214,6 @@ class ClickhouseConnectPool(ClickhousePool):
 
     def _execute_once(
         self,
-        client: Client,
         query: str,
         params: Params,
         with_column_types: bool,
@@ -366,6 +222,7 @@ class ClickhouseConnectPool(ClickhousePool):
         columnar: bool,
         capture_trace: bool,
     ) -> ClickhouseResult:
+        client = self._new_client()
         query_settings = self._build_query_settings(settings, query_id, capture_trace)
 
         with traces.start_span(
@@ -389,22 +246,12 @@ class ClickhouseConnectPool(ClickhousePool):
         try:
             return self._consume(query_result, with_column_types, query_id)
         finally:
-            # Drains whatever is left of the response so the socket goes back
-            # clean. Reading `result_set` happens to do this today, but only if
-            # nothing raises first, and a socket returned with bytes still on it
-            # is how one request ends up decoding another's response.
             with suppress(Exception):
                 query_result.close()
 
     def _consume(
         self, query_result: Any, with_column_types: bool, query_id: str | None
     ) -> ClickhouseResult:
-        """Turn a QueryResult into a ClickhouseResult. Never leaves the response open.
-
-        Split out of ``_execute_once`` so the drain can sit in a ``finally``
-        around it; ``query_id`` is threaded through because the server-reported
-        id falls back to the one we sent.
-        """
         summary = query_result.summary or {}
         result_query_id = str(query_result.query_id or query_id or "")
 
@@ -428,9 +275,7 @@ class ClickhouseConnectPool(ClickhousePool):
             progress_bytes=_int("read_bytes"),
             rows=_int("read_rows"),
         )
-
         results: Sequence[Any] = query_result.result_set
-
         if not with_column_types:
             return ClickhouseResult(
                 results=results,
@@ -438,14 +283,12 @@ class ClickhouseConnectPool(ClickhousePool):
                 trace_output="",
                 query_id=result_query_id,
             )
-
-        meta: list[tuple[str, str]] = [
+        meta = [
             (name, column_type.name)
             for name, column_type in zip(
                 query_result.column_names, query_result.column_types, strict=True
             )
         ]
-
         return ClickhouseResult(
             results=results,
             meta=meta,
@@ -463,20 +306,10 @@ class ClickhouseConnectPool(ClickhousePool):
         capture_trace: bool = False,
         robust: bool = False,
     ) -> ClickhouseResult:
-        """
-        HTTP override of :meth:`ClickhousePool.execute_with_totals`. clickhouse-connect's
-        Native/HTTP output drops the ``WITH TOTALS`` row, so run the query once with
-        ``FORMAT JSONCompact`` (data + meta + totals together) and append the totals as
-        the trailing result row, the shape the reader expects. ``capture_trace``/``robust``
-        are accepted for interface parity but unused on this path.
-        """
+        """WITH TOTALS via JSONCompact; totals as trailing row for the reader."""
         with self._translate_clickhouse_errors():
-            client = self._get_client()
-            # Profile settings first, as on the execute() path.
-            json_settings: dict[str, Any] = dict(self.client_settings)
-            if settings:
-                json_settings.update(settings)
-            # 64-bit ints as JSON numbers, matching the native driver's Python ints.
+            client = self._new_client()
+            json_settings: dict[str, Any] = dict(settings) if settings else {}
             json_settings["output_format_json_quote_64bit_integers"] = 0
             if query_id is not None:
                 json_settings["query_id"] = query_id
@@ -501,8 +334,6 @@ class ClickhouseConnectPool(ClickhousePool):
             payload = json.loads(raw)
             meta = [(column["name"], column["type"]) for column in payload.get("meta", [])]
             column_types = [ch_type for _, ch_type in meta]
-
-            # Each data row and the totals row is a positional array aligned to meta.
             results: list[tuple[Any, ...]] = [
                 tuple(
                     _coerce_temporal(value, column_types[index]) for index, value in enumerate(row)
@@ -517,7 +348,6 @@ class ClickhouseConnectPool(ClickhousePool):
                         for index, value in enumerate(totals)
                     )
                 )
-
             return ClickhouseResult(
                 results=results,
                 meta=meta,
@@ -527,8 +357,6 @@ class ClickhouseConnectPool(ClickhousePool):
 
     @staticmethod
     def _profile_from_statistics(payload: Mapping[str, Any]) -> ClickhouseProfile:
-        # JSON's ``statistics`` object carries the same read counters as the Native
-        # path's X-ClickHouse-Summary header.
         statistics = payload.get("statistics") or {}
 
         def _int(key: str) -> int:
@@ -541,7 +369,6 @@ class ClickhouseConnectPool(ClickhousePool):
             elapsed = float(statistics.get("elapsed") or 0.0)
         except (TypeError, ValueError):
             elapsed = 0.0
-
         read_bytes = _int("bytes_read")
         return ClickhouseProfile(
             blocks=0,
@@ -553,8 +380,6 @@ class ClickhouseConnectPool(ClickhousePool):
 
     @contextmanager
     def _translate_clickhouse_errors(self) -> Iterator[None]:
-        # No client disposal: a drained response leaves the socket clean, and a
-        # broken connection is urllib3's to drop.
         try:
             yield
         except OperationalError as e:
@@ -582,11 +407,8 @@ class ClickhouseConnectPool(ClickhousePool):
         capture_trace: bool = False,
         retryable: bool = True,
     ) -> ClickhouseResult:
-        """Execute a clickhouse query. ``retryable`` is accepted for interface parity only."""
         with self._translate_clickhouse_errors():
-            client = self._get_client()
             return self._execute_once(
-                client,
                 query,
                 params,
                 with_column_types,
@@ -606,18 +428,14 @@ class ClickhouseConnectPool(ClickhousePool):
         rows = list(data)
         if not rows:
             return
-
         column_names = list(rows[0].keys())
         matrix = [list(row.values()) for row in rows]
-
-        insert_settings: dict[str, Any] = dict(self.client_settings)
-        if settings:
-            insert_settings.update(settings)
+        insert_settings: dict[str, Any] = dict(settings) if settings else {}
         if query_id is not None:
             insert_settings["query_id"] = query_id
 
         with self._translate_clickhouse_errors():
-            client = self._get_client()
+            client = self._new_client()
             with traces.start_span(
                 name=f"INSERT INTO {table}",
                 attributes={
@@ -651,10 +469,6 @@ class ClickhouseConnectPool(ClickhousePool):
         capture_trace: bool = False,
         retryable: bool = True,
     ) -> ClickhouseResult:
-        """
-        Mirrors :meth:`ClickhousePool.execute_robust`. Since retries are
-        delegated to clickhouse-connect, this is equivalent to :meth:`execute`.
-        """
         return self.execute(
             query,
             params=params,
@@ -668,26 +482,9 @@ class ClickhouseConnectPool(ClickhousePool):
         )
 
     def execute_explain(self, query: str) -> ClickhouseResult:
-        """
-        Run an EXPLAIN statement over HTTP and return its single ``explain`` text
-        column, one row per line. Overrides :meth:`ClickhousePool.execute_explain`.
-
-        EXPLAIN needs its own path on this driver. ``query()`` appends
-        ``FORMAT Native`` and decodes the response with its binary Native reader;
-        for an EXPLAIN that trailing format is consumed by the *inner* query being
-        explained, so the EXPLAIN's own output comes back as text and the Native
-        reader misfires — the cryptic ``Unrecognized ClickHouse type ...`` error
-        (a fragment of the explain dump read as a column type). ``command()``
-        instead sends the statement verbatim — no FORMAT appended — and returns
-        the decoded text, which we split into one single-column row per line, the
-        same shape the native driver returns for the same EXPLAIN.
-
-        This serves the single-column explain output of EXPLAIN AST / QUERY TREE /
-        SYNTAX / PLAN / PIPELINE (the kinds admin system-query validation issues);
-        the multi-column EXPLAIN ESTIMATE is not used on this path.
-        """
+        """EXPLAIN via command() — query() Native framing mishandles EXPLAIN text."""
         with self._translate_clickhouse_errors():
-            client = self._get_client()
+            client = self._new_client()
             with traces.start_span(
                 name="clickhouse query",
                 attributes={
@@ -696,28 +493,19 @@ class ClickhouseConnectPool(ClickhousePool):
                     sentry_sdk.consts.SPANDATA.DB_QUERY_TEXT: query,
                 },
             ):
-                output = client.command(query, settings=dict(self.client_settings) or None)
+                output = client.command(query)
             return self._explain_result(output)
 
     @staticmethod
     def _explain_result(output: object) -> ClickhouseResult:
-        # command() returns the decoded body: a str for our single-column,
-        # tab-free explain output (it has already stripped the trailing newline).
-        # Normalize the other documented return shapes defensively before
-        # splitting into one row per line.
         if isinstance(output, str):
             text = output
         elif isinstance(output, int):
             text = str(output)
         elif isinstance(output, (list, tuple)):
-            # command() only returns a sequence when the body contained tab
-            # characters; explain output is space-indented and tab-free, so this
-            # is defensive. Re-join so the per-line split preserves the layout.
             text = "\t".join(str(part) for part in output)
         else:
-            # QuerySummary (empty body) or anything unexpected -> no rows.
             text = ""
-
         results: list[tuple[str, ...]] = [(line,) for line in text.split("\n")] if text else []
         profile = ClickhouseProfile(
             bytes=0, progress_bytes=0, blocks=0, rows=len(results), elapsed=0.0
@@ -727,6 +515,5 @@ class ClickhouseConnectPool(ClickhousePool):
         )
 
     def close(self) -> None:
-        # Clients and sockets live on the process-wide manager; façades share
-        # them, so teardown is the manager's call.
+        # Sockets live on the process-wide pool managers.
         pass
