@@ -3637,7 +3637,7 @@ class TestTraceItemTable(BaseApiTest):
                 comparison_filter=ComparisonFilter(
                     key=AttributeKey(
                         type=AttributeKey.TYPE_STRING,
-                        name="gen_ai.response.model",
+                        name="gen_ai.request.model",
                     ),
                     op=ComparisonFilter.OP_EQUALS,
                     value=AttributeValue(val_str="sentaur"),
@@ -3647,7 +3647,7 @@ class TestTraceItemTable(BaseApiTest):
                 Column(
                     key=AttributeKey(
                         type=AttributeKey.TYPE_STRING,
-                        name="gen_ai.response.model",
+                        name="gen_ai.request.model",
                     )
                 ),
             ],
@@ -3656,7 +3656,7 @@ class TestTraceItemTable(BaseApiTest):
 
         assert response.column_values == [
             TraceItemColumnValues(
-                attribute_name="gen_ai.response.model",
+                attribute_name="gen_ai.request.model",
                 results=[
                     AttributeValue(val_str="sentaur"),
                 ],
@@ -3682,7 +3682,7 @@ class TestTraceItemTable(BaseApiTest):
                 exists_filter=ExistsFilter(
                     key=AttributeKey(
                         type=AttributeKey.TYPE_STRING,
-                        name="gen_ai.response.model",
+                        name="gen_ai.request.model",
                     ),
                 )
             ),
@@ -3690,7 +3690,7 @@ class TestTraceItemTable(BaseApiTest):
                 Column(
                     key=AttributeKey(
                         type=AttributeKey.TYPE_STRING,
-                        name="gen_ai.response.model",
+                        name="gen_ai.request.model",
                     )
                 ),
             ],
@@ -3699,7 +3699,7 @@ class TestTraceItemTable(BaseApiTest):
 
         assert response.column_values == [
             TraceItemColumnValues(
-                attribute_name="gen_ai.response.model",
+                attribute_name="gen_ai.request.model",
                 results=[
                     AttributeValue(val_str="sentaur"),
                 ],
