@@ -36,20 +36,6 @@ from snuba.utils.sentry import SENTRY_OP
 
 metrics = MetricsWrapper(environment.metrics, "clickhouse.connect")
 
-
-def _driver_params(params: Params) -> Sequence[Any] | dict[str, Any] | None:
-    if not params:
-        return None
-    if isinstance(params, Mapping):
-        return dict(params)
-    return params
-
-
-def _insert_statement(table: str, column_names: Sequence[str]) -> str:
-    columns = ", ".join(quote_identifier(name) for name in column_names)
-    return f"INSERT INTO {table} ({columns}) FORMAT Native"
-
-
 DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS = 60 * 60  # 1h fallback when profile timeout is None
 DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
 
@@ -83,6 +69,33 @@ def _shared_pool(ca_certs: str | None, verify: bool) -> PoolManager:
         return manager
 
 
+def _driver_params(params: Params) -> Sequence[Any] | dict[str, Any] | None:
+    if not params:
+        return None
+    if isinstance(params, Mapping):
+        return dict(params)
+    return params
+
+
+def _insert_statement(table: str, column_names: Sequence[str]) -> str:
+    columns = ", ".join(quote_identifier(name) for name in column_names)
+    return f"INSERT INTO {table} ({columns}) FORMAT Native"
+
+
+def _as_int(value: Any) -> int:
+    try:
+        return int(value) if value is not None else 0
+    except (TypeError, ValueError):
+        return 0
+
+
+def _as_float(value: Any) -> float:
+    try:
+        return float(value) if value is not None else 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _coerce_temporal(value: Any, ch_type: str) -> Any:
     if not isinstance(value, str):
         return value
@@ -91,6 +104,23 @@ def _coerce_temporal(value: Any, ch_type: str) -> Any:
         return value
     parsed = datetime.fromisoformat(value)
     return parsed if inner.startswith("DateTime") else parsed.date()
+
+
+@contextmanager
+def _query_span(
+    sql: str, query_id: str | None = None, name: str = "clickhouse query"
+) -> Iterator[Any]:
+    with traces.start_span(
+        name=name,
+        attributes={
+            SENTRY_OP: "db.clickhouse",
+            sentry_sdk.consts.SPANDATA.DB_SYSTEM: "clickhouse",
+            sentry_sdk.consts.SPANDATA.DB_QUERY_TEXT: sql,
+        },
+    ) as span:
+        if query_id is not None:
+            span.set_attribute("query_id", query_id)
+        yield span
 
 
 class ClickhouseConnectPool(ClickhousePool):
@@ -163,6 +193,46 @@ class ClickhouseConnectPool(ClickhousePool):
             query_settings["send_logs_level"] = "trace"
         return query_settings or None
 
+    def _consume_query_result(
+        self, query_result: Any, with_column_types: bool, query_id: str | None
+    ) -> ClickhouseResult:
+        summary = query_result.summary or {}
+        read_bytes = _as_int(summary.get("read_bytes"))
+        try:
+            elapsed_ns = summary.get("elapsed_ns")
+            elapsed = float(elapsed_ns) / 1e9 if elapsed_ns is not None else 0.0
+        except (TypeError, ValueError):
+            elapsed = 0.0
+        profile = ClickhouseProfile(
+            blocks=0,
+            bytes=read_bytes,
+            elapsed=elapsed,
+            progress_bytes=read_bytes,
+            rows=_as_int(summary.get("read_rows")),
+        )
+        results: Sequence[Any] = query_result.result_set
+        query_id_out = str(query_result.query_id or query_id or "")
+        if not with_column_types:
+            return ClickhouseResult(
+                results=results,
+                profile=profile,
+                trace_output="",
+                query_id=query_id_out,
+            )
+        meta = [
+            (name, column_type.name)
+            for name, column_type in zip(
+                query_result.column_names, query_result.column_types, strict=True
+            )
+        ]
+        return ClickhouseResult(
+            results=results,
+            meta=meta,
+            profile=profile,
+            trace_output="",
+            query_id=query_id_out,
+        )
+
     def _execute_once(
         self,
         query: str,
@@ -176,16 +246,7 @@ class ClickhouseConnectPool(ClickhousePool):
         client = self._new_client()
         query_settings = self._build_query_settings(settings, query_id, capture_trace)
 
-        with traces.start_span(
-            name="clickhouse query",
-            attributes={
-                SENTRY_OP: "db.clickhouse",
-                sentry_sdk.consts.SPANDATA.DB_SYSTEM: "clickhouse",
-                sentry_sdk.consts.SPANDATA.DB_QUERY_TEXT: query,
-            },
-        ) as span:
-            if query_id is not None:
-                span.set_attribute("query_id", query_id)
+        with _query_span(query, query_id) as span:
             span.set_attribute("settings", json.dumps(query_settings, default=repr))
             query_result = client.query(
                 query,
@@ -195,50 +256,7 @@ class ClickhouseConnectPool(ClickhousePool):
             )
 
         try:
-            summary = query_result.summary or {}
-            result_query_id = str(query_result.query_id or query_id or "")
-
-            def _int(key: str) -> int:
-                value = summary.get(key)
-                try:
-                    return int(value) if value is not None else 0
-                except (TypeError, ValueError):
-                    return 0
-
-            elapsed_ns = summary.get("elapsed_ns")
-            try:
-                elapsed = float(elapsed_ns) / 1e9 if elapsed_ns is not None else 0.0
-            except (TypeError, ValueError):
-                elapsed = 0.0
-
-            profile_data = ClickhouseProfile(
-                blocks=0,
-                bytes=_int("read_bytes"),
-                elapsed=elapsed,
-                progress_bytes=_int("read_bytes"),
-                rows=_int("read_rows"),
-            )
-            results: Sequence[Any] = query_result.result_set
-            if not with_column_types:
-                return ClickhouseResult(
-                    results=results,
-                    profile=profile_data,
-                    trace_output="",
-                    query_id=result_query_id,
-                )
-            meta = [
-                (name, column_type.name)
-                for name, column_type in zip(
-                    query_result.column_names, query_result.column_types, strict=True
-                )
-            ]
-            return ClickhouseResult(
-                results=results,
-                meta=meta,
-                profile=profile_data,
-                trace_output="",
-                query_id=result_query_id,
-            )
+            return self._consume_query_result(query_result, with_column_types, query_id)
         finally:
             with suppress(Exception):
                 query_result.close()
@@ -259,16 +277,7 @@ class ClickhouseConnectPool(ClickhousePool):
             if query_id is not None:
                 json_settings["query_id"] = query_id
 
-            with traces.start_span(
-                name="clickhouse query",
-                attributes={
-                    SENTRY_OP: "db.clickhouse",
-                    sentry_sdk.consts.SPANDATA.DB_SYSTEM: "clickhouse",
-                    sentry_sdk.consts.SPANDATA.DB_QUERY_TEXT: query,
-                },
-            ) as span:
-                if query_id is not None:
-                    span.set_attribute("query_id", query_id)
+            with _query_span(query, query_id):
                 raw = client.raw_query(
                     query,
                     parameters=_driver_params(params),
@@ -279,17 +288,16 @@ class ClickhouseConnectPool(ClickhousePool):
             payload = json.loads(raw)
             meta = [(column["name"], column["type"]) for column in payload.get("meta", [])]
             column_types = [ch_type for _, ch_type in meta]
-            results: list[tuple[Any, ...]] = [
-                tuple(_coerce_temporal(value, column_types[i]) for i, value in enumerate(row))
-                for row in payload.get("data", [])
-            ]
+
+            def _row(values: Sequence[Any]) -> tuple[Any, ...]:
+                return tuple(
+                    _coerce_temporal(value, column_types[i]) for i, value in enumerate(values)
+                )
+
+            results = [_row(row) for row in payload.get("data", [])]
             totals = payload.get("totals")
             if totals:
-                results.append(
-                    tuple(
-                        _coerce_temporal(value, column_types[i]) for i, value in enumerate(totals)
-                    )
-                )
+                results.append(_row(totals))
             return ClickhouseResult(
                 results=results,
                 meta=meta,
@@ -300,24 +308,13 @@ class ClickhouseConnectPool(ClickhousePool):
     @staticmethod
     def _profile_from_statistics(payload: Mapping[str, Any]) -> ClickhouseProfile:
         statistics = payload.get("statistics") or {}
-
-        def _int(key: str) -> int:
-            try:
-                return int(statistics.get(key) or 0)
-            except (TypeError, ValueError):
-                return 0
-
-        try:
-            elapsed = float(statistics.get("elapsed") or 0.0)
-        except (TypeError, ValueError):
-            elapsed = 0.0
-        read_bytes = _int("bytes_read")
+        read_bytes = _as_int(statistics.get("bytes_read") or 0)
         return ClickhouseProfile(
             blocks=0,
             bytes=read_bytes,
-            elapsed=elapsed,
+            elapsed=_as_float(statistics.get("elapsed") or 0.0),
             progress_bytes=read_bytes,
-            rows=_int("rows_read"),
+            rows=_as_int(statistics.get("rows_read") or 0),
         )
 
     @contextmanager
@@ -376,20 +373,11 @@ class ClickhouseConnectPool(ClickhousePool):
 
         with self._translate_clickhouse_errors():
             client = self._new_client()
-            with traces.start_span(
+            with _query_span(
+                _insert_statement(table, column_names),
+                query_id if query_id is not None else "unknown-query-id",
                 name=f"INSERT INTO {table}",
-                attributes={
-                    SENTRY_OP: "db.clickhouse",
-                    sentry_sdk.consts.SPANDATA.DB_SYSTEM: "clickhouse",
-                    sentry_sdk.consts.SPANDATA.DB_QUERY_TEXT: _insert_statement(
-                        table, column_names
-                    ),
-                },
-            ) as span:
-                span.set_attribute(
-                    "query_id",
-                    query_id if query_id is not None else "unknown-query-id",
-                )
+            ):
                 client.insert(
                     table,
                     matrix,
@@ -424,14 +412,7 @@ class ClickhouseConnectPool(ClickhousePool):
     def execute_explain(self, query: str) -> ClickhouseResult:
         with self._translate_clickhouse_errors():
             client = self._new_client()
-            with traces.start_span(
-                name="clickhouse query",
-                attributes={
-                    SENTRY_OP: "db.clickhouse",
-                    sentry_sdk.consts.SPANDATA.DB_SYSTEM: "clickhouse",
-                    sentry_sdk.consts.SPANDATA.DB_QUERY_TEXT: query,
-                },
-            ):
+            with _query_span(query):
                 output = client.command(query)
             return self._explain_result(output)
 
@@ -446,11 +427,13 @@ class ClickhouseConnectPool(ClickhousePool):
         else:
             text = ""
         results: list[tuple[str, ...]] = [(line,) for line in text.split("\n")] if text else []
-        profile = ClickhouseProfile(
-            bytes=0, progress_bytes=0, blocks=0, rows=len(results), elapsed=0.0
-        )
         return ClickhouseResult(
-            results=results, meta=[("explain", "String")], profile=profile, trace_output=""
+            results=results,
+            meta=[("explain", "String")],
+            profile=ClickhouseProfile(
+                bytes=0, progress_bytes=0, blocks=0, rows=len(results), elapsed=0.0
+            ),
+            trace_output="",
         )
 
     def close(self) -> None:
