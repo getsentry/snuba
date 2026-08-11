@@ -20,8 +20,7 @@ from snuba.admin.clickhouse.trace_log_parsing import (
     TracingSummary,
     summarize_trace_output,
 )
-from snuba.clickhouse.escaping import escape_string
-from snuba.clickhouse.native import ClickhousePool, ClickhouseResult
+from snuba.clickhouse.native import ClickhousePool, ClickhouseResult, Params
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -120,6 +119,7 @@ def poll_system_query(
     connection: ClickhousePool,
     sql: str,
     *,
+    params: Params = None,
     accept_result: Callable[[ClickhouseResult], bool] | None = None,
 ) -> ClickhouseResult | None:
     is_acceptable = accept_result or (lambda result: bool(result and result.results))
@@ -127,7 +127,7 @@ def poll_system_query(
     last_result: ClickhouseResult | None = None
     for attempt in range(PROFILE_EVENTS_MAX_ATTEMPTS):
         try:
-            last_result = connection.execute(query=sql, with_column_types=True)
+            last_result = connection.execute(query=sql, params=params, with_column_types=True)
         except Exception:
             logger.warning(
                 "System log poll failed",
@@ -169,7 +169,7 @@ def summarize_from_query_log(
         FROM {source}
         WHERE event_time >= now() - INTERVAL 5 MINUTE
           AND type = 'QueryFinish'
-          AND (query_id = {escape_string(query_id)} OR initial_query_id = {escape_string(query_id)})
+          AND (query_id = %(query_id)s OR initial_query_id = %(query_id)s)
         ORDER BY is_initial_query DESC, event_time
     """
 
@@ -178,7 +178,9 @@ def summarize_from_query_log(
             return False
         return any(bool(row[2]) for row in result.results if row)
 
-    result = poll_system_query(connection, sql, accept_result=_root_finish_present)
+    result = poll_system_query(
+        connection, sql, params={"query_id": query_id}, accept_result=_root_finish_present
+    )
     summary = TracingSummary({})
     if result is None or not result.results:
         return summary

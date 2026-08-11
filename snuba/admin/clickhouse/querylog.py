@@ -3,7 +3,7 @@ from snuba.admin.clickhouse.common import (
     get_ro_query_node_connection,
     validate_ro_query,
 )
-from snuba.clickhouse.native import ClickhouseResult
+from snuba.clickhouse.native import ClickhouseResult, Params
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages.factory import get_storage
@@ -20,6 +20,7 @@ def run_querylog_query(
     query: str,
     user: str,
     max_threads: int | None = None,
+    params: Params = None,
 ) -> ClickhouseResult:
     """
     Validates, audit logs, and executes given query against Querylog
@@ -34,7 +35,7 @@ def run_querylog_query(
     validate_ro_query(
         sql_query=query, allowed_tables={schema.get_table_name(), "clickhouse_queries"}
     )
-    return __run_querylog_query(query, max_threads=max_threads)
+    return __run_querylog_query(query, max_threads=max_threads, params=params)
 
 
 def describe_querylog_schema() -> ClickhouseResult:
@@ -51,7 +52,9 @@ def _get_clickhouse_threads(max_threads: int | None = None) -> int:
     return min(config_threads, _MAX_CH_THREADS)
 
 
-def __run_querylog_query(query: str, max_threads: int | None = None) -> ClickhouseResult:
+def __run_querylog_query(
+    query: str, max_threads: int | None = None, params: Params = None
+) -> ClickhouseResult:
     """
     Runs given Query against Querylog table in ClickHouse. This function assumes valid
     query and does not validate/sanitize query or response data.
@@ -62,6 +65,7 @@ def __run_querylog_query(query: str, max_threads: int | None = None) -> Clickhou
 
     query_result = connection.execute(
         query=query,
+        params=params,
         with_column_types=True,
         settings={"max_threads": _get_clickhouse_threads(max_threads)},
     )
