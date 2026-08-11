@@ -104,6 +104,12 @@ def test_comment_tokens_outside_literals_rejected() -> None:
         "SELECT * FROM my_table WHERE x IN (SELECT * FROM merge('default', '.*'))",
         "SELECT * FROM my_table WHERE x IN (SELECT * FROM remote('h:9000', system.users))",
         "SELECT * FROM\n  URL('http://evil/x', CSV, 'a String')",
+        # Quoted identifiers: ClickHouse quotes strings with ' and identifiers
+        # with ` or ", so neither form may hide the function name.
+        "SELECT * FROM `url`('http://evil/x', CSV, 'a String')",
+        "SELECT * FROM \"url\"('http://evil/x', CSV, 'a String')",
+        "SELECT * FROM `remote`('h:9000', system.users)",
+        "SELECT * FROM \"merge\"('default', '.*')",
         # Following an allowed one must not end the scan.
         "SELECT * FROM clusterAllReplicas('c', my_table) JOIN merge('default', '.*') USING x",
     ],
@@ -122,6 +128,8 @@ def test_table_functions_rejected(query: str) -> None:
         "SELECT * FROM (SELECT * FROM my_table) sub",
         "SELECT count() FROM my_table WHERE referrer IN ('a', 'b')",
         "SELECT * FROM my_table WHERE referrer = 'url(http://x)'",
+        # A quoted table name is still just a table.
+        "SELECT * FROM `my_table`",
     ],
 )
 def test_legitimate_queries_still_allowed(query: str) -> None:

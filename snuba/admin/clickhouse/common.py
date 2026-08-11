@@ -374,18 +374,22 @@ def _sql_quotes_are_balanced(sql_query: str) -> bool:
     return True
 
 
-def _strip_sql_string_literals(sql_query: str) -> str:
+def _strip_sql_string_literals(sql_query: str, quote_chars: tuple[str, ...] = ("'", '"')) -> str:
     """Replace quoted string contents with empty quotes for safety checks.
 
     Lets validators ignore disallowed tokens that only appear inside literals
     (e.g. a referrer filter value containing ``--`` or ``delete``).
+
+    ``quote_chars`` narrows what counts as a literal. ClickHouse only quotes
+    strings with ``'``; ``"`` quotes an identifier. Pass ``("'",)`` when the
+    caller needs identifiers left in place to be inspected.
     """
     out: list[str] = []
     i = 0
     n = len(sql_query)
     while i < n:
         ch = sql_query[i]
-        if ch in ("'", '"'):
+        if ch in quote_chars:
             end = _end_of_sql_string_literal(sql_query, i)
             if end is None:
                 # Unbalanced quote; leave remainder as-is for the caller to reject.
@@ -539,7 +543,17 @@ def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) ->
         elif kw in lowered:
             raise InvalidCustomQuery(f"{kw} is not allowed in the query")
 
-    normalized = " ".join(lowered.split())
+    # Scanned separately from `lowered`: a table function name can be written as
+    # a quoted identifier -- `url`(...) or "url"(...) -- which the patterns below
+    # would miss, and which stripping "..." as a literal would erase outright. So
+    # strip only real (single-quoted) literals, then drop the identifier quoting.
+    normalized = " ".join(
+        _strip_sql_string_literals(sql_query, ("'",))
+        .lower()
+        .replace("`", "")
+        .replace('"', "")
+        .split()
+    )
     # Must run before the allowed_tables check below, which cannot see them.
     _reject_table_functions(normalized)
 
