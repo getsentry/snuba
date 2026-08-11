@@ -51,9 +51,8 @@ def _insert_statement(table: str, column_names: Sequence[str]) -> str:
 
 
 # clickhouse-connect rejects None for read timeout (progress-interval math).
-# When a profile has no timeout (INTERNAL), use a short ceiling instead of
-# leaving the socket open for hours.
-DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS = 60
+# When a profile has no timeout (INTERNAL), cap the socket read at 1h.
+DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS = 60 * 60  # 1h
 DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
 
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
