@@ -50,9 +50,7 @@ def _insert_statement(table: str, column_names: Sequence[str]) -> str:
     return f"INSERT INTO {table} ({columns}) FORMAT Native"
 
 
-# clickhouse-connect rejects None for read timeout (progress-interval math).
-# When a profile has no timeout (INTERNAL), cap the socket read at 1h.
-DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS = 60 * 60  # 1h
+DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS = 60 * 60  # 1h fallback when profile timeout is None
 DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
 
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
@@ -61,7 +59,6 @@ clickhouse_connect_common.set_setting(
     get_option("clickhouse_connect_use_protocol_version", False),
 )
 
-# One socket pool for the process.
 _pool_lock = Lock()
 _pool_managers: dict[tuple[str | None, bool], PoolManager] = {}
 
@@ -80,9 +77,6 @@ def _shared_pool(ca_certs: str | None, verify: bool) -> PoolManager:
                 maxsize=get_option(
                     "clickhouse_connect_pool_size", settings.CLICKHOUSE_MAX_POOL_SIZE
                 ),
-                # Distinct host:port pools retained before LRU eviction. Sized
-                # for the clusters we actually query, with a little headroom
-                # for admin by-node access.
                 num_pools=16,
             )
             _pool_managers[key] = manager
@@ -100,8 +94,6 @@ def _coerce_temporal(value: Any, ch_type: str) -> Any:
 
 
 class ClickhouseConnectPool(ClickhousePool):
-    """HTTP ClickHouse driver (clickhouse-connect)."""
-
     def __init__(
         self,
         host: str,
