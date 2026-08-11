@@ -411,13 +411,17 @@ _TABLE_POSITION_CALL_RE = re.compile(r"(?<!array )\b(?:from|join)\s+(\w+)\s*\(")
 # validator. Note this leaves allowed_tables reachable through them.
 _ALLOWED_TABLE_FUNCTIONS = frozenset({"cluster", "clusterallreplicas"})
 
-# Table functions reaching off the node: network and filesystem. Rejected
-# anywhere rather than only in a table position, so they cannot hide in a
-# comma-joined source or a subquery. None collide with a scalar function.
-_EXTERNAL_TABLE_FUNCTIONS = (
+# Table functions that can read data allowed_tables never authorized: off the
+# node (network, filesystem) or across local tables. Matched anywhere rather
+# than only in a table position, since a FROM list can reach them past a comma
+# -- `FROM allowed, merge('default', '.*')` -- or from inside a subquery. None
+# collide with a scalar function name; `format` and `values` are left out
+# because they do.
+_DISALLOWED_TABLE_FUNCTIONS = (
     "azureBlobStorage",
     "azureBlobStorageCluster",
     "deltaLake",
+    "dictionary",
     "executable",
     "file",
     "fileCluster",
@@ -428,6 +432,9 @@ _EXTERNAL_TABLE_FUNCTIONS = (
     "iceberg",
     "icebergS3",
     "jdbc",
+    "loop",
+    "merge",
+    "mergeTreeIndex",
     "mongodb",
     "mysql",
     "odbc",
@@ -440,21 +447,25 @@ _EXTERNAL_TABLE_FUNCTIONS = (
     "sqlite",
     "url",
     "urlCluster",
+    "view",
+    "viewIfPermitted",
 )
-_EXTERNAL_TABLE_FUNCTION_RE = re.compile(
-    r"\b(?:" + "|".join(fn.lower() for fn in _EXTERNAL_TABLE_FUNCTIONS) + r")\s*\("
+_DISALLOWED_TABLE_FUNCTION_RE = re.compile(
+    r"\b(?:" + "|".join(fn.lower() for fn in _DISALLOWED_TABLE_FUNCTIONS) + r")\s*\("
 )
 
 
 def _reject_table_functions(normalized_query: str) -> None:
     """Reject table functions. Query must be lower cased, literal stripped and
     whitespace collapsed for the patterns above to match reliably."""
-    external = _EXTERNAL_TABLE_FUNCTION_RE.search(normalized_query)
-    if external:
+    disallowed = _DISALLOWED_TABLE_FUNCTION_RE.search(normalized_query)
+    if disallowed:
         raise InvalidCustomQuery(
-            f"table function {external.group().rstrip('( ')} is not allowed in the query"
+            f"table function {disallowed.group().rstrip('( ')} is not allowed in the query"
         )
 
+    # Backstop for table functions not named above (synthetic generators, and
+    # anything ClickHouse adds later) sitting where a table belongs.
     for match in _TABLE_POSITION_CALL_RE.finditer(normalized_query):
         name = match.group(1)
         if name not in _ALLOWED_TABLE_FUNCTIONS:

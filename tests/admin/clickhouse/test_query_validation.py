@@ -98,6 +98,10 @@ def test_comment_tokens_outside_literals_rejected() -> None:
         "SELECT * FROM numbers(10)",
         # Not sitting directly after FROM.
         "SELECT * FROM my_table, url('http://evil/x', CSV, 'a String')",
+        "SELECT * FROM my_table, merge('default', '.*')",
+        "SELECT * FROM my_table, dictionary('d')",
+        "SELECT * FROM my_table, view(SELECT * FROM system.users)",
+        "SELECT * FROM my_table WHERE x IN (SELECT * FROM merge('default', '.*'))",
         "SELECT * FROM my_table WHERE x IN (SELECT * FROM remote('h:9000', system.users))",
         "SELECT * FROM\n  URL('http://evil/x', CSV, 'a String')",
         # Following an allowed one must not end the scan.
