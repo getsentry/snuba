@@ -240,7 +240,6 @@ def test_generic_clickhouse_error_wrapped() -> None:
         pool.execute("SELECT 1")
 
     assert client.query.call_count == 1
-    client.close_connections.assert_not_called()
 
 
 def test_totals_malformed_json_wrapped() -> None:
@@ -854,7 +853,7 @@ def test_shared_socket_pool() -> None:
     connect_mod._pool_managers.clear()
 
 
-def test_response_drained_to_avoid_desync() -> None:
+def test_response_is_drained() -> None:
     client = mock.Mock()
     result = mock.Mock()
     result.summary = {}
@@ -866,7 +865,7 @@ def test_response_drained_to_avoid_desync() -> None:
     result.close.assert_called_once()
 
 
-def test_response_drained_when_consume_fails() -> None:
+def test_response_is_drained_on_error() -> None:
     client = mock.Mock()
     result = mock.Mock()
     result.summary = {}

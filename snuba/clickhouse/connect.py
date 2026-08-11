@@ -60,14 +60,7 @@ clickhouse_connect_common.set_setting(
     get_option("clickhouse_connect_use_protocol_version", False),
 )
 
-_STREAM_DESYNC_MARKERS = (
-    "Unrecognized ClickHouse type",
-    "Stream ended unexpectedly",
-    "Stream failed during read",
-    "unrecognized data found in stream",
-)
-
-# One socket pool for the process. Clients are cheap façades; sockets are not.
+# One socket pool for the process.
 _pool_lock = Lock()
 _pool_managers: dict[tuple[str | None, bool], PoolManager] = {}
 
@@ -103,7 +96,7 @@ def _coerce_temporal(value: Any, ch_type: str) -> Any:
 
 
 class ClickhouseConnectPool(ClickhousePool):
-    """HTTP driver: new client per query on a shared socket pool; always drain."""
+    """HTTP ClickHouse driver (clickhouse-connect)."""
 
     def __init__(
         self,
@@ -174,10 +167,6 @@ class ClickhouseConnectPool(ClickhousePool):
             query_settings["send_logs_level"] = "trace"
         return query_settings or None
 
-    @staticmethod
-    def _is_stream_desync(exc: BaseException) -> bool:
-        return any(marker in str(exc) for marker in _STREAM_DESYNC_MARKERS)
-
     def _execute_once(
         self,
         query: str,
@@ -209,8 +198,6 @@ class ClickhouseConnectPool(ClickhousePool):
                 column_oriented=columnar,
             )
 
-        # Drain before the socket returns to the shared pool. A half-read body is
-        # how the next query decodes the previous response (stream desync).
         try:
             summary = query_result.summary or {}
             result_query_id = str(query_result.query_id or query_id or "")
@@ -348,8 +335,6 @@ class ClickhouseConnectPool(ClickhousePool):
             metrics.increment("stream_failure")
             raise ClickhouseError(str(e), code=-1) from e
         except ClickHouseError as e:
-            if self._is_stream_desync(e):
-                metrics.increment("stream_desync")
             raise ClickhouseError(str(e), code=getattr(e, "code", None) or -1) from e
         except json.JSONDecodeError as e:
             raise ClickhouseError(f"invalid JSON response: {e}", code=-1) from e
