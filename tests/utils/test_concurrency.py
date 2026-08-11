@@ -195,3 +195,40 @@ def test_serve_gives_granian_and_the_pools_the_same_thread_count(
     _, kwargs = granian.call_args
     assert kwargs["blocking_threads"] == 64
     assert process_query_concurrency() == 64
+
+
+@pytest.mark.parametrize(
+    "env, backlog, workers",
+    [
+        pytest.param({"GRANIAN_WORKERS": "4"}, 1024, 4, id="workers only, default backlog"),
+        pytest.param({"GRANIAN_WORKERS": "1"}, 1024, 1, id="one worker, default backlog"),
+        pytest.param({"GRANIAN_BACKLOG": "2048"}, 2048, 1, id="backlog only, default workers"),
+        pytest.param({"GRANIAN_BACKLOG": "64"}, 64, 1, id="below granian's backlog floor"),
+        pytest.param({"GRANIAN_BACKLOG": "256", "GRANIAN_WORKERS": "2"}, 256, 2, id="both set"),
+        pytest.param(
+            {"GRANIAN_BACKLOG": "1024", "GRANIAN_WORKERS": "3"}, 1024, 3, id="uneven division"
+        ),
+    ],
+)
+def test_env_derived_concurrency_matches_granian(
+    monkeypatch: pytest.MonkeyPatch, env: Mapping[str, str], backlog: int, workers: int
+) -> None:
+    # The env path has to agree with granian just as resolve_blocking_threads
+    # does, including when only some GRANIAN_* vars are set -- granian defaults
+    # the rest, so requiring the full set sized pools at 8 against a granian
+    # running up to 128 threads.
+    from granian import Granian
+    from granian.constants import Interfaces
+
+    set_env(monkeypatch, env)
+    granian_server = Granian(
+        target="snuba.web.wsgi:application",
+        interface=Interfaces.WSGI,
+        backlog=backlog,
+        workers=workers,
+        blocking_threads=None,
+    )
+
+    assert process_query_concurrency() == min(
+        granian_server.blocking_threads, concurrency._MAX_QUERY_CONCURRENCY
+    )

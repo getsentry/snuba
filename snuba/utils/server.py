@@ -3,25 +3,18 @@ from __future__ import annotations
 from granian import Granian
 from granian.constants import Interfaces
 
-from snuba.utils.concurrency import declare_query_concurrency
+from snuba.utils.concurrency import declare_query_concurrency, granian_blocking_threads
 
 
 def resolve_blocking_threads(threads: int | None, backlog: int, processes: int) -> int:
     """The number of WSGI blocking threads granian will actually run.
 
-    Mirrors granian's own derivation (``granian/server/common.py``): the backlog
-    has a floor of 128, backpressure defaults to ``backlog // workers``, and a
-    WSGI worker runs ``backpressure // 2`` blocking threads.
-
-    We compute it rather than let granian do it so the value can be handed to
-    both granian and the ClickHouse pool sizing, which otherwise disagree: with
-    ``API_THREADS`` unset, ``snuba api`` leaves ``blocking_threads=None`` and
-    granian derives 64, while the pools fall back to 8.
+    Computed rather than left to granian so the same number reaches both granian
+    and the ClickHouse pool sizing: with ``API_THREADS`` unset, ``snuba api``
+    leaves ``blocking_threads=None`` and granian derives 64 while the pools fall
+    back to 8.
     """
-    if threads is not None:
-        return max(1, threads)
-    backpressure = max(1, max(128, backlog) // max(1, processes))
-    return max(1, backpressure // 2)
+    return granian_blocking_threads(threads, backlog, processes)
 
 
 def serve(

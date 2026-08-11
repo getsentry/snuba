@@ -5,6 +5,12 @@ from functools import lru_cache
 
 _DEFAULT_QUERY_CONCURRENCY = 8
 
+# granian's own default and floor for the backlog (granian/cli.py and
+# granian/server/common.py). Mirrored rather than imported: granian does not
+# export them, and reading the env vars is how we learn what the CLI was given.
+_GRANIAN_DEFAULT_BACKLOG = 1024
+_GRANIAN_MIN_BACKLOG = 128
+
 # Bounds the damage a bogus env value can do, since pool sizes derive from this.
 _MAX_QUERY_CONCURRENCY = 128
 
@@ -19,6 +25,26 @@ def _positive_int_env(name: str) -> int | None:
     except ValueError:
         return None
     return value if value > 0 else None
+
+
+def granian_blocking_threads(
+    threads: int | None,
+    backlog: int = _GRANIAN_DEFAULT_BACKLOG,
+    workers: int = 1,
+    backpressure: int | None = None,
+) -> int:
+    """The number of WSGI blocking threads granian will actually run.
+
+    Mirrors ``granian/server/common.py``: the backlog has a floor of 128,
+    backpressure defaults to ``backlog // workers``, and a WSGI worker runs
+    ``backpressure // 2`` blocking threads. The defaults here are granian's own,
+    so a caller that knows only some of the values gets what granian would do
+    with the rest.
+    """
+    if threads is not None:
+        return max(1, threads)
+    backpressure = max(1, backpressure or max(_GRANIAN_MIN_BACKLOG, backlog) // max(1, workers))
+    return max(1, backpressure // 2)
 
 
 def declare_query_concurrency(concurrency: int) -> None:
@@ -58,16 +84,19 @@ def process_query_concurrency() -> int:
     )
 
     if concurrency is None:
-        # Mirror granian: blocking_threads is backpressure // 2, and
-        # backpressure is backlog // workers.
+        backlog = _positive_int_env("GRANIAN_BACKLOG")
+        workers = _positive_int_env("GRANIAN_WORKERS")
         backpressure = _positive_int_env("GRANIAN_BACKPRESSURE")
-        if backpressure is None:
-            backlog = _positive_int_env("GRANIAN_BACKLOG")
-            workers = _positive_int_env("GRANIAN_WORKERS")
-            if backlog is not None and workers is not None:
-                backpressure = backlog // workers
-        if backpressure is not None:
-            concurrency = max(1, backpressure // 2)
+        # Any one of them means granian is driving, and it defaults the rest --
+        # so requiring the full set would size to _DEFAULT_QUERY_CONCURRENCY
+        # against a granian running many times that.
+        if backlog is not None or workers is not None or backpressure is not None:
+            concurrency = granian_blocking_threads(
+                None,
+                backlog if backlog is not None else _GRANIAN_DEFAULT_BACKLOG,
+                workers if workers is not None else 1,
+                backpressure,
+            )
 
     if concurrency is None:
         # Lazy import: snuba.settings would otherwise cycle back through here.
