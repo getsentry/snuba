@@ -52,10 +52,13 @@ AND timestamp < toDateTime(%(end_datetime)s)"""
         else:
             cluster_name = None
         query = self._get_query(cluster_name)
-        logger.info(f"Executing query: {query}")
+        params = self._get_params()
+        # Log the params too: they are bound rather than interpolated, so the
+        # query text alone no longer says what this deleted.
+        logger.info(f"Executing query: {query} with params: {params!r}")
         result = connection.execute(
             query=query,
-            params=self._get_params(),
+            params=params,
             settings={"mutations_sync": 0, "lightweight_deletes_sync": 0},
         )
 

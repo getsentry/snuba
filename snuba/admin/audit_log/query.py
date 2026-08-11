@@ -31,6 +31,10 @@ def audit_log(fn: Callable[..., Return]) -> Callable[..., Return]:
 
     Expects the wrapped function to take ``query`` and ``user`` as the first
     two positional arguments. Additional args/kwargs are forwarded unchanged.
+
+    A ``params`` keyword is recorded alongside the query. Values bound as driver
+    parameters never appear in the query text, so without this the audit record
+    would show `referrer = %(referrer)s` and not what was actually filtered on.
     """
 
     @wraps(fn)
@@ -38,6 +42,9 @@ def audit_log(fn: Callable[..., Return]) -> Callable[..., Return]:
         data: MutableMapping[str, str | int] = {
             "query": query,
         }
+        params = kwargs.get("params")
+        if params:
+            data["params"] = repr(params)
         audit_log_notify = partial(
             __query_audit_log_notification_client.record,
             user=user,

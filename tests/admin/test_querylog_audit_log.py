@@ -27,6 +27,42 @@ def test_audit_log_success() -> None:
     assert "end_timestamp" in log
 
 
+def test_audit_log_records_bound_params() -> None:
+    """Bound values never reach the query text, so the record must carry them.
+
+    Without this the audit trail shows `referrer = %(referrer)s` and not what
+    the operator actually filtered on.
+    """
+    with capture_logs() as cap_logs:
+
+        @audit_log
+        def query_with_params(
+            query: str, user: str, params: dict[str, str] | None = None
+        ) -> ClickhouseResult:
+            return ClickhouseResult([])
+
+        query_with_params(
+            "SELECT * FROM querylog_dist WHERE referrer = %(referrer)s",
+            "test_user",
+            params={"referrer": "api.organization-events"},
+        )
+
+    log = cap_logs[0]
+    assert "api.organization-events" in log["params"]
+
+
+def test_audit_log_omits_params_when_absent() -> None:
+    with capture_logs() as cap_logs:
+
+        @audit_log
+        def query_without_params(query: str, user: str) -> ClickhouseResult:
+            return ClickhouseResult([])
+
+        query_without_params("SELECT 1", "test_user")
+
+    assert "params" not in cap_logs[0]
+
+
 def test_audit_log_failure() -> None:
     with capture_logs() as cap_logs:
 
