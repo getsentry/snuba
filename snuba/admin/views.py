@@ -24,7 +24,7 @@ from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_r
 from snuba.admin.cardinality_analyzer.cardinality_analyzer import run_metrics_query
 from snuba.admin.clickhouse.clusters import get_cluster_info
 from snuba.admin.clickhouse.common import InvalidCustomQuery, InvalidNodeError
-from snuba.admin.clickhouse.copy_tables import copy_tables
+from snuba.admin.clickhouse.copy_tables import InvalidClusterName, copy_tables
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_cardinality_analyzer_queries import (
@@ -505,6 +505,18 @@ def copy_table_query() -> Response:
                     "error": {
                         "type": "request",
                         "message": f"Target host is invalid: {err.args[0]}",
+                    }
+                }
+            ),
+            400,
+        )
+    except InvalidClusterName as err:
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "request",
+                        "message": err.message or "Invalid cluster name",
                     }
                 }
             ),

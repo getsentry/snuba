@@ -85,3 +85,45 @@ def test_comment_tokens_outside_literals_rejected() -> None:
         validate_ro_query("SELECT * FROM my_table -- drop everything")
     with pytest.raises(InvalidCustomQuery):
         validate_ro_query("SELECT * FROM my_table /* bad */")
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "SELECT * FROM url('http://169.254.169.254/latest/meta-data/', CSV, 'a String')",
+        "SELECT * FROM remote('other-host:9000', system.users)",
+        "SELECT * FROM mysql('host:3306', 'db', 'table', 'user', 'password')",
+        "SELECT * FROM s3('http://host/key', 'CSV', 'a String')",
+        "SELECT * FROM merge('default', '.*')",
+        "SELECT * FROM numbers(10)",
+        # Not sitting directly after FROM.
+        "SELECT * FROM my_table, url('http://evil/x', CSV, 'a String')",
+        "SELECT * FROM my_table WHERE x IN (SELECT * FROM remote('h:9000', system.users))",
+        "SELECT * FROM\n  URL('http://evil/x', CSV, 'a String')",
+        # Following an allowed one must not end the scan.
+        "SELECT * FROM clusterAllReplicas('c', my_table) JOIN merge('default', '.*') USING x",
+    ],
+)
+def test_table_functions_rejected(query: str) -> None:
+    with pytest.raises(InvalidCustomQuery):
+        validate_ro_query(query, allowed_tables={"my_table"})
+    # Rejected for the unscoped tools (tracing) too, not just the scoped ones.
+    with pytest.raises(InvalidCustomQuery):
+        validate_ro_query(query)
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "SELECT * FROM my_table ARRAY JOIN arrayMap(x -> x + 1, nums) AS n",
+        "SELECT * FROM my_table LEFT ARRAY JOIN arrayZip(a, b) AS z",
+        "SELECT * FROM (SELECT * FROM my_table) sub",
+        "SELECT count() FROM my_table WHERE referrer IN ('a', 'b')",
+        "SELECT * FROM my_table WHERE referrer = 'url(http://x)'",
+        # Fanning out across replicas stays available to the admin tools.
+        "SELECT * FROM clusterAllReplicas('c', my_table)",
+        "SELECT * FROM cluster('c', my_table)",
+    ],
+)
+def test_legitimate_queries_still_allowed(query: str) -> None:
+    validate_ro_query(query, allowed_tables={"my_table"})
