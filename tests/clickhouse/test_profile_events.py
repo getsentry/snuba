@@ -79,7 +79,8 @@ def test_gather_profile_events_matches_legacy_payload_shape() -> None:
     assert "SELECT" in sql
     assert "hostname() AS host" in sql
     assert "ProfileEvents" in sql
-    assert "query_id IN ('query1')" in sql
+    assert "query_id IN %(query_ids)s" in sql
+    assert mock_connection.execute.call_args.kwargs["params"] == {"query_ids": ["query1"]}
     assert "now() - INTERVAL 5 MINUTE" in sql
 
     assert trace_output.profile_events_meta == [[("ProfileEvents", "Map(String, UInt64)")]]
@@ -146,7 +147,7 @@ def test_gather_profile_events_appends_multiple_rows_per_host() -> None:
     }
 
 
-def test_gather_profile_events_escapes_query_ids() -> None:
+def test_gather_profile_events_binds_query_ids() -> None:
     trace_output = MagicMock()
     # Attacker-controlled trace_logs can put quotes/SQL into the parsed query_id.
     malicious_id = "x' OR 1=1 --"
@@ -173,9 +174,11 @@ def test_gather_profile_events_escapes_query_ids() -> None:
     ):
         gather_profile_events(trace_output, "test_storage")
 
+    # Bound rather than escaped, so it never reaches the statement at all.
     sql = mock_connection.execute.call_args.kwargs["query"]
     assert "x' OR 1=1 --" not in sql
-    assert r"'x\' OR 1=1 --'" in sql
+    assert "OR 1=1" not in sql
+    assert mock_connection.execute.call_args.kwargs["params"] == {"query_ids": [malicious_id]}
 
 
 def test_gather_profile_events_waits_for_all_query_ids() -> None:
