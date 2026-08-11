@@ -25,7 +25,6 @@ from snuba.admin.eap_query_analysis.analysis import (
     EapQueryAnalysisRequest,
     ResourceTotals,
     _build_fetch_sql,
-    _escape_literal,
     _infer_request_class,
     _parse_request_body,
     analyze_eap_queries,
@@ -374,4 +373,36 @@ def test_build_fetch_sql_filters_estimation_and_duplicates() -> None:
     assert "positionCaseInsensitive(referrer, 'eap_items') > 0" in sql
     assert "LIKE" not in sql
     assert "ESCAPE" not in sql
-    assert _escape_literal("a'b\\c") == "a\\'b\\\\c"
+
+
+def test_build_fetch_sql_escapes_referrer_filters() -> None:
+    req = EapQueryAnalysisRequest.from_dict(
+        {
+            "hours": 1,
+            "referrer": "a' OR 1=1 --",
+            "referrer_contains": "b'\\c",
+        }
+    )
+    with patch(
+        "snuba.admin.eap_query_analysis.analysis._schema_table_name",
+        return_value="querylog_local",
+    ):
+        sql = _build_fetch_sql(req)
+
+    assert "referrer = 'a\\' OR 1=1 --'" in sql
+    assert "positionCaseInsensitive(referrer, 'b\\'\\\\c')" in sql
+    # The injected quote never terminates the literal it sits in.
+    assert "OR 1=1" not in sql.replace("'a\\' OR 1=1 --'", "")
+
+
+def test_request_coerces_non_string_referrers() -> None:
+    req = EapQueryAnalysisRequest.from_dict(
+        {"referrer": ["a"], "referrer_contains": {"b": 1}},
+    )
+    assert isinstance(req.referrer, str)
+    assert isinstance(req.referrer_contains, str)
+    with patch(
+        "snuba.admin.eap_query_analysis.analysis._schema_table_name",
+        return_value="querylog_local",
+    ):
+        _build_fetch_sql(req)

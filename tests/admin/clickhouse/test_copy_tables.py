@@ -1,13 +1,17 @@
 import os
+from typing import Any, cast
 
 import pytest
 
 from snuba.admin.clickhouse.common import _get_storage, get_clusterless_node_connection
 from snuba.admin.clickhouse.copy_tables import (
+    InvalidClusterName,
     copy_tables,
     get_create_table_statements,
+    validate_cluster_name,
     verify_tables_on_replicas,
 )
+from snuba.clickhouse.native import ClickhousePool, ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.migrations import table_engines
 from snuba.migrations.groups import MigrationGroup
@@ -97,6 +101,74 @@ def run_migrations() -> None:
 
     migration_group = MigrationGroup("outcomes")
     Runner().run_all(force=True, group=migration_group)
+
+
+class FakeConnection:
+    """Records the SQL it is handed instead of talking to ClickHouse."""
+
+    def __init__(self, results: list[list[Any]]) -> None:
+        self.queries: list[str] = []
+        self.results = results
+
+    def execute(self, query: str, *args: Any, **kwargs: Any) -> ClickhouseResult:
+        self.queries.append(query)
+        return ClickhouseResult(self.results)
+
+    def as_pool(self) -> ClickhousePool:
+        return cast(ClickhousePool, self)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "test_cluster",
+        "cluster_one_sh",
+        "my-cluster-1",
+        "c" * 128,
+    ],
+)
+def test_validate_cluster_name_accepts_identifiers(name: str) -> None:
+    assert validate_cluster_name(name) == name
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        # Rewrites the verify query and the ON CLUSTER clause respectively.
+        "x', system.tables) WHERE 1=1 UNION ALL SELECT hostName(), groupArray(name) "
+        "FROM clusterAllReplicas('c', system.users) GROUP BY 1 --",
+        "c' AS SELECT * FROM system.users --",
+        "",
+        "c" * 129,
+        "has space",
+        "quote'",
+        "back\\slash",
+        "semi;colon",
+    ],
+)
+def test_validate_cluster_name_rejects_injection(name: str) -> None:
+    with pytest.raises(InvalidClusterName):
+        validate_cluster_name(name)
+
+
+def test_verify_tables_on_replicas_escapes_identifiers() -> None:
+    connection = FakeConnection([["host1", ["t"]]])
+    verify_tables_on_replicas(connection.as_pool(), "test_cluster", "my'db", ["t"])
+
+    query = connection.queries[0]
+    assert "clusterAllReplicas('test_cluster', system.tables)" in query
+    assert "WHERE database = 'my\\'db'" in query
+
+
+def test_create_table_statements_escape_cluster_name() -> None:
+    connection = FakeConnection([["CREATE TABLE db.t (a UInt64) ENGINE = MergeTree"]])
+    statements = get_create_table_statements(
+        tables=["t"],
+        source_connection=connection.as_pool(),
+        source_database="db",
+        cluster_name="test_cluster",
+    )
+    assert "ON CLUSTER 'test_cluster'" in statements[0].statement
 
 
 @pytest.mark.parametrize("table, storage_name, statement, is_mergetree", TABLE_DATA)

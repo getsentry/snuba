@@ -401,6 +401,66 @@ def _strip_sql_string_literals(sql_query: str) -> str:
     return "".join(out)
 
 
+# sql_metadata does not report table functions in Parser.tables, so a query
+# sourced only from one reaches the allowed_tables check with an empty table set
+# and passes it. ARRAY JOIN is excluded: it takes an expression list, not a table.
+_TABLE_POSITION_CALL_RE = re.compile(r"(?<!array )\b(?:from|join)\s+(\w+)\s*\(")
+
+# Fanning a read out across replicas is normal in these tools, so cluster and
+# clusterAllReplicas stay allowed -- as they already are in the system-queries
+# validator. Note this leaves allowed_tables reachable through them.
+_ALLOWED_TABLE_FUNCTIONS = frozenset({"cluster", "clusterallreplicas"})
+
+# Table functions reaching off the node: network and filesystem. Rejected
+# anywhere rather than only in a table position, so they cannot hide in a
+# comma-joined source or a subquery. None collide with a scalar function.
+_EXTERNAL_TABLE_FUNCTIONS = (
+    "azureBlobStorage",
+    "azureBlobStorageCluster",
+    "deltaLake",
+    "executable",
+    "file",
+    "fileCluster",
+    "gcs",
+    "hdfs",
+    "hdfsCluster",
+    "hudi",
+    "iceberg",
+    "icebergS3",
+    "jdbc",
+    "mongodb",
+    "mysql",
+    "odbc",
+    "postgresql",
+    "redis",
+    "remote",
+    "remoteSecure",
+    "s3",
+    "s3Cluster",
+    "sqlite",
+    "url",
+    "urlCluster",
+)
+_EXTERNAL_TABLE_FUNCTION_RE = re.compile(
+    r"\b(?:" + "|".join(fn.lower() for fn in _EXTERNAL_TABLE_FUNCTIONS) + r")\s*\("
+)
+
+
+def _reject_table_functions(normalized_query: str) -> None:
+    """Reject table functions. Query must be lower cased, literal stripped and
+    whitespace collapsed for the patterns above to match reliably."""
+    external = _EXTERNAL_TABLE_FUNCTION_RE.search(normalized_query)
+    if external:
+        raise InvalidCustomQuery(
+            f"table function {external.group().rstrip('( ')} is not allowed in the query"
+        )
+
+    for match in _TABLE_POSITION_CALL_RE.finditer(normalized_query):
+        name = match.group(1)
+        if name not in _ALLOWED_TABLE_FUNCTIONS:
+            raise InvalidCustomQuery(f"table function {name} is not allowed in the query")
+
+
 def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) -> None:
     """
     Validates that the query is a safe read-only query.
@@ -441,6 +501,9 @@ def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) ->
                 raise InvalidCustomQuery(f"{kw} is not allowed in the query")
         elif kw in lowered:
             raise InvalidCustomQuery(f"{kw} is not allowed in the query")
+
+    # Must run before the allowed_tables check below, which cannot see them.
+    _reject_table_functions(" ".join(lowered.split()))
 
     parsed = Parser(sql_query.lower())
 

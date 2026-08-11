@@ -21,6 +21,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableR
 
 from snuba.admin.clickhouse.common import get_ro_query_node_connection
 from snuba.admin.clickhouse.querylog import run_querylog_query
+from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.schemas.tables import TableSchema
@@ -104,12 +105,16 @@ class EapQueryAnalysisRequest:
 
         include_profile_events = bool(data.get("include_profile_events", True))
 
+        # Both fields end up in a SQL string literal, so keep them str.
+        referrer = data.get("referrer") or None
+        referrer_contains = data.get("referrer_contains") or None
+
         return cls(
             hours=hours,
             max_rows=max_rows,
-            referrer=data.get("referrer") or None,
+            referrer=str(referrer) if referrer is not None else None,
             organization_id=organization_id,
-            referrer_contains=data.get("referrer_contains") or None,
+            referrer_contains=(str(referrer_contains) if referrer_contains is not None else None),
             include_profile_events=include_profile_events,
         )
 
@@ -256,11 +261,6 @@ def _schema_table_name() -> str:
     return schema.get_table_name()
 
 
-def _escape_literal(value: str) -> str:
-    """Escape a string for safe inclusion in a single-quoted SQL literal."""
-    return value.replace("\\", "\\\\").replace("'", "\\'")
-
-
 def _build_fetch_sql(req: EapQueryAnalysisRequest) -> str:
     table = _schema_table_name()
     dataset_list = ", ".join(f"'{d}'" for d in _EAP_DATASETS)
@@ -269,13 +269,13 @@ def _build_fetch_sql(req: EapQueryAnalysisRequest) -> str:
         f"dataset IN ({dataset_list})",
     ]
     if req.referrer:
-        where.append(f"referrer = '{_escape_literal(req.referrer)}'")
+        where.append(f"referrer = {escape_string(req.referrer)}")
     if req.referrer_contains:
         # Use positionCaseInsensitive for literal substring matching. ClickHouse
         # 25.x does not support LIKE ... ESCAPE, and LIKE would treat _/% as
         # wildcards for inputs like "eap_items".
         where.append(
-            f"positionCaseInsensitive(referrer, '{_escape_literal(req.referrer_contains)}') > 0"
+            f"positionCaseInsensitive(referrer, {escape_string(req.referrer_contains)}) > 0"
         )
     if req.organization_id is not None:
         where.append(f"organization = {int(req.organization_id)}")
@@ -432,7 +432,7 @@ def _fetch_profile_events(query_ids: list[str], hours: int) -> dict[str, dict[st
         if len(raw) == 32:
             dashed.append(f"{raw[0:8]}-{raw[8:12]}-{raw[12:16]}-{raw[16:20]}-{raw[20:32]}")
     all_ids = list({*normalized, *dashed})
-    id_list = ", ".join(f"'{_escape_literal(qid)}'" for qid in all_ids)
+    id_list = ", ".join(escape_string(qid) for qid in all_ids)
 
     cluster_name = _eap_profile_cluster_name()
     sql_cluster = None
@@ -441,7 +441,7 @@ def _fetch_profile_events(query_ids: list[str], hours: int) -> dict[str, dict[st
             SELECT
                 replaceAll(toString(query_id), '-', '') AS qid,
                 ProfileEvents
-            FROM clusterAllReplicas('{_escape_literal(cluster_name)}', system.query_log)
+            FROM clusterAllReplicas({escape_string(cluster_name)}, system.query_log)
             WHERE type = 'QueryFinish'
               AND event_time > now() - INTERVAL {int(hours)} HOUR
               AND replaceAll(toString(query_id), '-', '') IN ({id_list})
