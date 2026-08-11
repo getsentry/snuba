@@ -890,3 +890,37 @@ def test_stream_failure_mapped() -> None:
     client.query.side_effect = StreamFailureError("stream died")
     with pytest.raises(ClickhouseError):
         _make_pool(client).execute("SELECT 1")
+
+
+def test_shared_pools_reset_after_fork() -> None:
+    from clickhouse_connect.driver.httputil import all_managers
+
+    import snuba.clickhouse.connect as connect_mod
+
+    connect_mod._close_pools()
+    mgr = mock.Mock()
+    all_managers[mgr] = 0
+    connect_mod._pool_managers[(None, False)] = mgr
+
+    connect_mod._reset_pools_after_fork()
+
+    assert connect_mod._pool_managers == {}
+    assert mgr not in all_managers
+    mgr.clear.assert_not_called()
+
+
+def test_close_pools_releases_sockets() -> None:
+    from clickhouse_connect.driver.httputil import all_managers
+
+    import snuba.clickhouse.connect as connect_mod
+
+    connect_mod._close_pools()
+    mgr = mock.Mock()
+    all_managers[mgr] = 0
+    connect_mod._pool_managers[(None, False)] = mgr
+
+    connect_mod._close_pools()
+
+    mgr.clear.assert_called_once()
+    assert mgr not in all_managers
+    assert connect_mod._pool_managers == {}

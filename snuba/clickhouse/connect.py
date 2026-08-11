@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import atexit
 import json
+import os
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
 from datetime import datetime
@@ -17,7 +19,7 @@ from clickhouse_connect.driver.exceptions import (
     OperationalError,
     StreamFailureError,
 )
-from clickhouse_connect.driver.httputil import get_pool_manager
+from clickhouse_connect.driver.httputil import all_managers, get_pool_manager
 from sentry_sdk import traces
 from urllib3.poolmanager import PoolManager
 
@@ -67,6 +69,30 @@ def _shared_pool(ca_certs: str | None, verify: bool) -> PoolManager:
             )
             _pool_managers[key] = manager
         return manager
+
+
+def _reset_pools_after_fork() -> None:
+    """Drop inherited pool refs in the child without closing parent FDs."""
+    global _pool_lock, _pool_managers
+    for manager in _pool_managers.values():
+        all_managers.pop(manager, None)
+    _pool_managers = {}
+    _pool_lock = Lock()
+
+
+def _close_pools() -> None:
+    """Release sockets held by the process-wide pool managers."""
+    global _pool_managers
+    with _pool_lock:
+        for manager in _pool_managers.values():
+            with suppress(Exception):
+                manager.clear()
+            all_managers.pop(manager, None)
+        _pool_managers = {}
+
+
+os.register_at_fork(after_in_child=_reset_pools_after_fork)
+atexit.register(_close_pools)
 
 
 def _driver_params(params: Params) -> Sequence[Any] | dict[str, Any] | None:
