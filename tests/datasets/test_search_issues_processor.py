@@ -238,6 +238,14 @@ class TestSearchIssuesMessageProcessor:
         assert "http_method" in insert_row and insert_row["http_method"] == "GET"
         assert "http_referer" in insert_row and insert_row["http_referer"] == "http://example.com"
 
+    def test_extract_http_null_request(self, message_base):
+        message_base["data"]["request"] = None
+        processed = self.process_message(message_base)
+        self.assert_required_columns(processed)
+        insert_row = processed.rows[0]
+        assert "http_method" in insert_row and insert_row["http_method"] is None
+        assert "http_referer" in insert_row and insert_row["http_referer"] is None
+
     def test_extract_sdk(self, message_base):
         message_base["data"]["sdk"] = {
             "version": "1.2.3",

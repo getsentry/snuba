@@ -155,7 +155,7 @@ class SearchIssuesMessageProcessor(DatasetMessageProcessor):
     def _process_request_data(
         self, event_data: IssueEventData, processed: MutableMapping[str, Any]
     ) -> None:
-        request = event_data.get("request", {})
+        request = event_data.get("request") or {}
         http_data: MutableMapping[str, Any] = {}
         extract_http(http_data, request)
         processed["http_method"] = http_data["http_method"]
