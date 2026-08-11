@@ -4,7 +4,7 @@ import json
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
 from datetime import datetime
-from threading import Lock, local
+from threading import RLock
 from typing import Any, NamedTuple
 
 import clickhouse_connect
@@ -118,20 +118,23 @@ class ClientKey(NamedTuple):
 
 
 class ClickhouseClientManager:
-    """Owns the ClickHouse HTTP clients and the sockets behind them.
+    """Process-wide cache of clickhouse-connect clients and their sockets.
 
     Built and held by :class:`~snuba.clusters.cluster.ConnectionCache`, which
-    hands one to every pool it creates.
+    hands one to every connect-driver façade it creates.
 
-    Clients are thread-local, so a client only ever has one query in flight and
-    nothing has to coordinate access to its response stream. That is cheap
-    because clients own no sockets: they all draw on one urllib3 pool manager,
-    kept per TLS config since urllib3 fixes cert verification at that level.
+    One :class:`Client` per endpoint and socket timeout is enough: without
+    ClickHouse sessions the driver is safe for concurrent ``query()`` calls,
+    and each call checks a socket out of a shared urllib3 pool manager (kept
+    per TLS config, since urllib3 fixes cert verification at that level).
+    ``maxsize`` on that manager is the process query concurrency, so the
+    socket ceiling matches the number of threads that can actually run a
+    query. Profile settings never live on the client -- they ride per request.
     """
 
     def __init__(self) -> None:
-        self.__lock = Lock()
-        self.__local = local()
+        self.__lock = RLock()
+        self.__clients: dict[ClientKey, Client] = {}
         self.__pool_managers: dict[tuple[str | None, bool], PoolManager] = {}
 
     def _pool_manager(self, ca_certs: str | None, verify: bool) -> PoolManager:
@@ -154,13 +157,16 @@ class ClickhouseClientManager:
             return manager
 
     def get_client(self, key: ClientKey) -> Client:
-        clients: dict[ClientKey, Client] | None = getattr(self.__local, "clients", None)
-        if clients is None:
-            clients = self.__local.clients = {}
-        client = clients.get(key)
-        if client is None:
-            client = clients[key] = self._build_client(key)
-        return client
+        client = self.__clients.get(key)
+        if client is not None:
+            return client
+        with self.__lock:
+            client = self.__clients.get(key)
+            if client is None:
+                # Build under the lock so concurrent first use cannot orphan a
+                # second client (and a second handshake) for the same key.
+                client = self.__clients[key] = self._build_client(key)
+            return client
 
     def _build_client(self, key: ClientKey) -> Client:
         return clickhouse_connect.get_client(
@@ -178,11 +184,10 @@ class ClickhouseClientManager:
             # No `settings=`: profile settings are per query, not per client.
             pool_mgr=self._pool_manager(key.ca_certs, key.verify),
             query_limit=0,
-            # One query in flight per client, so the driver can own the id. This
-            # covers insert, explain and migrations, which pass none.
+            # Covers insert, explain and migrations, which pass none.
             autogenerate_query_id=True,
-            # Sessions would serialize too, but are ClickHouse state with their
-            # own limits (max_sessions_for_user).
+            # Sessions would serialize concurrent queries on this client and
+            # take ClickHouse state (max_sessions_for_user). Off on purpose.
             autogenerate_session_id=False,
             compress="lz4",
         )
@@ -198,8 +203,8 @@ class ClickhouseClientManager:
         for manager in self.__pool_managers.values():
             all_managers.pop(manager, None)
         self.__pool_managers = {}
-        self.__local = local()
-        self.__lock = Lock()
+        self.__clients = {}
+        self.__lock = RLock()
 
     def close(self) -> None:
         """Close every socket this process holds.
@@ -214,7 +219,7 @@ class ClickhouseClientManager:
                     manager.clear()
                 all_managers.pop(manager, None)
             self.__pool_managers.clear()
-        self.__local = local()
+            self.__clients.clear()
 
 
 def _resolve_pool_size() -> int:
@@ -245,32 +250,23 @@ def _coerce_temporal(value: Any, ch_type: str) -> Any:
 
 class ClickhouseConnectPool(ClickhousePool):
     """
-    HTTP based ClickHouse client backed by ``clickhouse-connect``.
+    HTTP ClickHouse driver backed by ``clickhouse-connect``.
 
-    It subclasses :class:`snuba.clickhouse.native.ClickhousePool` and overrides
-    the ``execute`` / ``execute_robust`` / ``close`` interface so it is a true
-    drop-in replacement. The decision of which pool to instantiate is made by
-    the connection cache (see :mod:`snuba.clusters.cluster`), one level above
-    the individual drivers.
+    Drop-in for :class:`snuba.clickhouse.native.ClickhousePool`. It is not a
+    pool: it holds no client and no socket. It knows *where* to connect and
+    *with which profile settings*, and asks the process-wide
+    :class:`ClickhouseClientManager` for the cached client for its endpoint
+    and socket timeout. The manager (and the shared urllib3 socket pool under
+    it) belongs to :class:`~snuba.clusters.cluster.ConnectionCache`.
 
-    This class is the per-profile face of a shared resource. It holds no client
-    and no socket of its own: it knows *where* to connect and *with which
-    settings*, and asks the :class:`ClickhouseClientManager` it was given for
-    this thread's client for its endpoint and socket timeout. That manager
-    belongs to the :class:`~snuba.clusters.cluster.ConnectionCache` that built
-    this pool. Many pools -- one per profile per node --
-    therefore collapse onto a handful of clients per thread, and every thread
-    draws from one process-wide socket pool.
+    Two rules make sharing one client across profiles safe:
 
-    Two rules make that sharing safe, and both live here:
-
-    * The profile's ClickHouse settings are applied **per query**, never baked
-      into the client, so profiles that share a timeout (QUERY and TRACING) do
-      not leak settings into each other.
-    * Every request **drains its response** before returning, so the socket
-      going back to urllib3 has nothing left on it. A half-read socket returned
-      to the pool is precisely how one request ends up decoding the tail of
-      another request's response.
+    * Profile ClickHouse settings are applied **per query**, never baked into
+      the client, so QUERY and TRACING (same 25s timeout) cannot leak
+      ``readonly`` into each other.
+    * Every streaming response is **drained** before return
+      (``QueryResult.close``), so the urllib3 socket goes back clean. A
+      half-read socket is how one request ends up decoding another's body.
     """
 
     def __init__(
@@ -731,6 +727,6 @@ class ClickhouseConnectPool(ClickhousePool):
         )
 
     def close(self) -> None:
-        # Clients belong to the manager and are shared with other pools on the
-        # same endpoint, so tearing them down is the manager's call.
+        # Clients and sockets live on the process-wide manager; façades share
+        # them, so teardown is the manager's call.
         pass

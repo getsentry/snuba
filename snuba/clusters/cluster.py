@@ -227,11 +227,11 @@ CacheKey = tuple[
 class ConnectionCache:
     """The process-wide owner of every ClickHouse connection.
 
-    One object owns the whole stack: pools keyed by node, profile and driver;
-    the HTTP clients they query through; and the sockets behind those clients.
-    Each layer is cached differently -- pools per profile, clients per endpoint
-    and timeout, sockets per host -- but one owner means one place to reset at
-    fork and one place to close.
+    Owns driver façades (keyed by node, profile, and driver), and — for the
+    HTTP path — one :class:`~snuba.clickhouse.connect.ClickhouseClientManager`
+    that caches clients by endpoint and socket timeout on a shared urllib3
+    socket pool. One owner means one place to reset at fork and one place to
+    close.
 
     The client and socket layers stay in :mod:`snuba.clickhouse.connect` rather
     than being inlined here, which is what lets the native path run without
@@ -295,12 +295,13 @@ class ConnectionCache:
         ``native_port``). Both variants are cached side by side (the driver is
         part of the cache key).
 
-        This is the single place pools are instantiated and the single place the
-        driver is selected, so every caller — the cluster query/node connections
-        as well as the admin and CLI by-host helpers — goes through it and gets
-        one shared, runtime-selected pool behind the abstract
-        :class:`ClickhousePool` type. Pool sizing is left to the pools themselves
-        (the connect pool reads the ``clickhouse_connect_pool_size`` sentry-option).
+        This is the single place driver façades are instantiated and the single
+        place the driver is selected, so every caller — the cluster query/node
+        connections as well as the admin and CLI by-host helpers — goes through
+        it and gets one runtime-selected façade behind the abstract
+        :class:`ClickhousePool` type. On the HTTP path, clients and sockets are
+        cached on the shared client manager (sized from process query
+        concurrency); the native path still owns its own connection queue.
         """
         use_connect = use_clickhouse_connect_driver()
         with self.__lock:

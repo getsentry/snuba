@@ -46,7 +46,7 @@ class FakeQueryResult:
 
 
 class FakeClientManager:
-    """Stands in for the process-wide manager, handing out one client."""
+    """Stands in for the process-wide client cache, handing out one client."""
 
     def __init__(self, client: mock.Mock) -> None:
         self.client = client
@@ -58,8 +58,8 @@ class FakeClientManager:
 
 
 def _make_pool(client: mock.Mock, **kwargs: Any) -> ClickhouseConnectPool:
-    # The pool is given its manager, so a fake one is all it takes to hand every
-    # request the same mock -- no global to patch.
+    # The façade is given its manager, so a fake one hands every request the
+    # same mock -- no global to patch.
     return ClickhouseConnectPool(
         host="host",
         user="test",
@@ -1056,17 +1056,20 @@ def _managed_pool(manager: Any, **kwargs: Any) -> ClickhouseConnectPool:
     )
 
 
-def test_each_thread_gets_its_own_client() -> None:
-    # Each thread gets its own client, so none ever has two queries in flight.
-    # The barrier forces the requests to overlap, so sharing one would fail.
+def test_concurrent_threads_share_one_client() -> None:
+    # Without sessions, one process-wide client per endpoint is enough: concurrent
+    # queries check distinct sockets out of the shared pool. The barrier forces
+    # the requests to overlap so a per-thread cache would still mint two clients.
     import threading
 
     from snuba.clickhouse.connect import ClickhouseClientManager
 
     both_inside = threading.Barrier(2, timeout=5)
     seen: list[Any] = []
+    built: list[Any] = []
 
     def build(key: Any) -> Any:
+        built.append(key)
         client = mock.Mock()
         client.query.side_effect = lambda *a, **k: (
             both_inside.wait(),
@@ -1094,13 +1097,14 @@ def test_each_thread_gets_its_own_client() -> None:
         thread.join(timeout=10)
 
     assert not failures
+    assert len(built) == 1
     assert len(seen) == 2
-    assert seen[0] is not seen[1]
+    assert seen[0] is seen[1]
 
 
-def test_a_thread_reuses_its_own_client() -> None:
-    # Thread-local, not per-request: the same thread must not rebuild a client
-    # for every query, or the pool churns connections under normal load.
+def test_client_is_reused_across_queries() -> None:
+    # Process-wide cache, not per-request: rebuilding a client for every query
+    # would redo the server handshake under normal load.
     from snuba.clickhouse.connect import ClickhouseClientManager
 
     built = []
@@ -1123,8 +1127,7 @@ def test_a_thread_reuses_its_own_client() -> None:
 
 
 def test_driver_stamps_the_query_id() -> None:
-    # With one query in flight per client, the driver can own the query id, so
-    # paths that pass none (insert, explain, migrations) are still identifiable
+    # Paths that pass none (insert, explain, migrations) stay identifiable
     # client-side rather than only by whatever ClickHouse assigned.
     import clickhouse_connect
 
@@ -1139,12 +1142,13 @@ def test_driver_stamps_the_query_id() -> None:
 
     _, kwargs = get_client.call_args
     assert kwargs["autogenerate_query_id"] is True
+    assert kwargs["autogenerate_session_id"] is False
 
 
 def test_one_client_per_endpoint_and_timeout() -> None:
-    # Within a thread, profiles that differ only in settings collapse onto one
-    # client; a different socket timeout is a different client, because the
-    # timeout is baked in at construction.
+    # Profiles that differ only in settings collapse onto one client; a
+    # different socket timeout is a different client, because the timeout is
+    # baked in at construction.
     from snuba.clickhouse.connect import ClickhouseClientManager
 
     built: list[Any] = []
@@ -1295,9 +1299,8 @@ def test_every_path_applies_the_profile_settings(
 
 
 def test_pool_manager_is_created_once_under_concurrent_first_use() -> None:
-    # The pool-manager map is shared even though clients are not. Two managers
-    # for one key would be two socket pools, each with its own maxsize, so the
-    # process-wide ceiling would stop holding.
+    # Two managers for one TLS key would be two socket pools, each with its own
+    # maxsize, so the process-wide ceiling would stop holding.
     import threading
     import time
 
@@ -1349,11 +1352,13 @@ def test_fork_drops_inherited_managers_without_closing_them() -> None:
     inherited = mock.Mock()
     all_managers[inherited] = 0
     manager._ClickhouseClientManager__pool_managers[(None, False)] = inherited  # type: ignore[attr-defined]
+    manager._ClickhouseClientManager__clients["k"] = mock.Mock()  # type: ignore[attr-defined]
 
     manager.reset_after_fork()
 
     assert inherited not in all_managers
     assert manager._ClickhouseClientManager__pool_managers == {}  # type: ignore[attr-defined]
+    assert manager._ClickhouseClientManager__clients == {}  # type: ignore[attr-defined]
     inherited.clear.assert_not_called()  # the parent is still using that socket
 
 

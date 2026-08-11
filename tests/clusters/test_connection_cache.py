@@ -1,4 +1,4 @@
-"""The ConnectionCache owns the whole connection stack: pools, clients, sockets.
+"""The ConnectionCache owns driver façades and the HTTP client/socket manager.
 
 Kept out of test_cluster.py because none of this needs a live ClickHouse, and
 that module's autouse fixture reloads the cluster module between tests.
@@ -34,16 +34,15 @@ def _get(cache: ConnectionCache, profile: ClickhouseClientSettings) -> object:
 
 
 def test_connection_cache_owns_the_client_manager() -> None:
-    # One owner for the whole stack: pools, the clients they query through, and
-    # the sockets behind those clients. The pool is handed the cache's manager
-    # rather than reaching for a global of its own.
+    # One owner for façades plus the HTTP client/socket manager. Each façade is
+    # handed the cache's manager rather than reaching for a global of its own.
     cache = ConnectionCache()
     with override_options("snuba", {"use_clickhouse_connect_driver": True}):
         pool = _get(cache, ClickhouseClientSettings.QUERY)
         again = _get(cache, ClickhouseClientSettings.TRACING)
 
-    # Different profiles, different pools -- but one manager, which is what lets
-    # them share a client when their timeouts match.
+    # Different profiles, different façades -- but one manager, which is what
+    # lets them share a client when their timeouts match.
     assert pool is not again
     manager = pool._ClickhouseConnectPool__client_manager  # type: ignore[attr-defined]
     assert again._ClickhouseConnectPool__client_manager is manager  # type: ignore[attr-defined]
@@ -60,9 +59,9 @@ def test_native_path_builds_no_client_manager() -> None:
 
 
 def test_fork_drops_pools_and_resets_clients() -> None:
-    # Pools and clients hold the parent's sockets. The child must not use them,
-    # and must not close them either -- the descriptors are shared. Dropping the
-    # references is enough; the child rebuilds lazily.
+    # Façades and clients reference the parent's sockets. The child must not use
+    # them, and must not close them either -- the descriptors are shared.
+    # Dropping the references is enough; the child rebuilds lazily.
     cache = ConnectionCache()
     inherited_pool = mock.Mock()
     cache._ConnectionCache__cache["key"] = inherited_pool  # type: ignore[attr-defined]
