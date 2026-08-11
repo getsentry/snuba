@@ -161,24 +161,33 @@ class ClickhouseConnectPool(ClickhousePool):
                 if self.send_receive_timeout is not None
                 else DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS
             )
-        return clickhouse_connect.get_client(
-            host=self.host,
-            port=self.port,
-            username=self.user,
-            password=self.password,
-            database=self.database,
-            interface="https" if self.secure else "http",
-            secure=self.secure,
-            verify=bool(self.verify),
-            ca_cert=self.ca_certs,
-            connect_timeout=connect_timeout,
-            send_receive_timeout=send_receive_timeout,
-            settings=dict(self.client_settings),
-            pool_mgr=_shared_pool(self.ca_certs, bool(self.verify)),
-            query_limit=0,
-            autogenerate_session_id=False,
-            compress="lz4",
-        )
+        with traces.start_span(
+            name="clickhouse client",
+            attributes={
+                SENTRY_OP: "db.clickhouse",
+                sentry_sdk.consts.SPANDATA.DB_SYSTEM: "clickhouse",
+                "server.address": self.host,
+                "server.port": str(self.port),
+            },
+        ):
+            return clickhouse_connect.get_client(
+                host=self.host,
+                port=self.port,
+                username=self.user,
+                password=self.password,
+                database=self.database,
+                interface="https" if self.secure else "http",
+                secure=self.secure,
+                verify=bool(self.verify),
+                ca_cert=self.ca_certs,
+                connect_timeout=connect_timeout,
+                send_receive_timeout=send_receive_timeout,
+                settings=dict(self.client_settings),
+                pool_mgr=_shared_pool(self.ca_certs, bool(self.verify)),
+                query_limit=0,
+                autogenerate_session_id=False,
+                compress="lz4",
+            )
 
     def _build_query_settings(
         self,
