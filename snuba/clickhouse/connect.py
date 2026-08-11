@@ -80,7 +80,10 @@ def _shared_pool(ca_certs: str | None, verify: bool) -> PoolManager:
                 maxsize=get_option(
                     "clickhouse_connect_pool_size", settings.CLICKHOUSE_MAX_POOL_SIZE
                 ),
-                num_pools=64,
+                # Distinct host:port pools retained before LRU eviction. Sized
+                # for the clusters we actually query, with a little headroom
+                # for admin by-node access.
+                num_pools=16,
             )
             _pool_managers[key] = manager
         return manager
