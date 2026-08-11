@@ -279,10 +279,10 @@ def test_timeouts_are_passed_through() -> None:
     assert kwargs["compress"] == "lz4"
 
 
-def test_send_receive_timeout_unbounded_when_profile_has_none() -> None:
+def test_send_receive_timeout_defaults_when_profile_has_none() -> None:
     import clickhouse_connect
 
-    from snuba.clickhouse.connect import UNBOUNDED_SEND_RECEIVE_TIMEOUT_SECONDS
+    from snuba.clickhouse.connect import DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS
 
     # A profile with no timeout (None) means "unbounded" on the native path; over
     # HTTP that maps to a large finite timeout, since clickhouse-connect can't
@@ -302,7 +302,7 @@ def test_send_receive_timeout_unbounded_when_profile_has_none() -> None:
         pool._new_client()
 
     _, kwargs = get_client.call_args
-    assert kwargs["send_receive_timeout"] == UNBOUNDED_SEND_RECEIVE_TIMEOUT_SECONDS
+    assert kwargs["send_receive_timeout"] == DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS
 
 
 def test_timeout_options_override_constructor_values() -> None:
@@ -354,11 +354,9 @@ def test_tracing_client_settings_use_25s_timeout() -> None:
     assert settings.timeout == 25
 
 
-def test_internal_profile_is_unbounded() -> None:
-    # The 30s read timeout must not leak onto internal/maintenance queries
-    # (topology discovery, routing load lookups, delete throttling checks, the
-    # span-export job, table copies). They use the INTERNAL profile, which stays
-    # unbounded so long-running operations aren't capped at 30s.
+def test_internal_profile_has_no_explicit_timeout() -> None:
+    # INTERNAL leaves timeout unset; the connect driver applies
+    # DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS when building the client.
     assert ClickhouseClientSettings.INTERNAL.value.timeout is None
 
 

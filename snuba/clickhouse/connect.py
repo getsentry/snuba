@@ -50,8 +50,10 @@ def _insert_statement(table: str, column_names: Sequence[str]) -> str:
     return f"INSERT INTO {table} ({columns}) FORMAT Native"
 
 
-# clickhouse-connect cannot take None for read timeout (progress-interval math).
-UNBOUNDED_SEND_RECEIVE_TIMEOUT_SECONDS = 86_400  # 24h
+# clickhouse-connect rejects None for read timeout (progress-interval math).
+# When a profile has no timeout (INTERNAL), use a short ceiling instead of
+# leaving the socket open for hours.
+DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS = 60
 DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
 
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
@@ -133,7 +135,7 @@ class ClickhouseConnectPool(ClickhousePool):
             send_receive_timeout = (
                 self.send_receive_timeout
                 if self.send_receive_timeout is not None
-                else UNBOUNDED_SEND_RECEIVE_TIMEOUT_SECONDS
+                else DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS
             )
         return clickhouse_connect.get_client(
             host=self.host,
