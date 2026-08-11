@@ -141,10 +141,43 @@ def test_legitimate_queries_still_allowed(query: str) -> None:
 def test_allowed_without_a_table_allowlist(query: str) -> None:
     """Legitimate for tracing, which passes no allowed_tables.
 
-    The scoped tools reject these on sql_metadata 2.11.0 for an unrelated
-    reason: it reports `arraymap`, `clusterallreplicas` and friends in
-    Parser.tables, so they fail the allowlist as unknown table names. That is
-    pre-existing behaviour and version-specific -- 3.x drops them from
-    Parser.tables -- so it is not asserted here.
+    Whether the scoped tools accept these depends on how the parser reports
+    function sources in Parser.tables, which differs across sql_metadata
+    versions, so it is not asserted here. The cluster functions are covered
+    against an allowlist by the tests below instead.
     """
     validate_ro_query(query)
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "SELECT * FROM clusterAllReplicas('c', system.users)",
+        "SELECT * FROM cluster('c', system, users)",
+        "SELECT * FROM clusterAllReplicas('c', other_table)",
+        "SELECT * FROM my_table, clusterAllReplicas('c', system.users)",
+    ],
+)
+def test_cluster_functions_cannot_reach_past_the_allowlist(query: str) -> None:
+    """cluster/clusterAllReplicas are allowed, the table they read is not free.
+
+    The parser does not report their table argument, so without an explicit
+    check these clear an allowlist that never saw the table.
+    """
+    with pytest.raises(InvalidCustomQuery):
+        validate_ro_query(query, allowed_tables={"my_table"})
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "SELECT * FROM clusterAllReplicas('c', my_table)",
+        "SELECT * FROM cluster('c', my_table)",
+        # Trailing sharding key: only the first argument names the table.
+        "SELECT * FROM clusterAllReplicas('c', my_table, rand())",
+        "SELECT * FROM clusterAllReplicas('c', my_table) UNION ALL "
+        "SELECT * FROM clusterAllReplicas('c', my_table)",
+    ],
+)
+def test_cluster_functions_over_an_allowed_table(query: str) -> None:
+    validate_ro_query(query, allowed_tables={"my_table"})
