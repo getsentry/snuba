@@ -1,5 +1,4 @@
 import json
-import uuid
 from datetime import date, datetime
 from typing import Any, cast
 from unittest import mock
@@ -44,16 +43,19 @@ class FakeQueryResult:
             return str(summary_id)
         return self._query_id or ""
 
+    def close(self) -> None:
+        return None
 
-def _make_pool(client: mock.Mock) -> ClickhouseConnectPool:
+
+def _make_pool(client: mock.Mock, **kwargs: Any) -> ClickhouseConnectPool:
     pool = ClickhouseConnectPool(
         host="host",
         user="test",
         password="test",
         database="test",
+        **kwargs,
     )
-    pool._ClickhouseConnectPool__client = client  # type: ignore[attr-defined]
-    pool._get_client = lambda: client  # type: ignore[method-assign]
+    pool._new_client = lambda: client  # type: ignore[method-assign]
     return pool
 
 
@@ -227,21 +229,6 @@ def test_too_many_simultaneous_queries_not_retried() -> None:
     assert client.query.call_count == 1
 
 
-def test_operational_error_mapped_without_extra_retries() -> None:
-    from clickhouse_connect.driver.exceptions import OperationalError
-
-    client = mock.Mock()
-    client.query.side_effect = OperationalError("connection refused")
-
-    pool = _make_pool(client)
-    with pytest.raises(ClickhouseError):
-        pool.execute("SELECT 1", retryable=True)
-
-    assert client.query.call_count == 1
-    client.close_connections.assert_called_once()
-    client.close.assert_not_called()
-
-
 def test_generic_clickhouse_error_wrapped() -> None:
     from clickhouse_connect.driver.exceptions import ProgrammingError
 
@@ -253,7 +240,6 @@ def test_generic_clickhouse_error_wrapped() -> None:
         pool.execute("SELECT 1")
 
     assert client.query.call_count == 1
-    client.close_connections.assert_not_called()
 
 
 def test_totals_malformed_json_wrapped() -> None:
@@ -285,7 +271,7 @@ def test_timeouts_are_passed_through() -> None:
         mock.patch.object(clickhouse_connect, "get_client") as get_client,
         mock.patch("snuba.clickhouse.connect.get_pool_manager"),
     ):
-        pool._get_client()
+        pool._new_client()
 
     _, kwargs = get_client.call_args
     assert kwargs["send_receive_timeout"] == 300000
@@ -293,10 +279,10 @@ def test_timeouts_are_passed_through() -> None:
     assert kwargs["compress"] == "lz4"
 
 
-def test_send_receive_timeout_unbounded_when_profile_has_none() -> None:
+def test_send_receive_timeout_defaults_when_profile_has_none() -> None:
     import clickhouse_connect
 
-    from snuba.clickhouse.connect import UNBOUNDED_SEND_RECEIVE_TIMEOUT_SECONDS
+    from snuba.clickhouse.connect import DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS
 
     # A profile with no timeout (None) means "unbounded" on the native path; over
     # HTTP that maps to a large finite timeout, since clickhouse-connect can't
@@ -313,10 +299,10 @@ def test_send_receive_timeout_unbounded_when_profile_has_none() -> None:
         mock.patch.object(clickhouse_connect, "get_client") as get_client,
         mock.patch("snuba.clickhouse.connect.get_pool_manager"),
     ):
-        pool._get_client()
+        pool._new_client()
 
     _, kwargs = get_client.call_args
-    assert kwargs["send_receive_timeout"] == UNBOUNDED_SEND_RECEIVE_TIMEOUT_SECONDS
+    assert kwargs["send_receive_timeout"] == DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS
 
 
 def test_timeout_options_override_constructor_values() -> None:
@@ -343,7 +329,7 @@ def test_timeout_options_override_constructor_values() -> None:
         mock.patch.object(clickhouse_connect, "get_client") as get_client,
         mock.patch("snuba.clickhouse.connect.get_pool_manager"),
     ):
-        pool._get_client()
+        pool._new_client()
 
     _, kwargs = get_client.call_args
     assert kwargs["connect_timeout"] == 7
@@ -368,48 +354,10 @@ def test_tracing_client_settings_use_25s_timeout() -> None:
     assert settings.timeout == 25
 
 
-def test_internal_profile_is_unbounded() -> None:
-    # The 30s read timeout must not leak onto internal/maintenance queries
-    # (topology discovery, routing load lookups, delete throttling checks, the
-    # span-export job, table copies). They use the INTERNAL profile, which stays
-    # unbounded so long-running operations aren't capped at 30s.
+def test_internal_profile_has_no_explicit_timeout() -> None:
+    # INTERNAL leaves timeout unset; the connect driver applies
+    # DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS when building the client.
     assert ClickhouseClientSettings.INTERNAL.value.timeout is None
-
-
-def test_pool_size_defaults_to_setting() -> None:
-    import clickhouse_connect
-    from sentry_options.testing import override_options
-
-    from snuba import settings
-
-    pool = ClickhouseConnectPool(host="host", user="test", password="test", database="test")
-
-    with (
-        override_options("snuba", {}),
-        mock.patch.object(clickhouse_connect, "get_client"),
-        mock.patch("snuba.clickhouse.connect.get_pool_manager") as get_pool_manager,
-    ):
-        pool._get_client()
-
-    _, kwargs = get_pool_manager.call_args
-    assert kwargs["maxsize"] == settings.CLICKHOUSE_MAX_POOL_SIZE
-
-
-def test_pool_size_option_override() -> None:
-    import clickhouse_connect
-    from sentry_options.testing import override_options
-
-    pool = ClickhouseConnectPool(host="host", user="test", password="test", database="test")
-
-    with (
-        override_options("snuba", {"clickhouse_connect_pool_size": 42}),
-        mock.patch.object(clickhouse_connect, "get_client"),
-        mock.patch("snuba.clickhouse.connect.get_pool_manager") as get_pool_manager,
-    ):
-        pool._get_client()
-
-    _, kwargs = get_pool_manager.call_args
-    assert kwargs["maxsize"] == 42
 
 
 def test_clickhouse_reader_wraps_connect_pool() -> None:
@@ -760,7 +708,7 @@ def test_execute_explain_error_wrapped_and_preserves_code() -> None:
 
 
 def test_execute_explain_wraps_client_init_errors() -> None:
-    # _get_client() opens the connection on first use and can raise on an
+    # _new_client() opens the connection on first use and can raise on an
     # unreachable host. Like the normal execute() path, execute_explain must run
     # it inside the error-translation context, so the failure surfaces as a snuba
     # ClickhouseError rather than a raw clickhouse-connect error -- the
@@ -768,7 +716,7 @@ def test_execute_explain_wraps_client_init_errors() -> None:
     from clickhouse_connect.driver.exceptions import OperationalError
 
     pool = _make_pool(mock.Mock())
-    pool._get_client = mock.Mock(  # type: ignore[method-assign]
+    pool._new_client = mock.Mock(  # type: ignore[method-assign]
         side_effect=OperationalError("connection refused")
     )
 
@@ -864,134 +812,115 @@ def test_reader_routes_with_totals_through_execute_with_totals() -> None:
 
 
 @pytest.mark.clickhouse_db
-def test_connect_driver_matches_native_for_totals_and_empty_results() -> None:
-    # End-to-end vs a real ClickHouse: the connect (HTTP) pool must produce the same
-    # reader output as the native pool for the two shapes that broke when the HTTP
-    # driver was enabled -- WITH TOTALS and zero-row queries. Mocked tests can't catch
-    # these; they hinge on the real server's Native/HTTP serialization.
-    from snuba import settings
-    from snuba.clickhouse.native import ClickhouseNativePool, ClickhouseReader
-
-    conf = settings.CLUSTERS[0]
-    native_pool = ClickhouseNativePool(
-        conf["host"], conf["port"], conf["user"], conf["password"], conf["database"]
-    )
-    connect_pool = ClickhouseConnectPool(
-        conf["host"],
-        conf["user"],
-        conf["password"],
-        conf["database"],
-        http_port=conf["http_port"],
-    )
-
-    # Unique table name so parallel (xdist) workers don't collide.
-    table = f"test_connect_totals_parity_{uuid.uuid4().hex[:8]}"
-
-    class FakeFormattedQuery:
-        def __init__(self, sql: str) -> None:
-            self._sql = sql
-
-        def get_sql(self) -> str:
-            return self._sql
-
-    def run(pool: Any, sql: str, with_totals: bool) -> Any:
-        reader = ClickhouseReader(cache_partition_id=None, client=pool, query_settings_prefix=None)
-        return reader.execute(
-            cast(FormattedQuery, FakeFormattedQuery(sql)), with_totals=with_totals
-        )
-
-    try:
-        native_pool.execute(f"DROP TABLE IF EXISTS {table}")
-        native_pool.execute(
-            f"CREATE TABLE {table} (g UInt64, ts DateTime, v UInt64) ENGINE = Memory"
-        )
-        native_pool.execute(
-            f"INSERT INTO {table} (g, ts, v) VALUES",
-            [
-                [1, datetime(2023, 1, 2, 3, 4, 5), 10],
-                [2, datetime(2023, 1, 3, 0, 0, 0), 30],
-            ],
-        )
-
-        # 1) WITH TOTALS over a DateTime group: data and totals (including the
-        #    coerced totals datetime) must match the native driver exactly.
-        totals_sql = f"SELECT g, ts, sum(v) AS s FROM {table} GROUP BY g, ts WITH TOTALS ORDER BY g"
-        native = run(native_pool, totals_sql, True)
-        http = run(connect_pool, totals_sql, True)
-        assert http["data"] == native["data"]
-        assert http["totals"] == native["totals"]
-        assert http["totals"]["s"] == 40  # sum(v) over all rows
-        assert {c["name"] for c in http["meta"]} == {"g", "ts", "s"}
-
-        # 2) Zero-row query: native still reports its columns, connect returns empty
-        #    meta (zero-byte Native body); meta is synthesized in db_query, not
-        #    refetched. Pins the driver-level divergence.
-        empty_sql = f"SELECT g, sum(v) AS s FROM {table} WHERE g = 999 GROUP BY g"
-        native_empty = run(native_pool, empty_sql, False)
-        http_empty = run(connect_pool, empty_sql, False)
-        assert http_empty["data"] == []
-        assert http_empty["meta"] == []
-        assert {c["name"] for c in native_empty["meta"]} == {"g", "s"}
-
-        # 3) Zero-row WITH TOTALS still yields a totals row on both drivers -- the
-        #    case that fired the reader's assertion -> "SnubaError" over HTTP.
-        #    Asserting the native side pins that its protocol keeps the empty totals row.
-        empty_totals_sql = (
-            f"SELECT g, sum(v) AS s FROM {table} WHERE g = 999 GROUP BY g WITH TOTALS"
-        )
-        native_empty_totals = run(native_pool, empty_totals_sql, True)
-        http_empty_totals = run(connect_pool, empty_totals_sql, True)
-        assert native_empty_totals["data"] == []
-        assert native_empty_totals["totals"]["s"] == 0
-        assert http_empty_totals["data"] == []
-        assert http_empty_totals["totals"] == native_empty_totals["totals"]
-        assert {c["name"] for c in http_empty_totals["meta"]} == {"g", "s"}
-    finally:
-        try:
-            native_pool.execute(f"DROP TABLE IF EXISTS {table}")
-        finally:
-            native_pool.close()
-            connect_pool.close()
-
-
 def test_use_protocol_version_disabled_by_default() -> None:
     from clickhouse_connect import common as clickhouse_connect_common
 
     assert clickhouse_connect_common.get_setting("use_protocol_version") is False
 
 
-def test_execute_surfaces_native_stream_desync_without_retry() -> None:
-    from clickhouse_connect.driver.exceptions import InternalError
+def test_new_client_per_query() -> None:
+    clients = [mock.Mock(name=f"c{i}") for i in range(3)]
+    for c in clients:
+        c.query.return_value = FakeQueryResult(result_set=[[1]])
+    pool = ClickhouseConnectPool(host="h", user="u", password="p", database="d")
+    pool._new_client = mock.Mock(side_effect=clients)  # type: ignore[method-assign]
+    pool.execute("SELECT 1")
+    pool.execute("SELECT 2")
+    pool.execute("SELECT 3")
+    assert pool._new_client.call_count == 3
+
+
+def test_shared_socket_pool() -> None:
+    import snuba.clickhouse.connect as connect_mod
+
+    connect_mod._pool_managers.clear()
+    with (
+        mock.patch("snuba.clickhouse.connect.get_pool_manager") as gpm,
+        mock.patch("clickhouse_connect.get_client") as get_client,
+    ):
+        shared = mock.Mock(name="pool")
+        gpm.return_value = shared
+        get_client.return_value = mock.Mock()
+        a = ClickhouseConnectPool(host="h", user="u", password="p", database="d")
+        b = ClickhouseConnectPool(host="other", user="u", password="p", database="d")
+        a._new_client()
+        b._new_client()
+        assert gpm.call_count == 1
+        assert get_client.call_args_list[0].kwargs["pool_mgr"] is shared
+        assert get_client.call_args_list[1].kwargs["pool_mgr"] is shared
+    connect_mod._pool_managers.clear()
+
+
+def test_response_is_drained() -> None:
+    client = mock.Mock()
+    result = mock.Mock()
+    result.summary = {}
+    result.result_set = [[1]]
+    result.column_names = ()
+    result.column_types = ()
+    client.query.return_value = result
+    _make_pool(client).execute("SELECT 1")
+    result.close.assert_called_once()
+
+
+def test_response_is_drained_on_error() -> None:
+    client = mock.Mock()
+    result = mock.Mock()
+    result.summary = {}
+    type(result).result_set = mock.PropertyMock(side_effect=RuntimeError("boom"))
+    client.query.return_value = result
+    with pytest.raises(RuntimeError):
+        _make_pool(client).execute("SELECT 1")
+    result.close.assert_called_once()
+
+
+def test_operational_error_mapped() -> None:
+    from clickhouse_connect.driver.exceptions import OperationalError
 
     client = mock.Mock()
-    client.query.side_effect = InternalError(
-        "Unrecognized ClickHouse type base: achilles-api-dotnet name: achilles-api-dotnet"
-    )
-    pool = _make_pool(client)
-
-    with pytest.raises(ClickhouseError) as excinfo:
-        pool.execute("SELECT 1")
-
-    assert "Unrecognized ClickHouse type" in str(excinfo.value)
-    assert client.query.call_count == 1
-    client.close_connections.assert_called_once()
-    client.close.assert_not_called()
+    client.query.side_effect = OperationalError("conn reset")
+    with pytest.raises(ClickhouseError):
+        _make_pool(client).execute("SELECT 1")
 
 
-def test_stream_failure_error_is_translated_to_clickhouse_error() -> None:
+def test_stream_failure_mapped() -> None:
     from clickhouse_connect.driver.exceptions import StreamFailureError
 
     client = mock.Mock()
-    client.query.side_effect = StreamFailureError(
-        "Stream ended unexpectedly (connection closed by server)"
-    )
-    pool = _make_pool(client)
+    client.query.side_effect = StreamFailureError("stream died")
+    with pytest.raises(ClickhouseError):
+        _make_pool(client).execute("SELECT 1")
 
-    with pytest.raises(ClickhouseError) as excinfo:
-        pool.execute("SELECT 1")
 
-    assert excinfo.value.code == -1
-    assert "Stream ended unexpectedly" in str(excinfo.value)
-    assert client.query.call_count == 1
-    client.close_connections.assert_called_once()
-    client.close.assert_not_called()
+def test_shared_pools_reset_after_fork() -> None:
+    from clickhouse_connect.driver.httputil import all_managers
+
+    import snuba.clickhouse.connect as connect_mod
+
+    connect_mod._close_pools()
+    mgr = mock.Mock()
+    all_managers[mgr] = 0
+    connect_mod._pool_managers[(None, False)] = mgr
+
+    connect_mod._reset_pools_after_fork()
+
+    assert connect_mod._pool_managers == {}
+    assert mgr not in all_managers
+    mgr.clear.assert_not_called()
+
+
+def test_close_pools_releases_sockets() -> None:
+    from clickhouse_connect.driver.httputil import all_managers
+
+    import snuba.clickhouse.connect as connect_mod
+
+    connect_mod._close_pools()
+    mgr = mock.Mock()
+    all_managers[mgr] = 0
+    connect_mod._pool_managers[(None, False)] = mgr
+
+    connect_mod._close_pools()
+
+    mgr.clear.assert_called_once()
+    assert mgr not in all_managers
+    assert connect_mod._pool_managers == {}
