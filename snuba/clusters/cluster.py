@@ -1,4 +1,3 @@
-import os
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
@@ -221,16 +220,9 @@ CacheKey = tuple[
 
 
 class ConnectionCache:
-    """Process-wide cache of ClickHouse driver pools (native queue or HTTP façade)."""
-
     def __init__(self) -> None:
         self.__cache: MutableMapping[CacheKey, ClickhousePool] = {}
         self.__lock = Lock()
-
-    def reset_after_fork(self) -> None:
-        """Drop inherited pool refs without closing parent FDs."""
-        self.__lock = Lock()
-        self.__cache = {}
 
     def get_node_connection(
         self,
@@ -244,8 +236,20 @@ class ConnectionCache:
         verify: bool | None,
     ) -> ClickhousePool:
         """
-        Return a cached connection pool for the node. Driver is chosen from
-        ``use_clickhouse_connect_driver`` (HTTP vs native).
+        Return a cached connection pool for the node, typed as the abstract
+        :class:`ClickhousePool`. The driver is decided here, from the
+        ``use_clickhouse_connect_driver`` sentry-option: when it is enabled the
+        clickhouse-connect (HTTP) pool is built (connecting on the node's
+        ``http_port``), otherwise the native one (connecting on the node's
+        ``native_port``). Both variants are cached side by side (the driver is
+        part of the cache key).
+
+        This is the single place pools are instantiated and the single place the
+        driver is selected, so every caller — the cluster query/node connections
+        as well as the admin and CLI by-host helpers — goes through it and gets
+        one shared, runtime-selected pool behind the abstract
+        :class:`ClickhousePool` type. Pool sizing is left to the pools themselves
+        (the connect pool reads the ``clickhouse_connect_pool_size`` sentry-option).
         """
         use_connect = use_clickhouse_connect_driver()
         with self.__lock:
@@ -264,10 +268,15 @@ class ConnectionCache:
             if cache_key not in self.__cache:
                 pool: ClickhousePool
                 if use_connect:
+                    # Imported here so that the native code path never imports
+                    # clickhouse-connect.
                     from snuba.clickhouse.connect import ClickhouseConnectPool
 
                     pool = ClickhouseConnectPool(
                         host=node.host_name,
+                        # Fall back to the default HTTP port only for nodes that
+                        # were built without one (e.g. by-host helpers that have
+                        # no cluster http_port to draw on).
                         http_port=(
                             node.http_port
                             if node.http_port is not None
@@ -301,14 +310,6 @@ class ConnectionCache:
 
 
 connection_cache = ConnectionCache()
-
-
-def _reset_connections_after_fork() -> None:
-    connection_cache.reset_after_fork()
-
-
-os.register_at_fork(after_in_child=_reset_connections_after_fork)
-
 _DEFAULT_MAX_CONNECTIONS = 1
 
 

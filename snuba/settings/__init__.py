@@ -87,9 +87,7 @@ DISABLED_ENTITIES: set[str] = set()
 DISABLED_DATASETS: set[str] = set()
 
 # Clickhouse Options
-# None derives the pool size from snuba.utils.concurrency.process_query_concurrency.
-# Set an int to pin it.
-CLICKHOUSE_MAX_POOL_SIZE: int | None = None
+CLICKHOUSE_MAX_POOL_SIZE = 25
 # Maximum time (seconds) to wait for a connection from the ClickHouse pool
 # before failing fast. Prevents API workers from blocking indefinitely on
 # pool.get() when ClickHouse is hung but not dropping connections.

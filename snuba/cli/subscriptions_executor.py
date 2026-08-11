@@ -15,7 +15,6 @@ from snuba.datasets.factory import get_enabled_dataset_names
 from snuba.environment import setup_logging, setup_sentry
 from snuba.migrations.connect import check_clickhouse_connections
 from snuba.subscriptions.executor_consumer import build_executor_consumer
-from snuba.utils.concurrency import declare_query_concurrency
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
@@ -107,11 +106,6 @@ def subscriptions_executor(
     """
     setup_logging(log_level)
     setup_sentry()
-
-    # No GRANIAN_* env vars here, so declare the executor's thread count or the
-    # pools size to the default 8. Must precede check_clickhouse_connections,
-    # which builds the first pool.
-    declare_query_concurrency(total_concurrent_queries)
 
     logger = structlog.get_logger().bind(module=__name__)
 

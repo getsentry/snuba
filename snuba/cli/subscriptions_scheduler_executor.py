@@ -17,7 +17,6 @@ from snuba.migrations.connect import check_clickhouse_connections
 from snuba.subscriptions.combined_scheduler_executor import (
     build_scheduler_executor_consumer,
 )
-from snuba.utils.concurrency import declare_query_concurrency
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
@@ -98,9 +97,6 @@ def subscriptions_scheduler_executor(
     """
     setup_logging(log_level)
     setup_sentry()
-
-    # Same reasoning as snuba/cli/subscriptions_executor.py.
-    declare_query_concurrency(total_concurrent_queries)
 
     logger = structlog.get_logger().bind(module=__name__)
 

@@ -29,7 +29,6 @@ from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.reader import Reader, Result, build_result_transformer
 from snuba.state.sentry_options import get_option
-from snuba.utils.concurrency import process_query_concurrency
 from snuba.utils.metrics.gauge import ThreadSafeGauge
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.sentry import SENTRY_OP
@@ -207,7 +206,7 @@ class ClickhouseNativePool(ClickhousePool):
         verify: bool | None = False,
         connect_timeout: int = 1,
         send_receive_timeout: int | None = 35,
-        max_pool_size: int | None = None,
+        max_pool_size: int = settings.CLICKHOUSE_MAX_POOL_SIZE,
         pool_get_timeout_seconds: float = settings.CLICKHOUSE_POOL_GET_TIMEOUT_SECONDS,
         client_settings: Mapping[str, Any] = {},
     ) -> None:
@@ -223,10 +222,6 @@ class ClickhouseNativePool(ClickhousePool):
         self.send_receive_timeout = send_receive_timeout
         self.pool_get_timeout_seconds = pool_get_timeout_seconds
         self.client_settings = client_settings
-
-        if max_pool_size is None:
-            max_pool_size = settings.CLICKHOUSE_MAX_POOL_SIZE or process_query_concurrency()
-        self.max_pool_size = max_pool_size
 
         self.pool: queue.LifoQueue[Client | None] = queue.LifoQueue(max_pool_size)
         self.__gauge = ThreadSafeGauge(metrics, "connections")

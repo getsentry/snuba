@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
 from datetime import datetime
@@ -18,7 +17,7 @@ from clickhouse_connect.driver.exceptions import (
     OperationalError,
     StreamFailureError,
 )
-from clickhouse_connect.driver.httputil import all_managers, get_pool_manager
+from clickhouse_connect.driver.httputil import get_pool_manager
 from sentry_sdk import traces
 from urllib3.poolmanager import PoolManager
 
@@ -32,7 +31,6 @@ from snuba.clickhouse.native import (
 )
 from snuba.reader import unwrap_nullable_type
 from snuba.state.sentry_options import get_option
-from snuba.utils.concurrency import process_query_concurrency
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.sentry import SENTRY_OP
 
@@ -40,7 +38,6 @@ metrics = MetricsWrapper(environment.metrics, "clickhouse.connect")
 
 
 def _driver_params(params: Params) -> Sequence[Any] | dict[str, Any] | None:
-    """Narrow ``Params`` to clickhouse-connect's accepted forms."""
     if not params:
         return None
     if isinstance(params, Mapping):
@@ -56,9 +53,6 @@ def _insert_statement(table: str, column_names: Sequence[str]) -> str:
 # clickhouse-connect cannot take None for read timeout (progress-interval math).
 UNBOUNDED_SEND_RECEIVE_TIMEOUT_SECONDS = 86_400  # 24h
 DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
-# Live option default cannot change; 25 means "unset".
-LEGACY_CONNECT_POOL_SIZE = 25
-_MAX_ENDPOINTS_PER_PROCESS = 64
 
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
 clickhouse_connect_common.set_setting(
@@ -73,19 +67,12 @@ _STREAM_DESYNC_MARKERS = (
     "unrecognized data found in stream",
 )
 
+# One socket pool for the process. Clients are cheap façades; sockets are not.
 _pool_lock = Lock()
 _pool_managers: dict[tuple[str | None, bool], PoolManager] = {}
 
 
-def _pool_size() -> int:
-    option = get_option("clickhouse_connect_pool_size", LEGACY_CONNECT_POOL_SIZE)
-    if option > 0 and option != LEGACY_CONNECT_POOL_SIZE:
-        return int(option)
-    return settings.CLICKHOUSE_MAX_POOL_SIZE or process_query_concurrency()
-
-
 def _shared_pool(ca_certs: str | None, verify: bool) -> PoolManager:
-    """One urllib3 pool manager per TLS config for the whole process."""
     key = (ca_certs, verify)
     manager = _pool_managers.get(key)
     if manager is not None:
@@ -96,32 +83,13 @@ def _shared_pool(ca_certs: str | None, verify: bool) -> PoolManager:
             manager = get_pool_manager(
                 ca_cert=ca_certs,
                 verify=verify,
-                maxsize=_pool_size(),
-                num_pools=_MAX_ENDPOINTS_PER_PROCESS,
+                maxsize=get_option(
+                    "clickhouse_connect_pool_size", settings.CLICKHOUSE_MAX_POOL_SIZE
+                ),
+                num_pools=64,
             )
             _pool_managers[key] = manager
         return manager
-
-
-def reset_pools_after_fork() -> None:
-    """Drop inherited sockets without closing parent FDs."""
-    global _pool_managers, _pool_lock
-    for manager in _pool_managers.values():
-        all_managers.pop(manager, None)
-    _pool_managers = {}
-    _pool_lock = Lock()
-
-
-def close_pools() -> None:
-    with _pool_lock:
-        for manager in _pool_managers.values():
-            with suppress(Exception):
-                manager.clear()
-            all_managers.pop(manager, None)
-        _pool_managers.clear()
-
-
-os.register_at_fork(after_in_child=reset_pools_after_fork)
 
 
 def _coerce_temporal(value: Any, ch_type: str) -> Any:
@@ -135,7 +103,7 @@ def _coerce_temporal(value: Any, ch_type: str) -> Any:
 
 
 class ClickhouseConnectPool(ClickhousePool):
-    """HTTP ClickHouse driver: new client per query, shared process socket pool."""
+    """HTTP driver: new client per query on a shared socket pool; always drain."""
 
     def __init__(
         self,
@@ -189,7 +157,6 @@ class ClickhouseConnectPool(ClickhousePool):
             settings=dict(self.client_settings),
             pool_mgr=_shared_pool(self.ca_certs, bool(self.verify)),
             query_limit=0,
-            autogenerate_query_id=True,
             autogenerate_session_id=False,
             compress="lz4",
         )
@@ -209,8 +176,7 @@ class ClickhouseConnectPool(ClickhousePool):
 
     @staticmethod
     def _is_stream_desync(exc: BaseException) -> bool:
-        message = str(exc)
-        return any(marker in message for marker in _STREAM_DESYNC_MARKERS)
+        return any(marker in str(exc) for marker in _STREAM_DESYNC_MARKERS)
 
     def _execute_once(
         self,
@@ -243,59 +209,56 @@ class ClickhouseConnectPool(ClickhousePool):
                 column_oriented=columnar,
             )
 
+        # Drain before the socket returns to the shared pool. A half-read body is
+        # how the next query decodes the previous response (stream desync).
         try:
-            return self._consume(query_result, with_column_types, query_id)
-        finally:
-            with suppress(Exception):
-                query_result.close()
+            summary = query_result.summary or {}
+            result_query_id = str(query_result.query_id or query_id or "")
 
-    def _consume(
-        self, query_result: Any, with_column_types: bool, query_id: str | None
-    ) -> ClickhouseResult:
-        summary = query_result.summary or {}
-        result_query_id = str(query_result.query_id or query_id or "")
+            def _int(key: str) -> int:
+                value = summary.get(key)
+                try:
+                    return int(value) if value is not None else 0
+                except (TypeError, ValueError):
+                    return 0
 
-        def _int(key: str) -> int:
-            value = summary.get(key)
+            elapsed_ns = summary.get("elapsed_ns")
             try:
-                return int(value) if value is not None else 0
+                elapsed = float(elapsed_ns) / 1e9 if elapsed_ns is not None else 0.0
             except (TypeError, ValueError):
-                return 0
+                elapsed = 0.0
 
-        elapsed_ns = summary.get("elapsed_ns")
-        try:
-            elapsed = float(elapsed_ns) / 1e9 if elapsed_ns is not None else 0.0
-        except (TypeError, ValueError):
-            elapsed = 0.0
-
-        profile_data = ClickhouseProfile(
-            blocks=0,
-            bytes=_int("read_bytes"),
-            elapsed=elapsed,
-            progress_bytes=_int("read_bytes"),
-            rows=_int("read_rows"),
-        )
-        results: Sequence[Any] = query_result.result_set
-        if not with_column_types:
+            profile_data = ClickhouseProfile(
+                blocks=0,
+                bytes=_int("read_bytes"),
+                elapsed=elapsed,
+                progress_bytes=_int("read_bytes"),
+                rows=_int("read_rows"),
+            )
+            results: Sequence[Any] = query_result.result_set
+            if not with_column_types:
+                return ClickhouseResult(
+                    results=results,
+                    profile=profile_data,
+                    trace_output="",
+                    query_id=result_query_id,
+                )
+            meta = [
+                (name, column_type.name)
+                for name, column_type in zip(
+                    query_result.column_names, query_result.column_types, strict=True
+                )
+            ]
             return ClickhouseResult(
                 results=results,
+                meta=meta,
                 profile=profile_data,
                 trace_output="",
                 query_id=result_query_id,
             )
-        meta = [
-            (name, column_type.name)
-            for name, column_type in zip(
-                query_result.column_names, query_result.column_types, strict=True
-            )
-        ]
-        return ClickhouseResult(
-            results=results,
-            meta=meta,
-            profile=profile_data,
-            trace_output="",
-            query_id=result_query_id,
-        )
+        finally:
+            with suppress(Exception):
+                query_result.close()
 
     def execute_with_totals(
         self,
@@ -306,7 +269,6 @@ class ClickhouseConnectPool(ClickhousePool):
         capture_trace: bool = False,
         robust: bool = False,
     ) -> ClickhouseResult:
-        """WITH TOTALS via JSONCompact; totals as trailing row for the reader."""
         with self._translate_clickhouse_errors():
             client = self._new_client()
             json_settings: dict[str, Any] = dict(settings) if settings else {}
@@ -335,17 +297,14 @@ class ClickhouseConnectPool(ClickhousePool):
             meta = [(column["name"], column["type"]) for column in payload.get("meta", [])]
             column_types = [ch_type for _, ch_type in meta]
             results: list[tuple[Any, ...]] = [
-                tuple(
-                    _coerce_temporal(value, column_types[index]) for index, value in enumerate(row)
-                )
+                tuple(_coerce_temporal(value, column_types[i]) for i, value in enumerate(row))
                 for row in payload.get("data", [])
             ]
             totals = payload.get("totals")
             if totals:
                 results.append(
                     tuple(
-                        _coerce_temporal(value, column_types[index])
-                        for index, value in enumerate(totals)
+                        _coerce_temporal(value, column_types[i]) for i, value in enumerate(totals)
                     )
                 )
             return ClickhouseResult(
@@ -482,7 +441,6 @@ class ClickhouseConnectPool(ClickhousePool):
         )
 
     def execute_explain(self, query: str) -> ClickhouseResult:
-        """EXPLAIN via command() — query() Native framing mishandles EXPLAIN text."""
         with self._translate_clickhouse_errors():
             client = self._new_client()
             with traces.start_span(
@@ -515,5 +473,4 @@ class ClickhouseConnectPool(ClickhousePool):
         )
 
     def close(self) -> None:
-        # Sockets live on the process-wide pool managers.
         pass

@@ -711,7 +711,7 @@ def test_execute_explain_error_wrapped_and_preserves_code() -> None:
 
 
 def test_execute_explain_wraps_client_init_errors() -> None:
-    # _get_client() opens the connection on first use and can raise on an
+    # _new_client() opens the connection on first use and can raise on an
     # unreachable host. Like the normal execute() path, execute_explain must run
     # it inside the error-translation context, so the failure surfaces as a snuba
     # ClickhouseError rather than a raw clickhouse-connect error -- the
@@ -827,18 +827,16 @@ def test_new_client_per_query() -> None:
         c.query.return_value = FakeQueryResult(result_set=[[1]])
     pool = ClickhouseConnectPool(host="h", user="u", password="p", database="d")
     pool._new_client = mock.Mock(side_effect=clients)  # type: ignore[method-assign]
-
     pool.execute("SELECT 1")
     pool.execute("SELECT 2")
     pool.execute("SELECT 3")
-
     assert pool._new_client.call_count == 3
 
 
-def test_shared_pool_reused_across_clients() -> None:
+def test_shared_socket_pool() -> None:
     import snuba.clickhouse.connect as connect_mod
 
-    connect_mod.close_pools()
+    connect_mod._pool_managers.clear()
     with (
         mock.patch("snuba.clickhouse.connect.get_pool_manager") as gpm,
         mock.patch("clickhouse_connect.get_client") as get_client,
@@ -847,16 +845,16 @@ def test_shared_pool_reused_across_clients() -> None:
         gpm.return_value = shared
         get_client.return_value = mock.Mock()
         a = ClickhouseConnectPool(host="h", user="u", password="p", database="d")
-        b = ClickhouseConnectPool(host="h2", user="u", password="p", database="d")
+        b = ClickhouseConnectPool(host="other", user="u", password="p", database="d")
         a._new_client()
         b._new_client()
         assert gpm.call_count == 1
         assert get_client.call_args_list[0].kwargs["pool_mgr"] is shared
         assert get_client.call_args_list[1].kwargs["pool_mgr"] is shared
-    connect_mod.close_pools()
+    connect_mod._pool_managers.clear()
 
 
-def test_response_is_drained() -> None:
+def test_response_drained_to_avoid_desync() -> None:
     client = mock.Mock()
     result = mock.Mock()
     result.summary = {}
@@ -868,7 +866,7 @@ def test_response_is_drained() -> None:
     result.close.assert_called_once()
 
 
-def test_response_is_drained_when_consume_fails() -> None:
+def test_response_drained_when_consume_fails() -> None:
     client = mock.Mock()
     result = mock.Mock()
     result.summary = {}
@@ -895,24 +893,3 @@ def test_stream_failure_mapped() -> None:
     client.query.side_effect = StreamFailureError("stream died")
     with pytest.raises(ClickhouseError):
         _make_pool(client).execute("SELECT 1")
-
-
-def test_pool_size_uses_concurrency_when_option_unset() -> None:
-    from snuba.clickhouse.connect import LEGACY_CONNECT_POOL_SIZE, _pool_size
-
-    with (
-        mock.patch("snuba.clickhouse.connect.get_option", return_value=LEGACY_CONNECT_POOL_SIZE),
-        mock.patch("snuba.clickhouse.connect.process_query_concurrency", return_value=8),
-        mock.patch("snuba.clickhouse.connect.settings.CLICKHOUSE_MAX_POOL_SIZE", None),
-    ):
-        assert _pool_size() == 8
-
-
-def test_pool_size_option_override() -> None:
-    from snuba.clickhouse.connect import _pool_size
-
-    with (
-        mock.patch("snuba.clickhouse.connect.get_option", return_value=40),
-        mock.patch("snuba.clickhouse.connect.process_query_concurrency", return_value=8),
-    ):
-        assert _pool_size() == 40

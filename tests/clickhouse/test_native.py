@@ -104,18 +104,3 @@ def test_execute_retries(retryable: bool, expected: int) -> None:
     assert socket_timeout_connection.execute.call_count == expected, (
         f"Expected {expected} (failed) attempts with main connection pool"
     )
-
-
-def test_pool_size_defaults_to_process_concurrency() -> None:
-    # A granian blocking thread runs one query at a time, so a pool larger than
-    # the thread count can never be fully checked out.
-    from snuba.utils.concurrency import process_query_concurrency
-
-    pool = ClickhouseNativePool("host", 9000, "u", "p", "db")
-    assert pool.max_pool_size == process_query_concurrency()
-    assert pool.pool.maxsize == process_query_concurrency()
-
-
-def test_explicit_pool_size_overrides_derived() -> None:
-    pool = ClickhouseNativePool("host", 9000, "u", "p", "db", max_pool_size=3)
-    assert pool.max_pool_size == 3
