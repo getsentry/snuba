@@ -2,10 +2,8 @@ from dataclasses import asdict
 
 import pytest
 
-from snuba.clusters.cluster import ClickhouseCluster
+from snuba.clusters.cluster import ClickhouseCluster, _build_cluster, _build_sliced_cluster
 from snuba.consumers.consumer_config import resolve_consumer_config
-from snuba.datasets.storages.factory import get_writable_storage
-from snuba.datasets.storages.storage_key import StorageKey
 
 
 def test_consumer_config() -> None:
@@ -36,9 +34,7 @@ def test_consumer_config() -> None:
         == "replacements:9092,replacements-2:9092"
     )
     assert resolved.dlq_topic is None
-    cluster = get_writable_storage(StorageKey("errors")).get_cluster()
-    assert resolved.storages[0].clickhouse_cluster.verify == cluster.get_verify()
-    assert asdict(resolved.storages[0].clickhouse_cluster)["verify"] == cluster.get_verify()
+    assert asdict(resolved.storages[0].clickhouse_cluster)["verify"] is True
 
     # Invalid storage raises
     with pytest.raises(KeyError):
@@ -56,21 +52,8 @@ def test_consumer_config() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    ("raw", "expected"),
-    [
-        (None, True),
-        (True, True),
-        (False, False),
-        ("true", True),
-        ("1", True),
-        ("false", False),
-        ("FALSE", False),
-        ("0", False),
-    ],
-)
-def test_get_verify_coercion(raw: bool | str | None, expected: bool) -> None:
-    cluster = ClickhouseCluster(
+def _cluster_with_verify(raw: bool | str | None) -> ClickhouseCluster:
+    return ClickhouseCluster(
         host="localhost",
         port=9000,
         user="default",
@@ -83,4 +66,86 @@ def test_get_verify_coercion(raw: bool | str | None, expected: bool) -> None:
         storage_sets={"events"},
         single_node=True,
     )
-    assert cluster.get_verify() is expected
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (None, True),
+        (True, True),
+        (False, False),
+        ("true", True),
+        ("TRUE", True),
+        ("1", True),
+        ("false", False),
+        ("FALSE", False),
+        ("False", False),
+        ("  false  ", False),
+        ("\nfalse\n", False),
+        ("\t0\t", False),
+        ("0", False),
+        ("", True),
+        ("   ", True),
+        ("yes", True),
+        ("no", True),
+        ("off", True),
+        ("on", True),
+        ("fals", True),
+        ("garbage", True),
+        ("/path/to/ca.pem", True),
+    ],
+)
+def test_get_verify_coercion(raw: bool | str | None, expected: bool) -> None:
+    assert _cluster_with_verify(raw).get_verify() is expected
+
+
+def test_cluster_omitted_verify_defaults_true() -> None:
+    cluster = _build_cluster(
+        {
+            "host": "localhost",
+            "port": 9000,
+            "user": "default",
+            "password": "",
+            "database": "default",
+            "http_port": 8123,
+            "secure": True,
+            "storage_sets": {"events"},
+            "single_node": True,
+        }
+    )
+    assert cluster.get_verify() is True
+
+
+def test_sliced_cluster_omitted_verify_defaults_true() -> None:
+    cluster = _build_sliced_cluster(
+        {
+            "host": "localhost",
+            "port": 9000,
+            "user": "default",
+            "password": "",
+            "database": "default",
+            "http_port": 8123,
+            "secure": True,
+            "storage_set_slices": {("events", 0)},
+            "single_node": True,
+        }
+    )
+    assert cluster.get_verify() is True
+
+
+def test_sliced_cluster_explicit_verify_false() -> None:
+    cluster = _build_sliced_cluster(
+        {
+            "host": "localhost",
+            "port": 9000,
+            "user": "default",
+            "password": "",
+            "database": "default",
+            "http_port": 8123,
+            "secure": True,
+            "verify": False,
+            "storage_set_slices": {("events", 0)},
+            "single_node": True,
+        }
+    )
+    assert cluster.get_verify() is False

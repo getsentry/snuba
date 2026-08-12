@@ -230,6 +230,10 @@ where
 
 impl_writer_delegate!(RowBinaryWriterStep);
 
+fn accept_invalid_clickhouse_tls(secure: bool, verify: bool) -> bool {
+    secure && !verify
+}
+
 struct FailedAttempt {
     status: String,
     timeout: bool,
@@ -295,7 +299,7 @@ impl ClickhouseClient {
             .tcp_keepalive(timeouts.tcp_keepalive)
             .tcp_keepalive_interval(timeouts.tcp_keepalive_interval)
             .tcp_keepalive_retries(timeouts.tcp_keepalive_retries);
-        if config.secure && !config.verify {
+        if accept_invalid_clickhouse_tls(config.secure, config.verify) {
             builder = builder
                 .tls_danger_accept_invalid_certs(true)
                 .tls_danger_accept_invalid_hostnames(true);
@@ -875,7 +879,15 @@ mod tests {
     }
 
     #[test]
-    fn test_https_keeps_credentials_when_verify_disabled() {
+    fn test_accept_invalid_clickhouse_tls() {
+        assert!(accept_invalid_clickhouse_tls(true, false));
+        assert!(!accept_invalid_clickhouse_tls(true, true));
+        assert!(!accept_invalid_clickhouse_tls(false, false));
+        assert!(!accept_invalid_clickhouse_tls(false, true));
+    }
+
+    #[test]
+    fn test_https_url_and_auth_headers_preserved_when_verify_disabled() {
         let config = ClickhouseConfig {
             host: "clickhouse.example".to_string(),
             port: 9000,

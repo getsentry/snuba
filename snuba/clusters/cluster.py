@@ -417,7 +417,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             self.__database,
             self.__secure,
             self.__ca_certs,
-            self.__verify,
+            self.get_verify(),
         )
 
     def get_deleter(self) -> Reader:
@@ -466,7 +466,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             password=self.__password,
             secure=self.__secure,
             ca_certs=self.__ca_certs,
-            verify=self.__verify,
+            verify=self.get_verify(),
             metrics=metrics,
             statement=insert_statement.with_database(self.__database),
             encoding=encoding,
@@ -559,19 +559,20 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         return self.__secure
 
     def get_verify(self) -> bool:
-        # CLICKHOUSE_VERIFY is read as a raw env string; do not use truthiness
-        # of "false". Unset (None) stays verifying so Rust keeps current TLS
-        # behavior until verify is explicitly disabled.
+        # Fail closed: only an explicit false/"false"/"0" disables TLS
+        # verification. Unset, empty, and unrecognized values stay verifying.
         verify = self.__verify
+        if isinstance(verify, bool):
+            return verify
         if verify is None:
             return True
         if isinstance(verify, str):
-            return verify.lower() in ("true", "1")
-        return bool(verify)
+            return verify.strip().lower() not in ("false", "0")
+        return True
 
 
-CLUSTERS = [
-    ClickhouseCluster(
+def _build_cluster(cluster: Mapping[str, Any]) -> ClickhouseCluster:
+    return ClickhouseCluster(
         host=cluster["host"],
         port=cluster["port"],
         user=cluster.get("user", "default"),
@@ -580,7 +581,7 @@ CLUSTERS = [
         http_port=cluster["http_port"],
         secure=cluster.get("secure", False),
         ca_certs=cluster.get("ca_certs", None),
-        verify=cluster.get("verify", False),
+        verify=cluster.get("verify"),
         storage_sets=cluster["storage_sets"],
         single_node=cluster["single_node"],
         cluster_name=cluster.get("cluster_name", None),
@@ -589,8 +590,9 @@ CLUSTERS = [
         query_settings_prefix=cluster.get("query_settings_prefix"),
         max_connections=cluster.get("max_connections", _DEFAULT_MAX_CONNECTIONS),
     )
-    for cluster in settings.CLUSTERS
-]
+
+
+CLUSTERS = [_build_cluster(cluster) for cluster in settings.CLUSTERS]
 
 _registered_storage_sets = [
     storage_set for cluster in CLUSTERS for storage_set in cluster.get_storage_set_keys()
@@ -621,7 +623,7 @@ def _build_sliced_cluster(cluster: Mapping[str, Any]) -> ClickhouseCluster:
         http_port=cluster["http_port"],
         secure=cluster.get("secure", False),
         ca_certs=cluster.get("ca_certs", None),
-        verify=cluster.get("verify", False),
+        verify=cluster.get("verify"),
         storage_sets={storage_tuple[0] for storage_tuple in cluster["storage_set_slices"]},
         single_node=cluster["single_node"],
         cluster_name=cluster.get("cluster_name", None),
