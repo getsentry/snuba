@@ -7,7 +7,7 @@ those pieces so a new migration only has to describe what actually changes
 (usually the sampling predicate and the version it bumps to).
 """
 
-from typing import Callable, List, Sequence
+from collections.abc import Callable, Sequence
 
 from snuba.clickhouse.columns import Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
@@ -45,13 +45,13 @@ TRANSFORMED_COLUMNS = frozenset(
 
 def get_eap_items_columns(
     num_attr_buckets: int = DEFAULT_NUM_ATTR_BUCKETS,
-) -> List[Column[Modifiers]]:
+) -> list[Column[Modifiers]]:
     """Return a fresh ``eap_items`` column list.
 
     A new list is returned on every call so callers can freely append or
     tweak columns without mutating shared state.
     """
-    columns: List[Column[Modifiers]] = [
+    columns: list[Column[Modifiers]] = [
         Column("organization_id", UInt(64)),
         Column("project_id", UInt(64)),
         Column("item_type", UInt(8)),
@@ -141,7 +141,7 @@ def swap_downsample_materialized_views(
     sampling_weights: Sequence[int] = SAMPLING_WEIGHTS,
     storage_set: StorageSetKey = EAP_STORAGE_SET_KEY,
     table_prefix: str = "eap_items_1_downsample",
-) -> List[SqlOperation]:
+) -> list[SqlOperation]:
     """Create one downsample materialized view per sampling weight and drop
     the previous version.
 
@@ -149,7 +149,7 @@ def swap_downsample_materialized_views(
     the create/drop versions and the query swapped, so a migration can call
     this for each direction.
     """
-    ops: List[SqlOperation] = []
+    ops: list[SqlOperation] = []
     for sampling_weight in sampling_weights:
         view_base = f"{table_prefix}_{sampling_weight}"
         ops.extend(

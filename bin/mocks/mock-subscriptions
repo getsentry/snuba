@@ -12,9 +12,7 @@ from snuba.subscriptions.subscription import SubscriptionCreator
 from snuba.utils.metrics.timer import Timer
 
 parser = argparse.ArgumentParser(description="Mock subscriptions")
-parser.add_argument(
-    "--number", type=int, help="Number of subscriptions to create", dest="number"
-)
+parser.add_argument("--number", type=int, help="Number of subscriptions to create", dest="number")
 parser.add_argument(
     "--project-id",
     type=int,
@@ -64,9 +62,7 @@ for _ in range(parsed.number):
         metadata={},
     )
 
-    identifier = SubscriptionCreator(dataset, entity_key).create(
-        subscription_data, timer
-    )
+    identifier = SubscriptionCreator(dataset, entity_key).create(subscription_data, timer)
 
     print(f"Created {identifier}")
 
