@@ -1,6 +1,11 @@
+from dataclasses import asdict
+
 import pytest
 
+from snuba.clusters.cluster import ClickhouseCluster
 from snuba.consumers.consumer_config import resolve_consumer_config
+from snuba.datasets.storages.factory import get_writable_storage
+from snuba.datasets.storages.storage_key import StorageKey
 
 
 def test_consumer_config() -> None:
@@ -31,6 +36,9 @@ def test_consumer_config() -> None:
         == "replacements:9092,replacements-2:9092"
     )
     assert resolved.dlq_topic is None
+    cluster = get_writable_storage(StorageKey("errors")).get_cluster()
+    assert resolved.storages[0].clickhouse_cluster.verify == cluster.get_verify()
+    assert asdict(resolved.storages[0].clickhouse_cluster)["verify"] == cluster.get_verify()
 
     # Invalid storage raises
     with pytest.raises(KeyError):
@@ -46,3 +54,33 @@ def test_consumer_config() -> None:
             max_batch_size=1,
             max_batch_time_ms=1000,
         )
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (None, True),
+        (True, True),
+        (False, False),
+        ("true", True),
+        ("1", True),
+        ("false", False),
+        ("FALSE", False),
+        ("0", False),
+    ],
+)
+def test_get_verify_coercion(raw: bool | str | None, expected: bool) -> None:
+    cluster = ClickhouseCluster(
+        host="localhost",
+        port=9000,
+        user="default",
+        password="",
+        database="default",
+        http_port=8123,
+        secure=True,
+        ca_certs=None,
+        verify=raw,
+        storage_sets={"events"},
+        single_node=True,
+    )
+    assert cluster.get_verify() is expected

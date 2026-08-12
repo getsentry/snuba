@@ -342,7 +342,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         http_port: int,
         secure: bool,
         ca_certs: str | None,
-        verify: bool | None,
+        verify: bool | str | None,
         storage_sets: set[str],
         single_node: bool,
         # The cluster name and distributed cluster name only apply if single_node is set to False
@@ -557,6 +557,17 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
 
     def get_secure(self) -> bool:
         return self.__secure
+
+    def get_verify(self) -> bool:
+        # CLICKHOUSE_VERIFY is read as a raw env string; do not use truthiness
+        # of "false". Unset (None) stays verifying so Rust keeps current TLS
+        # behavior until verify is explicitly disabled.
+        verify = self.__verify
+        if verify is None:
+            return True
+        if isinstance(verify, str):
+            return verify.lower() in ("true", "1")
+        return bool(verify)
 
 
 CLUSTERS = [

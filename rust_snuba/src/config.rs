@@ -92,6 +92,10 @@ pub struct StorageConfig {
     pub message_processor: MessageProcessorConfig,
 }
 
+fn default_verify() -> bool {
+    true
+}
+
 #[derive(Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct ClickhouseConfig {
@@ -102,6 +106,8 @@ pub struct ClickhouseConfig {
     pub user: String,
     pub password: String,
     pub database: String,
+    #[serde(default = "default_verify")]
+    pub verify: bool,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -152,5 +158,41 @@ mod tests {
             topic_config.broker_config["queued.max.messages.kbytes"],
             "10000"
         );
+    }
+
+    fn parse_clickhouse_config(verify_json: &str) -> ClickhouseConfig {
+        let raw = format!(
+            r#"{{
+                "host": "ch.example",
+                "port": 9000,
+                "secure": true,
+                "http_port": 8443,
+                "user": "default",
+                "password": "secret",
+                "database": "default"{verify_json}
+            }}"#
+        );
+        serde_json::from_str(&raw).unwrap()
+    }
+
+    #[test]
+    fn test_clickhouse_verify_defaults_to_true_when_omitted() {
+        let cfg = parse_clickhouse_config("");
+        assert!(cfg.verify);
+        assert!(cfg.secure);
+        assert_eq!(cfg.user, "default");
+        assert_eq!(cfg.password, "secret");
+    }
+
+    #[test]
+    fn test_clickhouse_verify_false() {
+        let cfg = parse_clickhouse_config(r#", "verify": false"#);
+        assert!(!cfg.verify);
+    }
+
+    #[test]
+    fn test_clickhouse_verify_true() {
+        let cfg = parse_clickhouse_config(r#", "verify": true"#);
+        assert!(cfg.verify);
     }
 }
