@@ -187,7 +187,8 @@ def _convert_aggregation_to_conditional_aggregation(
                         key=aggregation.key,
                         label=aggregation.label,
                         extrapolation_mode=aggregation.extrapolation_mode,
-                        **ranked_by,
+                        # mypy can't type-check **unpack of an kwarg dict
+                        **ranked_by,  # type: ignore[arg-type]
                     )
                 )
             case "default_value_double":
@@ -198,7 +199,8 @@ def _convert_aggregation_to_conditional_aggregation(
                         label=aggregation.label,
                         extrapolation_mode=aggregation.extrapolation_mode,
                         default_value_double=aggregation.default_value_double,
-                        **ranked_by,
+                        # mypy can't type-check **unpack of an kwarg dict
+                        **ranked_by,  # type: ignore[arg-type]
                     )
                 )
             case "default_value_int64":
@@ -209,7 +211,8 @@ def _convert_aggregation_to_conditional_aggregation(
                         label=aggregation.label,
                         extrapolation_mode=aggregation.extrapolation_mode,
                         default_value_int64=aggregation.default_value_int64,
-                        **ranked_by,
+                        # mypy can't type-check **unpack of an kwarg dict
+                        **ranked_by,  # type: ignore[arg-type]
                     )
                 )
             case default:
