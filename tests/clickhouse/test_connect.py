@@ -115,21 +115,10 @@ def test_execute_passes_query_id_and_settings() -> None:
     _, kwargs = client.query.call_args
     assert kwargs["settings"]["query_id"] == "my-query-id"
     assert kwargs["settings"]["max_threads"] == 4
-    assert kwargs["settings"]["default_format"] == "Native"
+    assert kwargs["transport_settings"] == {"X-ClickHouse-Format": "Native"}
 
 
-def test_execute_default_format_can_be_overridden() -> None:
-    client = mock.Mock()
-    client.query.return_value = FakeQueryResult(result_set=[])
-
-    pool = _make_pool(client)
-    pool.execute("SELECT 1", settings={"default_format": "JSONEachRow"})
-
-    _, kwargs = client.query.call_args
-    assert kwargs["settings"]["default_format"] == "JSONEachRow"
-
-
-def test_execute_forces_native_default_format_for_embedded_insert_sql() -> None:
+def test_execute_handles_embedded_insert_sql() -> None:
     client = mock.Mock()
     client.query.return_value = FakeQueryResult(result_set=[])
 
@@ -143,8 +132,8 @@ def test_execute_forces_native_default_format_for_embedded_insert_sql() -> None:
 
     args, kwargs = client.query.call_args
     assert args[0] == sql
-    assert kwargs["settings"]["default_format"] == "Native"
     assert kwargs["settings"]["query_id"] == "qid"
+    assert kwargs["transport_settings"] == {"X-ClickHouse-Format": "Native"}
 
 
 def test_insert_dict_rows_use_client_insert() -> None:

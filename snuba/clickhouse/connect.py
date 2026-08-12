@@ -226,9 +226,6 @@ class ClickhouseConnectPool(ClickhousePool):
             query_settings["query_id"] = query_id
         if capture_trace:
             query_settings["send_logs_level"] = "trace"
-        # Keep the response Native when clickhouse-connect misclassifies a SELECT
-        # containing `INSERT INTO` in a string literal.
-        query_settings.setdefault("default_format", "Native")
         return query_settings or None
 
     def _consume_query_result(
@@ -293,6 +290,7 @@ class ClickhouseConnectPool(ClickhousePool):
                     parameters=_driver_params(params),
                     settings=query_settings,
                     column_oriented=columnar,
+                    transport_settings={"X-ClickHouse-Format": "Native"},
                 )
             return self._consume_query_result(query_result, with_column_types, query_id)
         finally:
