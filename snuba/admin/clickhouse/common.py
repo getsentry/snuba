@@ -431,12 +431,17 @@ def _normalize_for_scanning(sql_query: str) -> str:
             continue
         # Comments are removed rather than kept, because ClickHouse removes them
         # too: `url#c<newline>(...)` runs as url(...), so a scan that leaves the
-        # comment in place sees `url# c (` and matches nothing.
-        if ch == "#" or sql_query.startswith("--", i):
+        # comment in place sees `url# c (` and matches nothing. ClickHouse
+        # documents five forms -- `--`, `#`, `#!`, `//` ("or more than 2 /
+        # characters") and `/* */` -- and all of them are handled here. Matching
+        # a bare `#` also covers `#!`, and a `//` prefix covers `///`.
+        if ch == "#" or sql_query.startswith("--", i) or sql_query.startswith("//", i):
             newline = sql_query.find("\n", i)
             i = n if newline == -1 else newline + 1
             continue
         if sql_query.startswith("/*", i):
+            # ClickHouse nests these; closing at the first */ only ever leaves
+            # more text in the scan than it should, never less.
             close = sql_query.find("*/", i + 2)
             i = n if close == -1 else close + 2
             continue
@@ -569,7 +574,8 @@ def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) ->
         "replace",
         ";",  # Prevent query chaining
         "--",  # Prevent comment-based injection
-        "#",  # ClickHouse treats this as a line comment too
+        "#",  # ClickHouse line comment, and covers #!
+        "//",  # ClickHouse C-style line comment, and covers ///
         "/*",  # Prevent multi-line comment injection
         "*/",
         "exec",
