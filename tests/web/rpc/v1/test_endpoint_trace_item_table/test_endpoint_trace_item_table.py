@@ -60,6 +60,7 @@ from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
 
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.protos.common import _resolve_canonical
 from snuba.query import LimitBy, OrderBy, OrderByDirection
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column as snuba_column
@@ -3617,10 +3618,13 @@ class TestTraceItemTable(BaseApiTest):
         ]
 
     def test_coalesce_attributes(self) -> None:
-        span_ts = BASE_TIME + timedelta(minutes=1)
+        deprecated_attribute = "ai.model_id"
+        canonical_replacement = _resolve_canonical(deprecated_attribute)
+        assert deprecated_attribute != canonical_replacement
 
         # we write the old attribute name
-        write_eap_item(span_ts, {"ai.model_id": "sentaur"})
+        span_ts = BASE_TIME + timedelta(minutes=1)
+        write_eap_item(span_ts, {deprecated_attribute: "sentaur"})
 
         # we query and filter on the new attribute name
         message = TraceItemTableRequest(
@@ -3637,7 +3641,7 @@ class TestTraceItemTable(BaseApiTest):
                 comparison_filter=ComparisonFilter(
                     key=AttributeKey(
                         type=AttributeKey.TYPE_STRING,
-                        name="gen_ai.request.model",
+                        name=canonical_replacement,
                     ),
                     op=ComparisonFilter.OP_EQUALS,
                     value=AttributeValue(val_str="sentaur"),
@@ -3647,7 +3651,7 @@ class TestTraceItemTable(BaseApiTest):
                 Column(
                     key=AttributeKey(
                         type=AttributeKey.TYPE_STRING,
-                        name="gen_ai.request.model",
+                        name=canonical_replacement,
                     )
                 ),
             ],
@@ -3656,7 +3660,7 @@ class TestTraceItemTable(BaseApiTest):
 
         assert response.column_values == [
             TraceItemColumnValues(
-                attribute_name="gen_ai.request.model",
+                attribute_name=canonical_replacement,
                 results=[
                     AttributeValue(val_str="sentaur"),
                 ],
@@ -3665,8 +3669,12 @@ class TestTraceItemTable(BaseApiTest):
 
     def test_exists_filter_on_coalesced_deprecated_key(self) -> None:
         """exists_filter on a canonical key must match spans that only have the deprecated key."""
+        deprecated_attribute = "ai.model_id"
+        canonical_replacement = _resolve_canonical(deprecated_attribute)
+        assert deprecated_attribute != canonical_replacement
+
         span_ts = BASE_TIME + timedelta(minutes=1)
-        write_eap_item(span_ts, {"ai.model_id": "sentaur"})
+        write_eap_item(span_ts, {deprecated_attribute: "sentaur"})
 
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -3682,7 +3690,7 @@ class TestTraceItemTable(BaseApiTest):
                 exists_filter=ExistsFilter(
                     key=AttributeKey(
                         type=AttributeKey.TYPE_STRING,
-                        name="gen_ai.request.model",
+                        name=canonical_replacement,
                     ),
                 )
             ),
@@ -3690,7 +3698,7 @@ class TestTraceItemTable(BaseApiTest):
                 Column(
                     key=AttributeKey(
                         type=AttributeKey.TYPE_STRING,
-                        name="gen_ai.request.model",
+                        name=canonical_replacement,
                     )
                 ),
             ],
@@ -3699,7 +3707,7 @@ class TestTraceItemTable(BaseApiTest):
 
         assert response.column_values == [
             TraceItemColumnValues(
-                attribute_name="gen_ai.request.model",
+                attribute_name=canonical_replacement,
                 results=[
                     AttributeValue(val_str="sentaur"),
                 ],
