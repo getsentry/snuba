@@ -39,7 +39,7 @@ from snuba.processor import (
 )
 from snuba.replacers.projects_query_flags import ProjectsQueryFlags
 from snuba.replacers.replacements_and_expiry import (
-    get_config_auto_replacements_bypass_projects,
+    get_auto_replacements_bypass_projects_cached,
 )
 from snuba.replacers.replacer_processor import Replacement as ReplacementBase
 from snuba.replacers.replacer_processor import (
@@ -180,10 +180,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
 
         if processed is not None:
             manual_bypass_projects = get_option("replacements_bypass_projects", "[]")
-            auto_bypass_projects = list(
-                get_config_auto_replacements_bypass_projects(datetime.now()).keys()
-            )
-            projects_to_skip = auto_bypass_projects
+            projects_to_skip = list(get_auto_replacements_bypass_projects_cached(datetime.now()))
             if manual_bypass_projects is not None:
                 try:
                     projects_to_skip.extend(json.loads(manual_bypass_projects))
@@ -192,14 +189,10 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                     logger.exception(e)
             metrics.gauge("projects_to_skip", value=len(projects_to_skip))
             if processed.get_project_id() in projects_to_skip:
-                # For a persistent non rate limited logger
+                # Deliberate load shedding, not an error: logged below ERROR so it stays
+                # out of Sentry. `replacement_message_skipped` is the signal to alert on.
                 logger.info(
                     f"Skipping replacement for project. Data {message}, Partition: {message.metadata.partition_index}, Offset: {message.metadata.offset}",
-                )
-                # For sentry tracking
-                logger.error(
-                    "Skipping replacement for project",
-                    extra={"project_id": processed.get_project_id(), "data": message},
                 )
                 metrics.increment(
                     "replacement_message_skipped",
@@ -607,9 +600,15 @@ class MergeReplacement(Replacement):
         txn = message.data.get("transaction_id")
         if txn:
             if txn in SEEN_MERGE_TXN_CACHE:
-                logger.error(
+                # Expected dedup, not an error: kept below ERROR so it stays out of Sentry.
+                logger.info(
                     "Skipping duplicate group replacement",
                     extra={"project_id": project_id},
+                )
+                metrics.increment(
+                    "duplicate_group_replacement_skipped",
+                    1,
+                    tags={"consumer_group": message.metadata.consumer_group},
                 )
                 return None
             SEEN_MERGE_TXN_CACHE.append(txn)

@@ -337,6 +337,11 @@
       "default": 1.0,
       "description": "Fraction of the counter window a project may spend on replacements before it is reported as exceeding the time limit."
     },
+    "auto_replacements_bypass_cache_ttl_seconds": {
+      "type": "number",
+      "default": 5.0,
+      "description": "Seconds the replacer caches the auto-replacements bypass set read from Redis before refreshing it. Entry expiry is still evaluated exactly on each read."
+    },
     "counter_window_size_minutes": {
       "type": "integer",
       "default": 10,

@@ -28,18 +28,25 @@ class Counter:
     """
     The Counter class is used to track time spent on some activity (e.g. processing a replacement) for a project.
     To accomplish this, the `record_time_spent()` function captures some processing time range and splits it by a per
-    minute resolution (Bucket). The buckets older than COUNTER_WINDOW_SIZE are trimmed. Finally, the `get_bucket_totals_exceeding_limit()`
-    function returns all project ids who's total processing time has exceeded self.limit.
+    minute resolution (Bucket). The buckets older than the counter window are trimmed. Finally, the
+    `get_projects_exceeding_limit()` function returns all project ids who's total processing time has exceeded
+    self.limit.
+
+    A Counter lives for the life of the process, so the window and limit are properties
+    rather than attributes: snapshotting them left their options inert until restart.
     """
 
     def __init__(self, consumer_group: str) -> None:
         self.consumer_group: str = consumer_group
         self.buckets: Buckets = {}
 
-        percentage = get_option("project_quota_time_percentage", 1.0)
-        counter_window_size_minutes = get_option("counter_window_size_minutes", 10)
-        self.counter_window_size = timedelta(minutes=counter_window_size_minutes)
-        self.limit = self.counter_window_size * percentage
+    @property
+    def counter_window_size(self) -> timedelta:
+        return timedelta(minutes=get_option("counter_window_size_minutes", 10))
+
+    @property
+    def limit(self) -> timedelta:
+        return self.counter_window_size * get_option("project_quota_time_percentage", 1.0)
 
     def __trim_expired_buckets(self, now: datetime) -> None:
         current_minute = floor_minute(now)
@@ -84,12 +91,13 @@ class Counter:
                 project_groups[project_id] += processing_time
 
         # Compare the replacement total grouped by project_id with system time limit
+        limit = self.limit
+        skips_single_project = len(project_groups) > 1 or get_option(
+            "allows_skipping_single_project_replacements", False
+        )
         projects_exceeding_time_limit = []
         for project_id, total_processing_time in project_groups.items():
-            if total_processing_time > self.limit and (
-                len(project_groups) > 1
-                or get_option("allows_skipping_single_project_replacements", False)
-            ):
+            if total_processing_time > limit and skips_single_project:
                 projects_exceeding_time_limit.append(project_id)
 
         metrics.timing(

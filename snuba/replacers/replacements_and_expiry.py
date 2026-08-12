@@ -20,6 +20,10 @@ config_auto_replacements_bypass_projects_hash = (
 )
 
 REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY = "replacements_expiry_window_minutes"
+AUTO_REPLACEMENTS_BYPASS_CACHE_TTL_KEY = "auto_replacements_bypass_cache_ttl_seconds"
+
+_cached_projects: Mapping[int, datetime] = {}
+_cached_projects_at: float | None = None
 
 
 def set_config_auto_replacements_bypass_projects(
@@ -68,6 +72,30 @@ def _retrieve_projects_from_redis() -> Mapping[int, datetime]:
         metrics.increment("retrieve_projects_from_redis_error")
         logger.exception(e)
         return {}
+
+
+def _retrieve_projects_cached() -> Mapping[int, datetime]:
+    """Read the bypass hash from Redis at most once per TTL. The replacer consults it
+    for every replacement message, which is too hot for a Redis round trip."""
+    global _cached_projects, _cached_projects_at
+
+    ttl = get_option(AUTO_REPLACEMENTS_BYPASS_CACHE_TTL_KEY, 5.0)
+    now = time.monotonic()
+    if _cached_projects_at is None or now - _cached_projects_at >= ttl:
+        _cached_projects = _retrieve_projects_from_redis()
+        _cached_projects_at = now
+        metrics.increment("auto_replacements_bypass_cache_refresh")
+    return _cached_projects
+
+
+def get_auto_replacements_bypass_projects_cached(curr_time: datetime) -> Sequence[int]:
+    """Projects currently bypassing replacements. Only the Redis read is cached, so
+    expiry is still exact; reaping expired entries is left to the uncached reader."""
+    return [
+        project_id
+        for project_id, expiry in _retrieve_projects_cached().items()
+        if expiry >= curr_time
+    ]
 
 
 def get_config_auto_replacements_bypass_projects(
