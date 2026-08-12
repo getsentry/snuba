@@ -1035,7 +1035,7 @@ class TestTraceItemTable(BaseApiTest):
         assert response.column_values[0].results[0].val_str == expected_marker
 
     # When multiple rows share the same ranked_by value, sort key is
-    # tuple(ranked_by, sentry.timestamp), so timestamp breaks the tie:
+    # tuple(ranked_by, sentry.timestamp, sentry.item_id), so timestamp breaks the tie:
     # FIRST/argMin -> earliest ts, LAST/argMax -> latest ts.
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
@@ -1078,6 +1078,69 @@ class TestTraceItemTable(BaseApiTest):
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
                     key=AttributeKey(type=AttributeKey.TYPE_STRING, name="tied_rank_marker")
+                )
+            ),
+            columns=[
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=aggregate,
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="marker_value"),
+                        label="ordered(marker_value)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                        ranked_by=RankedBy(
+                            key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="rank_attr"),
+                        ),
+                    ),
+                ),
+            ],
+            limit=1,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values[0].results[0].val_str == expected_marker
+
+    # When ranked_by and timestamp both tie, sort key falls through to sentry.item_id.
+    # Smaller item_id wins for FIRST; larger for LAST.
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    @pytest.mark.parametrize(
+        "aggregate,expected_marker",
+        [
+            (Function.FUNCTION_FIRST, "small_id"),
+            (Function.FUNCTION_LAST, "large_id"),
+        ],
+    )
+    def test_ordered_tied_ranked_by_and_timestamp_breaks_on_item_id(
+        self, aggregate: Function.ValueType, expected_marker: str
+    ) -> None:
+        same_ts = BASE_TIME + timedelta(minutes=1)
+        for item_id, marker in [
+            (b"\x00" * 15 + b"\x03", "large_id"),
+            (b"\x00" * 15 + b"\x02", "middle_id"),
+            (b"\x00" * 15 + b"\x01", "small_id"),
+        ]:
+            write_eap_item(
+                start_timestamp=same_ts,
+                item_id=item_id,
+                raw_attributes={
+                    "tied_item_id_marker": "1",
+                    "marker_value": marker,
+                    "rank_attr": 5.0,
+                },
+            )
+
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="tied_item_id_marker")
                 )
             ),
             columns=[

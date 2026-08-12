@@ -892,10 +892,13 @@ def _build_ordered_agg_sort_key(
     if ranked_by.key.type == AttributeKey.TYPE_STRING and ranked_by.sort == RankedBy.SORT_SEMVER:
         expression = semver_sort_key(expression)
 
-    tie_break = attribute_key_to_expression(
+    timestamp = attribute_key_to_expression(
         AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp")
     )
-    return f.tuple(expression, tie_break)
+    item_id = attribute_key_to_expression(
+        AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
+    )
+    return f.tuple(expression, timestamp, item_id)
 
 
 def aggregation_to_expression(
