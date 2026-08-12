@@ -76,4 +76,4 @@ stores = [
 
 print(f"Total {entity_key.value} subscriptions:")
 for i, store in enumerate(stores):
-    print(f"Store {i}: {len([s for s in store.all()])} subscriptions")
+    print(f"Store {i}: {len(list(store.all()))} subscriptions")
