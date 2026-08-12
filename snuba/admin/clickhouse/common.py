@@ -374,22 +374,18 @@ def _sql_quotes_are_balanced(sql_query: str) -> bool:
     return True
 
 
-def _strip_sql_string_literals(sql_query: str, quote_chars: tuple[str, ...] = ("'", '"')) -> str:
+def _strip_sql_string_literals(sql_query: str) -> str:
     """Replace quoted string contents with empty quotes for safety checks.
 
     Lets validators ignore disallowed tokens that only appear inside literals
     (e.g. a referrer filter value containing ``--`` or ``delete``).
-
-    ``quote_chars`` narrows what counts as a literal. ClickHouse only quotes
-    strings with ``'``; ``"`` quotes an identifier. Pass ``("'",)`` when the
-    caller needs identifiers left in place to be inspected.
     """
     out: list[str] = []
     i = 0
     n = len(sql_query)
     while i < n:
         ch = sql_query[i]
-        if ch in quote_chars:
+        if ch in ("'", '"'):
             end = _end_of_sql_string_literal(sql_query, i)
             if end is None:
                 # Unbalanced quote; leave remainder as-is for the caller to reject.
@@ -403,6 +399,50 @@ def _strip_sql_string_literals(sql_query: str, quote_chars: tuple[str, ...] = ("
         out.append(ch)
         i += 1
     return "".join(out)
+
+
+def _normalize_for_scanning(sql_query: str) -> str:
+    """Lower cased SQL with literals emptied and identifier quoting removed.
+
+    ClickHouse quotes strings with ``'`` and identifiers with ``"`` or a
+    backtick, and the table-function scan below needs all three handled in one
+    pass. Treating ``"`` as a string delimiter erases `"url"` from the scan
+    outright; treating it as ordinary text lets the apostrophe in `"a'b"` open a
+    literal that swallows a following `url(`. Either way a table function slips
+    past.
+
+    String literals collapse to ''; identifiers keep their contents but lose
+    their quoting, which is what makes `url`(...) normalize to url(...).
+    """
+    out: list[str] = []
+    i = 0
+    n = len(sql_query)
+    while i < n:
+        ch = sql_query[i]
+        if ch in ("'", '"', "`"):
+            end = _end_of_sql_string_literal(sql_query, i)
+            if end is None:
+                # Unterminated. Keep the remainder minus the opener so nothing
+                # hides behind it; _sql_quotes_are_balanced rejects it anyway.
+                out.append(sql_query[i + 1 :])
+                break
+            out.append("''" if ch == "'" else sql_query[i + 1 : end - 1])
+            i = end
+            continue
+        # Comments are removed rather than kept, because ClickHouse removes them
+        # too: `url#c<newline>(...)` runs as url(...), so a scan that leaves the
+        # comment in place sees `url# c (` and matches nothing.
+        if ch == "#" or sql_query.startswith("--", i):
+            newline = sql_query.find("\n", i)
+            i = n if newline == -1 else newline + 1
+            continue
+        if sql_query.startswith("/*", i):
+            close = sql_query.find("*/", i + 2)
+            i = n if close == -1 else close + 2
+            continue
+        out.append(ch)
+        i += 1
+    return " ".join("".join(out).lower().split())
 
 
 # sql_metadata does not report table functions in Parser.tables, so a query
@@ -529,6 +569,7 @@ def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) ->
         "replace",
         ";",  # Prevent query chaining
         "--",  # Prevent comment-based injection
+        "#",  # ClickHouse treats this as a line comment too
         "/*",  # Prevent multi-line comment injection
         "*/",
         "exec",
@@ -543,17 +584,7 @@ def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) ->
         elif kw in lowered:
             raise InvalidCustomQuery(f"{kw} is not allowed in the query")
 
-    # Scanned separately from `lowered`: a table function name can be written as
-    # a quoted identifier -- `url`(...) or "url"(...) -- which the patterns below
-    # would miss, and which stripping "..." as a literal would erase outright. So
-    # strip only real (single-quoted) literals, then drop the identifier quoting.
-    normalized = " ".join(
-        _strip_sql_string_literals(sql_query, ("'",))
-        .lower()
-        .replace("`", "")
-        .replace('"', "")
-        .split()
-    )
+    normalized = _normalize_for_scanning(sql_query)
     # Must run before the allowed_tables check below, which cannot see them.
     _reject_table_functions(normalized)
 

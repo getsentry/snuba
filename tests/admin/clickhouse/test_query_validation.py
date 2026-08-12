@@ -85,6 +85,11 @@ def test_comment_tokens_outside_literals_rejected() -> None:
         validate_ro_query("SELECT * FROM my_table -- drop everything")
     with pytest.raises(InvalidCustomQuery):
         validate_ro_query("SELECT * FROM my_table /* bad */")
+    # ClickHouse also treats # as a line comment.
+    with pytest.raises(InvalidCustomQuery):
+        validate_ro_query("SELECT * FROM my_table # drop everything")
+    # ...but inside a literal it is just data.
+    validate_ro_query("SELECT * FROM my_table WHERE referrer = 'a#b'")
 
 
 @pytest.mark.parametrize(
@@ -109,6 +114,16 @@ def test_comment_tokens_outside_literals_rejected() -> None:
         "SELECT * FROM `url`('http://evil/x', CSV, 'a String')",
         "SELECT * FROM \"url\"('http://evil/x', CSV, 'a String')",
         "SELECT * FROM `remote`('h:9000', system.users)",
+        # An apostrophe inside a quoted identifier must not open a literal that
+        # swallows the function name that follows it.
+        """SELECT * FROM "a'b", url('http://evil/x', CSV, 'a String')""",
+        """SELECT * FROM `a'b`, url('http://evil/x', CSV, 'a String')""",
+        """SELECT * FROM "a'b", `remote`('h:9000', system.users)""",
+        # ClickHouse strips # and /* */ before parsing, so a comment between the
+        # name and its ( must not hide the call from the scan either.
+        "SELECT * FROM url#c\n('http://evil/x', CSV, 'a String')",
+        "SELECT * FROM url#\n('http://evil/x', CSV, 'a String')",
+        "SELECT * FROM remote/*c*/('h:9000', system.users)",
         "SELECT * FROM \"merge\"('default', '.*')",
         # Following an allowed one must not end the scan.
         "SELECT * FROM clusterAllReplicas('c', my_table) JOIN merge('default', '.*') USING x",
@@ -130,6 +145,7 @@ def test_table_functions_rejected(query: str) -> None:
         "SELECT * FROM my_table WHERE referrer = 'url(http://x)'",
         # A quoted table name is still just a table.
         "SELECT * FROM `my_table`",
+        'SELECT * FROM "my_table"',
     ],
 )
 def test_legitimate_queries_still_allowed(query: str) -> None:
