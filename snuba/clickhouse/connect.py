@@ -291,7 +291,7 @@ class ClickhouseConnectPool(ClickhousePool):
                     parameters=_driver_params(params),
                     settings=query_settings,
                     column_oriented=columnar,
-                    transport_settings=_CLICKHOUSE_CONNECT_TRANSPORT_SETTINGS,
+                    transport_settings=dict(_CLICKHOUSE_CONNECT_TRANSPORT_SETTINGS),
                 )
             return self._consume_query_result(query_result, with_column_types, query_id)
         finally:
