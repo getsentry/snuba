@@ -1,4 +1,4 @@
-from typing import Callable, List
+from collections.abc import Callable
 
 from snuba.clickhouse.columns import Column
 from snuba.clusters.storage_sets import StorageSetKey
@@ -19,7 +19,7 @@ table_name_prefix = "eap_items_1"
 sampling_weights = SAMPLING_WEIGHTS
 
 # New UUID identifier columns, added after `trace_id`.
-new_columns: List[Column[Modifiers]] = [
+new_columns: list[Column[Modifiers]] = [
     Column("conversation_id", UUID()),
     Column("session_id", UUID()),
 ]
@@ -40,7 +40,7 @@ mv_new_version = mv_old_version + 1
 # last base column. Reconstructed here so the rebuilt views match the mv_7 column
 # set without touching the shared get_eap_items_columns() helper.
 _codec = Modifiers(codecs=["ZSTD(1)"])
-array_attribute_columns: List[Column[Modifiers]] = [
+array_attribute_columns: list[Column[Modifiers]] = [
     Column("attributes_array_string", Map(String(), Array(String()), modifiers=_codec)),
     Column("attributes_array_int", Map(String(), Array(Int(64)), modifiers=_codec)),
     Column("attributes_array_float", Map(String(), Array(Float(64)), modifiers=_codec)),
@@ -48,14 +48,14 @@ array_attribute_columns: List[Column[Modifiers]] = [
 ]
 
 
-def _mv7_columns() -> List[Column[Modifiers]]:
+def _mv7_columns() -> list[Column[Modifiers]]:
     """The mv_7 column list: base columns plus the array columns from migration 0059."""
     columns = get_eap_items_columns()
     columns.extend(array_attribute_columns)
     return columns
 
 
-def _mv_columns_with_new() -> List[Column[Modifiers]]:
+def _mv_columns_with_new() -> list[Column[Modifiers]]:
     """The mv_7 column list with the new columns inserted after `trace_id`.
 
     Built locally rather than in ``get_eap_items_columns`` so the earlier
@@ -66,7 +66,7 @@ def _mv_columns_with_new() -> List[Column[Modifiers]]:
     return columns[:insert_at] + list(new_columns) + columns[insert_at:]
 
 
-def _query_for_weight(columns: List[Column[Modifiers]]) -> Callable[[int], str]:
+def _query_for_weight(columns: list[Column[Modifiers]]) -> Callable[[int], str]:
     # Un-perturbed per-item hash, matching the current mv_7 sampling.
     def inner(sampling_weight: int) -> str:
         return downsample_mv_select(
@@ -78,17 +78,17 @@ def _query_for_weight(columns: List[Column[Modifiers]]) -> Callable[[int], str]:
     return inner
 
 
-def _table_prefixes() -> List[str]:
+def _table_prefixes() -> list[str]:
     return [table_name_prefix] + [
         f"eap_items_1_downsample_{sampling_weight}" for sampling_weight in sampling_weights
     ]
 
 
-def _local_tables() -> List[str]:
+def _local_tables() -> list[str]:
     return [f"{prefix}_local" for prefix in _table_prefixes()]
 
 
-def _ro_dist_tables() -> List[str]:
+def _ro_dist_tables() -> list[str]:
     # Read-only distributed tables (CREATE TABLE ... AS) don't inherit schema
     # changes from their source, so the columns are added explicitly.
     return [f"{table_name_prefix}_dist_ro"] + [
@@ -99,11 +99,11 @@ def _ro_dist_tables() -> List[str]:
 class Migration(migration.ClickhouseNodeMigration):
     blocking = False
 
-    def forwards_ops(self) -> List[SqlOperation]:
-        ops: List[SqlOperation] = []
+    def forwards_ops(self) -> list[SqlOperation]:
+        ops: list[SqlOperation] = []
 
         for prefix in _table_prefixes():
-            for column, after in zip(new_columns, add_column_after):
+            for column, after in zip(new_columns, add_column_after, strict=False):
                 ops.extend(
                     [
                         operations.AddColumn(
@@ -124,7 +124,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 )
 
         for ro_table in _ro_dist_tables():
-            for column, after in zip(new_columns, add_column_after):
+            for column, after in zip(new_columns, add_column_after, strict=False):
                 ops.append(
                     operations.AddColumn(
                         storage_set=ro_storage_set,
@@ -162,10 +162,10 @@ class Migration(migration.ClickhouseNodeMigration):
 
         return ops
 
-    def backwards_ops(self) -> List[SqlOperation]:
+    def backwards_ops(self) -> list[SqlOperation]:
         # Restore the mv_7 views before dropping the columns they read from.
         base_columns = _mv7_columns()
-        ops: List[SqlOperation] = list(
+        ops: list[SqlOperation] = list(
             swap_downsample_materialized_views(
                 columns=base_columns,
                 create_version=mv_old_version,
