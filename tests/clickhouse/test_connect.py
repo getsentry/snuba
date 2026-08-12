@@ -5,7 +5,11 @@ from unittest import mock
 
 import pytest
 
-from snuba.clickhouse.connect import ClickhouseConnectPool, _insert_statement
+from snuba.clickhouse.connect import (
+    ClickhouseConnectPool,
+    _insert_statement,
+    _with_native_format,
+)
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.clusters.cluster import ClickhouseClientSettings
@@ -112,13 +116,13 @@ def test_execute_passes_query_id_and_settings() -> None:
         settings={"max_threads": 4},
     )
 
-    _, kwargs = client.query.call_args
+    args, kwargs = client.query.call_args
+    assert args[0] == "SELECT 1"
     assert kwargs["settings"]["query_id"] == "my-query-id"
     assert kwargs["settings"]["max_threads"] == 4
-    assert kwargs["transport_settings"] == {"X-ClickHouse-Format": "Native"}
 
 
-def test_execute_handles_embedded_insert_sql() -> None:
+def test_execute_appends_format_native_for_embedded_insert_sql() -> None:
     client = mock.Mock()
     client.query.return_value = FakeQueryResult(result_set=[])
 
@@ -131,9 +135,16 @@ def test_execute_handles_embedded_insert_sql() -> None:
     pool.execute(sql, query_id="qid")
 
     args, kwargs = client.query.call_args
-    assert args[0] == sql
+    assert args[0] == sql + "\nFORMAT Native"
     assert kwargs["settings"]["query_id"] == "qid"
-    assert kwargs["transport_settings"] == {"X-ClickHouse-Format": "Native"}
+
+
+def test_with_native_format_leaves_plain_select_and_real_insert_alone() -> None:
+    assert _with_native_format("SELECT 1") == "SELECT 1"
+    assert _with_native_format("INSERT INTO t (a) VALUES (1)") == (
+        "INSERT INTO t (a) VALUES (1)"
+    )
+    assert _with_native_format("SELECT 1 FORMAT JSON") == "SELECT 1 FORMAT JSON"
 
 
 def test_insert_dict_rows_use_client_insert() -> None:

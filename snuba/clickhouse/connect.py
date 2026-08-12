@@ -3,6 +3,7 @@ from __future__ import annotations
 import atexit
 import json
 import os
+import re
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
 from datetime import datetime
@@ -40,7 +41,10 @@ metrics = MetricsWrapper(environment.metrics, "clickhouse.connect")
 
 DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS = 60 * 60  # 1h fallback when profile timeout is None
 DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
-_CLICKHOUSE_CONNECT_TRANSPORT_SETTINGS = {"X-ClickHouse-Format": "Native"}
+# Matches clickhouse-connect QueryContext.is_insert (whole SQL, including literals).
+_CONNECT_INSERT_RE = re.compile(r"(^|\s)INSERT\s*INTO", re.IGNORECASE)
+_REAL_INSERT_RE = re.compile(r"^\s*INSERT\s+INTO\b", re.IGNORECASE)
+_NATIVE_FORMAT_SUFFIX = "\nFORMAT Native"
 
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
 clickhouse_connect_common.set_setting(
@@ -107,6 +111,15 @@ def _driver_params(params: Params) -> Sequence[Any] | dict[str, Any] | None:
 def _insert_statement(table: str, column_names: Sequence[str]) -> str:
     columns = ", ".join(quote_identifier(name) for name in column_names)
     return f"INSERT INTO {table} ({columns}) FORMAT Native"
+
+
+def _with_native_format(query: str) -> str:
+    """Ensure FORMAT Native when clickhouse-connect would skip its own suffix."""
+    if _REAL_INSERT_RE.match(query) or not _CONNECT_INSERT_RE.search(query):
+        return query
+    if re.search(r"\bFORMAT\s+\w+\s*$", query, re.IGNORECASE):
+        return query
+    return f"{query}{_NATIVE_FORMAT_SUFFIX}"
 
 
 def _as_int(value: Any) -> int:
@@ -281,6 +294,7 @@ class ClickhouseConnectPool(ClickhousePool):
     ) -> ClickhouseResult:
         client = self._new_client()
         query_settings = self._build_query_settings(settings, query_id, capture_trace)
+        query = _with_native_format(query)
 
         query_result = None
         try:
@@ -291,7 +305,6 @@ class ClickhouseConnectPool(ClickhousePool):
                     parameters=_driver_params(params),
                     settings=query_settings,
                     column_oriented=columnar,
-                    transport_settings=_CLICKHOUSE_CONNECT_TRANSPORT_SETTINGS,
                 )
             return self._consume_query_result(query_result, with_column_types, query_id)
         finally:
