@@ -836,14 +836,18 @@ class TestTraceItemTable(BaseApiTest):
         ]
 
     @pytest.mark.parametrize(
-        "descending,expected_tags",
+        "aggregate,expected_tags,label",
         [
-            (False, ["tag2", "tag1", "tag0"]),
-            (True, ["tag119", "tag118", "tag117"]),
+            (Function.FUNCTION_FIRST, ["tag2", "tag1", "tag0"], "first(variable_tag)"),
+            (Function.FUNCTION_LAST, ["tag119", "tag118", "tag117"], "last(variable_tag)"),
         ],
     )
-    def test_first_aggregation(
-        self, setup_teardown: Any, descending: bool, expected_tags: list[str]
+    def test_ordered_aggregation(
+        self,
+        setup_teardown: Any,
+        aggregate: Function.ValueType,
+        expected_tags: list[str],
+        label: str,
     ) -> None:
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -864,15 +868,14 @@ class TestTraceItemTable(BaseApiTest):
                 Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")),
                 Column(
                     aggregation=AttributeAggregation(
-                        aggregate=Function.FUNCTION_FIRST,
+                        aggregate=aggregate,
                         key=AttributeKey(type=AttributeKey.TYPE_STRING, name="variable_tag"),
-                        label="first(variable_tag)",
+                        label=label,
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                         ranked_by=RankedBy(
                             key=AttributeKey(
                                 type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp"
                             ),
-                            descending=descending,
                         ),
                     ),
                 ),
@@ -897,7 +900,7 @@ class TestTraceItemTable(BaseApiTest):
                 ],
             ),
             TraceItemColumnValues(
-                attribute_name="first(variable_tag)",
+                attribute_name=label,
                 results=[AttributeValue(val_str=tag) for tag in expected_tags],
             ),
         ]
@@ -905,18 +908,18 @@ class TestTraceItemTable(BaseApiTest):
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
     @pytest.mark.parametrize(
-        "sort,descending,expected_release",
+        "aggregate,sort,expected_release",
         [
-            (RankedBy.SORT_SEMVER, False, "1.2.2"),
-            (RankedBy.SORT_SEMVER, True, "1.2.10"),
-            (RankedBy.SORT_DEFAULT, False, "1.2.10"),
-            (RankedBy.SORT_DEFAULT, True, "1.2.9"),
+            (Function.FUNCTION_FIRST, RankedBy.SORT_SEMVER, "1.2.2"),
+            (Function.FUNCTION_LAST, RankedBy.SORT_SEMVER, "1.2.10"),
+            (Function.FUNCTION_FIRST, RankedBy.SORT_DEFAULT, "1.2.10"),
+            (Function.FUNCTION_LAST, RankedBy.SORT_DEFAULT, "1.2.9"),
         ],
     )
-    def test_first_by_semver_string(
+    def test_ordered_by_semver_string(
         self,
+        aggregate: Function.ValueType,
         sort: "RankedBy.Sort.ValueType",
-        descending: bool,
         expected_release: str,
     ) -> None:
         for i, release in enumerate(["1.2.9", "1.2.10", "1.2.2"]):
@@ -947,13 +950,12 @@ class TestTraceItemTable(BaseApiTest):
             columns=[
                 Column(
                     aggregation=AttributeAggregation(
-                        aggregate=Function.FUNCTION_FIRST,
+                        aggregate=aggregate,
                         key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.release"),
-                        label="first(release)",
+                        label="ordered(release)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                         ranked_by=RankedBy(
                             key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.release"),
-                            descending=descending,
                             sort=sort,
                         ),
                     ),
@@ -965,23 +967,25 @@ class TestTraceItemTable(BaseApiTest):
         actual_release = response.column_values[0].results[0].val_str
         assert actual_release == expected_release
 
-    # FUNCTION_FIRST when some rows are missing the ranked_by attribute (a NULL ranking
-    # value). The ranking value is wrapped in a tuple(ranked_by, sentry.timestamp) tie-break,
-    # so a missing ranked_by ranks as tuple(NULL, ts) — a non-NULL tuple that still
-    # participates. ClickHouse orders NULL first within a tuple, so ascending argMin selects
-    # the NULL-ranked row ("no_rank") while descending argMax picks the largest non-NULL
-    # rank_attr=20 ("rank_20"). marker_value is set on every row so a NULL result would mean
-    # "skipped", not "missing field".
+    # FUNCTION_FIRST / FUNCTION_LAST when some rows are missing the ranked_by attribute (a
+    # NULL ranking value). The ranking value is wrapped in a tuple(ranked_by,
+    # sentry.timestamp) tie-break, so a missing ranked_by ranks as tuple(NULL, ts) — a
+    # non-NULL tuple that still participates. ClickHouse orders NULL first within a tuple,
+    # so FIRST/argMin selects the NULL-ranked row ("no_rank") while LAST/argMax picks the
+    # largest non-NULL rank_attr=20 ("rank_20"). marker_value is set on every row so a NULL
+    # result would mean "skipped", not "missing field".
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
     @pytest.mark.parametrize(
-        "descending,expected_marker",
+        "aggregate,expected_marker",
         [
-            (False, "no_rank"),
-            (True, "rank_20"),
+            (Function.FUNCTION_FIRST, "no_rank"),
+            (Function.FUNCTION_LAST, "rank_20"),
         ],
     )
-    def test_first_skips_null_ranked_by(self, descending: bool, expected_marker: str) -> None:
+    def test_ordered_skips_null_ranked_by(
+        self, aggregate: Function.ValueType, expected_marker: str
+    ) -> None:
         rows = [
             # (offset_minutes, rank_attr or None, marker_value)
             (0, None, "no_rank"),
@@ -1018,13 +1022,12 @@ class TestTraceItemTable(BaseApiTest):
             columns=[
                 Column(
                     aggregation=AttributeAggregation(
-                        aggregate=Function.FUNCTION_FIRST,
+                        aggregate=aggregate,
                         key=AttributeKey(type=AttributeKey.TYPE_STRING, name="marker_value"),
-                        label="first(marker_value)",
+                        label="ordered(marker_value)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                         ranked_by=RankedBy(
                             key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="rank_attr"),
-                            descending=descending,
                         ),
                     ),
                 ),
@@ -1091,6 +1094,80 @@ class TestTraceItemTable(BaseApiTest):
             ),
         ]
 
+    # FIRST/LAST with a per-aggregate exists filter: only rows that have filter_attr
+    # participate. Without the filter, FIRST would pick "a" (earliest) and LAST "d"
+    # (latest); with it, those rows are excluded and we get "b" / "c".
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    @pytest.mark.parametrize(
+        "aggregate,expected_marker",
+        [
+            (Function.FUNCTION_FIRST, "b"),
+            (Function.FUNCTION_LAST, "c"),
+        ],
+    )
+    def test_ordered_aggregation_with_exists_filter(
+        self, aggregate: Function.ValueType, expected_marker: str
+    ) -> None:
+        rows: list[tuple[int, str, bool]] = [
+            # (offset_minutes, marker_value, has_filter_attr)
+            (0, "a", False),
+            (1, "b", True),
+            (2, "c", True),
+            (3, "d", False),
+        ]
+        for offset, marker, has_filter_attr in rows:
+            raw_attributes: dict[str, str | float | int | bool] = {
+                "ordered_exists_marker": "1",
+                "marker_value": marker,
+            }
+            if has_filter_attr:
+                raw_attributes["filter_attr"] = "present"
+            write_eap_item(
+                start_timestamp=BASE_TIME + timedelta(minutes=offset),
+                raw_attributes=raw_attributes,
+            )
+
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="ordered_exists_marker")
+                )
+            ),
+            columns=[
+                Column(
+                    conditional_aggregation=AttributeConditionalAggregation(
+                        aggregate=aggregate,
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="marker_value"),
+                        label="ordered(marker_value)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                        ranked_by=RankedBy(
+                            key=AttributeKey(
+                                type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp"
+                            ),
+                        ),
+                        filter=TraceItemFilter(
+                            exists_filter=ExistsFilter(
+                                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="filter_attr")
+                            )
+                        ),
+                    ),
+                ),
+            ],
+            limit=1,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values[0].results[0].val_str == expected_marker
+
     def test_first_aggregation_requires_ranked_by(self, setup_teardown: Any) -> None:
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -1114,10 +1191,13 @@ class TestTraceItemTable(BaseApiTest):
             ],
             group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="location")],
         )
-        with pytest.raises(BadSnubaRPCRequestException, match="FUNCTION_FIRST requires ranked_by"):
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="FUNCTION_FIRST and FUNCTION_LAST require ranked_by",
+        ):
             EndpointTraceItemTable().execute(message)
 
-    def test_ranked_by_rejected_on_non_first_aggregation(self, setup_teardown: Any) -> None:
+    def test_ranked_by_rejected_on_non_ordered_aggregation(self, setup_teardown: Any) -> None:
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -1145,11 +1225,11 @@ class TestTraceItemTable(BaseApiTest):
         )
         with pytest.raises(
             BadSnubaRPCRequestException,
-            match="ranked_by is only supported for FUNCTION_FIRST",
+            match="ranked_by is only supported for FUNCTION_FIRST and FUNCTION_LAST",
         ):
             EndpointTraceItemTable().execute(message)
 
-    def test_first_aggregation_rejects_default_value(self, setup_teardown: Any) -> None:
+    def test_ordered_aggregation_rejects_default_value(self, setup_teardown: Any) -> None:
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -1180,11 +1260,11 @@ class TestTraceItemTable(BaseApiTest):
         )
         with pytest.raises(
             BadSnubaRPCRequestException,
-            match="FUNCTION_FIRST does not support default_value",
+            match="FUNCTION_FIRST and FUNCTION_LAST do not support default_value",
         ):
             EndpointTraceItemTable().execute(message)
 
-    def test_nested_first_aggregation_requires_ranked_by(self, setup_teardown: Any) -> None:
+    def test_nested_ordered_aggregation_requires_ranked_by(self, setup_teardown: Any) -> None:
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -1214,10 +1294,15 @@ class TestTraceItemTable(BaseApiTest):
                 ),
             ],
         )
-        with pytest.raises(BadSnubaRPCRequestException, match="FUNCTION_FIRST requires ranked_by"):
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="FUNCTION_FIRST and FUNCTION_LAST require ranked_by",
+        ):
             EndpointTraceItemTable().execute(message)
 
-    def test_nested_ranked_by_rejected_on_non_first_aggregation(self, setup_teardown: Any) -> None:
+    def test_nested_ranked_by_rejected_on_non_ordered_aggregation(
+        self, setup_teardown: Any
+    ) -> None:
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -1254,11 +1339,11 @@ class TestTraceItemTable(BaseApiTest):
         )
         with pytest.raises(
             BadSnubaRPCRequestException,
-            match="ranked_by is only supported for FUNCTION_FIRST",
+            match="ranked_by is only supported for FUNCTION_FIRST and FUNCTION_LAST",
         ):
             EndpointTraceItemTable().execute(message)
 
-    def test_nested_first_aggregation_rejects_default_value(self, setup_teardown: Any) -> None:
+    def test_nested_ordered_aggregation_rejects_default_value(self, setup_teardown: Any) -> None:
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -1296,11 +1381,11 @@ class TestTraceItemTable(BaseApiTest):
         )
         with pytest.raises(
             BadSnubaRPCRequestException,
-            match="FUNCTION_FIRST does not support default_value",
+            match="FUNCTION_FIRST and FUNCTION_LAST do not support default_value",
         ):
             EndpointTraceItemTable().execute(message)
 
-    def test_first_aggregation_rejects_array_ranked_by(self, setup_teardown: Any) -> None:
+    def test_ordered_aggregation_rejects_array_ranked_by(self, setup_teardown: Any) -> None:
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -1328,20 +1413,27 @@ class TestTraceItemTable(BaseApiTest):
         )
         with pytest.raises(
             BadSnubaRPCRequestException,
-            match="FUNCTION_FIRST ranked_by is not supported on array attributes",
+            match="ranked_by is not supported on array attributes",
         ):
             EndpointTraceItemTable().execute(message)
 
     @pytest.mark.parametrize(
-        "extrapolation_mode",
+        "aggregate,extrapolation_mode",
         [
-            ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
-            ExtrapolationMode.EXTRAPOLATION_MODE_CLIENT_ONLY,
-            ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY,
+            (aggregate, mode)
+            for aggregate in (Function.FUNCTION_FIRST, Function.FUNCTION_LAST)
+            for mode in (
+                ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                ExtrapolationMode.EXTRAPOLATION_MODE_CLIENT_ONLY,
+                ExtrapolationMode.EXTRAPOLATION_MODE_SERVER_ONLY,
+            )
         ],
     )
-    def test_first_aggregation_rejects_extrapolation(
-        self, setup_teardown: Any, extrapolation_mode: ExtrapolationMode.ValueType
+    def test_ordered_aggregation_rejects_extrapolation(
+        self,
+        setup_teardown: Any,
+        aggregate: Function.ValueType,
+        extrapolation_mode: ExtrapolationMode.ValueType,
     ) -> None:
         message = TraceItemTableRequest(
             meta=RequestMeta(
@@ -1357,9 +1449,9 @@ class TestTraceItemTable(BaseApiTest):
                 Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")),
                 Column(
                     aggregation=AttributeAggregation(
-                        aggregate=Function.FUNCTION_FIRST,
+                        aggregate=aggregate,
                         key=AttributeKey(type=AttributeKey.TYPE_STRING, name="variable_tag"),
-                        label="first(variable_tag)",
+                        label="ordered(variable_tag)",
                         extrapolation_mode=extrapolation_mode,
                         ranked_by=RankedBy(
                             key=AttributeKey(
@@ -1373,7 +1465,7 @@ class TestTraceItemTable(BaseApiTest):
         )
         with pytest.raises(
             BadSnubaRPCRequestException,
-            match="Extrapolation is not supported for FUNCTION_FIRST",
+            match=f"Extrapolation is not supported for {Function.Name(aggregate)}",
         ):
             EndpointTraceItemTable().execute(message)
 

@@ -174,8 +174,8 @@ def _convert_aggregation_to_conditional_aggregation(
     if input.HasField("aggregation"):
         aggregation = input.aggregation
         input.ClearField("aggregation")
-        # ranked_by (used by FUNCTION_FIRST) is optional; only carry it over when set so an
-        # unset field stays unset on the conditional aggregation.
+        # ranked_by (used by FUNCTION_FIRST / FUNCTION_LAST) is optional; only carry it over
+        # when set so an unset field stays unset on the conditional aggregation.
         ranked_by = (
             {"ranked_by": aggregation.ranked_by} if aggregation.HasField("ranked_by") else {}
         )

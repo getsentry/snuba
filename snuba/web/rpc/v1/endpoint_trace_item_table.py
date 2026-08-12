@@ -86,34 +86,44 @@ def _validate_select_and_groupby(in_msg: TraceItemTableRequest) -> None:
             f"Columns {', '.join(disallowed_group_by_columns)} are not permitted in group_by. The following columns are not allowed: {', '.join(_GROUP_BY_DISALLOWED_COLUMNS)}"
         )
 
-    # Walk select columns (and nested formula operands) so FIRST / ranked_by rules
+    # Walk select columns (and nested formula operands) so FIRST/LAST / ranked_by rules
     # apply to aggregations nested under formulas, not just top-level columns.
     aggregations_visitor = GetColumnAggregationsVisitor()
     for column in in_msg.columns:
         ColumnWrapper(column).accept(aggregations_visitor)
     aggregation_columns = aggregations_visitor.aggregations
-    first_columns = [c for c in aggregation_columns if c.aggregate == Function.FUNCTION_FIRST]
+    ordered_agg_columns = [
+        c
+        for c in aggregation_columns
+        if c.aggregate in (Function.FUNCTION_FIRST, Function.FUNCTION_LAST)
+    ]
 
     invalid_ranked_by = [
-        c.label for c in aggregation_columns if c not in first_columns and c.HasField("ranked_by")
+        c.label
+        for c in aggregation_columns
+        if c not in ordered_agg_columns and c.HasField("ranked_by")
     ]
     if invalid_ranked_by:
         raise BadSnubaRPCRequestException(
-            f"ranked_by is only supported for FUNCTION_FIRST: {invalid_ranked_by}"
+            f"ranked_by is only supported for FUNCTION_FIRST and FUNCTION_LAST: {invalid_ranked_by}"
         )
 
-    first_without_ranked_by = [c.label for c in first_columns if not c.HasField("ranked_by")]
-    if first_without_ranked_by:
-        raise BadSnubaRPCRequestException(
-            f"FUNCTION_FIRST requires ranked_by to be set: {first_without_ranked_by}"
-        )
-
-    first_with_default_value = [
-        c.label for c in first_columns if c.WhichOneof("default_value") is not None
+    ordered_without_ranked_by = [
+        c.label for c in ordered_agg_columns if not c.HasField("ranked_by")
     ]
-    if first_with_default_value:
+    if ordered_without_ranked_by:
         raise BadSnubaRPCRequestException(
-            f"FUNCTION_FIRST does not support default_value: {first_with_default_value}"
+            "FUNCTION_FIRST and FUNCTION_LAST require ranked_by to be set: "
+            f"{ordered_without_ranked_by}"
+        )
+
+    ordered_with_default_value = [
+        c.label for c in ordered_agg_columns if c.WhichOneof("default_value") is not None
+    ]
+    if ordered_with_default_value:
+        raise BadSnubaRPCRequestException(
+            "FUNCTION_FIRST and FUNCTION_LAST do not support default_value: "
+            f"{ordered_with_default_value}"
         )
 
 

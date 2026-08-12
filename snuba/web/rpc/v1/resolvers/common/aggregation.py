@@ -525,6 +525,7 @@ def get_extrapolated_function(
     if aggregation.aggregate in (
         Function.FUNCTION_COLLECT_UNIQUE,
         Function.FUNCTION_FIRST,
+        Function.FUNCTION_LAST,
     ):
         raise BadSnubaRPCRequestException(
             f"Extrapolation is not supported for {Function.Name(aggregation.aggregate)} function."
@@ -868,28 +869,37 @@ def _array_aggregation_to_expression(
     )
 
 
-def _build_first_sort_key(
+_ORDERED_AGGREGATES = frozenset({Function.FUNCTION_FIRST, Function.FUNCTION_LAST})
+
+
+def _build_ordered_agg_sort_key(
     aggregation: AttributeConditionalAggregation,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
-) -> Expression:
-    """Builds the sort key for FUNCTION_FIRST from the aggregation's ``ranked_by``.
-    FUNCTION_FIRST returns ``key`` from the row that ranks first by this expression, so
-    ``ranked_by`` is required (the endpoint validator raises first; this is defensive).
+) -> Expression | None:
+    """Builds the sort key for FUNCTION_FIRST / FUNCTION_LAST from ``ranked_by``.
 
-    Direction is applied by the caller (argMin for ascending, argMax for descending), so
-    this only builds the ranking value. SORT_SEMVER wraps a string key in the semver sort
-    key; on a non-string key it is a silent no-op (the key already compares natively),
-    mirroring the top-level ORDER BY path in ``_convert_order_by``. SORT_NATURAL is not
-    implemented and falls through to the raw column (lexicographic), mirroring the
-    SORT_DEFAULT no-op elsewhere; non-string keys compare natively.
+    Returns None for aggregates that are not order-dependent. FUNCTION_FIRST /
+    FUNCTION_LAST return ``key`` from the row that ranks first / last by this expression,
+    so ``ranked_by`` is required (the endpoint validator raises first; this is defensive).
+
+    Direction is applied by the caller (argMin for FIRST, argMax for LAST), so this only
+    builds the ranking value. SORT_SEMVER wraps a string key in the semver sort key; on a
+    non-string key it is a silent no-op (the key already compares natively), mirroring the
+    top-level ORDER BY path in ``_convert_order_by``. SORT_NATURAL is not implemented and
+    falls through to the raw column (lexicographic), mirroring the SORT_DEFAULT no-op
+    elsewhere; non-string keys compare natively.
 
     The ranking value is wrapped in a ``tuple(ranked_by, sentry.timestamp)`` so that rows
     tied on ``ranked_by`` resolve to a single deterministic winner instead of an arbitrary
     one. ClickHouse compares tuples lexicographically, so the timestamp only breaks ties;
     it inherits the primary direction (argMin picks the earliest tied row, argMax the
     latest)."""
+    if aggregation.aggregate not in _ORDERED_AGGREGATES:
+        return None
+
+    aggregate_name = Function.Name(aggregation.aggregate)
     if not aggregation.HasField("ranked_by"):
-        raise BadSnubaRPCRequestException("FUNCTION_FIRST requires ranked_by to be set")
+        raise BadSnubaRPCRequestException(f"{aggregate_name} requires ranked_by to be set")
 
     ranked_by = aggregation.ranked_by
     # Array attributes can't be a scalar sort key (ClickHouse can't rank rows by an
@@ -897,7 +907,7 @@ def _build_first_sort_key(
     # than letting an array read reach argMin/argMax and fail with an opaque type error.
     if ranked_by.key.type in ARRAY_TYPES:
         raise BadSnubaRPCRequestException(
-            f"FUNCTION_FIRST ranked_by is not supported on array attributes: {ranked_by.key.name}"
+            f"{aggregate_name} ranked_by is not supported on array attributes: {ranked_by.key.name}"
         )
     expression = attribute_key_to_expression(ranked_by.key)
     if ranked_by.key.type == AttributeKey.TYPE_STRING and ranked_by.sort == RankedBy.SORT_SEMVER:
@@ -928,20 +938,10 @@ def aggregation_to_expression(
             aggregation, field, condition_in_aggregation, alias_dict
         )
 
-    # FUNCTION_FIRST returns the value of `field` at the row that ranks first by the
-    # aggregation's ranked_by. A descending ranked_by means "largest ranking value first",
-    # so it maps to argMax; ascending maps to argMin. Both are only built when FUNCTION_FIRST
-    # is the aggregate (None otherwise).
-    first_sort_key = (
-        _build_first_sort_key(aggregation, attribute_key_to_expression)
-        if aggregation.aggregate == Function.FUNCTION_FIRST
-        else None
-    )
-    first_agg_func = (
-        f.argMaxIfOrNull
-        if aggregation.aggregate == Function.FUNCTION_FIRST and aggregation.ranked_by.descending
-        else f.argMinIfOrNull
-    )
+    # FUNCTION_FIRST / FUNCTION_LAST return the value of `field` at the row that ranks
+    # first / last by the aggregation's ranked_by. FIRST maps to argMin; LAST maps to
+    # argMax. Sort key is only built for those aggregates (None otherwise).
+    ordered_agg_sort_key = _build_ordered_agg_sort_key(aggregation, attribute_key_to_expression)
 
     function_map: dict[Function.ValueType, CurriedFunctionCall | FunctionCall] = {
         Function.FUNCTION_SUM: f.sumIfOrNull(
@@ -1000,9 +1000,14 @@ def aggregation_to_expression(
             field,
             and_cond(field_exists, condition_in_aggregation),
         ),
-        Function.FUNCTION_FIRST: first_agg_func(
+        Function.FUNCTION_FIRST: f.argMinIfOrNull(
             field,
-            first_sort_key,
+            ordered_agg_sort_key,
+            and_cond(field_exists, condition_in_aggregation),
+        ),
+        Function.FUNCTION_LAST: f.argMaxIfOrNull(
+            field,
+            ordered_agg_sort_key,
             and_cond(field_exists, condition_in_aggregation),
         ),
     }
@@ -1031,9 +1036,16 @@ def aggregation_to_expression(
                     field, and_cond(field_exists, condition_in_aggregation), **alias_dict
                 )
             elif aggregation.aggregate == Function.FUNCTION_FIRST:
-                agg_func_expr = first_agg_func(
+                agg_func_expr = f.argMinIfOrNull(
                     field,
-                    first_sort_key,
+                    ordered_agg_sort_key,
+                    and_cond(field_exists, condition_in_aggregation),
+                    **alias_dict,
+                )
+            elif aggregation.aggregate == Function.FUNCTION_LAST:
+                agg_func_expr = f.argMaxIfOrNull(
+                    field,
+                    ordered_agg_sort_key,
                     and_cond(field_exists, condition_in_aggregation),
                     **alias_dict,
                 )
