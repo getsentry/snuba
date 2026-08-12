@@ -14,6 +14,7 @@ from snuba.web.rpc.proto_visitor import (
     AggregationToConditionalAggregationVisitor,
     ColumnWrapper,
     ContainsAggregateVisitor,
+    GetColumnAggregationsVisitor,
     TraceItemTableRequestWrapper,
 )
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
@@ -85,9 +86,12 @@ def _validate_select_and_groupby(in_msg: TraceItemTableRequest) -> None:
             f"Columns {', '.join(disallowed_group_by_columns)} are not permitted in group_by. The following columns are not allowed: {', '.join(_GROUP_BY_DISALLOWED_COLUMNS)}"
         )
 
-    aggregation_columns = [
-        c.conditional_aggregation for c in in_msg.columns if c.HasField("conditional_aggregation")
-    ]
+    # Walk select columns (and nested formula operands) so FIRST / ranked_by rules
+    # apply to aggregations nested under formulas, not just top-level columns.
+    aggregations_visitor = GetColumnAggregationsVisitor()
+    for column in in_msg.columns:
+        ColumnWrapper(column).accept(aggregations_visitor)
+    aggregation_columns = aggregations_visitor.aggregations
     first_columns = [c for c in aggregation_columns if c.aggregate == Function.FUNCTION_FIRST]
 
     invalid_ranked_by = [

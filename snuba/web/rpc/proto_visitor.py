@@ -279,3 +279,23 @@ class GetExpressionAggregationsVisitor(ProtoVisitor):
             self.aggregations.append(expression_wrapper.underlying_proto.aggregation)
         elif expression_wrapper.underlying_proto.HasField("conditional_aggregation"):
             self.aggregations.append(expression_wrapper.underlying_proto.conditional_aggregation)
+
+
+class GetColumnAggregationsVisitor(ProtoVisitor):
+    """Collect conditional_aggregation nodes under columns, including nested formulas."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.aggregations: list[AttributeConditionalAggregation] = []
+
+    def visit_ColumnWrapper(self, column_wrapper: ColumnWrapper) -> None:
+        column = column_wrapper.underlying_proto
+        if column.HasField("conditional_aggregation"):
+            self.aggregations.append(column.conditional_aggregation)
+
+    def visit_AggregationComparisonFilterWrapper(
+        self, aggregation_comparison_filter_wrapper: AggregationComparisonFilterWrapper
+    ) -> None:
+        comparison_filter = aggregation_comparison_filter_wrapper.underlying_proto
+        if comparison_filter.HasField("conditional_aggregation"):
+            self.aggregations.append(comparison_filter.conditional_aggregation)

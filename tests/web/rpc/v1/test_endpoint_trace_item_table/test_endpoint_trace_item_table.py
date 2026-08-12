@@ -1184,6 +1184,122 @@ class TestTraceItemTable(BaseApiTest):
         ):
             EndpointTraceItemTable().execute(message)
 
+    def test_nested_first_aggregation_requires_ranked_by(self, setup_teardown: Any) -> None:
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    formula=Column.BinaryFormula(
+                        op=Column.BinaryFormula.OP_ADD,
+                        left=Column(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_FIRST,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_DOUBLE, name="eap.measurement"
+                                ),
+                                label="first(eap.measurement)",
+                            ),
+                        ),
+                        right=Column(literal=Literal(val_double=1.0)),
+                    ),
+                    label="first + 1",
+                ),
+            ],
+        )
+        with pytest.raises(BadSnubaRPCRequestException, match="FUNCTION_FIRST requires ranked_by"):
+            EndpointTraceItemTable().execute(message)
+
+    def test_nested_ranked_by_rejected_on_non_first_aggregation(self, setup_teardown: Any) -> None:
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    formula=Column.BinaryFormula(
+                        op=Column.BinaryFormula.OP_ADD,
+                        left=Column(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_SUM,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_DOUBLE, name="eap.measurement"
+                                ),
+                                label="sum(eap.measurement)",
+                                ranked_by=RankedBy(
+                                    key=AttributeKey(
+                                        type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp"
+                                    ),
+                                ),
+                            ),
+                        ),
+                        right=Column(literal=Literal(val_double=1.0)),
+                    ),
+                    label="sum + 1",
+                ),
+            ],
+        )
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="ranked_by is only supported for FUNCTION_FIRST",
+        ):
+            EndpointTraceItemTable().execute(message)
+
+    def test_nested_first_aggregation_rejects_default_value(self, setup_teardown: Any) -> None:
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    formula=Column.BinaryFormula(
+                        op=Column.BinaryFormula.OP_ADD,
+                        left=Column(
+                            aggregation=AttributeAggregation(
+                                aggregate=Function.FUNCTION_FIRST,
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_DOUBLE, name="eap.measurement"
+                                ),
+                                label="first(eap.measurement)",
+                                ranked_by=RankedBy(
+                                    key=AttributeKey(
+                                        type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp"
+                                    ),
+                                ),
+                                default_value_int64=0,
+                            ),
+                        ),
+                        right=Column(literal=Literal(val_double=1.0)),
+                    ),
+                    label="first + 1",
+                ),
+            ],
+        )
+        with pytest.raises(
+            BadSnubaRPCRequestException,
+            match="FUNCTION_FIRST does not support default_value",
+        ):
+            EndpointTraceItemTable().execute(message)
+
     def test_first_aggregation_rejects_array_ranked_by(self, setup_teardown: Any) -> None:
         message = TraceItemTableRequest(
             meta=RequestMeta(
