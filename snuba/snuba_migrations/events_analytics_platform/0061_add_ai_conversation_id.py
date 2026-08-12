@@ -94,7 +94,7 @@ class Migration(migration.ClickhouseNodeMigration):
         ops: list[SqlOperation] = []
 
         for prefix in _table_prefixes():
-            for column, after in zip(new_columns, add_column_after):
+            for column, after in zip(new_columns, add_column_after, strict=False):
                 ops.extend(
                     [
                         operations.AddColumn(
@@ -115,7 +115,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 )
 
         for ro_table in _ro_dist_tables():
-            for column, after in zip(new_columns, add_column_after):
+            for column, after in zip(new_columns, add_column_after, strict=False):
                 ops.append(
                     operations.AddColumn(
                         storage_set=ro_storage_set,
