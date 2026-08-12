@@ -112,9 +112,29 @@ def test_execute_passes_query_id_and_settings() -> None:
         settings={"max_threads": 4},
     )
 
-    _, kwargs = client.query.call_args
+    args, kwargs = client.query.call_args
+    assert args[0] == "SELECT 1"
     assert kwargs["settings"]["query_id"] == "my-query-id"
     assert kwargs["settings"]["max_threads"] == 4
+    assert kwargs["transport_settings"] == {"X-ClickHouse-Format": "Native"}
+
+
+def test_execute_sets_native_format_for_embedded_insert_sql() -> None:
+    client = mock.Mock()
+    client.query.return_value = FakeQueryResult(result_set=[])
+
+    sql = (
+        "SELECT trace_id FROM eap_items_1_dist_ro WHERE equals(transaction, "
+        "'db.query: \n      INSERT INTO sse_event_log (channel_id, event_id) "
+        "VALUES (?, ?) ON CONFLICT DO NOTHING')"
+    )
+    pool = _make_pool(client)
+    pool.execute(sql, query_id="qid")
+
+    args, kwargs = client.query.call_args
+    assert args[0] == sql
+    assert kwargs["settings"]["query_id"] == "qid"
+    assert kwargs["transport_settings"] == {"X-ClickHouse-Format": "Native"}
 
 
 def test_insert_dict_rows_use_client_insert() -> None:
