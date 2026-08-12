@@ -967,19 +967,16 @@ class TestTraceItemTable(BaseApiTest):
         actual_release = response.column_values[0].results[0].val_str
         assert actual_release == expected_release
 
-    # FUNCTION_FIRST / FUNCTION_LAST when some rows are missing the ranked_by attribute (a
-    # NULL ranking value). The ranking value is wrapped in a tuple(ranked_by,
-    # sentry.timestamp) tie-break, so a missing ranked_by ranks as tuple(NULL, ts) — a
-    # non-NULL tuple that still participates. ClickHouse orders NULL first within a tuple,
-    # so FIRST/argMin selects the NULL-ranked row ("no_rank") while LAST/argMax picks the
-    # largest non-NULL rank_attr=20 ("rank_20"). marker_value is set on every row so a NULL
-    # result would mean "skipped", not "missing field".
+    # FUNCTION_FIRST / FUNCTION_LAST skip rows missing the ranked_by attribute. The If
+    # condition requires ranked_by existence in addition to the return field, so the
+    # NULL-ranked row ("no_rank") is excluded. FIRST picks the smallest remaining rank
+    # (rank_attr=10), LAST the largest (rank_attr=20).
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
     @pytest.mark.parametrize(
         "aggregate,expected_marker",
         [
-            (Function.FUNCTION_FIRST, "no_rank"),
+            (Function.FUNCTION_FIRST, "rank_10"),
             (Function.FUNCTION_LAST, "rank_20"),
         ],
     )

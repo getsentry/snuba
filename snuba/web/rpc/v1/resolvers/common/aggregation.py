@@ -920,6 +920,12 @@ def aggregation_to_expression(
     # first / last by the aggregation's ranked_by. FIRST maps to argMin; LAST maps to
     # argMax. Sort key is only built for those aggregates (None otherwise).
     ordered_agg_sort_key = _build_ordered_agg_sort_key(aggregation, attribute_key_to_expression)
+    ordered_agg_condition = None
+    if ordered_agg_sort_key is not None:
+        ranked_by_exists = get_field_existence_expression(
+            attribute_key_to_expression(aggregation.ranked_by.key)
+        )
+        ordered_agg_condition = and_cond(field_exists, ranked_by_exists, condition_in_aggregation)
 
     function_map: dict[Function.ValueType, CurriedFunctionCall | FunctionCall] = {
         Function.FUNCTION_SUM: f.sumIfOrNull(
@@ -981,12 +987,12 @@ def aggregation_to_expression(
         Function.FUNCTION_FIRST: f.argMinIfOrNull(
             field,
             ordered_agg_sort_key,
-            and_cond(field_exists, condition_in_aggregation),
+            ordered_agg_condition,
         ),
         Function.FUNCTION_LAST: f.argMaxIfOrNull(
             field,
             ordered_agg_sort_key,
-            and_cond(field_exists, condition_in_aggregation),
+            ordered_agg_condition,
         ),
     }
 
@@ -1017,14 +1023,14 @@ def aggregation_to_expression(
                 agg_func_expr = f.argMinIfOrNull(
                     field,
                     ordered_agg_sort_key,
-                    and_cond(field_exists, condition_in_aggregation),
+                    ordered_agg_condition,
                     **alias_dict,
                 )
             elif aggregation.aggregate == Function.FUNCTION_LAST:
                 agg_func_expr = f.argMaxIfOrNull(
                     field,
                     ordered_agg_sort_key,
-                    and_cond(field_exists, condition_in_aggregation),
+                    ordered_agg_condition,
                     **alias_dict,
                 )
             else:
