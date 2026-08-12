@@ -226,13 +226,8 @@ class ClickhouseConnectPool(ClickhousePool):
             query_settings["query_id"] = query_id
         if capture_trace:
             query_settings["send_logs_level"] = "trace"
-        # clickhouse-connect only appends `FORMAT Native` when QueryContext.is_insert
-        # is false. That check is a whole-SQL regex (`INSERT INTO` anywhere), so a
-        # SELECT that filters on a transaction/span name containing "INSERT INTO"
-        # is misclassified. ClickHouse then answers with its default TabSeparated
-        # body while the client still Native-parses it → StreamFailureError with the
-        # row payload as the "error" (SNUBA-C9G). Force the server default format so
-        # the response matches the client even when the FORMAT suffix is skipped.
+        # Keep the response Native when clickhouse-connect misclassifies a SELECT
+        # containing `INSERT INTO` in a string literal.
         query_settings.setdefault("default_format", "Native")
         return query_settings or None
 
@@ -289,9 +284,6 @@ class ClickhouseConnectPool(ClickhousePool):
         client = self._new_client()
         query_settings = self._build_query_settings(settings, query_id, capture_trace)
 
-        # Bind before try so the error path (client.query raises while parsing the
-        # first block) still hits finally. The driver usually closes the source on
-        # StreamFailureError, but Snuba should not rely on that.
         query_result = None
         try:
             with _query_span(query, query_id) as span:
