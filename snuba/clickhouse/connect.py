@@ -40,7 +40,7 @@ metrics = MetricsWrapper(environment.metrics, "clickhouse.connect")
 
 DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS = 60 * 60  # 1h fallback when profile timeout is None
 DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
-_NATIVE_RESPONSE_FORMAT = {"X-ClickHouse-Format": "Native"}
+_CLICKHOUSE_CONNECT_TRANSPORT_SETTINGS = {"X-ClickHouse-Format": "Native"}
 
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
 clickhouse_connect_common.set_setting(
@@ -291,7 +291,7 @@ class ClickhouseConnectPool(ClickhousePool):
                     parameters=_driver_params(params),
                     settings=query_settings,
                     column_oriented=columnar,
-                    transport_settings=_NATIVE_RESPONSE_FORMAT,
+                    transport_settings=_CLICKHOUSE_CONNECT_TRANSPORT_SETTINGS,
                 )
             return self._consume_query_result(query_result, with_column_types, query_id)
         finally:
