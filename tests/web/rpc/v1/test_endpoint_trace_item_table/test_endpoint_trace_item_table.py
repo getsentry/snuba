@@ -1037,6 +1037,70 @@ class TestTraceItemTable(BaseApiTest):
         response = EndpointTraceItemTable().execute(message)
         assert response.column_values[0].results[0].val_str == expected_marker
 
+    # When multiple rows share the same ranked_by value, sort key is
+    # tuple(ranked_by, sentry.timestamp), so timestamp breaks the tie:
+    # FIRST/argMin -> earliest ts, LAST/argMax -> latest ts.
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    @pytest.mark.parametrize(
+        "aggregate,expected_marker",
+        [
+            (Function.FUNCTION_FIRST, "earliest"),
+            (Function.FUNCTION_LAST, "latest"),
+        ],
+    )
+    def test_ordered_tied_ranked_by_breaks_on_timestamp(
+        self, aggregate: Function.ValueType, expected_marker: str
+    ) -> None:
+        rows = [
+            # (offset_minutes, marker_value) — same rank_attr on every row
+            (0, "earliest"),
+            (1, "middle"),
+            (2, "latest"),
+        ]
+        for offset, marker in rows:
+            write_eap_item(
+                start_timestamp=BASE_TIME + timedelta(minutes=offset),
+                raw_attributes={
+                    "tied_rank_marker": "1",
+                    "marker_value": marker,
+                    "rank_attr": 5.0,
+                },
+            )
+
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=START_TIMESTAMP,
+                end_timestamp=END_TIMESTAMP,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="tied_rank_marker")
+                )
+            ),
+            columns=[
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=aggregate,
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="marker_value"),
+                        label="ordered(marker_value)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                        ranked_by=RankedBy(
+                            key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="rank_attr"),
+                        ),
+                    ),
+                ),
+            ],
+            limit=1,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values[0].results[0].val_str == expected_marker
+
     # FUNCTION_FIRST when no row satisfies the aggregate's condition — "first of nothing".
     # Every row has the marker (so the query matches rows) but none has the return attribute,
     # so the aggregate's field-existence condition holds for zero rows. argMinIfOrNull then

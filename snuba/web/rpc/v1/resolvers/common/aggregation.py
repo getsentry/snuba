@@ -876,24 +876,6 @@ def _build_ordered_agg_sort_key(
     aggregation: AttributeConditionalAggregation,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
 ) -> Expression | None:
-    """Builds the sort key for FUNCTION_FIRST / FUNCTION_LAST from ``ranked_by``.
-
-    Returns None for aggregates that are not order-dependent. FUNCTION_FIRST /
-    FUNCTION_LAST return ``key`` from the row that ranks first / last by this expression,
-    so ``ranked_by`` is required (the endpoint validator raises first; this is defensive).
-
-    Direction is applied by the caller (argMin for FIRST, argMax for LAST), so this only
-    builds the ranking value. SORT_SEMVER wraps a string key in the semver sort key; on a
-    non-string key it is a silent no-op (the key already compares natively), mirroring the
-    top-level ORDER BY path in ``_convert_order_by``. SORT_NATURAL is not implemented and
-    falls through to the raw column (lexicographic), mirroring the SORT_DEFAULT no-op
-    elsewhere; non-string keys compare natively.
-
-    The ranking value is wrapped in a ``tuple(ranked_by, sentry.timestamp)`` so that rows
-    tied on ``ranked_by`` resolve to a single deterministic winner instead of an arbitrary
-    one. ClickHouse compares tuples lexicographically, so the timestamp only breaks ties;
-    it inherits the primary direction (argMin picks the earliest tied row, argMax the
-    latest)."""
     if aggregation.aggregate not in _ORDERED_AGGREGATES:
         return None
 
@@ -902,9 +884,6 @@ def _build_ordered_agg_sort_key(
         raise BadSnubaRPCRequestException(f"{aggregate_name} requires ranked_by to be set")
 
     ranked_by = aggregation.ranked_by
-    # Array attributes can't be a scalar sort key (ClickHouse can't rank rows by an
-    # array here), same as select/group_by/order_by/limit_by. Reject up front rather
-    # than letting an array read reach argMin/argMax and fail with an opaque type error.
     if ranked_by.key.type in ARRAY_TYPES:
         raise BadSnubaRPCRequestException(
             f"{aggregate_name} ranked_by is not supported on array attributes: {ranked_by.key.name}"
@@ -912,8 +891,7 @@ def _build_ordered_agg_sort_key(
     expression = attribute_key_to_expression(ranked_by.key)
     if ranked_by.key.type == AttributeKey.TYPE_STRING and ranked_by.sort == RankedBy.SORT_SEMVER:
         expression = semver_sort_key(expression)
-    # Secondary tie-break: with only the primary key, argMin/argMax pick an arbitrary row
-    # among ties. Appending sentry.timestamp gives a stable total order per group.
+
     tie_break = attribute_key_to_expression(
         AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp")
     )

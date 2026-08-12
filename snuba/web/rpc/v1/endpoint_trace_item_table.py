@@ -86,11 +86,10 @@ def _validate_select_and_groupby(in_msg: TraceItemTableRequest) -> None:
             f"Columns {', '.join(disallowed_group_by_columns)} are not permitted in group_by. The following columns are not allowed: {', '.join(_GROUP_BY_DISALLOWED_COLUMNS)}"
         )
 
-    # Walk select columns (and nested formula operands) so FIRST/LAST / ranked_by rules
-    # apply to aggregations nested under formulas, not just top-level columns.
     aggregations_visitor = GetColumnAggregationsVisitor()
     for column in in_msg.columns:
         ColumnWrapper(column).accept(aggregations_visitor)
+
     aggregation_columns = aggregations_visitor.aggregations
     ordered_agg_columns = [
         c
