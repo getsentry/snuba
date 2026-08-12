@@ -53,7 +53,7 @@ timer = Timer("mock-subscriptions")
 for _ in range(parsed.number):
     project_id = random.choice(parsed.project)
 
-    subscription_data = SubscriptionData(
+    subscription_data = SubscriptionData(  # type: ignore[operator]
         query=f"MATCH ({entity_key.value}) SELECT count() AS count WHERE project_id = {project_id}",
         project_id=project_id,
         time_window_sec=60,
