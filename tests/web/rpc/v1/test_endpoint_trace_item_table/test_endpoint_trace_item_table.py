@@ -1292,7 +1292,15 @@ class TestTraceItemTable(BaseApiTest):
         response = EndpointTraceItemTable().execute(message)
         assert response.column_values[0].results[0].val_str == expected_marker
 
-    def test_first_aggregation_requires_ranked_by(self, setup_teardown: Any) -> None:
+    @pytest.mark.parametrize("location", ["select", "having"])
+    def test_ordered_aggregation_requires_ranked_by(
+        self, setup_teardown: Any, location: str
+    ) -> None:
+        first_without_ranked_by = AttributeAggregation(
+            aggregate=Function.FUNCTION_FIRST,
+            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="variable_tag"),
+            label="first(variable_tag)",
+        )
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -1307,14 +1315,26 @@ class TestTraceItemTable(BaseApiTest):
                 Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")),
                 Column(
                     aggregation=AttributeAggregation(
-                        aggregate=Function.FUNCTION_FIRST,
-                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="variable_tag"),
-                        label="first(variable_tag)",
+                        aggregate=Function.FUNCTION_COUNT,
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location"),
+                        label="count()",
                     ),
                 ),
             ],
             group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="location")],
         )
+        if location == "select":
+            message.columns.append(Column(aggregation=first_without_ranked_by))
+        else:
+            message.aggregation_filter.CopyFrom(
+                AggregationFilter(
+                    comparison_filter=AggregationComparisonFilter(
+                        aggregation=first_without_ranked_by,
+                        op=AggregationComparisonFilter.OP_EQUALS,
+                        val=1,
+                    )
+                )
+            )
         with pytest.raises(
             BadSnubaRPCRequestException,
             match="FUNCTION_FIRST and FUNCTION_LAST require ranked_by",
@@ -1353,7 +1373,19 @@ class TestTraceItemTable(BaseApiTest):
         ):
             EndpointTraceItemTable().execute(message)
 
-    def test_ordered_aggregation_rejects_default_value(self, setup_teardown: Any) -> None:
+    @pytest.mark.parametrize("location", ["select", "having"])
+    def test_ordered_aggregation_rejects_default_value(
+        self, setup_teardown: Any, location: str
+    ) -> None:
+        first_with_default = AttributeAggregation(
+            aggregate=Function.FUNCTION_FIRST,
+            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="variable_tag"),
+            label="first(variable_tag)",
+            ranked_by=RankedBy(
+                key=AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp"),
+            ),
+            default_value_int64=0,
+        )
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -1368,20 +1400,26 @@ class TestTraceItemTable(BaseApiTest):
                 Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")),
                 Column(
                     aggregation=AttributeAggregation(
-                        aggregate=Function.FUNCTION_FIRST,
-                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="variable_tag"),
-                        label="first(variable_tag)",
-                        ranked_by=RankedBy(
-                            key=AttributeKey(
-                                type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp"
-                            ),
-                        ),
-                        default_value_int64=0,
+                        aggregate=Function.FUNCTION_COUNT,
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location"),
+                        label="count()",
                     ),
                 ),
             ],
             group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="location")],
         )
+        if location == "select":
+            message.columns.append(Column(aggregation=first_with_default))
+        else:
+            message.aggregation_filter.CopyFrom(
+                AggregationFilter(
+                    comparison_filter=AggregationComparisonFilter(
+                        aggregation=first_with_default,
+                        op=AggregationComparisonFilter.OP_EQUALS,
+                        val=1,
+                    )
+                )
+            )
         with pytest.raises(
             BadSnubaRPCRequestException,
             match="FUNCTION_FIRST and FUNCTION_LAST do not support default_value",

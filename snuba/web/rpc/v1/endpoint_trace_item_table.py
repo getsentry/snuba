@@ -87,8 +87,9 @@ def _validate_select_and_groupby(in_msg: TraceItemTableRequest) -> None:
         )
 
     aggregations_visitor = GetColumnAggregationsVisitor()
-    for column in in_msg.columns:
-        ColumnWrapper(column).accept(aggregations_visitor)
+    # Walk SELECT columns and HAVING (aggregation_filter) so FIRST/LAST validation
+    # is consistent across both — TraceItemTableRequestWrapper covers both.
+    TraceItemTableRequestWrapper(in_msg).accept(aggregations_visitor)
 
     aggregation_columns = aggregations_visitor.aggregations
     ordered_agg_columns = [
