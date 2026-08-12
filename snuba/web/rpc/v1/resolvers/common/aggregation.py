@@ -18,6 +18,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKeyExpression,
     ExtrapolationMode,
     Function,
+    RankedBy,
     Reliability,
 )
 
@@ -33,6 +34,7 @@ from snuba.query.expressions import (
 from snuba.state.sentry_options import get_option
 from snuba.web.rpc.common.common import (
     get_field_existence_expression,
+    semver_sort_key,
     trace_item_filters_to_expression,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -520,7 +522,10 @@ def get_extrapolated_function(
     alias = aggregation.label or None
     alias_dict = {"alias": alias} if alias else {}
 
-    if aggregation.aggregate == Function.FUNCTION_COLLECT_UNIQUE:
+    if aggregation.aggregate in (
+        Function.FUNCTION_COLLECT_UNIQUE,
+        Function.FUNCTION_FIRST,
+    ):
         raise BadSnubaRPCRequestException(
             f"Extrapolation is not supported for {Function.Name(aggregation.aggregate)} function."
         )
@@ -863,6 +868,48 @@ def _array_aggregation_to_expression(
     )
 
 
+def _build_first_sort_key(
+    aggregation: AttributeConditionalAggregation,
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
+) -> Expression:
+    """Builds the sort key for FUNCTION_FIRST from the aggregation's ``ranked_by``.
+    FUNCTION_FIRST returns ``key`` from the row that ranks first by this expression, so
+    ``ranked_by`` is required (the endpoint validator raises first; this is defensive).
+
+    Direction is applied by the caller (argMin for ascending, argMax for descending), so
+    this only builds the ranking value. SORT_SEMVER wraps a string key in the semver sort
+    key; on a non-string key it is a silent no-op (the key already compares natively),
+    mirroring the top-level ORDER BY path in ``_convert_order_by``. SORT_NATURAL is not
+    implemented and falls through to the raw column (lexicographic), mirroring the
+    SORT_DEFAULT no-op elsewhere; non-string keys compare natively.
+
+    The ranking value is wrapped in a ``tuple(ranked_by, sentry.timestamp)`` so that rows
+    tied on ``ranked_by`` resolve to a single deterministic winner instead of an arbitrary
+    one. ClickHouse compares tuples lexicographically, so the timestamp only breaks ties;
+    it inherits the primary direction (argMin picks the earliest tied row, argMax the
+    latest)."""
+    if not aggregation.HasField("ranked_by"):
+        raise BadSnubaRPCRequestException("FUNCTION_FIRST requires ranked_by to be set")
+
+    ranked_by = aggregation.ranked_by
+    # Array attributes can't be a scalar sort key (ClickHouse can't rank rows by an
+    # array here), same as select/group_by/order_by/limit_by. Reject up front rather
+    # than letting an array read reach argMin/argMax and fail with an opaque type error.
+    if ranked_by.key.type in ARRAY_TYPES:
+        raise BadSnubaRPCRequestException(
+            f"FUNCTION_FIRST ranked_by is not supported on array attributes: {ranked_by.key.name}"
+        )
+    expression = attribute_key_to_expression(ranked_by.key)
+    if ranked_by.key.type == AttributeKey.TYPE_STRING and ranked_by.sort == RankedBy.SORT_SEMVER:
+        expression = semver_sort_key(expression)
+    # Secondary tie-break: with only the primary key, argMin/argMax pick an arbitrary row
+    # among ties. Appending sentry.timestamp gives a stable total order per group.
+    tie_break = attribute_key_to_expression(
+        AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp")
+    )
+    return f.tuple(expression, tie_break)
+
+
 def aggregation_to_expression(
     aggregation: AttributeConditionalAggregation,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
@@ -880,6 +927,21 @@ def aggregation_to_expression(
         return _array_aggregation_to_expression(
             aggregation, field, condition_in_aggregation, alias_dict
         )
+
+    # FUNCTION_FIRST returns the value of `field` at the row that ranks first by the
+    # aggregation's ranked_by. A descending ranked_by means "largest ranking value first",
+    # so it maps to argMax; ascending maps to argMin. Both are only built when FUNCTION_FIRST
+    # is the aggregate (None otherwise).
+    first_sort_key = (
+        _build_first_sort_key(aggregation, attribute_key_to_expression)
+        if aggregation.aggregate == Function.FUNCTION_FIRST
+        else None
+    )
+    first_agg_func = (
+        f.argMaxIfOrNull
+        if aggregation.aggregate == Function.FUNCTION_FIRST and aggregation.ranked_by.descending
+        else f.argMinIfOrNull
+    )
 
     function_map: dict[Function.ValueType, CurriedFunctionCall | FunctionCall] = {
         Function.FUNCTION_SUM: f.sumIfOrNull(
@@ -938,6 +1000,11 @@ def aggregation_to_expression(
             field,
             and_cond(field_exists, condition_in_aggregation),
         ),
+        Function.FUNCTION_FIRST: first_agg_func(
+            field,
+            first_sort_key,
+            and_cond(field_exists, condition_in_aggregation),
+        ),
     }
 
     if aggregation.extrapolation_mode in [
@@ -962,6 +1029,13 @@ def aggregation_to_expression(
             elif aggregation.aggregate == Function.FUNCTION_COLLECT_UNIQUE:
                 agg_func_expr = cf.groupUniqArrayIf(max_array_size)(
                     field, and_cond(field_exists, condition_in_aggregation), **alias_dict
+                )
+            elif aggregation.aggregate == Function.FUNCTION_FIRST:
+                agg_func_expr = first_agg_func(
+                    field,
+                    first_sort_key,
+                    and_cond(field_exists, condition_in_aggregation),
+                    **alias_dict,
                 )
             else:
                 agg_func_expr = f.round(agg_func_expr, _FLOATING_POINT_PRECISION, **alias_dict)

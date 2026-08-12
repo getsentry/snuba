@@ -174,6 +174,11 @@ def _convert_aggregation_to_conditional_aggregation(
     if input.HasField("aggregation"):
         aggregation = input.aggregation
         input.ClearField("aggregation")
+        # ranked_by (used by FUNCTION_FIRST) is optional; only carry it over when set so an
+        # unset field stays unset on the conditional aggregation.
+        ranked_by = (
+            {"ranked_by": aggregation.ranked_by} if aggregation.HasField("ranked_by") else {}
+        )
         match aggregation.WhichOneof("default_value"):
             case None:
                 input.conditional_aggregation.CopyFrom(
@@ -182,6 +187,7 @@ def _convert_aggregation_to_conditional_aggregation(
                         key=aggregation.key,
                         label=aggregation.label,
                         extrapolation_mode=aggregation.extrapolation_mode,
+                        **ranked_by,
                     )
                 )
             case "default_value_double":
@@ -192,6 +198,7 @@ def _convert_aggregation_to_conditional_aggregation(
                         label=aggregation.label,
                         extrapolation_mode=aggregation.extrapolation_mode,
                         default_value_double=aggregation.default_value_double,
+                        **ranked_by,
                     )
                 )
             case "default_value_int64":
@@ -202,6 +209,7 @@ def _convert_aggregation_to_conditional_aggregation(
                         label=aggregation.label,
                         extrapolation_mode=aggregation.extrapolation_mode,
                         default_value_int64=aggregation.default_value_int64,
+                        **ranked_by,
                     )
                 )
             case default:

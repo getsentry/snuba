@@ -5,7 +5,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, Function
 
 from snuba.protos.common import ARRAY_TYPES
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
@@ -83,6 +83,33 @@ def _validate_select_and_groupby(in_msg: TraceItemTableRequest) -> None:
     if disallowed_group_by_columns:
         raise BadSnubaRPCRequestException(
             f"Columns {', '.join(disallowed_group_by_columns)} are not permitted in group_by. The following columns are not allowed: {', '.join(_GROUP_BY_DISALLOWED_COLUMNS)}"
+        )
+
+    aggregation_columns = [
+        c.conditional_aggregation for c in in_msg.columns if c.HasField("conditional_aggregation")
+    ]
+    first_columns = [c for c in aggregation_columns if c.aggregate == Function.FUNCTION_FIRST]
+
+    invalid_ranked_by = [
+        c.label for c in aggregation_columns if c not in first_columns and c.HasField("ranked_by")
+    ]
+    if invalid_ranked_by:
+        raise BadSnubaRPCRequestException(
+            f"ranked_by is only supported for FUNCTION_FIRST: {invalid_ranked_by}"
+        )
+
+    first_without_ranked_by = [c.label for c in first_columns if not c.HasField("ranked_by")]
+    if first_without_ranked_by:
+        raise BadSnubaRPCRequestException(
+            f"FUNCTION_FIRST requires ranked_by to be set: {first_without_ranked_by}"
+        )
+
+    first_with_default_value = [
+        c.label for c in first_columns if c.WhichOneof("default_value") is not None
+    ]
+    if first_with_default_value:
+        raise BadSnubaRPCRequestException(
+            f"FUNCTION_FIRST does not support default_value: {first_with_default_value}"
         )
 
 
