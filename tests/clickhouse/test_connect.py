@@ -141,9 +141,7 @@ def test_execute_appends_format_native_for_embedded_insert_sql() -> None:
 
 def test_with_native_format_leaves_plain_select_and_real_insert_alone() -> None:
     assert _with_native_format("SELECT 1") == "SELECT 1"
-    assert _with_native_format("INSERT INTO t (a) VALUES (1)") == (
-        "INSERT INTO t (a) VALUES (1)"
-    )
+    assert _with_native_format("INSERT INTO t (a) VALUES (1)") == ("INSERT INTO t (a) VALUES (1)")
     assert _with_native_format("SELECT 1 FORMAT JSON") == "SELECT 1 FORMAT JSON"
 
 
