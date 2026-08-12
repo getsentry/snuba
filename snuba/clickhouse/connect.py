@@ -3,6 +3,7 @@ from __future__ import annotations
 import atexit
 import json
 import os
+import re
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
 from datetime import datetime
@@ -40,6 +41,9 @@ metrics = MetricsWrapper(environment.metrics, "clickhouse.connect")
 
 DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS = 60 * 60  # 1h fallback when profile timeout is None
 DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
+# Start-anchored only: do not match INSERT INTO inside string literals (SNUBA-C9G).
+_REAL_INSERT_RE = re.compile(r"^\s*INSERT\s+INTO\b", re.IGNORECASE)
+_NATIVE_RESPONSE_FORMAT = {"X-ClickHouse-Format": "Native"}
 
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
 clickhouse_connect_common.set_setting(
@@ -281,6 +285,10 @@ class ClickhouseConnectPool(ClickhousePool):
         client = self._new_client()
         query_settings = self._build_query_settings(settings, query_id, capture_trace)
 
+        transport_settings = (
+            None if _REAL_INSERT_RE.match(query) else _NATIVE_RESPONSE_FORMAT
+        )
+
         query_result = None
         try:
             with _query_span(query, query_id) as span:
@@ -290,7 +298,7 @@ class ClickhouseConnectPool(ClickhousePool):
                     parameters=_driver_params(params),
                     settings=query_settings,
                     column_oriented=columnar,
-                    transport_settings={"X-ClickHouse-Format": "Native"},
+                    transport_settings=transport_settings,
                 )
             return self._consume_query_result(query_result, with_column_types, query_id)
         finally:

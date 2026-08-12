@@ -136,6 +136,17 @@ def test_execute_handles_embedded_insert_sql() -> None:
     assert kwargs["transport_settings"] == {"X-ClickHouse-Format": "Native"}
 
 
+def test_execute_skips_native_header_for_real_insert_sql() -> None:
+    client = mock.Mock()
+    client.query.return_value = FakeQueryResult(result_set=[])
+
+    pool = _make_pool(client)
+    pool.execute("INSERT INTO t (a) VALUES (1)")
+
+    _, kwargs = client.query.call_args
+    assert kwargs["transport_settings"] is None
+
+
 def test_insert_dict_rows_use_client_insert() -> None:
     client = mock.Mock()
 
