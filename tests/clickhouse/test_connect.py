@@ -115,6 +115,44 @@ def test_execute_passes_query_id_and_settings() -> None:
     _, kwargs = client.query.call_args
     assert kwargs["settings"]["query_id"] == "my-query-id"
     assert kwargs["settings"]["max_threads"] == 4
+    # Always pin Native so clickhouse-connect's is_insert false-positive cannot
+    # leave the server on TabSeparated while the client Native-parses (SNUBA-C9G).
+    assert kwargs["settings"]["default_format"] == "Native"
+
+
+def test_execute_default_format_can_be_overridden() -> None:
+    client = mock.Mock()
+    client.query.return_value = FakeQueryResult(result_set=[])
+
+    pool = _make_pool(client)
+    pool.execute("SELECT 1", settings={"default_format": "JSONEachRow"})
+
+    _, kwargs = client.query.call_args
+    assert kwargs["settings"]["default_format"] == "JSONEachRow"
+
+
+def test_execute_forces_native_default_format_for_embedded_insert_sql() -> None:
+    """Reproduce SNUBA-C9G shape: SELECT filtering on a name containing INSERT INTO.
+
+    clickhouse-connect's QueryContext.is_insert matches INSERT INTO anywhere in the
+    SQL (including string literals), which skips appending FORMAT Native. Snuba must
+    still send default_format=Native so the body matches the Native parser.
+    """
+    client = mock.Mock()
+    client.query.return_value = FakeQueryResult(result_set=[])
+
+    sql = (
+        "SELECT trace_id FROM eap_items_1_dist_ro WHERE equals(transaction, "
+        "'db.query: \n      INSERT INTO sse_event_log (channel_id, event_id) "
+        "VALUES (?, ?) ON CONFLICT DO NOTHING')"
+    )
+    pool = _make_pool(client)
+    pool.execute(sql, query_id="qid")
+
+    args, kwargs = client.query.call_args
+    assert args[0] == sql
+    assert kwargs["settings"]["default_format"] == "Native"
+    assert kwargs["settings"]["query_id"] == "qid"
 
 
 def test_insert_dict_rows_use_client_insert() -> None:
