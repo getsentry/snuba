@@ -3564,7 +3564,7 @@ class TestTraceItemTable(BaseApiTest):
             ),
         ]
 
-    def test_nonexistent_attribute(self, setup_teardown: Any) -> None:
+    def test_nonexistent_attribute(self) -> None:
         span_ts = BASE_TIME - timedelta(minutes=1)
         write_eap_item(span_ts, {"animal_type": "duck"}, 10)
         message = TraceItemTableRequest(
