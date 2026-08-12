@@ -285,9 +285,7 @@ class ClickhouseConnectPool(ClickhousePool):
         client = self._new_client()
         query_settings = self._build_query_settings(settings, query_id, capture_trace)
 
-        transport_settings = (
-            None if _REAL_INSERT_RE.match(query) else _NATIVE_RESPONSE_FORMAT
-        )
+        transport_settings = None if _REAL_INSERT_RE.match(query) else _NATIVE_RESPONSE_FORMAT
 
         query_result = None
         try:
