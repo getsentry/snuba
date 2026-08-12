@@ -579,10 +579,10 @@ class ReplacerWorker:
         )
         projects_exceeding_limit = self.__processing_time_counter.get_projects_exceeding_limit()
         set_config_auto_replacements_bypass_projects(projects_exceeding_limit, end_time)
-        logger.info(
-            "projects_exceeding_limit = {}".format(
-                ",".join(str(project_id) for project_id in projects_exceeding_limit)
-            )
-        )
         for _project_id in projects_exceeding_limit:
+            logger.info(
+                "projects_exceeding_limit = {}".format(
+                    ",".join(str(project_id) for project_id in projects_exceeding_limit)
+                )
+            )
             self.metrics.increment("project_processing_time_exceeded_time_limit")

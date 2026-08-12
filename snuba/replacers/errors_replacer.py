@@ -194,12 +194,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             if processed.get_project_id() in projects_to_skip:
                 # For a persistent non rate limited logger
                 logger.info(
-                    f"Skipping replacement for project. Data {message}, Partition: {message.metadata.partition_index}, Offset: {message.metadata.offset}",
-                )
-                # For sentry tracking
-                logger.error(
-                    "Skipping replacement for project",
-                    extra={"project_id": processed.get_project_id(), "data": message},
+                    f"Skipping replacement for project {processed.get_project_id()}. Data {message}, Partition: {message.metadata.partition_index}, Offset: {message.metadata.offset}",
                 )
                 metrics.increment(
                     "replacement_message_skipped",
