@@ -944,3 +944,28 @@ def test_close_pools_releases_sockets() -> None:
     mgr.clear.assert_called_once()
     assert mgr not in all_managers
     assert connect_mod._pool_managers == {}
+
+
+def test_readonly_user_profiles_do_not_send_readonly() -> None:
+    """
+    VULN-2528: read-only on these paths is enforced by the ClickHouse user's own
+    server-side profile -- the API deployment's CLICKHOUSE_USER and the admin read
+    tools' CLICKHOUSE_READONLY_USER are both provisioned readonly=2. Sending
+    readonly as a client setting on top of that is not redundant, it is breaking:
+    a user already in readonly mode rejects the query with "Cannot modify
+    'readonly' setting in readonly mode", and a readonly=1 profile rejects any
+    setting at all.
+
+    TRACING and CARDINALITY_ANALYZER deliberately still send readonly=2: they
+    authenticate as CLICKHOUSE_TRACE_USER, which is not constrained server-side,
+    so for them the client-side setting is the only guard there is. If that user
+    is ever given a readonly profile, they have to drop the setting the same way.
+    """
+    for profile in (
+        ClickhouseClientSettings.QUERY,
+        ClickhouseClientSettings.QUERYLOG,
+    ):
+        assert "readonly" not in profile.value.settings, (
+            f"{profile.name} runs as a server-side read-only user; sending readonly "
+            "would make ClickHouse reject the query"
+        )
