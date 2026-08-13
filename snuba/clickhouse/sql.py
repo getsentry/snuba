@@ -7,8 +7,6 @@ rather than here -- see ClickhousePool.execute(params=...) -- but identifiers an
 clause keywords cannot be bound, so they still need building by hand.
 """
 
-from collections.abc import Iterable
-
 from snuba.clickhouse.escaping import escape_identifier, escape_string
 
 
@@ -17,11 +15,6 @@ def identifier(name: str) -> str:
     escaped = escape_identifier(name)
     assert escaped is not None, "escape_identifier returns None only for a None name"
     return escaped
-
-
-def literal_list(values: Iterable[str]) -> str:
-    """Escaped, comma separated literals for an IN (...) list."""
-    return ", ".join(escape_string(value) for value in values)
 
 
 def on_cluster_clause(cluster_name: str | None) -> str:

@@ -1,4 +1,4 @@
-from snuba.clickhouse.sql import identifier, literal_list, on_cluster_clause
+from snuba.clickhouse.sql import identifier, on_cluster_clause
 
 
 def test_on_cluster_clause() -> None:
@@ -11,12 +11,6 @@ def test_on_cluster_clause() -> None:
 def test_on_cluster_clause_escapes() -> None:
     assert on_cluster_clause("a'b") == " ON CLUSTER 'a\\'b'"
     assert on_cluster_clause("a\\b") == " ON CLUSTER 'a\\\\b'"
-
-
-def test_literal_list() -> None:
-    assert literal_list(["a", "b"]) == "'a', 'b'"
-    assert literal_list([]) == ""
-    assert literal_list(["it's"]) == "'it\\'s'"
 
 
 def test_identifier() -> None:

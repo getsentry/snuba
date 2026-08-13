@@ -39,6 +39,10 @@ def _on_cluster(cluster: ClickhouseCluster, *, distributed: bool = False) -> str
         if distributed
         else cluster.get_clickhouse_cluster_name()
     )
+    # on_cluster_clause treats None as "no cluster". A multi-node cluster with no
+    # configured name is a misconfiguration, and silently running DDL on one node
+    # is worse than failing, so keep asserting it rather than leaning on that.
+    assert cluster_name is not None
     return on_cluster_clause(cluster_name)
 
 
