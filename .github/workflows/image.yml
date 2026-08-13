@@ -32,7 +32,7 @@ jobs:
         platforms: linux/${{ matrix.platform }}
         dockerfile_path: 'Dockerfile'
         build_target: 'application'
-        tag_suffix: -${{ matrix.platform }}
+        tag_suffix: -distroful-${{ matrix.platform }}
         ghcr: true
         tag_nightly: false
         tag_latest: false
@@ -142,8 +142,12 @@ jobs:
         tag_nightly: false
         tag_latest: false
 
+  # Publishes the unsuffixed tags that everyone downstream consumes: self-hosted
+  # (docker compose, the e2e job below) and craft, which retags <sha> into the
+  # versioned release and :latest. These now point at the distroless build; the
+  # previous default image is still published under the -distroful suffix.
   assemble:
-    needs: [build-multiplatform]
+    needs: [build-multiplatform, build-distroless-multiplatform]
     if: ${{ (github.ref_name == 'master' || startsWith(github.ref_name, 'release/')) && github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
     permissions:
@@ -163,8 +167,16 @@ jobs:
           docker buildx imagetools create \
             --tag ghcr.io/getsentry/snuba:${{ github.sha }} \
             --tag ghcr.io/getsentry/snuba:nightly \
-            ghcr.io/getsentry/snuba:${{ github.sha }}-amd64 \
-            ghcr.io/getsentry/snuba:${{ github.sha }}-arm64
+            ghcr.io/getsentry/snuba:${{ github.sha }}-distroless-amd64 \
+            ghcr.io/getsentry/snuba:${{ github.sha }}-distroless-arm64
+
+      - name: Create distroful multiplatform manifests
+        run: |
+          docker buildx imagetools create \
+            --tag ghcr.io/getsentry/snuba:${{ github.sha }}-distroful \
+            --tag ghcr.io/getsentry/snuba:nightly-distroful \
+            ghcr.io/getsentry/snuba:${{ github.sha }}-distroful-amd64 \
+            ghcr.io/getsentry/snuba:${{ github.sha }}-distroful-arm64
 
   assemble-distroless:
     needs: [build-distroless-multiplatform]
@@ -214,8 +226,10 @@ jobs:
             ghcr.io/getsentry/snuba:${{ github.sha }}-debug-amd64 \
             ghcr.io/getsentry/snuba:${{ github.sha }}-debug-arm64
 
+  # Exercises the unsuffixed <sha> tag, i.e. the distroless image, against the
+  # real self-hosted docker compose stack before craft can cut a release from it.
   self-hosted-end-to-end:
-    needs: [build-multiplatform, assemble]
+    needs: [build-distroless-multiplatform, assemble]
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
