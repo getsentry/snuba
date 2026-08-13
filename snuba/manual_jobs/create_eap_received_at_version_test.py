@@ -1,7 +1,8 @@
 from collections.abc import Sequence
 
-from snuba.clickhouse.escaping import escape_identifier, escape_string
+from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.native import ClickhousePool, ClickhouseResult
+from snuba.clickhouse.sql import identifier, on_cluster_clause
 from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.manual_jobs import Job, JobLogger
@@ -16,15 +17,9 @@ _VIEW_NAME = "eap_items_1_downsample_8_timestamp_versioned_test_mv"
 ColumnDescription = tuple[str, str, str, str, str, str, str]
 
 
-def _escape_identifier(identifier: str) -> str:
-    escaped = escape_identifier(identifier)
-    assert escaped is not None
-    return escaped
-
-
 def _column_definition(column: ColumnDescription) -> str:
     name, column_type, default_type, default_expression, comment, codec, ttl = column
-    clauses = [f"{_escape_identifier(name)} {column_type}"]
+    clauses = [f"{identifier(name)} {column_type}"]
     if default_type:
         clauses.append(f"{default_type} {default_expression}")
     if comment:
@@ -44,8 +39,7 @@ def _on_cluster(cluster: ClickhouseCluster, *, distributed: bool = False) -> str
         if distributed
         else cluster.get_clickhouse_cluster_name()
     )
-    assert cluster_name is not None
-    return f" ON CLUSTER {escape_string(cluster_name)}"
+    return on_cluster_clause(cluster_name)
 
 
 def _get_connection() -> tuple[ClickhouseCluster, ClickhousePool]:
@@ -114,9 +108,7 @@ def _create_view_query(cluster: ClickhouseCluster, columns: Sequence[ColumnDescr
         "client_sample_rate": "client_sample_rate / 8 AS client_sample_rate",
         "server_sample_rate": "server_sample_rate / 8 AS server_sample_rate",
     }
-    select_columns = [
-        projections.get(column[0], _escape_identifier(column[0])) for column in columns
-    ]
+    select_columns = [projections.get(column[0], identifier(column[0])) for column in columns]
     return (
         f"CREATE MATERIALIZED VIEW IF NOT EXISTS {_VIEW_NAME}{_on_cluster(cluster)} "
         f"TO {_DESTINATION_TABLE} AS SELECT {', '.join(select_columns)} "

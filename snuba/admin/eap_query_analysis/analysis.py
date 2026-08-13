@@ -261,22 +261,23 @@ def _schema_table_name() -> str:
     return schema.get_table_name()
 
 
-def _build_fetch_sql(req: EapQueryAnalysisRequest) -> str:
+def _build_fetch_sql(req: EapQueryAnalysisRequest) -> tuple[str, dict[str, Any]]:
     table = _schema_table_name()
     dataset_list = ", ".join(f"'{d}'" for d in _EAP_DATASETS)
+    params: dict[str, Any] = {}
     where = [
         f"timestamp > now() - INTERVAL {int(req.hours)} HOUR",
         f"dataset IN ({dataset_list})",
     ]
     if req.referrer:
-        where.append(f"referrer = {escape_string(req.referrer)}")
+        where.append("referrer = %(referrer)s")
+        params["referrer"] = req.referrer
     if req.referrer_contains:
         # Use positionCaseInsensitive for literal substring matching. ClickHouse
         # 25.x does not support LIKE ... ESCAPE, and LIKE would treat _/% as
         # wildcards for inputs like "eap_items".
-        where.append(
-            f"positionCaseInsensitive(referrer, {escape_string(req.referrer_contains)}) > 0"
-        )
+        where.append("positionCaseInsensitive(referrer, %(referrer_contains)s) > 0")
+        params["referrer_contains"] = req.referrer_contains
     if req.organization_id is not None:
         where.append(f"organization = {int(req.organization_id)}")
 
@@ -289,7 +290,8 @@ def _build_fetch_sql(req: EapQueryAnalysisRequest) -> str:
     )
 
     where_sql = " AND ".join(where)
-    return f"""
+    return (
+        f"""
         SELECT
             request_id,
             timestamp,
@@ -307,7 +309,9 @@ def _build_fetch_sql(req: EapQueryAnalysisRequest) -> str:
         WHERE {where_sql}
         ORDER BY timestamp DESC
         LIMIT {int(req.max_rows)}
-    """
+    """,
+        params,
+    )
 
 
 def _infer_request_class(body: dict[str, Any]) -> type[ProtobufMessage] | None:
@@ -432,7 +436,7 @@ def _fetch_profile_events(query_ids: list[str], hours: int) -> dict[str, dict[st
         if len(raw) == 32:
             dashed.append(f"{raw[0:8]}-{raw[8:12]}-{raw[12:16]}-{raw[16:20]}-{raw[20:32]}")
     all_ids = list({*normalized, *dashed})
-    id_list = ", ".join(escape_string(qid) for qid in all_ids)
+    params = {"query_ids": all_ids}
 
     cluster_name = _eap_profile_cluster_name()
     sql_cluster = None
@@ -444,7 +448,7 @@ def _fetch_profile_events(query_ids: list[str], hours: int) -> dict[str, dict[st
             FROM clusterAllReplicas({escape_string(cluster_name)}, system.query_log)
             WHERE type = 'QueryFinish'
               AND event_time > now() - INTERVAL {int(hours)} HOUR
-              AND replaceAll(toString(query_id), '-', '') IN ({id_list})
+              AND replaceAll(toString(query_id), '-', '') IN %(query_ids)s
             SETTINGS skip_unavailable_shards = 1, max_threads = 0
         """
     sql_local = f"""
@@ -454,7 +458,7 @@ def _fetch_profile_events(query_ids: list[str], hours: int) -> dict[str, dict[st
         FROM system.query_log
         WHERE type = 'QueryFinish'
           AND event_time > now() - INTERVAL {int(hours)} HOUR
-          AND replaceAll(toString(query_id), '-', '') IN ({id_list})
+          AND replaceAll(toString(query_id), '-', '') IN %(query_ids)s
         SETTINGS max_threads = 0
     """
 
@@ -464,14 +468,16 @@ def _fetch_profile_events(query_ids: list[str], hours: int) -> dict[str, dict[st
         )
         if sql_cluster is not None:
             try:
-                result = connection.execute(query=sql_cluster, with_column_types=True)
+                result = connection.execute(
+                    query=sql_cluster, params=params, with_column_types=True
+                )
             except Exception as e:
                 logger.warning(
                     "clusterAllReplicas ProfileEvents lookup failed, trying local: %s", e
                 )
-                result = connection.execute(query=sql_local, with_column_types=True)
+                result = connection.execute(query=sql_local, params=params, with_column_types=True)
         else:
-            result = connection.execute(query=sql_local, with_column_types=True)
+            result = connection.execute(query=sql_local, params=params, with_column_types=True)
     except Exception as e:
         logger.warning("ProfileEvents lookup failed: %s", e)
         return {}
@@ -602,10 +608,10 @@ def analyze_eap_queries(req: EapQueryAnalysisRequest, user: str) -> EapQueryAnal
     Uses the audited querylog runner for the primary scan. ProfileEvents
     enrichment is best-effort against the EAP cluster's system.query_log.
     """
-    sql = _build_fetch_sql(req)
+    sql, params = _build_fetch_sql(req)
     # run_querylog_query is @audit_log'd — records the user + SQL.
     # max_threads=0 lets ClickHouse use all cores for whole-dataset scans.
-    result = run_querylog_query(sql, user, max_threads=_EAP_STATS_MAX_THREADS)
+    result = run_querylog_query(sql, user, max_threads=_EAP_STATS_MAX_THREADS, params=params)
     raw_rows = result.results or []
 
     parsed_rows: list[dict[str, Any]] = []

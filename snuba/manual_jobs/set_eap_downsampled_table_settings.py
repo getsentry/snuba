@@ -1,7 +1,7 @@
 from collections.abc import Mapping
 from typing import Any
 
-from snuba.clickhouse.escaping import escape_identifier
+from snuba.clickhouse.sql import identifier, on_cluster_clause
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.manual_jobs import Job, JobLogger, JobSpec
@@ -31,11 +31,9 @@ class SetEAPDownsampledTableSettings(Job):
         self._table_name = table_name
 
     def _get_query(self, cluster_name: str | None) -> str:
-        on_cluster = f" ON CLUSTER '{cluster_name}'" if cluster_name else ""
-        escaped_table_name = escape_identifier(self._table_name)
-        assert escaped_table_name is not None
         return (
-            f"ALTER TABLE {escaped_table_name}{on_cluster} MODIFY SETTING "
+            f"ALTER TABLE {identifier(self._table_name)}"
+            f"{on_cluster_clause(cluster_name)} MODIFY SETTING "
             "enable_block_number_column = 1, enable_block_offset_column = 1;"
         )
 
@@ -56,10 +54,8 @@ class ResetEAPDownsampledTableSettings(SetEAPDownsampledTableSettings):
     """Reset block metadata column settings on a downsampled EAP local table."""
 
     def _get_query(self, cluster_name: str | None) -> str:
-        on_cluster = f" ON CLUSTER '{cluster_name}'" if cluster_name else ""
-        escaped_table_name = escape_identifier(self._table_name)
-        assert escaped_table_name is not None
         return (
-            f"ALTER TABLE {escaped_table_name}{on_cluster} RESET SETTING "
+            f"ALTER TABLE {identifier(self._table_name)}"
+            f"{on_cluster_clause(cluster_name)} RESET SETTING "
             "enable_block_number_column, enable_block_offset_column;"
         )

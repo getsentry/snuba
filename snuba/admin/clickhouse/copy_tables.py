@@ -6,6 +6,7 @@ from typing import TypedDict
 from snuba.admin.clickhouse.common import _get_storage, get_clusterless_node_connection
 from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.sql import on_cluster_clause
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.utils.serializable_exception import SerializableException
 
@@ -83,7 +84,7 @@ def get_create_table_statements(
 
         if cluster_name:
             table_statement = table_statement.replace(
-                db_table, f"{db_table} ON CLUSTER {escape_string(cluster_name)}"
+                db_table, f"{db_table}{on_cluster_clause(cluster_name)}"
             )
 
         table_statements.append(

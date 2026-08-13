@@ -365,17 +365,21 @@ def test_build_fetch_sql_filters_estimation_and_duplicates() -> None:
         "snuba.admin.eap_query_analysis.analysis._schema_table_name",
         return_value="querylog_local",
     ):
-        sql = _build_fetch_sql(EapQueryAnalysisRequest(hours=1, referrer_contains="eap_items"))
+        sql, params = _build_fetch_sql(
+            EapQueryAnalysisRequest(hours=1, referrer_contains="eap_items")
+        )
     assert "dataset IN ('eap')" in sql
     assert "storage_routing" not in sql
     assert "positionCaseInsensitive(t, 'outcomes')" in sql
     # Literal substring match avoids LIKE wildcards and unsupported ESCAPE.
-    assert "positionCaseInsensitive(referrer, 'eap_items') > 0" in sql
+    assert "positionCaseInsensitive(referrer, %(referrer_contains)s) > 0" in sql
+    assert params == {"referrer_contains": "eap_items"}
     assert "LIKE" not in sql
     assert "ESCAPE" not in sql
 
 
-def test_build_fetch_sql_escapes_referrer_filters() -> None:
+def test_build_fetch_sql_binds_referrer_filters() -> None:
+    """Referrer filters are bound, so their contents never reach the SQL text."""
     req = EapQueryAnalysisRequest.from_dict(
         {
             "hours": 1,
@@ -387,12 +391,14 @@ def test_build_fetch_sql_escapes_referrer_filters() -> None:
         "snuba.admin.eap_query_analysis.analysis._schema_table_name",
         return_value="querylog_local",
     ):
-        sql = _build_fetch_sql(req)
+        sql, params = _build_fetch_sql(req)
 
-    assert "referrer = 'a\\' OR 1=1 --'" in sql
-    assert "positionCaseInsensitive(referrer, 'b\\'\\\\c')" in sql
-    # The injected quote never terminates the literal it sits in.
-    assert "OR 1=1" not in sql.replace("'a\\' OR 1=1 --'", "")
+    assert "referrer = %(referrer)s" in sql
+    assert params["referrer"] == "a' OR 1=1 --"
+    assert params["referrer_contains"] == "b'\\c"
+    # Nothing the caller supplied is in the statement at all.
+    assert "OR 1=1" not in sql
+    assert "'" not in sql.split("WHERE", 1)[1].replace("'eap'", "").replace("'outcomes'", "")
 
 
 def test_request_coerces_non_string_referrers() -> None:
