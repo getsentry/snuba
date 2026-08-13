@@ -4,7 +4,7 @@ name: generic_metrics_distributions
 storage:
   key: generic_metrics_distributions
   set_key: generic_metrics_distributions
-readiness_state: complete
+readiness_state: limited
 schema:
   columns:
     [
