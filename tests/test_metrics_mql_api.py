@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import itertools
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -32,7 +31,7 @@ from snuba.datasets.storage import WritableTableStorage
 from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
 
-DISTRIBUTIONS_MRI = "d:transactions/duration@millisecond"
+DISTRIBUTIONS_MRI = "c:transactions/duration@millisecond"
 COUNTERS_MRI = "c:transactions/count_per_root_project@none"
 USE_CASE_ID = "performance"
 RETENTION_DAYS = 90
@@ -83,10 +82,6 @@ def resolve_str(value: str) -> int:
     return int(meta_lookup[value])
 
 
-SET_CYCLE = itertools.cycle(range(0, 5))
-DIST_CYCLE = itertools.cycle(range(0, 5))
-
-
 @dataclass
 class MetricFixture:
     entity: str
@@ -102,28 +97,10 @@ COUNTERS = MetricFixture(
     value=lambda: 1.0,
 )
 DISTRIBUTIONS = MetricFixture(
-    entity="generic_metrics_distributions",
-    type=InputType.DISTRIBUTION,
+    entity="generic_metrics_counters",
+    type=InputType.COUNTER,
     metric_id=1068,
-    value=lambda: list(itertools.islice(DIST_CYCLE, 10)),
-)
-SETS = MetricFixture(
-    entity="generic_metrics_sets",
-    type=InputType.SET,
-    metric_id=1083,
-    value=lambda: list(itertools.islice(SET_CYCLE, 3)),
-)
-GAUGES = MetricFixture(
-    entity="generic_metrics_gauges",
-    type=InputType.GAUGE,
-    metric_id=1071,
-    value=lambda: {
-        "min": 2.0,
-        "max": 21.0,
-        "sum": 25.0,
-        "count": 3,
-        "last": 4.0,
-    },
+    value=lambda: 1.0,
 )
 
 DATASET = "generic_metrics"
@@ -159,7 +136,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         self.end_time = self.base_time + self.skew
 
         self.sentry_received_time = utc_yesterday_12_15() - timedelta(minutes=1)
-        for fixture in [COUNTERS, SETS, DISTRIBUTIONS, GAUGES]:
+        for fixture in [COUNTERS, DISTRIBUTIONS]:
             self.generate_metrics(fixture)
 
     def generate_metrics(self, fixture: MetricFixture) -> None:
@@ -444,7 +421,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
             query=Timeseries(
                 metric=Metric(
                     "transaction.duration",
-                    "d:transactions/measurements.indexer_batch.payloads.len@none",
+                    "c:transactions/measurements.indexer_batch.payloads.len@none",
                     DISTRIBUTIONS.metric_id,
                 ),
                 aggregate="avg",
@@ -467,8 +444,8 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                 use_case_id="transactions",
             ),
             indexer_mappings={
-                "transaction.duration": "d:transactions/measurements.indexer_batch.payloads.len@none",
-                "d:transactions/measurements.indexer_batch.payloads.len@none": DISTRIBUTIONS.metric_id,
+                "transaction.duration": "c:transactions/measurements.indexer_batch.payloads.len@none",
+                "c:transactions/measurements.indexer_batch.payloads.len@none": DISTRIBUTIONS.metric_id,
                 "status_code": resolve_str("status_code"),
             },
         )
@@ -489,7 +466,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         query = MetricsQuery(
             query=Timeseries(
                 metric=Metric(
-                    mri="d:transactions/duration@millisecond",
+                    mri="c:transactions/duration@millisecond",
                 ),
                 aggregate="max",
                 aggregate_params=None,
@@ -506,7 +483,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
             rollup=Rollup(interval=3600, totals=None, granularity=3600),
             scope=MetricsScope(org_ids=[1], project_ids=[11], use_case_id="transactions"),
             indexer_mappings={
-                "d:transactions/duration@millisecond": 123456,
+                "c:transactions/duration@millisecond": 123456,
                 " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~": 78910,
                 "bar": 111213,
             },
@@ -1673,7 +1650,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
 
     def test_formula_filters_with_scalar_formula(self) -> None:
         query = MetricsQuery(
-            query="sum(d:transactions/duration@millisecond) + (86400 / 3600)",
+            query="sum(c:transactions/duration@millisecond) + (86400 / 3600)",
             start=self.start_time,
             end=self.end_time,
             rollup=Rollup(interval=60, granularity=60, totals=True),

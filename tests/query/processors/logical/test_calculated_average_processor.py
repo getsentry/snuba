@@ -11,8 +11,8 @@ from snuba.query.processors.logical.calculated_average_processor import (
 )
 from snuba.query.query_settings import HTTPQuerySettings
 
-entity = get_entity(EntityKey("generic_metrics_gauges"))
-query_entity = QueryEntity(EntityKey("generic_metrics_gauges"), entity.get_data_model())
+entity = get_entity(EntityKey("generic_metrics_counters"))
+query_entity = QueryEntity(EntityKey("generic_metrics_counters"), entity.get_data_model())
 
 AVG_VALUE_EXPRESSION = FunctionCall(
     alias="_snuba_aggregate_value",
@@ -237,6 +237,5 @@ def sumif_over_countif(condition: FunctionCall) -> FunctionCall:
     ],
 )
 def test_calculated_average_processor(input_query: Query, expected_query: Query) -> None:
-    # TODO: Don't use the guages entity in this test, it shouldn't be necessary
     CalculatedAverageProcessor().process_query(input_query, HTTPQuerySettings())
     assert input_query == expected_query

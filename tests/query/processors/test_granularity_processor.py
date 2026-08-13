@@ -283,8 +283,8 @@ def test_multiple_granularities_added_in_condition(
 @pytest.mark.parametrize(
     "entity_key,column",
     [
-        (EntityKey.GENERIC_METRICS_DISTRIBUTIONS, "percentiles"),
-        (EntityKey.GENERIC_METRICS_SETS, "value"),
+        (EntityKey.GENERIC_METRICS_COUNTERS, "percentiles"),
+        (EntityKey.GENERIC_METRICS_COUNTERS, "value"),
     ],
 )
 @pytest.mark.parametrize(
@@ -351,8 +351,8 @@ def test_granularity_enum_mapping(
 @pytest.mark.parametrize(
     "entity_key,column",
     [
-        (EntityKey.GENERIC_METRICS_DISTRIBUTIONS, "percentiles"),
-        (EntityKey.GENERIC_METRICS_SETS, "value"),
+        (EntityKey.GENERIC_METRICS_COUNTERS, "percentiles"),
+        (EntityKey.GENERIC_METRICS_COUNTERS, "value"),
     ],
 )
 @pytest.mark.parametrize(
@@ -426,8 +426,8 @@ def test_granularity_enum_mapping_in_condition(
 @pytest.mark.parametrize(
     "entity_key,column",
     [
-        (EntityKey.GENERIC_METRICS_DISTRIBUTIONS, "percentiles"),
-        (EntityKey.GENERIC_METRICS_SETS, "value"),
+        (EntityKey.GENERIC_METRICS_COUNTERS, "percentiles"),
+        (EntityKey.GENERIC_METRICS_COUNTERS, "value"),
     ],
 )
 @pytest.mark.parametrize(

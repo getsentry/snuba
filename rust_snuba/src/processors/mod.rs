@@ -58,9 +58,6 @@ define_processing_functions! {
     ("ReplaysProcessor", "ingest-replay-events", ProcessingFunctionType::ProcessingFunction(replays::process_message)),
     ("OutcomesProcessor", "outcomes", ProcessingFunctionType::ProcessingFunction(outcomes::process_message)),
     ("GenericCountersMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_counter_message)),
-    ("GenericSetsMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_set_message)),
-    ("GenericDistributionsMetricsProcessor" , "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_distribution_message)),
-    ("GenericGaugesMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_gauge_message)),
     ("PolymorphicMetricsProcessor", "snuba-metrics", ProcessingFunctionType::ProcessingFunction(release_health_metrics::process_metrics_message)),
     ("ErrorsProcessor", "events", ProcessingFunctionType::ProcessingFunctionWithReplacements(errors::process_message_with_replacement)),
     ("ProfileChunksProcessor", "snuba-profile-chunks", ProcessingFunctionType::ProcessingFunction(profile_chunks::process_message)),
@@ -72,11 +69,6 @@ define_processing_functions! {
 pub fn get_cogs_label(processor_name: &str) -> Option<String> {
     match processor_name {
         "GenericCountersMetricsProcessor" => Some("generic_metrics_processor_counters".to_string()),
-        "GenericSetsMetricsProcessor" => Some("generic_metrics_processor_sets".to_string()),
-        "GenericDistributionsMetricsProcessor" => {
-            Some("generic_metrics_processor_distributions".to_string())
-        }
-        "GenericGaugesMetricsProcessor" => Some("generic_metrics_processor_gauges".to_string()),
         "EAPItemsProcessor" => Some("eap_items_processor".to_string()),
         _ => None,
     }
