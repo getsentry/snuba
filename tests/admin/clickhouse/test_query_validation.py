@@ -186,3 +186,37 @@ def test_allowed_without_a_table_allowlist(query: str) -> None:
     versions, so it is not asserted here.
     """
     validate_ro_query(query)
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "SELECT * FROM clusterAllReplicas('c', system.users)",
+        "SELECT * FROM cluster('c', system, users)",
+        "SELECT * FROM clusterAllReplicas('c', other_table)",
+        "SELECT * FROM my_table, clusterAllReplicas('c', system.users)",
+    ],
+)
+def test_cluster_functions_cannot_reach_past_the_allowlist(query: str) -> None:
+    """cluster/clusterAllReplicas are allowed, the table they read is not free.
+
+    The parser does not report their table argument, so without an explicit
+    check these clear an allowlist that never saw the table.
+    """
+    with pytest.raises(InvalidCustomQuery):
+        validate_ro_query(query, allowed_tables={"my_table"})
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "SELECT * FROM clusterAllReplicas('c', my_table)",
+        "SELECT * FROM cluster('c', my_table)",
+        # Trailing sharding key: only the first argument names the table.
+        "SELECT * FROM clusterAllReplicas('c', my_table, rand())",
+        "SELECT * FROM clusterAllReplicas('c', my_table) UNION ALL "
+        "SELECT * FROM clusterAllReplicas('c', my_table)",
+    ],
+)
+def test_cluster_functions_over_an_allowed_table(query: str) -> None:
+    validate_ro_query(query, allowed_tables={"my_table"})

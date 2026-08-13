@@ -1279,7 +1279,7 @@ requires-dist = [
     { name = "sentry-usage-accountant", specifier = ">=0.0.11" },
     { name = "simplejson", specifier = ">=3.17.6" },
     { name = "snuba-sdk", specifier = ">=3.0.39" },
-    { name = "sql-metadata", specifier = ">=2.11.0" },
+    { name = "sql-metadata", specifier = ">=3.0.1" },
     { name = "sqlparse", specifier = ">=0.5.0" },
     { name = "structlog", specifier = ">=22.3.0" },
     { name = "structlog-sentry", specifier = ">=2.0.0" },
@@ -1322,13 +1322,21 @@ wheels = [
 
 [[package]]
 name = "sql-metadata"
-version = "2.11.0"
+version = "3.0.1"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 dependencies = [
-    { name = "sqlparse" },
+    { name = "sqlglot" },
 ]
 wheels = [
-    { url = "https://pypi.devinfra.sentry.io/wheels/sql_metadata-2.11.0-py3-none-any.whl", hash = "sha256:2ce9d4519565a972edf786712d3f6fbebf8ddd8e0d7bdb4bf51d64f5ec2e5c88" },
+    { url = "https://pypi.devinfra.sentry.io/wheels/sql_metadata-3.0.1-py3-none-any.whl", hash = "sha256:33b17891a149bfd851f5927d38fe6f133c63fca5955c016925dbc67113a07f7d" },
+]
+
+[[package]]
+name = "sqlglot"
+version = "30.16.0"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/sqlglot-30.16.0-py3-none-any.whl", hash = "sha256:f14f119e87bb1397316ab2b3c1f12dddd3b098921185dc69935952111be91788" },
 ]
 
 [[package]]

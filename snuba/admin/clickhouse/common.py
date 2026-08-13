@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import MutableMapping
 
-from sql_metadata import Parser, QueryType  # type: ignore[import-untyped]
+from sql_metadata import Parser, QueryType
 
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
@@ -457,14 +457,20 @@ _TABLE_POSITION_CALL_RE = re.compile(r"\b(?:from|join)\s+(\w+)\s*\(")
 
 # Fanning a read out across replicas is normal in these tools, so cluster and
 # clusterAllReplicas stay allowed -- as they already are in the system-queries
-# validator.
-#
-# Their table argument is not inspected here, which does not open a hole on the
-# pinned sql-metadata 2.11.0: that version reports both the function and its
-# table in Parser.tables, so allowed_tables still rejects a read outside the
-# allowlist. 3.x stops reporting them, so the upgrade to it has to add an
-# explicit check on that argument in the same change.
+# validator. The table they fan out over still has to clear allowed_tables, via
+# _cluster_function_tables -- the parser cannot do it for them. That check is
+# not optional on sql-metadata 3.x: unlike 2.11.0 it does not report these in
+# Parser.tables, so without it an empty table set clears any allowlist.
 _ALLOWED_TABLE_FUNCTIONS = frozenset({"cluster", "clusterallreplicas"})
+
+# Their table argument, in the three forms ClickHouse accepts:
+#   cluster('name', db.table)  cluster('name', db, table)  cluster('name', db.table, key)
+# The cluster name has collapsed to '' by the time this runs, since the caller
+# strips string literals first.
+_CLUSTER_FUNCTION_CALL_RE = re.compile(r"\b(?:cluster|clusterallreplicas)\s*\(")
+_CLUSTER_FUNCTION_ARGS_RE = re.compile(
+    r"\b(?:cluster|clusterallreplicas)\s*\(\s*''\s*,\s*([\w.]+)\s*(?:,\s*([\w.]+)\s*)?[,)]"
+)
 
 # Table functions that can read data allowed_tables never authorized: off the
 # node (network, filesystem) or across local tables. Matched anywhere rather
@@ -542,6 +548,22 @@ def _reject_table_functions(normalized_query: str) -> None:
         raise InvalidCustomQuery(f"table function {name} is not allowed in the query")
 
 
+def _cluster_function_tables(normalized_query: str) -> set[str]:
+    """Tables reached through cluster()/clusterAllReplicas() in the query.
+
+    sql_metadata does not report them, so without this they would clear an
+    allowed_tables check that never saw them. Fails closed: a call whose table
+    argument cannot be read is rejected rather than waved through.
+    """
+    args = _CLUSTER_FUNCTION_ARGS_RE.findall(normalized_query)
+    if len(args) != len(_CLUSTER_FUNCTION_CALL_RE.findall(normalized_query)):
+        raise InvalidCustomQuery("Could not determine the table a cluster function reads")
+
+    # `db, table` is two arguments; `db.table, key` is a table plus a sharding
+    # key, where only the first half names the table.
+    return {f"{first}.{second}" if second and "." not in first else first for first, second in args}
+
+
 def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) -> None:
     """
     Validates that the query is a safe read-only query.
@@ -614,10 +636,12 @@ def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) ->
 
         tables_set.add(parsed.tables_aliases[array_join])  # Add the table back
 
-    if allowed_tables and not tables_set.issubset(allowed_tables):
-        raise InvalidCustomQuery(
-            f"Invalid FROM clause, only the following tables are allowed: {allowed_tables}"
-        )
+    if allowed_tables:
+        tables_set |= _cluster_function_tables(normalized)
+        if not tables_set.issubset(allowed_tables):
+            raise InvalidCustomQuery(
+                f"Invalid FROM clause, only the following tables are allowed: {allowed_tables}"
+            )
 
 
 def format_predefined_sql(sql: str) -> str:
