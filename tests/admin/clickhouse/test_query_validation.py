@@ -133,6 +133,13 @@ def test_comment_tokens_outside_literals_rejected() -> None:
         "SELECT * FROM url///c\n('http://evil/x', CSV, 'a String')",
         "SELECT * FROM url/*c*/('http://evil/x', CSV, 'a String')",
         "SELECT * FROM remote//c\n('h:9000', system.users)",
+        # Data-lake and *Cluster families sit beside names already listed.
+        "SELECT * FROM icebergCluster('c', 'http://host/x')",
+        "SELECT * FROM my_table, paimon('http://host/x')",
+        "SELECT * FROM deltaLakeAzure('x')",
+        # A real JOIN after an alias named `array` is not an ARRAY JOIN, so the
+        # backstop must still see the call after it.
+        "SELECT * FROM my_table AS array JOIN somefunc(1) USING x",
         "SELECT * FROM \"merge\"('default', '.*')",
         # Following an allowed one must not end the scan.
         "SELECT * FROM clusterAllReplicas('c', my_table) JOIN merge('default', '.*') USING x",

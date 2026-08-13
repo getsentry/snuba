@@ -453,7 +453,7 @@ def _normalize_for_scanning(sql_query: str) -> str:
 # sql_metadata does not report table functions in Parser.tables, so a query
 # sourced only from one reaches the allowed_tables check with an empty table set
 # and passes it. ARRAY JOIN is excluded: it takes an expression list, not a table.
-_TABLE_POSITION_CALL_RE = re.compile(r"(?<!array )\b(?:from|join)\s+(\w+)\s*\(")
+_TABLE_POSITION_CALL_RE = re.compile(r"\b(?:from|join)\s+(\w+)\s*\(")
 
 # Fanning a read out across replicas is normal in these tools, so cluster and
 # clusterAllReplicas stay allowed -- as they already are in the system-queries
@@ -470,6 +470,8 @@ _DISALLOWED_TABLE_FUNCTIONS = (
     "azureBlobStorage",
     "azureBlobStorageCluster",
     "deltaLake",
+    "deltaLakeAzure",
+    "deltaLakeCluster",
     "dictionary",
     "executable",
     "file",
@@ -478,8 +480,11 @@ _DISALLOWED_TABLE_FUNCTIONS = (
     "hdfs",
     "hdfsCluster",
     "hudi",
+    "hudiCluster",
     "iceberg",
+    "icebergCluster",
     "icebergS3",
+    "icebergS3Cluster",
     "jdbc",
     "loop",
     "merge",
@@ -487,6 +492,8 @@ _DISALLOWED_TABLE_FUNCTIONS = (
     "mongodb",
     "mysql",
     "odbc",
+    "paimon",
+    "paimonCluster",
     "postgresql",
     "redis",
     "remote",
@@ -517,8 +524,16 @@ def _reject_table_functions(normalized_query: str) -> None:
     # anything ClickHouse adds later) sitting where a table belongs.
     for match in _TABLE_POSITION_CALL_RE.finditer(normalized_query):
         name = match.group(1)
-        if name not in _ALLOWED_TABLE_FUNCTIONS:
-            raise InvalidCustomQuery(f"table function {name} is not allowed in the query")
+        if name in _ALLOWED_TABLE_FUNCTIONS:
+            continue
+        # ARRAY JOIN takes an expression list rather than a table, so a call
+        # there is an ordinary one. Checked here rather than as a lookbehind on
+        # "array " because that also skipped a real JOIN after an alias named
+        # `array` -- `FROM t AS array JOIN f(...)`.
+        before = normalized_query[: match.start()]
+        if before.endswith("array ") and not before.endswith("as array "):
+            continue
+        raise InvalidCustomQuery(f"table function {name} is not allowed in the query")
 
 
 def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) -> None:
