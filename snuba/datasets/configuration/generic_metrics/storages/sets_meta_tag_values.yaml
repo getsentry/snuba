@@ -6,7 +6,7 @@ name: generic_metrics_sets_meta_tag_values
 storage:
   key: generic_metrics_sets_meta_tag_values
   set_key: generic_metrics_sets
-readiness_state: complete
+readiness_state: deprecate
 schema:
   columns:
     [
