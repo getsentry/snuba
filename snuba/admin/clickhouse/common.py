@@ -401,6 +401,55 @@ def _strip_sql_string_literals(sql_query: str) -> str:
     return "".join(out)
 
 
+def _normalize_for_scanning(sql_query: str) -> str:
+    """Lower cased SQL with literals emptied and identifier quoting removed.
+
+    ClickHouse quotes strings with ``'`` and identifiers with ``"`` or a
+    backtick, and the table-function scan below needs all three handled in one
+    pass. Treating ``"`` as a string delimiter erases `"url"` from the scan
+    outright; treating it as ordinary text lets the apostrophe in `"a'b"` open a
+    literal that swallows a following `url(`. Either way a table function slips
+    past.
+
+    String literals collapse to ''; identifiers keep their contents but lose
+    their quoting, which is what makes `url`(...) normalize to url(...).
+    """
+    out: list[str] = []
+    i = 0
+    n = len(sql_query)
+    while i < n:
+        ch = sql_query[i]
+        if ch in ("'", '"', "`"):
+            end = _end_of_sql_string_literal(sql_query, i)
+            if end is None:
+                # Unterminated. Keep the remainder minus the opener so nothing
+                # hides behind it; _sql_quotes_are_balanced rejects it anyway.
+                out.append(sql_query[i + 1 :])
+                break
+            out.append("''" if ch == "'" else sql_query[i + 1 : end - 1])
+            i = end
+            continue
+        # Comments are removed rather than kept, because ClickHouse removes them
+        # too: `url#c<newline>(...)` runs as url(...), so a scan that leaves the
+        # comment in place sees `url# c (` and matches nothing. ClickHouse
+        # documents five forms -- `--`, `#`, `#!`, `//` ("or more than 2 /
+        # characters") and `/* */` -- and all of them are handled here. Matching
+        # a bare `#` also covers `#!`, and a `//` prefix covers `///`.
+        if ch == "#" or sql_query.startswith("--", i) or sql_query.startswith("//", i):
+            newline = sql_query.find("\n", i)
+            i = n if newline == -1 else newline + 1
+            continue
+        if sql_query.startswith("/*", i):
+            # ClickHouse nests these; closing at the first */ only ever leaves
+            # more text in the scan than it should, never less.
+            close = sql_query.find("*/", i + 2)
+            i = n if close == -1 else close + 2
+            continue
+        out.append(ch)
+        i += 1
+    return " ".join("".join(out).lower().split())
+
+
 # sql_metadata does not report table functions in Parser.tables, so a query
 # sourced only from one reaches the allowed_tables check with an empty table set
 # and passes it. ARRAY JOIN is excluded: it takes an expression list, not a table.
@@ -499,6 +548,8 @@ def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) ->
         "replace",
         ";",  # Prevent query chaining
         "--",  # Prevent comment-based injection
+        "#",  # ClickHouse line comment, and covers #!
+        "//",  # ClickHouse C-style line comment, and covers ///
         "/*",  # Prevent multi-line comment injection
         "*/",
         "exec",
@@ -513,8 +564,9 @@ def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) ->
         elif kw in lowered:
             raise InvalidCustomQuery(f"{kw} is not allowed in the query")
 
+    normalized = _normalize_for_scanning(sql_query)
     # Must run before the allowed_tables check below, which cannot see them.
-    _reject_table_functions(" ".join(lowered.split()))
+    _reject_table_functions(normalized)
 
     parsed = Parser(sql_query.lower())
 

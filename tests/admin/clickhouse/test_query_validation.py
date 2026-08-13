@@ -85,6 +85,15 @@ def test_comment_tokens_outside_literals_rejected() -> None:
         validate_ro_query("SELECT * FROM my_table -- drop everything")
     with pytest.raises(InvalidCustomQuery):
         validate_ro_query("SELECT * FROM my_table /* bad */")
+    # ClickHouse also treats # as a line comment.
+    with pytest.raises(InvalidCustomQuery):
+        validate_ro_query("SELECT * FROM my_table # drop everything")
+    with pytest.raises(InvalidCustomQuery):
+        validate_ro_query("SELECT * FROM my_table // drop everything")
+    # ...but inside a literal they are just data. A URL is the case that matters:
+    # // in a filter value must not read as a comment.
+    validate_ro_query("SELECT * FROM my_table WHERE referrer = 'a#b'")
+    validate_ro_query("SELECT * FROM my_table WHERE u = 'http://example.com/x'")
 
 
 @pytest.mark.parametrize(
@@ -104,6 +113,27 @@ def test_comment_tokens_outside_literals_rejected() -> None:
         "SELECT * FROM my_table WHERE x IN (SELECT * FROM merge('default', '.*'))",
         "SELECT * FROM my_table WHERE x IN (SELECT * FROM remote('h:9000', system.users))",
         "SELECT * FROM\n  URL('http://evil/x', CSV, 'a String')",
+        # Quoted identifiers: ClickHouse quotes strings with ' and identifiers
+        # with ` or ", so neither form may hide the function name.
+        "SELECT * FROM `url`('http://evil/x', CSV, 'a String')",
+        "SELECT * FROM \"url\"('http://evil/x', CSV, 'a String')",
+        "SELECT * FROM `remote`('h:9000', system.users)",
+        # An apostrophe inside a quoted identifier must not open a literal that
+        # swallows the function name that follows it.
+        """SELECT * FROM "a'b", url('http://evil/x', CSV, 'a String')""",
+        """SELECT * FROM `a'b`, url('http://evil/x', CSV, 'a String')""",
+        """SELECT * FROM "a'b", `remote`('h:9000', system.users)""",
+        # ClickHouse strips comments before parsing, so one between the name and
+        # its ( must not hide the call. It documents five forms: -- # #! // /* */
+        # ("or more than 2 / characters"), and all of them are covered here.
+        "SELECT * FROM url--c\n('http://evil/x', CSV, 'a String')",
+        "SELECT * FROM url#c\n('http://evil/x', CSV, 'a String')",
+        "SELECT * FROM url#!c\n('http://evil/x', CSV, 'a String')",
+        "SELECT * FROM url//c\n('http://evil/x', CSV, 'a String')",
+        "SELECT * FROM url///c\n('http://evil/x', CSV, 'a String')",
+        "SELECT * FROM url/*c*/('http://evil/x', CSV, 'a String')",
+        "SELECT * FROM remote//c\n('h:9000', system.users)",
+        "SELECT * FROM \"merge\"('default', '.*')",
         # Following an allowed one must not end the scan.
         "SELECT * FROM clusterAllReplicas('c', my_table) JOIN merge('default', '.*') USING x",
     ],
@@ -122,6 +152,9 @@ def test_table_functions_rejected(query: str) -> None:
         "SELECT * FROM (SELECT * FROM my_table) sub",
         "SELECT count() FROM my_table WHERE referrer IN ('a', 'b')",
         "SELECT * FROM my_table WHERE referrer = 'url(http://x)'",
+        # A quoted table name is still just a table.
+        "SELECT * FROM `my_table`",
+        'SELECT * FROM "my_table"',
     ],
 )
 def test_legitimate_queries_still_allowed(query: str) -> None:
@@ -141,10 +174,8 @@ def test_legitimate_queries_still_allowed(query: str) -> None:
 def test_allowed_without_a_table_allowlist(query: str) -> None:
     """Legitimate for tracing, which passes no allowed_tables.
 
-    The scoped tools reject these on sql_metadata 2.11.0 for an unrelated
-    reason: it reports `arraymap`, `clusterallreplicas` and friends in
-    Parser.tables, so they fail the allowlist as unknown table names. That is
-    pre-existing behaviour and version-specific -- 3.x drops them from
-    Parser.tables -- so it is not asserted here.
+    Whether the scoped tools accept these depends on how the parser reports
+    function sources in Parser.tables, which differs across sql_metadata
+    versions, so it is not asserted here.
     """
     validate_ro_query(query)
