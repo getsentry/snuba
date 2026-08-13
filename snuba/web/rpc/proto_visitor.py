@@ -171,52 +171,35 @@ class ProtoVisitor(ABC):  # noqa: B024 dynamic visit dispatch via __getattr__; A
 def _convert_aggregation_to_conditional_aggregation(
     input: Column | AggregationComparisonFilter | TimeSeriesExpression,
 ) -> None:
-    if input.HasField("aggregation"):
-        aggregation = input.aggregation
-        input.ClearField("aggregation")
-        ranked_by = (
-            {"ranked_by": aggregation.ranked_by} if aggregation.HasField("ranked_by") else {}
-        )
-        match aggregation.WhichOneof("default_value"):
-            case None:
-                input.conditional_aggregation.CopyFrom(
-                    AttributeConditionalAggregation(
-                        aggregate=aggregation.aggregate,
-                        key=aggregation.key,
-                        label=aggregation.label,
-                        extrapolation_mode=aggregation.extrapolation_mode,
-                        # mypy can't type-check **unpack of an kwarg dict
-                        **ranked_by,  # type: ignore[arg-type]
-                    )
-                )
-            case "default_value_double":
-                input.conditional_aggregation.CopyFrom(
-                    AttributeConditionalAggregation(
-                        aggregate=aggregation.aggregate,
-                        key=aggregation.key,
-                        label=aggregation.label,
-                        extrapolation_mode=aggregation.extrapolation_mode,
-                        default_value_double=aggregation.default_value_double,
-                        # mypy can't type-check **unpack of an kwarg dict
-                        **ranked_by,  # type: ignore[arg-type]
-                    )
-                )
-            case "default_value_int64":
-                input.conditional_aggregation.CopyFrom(
-                    AttributeConditionalAggregation(
-                        aggregate=aggregation.aggregate,
-                        key=aggregation.key,
-                        label=aggregation.label,
-                        extrapolation_mode=aggregation.extrapolation_mode,
-                        default_value_int64=aggregation.default_value_int64,
-                        # mypy can't type-check **unpack of an kwarg dict
-                        **ranked_by,  # type: ignore[arg-type]
-                    )
-                )
-            case default:
-                raise BadSnubaRPCRequestException(
-                    f"Unknown default_value in formula. Expected default_value_double or default_value_int64 but got {default}"
-                )
+    if not input.HasField("aggregation"):
+        return
+
+    input_agg = input.aggregation
+    input.ClearField("aggregation")
+
+    conditional_aggregation = AttributeConditionalAggregation(
+        aggregate=input_agg.aggregate,
+        key=input_agg.key,
+        label=input_agg.label,
+        extrapolation_mode=input_agg.extrapolation_mode,
+    )
+
+    if input_agg.HasField("ranked_by"):
+        conditional_aggregation.ranked_by.CopyFrom(input_agg.ranked_by)
+
+    match input_agg.WhichOneof("default_value"):
+        case None:
+            pass
+        case "default_value_double":
+            conditional_aggregation.default_value_double = input_agg.default_value_double
+        case "default_value_int64":
+            conditional_aggregation.default_value_int64 = input_agg.default_value_int64
+        case default:
+            raise BadSnubaRPCRequestException(
+                f"Unknown default_value in formula. Expected default_value_double or default_value_int64 but got {default}"
+            )
+
+    input.conditional_aggregation.CopyFrom(conditional_aggregation)
 
 
 class AggregationToConditionalAggregationVisitor(ProtoVisitor):
