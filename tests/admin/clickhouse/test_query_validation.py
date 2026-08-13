@@ -220,3 +220,18 @@ def test_cluster_functions_cannot_reach_past_the_allowlist(query: str) -> None:
 )
 def test_cluster_functions_over_an_allowed_table(query: str) -> None:
     validate_ro_query(query, allowed_tables={"my_table"})
+
+
+def test_cluster_function_bare_identifiers_are_db_and_table() -> None:
+    """`cluster('c', a, b)` is db=a table=b, not table=a sharding_key=b.
+
+    ClickHouse documents the signature as
+    `cluster(cluster_name, db, table, sharding_key)`, so a sharding key only
+    follows a complete table spec. The two readings are indistinguishable from
+    syntax alone, so this pins the one the docs give.
+    """
+    validate_ro_query("SELECT * FROM cluster('c', db, tbl)", allowed_tables={"db.tbl"})
+    # And the sharding key, when present, is not part of the table.
+    validate_ro_query("SELECT * FROM cluster('c', db, tbl, mykey)", allowed_tables={"db.tbl"})
+    with pytest.raises(InvalidCustomQuery):
+        validate_ro_query("SELECT * FROM cluster('c', db, tbl)", allowed_tables={"db"})
