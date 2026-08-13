@@ -457,7 +457,13 @@ _TABLE_POSITION_CALL_RE = re.compile(r"\b(?:from|join)\s+(\w+)\s*\(")
 
 # Fanning a read out across replicas is normal in these tools, so cluster and
 # clusterAllReplicas stay allowed -- as they already are in the system-queries
-# validator. Note this leaves allowed_tables reachable through them.
+# validator.
+#
+# Their table argument is not inspected here, which does not open a hole on the
+# pinned sql-metadata 2.11.0: that version reports both the function and its
+# table in Parser.tables, so allowed_tables still rejects a read outside the
+# allowlist. 3.x stops reporting them, so the upgrade to it has to add an
+# explicit check on that argument in the same change.
 _ALLOWED_TABLE_FUNCTIONS = frozenset({"cluster", "clusterallreplicas"})
 
 # Table functions that can read data allowed_tables never authorized: off the
