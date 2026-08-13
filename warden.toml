@@ -1,0 +1,20 @@
+# Warden Configuration
+# https://github.com/getsentry/warden
+#
+# Org-wide CI runs Warden via getsentry/.github. This file preserves the
+# security review when repository configuration is resolved on its own.
+
+version = 1
+
+[defaults]
+# Report medium findings and fail CI for high-severity vulnerabilities.
+reportOn = "medium"
+failOn = "high"
+
+[[skills]]
+name = "security-review"
+paths = ["**/*.py", "**/*.rs"]
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize", "reopened"]
