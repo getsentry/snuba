@@ -40,6 +40,7 @@ metrics = MetricsWrapper(environment.metrics, "clickhouse.connect")
 
 DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS = 60 * 60  # 1h fallback when profile timeout is None
 DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
+_CLICKHOUSE_CONNECT_TRANSPORT_SETTINGS = {"X-ClickHouse-Format": "Native"}
 
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
 clickhouse_connect_common.set_setting(
@@ -281,20 +282,22 @@ class ClickhouseConnectPool(ClickhousePool):
         client = self._new_client()
         query_settings = self._build_query_settings(settings, query_id, capture_trace)
 
-        with _query_span(query, query_id) as span:
-            span.set_attribute("settings", json.dumps(query_settings, default=repr))
-            query_result = client.query(
-                query,
-                parameters=_driver_params(params),
-                settings=query_settings,
-                column_oriented=columnar,
-            )
-
+        query_result = None
         try:
+            with _query_span(query, query_id) as span:
+                span.set_attribute("settings", json.dumps(query_settings, default=repr))
+                query_result = client.query(
+                    query,
+                    parameters=_driver_params(params),
+                    settings=query_settings,
+                    column_oriented=columnar,
+                    transport_settings=dict(_CLICKHOUSE_CONNECT_TRANSPORT_SETTINGS),
+                )
             return self._consume_query_result(query_result, with_column_types, query_id)
         finally:
-            with suppress(Exception):
-                query_result.close()
+            if query_result is not None:
+                with suppress(Exception):
+                    query_result.close()
 
     def execute_with_totals(
         self,

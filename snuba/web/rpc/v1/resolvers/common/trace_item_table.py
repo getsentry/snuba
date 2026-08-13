@@ -68,7 +68,7 @@ def _get_aggregate_converter(
     match aggregate:
         case Function.FUNCTION_COLLECT_UNIQUE:
             return _array_raw_to_attribute_value
-        case Function.FUNCTION_ANY:
+        case Function.FUNCTION_ANY | Function.FUNCTION_FIRST | Function.FUNCTION_LAST:
             return _get_converter_for_type(key_type)
 
     return _get_double_converter()

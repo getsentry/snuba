@@ -5,7 +5,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, Function
 
 from snuba.protos.common import ARRAY_TYPES
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
@@ -14,6 +14,7 @@ from snuba.web.rpc.proto_visitor import (
     AggregationToConditionalAggregationVisitor,
     ColumnWrapper,
     ContainsAggregateVisitor,
+    GetColumnAggregationsVisitor,
     TraceItemTableRequestWrapper,
 )
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
@@ -83,6 +84,46 @@ def _validate_select_and_groupby(in_msg: TraceItemTableRequest) -> None:
     if disallowed_group_by_columns:
         raise BadSnubaRPCRequestException(
             f"Columns {', '.join(disallowed_group_by_columns)} are not permitted in group_by. The following columns are not allowed: {', '.join(_GROUP_BY_DISALLOWED_COLUMNS)}"
+        )
+
+    aggregations_visitor = GetColumnAggregationsVisitor()
+    # Walk SELECT columns and HAVING (aggregation_filter) so FIRST/LAST validation
+    # is consistent across both — TraceItemTableRequestWrapper covers both.
+    TraceItemTableRequestWrapper(in_msg).accept(aggregations_visitor)
+
+    aggregation_columns = aggregations_visitor.aggregations
+    ordered_agg_columns = [
+        c
+        for c in aggregation_columns
+        if c.aggregate in (Function.FUNCTION_FIRST, Function.FUNCTION_LAST)
+    ]
+
+    invalid_ranked_by = [
+        c.label
+        for c in aggregation_columns
+        if c not in ordered_agg_columns and c.HasField("ranked_by")
+    ]
+    if invalid_ranked_by:
+        raise BadSnubaRPCRequestException(
+            f"ranked_by is only supported for FUNCTION_FIRST and FUNCTION_LAST: {invalid_ranked_by}"
+        )
+
+    ordered_without_ranked_by = [
+        c.label for c in ordered_agg_columns if not c.HasField("ranked_by")
+    ]
+    if ordered_without_ranked_by:
+        raise BadSnubaRPCRequestException(
+            "FUNCTION_FIRST and FUNCTION_LAST require ranked_by to be set: "
+            f"{ordered_without_ranked_by}"
+        )
+
+    ordered_with_default_value = [
+        c.label for c in ordered_agg_columns if c.WhichOneof("default_value") is not None
+    ]
+    if ordered_with_default_value:
+        raise BadSnubaRPCRequestException(
+            "FUNCTION_FIRST and FUNCTION_LAST do not support default_value: "
+            f"{ordered_with_default_value}"
         )
 
 
