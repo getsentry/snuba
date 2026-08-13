@@ -43,7 +43,7 @@ def test_subset_property_via_modular_arithmetic() -> None:
     # Verify the divisibility chain that the SQL relies on for the subset
     # guarantee.
     weights = sorted(_migration.sampling_weights)
-    for smaller, larger in zip(weights, weights[1:]):
+    for smaller, larger in zip(weights, weights[1:], strict=False):
         assert larger % smaller == 0, (
             f"sampling_weight {larger} must be a multiple of {smaller} "
             "for tier subset property to hold"

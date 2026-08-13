@@ -18,6 +18,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKeyExpression,
     ExtrapolationMode,
     Function,
+    RankedBy,
     Reliability,
 )
 
@@ -33,6 +34,7 @@ from snuba.query.expressions import (
 from snuba.state.sentry_options import get_option
 from snuba.web.rpc.common.common import (
     get_field_existence_expression,
+    semver_sort_key,
     trace_item_filters_to_expression,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -520,7 +522,11 @@ def get_extrapolated_function(
     alias = aggregation.label or None
     alias_dict = {"alias": alias} if alias else {}
 
-    if aggregation.aggregate == Function.FUNCTION_COLLECT_UNIQUE:
+    if aggregation.aggregate in (
+        Function.FUNCTION_COLLECT_UNIQUE,
+        Function.FUNCTION_FIRST,
+        Function.FUNCTION_LAST,
+    ):
         raise BadSnubaRPCRequestException(
             f"Extrapolation is not supported for {Function.Name(aggregation.aggregate)} function."
         )
@@ -863,6 +869,38 @@ def _array_aggregation_to_expression(
     )
 
 
+_ORDERED_AGGREGATES = frozenset({Function.FUNCTION_FIRST, Function.FUNCTION_LAST})
+
+
+def _build_ordered_agg_sort_key(
+    aggregation: AttributeConditionalAggregation,
+    attribute_key_to_expression: Callable[[AttributeKey], Expression],
+) -> Expression | None:
+    if aggregation.aggregate not in _ORDERED_AGGREGATES:
+        return None
+
+    aggregate_name = Function.Name(aggregation.aggregate)
+    if not aggregation.HasField("ranked_by"):
+        raise BadSnubaRPCRequestException(f"{aggregate_name} requires ranked_by to be set")
+
+    ranked_by = aggregation.ranked_by
+    if ranked_by.key.type in ARRAY_TYPES:
+        raise BadSnubaRPCRequestException(
+            f"{aggregate_name} ranked_by is not supported on array attributes: {ranked_by.key.name}"
+        )
+    expression = attribute_key_to_expression(ranked_by.key)
+    if ranked_by.key.type == AttributeKey.TYPE_STRING and ranked_by.sort == RankedBy.SORT_SEMVER:
+        expression = semver_sort_key(expression)
+
+    timestamp = attribute_key_to_expression(
+        AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="sentry.timestamp")
+    )
+    item_id = attribute_key_to_expression(
+        AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.item_id")
+    )
+    return f.tuple(expression, timestamp, item_id)
+
+
 def aggregation_to_expression(
     aggregation: AttributeConditionalAggregation,
     attribute_key_to_expression: Callable[[AttributeKey], Expression],
@@ -880,6 +918,17 @@ def aggregation_to_expression(
         return _array_aggregation_to_expression(
             aggregation, field, condition_in_aggregation, alias_dict
         )
+
+    # FUNCTION_FIRST / FUNCTION_LAST return the value of `field` at the row that ranks
+    # first / last by the aggregation's ranked_by. FIRST maps to argMin; LAST maps to
+    # argMax. Sort key is only built for those aggregates (None otherwise).
+    ordered_agg_sort_key = _build_ordered_agg_sort_key(aggregation, attribute_key_to_expression)
+    ordered_agg_condition = None
+    if ordered_agg_sort_key is not None:
+        ranked_by_exists = get_field_existence_expression(
+            attribute_key_to_expression(aggregation.ranked_by.key)
+        )
+        ordered_agg_condition = and_cond(field_exists, ranked_by_exists, condition_in_aggregation)
 
     function_map: dict[Function.ValueType, CurriedFunctionCall | FunctionCall] = {
         Function.FUNCTION_SUM: f.sumIfOrNull(
@@ -938,6 +987,16 @@ def aggregation_to_expression(
             field,
             and_cond(field_exists, condition_in_aggregation),
         ),
+        Function.FUNCTION_FIRST: f.argMinIfOrNull(
+            field,
+            ordered_agg_sort_key,
+            ordered_agg_condition,
+        ),
+        Function.FUNCTION_LAST: f.argMaxIfOrNull(
+            field,
+            ordered_agg_sort_key,
+            ordered_agg_condition,
+        ),
     }
 
     if aggregation.extrapolation_mode in [
@@ -962,6 +1021,20 @@ def aggregation_to_expression(
             elif aggregation.aggregate == Function.FUNCTION_COLLECT_UNIQUE:
                 agg_func_expr = cf.groupUniqArrayIf(max_array_size)(
                     field, and_cond(field_exists, condition_in_aggregation), **alias_dict
+                )
+            elif aggregation.aggregate == Function.FUNCTION_FIRST:
+                agg_func_expr = f.argMinIfOrNull(
+                    field,
+                    ordered_agg_sort_key,
+                    ordered_agg_condition,
+                    **alias_dict,
+                )
+            elif aggregation.aggregate == Function.FUNCTION_LAST:
+                agg_func_expr = f.argMaxIfOrNull(
+                    field,
+                    ordered_agg_sort_key,
+                    ordered_agg_condition,
+                    **alias_dict,
                 )
             else:
                 agg_func_expr = f.round(agg_func_expr, _FLOATING_POINT_PRECISION, **alias_dict)

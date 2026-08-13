@@ -1,4 +1,4 @@
-from typing import Callable, List
+from collections.abc import Callable
 
 from snuba.clickhouse.columns import Column
 from snuba.clusters.storage_sets import StorageSetKey
@@ -20,7 +20,7 @@ sampling_weights = SAMPLING_WEIGHTS
 
 _codec = Modifiers(codecs=["ZSTD(1)"])
 
-new_columns: List[Column[Modifiers]] = [
+new_columns: list[Column[Modifiers]] = [
     Column("ai_conversation_id", String(modifiers=_codec)),
 ]
 add_column_after = ["session_id"]
@@ -38,7 +38,7 @@ mv_new_version = mv_old_version + 1
 # Columns the current mv_8 set carries that aren't in get_eap_items_columns():
 # the array columns from 0059 and conversation_id/session_id (after trace_id)
 # from 0060. Reconstructed here so get_eap_items_columns() stays untouched.
-array_attribute_columns: List[Column[Modifiers]] = [
+array_attribute_columns: list[Column[Modifiers]] = [
     Column("attributes_array_string", Map(String(), Array(String()), modifiers=_codec)),
     Column("attributes_array_int", Map(String(), Array(Int(64)), modifiers=_codec)),
     Column("attributes_array_float", Map(String(), Array(Float(64)), modifiers=_codec)),
@@ -48,21 +48,21 @@ conversation_id: Column[Modifiers] = Column("conversation_id", UUID())
 session_id: Column[Modifiers] = Column("session_id", UUID())
 
 
-def _mv8_columns() -> List[Column[Modifiers]]:
+def _mv8_columns() -> list[Column[Modifiers]]:
     columns = get_eap_items_columns()
     columns.extend(array_attribute_columns)
     at = next(i for i, c in enumerate(columns) if c.name == "trace_id") + 1
     return columns[:at] + [conversation_id, session_id] + columns[at:]
 
 
-def _mv9_columns() -> List[Column[Modifiers]]:
+def _mv9_columns() -> list[Column[Modifiers]]:
     columns = get_eap_items_columns()
     columns.extend(array_attribute_columns)
     at = next(i for i, c in enumerate(columns) if c.name == "trace_id") + 1
     return columns[:at] + [session_id] + list(new_columns) + columns[at:]
 
 
-def _query_for_weight(columns: List[Column[Modifiers]]) -> Callable[[int], str]:
+def _query_for_weight(columns: list[Column[Modifiers]]) -> Callable[[int], str]:
     def inner(sampling_weight: int) -> str:
         return downsample_mv_select(
             columns,
@@ -73,28 +73,28 @@ def _query_for_weight(columns: List[Column[Modifiers]]) -> Callable[[int], str]:
     return inner
 
 
-def _table_prefixes() -> List[str]:
+def _table_prefixes() -> list[str]:
     return [table_name_prefix] + [
         f"eap_items_1_downsample_{sampling_weight}" for sampling_weight in sampling_weights
     ]
 
 
-def _local_tables() -> List[str]:
+def _local_tables() -> list[str]:
     return [f"{prefix}_local" for prefix in _table_prefixes()]
 
 
-def _ro_dist_tables() -> List[str]:
+def _ro_dist_tables() -> list[str]:
     return [f"{prefix}_dist_ro" for prefix in _table_prefixes()]
 
 
 class Migration(migration.ClickhouseNodeMigration):
     blocking = False
 
-    def forwards_ops(self) -> List[SqlOperation]:
-        ops: List[SqlOperation] = []
+    def forwards_ops(self) -> list[SqlOperation]:
+        ops: list[SqlOperation] = []
 
         for prefix in _table_prefixes():
-            for column, after in zip(new_columns, add_column_after):
+            for column, after in zip(new_columns, add_column_after, strict=False):
                 ops.extend(
                     [
                         operations.AddColumn(
@@ -115,7 +115,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 )
 
         for ro_table in _ro_dist_tables():
-            for column, after in zip(new_columns, add_column_after):
+            for column, after in zip(new_columns, add_column_after, strict=False):
                 ops.append(
                     operations.AddColumn(
                         storage_set=ro_storage_set,
@@ -152,9 +152,9 @@ class Migration(migration.ClickhouseNodeMigration):
 
         return ops
 
-    def backwards_ops(self) -> List[SqlOperation]:
+    def backwards_ops(self) -> list[SqlOperation]:
         base_columns = _mv8_columns()
-        ops: List[SqlOperation] = list(
+        ops: list[SqlOperation] = list(
             swap_downsample_materialized_views(
                 columns=base_columns,
                 create_version=mv_old_version,

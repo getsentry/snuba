@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 from snuba.migrations import migration
 from snuba.migrations.operations import SqlOperation
