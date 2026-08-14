@@ -79,6 +79,14 @@ def test_extract_settings_clause_moves_settings() -> None:
     assert settings == {}
     assert apply_limit is False
 
+    # Subquery SETTINGS must not be peeled, even if a later quoted SETTINGS exists.
+    body, settings, apply_limit = _extract_settings_clause(
+        "SELECT * FROM (SELECT 1 SETTINGS max_threads = 2) WHERE x = 'SETTINGS'"
+    )
+    assert body == "SELECT * FROM (SELECT 1 SETTINGS max_threads = 2) WHERE x = 'SETTINGS'"
+    assert settings == {}
+    assert apply_limit is True
+
 
 def test_summarize_from_query_log() -> None:
     connection = MagicMock()
@@ -445,13 +453,15 @@ def test_run_query_and_get_trace_uses_query_log_when_wire_trace_empty() -> None:
         "log_profile_events": 1,
         "max_threads": "10",
     }
-    assert connection.query_limit == MAX_TRACING_QUERY_LIMIT
+    # query_limit is passed per execute; the shared pool attribute is untouched.
+    assert connection.query_limit == 0
+    assert connection.execute.call_args.kwargs["query_limit"] == MAX_TRACING_QUERY_LIMIT
     assert output.executed_query == "SELECT 1 LIMIT 10000"
 
 
 def test_run_query_and_get_trace_disables_query_limit_when_settings_remain() -> None:
     connection = MagicMock()
-    # Simulate a pool that kept LIMIT on from a previous request.
+    # Simulate a connect pool (has query_limit attr) without mutating it.
     connection.query_limit = MAX_TRACING_QUERY_LIMIT
     connection.execute.return_value = ClickhouseResult(
         results=[(1,)],
@@ -473,9 +483,10 @@ def test_run_query_and_get_trace_disables_query_limit_when_settings_remain() -> 
     ):
         run_query_and_get_trace("errors_ro", "SELECT 1 SETTINGS max_threads")
 
-    # SETTINGS stayed in SQL, so driver LIMIT must be cleared for this request.
-    assert connection.query_limit == 0
+    # SETTINGS stayed in SQL, so this execute disables LIMIT without touching the pool.
+    assert connection.query_limit == MAX_TRACING_QUERY_LIMIT
     assert connection.execute.call_args.kwargs["query"] == "SELECT 1 SETTINGS max_threads"
+    assert connection.execute.call_args.kwargs["query_limit"] == 0
 
 
 def test_run_query_and_get_trace_keeps_native_wire_trace() -> None:

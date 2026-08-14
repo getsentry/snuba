@@ -181,7 +181,7 @@ class ClickhouseConnectPool(ClickhousePool):
         self.client_settings = client_settings
         self.query_limit = query_limit
 
-    def _new_client(self) -> Client:
+    def _new_client(self, query_limit: int | None = None) -> Client:
         connect_timeout = (
             get_option("clickhouse_connect_connect_timeout", 0) or self.connect_timeout
         )
@@ -215,7 +215,8 @@ class ClickhouseConnectPool(ClickhousePool):
                 send_receive_timeout=send_receive_timeout,
                 settings=dict(self.client_settings),
                 pool_mgr=_shared_pool(self.ca_certs, bool(self.verify)),
-                query_limit=self.query_limit,
+                # Per-call override avoids mutating shared/cached pool state.
+                query_limit=self.query_limit if query_limit is None else query_limit,
                 autogenerate_session_id=False,
                 compress="lz4",
             )
@@ -282,8 +283,9 @@ class ClickhouseConnectPool(ClickhousePool):
         settings: Mapping[str, Any] | None,
         columnar: bool,
         capture_trace: bool,
+        query_limit: int | None = None,
     ) -> ClickhouseResult:
-        client = self._new_client()
+        client = self._new_client(query_limit=query_limit)
         query_settings = self._build_query_settings(settings, query_id, capture_trace)
 
         query_result = None
@@ -385,6 +387,7 @@ class ClickhouseConnectPool(ClickhousePool):
         columnar: bool = False,
         capture_trace: bool = False,
         retryable: bool = True,
+        query_limit: int | None = None,
     ) -> ClickhouseResult:
         with self._translate_clickhouse_errors():
             return self._execute_once(
@@ -395,6 +398,7 @@ class ClickhouseConnectPool(ClickhousePool):
                 settings,
                 columnar,
                 capture_trace,
+                query_limit=query_limit,
             )
 
     def insert(

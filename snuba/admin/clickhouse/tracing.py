@@ -22,7 +22,6 @@ from snuba.admin.clickhouse.trace_log_parsing import (
     TracingSummary,
     summarize_trace_output,
 )
-from snuba.clickhouse.connect import ClickhouseConnectPool
 from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.native import ClickhousePool, ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings
@@ -69,8 +68,28 @@ def _split_settings_list(text: str) -> list[str]:
     return parts
 
 
+def _paren_depth_at(text: str, index: int) -> int:
+    """Parenthesis depth at ``index``, ignoring quoted string contents."""
+    depth = 0
+    i = 0
+    while i < index:
+        ch = text[i]
+        if ch in "'\"":
+            end = _end_of_sql_string_literal(text, i)
+            if end is None:
+                return -1
+            i = end
+            continue
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth = max(0, depth - 1)
+        i += 1
+    return depth
+
+
 def _find_trailing_settings(query: str) -> int | None:
-    """Index of the last unquoted standalone SETTINGS token, if any."""
+    """Index of the last top-level unquoted standalone SETTINGS token, if any."""
     upper = query.upper()
     search_end = len(upper)
     while True:
@@ -85,6 +104,7 @@ def _find_trailing_settings(query: str) -> int | None:
             before in " \t\n\r;"
             and after in " \t\n\r"
             and _sql_quotes_are_balanced(query[:settings_at])
+            and _paren_depth_at(query, settings_at) == 0
         ):
             return settings_at
 
@@ -95,7 +115,8 @@ def _extract_settings_clause(query: str) -> tuple[str, dict[str, str], bool]:
     """Move a trailing SETTINGS clause into the driver settings dict.
 
     Returns (sql, settings, apply_query_limit). apply_query_limit is False when a
-    SETTINGS clause remains in the SQL, so the driver must not append LIMIT after it.
+    top-level SETTINGS clause remains in the SQL, so the driver must not append
+    LIMIT after it.
     """
     settings_at = _find_trailing_settings(query)
     if settings_at is None:
@@ -141,20 +162,22 @@ def run_query_and_get_trace(
     execute_settings.update(sql_settings)
 
     connection = get_ro_query_node_connection(storage_name, ClickhouseClientSettings.TRACING)
-    # Prefer clickhouse-connect's client-side query_limit. Native pools do not set
-    # this instance attribute and are left alone. Always set it so a previous
-    # request cannot leak LIMIT onto a later query that still has SETTINGS in SQL.
+    # Prefer clickhouse-connect's client-side query_limit. Pass it per execute so
+    # concurrent requests cannot race on a shared cached pool attribute. Native
+    # pools are left alone. Skip when SETTINGS remains in SQL: the driver appends
+    # LIMIT at the end, which is invalid after SETTINGS.
+    execute_kwargs: dict[str, Any] = {
+        "query": query_without_settings,
+        "capture_trace": True,
+        "with_column_types": True,
+        "settings": execute_settings,
+    }
     if "query_limit" in getattr(connection, "__dict__", {}):
-        cast(ClickhouseConnectPool, connection).query_limit = (
+        execute_kwargs["query_limit"] = (
             MAX_TRACING_QUERY_LIMIT if apply_query_limit else 0
         )
 
-    query_result = connection.execute(
-        query=query_without_settings,
-        capture_trace=True,
-        with_column_types=True,
-        settings=execute_settings,
-    )
+    query_result = connection.execute(**execute_kwargs)
 
     trace_output = query_result.trace_output or ""
     summarized_trace_output = summarize_trace_output(trace_output)
