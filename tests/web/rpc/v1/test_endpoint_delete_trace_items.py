@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 import pytest
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.endpoint_delete_trace_items_pb2 import (
     DeleteTraceItemsRequest,
     DeleteTraceItemsResponse,
@@ -150,6 +151,32 @@ class TestEndpointDeleteTrace(BaseApiTest):
         assert called_args["conditions"]["organization_id"] == [1]
         assert called_args["conditions"]["trace_id"] == [_TRACE_ID]
         assert called_args["rows_to_delete"] == _SPAN_COUNT
+
+    @patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10)
+    @patch("snuba.web.bulk_delete_query.produce_delete_query")
+    @override_options("snuba", {"lw_deletes_killswitch": {"eap_items": "[1]"}})
+    def test_killswitch_uses_predicate_without_tenant_project_id(
+        self, produce_delete_query_mock: Mock, mock_enforce_rows: Mock
+    ) -> None:
+        # RPC attribution never sets tenant_ids.project_id. Killswitch must
+        # still apply to meta.project_ids in the delete predicate.
+        ts = Timestamp()
+        ts.GetCurrentTime()
+        message = DeleteTraceItemsRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=ts,
+                request_id=_REQUEST_ID,
+            ),
+            trace_ids=[_TRACE_ID],
+        )
+
+        EndpointDeleteTraceItems().execute(message)
+        produce_delete_query_mock.assert_not_called()
 
     # This should not yet produce a message to bulk_delete topic because
     # we haven't wired that behavior through yet (it should not error out,

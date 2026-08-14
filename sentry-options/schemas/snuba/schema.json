@@ -180,7 +180,7 @@
         "type": "string"
       },
       "default": {},
-      "description": "Dict mapping storage name to a string of project ids; a lightweight delete is dropped when its project id appears in that storage's entry. Storages with no entry are not killswitched. Migrated from per-storage runtime config lw_deletes_killswitch_<storage>."
+      "description": "Dict mapping storage name to a string of project ids; a lightweight delete is dropped when any project_id in the delete predicate appears in that storage's entry. Mixed project lists fail closed. Attribution tenant_ids are not used. Storages with no entry are not killswitched. Migrated from per-storage runtime config lw_deletes_killswitch_<storage>."
     },
     "validate_schema_sample_rate": {
       "type": "object",

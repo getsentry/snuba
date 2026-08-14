@@ -122,6 +122,68 @@ def test_deletes_killswitch(mock_produce_query: Mock, mock_enforce_rows: Mock) -
 
 
 @pytest.mark.redis_db
+@patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10)
+@patch("snuba.web.bulk_delete_query.produce_delete_query")
+@override_options("snuba", {"lw_deletes_killswitch": {"search_issues": "[1]"}})
+def test_killswitch_omitted_attribution_project_id(
+    mock_produce_query: Mock, mock_enforce_rows: Mock
+) -> None:
+    storage = get_writable_storage(StorageKey("search_issues"))
+    conditions = {"project_id": [1], "group_id": [1, 2, 3, 4]}
+    attr_info = get_attribution_info({"organization_id": 1})
+
+    delete_from_storage(storage, conditions, attr_info)
+    mock_produce_query.assert_not_called()
+
+
+@pytest.mark.redis_db
+@patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10)
+@patch("snuba.web.bulk_delete_query.produce_delete_query")
+@override_options("snuba", {"lw_deletes_killswitch": {"search_issues": "[1]"}})
+def test_killswitch_ignores_attribution_project_id(
+    mock_produce_query: Mock, mock_enforce_rows: Mock
+) -> None:
+    storage = get_writable_storage(StorageKey("search_issues"))
+    conditions = {"project_id": [1], "group_id": [1, 2, 3, 4]}
+    # Attribution names a different project than the predicate. Killswitch
+    # must still fire on the predicate id.
+    attr_info = get_attribution_info({"project_id": 99, "organization_id": 1})
+
+    delete_from_storage(storage, conditions, attr_info)
+    mock_produce_query.assert_not_called()
+
+
+@pytest.mark.redis_db
+@patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10)
+@patch("snuba.web.bulk_delete_query.produce_delete_query")
+@override_options("snuba", {"lw_deletes_killswitch": {"search_issues": "[1]"}})
+def test_killswitch_mixed_projects_fail_closed(
+    mock_produce_query: Mock, mock_enforce_rows: Mock
+) -> None:
+    storage = get_writable_storage(StorageKey("search_issues"))
+    conditions = {"project_id": [1, 2], "group_id": [1, 2, 3, 4]}
+    attr_info = get_attribution_info({"organization_id": 1})
+
+    delete_from_storage(storage, conditions, attr_info)
+    mock_produce_query.assert_not_called()
+
+
+@pytest.mark.redis_db
+@patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10)
+@patch("snuba.web.bulk_delete_query.produce_delete_query")
+@override_options("snuba", {"lw_deletes_killswitch": {"search_issues": "[1]"}})
+def test_killswitch_does_not_drop_other_projects(
+    mock_produce_query: Mock, mock_enforce_rows: Mock
+) -> None:
+    storage = get_writable_storage(StorageKey("search_issues"))
+    conditions = {"project_id": [2], "group_id": [1, 2, 3, 4]}
+    attr_info = get_attribution_info({"organization_id": 1})
+
+    delete_from_storage(storage, conditions, attr_info)
+    mock_produce_query.assert_called_once()
+
+
+@pytest.mark.redis_db
 def test_delete_invalid_column_type() -> None:
     storage = get_writable_storage(StorageKey("search_issues"))
     conditions: dict[str, list[int | str]] = {

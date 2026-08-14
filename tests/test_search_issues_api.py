@@ -158,6 +158,18 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
             assert called_args["conditions"]["group_id"] == [4]
             assert called_args["rows_to_delete"] == 1
 
+    @patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10)
+    @patch("snuba.web.bulk_delete_query.produce_delete_query")
+    @override_options("snuba", {"lw_deletes_killswitch": {"search_issues": "[3]"}})
+    def test_http_delete_killswitch_without_attribution_project_id(
+        self, mock_produce_delete: Mock, mock_enforce_rows: Mock
+    ) -> None:
+        # tenant_ids in delete_query omit project_id; killswitch must still
+        # apply to the predicate project_id.
+        response = self.delete_query(4)
+        assert response.status_code == 200
+        mock_produce_delete.assert_not_called()
+
     def test_bad_delete(self) -> None:
         res = self.app.delete(
             "/search_issues",

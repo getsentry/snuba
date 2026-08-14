@@ -340,8 +340,10 @@ def delete_from_tables(
         return result
 
     storage_name = storage.get_storage_key().value
-    project_id = attribution_info.tenant_ids.get("project_id")
-    if project_id and should_use_killswitch(storage_name, str(project_id)):
+    # Killswitch is keyed on the delete predicate, not caller-controlled
+    # attribution. Mixed project lists fail closed: any killswitched id
+    # drops the entire request rather than deleting the rest.
+    if should_killswitch_delete(storage_name, conditions.column_conditions):
         return result
 
     delete_query: DeleteQueryMessage = {
@@ -373,6 +375,23 @@ def construct_or_conditions(
     return combine_or_conditions([_construct_condition(storage, cond) for cond in conditions])
 
 
+def _predicate_project_ids(column_conditions: Mapping[str, Any]) -> list[str]:
+    raw = column_conditions.get("project_id") or []
+    return [str(project_id) for project_id in raw]
+
+
 def should_use_killswitch(storage_name: str, project_id: str) -> bool:
     killswitch_config = get_mapped_option("lw_deletes_killswitch", storage_name, "")
     return project_id in killswitch_config if killswitch_config else False
+
+
+def should_killswitch_delete(storage_name: str, column_conditions: Mapping[str, Any]) -> bool:
+    """Drop the delete if any predicate project_id is killswitched.
+
+    Attribution tenant_ids are not consulted. A mixed list is dropped
+    entirely when any targeted project is killswitched.
+    """
+    return any(
+        should_use_killswitch(storage_name, project_id)
+        for project_id in _predicate_project_ids(column_conditions)
+    )
