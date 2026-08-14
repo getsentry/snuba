@@ -549,7 +549,10 @@ class ClickhouseConnectPool(ClickhousePool):
             metrics.increment("stream_failure")
             raise ClickhouseError(str(e), code=-1) from e
         except ClickHouseError as e:
-            raise ClickhouseError(str(e), code=getattr(e, "code", None) or -1) from e
+            # Missing server code is not a transport failure. -1 is reserved
+            # for OperationalError / StreamFailureError / malformed HTTP bodies.
+            code = getattr(e, "code", None)
+            raise ClickhouseError(str(e), code=code if isinstance(code, int) else 0) from e
         except json.JSONDecodeError as e:
             raise ClickhouseError(f"invalid JSON response: {e}", code=-1) from e
 

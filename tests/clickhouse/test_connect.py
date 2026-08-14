@@ -444,9 +444,10 @@ def test_generic_clickhouse_error_wrapped() -> None:
     client.query.side_effect = ProgrammingError("bad query")
 
     pool = _make_pool(client)
-    with pytest.raises(ClickhouseError):
+    with pytest.raises(ClickhouseError) as excinfo:
         pool.execute("SELECT 1")
 
+    assert excinfo.value.code == 0
     assert client.query.call_count == 1
 
 
