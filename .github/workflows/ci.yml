@@ -478,6 +478,8 @@ jobs:
             tests/snuba/rules/conditions \
             --ignore=tests/sentry/snuba/metrics \
             --ignore=tests/snuba/test_metrics_layer.py \
+            --ignore=tests/sentry/snuba/test_metrics_performance.py \
+            --ignore=tests/sentry/snuba/test_metrics_enhanced_performance.py \
             -m snuba_ci \
             -n "$XDIST_WORKERS" --dist=loadfile --reuse-db \
             -vv
@@ -514,6 +516,8 @@ jobs:
               --ignore=tests/snuba/api/endpoints/test_organization_events_stats_span_metrics.py \
               --ignore=tests/snuba/api/endpoints/test_organization_metrics_meta.py \
               --ignore=tests/snuba/api/endpoints/test_organization_measurements_meta.py \
+              --ignore=tests/sentry/snuba/test_metrics_performance.py \
+              --ignore=tests/sentry/snuba/test_metrics_enhanced_performance.py \
               -n "$XDIST_WORKERS" --dist=loadfile --reuse-db \
               -vv
 
@@ -527,6 +531,8 @@ jobs:
             tests/snuba/rules/conditions \
             --ignore=tests/sentry/snuba/metrics \
             --ignore=tests/snuba/test_metrics_layer.py \
+            --ignore=tests/sentry/snuba/test_metrics_performance.py \
+            --ignore=tests/sentry/snuba/test_metrics_enhanced_performance.py \
             -m snuba_ci \
             -n "$XDIST_WORKERS" --dist=loadfile --reuse-db \
             -vv
