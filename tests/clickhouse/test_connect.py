@@ -400,6 +400,34 @@ def test_execute_retryable_false_does_not_retry_transport() -> None:
     sleep.assert_not_called()
 
 
+def test_execute_with_totals_retries_transport_failures() -> None:
+    # WITH TOTALS uses raw_query outside execute(); after query_retries=0 it must
+    # still ride out transient HTTP errors via the shared transport retry loop.
+    from clickhouse_connect.driver.exceptions import OperationalError
+
+    ok = json.dumps(
+        {
+            "meta": [{"name": "g", "type": "UInt64"}, {"name": "s", "type": "UInt64"}],
+            "data": [[1, 10]],
+            "totals": [0, 10],
+        }
+    ).encode()
+    client = mock.Mock()
+    client.raw_query.side_effect = [
+        OperationalError("conn reset"),
+        OperationalError("conn reset"),
+        ok,
+    ]
+
+    pool = _make_pool(client)
+    with mock.patch("snuba.clickhouse.connect.time.sleep") as sleep:
+        result = pool.execute_with_totals("SELECT g, sum(v) AS s FROM t GROUP BY g WITH TOTALS")
+
+    assert result.results == [(1, 10), (0, 10)]
+    assert client.raw_query.call_count == 3
+    assert sleep.call_count == 2
+
+
 def test_execute_robust_retries_too_many_simultaneous_queries() -> None:
     # execute_robust must keep the old native-pool tenacity for concurrent load.
     from clickhouse_connect.driver.exceptions import DatabaseError

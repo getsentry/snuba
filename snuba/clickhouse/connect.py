@@ -6,7 +6,7 @@ import logging
 import os
 import re
 import time
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
 from datetime import datetime
 from threading import Lock
@@ -283,9 +283,9 @@ class ClickhouseConnectPool(ClickhousePool):
                 pool_mgr=_shared_pool(self.ca_certs, bool(self.verify)),
                 # Per-call override avoids mutating shared/cached pool state.
                 query_limit=self.query_limit if query_limit is None else query_limit,
-                # Disable connect's built-in HTTP retries. execute/execute_robust
-                # own the retry policy so a blip stays ~3 attempts, not 3 *
-                # (query_retries+1).
+                # Disable connect's built-in HTTP retries. Pool methods own the
+                # retry policy (execute / execute_robust / execute_with_totals)
+                # so a blip stays ~3 attempts, not 3 * (query_retries+1).
                 query_retries=0,
                 autogenerate_session_id=False,
                 compress="lz4",
@@ -489,7 +489,9 @@ class ClickhouseConnectPool(ClickhousePool):
         capture_trace: bool = False,
         robust: bool = False,
     ) -> ClickhouseResult:
-        with self._translate_clickhouse_errors():
+        # raw_query sits outside execute(); still needs the same transport
+        # retries now that connect's query_retries are disabled.
+        def _once() -> ClickhouseResult:
             client = self._new_client()
             json_settings: dict[str, Any] = dict(settings) if settings else {}
             json_settings["output_format_json_quote_64bit_integers"] = 0
@@ -530,6 +532,10 @@ class ClickhouseConnectPool(ClickhousePool):
                 trace_output="",
             )
 
+        if robust:
+            return self._retry_robust(_once)
+        return self._retry_transport(_once, retryable=True)
+
     @staticmethod
     def _profile_from_statistics(payload: Mapping[str, Any]) -> ClickhouseProfile:
         statistics = payload.get("statistics") or {}
@@ -560,6 +566,69 @@ class ClickhouseConnectPool(ClickhousePool):
         except json.JSONDecodeError as e:
             raise ClickhouseError(f"invalid JSON response: {e}", code=-1) from e
 
+    def _retry_transport(
+        self,
+        operation: Callable[[], ClickhouseResult],
+        *,
+        retryable: bool = True,
+    ) -> ClickhouseResult:
+        """Retry transient connect/socket errors up to three times."""
+        attempts_remaining = 3 if retryable else 1
+        while True:
+            try:
+                with self._translate_clickhouse_errors():
+                    return operation()
+            except ClickhouseError as e:
+                if e.code not in _RETRYABLE_TRANSPORT_CODES:
+                    raise
+                attempts_remaining -= 1
+                if attempts_remaining <= 0:
+                    raise
+                # Short sleep so a load balancer can mark a bad host down,
+                # matching the old native pool.
+                time.sleep(0.1)
+
+    def _retry_robust(
+        self,
+        operation: Callable[[], ClickhouseResult],
+        *,
+        retryable: bool = True,
+    ) -> ClickhouseResult:
+        """Retry transport failures and TOO_MANY_SIMULTANEOUS_QUERIES."""
+        total_attempts = 3 if retryable else 1
+        attempts_remaining = total_attempts
+
+        while True:
+            try:
+                # Nested transport retries are off: this loop owns both policies.
+                return self._retry_transport(operation, retryable=False)
+            except ClickhouseError as e:
+                logger.warning(
+                    "ClickHouse query execution failed: %s (%d tries left)",
+                    str(e),
+                    attempts_remaining,
+                )
+                if e.code == ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
+                    attempts_remaining -= 1
+                    if attempts_remaining <= 0:
+                        raise
+                    # Linear backoff. Falls back to a 1-second base when the
+                    # option is unset (0), matching the old native pool.
+                    sleep_interval_seconds = (
+                        get_option("simultaneous_queries_sleep_seconds", 0) or 1
+                    )
+                    time.sleep(
+                        float((total_attempts - attempts_remaining) * sleep_interval_seconds)
+                    )
+                    continue
+                if e.code in _RETRYABLE_TRANSPORT_CODES:
+                    attempts_remaining -= 1
+                    if attempts_remaining <= 0:
+                        raise
+                    time.sleep(1)
+                    continue
+                raise
+
     def execute(
         self,
         query: str,
@@ -582,29 +651,19 @@ class ClickhouseConnectPool(ClickhousePool):
         (including ``TOO_MANY_SIMULTANEOUS_QUERIES``) are not retried here;
         use :meth:`execute_robust` for that.
         """
-        attempts_remaining = 3 if retryable else 1
-        while True:
-            try:
-                with self._translate_clickhouse_errors():
-                    return self._execute_once(
-                        query,
-                        params,
-                        with_column_types,
-                        query_id,
-                        settings,
-                        columnar,
-                        capture_trace,
-                        query_limit=query_limit,
-                    )
-            except ClickhouseError as e:
-                if e.code not in _RETRYABLE_TRANSPORT_CODES:
-                    raise
-                attempts_remaining -= 1
-                if attempts_remaining <= 0:
-                    raise
-                # Short sleep so a load balancer can mark a bad host down,
-                # matching the old native pool.
-                time.sleep(0.1)
+        return self._retry_transport(
+            lambda: self._execute_once(
+                query,
+                params,
+                with_column_types,
+                query_id,
+                settings,
+                columnar,
+                capture_trace,
+                query_limit=query_limit,
+            ),
+            retryable=retryable,
+        )
 
     def insert(
         self,
@@ -656,48 +715,18 @@ class ClickhouseConnectPool(ClickhousePool):
         critical paths (e.g. the replacer) can finish under transient load
         instead of failing immediately. Other server errors are raised as-is.
         """
-        total_attempts = 3 if retryable else 1
-        attempts_remaining = total_attempts
-
-        while True:
-            try:
-                return self.execute(
-                    query,
-                    params=params,
-                    with_column_types=with_column_types,
-                    query_id=query_id,
-                    settings=settings,
-                    types_check=types_check,
-                    columnar=columnar,
-                    capture_trace=capture_trace,
-                    retryable=False,
-                )
-            except ClickhouseError as e:
-                logger.warning(
-                    "ClickHouse query execution failed: %s (%d tries left)",
-                    str(e),
-                    attempts_remaining,
-                )
-                if e.code == ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
-                    attempts_remaining -= 1
-                    if attempts_remaining <= 0:
-                        raise
-                    # Linear backoff. Falls back to a 1-second base when the
-                    # option is unset (0), matching the old native pool.
-                    sleep_interval_seconds = (
-                        get_option("simultaneous_queries_sleep_seconds", 0) or 1
-                    )
-                    time.sleep(
-                        float((total_attempts - attempts_remaining) * sleep_interval_seconds)
-                    )
-                    continue
-                if e.code in _RETRYABLE_TRANSPORT_CODES:
-                    attempts_remaining -= 1
-                    if attempts_remaining <= 0:
-                        raise
-                    time.sleep(1)
-                    continue
-                raise
+        return self._retry_robust(
+            lambda: self._execute_once(
+                query,
+                params,
+                with_column_types,
+                query_id,
+                settings,
+                columnar,
+                capture_trace,
+            ),
+            retryable=retryable,
+        )
 
     def execute_explain(self, query: str) -> ClickhouseResult:
         with self._translate_clickhouse_errors():
