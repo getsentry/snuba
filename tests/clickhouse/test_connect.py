@@ -15,6 +15,16 @@ from snuba.clusters.cluster import ClickhouseClientSettings
 TOO_MANY_SIMULTANEOUS_QUERIES = 202
 
 
+@pytest.fixture(autouse=True)
+def _clear_shared_pools() -> Any:
+    # _new_client caches get_pool_manager() in a process-wide dict. Tests that
+    # patch it would otherwise leak a MagicMock into later clickhouse_db tests.
+    import snuba.clickhouse.connect as connect_mod
+
+    yield
+    connect_mod._pool_managers.clear()
+
+
 class FakeColumnType:
     def __init__(self, name: str) -> None:
         self.name = name
@@ -164,7 +174,7 @@ def test_database_ddl_does_not_require_current_database(query: str) -> None:
     with mock.patch.object(pool, "_new_client", return_value=client) as new_client:
         pool.execute(query)
 
-    new_client.assert_called_once_with(use_database=False)
+    new_client.assert_called_once_with(use_database=False, query_limit=None)
 
 
 def test_regular_query_uses_current_database() -> None:
@@ -180,7 +190,7 @@ def test_regular_query_uses_current_database() -> None:
     with mock.patch.object(pool, "_new_client", return_value=client) as new_client:
         pool.execute("SELECT 1")
 
-    new_client.assert_called_once_with(use_database=True)
+    new_client.assert_called_once_with(use_database=True, query_limit=None)
 
 
 def test_execute_sets_native_format_for_embedded_insert_sql() -> None:
@@ -748,6 +758,37 @@ def test_typed_select_uses_single_jsoncompact_request() -> None:
     assert client.raw_query.call_args.kwargs["fmt"] == "JSONCompact"
 
 
+def test_typed_select_applies_client_query_limit() -> None:
+    # raw_query does not apply query_limit; typed JSONCompact reads must.
+    client = mock.Mock()
+    client.query_limit = 10000
+    client.raw_query.return_value = json.dumps(
+        {"meta": [{"name": "x", "type": "UInt8"}], "data": [[1]]}
+    ).encode()
+
+    pool = _make_pool(client)
+    pool.execute("SELECT 1", with_column_types=True, query_limit=10000)
+
+    sql = client.raw_query.call_args.args[0]
+    assert sql.endswith("LIMIT 10000")
+    client.query.assert_not_called()
+
+
+def test_typed_select_keeps_existing_limit() -> None:
+    client = mock.Mock()
+    client.query_limit = 10000
+    client.raw_query.return_value = json.dumps(
+        {"meta": [{"name": "x", "type": "UInt8"}], "data": [[1]]}
+    ).encode()
+
+    pool = _make_pool(client)
+    pool.execute("SELECT 1 LIMIT 5", with_column_types=True)
+
+    sql = client.raw_query.call_args.args[0]
+    assert "LIMIT 5" in sql
+    assert "LIMIT 10000" not in sql
+
+
 def test_connect_type_names_drive_reader_transforms() -> None:
     # The connect pool exposes clickhouse-connect's column_type.name in the
     # result meta, and the driver-agnostic ClickhouseReader runs that through
@@ -756,8 +797,6 @@ def test_connect_type_names_drive_reader_transforms() -> None:
     # those regexes expect (including parametrized types like DateTime('UTC')
     # and Nullable(UUID)), so transformations are not silently skipped on the
     # HTTP path.
-    from datetime import date, datetime
-    from uuid import UUID as UUIDClass
 
     from clickhouse_connect.datatypes.registry import get_from_name
 
@@ -785,10 +824,6 @@ def test_connect_type_names_drive_reader_transforms() -> None:
         "UUID",
         "Nullable(UUID)",
     ]
-
-    d = date(2023, 1, 2)
-    dt = datetime(2023, 1, 2, 3, 4, 5)
-    uid = UUIDClass("00000000-0000-0000-0000-000000000001")
 
     client = mock.Mock()
     # Reader always requests column types, so the connect pool uses JSONCompact.

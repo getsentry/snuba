@@ -23,6 +23,7 @@ from clickhouse_connect.driver.exceptions import (
     StreamFailureError,
 )
 from clickhouse_connect.driver.httputil import all_managers, get_pool_manager
+from clickhouse_connect.driver.query import limit_re, select_re
 from sentry_sdk import traces
 from urllib3.poolmanager import PoolManager
 
@@ -161,6 +162,24 @@ def _coerce_temporal(value: Any, ch_type: str) -> Any:
     return parsed if inner.startswith("DateTime") else parsed.date()
 
 
+def _apply_client_query_limit(client: Client, query: str) -> str:
+    """Mirror ``Client._prep_query``: append the client's default LIMIT.
+
+    ``raw_query`` does not apply ``query_limit`` (only ``query()`` does). Typed
+    reads go through JSONCompact / ``raw_query``, so do it here. Skip when the
+    SQL already has LIMIT or still contains SETTINGS (LIMIT after SETTINGS is
+    invalid ClickHouse).
+    """
+    query_limit = getattr(client, "query_limit", 0)
+    if not isinstance(query_limit, int) or query_limit <= 0:
+        return query
+    if select_re.search(query) is None or limit_re.search(query) is not None:
+        return query
+    if re.search(r"\bSETTINGS\b", query, re.IGNORECASE):
+        return query
+    return f"{query}\n LIMIT {query_limit}"
+
+
 @contextmanager
 def _query_span(
     sql: str, query_id: str | None = None, name: str = "clickhouse query"
@@ -214,9 +233,7 @@ class ClickhouseConnectPool(ClickhousePool):
         self.client_settings = client_settings
         self.query_limit = query_limit
 
-    def _new_client(
-        self, use_database: bool = True, query_limit: int | None = None
-    ) -> Client:
+    def _new_client(self, use_database: bool = True, query_limit: int | None = None) -> Client:
         connect_timeout = (
             get_option("clickhouse_connect_connect_timeout", 0) or self.connect_timeout
         )
@@ -420,6 +437,7 @@ class ClickhouseConnectPool(ClickhousePool):
             json_settings["query_id"] = query_id
         if capture_trace:
             json_settings["send_logs_level"] = "trace"
+        query = _apply_client_query_limit(client, query)
 
         with _query_span(query, query_id):
             raw = client.raw_query(
