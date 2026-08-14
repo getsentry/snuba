@@ -89,7 +89,7 @@ def run_query_and_get_trace(
     # Prefer clickhouse-connect's client-side query_limit. Native pools do not set
     # this instance attribute and are left alone.
     if "query_limit" in getattr(connection, "__dict__", {}):
-        connection.query_limit = MAX_TRACING_QUERY_LIMIT
+        setattr(connection, "query_limit", MAX_TRACING_QUERY_LIMIT)
 
     query_result = connection.execute(
         query=query_without_settings,
