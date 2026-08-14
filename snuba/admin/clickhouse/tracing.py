@@ -110,19 +110,15 @@ def run_query_and_get_trace(
         profile_events_meta=[],
         profile_events_profile={},
         query_id=query_id,
-        executed_query=_executed_query_from_summary(summarized_trace_output),
+        executed_query=next(
+            (
+                summary.query
+                for summary in summarized_trace_output.query_summaries.values()
+                if summary.is_distributed and summary.query
+            ),
+            "",
+        ),
     )
-
-
-def _executed_query_from_summary(summary: TracingSummary) -> str:
-    """Prefer the initial/distributed query text recorded in system.query_log."""
-    for query_summary in summary.query_summaries.values():
-        if query_summary.is_distributed and query_summary.query:
-            return query_summary.query
-    for query_summary in summary.query_summaries.values():
-        if query_summary.query:
-            return query_summary.query
-    return ""
 
 
 def _resolve_query_id(
