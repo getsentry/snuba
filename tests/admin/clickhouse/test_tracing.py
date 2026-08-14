@@ -28,6 +28,15 @@ def test_extract_settings_clause_moves_settings() -> None:
     assert body == "SELECT 1"
     assert settings == {}
 
+    # SETTINGS inside a string or identifier must not crash or strip the query.
+    body, settings = _extract_settings_clause("SELECT 'SETTINGS' AS x")
+    assert body == "SELECT 'SETTINGS' AS x"
+    assert settings == {}
+
+    body, settings = _extract_settings_clause("SELECT 1 FROM mysettings")
+    assert body == "SELECT 1 FROM mysettings"
+    assert settings == {}
+
 
 def test_summarize_from_query_log() -> None:
     connection = MagicMock()

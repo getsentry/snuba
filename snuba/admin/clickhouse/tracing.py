@@ -37,16 +37,28 @@ MAX_TRACING_QUERY_LIMIT = 10_000
 
 def _extract_settings_clause(query: str) -> tuple[str, dict[str, str]]:
     """Move a trailing SETTINGS clause into the driver settings dict."""
-    settings_at = query.upper().rfind("SETTINGS")
+    upper = query.upper()
+    settings_at = upper.rfind("SETTINGS")
     if settings_at == -1:
         return query, {}
 
-    settings = dict(
-        part.strip().split("=", 1) for part in query[settings_at + len("SETTINGS") :].split(",")
-    )
-    return query[:settings_at].rstrip(), {
-        key.strip(): value.strip().strip("'\"") for key, value in settings.items()
-    }
+    # Require a standalone SETTINGS token, not a substring match.
+    before = upper[settings_at - 1] if settings_at > 0 else " "
+    after_at = settings_at + len("SETTINGS")
+    after = upper[after_at] if after_at < len(upper) else " "
+    if before not in " \t\n\r;" or after not in " \t\n\r":
+        return query, {}
+
+    try:
+        settings = {}
+        for part in query[after_at:].split(","):
+            key, value = part.strip().split("=", 1)
+            settings[key.strip()] = value.strip().strip("'\"")
+    except ValueError:
+        # Not a real trailing SETTINGS clause (e.g. SETTINGS inside a string).
+        return query, {}
+
+    return query[:settings_at].rstrip(), settings
 
 
 @dataclass
