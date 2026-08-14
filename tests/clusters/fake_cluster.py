@@ -1,7 +1,7 @@
 from collections.abc import Mapping, MutableMapping, Sequence
 from typing import Any
 
-from snuba.clickhouse.native import ClickhouseNativePool, ClickhouseResult, Params
+from snuba.clickhouse.native import ClickhousePool, ClickhouseResult, Params
 from snuba.clusters.cluster import (
     ClickhouseClientSettings,
     ClickhouseCluster,
@@ -14,10 +14,14 @@ class ServerExplodedException(SerializableException):
     pass
 
 
-class FakeClickhousePool(ClickhouseNativePool):
+class FakeClickhousePool(ClickhousePool):
     def __init__(self, host_name: str) -> None:
         self.__queries: list[str] = []
         self.host = host_name
+        self.port = 0
+        self.user = ""
+        self.password = ""
+        self.database = ""
 
     def execute(
         self,
@@ -34,15 +38,38 @@ class FakeClickhousePool(ClickhouseNativePool):
         self.__queries.append(query)
         return ClickhouseResult([[1]])
 
+    def execute_robust(
+        self,
+        query: str,
+        params: Params = None,
+        with_column_types: bool = False,
+        query_id: str | None = None,
+        settings: Mapping[str, Any] | None = None,
+        types_check: bool = False,
+        columnar: bool = False,
+        capture_trace: bool = False,
+        retryable: bool = True,
+    ) -> ClickhouseResult:
+        return self.execute(
+            query,
+            params=params,
+            with_column_types=with_column_types,
+            query_id=query_id,
+            settings=settings,
+            types_check=types_check,
+            columnar=columnar,
+            capture_trace=capture_trace,
+            retryable=retryable,
+        )
+
+    def close(self) -> None:
+        return None
+
     def get_queries(self) -> Sequence[str]:
         return self.__queries
 
 
 class FakeFailingClickhousePool(FakeClickhousePool):
-    def __init__(self, host_name: str) -> None:
-        self.__queries: list[str] = []
-        self.host = host_name
-
     def execute(
         self,
         query: str,
@@ -56,9 +83,6 @@ class FakeFailingClickhousePool(FakeClickhousePool):
         retryable: bool = True,
     ) -> ClickhouseResult:
         raise ServerExplodedException("The server exploded")
-
-    def get_queries(self) -> Sequence[str]:
-        return self.__queries
 
 
 class FakeClickhouseCluster(ClickhouseCluster):
@@ -129,7 +153,7 @@ class FakeClickhouseCluster(ClickhouseCluster):
         self,
         client_settings: ClickhouseClientSettings,
         node: ClickhouseNode,
-    ) -> ClickhouseNativePool:
+    ) -> ClickhousePool:
         settings, timeout = client_settings.value
         cache_key = (node, client_settings)
         if cache_key not in self.__connections:

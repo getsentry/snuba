@@ -1,16 +1,10 @@
 from __future__ import annotations
 
-import json
-import logging
-import queue
 import re
-import time
 from abc import ABC, abstractmethod
-from collections.abc import Generator, Mapping, Sequence
-from contextlib import contextmanager
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from io import StringIO
 from typing import (
     Any,
     TypedDict,
@@ -18,37 +12,12 @@ from typing import (
 )
 from uuid import UUID
 
-import sentry_sdk
-from clickhouse_driver import Client, errors
 from dateutil.tz import tz
-from sentry_sdk import traces
-from sentry_sdk.integrations.logging import ignore_logger
 
-from snuba import environment, settings
-from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.reader import Reader, Result, build_result_transformer
-from snuba.state.sentry_options import get_option
-from snuba.utils.metrics.gauge import ThreadSafeGauge
-from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.sentry import SENTRY_OP
-
-ignore_logger("clickhouse_driver.connection")
-
-logger = logging.getLogger("snuba.clickhouse")
-trace_logger = logging.getLogger("clickhouse_driver.log")
-trace_logger.setLevel("INFO")
-# The clickhouse-driver forwards the server's ``send_logs_level`` output (the
-# ``<Trace>`` lines emitted by SelectExecutor and friends) through this logger.
-# We only want those lines when a query explicitly captures them via
-# ``capture_logging`` below, which attaches its own handler directly to this
-# logger. Disabling propagation keeps them out of the root logger so they don't
-# flood stdout/GCP logging on every traced query.
-trace_logger.propagate = False
 
 Params = Sequence[Any] | dict[str, Any] | None
-
-metrics = MetricsWrapper(environment.metrics, "clickhouse.native")
 
 
 class ClickhouseProfile(TypedDict):
@@ -68,29 +37,14 @@ class ClickhouseResult:
     query_id: str = ""
 
 
-@contextmanager
-def capture_logging() -> Generator[StringIO]:
-    buffer = StringIO()
-    new_handler = logging.StreamHandler(buffer)
-    trace_logger.addHandler(new_handler)
-
-    yield buffer
-
-    trace_logger.removeHandler(new_handler)
-    buffer.close()
-
-
 class ClickhousePool(ABC):
     """
     Abstract base for a pool of ClickHouse connections.
 
-    Concrete implementations:
-      - :class:`ClickhouseNativePool` — native protocol via clickhouse-driver
-      - ``ClickhouseConnectPool`` (snuba.clickhouse.connect) — HTTP protocol via
-        clickhouse-connect
-
+    The concrete implementation is ``ClickhouseConnectPool``
+    (snuba.clickhouse.connect), which talks HTTP via clickhouse-connect.
     Callers receive connections typed as ``ClickhousePool`` and only rely on the
-    methods/attributes declared here, so the two drivers are interchangeable.
+    methods/attributes declared here.
     """
 
     host: str
@@ -134,14 +88,10 @@ class ClickhousePool(ABC):
         Run an EXPLAIN statement and return its single ``explain`` text column,
         one row per line.
 
-        EXPLAIN gets its own entry point because the drivers surface it
-        differently. The native protocol decodes an EXPLAIN response correctly
-        through :meth:`execute`, so the default implementation just delegates to
-        it. The clickhouse-connect (HTTP) pool cannot — its Native result reader
-        chokes on the EXPLAIN response — so it overrides this method (see
-        ``ClickhouseConnectPool.execute_explain``). Callers that issue EXPLAIN
-        (snuba-admin system-query validation) must use this method rather than
-        ``execute`` so they work on either driver.
+        The clickhouse-connect pool overrides this because its Native result
+        reader cannot decode EXPLAIN responses through :meth:`execute`. Callers
+        that issue EXPLAIN (snuba-admin system-query validation) must use this
+        method rather than ``execute``.
         """
         return self.execute(query, with_column_types=True)
 
@@ -156,10 +106,9 @@ class ClickhousePool(ABC):
     ) -> ClickhouseResult:
         """
         Run a ``WITH TOTALS`` query, returning the totals as the trailing result row
-        (the shape :class:`ClickhouseReader` expects). The native protocol already
-        streams it there, so this default just delegates to :meth:`execute`; the
-        clickhouse-connect pool overrides it (its output drops the totals block).
-        Callers must use this rather than ``execute`` so both drivers work.
+        (the shape :class:`ClickhouseReader` expects). The clickhouse-connect pool
+        overrides this because its normal output drops the totals block. Callers
+        must use this rather than ``execute``.
         """
         execute = self.execute_robust if robust else self.execute
         return execute(
@@ -191,298 +140,6 @@ class ClickhousePool(ABC):
     @abstractmethod
     def close(self) -> None:
         raise NotImplementedError
-
-
-class ClickhouseNativePool(ClickhousePool):
-    def __init__(
-        self,
-        host: str,
-        port: int,
-        user: str,
-        password: str,
-        database: str,
-        secure: bool = False,
-        ca_certs: str | None = None,
-        verify: bool | None = False,
-        connect_timeout: int = 1,
-        send_receive_timeout: int | None = 35,
-        max_pool_size: int = settings.CLICKHOUSE_MAX_POOL_SIZE,
-        pool_get_timeout_seconds: float = settings.CLICKHOUSE_POOL_GET_TIMEOUT_SECONDS,
-        client_settings: Mapping[str, Any] = {},
-    ) -> None:
-        self.host = host
-        self.port = port
-        self.user = user
-        self.password = password
-        self.database = database
-        self.secure = secure
-        self.ca_certs = ca_certs
-        self.verify = verify
-        self.connect_timeout = connect_timeout
-        self.send_receive_timeout = send_receive_timeout
-        self.pool_get_timeout_seconds = pool_get_timeout_seconds
-        self.client_settings = client_settings
-
-        self.pool: queue.LifoQueue[Client | None] = queue.LifoQueue(max_pool_size)
-        self.__gauge = ThreadSafeGauge(metrics, "connections")
-
-        # Fill the queue up so that doing get() on it will block properly
-        for _ in range(max_pool_size):
-            self.pool.put(None)
-
-    # This will actually return an int if an INSERT query is run, but we never capture the
-    # output of INSERT queries so I left this as a Sequence.
-    def execute(
-        self,
-        query: str,
-        params: Params = None,
-        with_column_types: bool = False,
-        query_id: str | None = None,
-        settings: Mapping[str, Any] | None = None,
-        types_check: bool = False,
-        columnar: bool = False,
-        capture_trace: bool = False,
-        retryable: bool = True,
-    ) -> ClickhouseResult:
-        """
-        Execute a clickhouse query with a single quick retry in case of
-        connection failure.
-
-        This should smooth over any Clickhouse instance restarts, but will also
-        return relatively quickly with an error in case of more persistent
-        failures.
-        """
-        try:
-            conn = self.pool.get(block=True, timeout=self.pool_get_timeout_seconds)
-        except queue.Empty:
-            metrics.increment(
-                "pool_get_timeout",
-                tags={"host": self.host, "port": str(self.port)},
-            )
-            raise
-
-        try:
-            if retryable:
-                attempts_remaining = 3
-            else:
-                attempts_remaining = 1
-
-            while attempts_remaining > 0:
-                attempts_remaining -= 1
-                # Lazily create connection instances
-                if conn is None:
-                    self.__gauge.increment()
-                    conn = self._create_conn()
-
-                try:
-                    if capture_trace:
-                        settings = (
-                            {**settings, "send_logs_level": "trace"}
-                            if settings
-                            else {"send_logs_level": "trace"}
-                        )
-
-                    def query_execute(conn: Client = conn, settings: Any = settings) -> Any:
-                        with traces.start_span(
-                            name="clickhouse query",
-                            attributes={
-                                SENTRY_OP: "db.clickhouse",
-                                sentry_sdk.consts.SPANDATA.DB_SYSTEM: "clickhouse",
-                                sentry_sdk.consts.SPANDATA.DB_QUERY_TEXT: query,
-                            },
-                        ) as span:
-                            if query_id is not None:
-                                span.set_attribute("query_id", query_id)
-                            span.set_attribute("settings", json.dumps(settings, default=repr))
-                            return conn.execute(
-                                query,
-                                params=params,
-                                with_column_types=with_column_types,
-                                query_id=query_id,
-                                settings=settings,
-                                types_check=types_check,
-                                columnar=columnar,
-                            )
-
-                    result_data: Sequence[Any]
-                    trace_output = ""
-                    if settings and settings.get("send_logs_level") == "trace":
-                        with capture_logging() as buffer:
-                            result_data = query_execute()
-                            trace_output = buffer.getvalue()
-                    else:
-                        result_data = query_execute()
-
-                    profile_data = ClickhouseProfile(
-                        blocks=getattr(conn.last_query.profile_info, "blocks", 0),
-                        bytes=getattr(conn.last_query.profile_info, "bytes", 0),
-                        elapsed=conn.last_query.elapsed or 0.0,
-                        progress_bytes=getattr(conn.last_query.progress, "bytes", 0),
-                        rows=getattr(conn.last_query.profile_info, "rows", 0),
-                    )
-                    result_query_id = query_id or ""
-                    if with_column_types:
-                        result = ClickhouseResult(
-                            results=result_data[0],
-                            meta=result_data[1],
-                            profile=profile_data,
-                            trace_output=trace_output,
-                            query_id=result_query_id,
-                        )
-                    else:
-                        if not isinstance(result_data, (list, tuple)):
-                            result_data = [result_data]
-                        result = ClickhouseResult(
-                            results=result_data,
-                            profile=profile_data,
-                            trace_output=trace_output,
-                            query_id=result_query_id,
-                        )
-
-                    return result
-                except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
-                    metrics.increment(
-                        "connection_error",
-                        tags={
-                            "host": self.host,
-                            "port": str(self.port),
-                            "user": self.user,
-                            "database": self.database,
-                        },
-                    )
-
-                    # Force a reconnection next time
-                    conn = None
-                    self.__gauge.decrement()
-
-                    if attempts_remaining == 0:
-                        if isinstance(e, errors.Error):
-                            raise ClickhouseError(e.message, code=e.code) from e
-                        raise e
-                    # Short sleep to make sure we give the load
-                    # balancer a chance to mark a bad host as down.
-                    time.sleep(0.1)
-                except errors.Error as e:
-                    if e.code == errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
-                        attempts_remaining -= 1
-                        if attempts_remaining <= 0:
-                            raise ClickhouseError(e.message, code=e.code) from e
-
-                        sleep_interval_seconds = get_option("simultaneous_queries_sleep_seconds", 0)
-                        if not sleep_interval_seconds:
-                            raise ClickhouseError(e.message, code=e.code) from e
-
-                        attempts_remaining = min(attempts_remaining, 1)  # only retry once
-
-                        assert sleep_interval_seconds is not None
-                        # Linear backoff. Adds one second at each iteration.
-                        time.sleep(sleep_interval_seconds)
-                        continue
-
-                    raise ClickhouseError(e.message, code=e.code) from e
-        finally:
-            # Return finished connection to the appropriate connection pool
-            self.pool.put(conn, block=False)
-
-        return ClickhouseResult()
-
-    def execute_robust(
-        self,
-        query: str,
-        params: Params = None,
-        with_column_types: bool = False,
-        query_id: str | None = None,
-        settings: Mapping[str, Any] | None = None,
-        types_check: bool = False,
-        columnar: bool = False,
-        capture_trace: bool = False,
-        retryable: bool = True,
-    ) -> ClickhouseResult:
-        """
-        Execute a clickhouse query with a bit more tenacity. Make more retry
-        attempts, (infinite in the case of too many simultaneous queries
-        errors) and wait a second between retries.
-
-        This is by components which need to either complete their current
-        query successfully or else quit altogether. Note that each retry in this
-        loop will be doubled by the retry in execute()
-        """
-        total_attempts = 3 if retryable else 1
-        attempts_remaining = total_attempts
-
-        while True:
-            try:
-                return self.execute(
-                    query,
-                    params=params,
-                    with_column_types=with_column_types,
-                    query_id=query_id,
-                    settings=settings,
-                    types_check=types_check,
-                    columnar=columnar,
-                    capture_trace=capture_trace,
-                )
-            except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
-                # Try 3 times on connection issues.
-                logger.warning(
-                    "ClickHouse query execution failed: %s (%d tries left)",
-                    str(e),
-                    attempts_remaining,
-                )
-                attempts_remaining -= 1
-                if attempts_remaining <= 0:
-                    if isinstance(e, errors.Error):
-                        raise ClickhouseError(e.message, code=e.code) from e
-                    raise e
-                time.sleep(1)
-                continue
-            except ClickhouseError as e:
-                logger.warning(
-                    "ClickHouse query execution failed: %s (%d tries left)",
-                    str(e),
-                    attempts_remaining,
-                )
-                if e.code == errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
-                    attempts_remaining -= 1
-                    if attempts_remaining <= 0:
-                        raise e
-                    # Linear backoff. Adds one second at each iteration. Falls
-                    # back to a 1-second base when the option is unset (0).
-                    sleep_interval_seconds = (
-                        get_option("simultaneous_queries_sleep_seconds", 0)
-                    ) or 1
-                    time.sleep(
-                        float((total_attempts - attempts_remaining) * sleep_interval_seconds)
-                    )
-                    continue
-                # Quit immediately for other types of server errors.
-                raise e
-            except errors.Error as e:
-                raise ClickhouseError(e.message, code=e.code) from e
-
-    def _create_conn(self) -> Client:
-        return Client(
-            host=self.host,
-            port=self.port,
-            user=self.user,
-            password=self.password,
-            database=self.database,
-            secure=self.secure,
-            ca_certs=self.ca_certs,
-            verify=self.verify,
-            connect_timeout=self.connect_timeout,
-            send_receive_timeout=self.send_receive_timeout,
-            settings=self.client_settings,
-        )
-
-    def close(self) -> None:
-        try:
-            while True:
-                conn = self.pool.get(block=False)
-                if conn:
-                    conn.disconnect()
-        except queue.Empty:
-            pass
 
 
 def transform_date(value: date) -> str:
@@ -528,9 +185,7 @@ transform_column_types = build_result_transformer(
 class ClickhouseReader(Reader):
     """
     Reader for ClickHouse queries. It adapts a :class:`ClickhouseResult` into the
-    JSON-flavored ``Result``. It is driver-agnostic: it wraps the abstract
-    :class:`ClickhousePool`, so the same reader works for both the native and the
-    clickhouse-connect (HTTP) pools.
+    JSON-flavored ``Result``. It wraps the abstract :class:`ClickhousePool`.
     """
 
     def __init__(
@@ -547,8 +202,8 @@ class ClickhouseReader(Reader):
 
     def __transform_result(self, result: ClickhouseResult, with_totals: bool) -> Result:
         """
-        Transform a native driver response into a response that is
-        structurally similar to a ClickHouse-flavored JSON response.
+        Transform a driver response into a response that is structurally similar
+        to a ClickHouse-flavored JSON response.
         """
         meta = result.meta if result.meta is not None else []
         data = result.results
@@ -573,7 +228,7 @@ class ClickhouseReader(Reader):
 
         new_result: Result = {}
         if with_totals:
-            # Both pools return the totals as the trailing row (see
+            # The pool returns the totals as the trailing row (see
             # ClickhousePool.execute_with_totals); an empty result means it went missing.
             assert len(data) > 0, "WITH TOTALS query returned no rows (missing totals row)"
             totals = data.pop(-1)
@@ -612,8 +267,8 @@ class ClickhouseReader(Reader):
             query_id = settings.pop("query_id")
 
         if with_totals:
-            # Totals travel differently per driver, so route through the entry
-            # point both pools implement (see ClickhousePool.execute_with_totals).
+            # Totals travel through the pool entry point (see
+            # ClickhousePool.execute_with_totals).
             result = self.__client.execute_with_totals(
                 query.get_sql(),
                 query_id=query_id,

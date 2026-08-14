@@ -1,6 +1,6 @@
 from http.client import BAD_REQUEST, INTERNAL_SERVER_ERROR
 
-from clickhouse_driver.errors import ErrorCodes
+from snuba.clickhouse.error_codes import ErrorCodes
 
 from snuba.clickhouse.errors import ClickhouseError
 

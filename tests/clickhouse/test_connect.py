@@ -304,7 +304,7 @@ def test_send_receive_timeout_defaults_when_profile_has_none() -> None:
 
     from snuba.clickhouse.connect import DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS
 
-    # A profile with no timeout (None) means "unbounded" on the native path; over
+    # A profile with no timeout (None) means "unbounded"; over
     # HTTP that maps to a large finite timeout, since clickhouse-connect can't
     # take None.
     pool = ClickhouseConnectPool(
@@ -382,7 +382,7 @@ def test_internal_profile_has_no_explicit_timeout() -> None:
 
 def test_clickhouse_reader_wraps_connect_pool() -> None:
     # The single driver-agnostic ClickhouseReader wraps the abstract pool, so it
-    # works with the connect pool just like the native one.
+    # works with the connect pool.
     from snuba.clickhouse.native import ClickhouseReader
 
     pool = _make_pool(mock.Mock())
@@ -456,7 +456,7 @@ def test_totals_jsoncompact_uses_original_query_id_and_inherits_settings() -> No
 
 
 def test_totals_jsoncompact_decodes_value_types() -> None:
-    # JSONCompact values decode to the types the native driver yields. Covers DateTime
+    # JSONCompact values decode to the expected Python types. Covers DateTime
     # (string -> datetime so the reader can ISO-format it), Array, and Nullable.
     from snuba.clickhouse.native import ClickhouseReader
 
@@ -579,7 +579,7 @@ def test_non_empty_non_totals_query_does_not_refetch() -> None:
 def test_connect_type_names_drive_reader_transforms() -> None:
     # The connect pool exposes clickhouse-connect's column_type.name in the
     # result meta, and the driver-agnostic ClickhouseReader runs that through
-    # the same Date / DateTime / UUID regex transforms used for the native
+    # the same Date / DateTime / UUID regex transforms used for the
     # driver. This pins that clickhouse-connect's type-name format matches what
     # those regexes expect (including parametrized types like DateTime('UTC')
     # and Nullable(UUID)), so transformations are not silently skipped on the
@@ -597,7 +597,7 @@ def test_connect_type_names_drive_reader_transforms() -> None:
 
     # Column types named exactly as clickhouse-connect produces them. The
     # assertion documents that clickhouse-connect uses the canonical ClickHouse
-    # type strings (the same the native driver returns), so the reader regexes
+    # type strings, so the reader regexes
     # match identically for both drivers.
     col_types = [
         get_from_name("Date"),
@@ -666,7 +666,7 @@ def test_execute_explain_uses_command_and_returns_text_rows() -> None:
     client.query.assert_not_called()
 
     # One single-column row per explain line, indentation preserved -- the shape
-    # the native driver returns for the same EXPLAIN.
+    # the expected EXPLAIN shape.
     assert result.results == [
         ("SelectWithUnionQuery (children 1)",),
         (" ExpressionList (children 1)",),
@@ -744,60 +744,7 @@ def test_execute_explain_wraps_client_init_errors() -> None:
         pool.execute_explain("EXPLAIN AST SELECT 1")
 
 
-def test_native_pool_execute_explain_delegates_to_execute() -> None:
-    # The ClickhousePool default (used by the native driver) runs EXPLAIN through
-    # the normal execute() path -- the native protocol decodes it fine, so only
-    # the connect pool overrides execute_explain.
-    from snuba.clickhouse.native import ClickhouseNativePool, ClickhouseResult
 
-    pool = ClickhouseNativePool("host", 9000, "user", "pw", "db")
-    sentinel = ClickhouseResult(results=[("ExpressionList (children 1)",)])
-    with mock.patch.object(pool, "execute", return_value=sentinel) as execute:
-        out = pool.execute_explain("EXPLAIN AST SELECT 1")
-
-    execute.assert_called_once_with("EXPLAIN AST SELECT 1", with_column_types=True)
-    assert out is sentinel
-
-
-def test_native_pool_execute_with_totals_delegates_to_execute() -> None:
-    # The native default runs WITH TOTALS through execute() -- the protocol already
-    # streams the totals as the trailing row. Only the connect pool overrides this.
-    from snuba.clickhouse.native import ClickhouseNativePool, ClickhouseResult
-
-    pool = ClickhouseNativePool("host", 9000, "user", "pw", "db")
-    sentinel = ClickhouseResult(results=[(1, 10), (0, 10)])
-    with mock.patch.object(pool, "execute", return_value=sentinel) as execute:
-        out = pool.execute_with_totals(
-            "SELECT g, sum(v) FROM t GROUP BY g WITH TOTALS",
-            query_id="qid",
-            settings={"max_threads": 4},
-        )
-
-    execute.assert_called_once_with(
-        "SELECT g, sum(v) FROM t GROUP BY g WITH TOTALS",
-        params=None,
-        with_column_types=True,
-        query_id="qid",
-        settings={"max_threads": 4},
-        capture_trace=False,
-    )
-    assert out is sentinel
-
-
-def test_native_pool_execute_with_totals_robust_uses_execute_robust() -> None:
-    # robust=True must route through execute_robust (the retrying path), matching
-    # how the reader forwards robust for WITH TOTALS queries.
-    from snuba.clickhouse.native import ClickhouseNativePool, ClickhouseResult
-
-    pool = ClickhouseNativePool("host", 9000, "user", "pw", "db")
-    sentinel = ClickhouseResult(results=[(1, 10), (0, 10)])
-    with mock.patch.object(pool, "execute_robust", return_value=sentinel) as execute_robust:
-        out = pool.execute_with_totals(
-            "SELECT g, sum(v) FROM t GROUP BY g WITH TOTALS", robust=True
-        )
-
-    execute_robust.assert_called_once()
-    assert out is sentinel
 
 
 def test_reader_routes_with_totals_through_execute_with_totals() -> None:

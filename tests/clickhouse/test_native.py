@@ -1,14 +1,8 @@
-import queue
 from datetime import datetime, timedelta
-from unittest import mock
 
-import pytest
-from clickhouse_driver import errors
 from dateutil.tz import tz
-from sentry_options.testing import override_options
 
-from snuba.clickhouse.errors import ClickhouseError
-from snuba.clickhouse.native import ClickhouseNativePool, transform_datetime
+from snuba.clickhouse.native import transform_datetime
 
 
 def test_transform_datetime() -> None:
@@ -19,88 +13,3 @@ def test_transform_datetime() -> None:
 
     offset = timedelta(hours=8)
     assert transform_datetime(now.replace(tzinfo=tz.tzoffset("PST", offset)) + offset) == fmt
-
-
-@pytest.mark.redis_db
-def test_robust_concurrency_limit() -> None:
-    connection = mock.Mock()
-    connection.execute.side_effect = ClickhouseError("some error", extra_data={"code": 1})
-
-    pool = ClickhouseNativePool("host", 100, "test", "test", "test")
-    pool.pool = queue.LifoQueue(1)
-    pool.pool.put(connection, block=False)
-
-    with pytest.raises(ClickhouseError):
-        pool.execute_robust("SELECT something")
-    connection.execute.assert_called_once()
-
-    connection.reset_mock(side_effect=True)
-    connection.execute.side_effect = ClickhouseError(
-        "some error",
-        code=errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES,
-    )
-
-    with pytest.raises(ClickhouseError):
-        pool.execute_robust("SELECT something")
-    assert connection.execute.call_count == 3, "Expected three attempts"
-
-
-class TestError(errors.Error):  # type: ignore[misc]
-    code = 1
-
-
-class TestConcurrentError(errors.Error):  # type: ignore[misc]
-    code = errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES
-
-
-@pytest.mark.skip(reason="broke all of a sudden, blocking CI but not critical")
-@pytest.mark.redis_db
-@override_options("snuba", {"simultaneous_queries_sleep_seconds": 1})
-def test_concurrency_limit() -> None:
-    connection = mock.Mock()
-    connection.execute.side_effect = TestError("some error")
-
-    pool = ClickhouseNativePool("host", 100, "test", "test", "test")
-    pool.pool = queue.LifoQueue(1)
-    pool.pool.put(connection, block=False)
-
-    with pytest.raises(ClickhouseError):
-        pool.execute("SELECT something")
-    connection.execute.assert_called_once()
-
-    connection.reset_mock(side_effect=True)
-    connection.execute.side_effect = TestConcurrentError("some error")
-
-    with pytest.raises(ClickhouseError):
-        pool.execute("SELECT something")
-    assert connection.execute.call_count == 2, "Expected two attempts"
-
-
-TEST_DB_NAME = "test"
-CLUSTER_HOST = "host"
-CLUSTER_PORT = 100
-
-
-@pytest.mark.parametrize(
-    "retryable, expected",
-    [
-        pytest.param(True, 3, id="retries"),
-        pytest.param(False, 1, id="no retries"),
-    ],
-)
-@pytest.mark.redis_db
-def test_execute_retries(retryable: bool, expected: int) -> None:
-    socket_timeout_connection = mock.Mock()
-    socket_timeout_connection.execute.side_effect = errors.SocketTimeoutError
-
-    pool = ClickhouseNativePool(CLUSTER_HOST, CLUSTER_PORT, "test", "test", TEST_DB_NAME)
-
-    with mock.patch.object(pool, "_create_conn", lambda: socket_timeout_connection):
-        pool.pool = queue.LifoQueue(1)
-        pool.pool.put(socket_timeout_connection, block=False)
-        with pytest.raises(ClickhouseError):
-            pool.execute("SELECT something", retryable=retryable)
-
-    assert socket_timeout_connection.execute.call_count == expected, (
-        f"Expected {expected} (failed) attempts with main connection pool"
-    )

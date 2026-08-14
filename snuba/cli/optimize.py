@@ -103,8 +103,8 @@ def optimize(
     connection: ClickhousePool
     if clickhouse_host and clickhouse_port:
         # Go through the shared connection cache so the driver (native vs
-        # clickhouse-connect/HTTP) is selected by the use_clickhouse_connect_driver sentry-option, behind
-        # the abstract ClickhousePool type. The OPTIMIZE timeout is carried by
+        # clickhouse-connect HTTP pool behind the abstract ClickhousePool type.
+        # The OPTIMIZE timeout is carried by
         # the client settings profile the cache reads.
         connection = connection_cache.get_node_connection(
             ClickhouseClientSettings.OPTIMIZE,

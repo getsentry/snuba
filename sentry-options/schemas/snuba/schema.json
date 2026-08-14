@@ -643,11 +643,6 @@
       "default": false,
       "description": "When true, the dual-write metrics backend also emits to the Sentry metrics backend (sampled by settings.DDM_METRICS_SAMPLE_RATE)."
     },
-    "use_clickhouse_connect_driver": {
-      "type": "boolean",
-      "default": false,
-      "description": "When true, the ClickHouse read path uses the clickhouse-connect (HTTP) driver instead of the native protocol. Lets the driver migration roll out and roll back without a deploy. Migrated from the runtime config of the same name."
-    },
     "clickhouse_connect_use_protocol_version": {
       "type": "boolean",
       "default": false,

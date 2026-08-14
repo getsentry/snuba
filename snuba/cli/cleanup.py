@@ -83,8 +83,7 @@ def cleanup(
     connection: ClickhousePool
     if clickhouse_host and clickhouse_port:
         # Go through the shared connection cache so the driver (native vs
-        # clickhouse-connect/HTTP) is selected by the use_clickhouse_connect_driver sentry-option, behind
-        # the abstract ClickhousePool type.
+        # clickhouse-connect HTTP pool behind the abstract ClickhousePool type.
         connection = connection_cache.get_node_connection(
             ClickhouseClientSettings.CLEANUP,
             ClickhouseNode(clickhouse_host, clickhouse_port, http_port=cluster.get_http_port()),

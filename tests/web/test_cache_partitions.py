@@ -1,12 +1,52 @@
 import pytest
 
-from snuba.clickhouse.native import ClickhouseNativePool, ClickhouseReader
+from snuba.clickhouse.native import ClickhousePool, ClickhouseReader, ClickhouseResult, Params
 from snuba.web.db_query import _get_cache_partition
+
+
+class _StubPool(ClickhousePool):
+    def __init__(self) -> None:
+        self.host = "127.0.0.1"
+        self.port = 8123
+        self.user = ""
+        self.password = ""
+        self.database = ""
+
+    def execute(
+        self,
+        query: str,
+        params: Params = None,
+        with_column_types: bool = False,
+        query_id: str | None = None,
+        settings=None,
+        types_check: bool = False,
+        columnar: bool = False,
+        capture_trace: bool = False,
+        retryable: bool = True,
+    ) -> ClickhouseResult:
+        return ClickhouseResult()
+
+    def execute_robust(
+        self,
+        query: str,
+        params: Params = None,
+        with_column_types: bool = False,
+        query_id: str | None = None,
+        settings=None,
+        types_check: bool = False,
+        columnar: bool = False,
+        capture_trace: bool = False,
+        retryable: bool = True,
+    ) -> ClickhouseResult:
+        return self.execute(query)
+
+    def close(self) -> None:
+        return None
 
 
 @pytest.mark.redis_db
 def test_cache_partition() -> None:
-    pool = ClickhouseNativePool("127.0.0.1", 9000, "", "", "")
+    pool = _StubPool()
     reader1 = ClickhouseReader(None, pool, None)
     reader2 = ClickhouseReader(None, pool, None)
 

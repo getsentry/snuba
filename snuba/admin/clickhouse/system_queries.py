@@ -1,6 +1,6 @@
 import re
 
-from clickhouse_driver.errors import ErrorCodes
+from snuba.clickhouse.error_codes import ErrorCodes
 
 from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.audit_log.base import AuditLog

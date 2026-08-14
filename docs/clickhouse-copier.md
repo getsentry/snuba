@@ -87,11 +87,11 @@ destination before the copy of that partitions begins, so this lets you fine
 tune which partitions will and won't be dropped and copied.
 
 ```python
-from clickhouse_driver import Client
+import clickhouse_connect
 
 # note that this assumes every node has the same partitions, which is true in our
 # current configuration
-c = Client("snuba-storage-0-0")
+c = clickhouse_connect.get_client(host="snuba-storage-0-0")
 
 parts = c.execute("""
     SELECT DISTINCT partition
@@ -339,12 +339,12 @@ something like it) should always be used to verify results and re-run over
 failed partitions. The cause of the failures isn't known at this time, we can
 investigate when we have time later.
 
-This script requires the `clickhouse_driver` library.
+This script requires the `clickhouse-connect` library.
 
 ```python
 from collections import defaultdict
 
-from clickhouse_driver import Client
+import clickhouse_connect
 
 # a `Distributed` table for source and destination
 old_dist = 'sentry_dist_old'
@@ -364,7 +364,7 @@ count_query = """
     ORDER BY day
 """ % (start_day, end_day)
 
-c = Client("snuba-storage-0-0")
+c = clickhouse_connect.get_client(host="snuba-storage-0-0")
 c.execute("set max_threads = 16")
 old_counts = c.execute(count_query % old_dist)
 new_counts = c.execute(count_query % new_dist)

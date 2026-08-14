@@ -6,7 +6,7 @@ from bisect import bisect_left
 from typing import Any, Generic, cast, final
 
 import sentry_sdk
-from clickhouse_driver.errors import ErrorCodes as clickhouse_errors
+from snuba.clickhouse.error_codes import ErrorCodes as clickhouse_errors
 from google.protobuf.message import DecodeError
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.downsampled_storage_pb2 import DownsampledStorageConfig

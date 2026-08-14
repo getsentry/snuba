@@ -5,17 +5,22 @@ import re
 from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 
-from clickhouse_driver import Client
+import clickhouse_connect
+from clickhouse_connect.driver.client import Client
 
 
 def _get_client(host: str, port: int, user: str, password: str, database: str) -> Client:
-    return Client(
+    return clickhouse_connect.get_client(
         host=host,
         port=port,
-        user=user,
+        username=user,
         password=password,
         database=database,
     )
+
+
+def _execute(client: Client, query: str):
+    return client.query(query).result_rows
 
 
 def get_regex_match(curr_create_table_statement: str) -> str:
@@ -36,14 +41,14 @@ def verify_zk_replica_path(
 
     """
     print("...looking up macros")
-    ((_, source_replica), (_, source_shard)) = source_client.execute(
+    ((_, source_replica), (_, source_shard)) = _execute(source_client, 
         "SELECT macro, substitution FROM system.macros"
     )
     print(f"...found replica: {source_replica} for shard: {source_shard}")
 
     print(f"...verifying zk replica path for table: {table}...")
 
-    ((replica_path,),) = source_client.execute(
+    ((replica_path,),) = _execute(source_client, 
         f"SELECT replica_path FROM system.replicas where table = '{table}'"
     )
 
@@ -87,7 +92,7 @@ def verify_local_tables_exist_from_mv(
 
     print(f"...looking for local tables: {to_local_table}, {from_local_table} ")
 
-    all_tables = [result[0] for result in target_client.execute("SHOW TABLES")]
+    all_tables = [result[0] for result in _execute(target_client, "SHOW TABLES")]
 
     assert to_local_table in all_tables, f"{to_local_table} needs to be created before {table}"
     assert from_local_table in all_tables, f"{from_local_table} needs to be created before {table}"
@@ -123,7 +128,7 @@ def copy_tables(
     """
 
     if not tables:
-        tables = [result[0] for result in source_client.execute("SHOW TABLES")]
+        tables = [result[0] for result in _execute(source_client, "SHOW TABLES")]
 
     # create local tables before MVs
     tables = sorted(tables, key=lambda x: "_local" not in x)
@@ -132,11 +137,11 @@ def copy_tables(
     show_mv_statements = OrderedDict()
 
     for name in tables:
-        ((engine,),) = source_client.execute(
+        ((engine,),) = _execute(source_client, 
             f"SELECT engine FROM system.tables WHERE name = '{name}'"
         )
 
-        ((curr_create_table_statement,),) = source_client.execute(
+        ((curr_create_table_statement,),) = _execute(source_client, 
             f"SHOW CREATE TABLE {source_database}.{name}"
         )
 
@@ -153,7 +158,7 @@ def copy_tables(
         else:
             show_table_statements[name] = curr_create_table_statement
 
-    ((_, target_replica), (_, target_shard)) = target_client.execute(
+    ((_, target_replica), (_, target_shard)) = _execute(target_client, 
         "SELECT macro, substitution FROM system.macros"
     )
 
@@ -171,7 +176,7 @@ def copy_tables(
                 f"creating {table_name}... on replica: {target_replica}, shard: {target_shard}, database: {target_database}"
             )
             if execute:
-                target_client.execute(statement)
+                _execute(target_client, statement)
                 print(f"created {table_name} !")
             else:
                 print(f"\ncreate table statement: \n {statement}\n")
@@ -192,7 +197,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--source-port",
         help="Port for node that tables should be copied from.",
-        default=9000,
+        default=8123,
     )
     parser.add_argument(
         "--target-host",
@@ -200,7 +205,7 @@ if __name__ == "__main__":
         help="IP/name for node that needs tables created.",
     )
     parser.add_argument(
-        "--target-port", help="Port for node that needs tables created.", default=9000
+        "--target-port", help="Port for node that needs tables created.", default=8123
     )
     parser.add_argument("--user", default="default")
     parser.add_argument("--password", default="")

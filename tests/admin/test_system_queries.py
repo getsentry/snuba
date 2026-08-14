@@ -306,7 +306,7 @@ def test_clusterless_rejects_unvalidated_host(
     """
     Regression for EAP-488: the clusterless helpers used to acquire a
     ClickhousePool against any attacker-supplied host/port, which leaked the
-    configured ClickHouse user/password to the node (the native protocol's
+    configured ClickHouse user/password to the node (the driver's
     first hello packet, or the HTTP auth header). Both helpers must now call
     _validate_node before acquiring the pool, so an invalid host produces
     InvalidNodeError and no credentials ever leave the process.
@@ -574,7 +574,7 @@ def test_sudo_mode_skips_experimental_analyzer(sql_query: str, sudo_mode: bool) 
 _POOL_ACQUISITION_NAMES = frozenset(
     {
         "get_node_connection",
-        "ClickhouseNativePool",
+        "ClickhouseConnectPool",
         "ClickhouseConnectPool",
     }
 )
@@ -623,7 +623,7 @@ def _find_clickhouse_pool_calls(tree: ast.AST) -> list[tuple[ast.Call, list[str]
 def test_no_direct_clickhouse_pool_construction_in_admin() -> None:
     """
     Defense-in-depth for EAP-488: a ClickhousePool ships the configured
-    user/password to the node (the native protocol's first hello packet, or
+    user/password to the node (the driver's first hello packet, or
     the HTTP auth header), so any admin code path that acquires one against a
     caller-supplied host leaks credentials to whatever listener answers.
     `_build_validated_pool` in snuba/admin/clickhouse/common.py is the single

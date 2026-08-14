@@ -7,15 +7,15 @@ Note that all consumers should be stopped before this is run.
 
 import sys
 
-from clickhouse_driver import Client
+import clickhouse_connect
 from confluent_kafka import Consumer, TopicPartition
 
 clickhouse_host = sys.argv[1]  # ex: snuba-query.i.getsentry.net
 group_id = sys.argv[2]  # ex: snuba-consumers-3
 topic = sys.argv[3]  # ex: 'events'
 
-clickhouse = Client(clickhouse_host)
-clickhouse.execute("set max_threads = 8")
+clickhouse = clickhouse_connect.get_client(host=clickhouse_host)
+clickhouse.command("set max_threads = 8")
 
 consumer_config = {
     "enable.auto.commit": False,
@@ -26,7 +26,7 @@ consumer_config = {
 
 consumer = Consumer(consumer_config)
 
-offsets = clickhouse.execute(
+offsets = clickhouse.query(
     """
     select partition, max(offset)
     from sentry_dist
@@ -34,7 +34,7 @@ offsets = clickhouse.execute(
     group by partition
     order by partition
 """
-)
+).result_rows
 
 topic_partitions = [TopicPartition(topic, partition=o[0], offset=o[1]) for o in offsets]
 

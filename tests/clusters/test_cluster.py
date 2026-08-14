@@ -5,7 +5,8 @@ from unittest.mock import patch
 import pytest
 
 from snuba import settings
-from snuba.clickhouse.native import ClickhouseNativePool, ClickhouseResult
+from snuba.clickhouse.connect import ClickhouseConnectPool
+from snuba.clickhouse.native import ClickhouseResult
 from snuba.clusters import cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages.factory import get_storage
@@ -186,7 +187,7 @@ def test_disabled_cluster() -> None:
 @pytest.mark.clickhouse_db
 def test_get_local_nodes() -> None:
     importlib.reload(cluster)
-    with patch.object(ClickhouseNativePool, "execute") as execute:
+    with patch.object(ClickhouseConnectPool, "execute") as execute:
         execute.return_value = ClickhouseResult([("host_1", 9000, 1, 1), ("host_2", 9000, 2, 1)])
 
         local_cluster = get_storage(StorageKey("errors")).get_cluster()
@@ -225,7 +226,7 @@ def test_discovered_nodes_use_default_http_port() -> None:
         distributed_cluster_name="dist_hosts",
     )
 
-    with patch.object(ClickhouseNativePool, "execute") as execute:
+    with patch.object(ClickhouseConnectPool, "execute") as execute:
         execute.return_value = ClickhouseResult([("host_1", 9000, 1, 1), ("host_2", 9000, 2, 1)])
         local_nodes = distributed_cluster.get_local_nodes()
 
@@ -305,11 +306,9 @@ def test_cache_connections() -> None:
 
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
-def test_get_node_connection_selects_driver() -> None:
-    from sentry_options.testing import override_options
-
+def test_get_node_connection_uses_connect_pool() -> None:
     from snuba.clickhouse.connect import ClickhouseConnectPool
-    from snuba.clickhouse.native import ClickhouseNativePool, ClickhouseReader
+    from snuba.clickhouse.native import ClickhouseReader
 
     test_cluster = cluster.ClickhouseCluster(
         "127.0.0.1",
@@ -325,25 +324,9 @@ def test_get_node_connection_selects_driver() -> None:
         True,
     )
 
-    # The driver is selected at the pool level; the reader is the single
-    # driver-agnostic ClickhouseReader regardless.
-    # Default: native pool.
-    with override_options("snuba", {"use_clickhouse_connect_driver": False}):
-        native_pool = test_cluster.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
-        assert isinstance(native_pool, ClickhouseNativePool)
-        assert isinstance(test_cluster.get_reader(), ClickhouseReader)
-
-    # Flip on: HTTP pool.
-    with override_options("snuba", {"use_clickhouse_connect_driver": True}):
-        http_pool = test_cluster.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
-        assert isinstance(http_pool, ClickhouseConnectPool)
-
-    # Flip back: native pool again.
-    with override_options("snuba", {"use_clickhouse_connect_driver": False}):
-        assert isinstance(
-            test_cluster.get_query_connection(cluster.ClickhouseClientSettings.QUERY),
-            ClickhouseNativePool,
-        )
+    pool = test_cluster.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
+    assert isinstance(pool, ClickhouseConnectPool)
+    assert isinstance(test_cluster.get_reader(), ClickhouseReader)
 
 
 @patch("snuba.settings.SLICED_CLUSTERS", SLICED_CLUSTERS_CONFIG)

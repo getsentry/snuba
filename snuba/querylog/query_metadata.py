@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, cast
 
-from clickhouse_driver.errors import ErrorCodes
+from snuba.clickhouse.error_codes import ErrorCodes
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
 
 from snuba.clickhouse.errors import ClickhouseError

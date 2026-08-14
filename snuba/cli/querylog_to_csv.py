@@ -167,8 +167,8 @@ def querylog_to_csv(
 
     (clickhouse_user, clickhouse_password) = get_credentials()
     # Go through the shared connection cache so the driver (native vs
-    # clickhouse-connect/HTTP) is selected by the use_clickhouse_connect_driver sentry-option, behind the
-    # abstract ClickhousePool type. There is no cluster here to read an
+    # clickhouse-connect HTTP pool behind the abstract ClickhousePool type.
+    # There is no cluster here to read an
     # http_port from, so use the configured CLICKHOUSE_HTTP_PORT (the same env
     # var the cluster config reads), defaulting to the well-known port.
     http_port = int(os.environ.get("CLICKHOUSE_HTTP_PORT", DEFAULT_CLICKHOUSE_HTTP_PORT))
