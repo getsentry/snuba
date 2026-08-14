@@ -377,6 +377,15 @@ class ClickhouseConnectPool(ClickhousePool):
                 query_id=str(query_id or ""),
             )
 
+        # Prefer JSONCompact whenever column types are required. Native HTTP
+        # responses omit the column header on zero-row results, which forced a
+        # second scan for meta. JSONCompact always returns meta in one request
+        # (same path as WITH TOTALS). Keep Native for untyped / columnar reads.
+        if with_column_types and not columnar:
+            return self._execute_jsoncompact(
+                client, query, params, query_id, settings, capture_trace
+            )
+
         query_result = None
         try:
             with _query_span(query, query_id) as span:
@@ -388,22 +397,13 @@ class ClickhouseConnectPool(ClickhousePool):
                     column_oriented=columnar,
                     transport_settings=dict(_CLICKHOUSE_CONNECT_TRANSPORT_SETTINGS),
                 )
-            result = self._consume_query_result(
+            return self._consume_query_result(
                 query_result, with_column_types, query_id, client.server_tz
             )
         finally:
             if query_result is not None:
                 with suppress(Exception):
                     query_result.close()
-
-        # Zero-row Native responses omit the column header. The native driver
-        # always reported types; fall back to JSONCompact (same as WITH TOTALS)
-        # so empty SELECTs still expose real meta for admin/sentry callers.
-        if with_column_types and not result.meta:
-            return self._execute_jsoncompact(
-                client, query, params, query_id, settings, capture_trace
-            )
-        return result
 
     def _execute_jsoncompact(
         self,
