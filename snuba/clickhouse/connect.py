@@ -566,17 +566,38 @@ class ClickhouseConnectPool(ClickhousePool):
         retryable: bool = True,
         query_limit: int | None = None,
     ) -> ClickhouseResult:
-        with self._translate_clickhouse_errors():
-            return self._execute_once(
-                query,
-                params,
-                with_column_types,
-                query_id,
-                settings,
-                columnar,
-                capture_trace,
-                query_limit=query_limit,
-            )
+        """
+        Execute a ClickHouse query with a quick transport-failure retry.
+
+        Matches the old native pool: when ``retryable`` is true, transient
+        connect/socket errors are retried up to three times with a short sleep
+        so callers like cluster discovery can ride out a blip. Server errors
+        (including ``TOO_MANY_SIMULTANEOUS_QUERIES``) are not retried here;
+        use :meth:`execute_robust` for that.
+        """
+        attempts_remaining = 3 if retryable else 1
+        while True:
+            try:
+                with self._translate_clickhouse_errors():
+                    return self._execute_once(
+                        query,
+                        params,
+                        with_column_types,
+                        query_id,
+                        settings,
+                        columnar,
+                        capture_trace,
+                        query_limit=query_limit,
+                    )
+            except ClickhouseError as e:
+                if e.code not in _RETRYABLE_TRANSPORT_CODES:
+                    raise
+                attempts_remaining -= 1
+                if attempts_remaining <= 0:
+                    raise
+                # Short sleep so a load balancer can mark a bad host down,
+                # matching the old native pool.
+                time.sleep(0.1)
 
     def insert(
         self,

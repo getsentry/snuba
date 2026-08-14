@@ -326,8 +326,8 @@ def test_execute_does_not_handle_insert_rows() -> None:
 
 
 def test_too_many_simultaneous_queries_not_retried() -> None:
-    # Plain execute does not retry TOO_MANY_SIMULTANEOUS_QUERIES. It surfaces
-    # immediately as a ClickhouseError that preserves the error code.
+    # Plain execute retries transport failures only. Server errors like
+    # TOO_MANY_SIMULTANEOUS_QUERIES still surface immediately.
     from clickhouse_connect.driver.exceptions import DatabaseError
 
     client = mock.Mock()
@@ -339,8 +339,65 @@ def test_too_many_simultaneous_queries_not_retried() -> None:
         raise AssertionError("expected a ClickhouseError to be raised")
     except ClickhouseError as error:
         assert error.code == TOO_MANY_SIMULTANEOUS_QUERIES
-    # No retry on the plain execute path.
+    # No retry on the plain execute path for server errors.
     assert client.query.call_count == 1
+
+
+def test_execute_retries_transport_failures() -> None:
+    # Native execute retried NetworkError / SocketTimeout / EOF up to three
+    # times when retryable=True. Connect maps those to OperationalError (-1).
+    from clickhouse_connect.driver.exceptions import OperationalError
+
+    client = mock.Mock()
+    client.query.side_effect = [
+        OperationalError("conn reset"),
+        OperationalError("conn reset"),
+        FakeQueryResult(result_set=[[1]]),
+    ]
+
+    pool = _make_pool(client)
+    with mock.patch("snuba.clickhouse.connect.time.sleep") as sleep:
+        result = pool.execute("SELECT 1")
+
+    assert result.results == [[1]]
+    assert client.query.call_count == 3
+    assert sleep.call_count == 2
+    assert all(call.args == (0.1,) for call in sleep.call_args_list)
+
+
+def test_execute_gives_up_after_transport_retries() -> None:
+    from clickhouse_connect.driver.exceptions import OperationalError
+
+    client = mock.Mock()
+    client.query.side_effect = OperationalError("conn reset")
+
+    pool = _make_pool(client)
+    with (
+        mock.patch("snuba.clickhouse.connect.time.sleep") as sleep,
+        pytest.raises(ClickhouseError) as excinfo,
+    ):
+        pool.execute("SELECT 1")
+
+    assert excinfo.value.code == -1
+    assert client.query.call_count == 3
+    assert sleep.call_count == 2
+
+
+def test_execute_retryable_false_does_not_retry_transport() -> None:
+    from clickhouse_connect.driver.exceptions import OperationalError
+
+    client = mock.Mock()
+    client.query.side_effect = OperationalError("conn reset")
+
+    pool = _make_pool(client)
+    with (
+        mock.patch("snuba.clickhouse.connect.time.sleep") as sleep,
+        pytest.raises(ClickhouseError),
+    ):
+        pool.execute("SELECT 1", retryable=False)
+
+    assert client.query.call_count == 1
+    sleep.assert_not_called()
 
 
 def test_execute_robust_retries_too_many_simultaneous_queries() -> None:
@@ -1087,8 +1144,12 @@ def test_operational_error_mapped() -> None:
 
     client = mock.Mock()
     client.query.side_effect = OperationalError("conn reset")
-    with pytest.raises(ClickhouseError):
-        _make_pool(client).execute("SELECT 1")
+    with (
+        mock.patch("snuba.clickhouse.connect.time.sleep"),
+        pytest.raises(ClickhouseError) as excinfo,
+    ):
+        _make_pool(client).execute("SELECT 1", retryable=False)
+    assert excinfo.value.code == -1
 
 
 def test_stream_failure_mapped() -> None:
@@ -1096,8 +1157,12 @@ def test_stream_failure_mapped() -> None:
 
     client = mock.Mock()
     client.query.side_effect = StreamFailureError("stream died")
-    with pytest.raises(ClickhouseError):
-        _make_pool(client).execute("SELECT 1")
+    with (
+        mock.patch("snuba.clickhouse.connect.time.sleep"),
+        pytest.raises(ClickhouseError) as excinfo,
+    ):
+        _make_pool(client).execute("SELECT 1", retryable=False)
+    assert excinfo.value.code == -1
 
 
 def test_shared_pools_reset_after_fork() -> None:
