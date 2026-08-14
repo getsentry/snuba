@@ -328,89 +328,17 @@ def test_too_many_simultaneous_queries_not_retried() -> None:
     assert client.query.call_count == 1
 
 
-def test_execute_retries_transport_failures() -> None:
-    # Native execute retried NetworkError / SocketTimeout / EOF up to three
-    # times when retryable=True. Connect maps those to OperationalError (-1).
-    from clickhouse_connect.driver.exceptions import OperationalError
+def test_shared_pool_uses_urllib3_retry() -> None:
+    from snuba.clickhouse.connect import _TRANSPORT_RETRY, _close_pools, _shared_pool
 
-    client = mock.Mock()
-    client.query.side_effect = [
-        OperationalError("conn reset"),
-        OperationalError("conn reset"),
-        FakeQueryResult(result_set=[[1]]),
-    ]
-
-    pool = _make_pool(client)
-    with mock.patch("snuba.clickhouse.connect.time.sleep") as sleep:
-        result = pool.execute("SELECT 1")
-
-    assert result.results == [[1]]
-    assert client.query.call_count == 3
-    assert sleep.call_count == 2
-    assert all(call.args == (0.1,) for call in sleep.call_args_list)
-
-
-def test_execute_gives_up_after_transport_retries() -> None:
-    from clickhouse_connect.driver.exceptions import OperationalError
-
-    client = mock.Mock()
-    client.query.side_effect = OperationalError("conn reset")
-
-    pool = _make_pool(client)
-    with (
-        mock.patch("snuba.clickhouse.connect.time.sleep") as sleep,
-        pytest.raises(ClickhouseError) as excinfo,
-    ):
-        pool.execute("SELECT 1")
-
-    assert excinfo.value.code == -1
-    assert client.query.call_count == 3
-    assert sleep.call_count == 2
-
-
-def test_execute_retryable_false_does_not_retry_transport() -> None:
-    from clickhouse_connect.driver.exceptions import OperationalError
-
-    client = mock.Mock()
-    client.query.side_effect = OperationalError("conn reset")
-
-    pool = _make_pool(client)
-    with (
-        mock.patch("snuba.clickhouse.connect.time.sleep") as sleep,
-        pytest.raises(ClickhouseError),
-    ):
-        pool.execute("SELECT 1", retryable=False)
-
-    assert client.query.call_count == 1
-    sleep.assert_not_called()
-
-
-def test_execute_with_totals_retries_transport_failures() -> None:
-    # WITH TOTALS uses raw_query outside execute(); after query_retries=0 it must
-    # still ride out transient HTTP errors via the shared transport retry loop.
-    from clickhouse_connect.driver.exceptions import OperationalError
-
-    ok = json.dumps(
-        {
-            "meta": [{"name": "g", "type": "UInt64"}, {"name": "s", "type": "UInt64"}],
-            "data": [[1, 10]],
-            "totals": [0, 10],
-        }
-    ).encode()
-    client = mock.Mock()
-    client.raw_query.side_effect = [
-        OperationalError("conn reset"),
-        OperationalError("conn reset"),
-        ok,
-    ]
-
-    pool = _make_pool(client)
-    with mock.patch("snuba.clickhouse.connect.time.sleep") as sleep:
-        result = pool.execute_with_totals("SELECT g, sum(v) AS s FROM t GROUP BY g WITH TOTALS")
-
-    assert result.results == [(1, 10), (0, 10)]
-    assert client.raw_query.call_count == 3
-    assert sleep.call_count == 2
+    with mock.patch("snuba.clickhouse.connect.get_pool_manager") as get_pool_manager:
+        get_pool_manager.return_value = mock.Mock()
+        _close_pools()
+        _shared_pool(None, False)
+        assert get_pool_manager.call_args.kwargs["retries"] is _TRANSPORT_RETRY
+        assert _TRANSPORT_RETRY.total == 2
+        assert _TRANSPORT_RETRY.connect == 2
+        assert _TRANSPORT_RETRY.read == 2
 
 
 def test_execute_robust_retries_too_many_simultaneous_queries() -> None:
@@ -538,7 +466,7 @@ def test_timeouts_are_passed_through() -> None:
     assert kwargs["send_receive_timeout"] == 300000
     assert kwargs["connect_timeout"] == 60
     assert kwargs["compress"] == "lz4"
-    # Snuba owns transport retries in execute/execute_robust; disable connect's.
+    # Query-level retries stay off; urllib3 Retry on the pool handles blips.
     assert kwargs["query_retries"] == 0
 
 
@@ -1169,11 +1097,8 @@ def test_operational_error_mapped() -> None:
 
     client = mock.Mock()
     client.query.side_effect = OperationalError("conn reset")
-    with (
-        mock.patch("snuba.clickhouse.connect.time.sleep"),
-        pytest.raises(ClickhouseError) as excinfo,
-    ):
-        _make_pool(client).execute("SELECT 1", retryable=False)
+    with pytest.raises(ClickhouseError) as excinfo:
+        _make_pool(client).execute("SELECT 1")
     assert excinfo.value.code == -1
 
 
@@ -1182,11 +1107,8 @@ def test_stream_failure_mapped() -> None:
 
     client = mock.Mock()
     client.query.side_effect = StreamFailureError("stream died")
-    with (
-        mock.patch("snuba.clickhouse.connect.time.sleep"),
-        pytest.raises(ClickhouseError) as excinfo,
-    ):
-        _make_pool(client).execute("SELECT 1", retryable=False)
+    with pytest.raises(ClickhouseError) as excinfo:
+        _make_pool(client).execute("SELECT 1")
     assert excinfo.value.code == -1
 
 

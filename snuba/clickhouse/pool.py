@@ -64,7 +64,6 @@ class ClickhousePool(ABC):
         types_check: bool = False,
         columnar: bool = False,
         capture_trace: bool = False,
-        retryable: bool = True,
     ) -> ClickhouseResult:
         raise NotImplementedError
 
@@ -79,7 +78,6 @@ class ClickhousePool(ABC):
         types_check: bool = False,
         columnar: bool = False,
         capture_trace: bool = False,
-        retryable: bool = True,
     ) -> ClickhouseResult:
         raise NotImplementedError
 

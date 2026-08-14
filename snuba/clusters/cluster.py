@@ -424,7 +424,6 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             .execute(
                 "select host_name, port, shard_num, replica_num from system.clusters where cluster=%(cluster_name)s",
                 {"cluster_name": cluster_name},
-                retryable=True,
             )
             .results
         ]

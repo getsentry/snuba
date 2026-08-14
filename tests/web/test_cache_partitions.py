@@ -25,7 +25,6 @@ class _StubPool(ClickhousePool):
         types_check: bool = False,
         columnar: bool = False,
         capture_trace: bool = False,
-        retryable: bool = True,
     ) -> ClickhouseResult:
         return ClickhouseResult()
 
@@ -39,7 +38,6 @@ class _StubPool(ClickhousePool):
         types_check: bool = False,
         columnar: bool = False,
         capture_trace: bool = False,
-        retryable: bool = True,
     ) -> ClickhouseResult:
         return self.execute(query)
 

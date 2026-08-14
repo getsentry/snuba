@@ -26,6 +26,7 @@ from clickhouse_connect.driver.httputil import all_managers, get_pool_manager
 from clickhouse_connect.driver.query import limit_re, select_re
 from sentry_sdk import traces
 from urllib3.poolmanager import PoolManager
+from urllib3.util.retry import Retry
 
 from snuba import environment, settings
 from snuba.clickhouse.error_codes import ErrorCodes
@@ -44,13 +45,9 @@ from snuba.utils.sentry import SENTRY_OP
 logger = logging.getLogger("snuba.clickhouse")
 metrics = MetricsWrapper(environment.metrics, "clickhouse.connect")
 
-# Transport failures that used to be NetworkError / SocketTimeoutError / EOFError
-# on the native driver. StreamFailureError and bare OperationalError map to -1.
-_RETRYABLE_TRANSPORT_CODES = {
-    -1,
-    ErrorCodes.NETWORK_ERROR,
-    ErrorCodes.SOCKET_TIMEOUT,
-}
+# Connect/read blips: 2 retries = 3 attempts, 0.1s backoff. Status retries stay
+# off so ClickHouse 4xx/5xx application errors are not replayed.
+_TRANSPORT_RETRY = Retry(total=2, connect=2, read=2, backoff_factor=0.1, status=0)
 
 DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS = 60 * 60  # 1h fallback when profile timeout is None
 DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
@@ -81,6 +78,7 @@ def _shared_pool(ca_certs: str | None, verify: bool) -> PoolManager:
                     "clickhouse_connect_pool_size", settings.CLICKHOUSE_MAX_POOL_SIZE
                 ),
                 num_pools=16,
+                retries=_TRANSPORT_RETRY,
             )
             _pool_managers[key] = manager
         return manager
@@ -257,9 +255,8 @@ class ClickhouseConnectPool(ClickhousePool):
                 pool_mgr=_shared_pool(self.ca_certs, bool(self.verify)),
                 # Per-call override avoids mutating shared/cached pool state.
                 query_limit=self.query_limit if query_limit is None else query_limit,
-                # Disable connect's built-in HTTP retries. Pool methods own the
-                # retry policy (execute / execute_robust / execute_with_totals)
-                # so a blip stays ~3 attempts, not 3 * (query_retries+1).
+                # Query-level retries stay off. urllib3 Retry on the shared
+                # pool handles connect/read blips once, not 3 * (query_retries+1).
                 query_retries=0,
                 autogenerate_session_id=False,
                 compress="lz4",
@@ -452,8 +449,6 @@ class ClickhouseConnectPool(ClickhousePool):
         capture_trace: bool = False,
         robust: bool = False,
     ) -> ClickhouseResult:
-        # raw_query sits outside execute(); still needs the same transport
-        # retries now that connect's query_retries are disabled.
         def _once() -> ClickhouseResult:
             client = self._new_client()
             json_settings: dict[str, Any] = dict(settings) if settings else {}
@@ -493,7 +488,8 @@ class ClickhouseConnectPool(ClickhousePool):
 
         if robust:
             return self._retry_robust(_once)
-        return self._retry_transport(_once, retryable=True)
+        with self._translate_clickhouse_errors():
+            return _once()
 
     @staticmethod
     def _profile_from_statistics(payload: Mapping[str, Any]) -> ClickhouseProfile:
@@ -525,68 +521,28 @@ class ClickhouseConnectPool(ClickhousePool):
         except json.JSONDecodeError as e:
             raise ClickhouseError(f"invalid JSON response: {e}", code=-1) from e
 
-    def _retry_transport(
-        self,
-        operation: Callable[[], ClickhouseResult],
-        *,
-        retryable: bool = True,
-    ) -> ClickhouseResult:
-        """Retry transient connect/socket errors up to three times."""
-        attempts_remaining = 3 if retryable else 1
-        while True:
-            try:
-                with self._translate_clickhouse_errors():
-                    return operation()
-            except ClickhouseError as e:
-                if e.code not in _RETRYABLE_TRANSPORT_CODES:
-                    raise
-                attempts_remaining -= 1
-                if attempts_remaining <= 0:
-                    raise
-                # Short sleep so a load balancer can mark a bad host down,
-                # matching the old native pool.
-                time.sleep(0.1)
-
-    def _retry_robust(
-        self,
-        operation: Callable[[], ClickhouseResult],
-        *,
-        retryable: bool = True,
-    ) -> ClickhouseResult:
-        """Retry transport failures and TOO_MANY_SIMULTANEOUS_QUERIES."""
-        total_attempts = 3 if retryable else 1
+    def _retry_robust(self, operation: Callable[[], ClickhouseResult]) -> ClickhouseResult:
+        """Retry TOO_MANY_SIMULTANEOUS_QUERIES. Transport blips are urllib3's job."""
+        total_attempts = 3
         attempts_remaining = total_attempts
 
         while True:
             try:
-                # Nested transport retries are off: this loop owns both policies.
-                return self._retry_transport(operation, retryable=False)
+                with self._translate_clickhouse_errors():
+                    return operation()
             except ClickhouseError as e:
                 logger.warning(
                     "ClickHouse query execution failed: %s (%d tries left)",
                     str(e),
                     attempts_remaining,
                 )
-                if e.code == ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
-                    attempts_remaining -= 1
-                    if attempts_remaining <= 0:
-                        raise
-                    # Linear backoff. Falls back to a 1-second base when the
-                    # option is unset (0), matching the old native pool.
-                    sleep_interval_seconds = (
-                        get_option("simultaneous_queries_sleep_seconds", 0) or 1
-                    )
-                    time.sleep(
-                        float((total_attempts - attempts_remaining) * sleep_interval_seconds)
-                    )
-                    continue
-                if e.code in _RETRYABLE_TRANSPORT_CODES:
-                    attempts_remaining -= 1
-                    if attempts_remaining <= 0:
-                        raise
-                    time.sleep(1)
-                    continue
-                raise
+                if e.code != ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
+                    raise
+                attempts_remaining -= 1
+                if attempts_remaining <= 0:
+                    raise
+                sleep_interval_seconds = get_option("simultaneous_queries_sleep_seconds", 0) or 1
+                time.sleep(float((total_attempts - attempts_remaining) * sleep_interval_seconds))
 
     def execute(
         self,
@@ -598,20 +554,16 @@ class ClickhouseConnectPool(ClickhousePool):
         types_check: bool = False,
         columnar: bool = False,
         capture_trace: bool = False,
-        retryable: bool = True,
         query_limit: int | None = None,
     ) -> ClickhouseResult:
-        """
-        Execute a ClickHouse query with a quick transport-failure retry.
+        """Execute a ClickHouse query.
 
-        Matches the old native pool: when ``retryable`` is true, transient
-        connect/socket errors are retried up to three times with a short sleep
-        so callers like cluster discovery can ride out a blip. Server errors
-        (including ``TOO_MANY_SIMULTANEOUS_QUERIES``) are not retried here;
-        use :meth:`execute_robust` for that.
+        Connect/read blips are retried by urllib3 on the shared pool. Server
+        errors (including ``TOO_MANY_SIMULTANEOUS_QUERIES``) are not retried
+        here; use :meth:`execute_robust` for that.
         """
-        return self._retry_transport(
-            lambda: self._execute_once(
+        with self._translate_clickhouse_errors():
+            return self._execute_once(
                 query,
                 params,
                 with_column_types,
@@ -620,9 +572,7 @@ class ClickhouseConnectPool(ClickhousePool):
                 columnar,
                 capture_trace,
                 query_limit=query_limit,
-            ),
-            retryable=retryable,
-        )
+            )
 
     def insert(
         self,
@@ -665,14 +615,11 @@ class ClickhouseConnectPool(ClickhousePool):
         types_check: bool = False,
         columnar: bool = False,
         capture_trace: bool = False,
-        retryable: bool = True,
     ) -> ClickhouseResult:
-        """
-        Execute a ClickHouse query with more tenacity than :meth:`execute`.
+        """Execute a ClickHouse query, retrying ``TOO_MANY_SIMULTANEOUS_QUERIES``.
 
-        Retries transport failures and ``TOO_MANY_SIMULTANEOUS_QUERIES`` so
-        critical paths (e.g. the replacer) can finish under transient load
-        instead of failing immediately. Other server errors are raised as-is.
+        Transport blips are retried by urllib3. Other server errors are raised
+        as-is.
         """
         return self._retry_robust(
             lambda: self._execute_once(
@@ -683,8 +630,7 @@ class ClickhouseConnectPool(ClickhousePool):
                 settings,
                 columnar,
                 capture_trace,
-            ),
-            retryable=retryable,
+            )
         )
 
     def execute_explain(self, query: str) -> ClickhouseResult:
