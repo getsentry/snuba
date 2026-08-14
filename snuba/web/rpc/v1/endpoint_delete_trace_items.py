@@ -16,7 +16,8 @@ from snuba.lw_deletions.types import AttributeConditions
 from snuba.web.bulk_delete_query import delete_from_storage
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import _scalar_value
-from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException, RPCRequestException
+from snuba.web.service_auth import ServiceAuthzError
 
 
 def _extract_attribute_value(comparison_filter: ComparisonFilter) -> Any:
@@ -157,12 +158,15 @@ class EndpointDeleteTraceItems(RPCEndpoint[DeleteTraceItemsRequest, DeleteTraceI
             # Add item_type to conditions for the delete query
             conditions["item_type"] = [attribute_conditions.item_type]
 
-        delete_result = delete_from_storage(
-            get_writable_storage(StorageKey.EAP_ITEMS),
-            conditions,
-            attribution_info,
-            attribute_conditions,
-        )
+        try:
+            delete_result = delete_from_storage(
+                get_writable_storage(StorageKey.EAP_ITEMS),
+                conditions,
+                attribution_info,
+                attribute_conditions,
+            )
+        except ServiceAuthzError as error:
+            raise RPCRequestException(error.status_code, str(error)) from error
 
         response = DeleteTraceItemsResponse()
         # TODO: fix how we pass this data around, this is too coupled

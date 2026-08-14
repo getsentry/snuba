@@ -26,6 +26,7 @@ from snuba.web.delete_query import DeletesNotEnabledError
 from snuba.web.service_auth import (
     SENTRY_DELETE_PRINCIPAL,
     ServiceAuthError,
+    ServiceAuthzError,
     ServiceIdentity,
     using_service_identity,
 )
@@ -82,6 +83,64 @@ def test_delete_from_storage_requires_identity() -> None:
             )
     finally:
         _active_identity.reset(token)
+
+
+def test_delete_rejects_project_outside_authorized_set() -> None:
+    storage = get_writable_storage(StorageKey("search_issues"))
+    from snuba.web.service_auth import _active_identity
+
+    identity = ServiceIdentity(
+        principal=SENTRY_DELETE_PRINCIPAL,
+        source="test",
+        authorized_project_ids=frozenset({1}),
+        authorized_organization_ids=frozenset({1}),
+    )
+    token = _active_identity.set(identity)
+    try:
+        with pytest.raises(ServiceAuthzError):
+            delete_from_storage(
+                storage,
+                {"project_id": [99], "group_id": [1]},
+                get_attribution_info({"organization_id": 1}),
+            )
+    finally:
+        _active_identity.reset(token)
+
+
+def test_delete_rejects_missing_authorized_projects() -> None:
+    storage = get_writable_storage(StorageKey("search_issues"))
+    from snuba.web.service_auth import _active_identity
+
+    identity = ServiceIdentity(
+        principal=SENTRY_DELETE_PRINCIPAL,
+        source="test",
+        authorized_project_ids=frozenset(),
+        authorized_organization_ids=frozenset({1}),
+    )
+    token = _active_identity.set(identity)
+    try:
+        with pytest.raises(ServiceAuthzError):
+            delete_from_storage(
+                storage,
+                {"project_id": [1], "group_id": [1]},
+                get_attribution_info(),
+            )
+    finally:
+        _active_identity.reset(token)
+
+
+@patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10)
+@patch("snuba.web.bulk_delete_query.produce_delete_query")
+def test_delete_allows_authorized_same_tenant(
+    mock_produce_query: Mock, mock_enforce_rows: Mock
+) -> None:
+    storage = get_writable_storage(StorageKey("search_issues"))
+    delete_from_storage(
+        storage,
+        {"project_id": [1], "group_id": [1]},
+        get_attribution_info(),
+    )
+    mock_produce_query.assert_called_once()
 
 
 @patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10)

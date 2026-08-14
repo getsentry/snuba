@@ -10,7 +10,10 @@ from snuba.web.service_auth import (
     DELETE_JWT_AUDIENCE,
     SENTRY_DELETE_PRINCIPAL,
     ServiceAuthError,
+    ServiceAuthzError,
+    ServiceIdentity,
     authenticate_service_request,
+    authorize_delete_predicate,
     mint_delete_service_token,
 )
 from tests.base import BaseApiTest
@@ -72,6 +75,39 @@ def test_authenticate_ignores_body_like_headers() -> None:
     )
     assert identity.principal == SENTRY_DELETE_PRINCIPAL
     assert DELETE_JWT_AUDIENCE == "snuba-deletes"
+
+
+def _identity(**kwargs: object) -> ServiceIdentity:
+    defaults = {
+        "principal": SENTRY_DELETE_PRINCIPAL,
+        "source": "test",
+        "authorized_project_ids": frozenset({1}),
+        "authorized_organization_ids": frozenset({9}),
+    }
+    defaults.update(kwargs)
+    return ServiceIdentity(**defaults)  # type: ignore[arg-type]
+
+
+def test_authorize_same_tenant_allowed() -> None:
+    authorize_delete_predicate(_identity(), {"project_id": [1], "organization_id": [9]})
+
+
+def test_authorize_cross_tenant_project_denied() -> None:
+    with pytest.raises(ServiceAuthzError):
+        authorize_delete_predicate(_identity(), {"project_id": [99]})
+
+
+def test_authorize_missing_project_id_denied() -> None:
+    with pytest.raises(ServiceAuthzError):
+        authorize_delete_predicate(_identity(), {"group_id": [1]})
+
+
+def test_authorize_ignores_attribution_spoof() -> None:
+    with pytest.raises(ServiceAuthzError):
+        authorize_delete_predicate(
+            _identity(),
+            {"project_id": [99]},
+        )
 
 
 class TestDeleteServiceAuthHTTP(BaseApiTest):

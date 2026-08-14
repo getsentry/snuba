@@ -54,6 +54,20 @@ class ServiceIdentity:
     authorized_organization_ids: frozenset[int]
 
 
+def authorize_delete_predicate(
+    identity: ServiceIdentity, column_conditions: Mapping[str, Any]
+) -> None:
+    """Authorize every tenant id in the delete predicate. Never uses attribution."""
+    predicate_projects = _condition_ids(column_conditions.get("project_id"))
+    predicate_orgs = _condition_ids(column_conditions.get("organization_id"))
+    if not predicate_projects:
+        raise ServiceAuthzError("delete predicate is not authorized")
+    if not predicate_projects.issubset(identity.authorized_project_ids):
+        raise ServiceAuthzError("delete predicate is not authorized")
+    if predicate_orgs and not predicate_orgs.issubset(identity.authorized_organization_ids):
+        raise ServiceAuthzError("delete predicate is not authorized")
+
+
 _active_identity: ContextVar[ServiceIdentity | None] = ContextVar(
     "snuba_delete_service_identity", default=None
 )
@@ -187,6 +201,19 @@ def _header(headers: Mapping[str, str], name: str) -> str:
         if key.lower() == target:
             return value
     return ""
+
+
+def _condition_ids(raw: Any) -> set[int]:
+    if raw is None:
+        return set()
+    if not isinstance(raw, list):
+        raise ServiceAuthzError("delete predicate is not authorized")
+    values: set[int] = set()
+    for item in raw:
+        if isinstance(item, bool) or not isinstance(item, int):
+            raise ServiceAuthzError("delete predicate is not authorized")
+        values.add(item)
+    return values
 
 
 def _int_set(raw: Any) -> frozenset[int]:

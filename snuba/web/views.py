@@ -71,6 +71,7 @@ from snuba.web.query import parse_and_run_query
 from snuba.web.rpc import run_rpc_handler
 from snuba.web.service_auth import (
     ServiceAuthError,
+    ServiceAuthzError,
     authenticate_service_request,
     using_service_identity,
 )
@@ -377,6 +378,11 @@ def storage_delete(*, storage: WritableTableStorage, timer: Timer) -> Response |
                     request_parts.query["query"]["columns"],
                     request_parts.attribution_info,
                 )
+        except ServiceAuthzError as error:
+            return make_response(
+                jsonify({"error": {"type": "authorization", "message": str(error)}}),
+                error.status_code,
+            )
         except (
             InvalidJsonRequestException,
             DeletesNotEnabledError,

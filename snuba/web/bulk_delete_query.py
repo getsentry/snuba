@@ -39,7 +39,11 @@ from snuba.web.delete_query import (
     _get_attribution_info,
     deletes_are_enabled,
 )
-from snuba.web.service_auth import require_delete_identity, service_auth_is_enforced
+from snuba.web.service_auth import (
+    authorize_delete_predicate,
+    require_delete_identity,
+    service_auth_is_enforced,
+)
 
 metrics = MetricsWrapper(environment.metrics, "snuba.delete")
 logger = logging.getLogger(__name__)
@@ -205,7 +209,17 @@ def delete_from_storage(
     * attribute names are valid (allowed_attributes_by_item_type storage setting)
     """
     if service_auth_is_enforced():
-        require_delete_identity()
+        identity = require_delete_identity()
+        authorize_delete_predicate(identity, column_conditions)
+        logger.info(
+            "delete_authorized",
+            extra={
+                "principal": identity.principal,
+                "storage": storage.get_storage_key().value,
+                "project_ids": list(column_conditions.get("project_id") or []),
+                "organization_ids": list(column_conditions.get("organization_id") or []),
+            },
+        )
 
     if not deletes_are_enabled():
         raise DeletesNotEnabledError("Deletes not enabled in this region")
