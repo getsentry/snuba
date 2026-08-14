@@ -54,10 +54,7 @@ DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
 _CLICKHOUSE_CONNECT_TRANSPORT_SETTINGS = {"X-ClickHouse-Format": "Native"}
 
 clickhouse_connect_common.set_setting("invalid_setting_action", "drop")
-clickhouse_connect_common.set_setting(
-    "use_protocol_version",
-    get_option("clickhouse_connect_use_protocol_version", False),
-)
+clickhouse_connect_common.set_setting("use_protocol_version", True)
 
 _pool_lock = Lock()
 _pool_managers: dict[tuple[str | None, bool], PoolManager] = {}

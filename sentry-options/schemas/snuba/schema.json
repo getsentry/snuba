@@ -643,11 +643,6 @@
       "default": false,
       "description": "When true, the dual-write metrics backend also emits to the Sentry metrics backend (sampled by settings.DDM_METRICS_SAMPLE_RATE)."
     },
-    "clickhouse_connect_use_protocol_version": {
-      "type": "boolean",
-      "default": false,
-      "description": "When true, clickhouse-connect negotiates client_protocol_version (Native block-info framing). Process-wide setting applied when snuba.clickhouse.connect is imported; existing clients are unchanged until restart. Default false: proxies can strip the setting and desync the decoder into Unrecognized ClickHouse type errors."
-    },
     "clickhouse_connect_pool_size": {
       "type": "integer",
       "default": 25,

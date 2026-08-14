@@ -1030,11 +1030,10 @@ def test_reader_routes_with_totals_through_execute_with_totals() -> None:
     assert result["totals"] == {"g": 0, "s": 10}
 
 
-@pytest.mark.clickhouse_db
-def test_use_protocol_version_disabled_by_default() -> None:
+def test_use_protocol_version_enabled() -> None:
     from clickhouse_connect import common as clickhouse_connect_common
 
-    assert clickhouse_connect_common.get_setting("use_protocol_version") is False
+    assert clickhouse_connect_common.get_setting("use_protocol_version") is True
 
 
 def test_new_client_per_query() -> None:
