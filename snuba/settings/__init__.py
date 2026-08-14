@@ -96,7 +96,7 @@ CLICKHOUSE_POOL_GET_TIMEOUT_SECONDS = 5
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
         "host": os.environ.get("CLICKHOUSE_HOST", "127.0.0.1"),
-        "port": int(os.environ.get("CLICKHOUSE_PORT", 8123)),
+        "port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
         "max_connections": int(os.environ.get("CLICKHOUSE_MAX_CONNECTIONS", 1)),
         "block_connections": bool(os.environ.get("CLICKHOUSE_BLOCK_CONNECTIONS", False)),
         "user": os.environ.get("CLICKHOUSE_USER", "default"),

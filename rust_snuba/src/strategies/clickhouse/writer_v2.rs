@@ -492,7 +492,7 @@ mod tests {
     fn make_test_config() -> ClickhouseConfig {
         ClickhouseConfig {
             host: std::env::var("CLICKHOUSE_HOST").unwrap_or("127.0.0.1".to_string()),
-            port: std::env::var("CLICKHOUSE_PORT")
+            port: std::env::var("CLICKHOUSE_HTTP_PORT")
                 .unwrap_or("8123".to_string())
                 .parse::<u16>()
                 .unwrap(),

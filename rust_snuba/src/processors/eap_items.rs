@@ -2097,7 +2097,7 @@ mod tests {
     #[tokio::test]
     async fn test_row_binary_clickhouse_insert() {
         let host = std::env::var("CLICKHOUSE_HOST").unwrap_or("127.0.0.1".to_string());
-        let port: u16 = std::env::var("CLICKHOUSE_PORT")
+        let port: u16 = std::env::var("CLICKHOUSE_HTTP_PORT")
             .unwrap_or("8123".to_string())
             .parse()
             .unwrap();
