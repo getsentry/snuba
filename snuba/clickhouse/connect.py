@@ -142,6 +142,12 @@ def _column_type_name(column_type: Any, server_timezone: Any) -> str:
     if name != "DateTime":
         return name
 
+    # clickhouse-connect sets client.server_tz to None when the server timezone
+    # is unrecognized. Fall back to the same Universal spelling the native
+    # driver used for the default UTC zone rather than crashing on .tzname().
+    if server_timezone is None:
+        return "DateTime('Universal')"
+
     timezone_name = getattr(server_timezone, "key", None)
     if timezone_name is None:
         timezone_name = server_timezone.tzname(None)
