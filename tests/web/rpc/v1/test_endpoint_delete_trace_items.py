@@ -31,6 +31,11 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_delete_trace_items import EndpointDeleteTraceItems
+from snuba.web.service_auth import (
+    SENTRY_DELETE_PRINCIPAL,
+    ServiceIdentity,
+    using_service_identity,
+)
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 from tests.web.rpc.v1.test_utils import gen_item_message
@@ -75,6 +80,17 @@ def setup_teardown(eap: None, redis_db: None) -> None:
 @pytest.mark.eap
 @pytest.mark.redis_db
 class TestEndpointDeleteTrace(BaseApiTest):
+    @pytest.fixture(autouse=True)
+    def bind_delete_identity(self) -> Any:
+        identity = ServiceIdentity(
+            principal=SENTRY_DELETE_PRINCIPAL,
+            source="test",
+            authorized_project_ids=frozenset({1, 2, 3}),
+            authorized_organization_ids=frozenset({1}),
+        )
+        with using_service_identity(identity):
+            yield identity
+
     def test_missing_trace_id_raises_exception(self) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()

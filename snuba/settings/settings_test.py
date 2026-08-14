@@ -66,3 +66,6 @@ REDIS_CLUSTERS = {
 VALIDATE_DATASET_YAMLS_ON_STARTUP = True
 
 LOG_MIGRATIONS = False
+
+# Fixture secret for delete AuthN tests. Not a production credential.
+DELETE_SERVICE_AUTH_SECRET = "snuba-test-delete-service-auth-secret"

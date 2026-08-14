@@ -81,6 +81,14 @@ MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS = 24
 
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
 
+# Destructive-endpoint service AuthN. Empty secret fails closed outside tests.
+# Mesh / mTLS should replace the JWT verifier later; keep the ServiceIdentity
+# interface stable.
+DELETE_SERVICE_AUTH_SECRET = os.environ.get("SNUBA_DELETE_SERVICE_AUTH_SECRET", "")
+DELETE_SERVICE_AUTH_ALLOWED_PRINCIPALS: Sequence[str] = ("sentry-delete",)
+DELETE_SERVICE_AUTH_MAX_TTL_SECONDS = 120
+
+
 ALLOCATION_POLICY_ENABLED = True
 DEFAULT_DATASET_NAME = "events"
 DISABLED_ENTITIES: set[str] = set()

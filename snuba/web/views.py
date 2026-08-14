@@ -69,6 +69,11 @@ from snuba.web.converters import DatasetConverter, EntityConverter, StorageConve
 from snuba.web.delete_query import DeletesNotEnabledError, TooManyOngoingMutationsError
 from snuba.web.query import parse_and_run_query
 from snuba.web.rpc import run_rpc_handler
+from snuba.web.service_auth import (
+    ServiceAuthError,
+    authenticate_service_request,
+    using_service_identity,
+)
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
 logger = logging.getLogger("snuba.api")
@@ -293,7 +298,23 @@ def unqualified_query_view(*, timer: Timer) -> Response | str | WerkzeugResponse
 
 @application.route("/rpc/<name>/<version>", methods=["POST"])
 def rpc(*, name: str, version: str) -> Response:
-    result_proto = run_rpc_handler(name, version, http_request.data)
+    if name == "EndpointDeleteTraceItems":
+        try:
+            identity = authenticate_service_request(
+                {
+                    **{k: v for k, v in http_request.headers.items() if isinstance(v, str)},
+                    "x-snuba-delete-endpoint": name,
+                }
+            )
+        except ServiceAuthError as error:
+            return Response(
+                ErrorProto(code=error.status_code, message=str(error)).SerializeToString(),
+                status=error.status_code,
+            )
+        with using_service_identity(identity):
+            result_proto = run_rpc_handler(name, version, http_request.data)
+    else:
+        result_proto = run_rpc_handler(name, version, http_request.data)
     if isinstance(result_proto, ErrorProto):
         return Response(result_proto.SerializeToString(), status=result_proto.code)
     return Response(result_proto.SerializeToString(), status=200)
@@ -332,16 +353,30 @@ def mql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Response | str:
 @util.time_request("delete_query")
 def storage_delete(*, storage: WritableTableStorage, timer: Timer) -> Response | str:
     if http_request.method == "DELETE":
+        try:
+            identity = authenticate_service_request(
+                {
+                    **{k: v for k, v in http_request.headers.items() if isinstance(v, str)},
+                    "x-snuba-delete-endpoint": "storage_delete",
+                }
+            )
+        except ServiceAuthError as error:
+            return make_response(
+                jsonify({"error": {"type": "authentication", "message": str(error)}}),
+                error.status_code,
+            )
+
         body = parse_request_body(http_request)
 
         try:
-            schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
-            request_parts = schema.validate(body)
-            payload = bulk_delete_from_storage(
-                storage,
-                request_parts.query["query"]["columns"],
-                request_parts.attribution_info,
-            )
+            with using_service_identity(identity):
+                schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
+                request_parts = schema.validate(body)
+                payload = bulk_delete_from_storage(
+                    storage,
+                    request_parts.query["query"]["columns"],
+                    request_parts.attribution_info,
+                )
         except (
             InvalidJsonRequestException,
             DeletesNotEnabledError,

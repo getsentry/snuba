@@ -23,6 +23,12 @@ from snuba.utils.streams.configuration_builder import get_default_kafka_configur
 from snuba.utils.streams.topics import Topic
 from snuba.web.bulk_delete_query import delete_from_storage
 from snuba.web.delete_query import DeletesNotEnabledError
+from snuba.web.service_auth import (
+    SENTRY_DELETE_PRINCIPAL,
+    ServiceAuthError,
+    ServiceIdentity,
+    using_service_identity,
+)
 
 # TraceItemType values from sentry_protos
 TRACE_ITEM_TYPE_SPAN = 1
@@ -48,6 +54,34 @@ def get_attribution_info(tenant_ids: Mapping[str, int | str] | None = None) -> M
         "parent_api": "test",
         "feature": "test",
     }
+
+
+@pytest.fixture(autouse=True)
+def bind_delete_identity() -> Any:
+    identity = ServiceIdentity(
+        principal=SENTRY_DELETE_PRINCIPAL,
+        source="test",
+        authorized_project_ids=frozenset({1, 2, 3}),
+        authorized_organization_ids=frozenset({1}),
+    )
+    with using_service_identity(identity):
+        yield identity
+
+
+def test_delete_from_storage_requires_identity() -> None:
+    from snuba.web.service_auth import _active_identity
+
+    token = _active_identity.set(None)
+    try:
+        storage = get_writable_storage(StorageKey("search_issues"))
+        with pytest.raises(ServiceAuthError, match="missing service identity"):
+            delete_from_storage(
+                storage,
+                {"project_id": [1], "group_id": [1]},
+                get_attribution_info(),
+            )
+    finally:
+        _active_identity.reset(token)
 
 
 @patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10)

@@ -94,7 +94,17 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         self,
         group_id: int,
         debug: bool = True,
+        headers: MutableMapping[str, str] | None = None,
     ) -> Any:
+        from snuba.web.service_auth import mint_delete_service_token
+
+        request_headers = {"referer": "test"}
+        if headers is None:
+            request_headers["Authorization"] = (
+                f"Bearer {mint_delete_service_token(project_ids=[3], organization_ids=[1])}"
+            )
+        else:
+            request_headers.update(headers)
         return self.app.delete(
             "/search_issues",
             data=json.dumps(
@@ -104,7 +114,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
                     "tenant_ids": {"referrer": "test", "organization_id": 1},
                 }
             ),
-            headers={"referer": "test"},
+            headers=request_headers,
         )
 
     @patch("snuba.web.bulk_delete_query.produce_delete_query")
@@ -159,6 +169,9 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
             assert called_args["rows_to_delete"] == 1
 
     def test_bad_delete(self) -> None:
+        from snuba.web.service_auth import mint_delete_service_token
+
+        auth = {"referer": "test", "Authorization": f"Bearer {mint_delete_service_token()}"}
         res = self.app.delete(
             "/search_issues",
             data=json.dumps(
@@ -167,7 +180,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
                     "tenant_ids": {"referrer": "test", "organization_id": 1},
                 }
             ),
-            headers={"referer": "test"},
+            headers=auth,
         )
         assert int(res.status_code / 100) == 4  # 400 status code
         assert "'query' is a required property" in res.get_json()["error"]["message"]
@@ -187,7 +200,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
                     "tenant_ids": {"referrer": "test", "organization_id": 1},
                 }
             ),
-            headers={"referer": "test"},
+            headers=auth,
         )
         assert res.status_code == 400
         data = json.loads(res.data)
@@ -195,6 +208,16 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
             data["error"]["message"]
             == "Invalid value invalid_id for column type schemas.UInt(64, modifiers=None)"
         )
+
+    def test_http_delete_rejects_missing_auth(self) -> None:
+        response = self.delete_query(4, headers={"referer": "test"})
+        assert response.status_code == 401
+
+    def test_http_delete_rejects_invalid_auth(self) -> None:
+        response = self.delete_query(
+            4, headers={"referer": "test", "Authorization": "Bearer not-a-jwt"}
+        )
+        assert response.status_code == 401
 
     def test_simple_search_query(self) -> None:
         now = datetime.now().replace(minute=0, second=0, microsecond=0)
