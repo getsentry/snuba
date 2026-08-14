@@ -234,7 +234,7 @@ def test_discovered_nodes_use_default_http_port() -> None:
     assert distributed_cluster.get_http_port() == envoy_http_port
     # ... but directly-addressed nodes use the default HTTP port.
     assert len(local_nodes) == 2
-    assert all(node.http_port == cluster.DEFAULT_CLICKHOUSE_HTTP_PORT for node in local_nodes)
+    assert all(node.port == cluster.DEFAULT_CLICKHOUSE_HTTP_PORT for node in local_nodes)
 
 
 @pytest.mark.clickhouse_db

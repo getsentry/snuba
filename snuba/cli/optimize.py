@@ -79,11 +79,7 @@ def optimize(
 
     from snuba.clickhouse.native import ClickhousePool
     from snuba.clickhouse.optimize.optimize import logger
-    from snuba.clusters.cluster import (
-        DEFAULT_CLICKHOUSE_HTTP_PORT,
-        ClickhouseNode,
-        connection_cache,
-    )
+    from snuba.clusters.cluster import ClickhouseNode, connection_cache
 
     setup_logging(log_level)
     setup_sentry()
@@ -106,15 +102,11 @@ def optimize(
     # that cluster.
     connection: ClickhousePool
     if clickhouse_host and clickhouse_port:
-        # Storage nodes serve HTTP on 8123. --clickhouse-port is only node
-        # identity (system.clusters / cron args), not the HTTP listener.
+        # --clickhouse-port identifies the node. ConnectionCache dials 8123
+        # when the node has no explicit connect port.
         connection = connection_cache.get_node_connection(
             ClickhouseClientSettings.OPTIMIZE,
-            ClickhouseNode(
-                clickhouse_host,
-                clickhouse_port,
-                http_port=DEFAULT_CLICKHOUSE_HTTP_PORT,
-            ),
+            ClickhouseNode(clickhouse_host, clickhouse_port),
             clickhouse_user,
             clickhouse_password,
             database,

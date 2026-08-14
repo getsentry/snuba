@@ -405,8 +405,8 @@ def test_by_host_connection_uses_default_http_port(helper_name: str) -> None:
 
         assert mock_pool.called, "expected a pool to be acquired for a valid host"
         node = mock_pool.call_args.args[1]
-        assert node.http_port == DEFAULT_CLICKHOUSE_HTTP_PORT
-        assert node.http_port != sentinel_cluster_http_port, (
+        assert node.port == DEFAULT_CLICKHOUSE_HTTP_PORT
+        assert node.port != sentinel_cluster_http_port, (
             "by-host connections must not use the cluster's configured http_port"
         )
     finally:
@@ -456,7 +456,7 @@ def test_query_node_connection_uses_cluster_http_port() -> None:
 
         assert mock_pool.called, "expected a pool to be acquired for the query node"
         node = mock_pool.call_args.args[1]
-        assert node.http_port == sentinel_cluster_http_port, (
+        assert node.port == sentinel_cluster_http_port, (
             "the query-node connection must use the cluster's configured http_port"
         )
     finally:

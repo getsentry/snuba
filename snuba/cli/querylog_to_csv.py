@@ -175,7 +175,7 @@ def querylog_to_csv(
     # unbounded INTERNAL profile rather than the 25s QUERY profile.
     connection = connection_cache.get_node_connection(
         ClickhouseClientSettings.INTERNAL,
-        ClickhouseNode(clickhouse_host, clickhouse_port, http_port=http_port),
+        ClickhouseNode(clickhouse_host, clickhouse_port, port=http_port),
         clickhouse_user,
         clickhouse_password,
         database,

@@ -123,11 +123,10 @@ class ClickhouseNode:
     native_port: int
     shard: int | None = None
     replica: int | None = None
-    # The node's HTTP port, used by clickhouse-connect. It is optional because
-    # nodes built outside a cluster context (e.g. in tests, or the replacer's
-    # load balancer, which never open HTTP connections) do not need one.
-    # Cluster-produced nodes always carry the cluster's HTTP port.
-    http_port: int | None = None
+    # Port used to reach this node. Optional for nodes that never open a
+    # client (tests, replacer load balancer). Cluster-produced query nodes
+    # carry the cluster listen port; discovered storage nodes use 8123.
+    port: int | None = None
 
     def __str__(self) -> str:
         return f"{self.host_name}:{self.native_port}"
@@ -188,8 +187,8 @@ class Cluster(ABC, Generic[TWriterOptions]):
 ClickhouseWriterOptions = Mapping[str, Any] | None
 
 
-# The node's HTTP port is part of ``ClickhouseNode`` itself, so it does not need
-# a separate cache-key element.
+# The node's connect port is part of ``ClickhouseNode``, so it does not
+# need a separate cache-key element.
 CacheKey = tuple[
     ClickhouseNode,
     ClickhouseClientSettings,
@@ -242,13 +241,10 @@ class ConnectionCache:
             if cache_key not in self.__cache:
                 self.__cache[cache_key] = ClickhouseConnectPool(
                     host=node.host_name,
-                    # Fall back to the default HTTP port only for nodes that
-                    # were built without one (e.g. by-host helpers that have
-                    # no cluster http_port to draw on).
+                    # Fall back to 8123 only for nodes built without a port
+                    # (by-host helpers with no cluster listen port).
                     http_port=(
-                        node.http_port
-                        if node.http_port is not None
-                        else DEFAULT_CLICKHOUSE_HTTP_PORT
+                        node.port if node.port is not None else DEFAULT_CLICKHOUSE_HTTP_PORT
                     ),
                     native_port=node.native_port,
                     user=user,
@@ -313,7 +309,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         self.__port = port
         self.__max_connections = max_connections or _DEFAULT_MAX_CONNECTIONS
         self.__block_connections = block_connections
-        self.__query_node = ClickhouseNode(host, port, http_port=http_port)
+        self.__query_node = ClickhouseNode(host, port, port=http_port)
         self.__user = user
         self.__password = password
         self.__database = database
@@ -487,7 +483,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
                 native_port=host[1],
                 shard=host[2],
                 replica=host[3],
-                http_port=DEFAULT_CLICKHOUSE_HTTP_PORT,
+                port=DEFAULT_CLICKHOUSE_HTTP_PORT,
             )
             for host in self.get_query_connection(ClickhouseClientSettings.INTERNAL)
             .execute(

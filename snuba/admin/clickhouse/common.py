@@ -121,7 +121,7 @@ def _build_validated_pool(
     http_port = cluster.get_http_port() if is_query_node else DEFAULT_CLICKHOUSE_HTTP_PORT
     return connection_cache.get_node_connection(
         client_settings,
-        ClickhouseNode(clickhouse_host, clickhouse_port, http_port=http_port),
+        ClickhouseNode(clickhouse_host, clickhouse_port, port=http_port),
         username,
         password,
         database,

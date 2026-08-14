@@ -68,11 +68,7 @@ def cleanup(
 
     from snuba.cleanup import logger, run_cleanup
     from snuba.clickhouse.native import ClickhousePool
-    from snuba.clusters.cluster import (
-        DEFAULT_CLICKHOUSE_HTTP_PORT,
-        ClickhouseNode,
-        connection_cache,
-    )
+    from snuba.clusters.cluster import ClickhouseNode, connection_cache
 
     storage = get_writable_storage(StorageKey(storage_name))
 
@@ -86,15 +82,11 @@ def cleanup(
 
     connection: ClickhousePool
     if clickhouse_host and clickhouse_port:
-        # Storage nodes serve HTTP on 8123. --clickhouse-port is only node
-        # identity (system.clusters / cron args), not the HTTP listener.
+        # --clickhouse-port identifies the node. ConnectionCache dials 8123
+        # when the node has no explicit connect port.
         connection = connection_cache.get_node_connection(
             ClickhouseClientSettings.CLEANUP,
-            ClickhouseNode(
-                clickhouse_host,
-                clickhouse_port,
-                http_port=DEFAULT_CLICKHOUSE_HTTP_PORT,
-            ),
+            ClickhouseNode(clickhouse_host, clickhouse_port),
             clickhouse_user,
             clickhouse_password,
             database,
