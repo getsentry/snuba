@@ -2,7 +2,9 @@ from unittest.mock import MagicMock, patch
 
 from snuba.admin.clickhouse.trace_log_parsing import ExecuteSummary, QuerySummary, TracingSummary
 from snuba.admin.clickhouse.tracing import (
-    _limit_tracing_query,
+    MAX_TRACING_QUERY_LIMIT,
+    _executed_query_with_limit,
+    _extract_settings_clause,
     format_trace_output_from_summary,
     merge_query_log_summary,
     run_query_and_get_trace,
@@ -16,31 +18,33 @@ def test_scrub() -> None:
     assert scrub_row((1, 2, 3, "release name")) == (1, 2, 3, "<scrubbed: str>")
 
 
-def test_limit_tracing_query_adds_limit_when_missing() -> None:
-    assert _limit_tracing_query("SELECT * FROM events") == "SELECT * FROM events LIMIT 10000"
-    assert _limit_tracing_query("SELECT 1 SETTINGS max_threads = 10") == (
-        "SELECT 1 LIMIT 10000 SETTINGS max_threads = 10"
+def test_extract_settings_clause_moves_top_level_settings() -> None:
+    body, settings = _extract_settings_clause(
+        "SELECT 1 SETTINGS max_threads = 10, distributed_product_mode = 'global'"
     )
+    assert body == "SELECT 1"
+    assert settings == {"max_threads": 10, "distributed_product_mode": "global"}
 
 
-def test_limit_tracing_query_preserves_existing_top_level_limit() -> None:
-    assert _limit_tracing_query("SELECT * FROM events LIMIT 100") == (
+def test_extract_settings_clause_ignores_nested_and_quoted_settings() -> None:
+    body, settings = _extract_settings_clause(
+        "SELECT 1 FROM (SELECT 2 SETTINGS x = 1) SETTINGS max_threads = 2"
+    )
+    assert body == "SELECT 1 FROM (SELECT 2 SETTINGS x = 1)"
+    assert settings == {"max_threads": 2}
+
+    body, settings = _extract_settings_clause("SELECT 'SETTINGS x=1'")
+    assert body == "SELECT 'SETTINGS x=1'"
+    assert settings == {}
+
+
+def test_executed_query_with_limit_mirrors_connect_behavior() -> None:
+    assert _executed_query_with_limit("SELECT * FROM events") == (
+        "SELECT * FROM events\n LIMIT 10000"
+    )
+    assert _executed_query_with_limit("SELECT * FROM events LIMIT 100") == (
         "SELECT * FROM events LIMIT 100"
     )
-    assert _limit_tracing_query("SELECT * FROM events LIMIT 20000") == (
-        "SELECT * FROM events LIMIT 20000"
-    )
-    assert _limit_tracing_query("SELECT * FROM events LIMIT 5, 20000") == (
-        "SELECT * FROM events LIMIT 5, 20000"
-    )
-    assert _limit_tracing_query("SELECT 1 LIMIT 5 BY x") == "SELECT 1 LIMIT 5 BY x"
-
-
-def test_limit_tracing_query_ignores_nested_and_quoted_limits() -> None:
-    assert _limit_tracing_query("SELECT * FROM (SELECT * FROM events LIMIT 1)") == (
-        "SELECT * FROM (SELECT * FROM events LIMIT 1) LIMIT 10000"
-    )
-    assert _limit_tracing_query("SELECT 'LIMIT 1'") == "SELECT 'LIMIT 1' LIMIT 10000"
 
 
 def test_summarize_from_query_log() -> None:
@@ -278,8 +282,10 @@ def test_summarize_from_query_log_waits_for_root_finish() -> None:
 
 
 def test_run_query_and_get_trace_uses_query_log_when_wire_trace_empty() -> None:
-    connection = MagicMock()
     # Driver/server assigned the id; tracing should not invent one.
+    # query_limit marks this as a clickhouse-connect pool.
+    connection = MagicMock()
+    connection.query_limit = 0
     connection.execute.return_value = ClickhouseResult(
         results=[(1,)],
         meta=[("count()", "UInt64")],
@@ -331,7 +337,11 @@ def test_run_query_and_get_trace_uses_query_log_when_wire_trace_empty() -> None:
             return_value=query_log_summary,
         ) as mock_summary,
     ):
-        output = run_query_and_get_trace("errors_ro", "SELECT 1")
+        output = run_query_and_get_trace(
+            "errors_ro",
+            "SELECT 1 SETTINGS max_threads = 10",
+            settings={"log_profile_events": 1},
+        )
 
     mock_summary.assert_called_once_with(connection, "errors_ro", "qid")
     assert output.query_id == "qid"
@@ -344,8 +354,13 @@ def test_run_query_and_get_trace_uses_query_log_when_wire_trace_empty() -> None:
     # No client-side query_id was forced onto the execute call.
     assert connection.execute.call_args.kwargs.get("query_id") in (None, "")
     assert connection.execute.call_args.kwargs["capture_trace"] is True
-    assert connection.execute.call_args.kwargs["query"] == "SELECT 1 LIMIT 10000"
-    assert output.executed_query == "SELECT 1 LIMIT 10000"
+    assert connection.execute.call_args.kwargs["query"] == "SELECT 1"
+    assert connection.execute.call_args.kwargs["settings"] == {
+        "log_profile_events": 1,
+        "max_threads": 10,
+    }
+    assert connection.query_limit == MAX_TRACING_QUERY_LIMIT
+    assert output.executed_query == "SELECT 1\n LIMIT 10000"
 
 
 def test_run_query_and_get_trace_keeps_native_wire_trace() -> None:

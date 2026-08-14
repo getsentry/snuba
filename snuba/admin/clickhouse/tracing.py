@@ -1,17 +1,15 @@
 from __future__ import annotations
 
 import math
+import re
 import time
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, cast
 from uuid import UUID
 
-import sqlparse
 import structlog
-from sqlparse import tokens as sql_tokens
-from sqlparse.sql import Parenthesis, Statement, Token, TokenList
 
 from snuba.admin.clickhouse.common import (
     get_ro_query_node_connection,
@@ -37,60 +35,144 @@ logger = structlog.get_logger().bind(module=__name__)
 
 MAX_TRACING_QUERY_LIMIT = 10_000
 
-
-def _iter_top_level_tokens(token: Token, start: int = 0) -> Iterator[tuple[Token, int]]:
-    """Yield leaf tokens outside parentheses with string offsets."""
-    if isinstance(token, Parenthesis):
-        return
-    if isinstance(token, TokenList):
-        pos = start
-        for child in token.tokens:
-            yield from _iter_top_level_tokens(child, pos)
-            pos += len(child.value)
-        return
-    yield token, start
+# Mirrors clickhouse-connect's limit detection so the executed-query display matches
+# what the driver will do when query_limit is set.
+_LIMIT_RE = re.compile(r"\s+LIMIT($|\s)", re.IGNORECASE)
+_SETTINGS_ASSIGNMENT_RE = re.compile(
+    r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$",
+)
 
 
-def _is_keyword_token(token: Token, *names: str) -> bool:
-    if token.ttype not in (sql_tokens.Keyword, sql_tokens.Name):
-        return False
-    return token.value.upper() in {name.upper() for name in names}
+def _find_top_level_settings_index(query: str) -> int | None:
+    """Return the index of the first top-level SETTINGS keyword, if any."""
+    depth = 0
+    in_single = in_double = in_backtick = False
+    escape = False
+    index = 0
+    length = len(query)
+
+    while index < length:
+        char = query[index]
+        if in_single:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == "'":
+                in_single = False
+        elif in_double:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_double = False
+        elif in_backtick:
+            if char == "`":
+                in_backtick = False
+        elif char == "'":
+            in_single = True
+        elif char == '"':
+            in_double = True
+        elif char == "`":
+            in_backtick = True
+        elif char == "(":
+            depth += 1
+        elif char == ")":
+            depth = max(0, depth - 1)
+        elif (
+            depth == 0
+            and query[index : index + 8].upper() == "SETTINGS"
+            and (index == 0 or not query[index - 1].isalnum())
+            and (index + 8 >= length or not query[index + 8].isalnum())
+        ):
+            return index
+        index += 1
+    return None
 
 
-def _has_top_level_limit(statement: Statement) -> bool:
-    return any(
-        token.ttype is sql_tokens.Keyword and token.value.upper() == "LIMIT"
-        for token, _start in _iter_top_level_tokens(statement)
-    )
+def _parse_settings_clause(clause: str) -> dict[str, Any]:
+    """Parse `key = value, ...` pairs from a SETTINGS clause body."""
+    parts: list[str] = []
+    current: list[str] = []
+    depth = 0
+    in_single = False
+    escape = False
+
+    for char in clause:
+        if in_single:
+            current.append(char)
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == "'":
+                in_single = False
+            continue
+
+        if char == "'":
+            in_single = True
+            current.append(char)
+            continue
+        if char == "(":
+            depth += 1
+            current.append(char)
+            continue
+        if char == ")":
+            depth = max(0, depth - 1)
+            current.append(char)
+            continue
+        if char == "," and depth == 0:
+            parts.append("".join(current).strip())
+            current = []
+            continue
+        current.append(char)
+
+    if current:
+        parts.append("".join(current).strip())
+
+    settings: dict[str, Any] = {}
+    for part in parts:
+        if not part:
+            continue
+        match = _SETTINGS_ASSIGNMENT_RE.match(part)
+        if match is None:
+            continue
+        key, raw_value = match.group(1), match.group(2).strip()
+        if (raw_value.startswith("'") and raw_value.endswith("'")) or (
+            raw_value.startswith('"') and raw_value.endswith('"')
+        ):
+            settings[key] = raw_value[1:-1]
+            continue
+        try:
+            settings[key] = float(raw_value) if "." in raw_value else int(raw_value)
+        except ValueError:
+            settings[key] = raw_value
+    return settings
 
 
-def _add_top_level_limit(statement: Statement, max_limit: int) -> str:
-    """Return statement SQL with LIMIT inserted before SETTINGS/FORMAT, else appended."""
-    query = str(statement)
-    insertion_point = len(query)
-    for token, start in _iter_top_level_tokens(statement):
-        if _is_keyword_token(token, "SETTINGS", "FORMAT"):
-            insertion_point = start
-            break
+def _extract_settings_clause(query: str) -> tuple[str, dict[str, Any]]:
+    """
+    Move a top-level SETTINGS clause out of the SQL string.
 
-    prefix = query[:insertion_point].rstrip()
-    suffix = query[insertion_point:].lstrip()
-    if suffix:
-        return f"{prefix} LIMIT {max_limit} {suffix}"
-    return f"{prefix} LIMIT {max_limit}"
+    clickhouse-connect's query_limit appends `LIMIT N` at the end of the SQL. That
+    is invalid when the query already ends with SETTINGS, so tracing lifts those
+    settings into the driver settings dict instead.
+    """
+    settings_at = _find_top_level_settings_index(query)
+    if settings_at is None:
+        return query, {}
+
+    body = query[:settings_at].rstrip()
+    clause = query[settings_at + len("SETTINGS") :].strip()
+    return body, _parse_settings_clause(clause)
 
 
-def _limit_tracing_query(query: str, max_limit: int = MAX_TRACING_QUERY_LIMIT) -> str:
-    """Parse with sqlparse, add a top-level LIMIT only when missing, then stringify."""
-    statements = sqlparse.parse(query)
-    if not statements:
-        return f"{query.rstrip()} LIMIT {max_limit}"
-
-    statement = statements[0]
-    if _has_top_level_limit(statement):
-        return str(statement)
-
-    return _add_top_level_limit(statement, max_limit)
+def _executed_query_with_limit(query: str, max_limit: int = MAX_TRACING_QUERY_LIMIT) -> str:
+    """Best-effort SQL the connect driver will send when query_limit is enabled."""
+    if _LIMIT_RE.search(query):
+        return query
+    return f"{query.rstrip()}\n LIMIT {max_limit}"
 
 
 @dataclass
@@ -104,7 +186,7 @@ class TraceOutput:
     profile_events_meta: list[Any]
     profile_events_profile: dict[str, int]
     query_id: str = ""
-    # SQL actually sent to ClickHouse after admin-side rewrites (e.g. LIMIT).
+    # SQL shape we expect ClickHouse to run after SETTINGS extraction + query_limit.
     executed_query: str = ""
 
 
@@ -112,13 +194,24 @@ def run_query_and_get_trace(
     storage_name: str, query: str, settings: Mapping[str, Any] | None = None
 ) -> TraceOutput:
     validate_ro_query(query)
-    executed_query = _limit_tracing_query(query)
+    query_without_settings, sql_settings = _extract_settings_clause(query)
+
+    execute_settings: dict[str, Any] = dict(settings or {})
+    # SQL SETTINGS win over request defaults for the same key.
+    execute_settings.update(sql_settings)
+
     connection = get_ro_query_node_connection(storage_name, ClickhouseClientSettings.TRACING)
+    # Prefer clickhouse-connect's client-side query_limit. Native pools do not set
+    # this instance attribute and are left alone.
+    if "query_limit" in getattr(connection, "__dict__", {}):
+        connection.query_limit = MAX_TRACING_QUERY_LIMIT
+
+    executed_query = _executed_query_with_limit(query_without_settings)
     query_result = connection.execute(
-        query=executed_query,
+        query=query_without_settings,
         capture_trace=True,
         with_column_types=True,
-        settings=settings or {},
+        settings=execute_settings,
     )
 
     trace_output = query_result.trace_output or ""

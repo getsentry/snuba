@@ -164,6 +164,9 @@ class ClickhouseConnectPool(ClickhousePool):
         connect_timeout: int = 1,
         send_receive_timeout: int | None = 35,
         client_settings: Mapping[str, Any] = {},
+        # clickhouse-connect client-side default LIMIT for SELECTs with no LIMIT.
+        # 0 disables. Kept off by default so prod query paths stay unbounded.
+        query_limit: int = 0,
     ) -> None:
         self.host = host
         self.port = http_port
@@ -176,6 +179,7 @@ class ClickhouseConnectPool(ClickhousePool):
         self.connect_timeout = connect_timeout
         self.send_receive_timeout = send_receive_timeout
         self.client_settings = client_settings
+        self.query_limit = query_limit
 
     def _new_client(self) -> Client:
         connect_timeout = (
@@ -211,7 +215,7 @@ class ClickhouseConnectPool(ClickhousePool):
                 send_receive_timeout=send_receive_timeout,
                 settings=dict(self.client_settings),
                 pool_mgr=_shared_pool(self.ca_certs, bool(self.verify)),
-                query_limit=0,
+                query_limit=self.query_limit,
                 autogenerate_session_id=False,
                 compress="lz4",
             )
