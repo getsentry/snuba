@@ -11,8 +11,6 @@ from uuid import UUID
 import structlog
 
 from snuba.admin.clickhouse.common import (
-    _end_of_sql_string_literal,
-    _sql_quotes_are_balanced,
     get_ro_query_node_connection,
     validate_ro_query,
 )
@@ -37,101 +35,30 @@ logger = structlog.get_logger().bind(module=__name__)
 MAX_TRACING_QUERY_LIMIT = 10_000
 
 
-def _split_settings_list(text: str) -> list[str]:
-    """Split SETTINGS assignments on commas outside quotes."""
-    parts: list[str] = []
-    buf: list[str] = []
-    i = 0
-    n = len(text)
-    while i < n:
-        ch = text[i]
-        if ch in "'\"":
-            end = _end_of_sql_string_literal(text, i)
-            if end is None:
-                buf.append(text[i:])
-                break
-            buf.append(text[i:end])
-            i = end
-            continue
-        if ch == ",":
-            part = "".join(buf).strip()
-            if part:
-                parts.append(part)
-            buf = []
-            i += 1
-            continue
-        buf.append(ch)
-        i += 1
-    part = "".join(buf).strip()
-    if part:
-        parts.append(part)
-    return parts
-
-
-def _paren_depth_at(text: str, index: int) -> int:
-    """Parenthesis depth at ``index``, ignoring quoted string contents."""
-    depth = 0
-    i = 0
-    while i < index:
-        ch = text[i]
-        if ch in "'\"":
-            end = _end_of_sql_string_literal(text, i)
-            if end is None:
-                return -1
-            i = end
-            continue
-        if ch == "(":
-            depth += 1
-        elif ch == ")":
-            depth = max(0, depth - 1)
-        i += 1
-    return depth
-
-
-def _find_trailing_settings(query: str) -> int | None:
-    """Index of the last top-level unquoted standalone SETTINGS token, if any."""
-    upper = query.upper()
-    search_end = len(upper)
-    while True:
-        settings_at = upper.rfind("SETTINGS", 0, search_end)
-        if settings_at == -1:
-            return None
-
-        before = upper[settings_at - 1] if settings_at > 0 else " "
-        after_at = settings_at + len("SETTINGS")
-        after = upper[after_at] if after_at < len(upper) else " "
-        if (
-            before in " \t\n\r;"
-            and after in " \t\n\r"
-            and _sql_quotes_are_balanced(query[:settings_at])
-            and _paren_depth_at(query, settings_at) == 0
-        ):
-            return settings_at
-
-        search_end = settings_at
-
-
 def _extract_settings_clause(query: str) -> tuple[str, dict[str, str], bool]:
     """Move a trailing SETTINGS clause into the driver settings dict.
 
+    SETTINGS is a simple ``key=value`` list separated by commas; values are strings
+    (same model as clickhouse-connect's settings argument).
+
     Returns (sql, settings, apply_query_limit). apply_query_limit is False when a
-    top-level SETTINGS clause remains in the SQL, so the driver must not append
-    LIMIT after it.
+    SETTINGS clause remains in the SQL, so the driver must not append LIMIT after it.
     """
-    settings_at = _find_trailing_settings(query)
-    if settings_at is None:
+    settings_at = query.upper().rfind("SETTINGS")
+    if settings_at == -1:
         return query, {}, True
 
-    after_at = settings_at + len("SETTINGS")
     try:
-        settings = {}
-        for part in _split_settings_list(query[after_at:]):
+        settings: dict[str, str] = {}
+        for part in query[settings_at + len("SETTINGS") :].split(","):
+            part = part.strip()
+            if not part:
+                continue
             key, value = part.split("=", 1)
             settings[key.strip()] = value.strip().strip("'\"")
         if not settings:
             return query, {}, False
     except ValueError:
-        # Trailing SETTINGS present but not safely peelable.
         return query, {}, False
 
     return query[:settings_at].rstrip(), settings, True
