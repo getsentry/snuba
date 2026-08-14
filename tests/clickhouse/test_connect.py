@@ -744,9 +744,6 @@ def test_execute_explain_wraps_client_init_errors() -> None:
         pool.execute_explain("EXPLAIN AST SELECT 1")
 
 
-
-
-
 def test_reader_routes_with_totals_through_execute_with_totals() -> None:
     # The reader routes WITH TOTALS through execute_with_totals (not plain execute),
     # forwarding robust, so each driver handles totals its own way.

@@ -4,7 +4,6 @@ import logging
 import time
 from typing import Any, cast
 
-from snuba.clickhouse.error_codes import ErrorCodes
 from sentry_redis_tools.sliding_windows_rate_limiter import (
     GrantedQuota,
     Quota,
@@ -12,6 +11,7 @@ from sentry_redis_tools.sliding_windows_rate_limiter import (
     RequestedQuota,
 )
 
+from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.configs.configuration import Configuration
 from snuba.query.allocation_policies import (

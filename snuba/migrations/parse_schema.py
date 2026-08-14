@@ -4,7 +4,6 @@ import re
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
-from snuba.clickhouse.native import ClickhousePool
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
 
@@ -30,6 +29,7 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.clickhouse.columns import Tuple as TupleCol
+from snuba.clickhouse.native import ClickhousePool
 from snuba.migrations.columns import MigrationModifiers
 
 grammar = Grammar(
@@ -416,7 +416,9 @@ def _get_column(
     return column
 
 
-def get_local_schema(conn: ClickhousePool, table_name: str) -> Mapping[str, ColumnType[MigrationModifiers]]:
+def get_local_schema(
+    conn: ClickhousePool, table_name: str
+) -> Mapping[str, ColumnType[MigrationModifiers]]:
     return {
         column_name: _get_column(column_type, default_type, default_expr, codec_expr)
         for column_name, column_type, default_type, default_expr, _comment, codec_expr in [

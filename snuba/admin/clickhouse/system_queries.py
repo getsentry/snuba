@@ -1,7 +1,5 @@
 import re
 
-from snuba.clickhouse.error_codes import ErrorCodes
-
 from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth_roles import ExecuteSudoSystemQuery
@@ -13,6 +11,7 @@ from snuba.admin.clickhouse.common import (
     get_sudo_node_connection,
 )
 from snuba.admin.user import AdminUser
+from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.native import ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings

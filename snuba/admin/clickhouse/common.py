@@ -131,8 +131,6 @@ def _build_validated_pool(
     )
 
 
-
-
 def _settings_cache_token(client_settings: ClickhouseClientSettings) -> str:
     # Part of the admin connection cache keys because the ClickHouse settings
     # (and, for the read-only getters, the credentials) a pool is built with are

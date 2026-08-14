@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import pytest
-from snuba.clickhouse.error_codes import ErrorCodes
 
+from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.configs.configuration import ResourceIdentifier
 from snuba.datasets.storages.storage_key import StorageKey

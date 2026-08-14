@@ -3,7 +3,6 @@
 from typing import Any
 
 from snuba.clickhouse.error_codes import ErrorCodes
-
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.querylog.query_metadata import (
     SLO,

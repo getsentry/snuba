@@ -575,7 +575,6 @@ _POOL_ACQUISITION_NAMES = frozenset(
     {
         "get_node_connection",
         "ClickhouseConnectPool",
-        "ClickhouseConnectPool",
     }
 )
 

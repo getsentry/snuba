@@ -6,9 +6,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, cast
 
-from snuba.clickhouse.error_codes import ErrorCodes
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
 
+from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.datasets.entities.entity_key import EntityKey

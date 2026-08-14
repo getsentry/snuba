@@ -5,8 +5,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import simplejson as json
-from snuba.clickhouse.error_codes import ErrorCodes
 
+from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.state.cache.abstract import ExecutionTimeoutError
 from snuba.state.rate_limit import (

@@ -6,7 +6,6 @@ from typing import Any
 from unittest.mock import MagicMock, call, patch
 
 import pytest
-from snuba.clickhouse.errors import ClickhouseError
 from google.protobuf.json_format import ParseDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.attribute_conditional_aggregation_pb2 import (
@@ -41,6 +40,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_pb2 import AnyValue, ArrayValue
 
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web import QueryException

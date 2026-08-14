@@ -188,8 +188,6 @@ class Cluster(ABC, Generic[TWriterOptions]):
 ClickhouseWriterOptions = Mapping[str, Any] | None
 
 
-
-
 # The node's HTTP port is part of ``ClickhouseNode`` itself, so it does not need
 # a separate cache-key element.
 CacheKey = tuple[
