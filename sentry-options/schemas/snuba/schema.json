@@ -658,6 +658,11 @@
       "default": 0,
       "description": "HTTP read timeout in seconds for clickhouse-connect clients (urllib3 read/send_receive_timeout). 0 keeps the per-profile constructor value (e.g. 25s for QUERY). Read when a client is created."
     },
+    "clickhouse_connect_query_retries": {
+      "type": "integer",
+      "default": 2,
+      "description": "clickhouse-connect query_retries: replay a query on HTTP 429/503/504 and dead keep-alives. 0 disables SQL replay. Read when a client is created."
+    },
     "max_spans_per_transaction": {
       "type": "integer",
       "default": 2000,

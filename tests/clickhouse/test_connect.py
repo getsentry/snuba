@@ -157,35 +157,25 @@ def test_execute_passes_query_id_and_settings() -> None:
     assert kwargs["transport_settings"] == {"X-ClickHouse-Format": "Native"}
 
 
-def test_command_can_skip_database() -> None:
-    client = mock.Mock()
+def test_new_client_connects_with_database() -> None:
+    import clickhouse_connect
+
     pool = ClickhouseConnectPool(
         host="host",
         user="test",
         password="test",
         database="snuba_test",
     )
+    fake_client = mock.Mock()
 
-    with mock.patch.object(pool, "_new_client", return_value=client) as new_client:
-        pool.command("CREATE DATABASE snuba_test", use_database=False)
+    with (
+        mock.patch.object(clickhouse_connect, "get_client", return_value=fake_client) as get_client,
+        mock.patch("snuba.clickhouse.connect.get_pool_manager"),
+    ):
+        client = pool._new_client()
 
-    new_client.assert_called_once_with(use_database=False)
-
-
-def test_regular_query_uses_current_database() -> None:
-    client = mock.Mock()
-    client.query.return_value = FakeQueryResult(result_set=[[1]])
-    pool = ClickhouseConnectPool(
-        host="host",
-        user="test",
-        password="test",
-        database="snuba_test",
-    )
-
-    with mock.patch.object(pool, "_new_client", return_value=client) as new_client:
-        pool.execute("SELECT 1")
-
-    new_client.assert_called_once_with(query_limit=None)
+    assert client is fake_client
+    assert get_client.call_args.kwargs["database"] == "snuba_test"
 
 
 def test_execute_sets_native_format_for_embedded_insert_sql() -> None:
@@ -320,19 +310,6 @@ def test_too_many_simultaneous_queries_not_retried() -> None:
     assert client.query.call_count == 1
 
 
-def test_shared_pool_uses_urllib3_retry() -> None:
-    from snuba.clickhouse.connect import _TRANSPORT_RETRY, _close_pools, _shared_pool
-
-    with mock.patch("snuba.clickhouse.connect.get_pool_manager") as get_pool_manager:
-        get_pool_manager.return_value = mock.Mock()
-        _close_pools()
-        _shared_pool(None, False)
-        assert get_pool_manager.call_args.kwargs["retries"] is _TRANSPORT_RETRY
-        assert _TRANSPORT_RETRY.total == 2
-        assert _TRANSPORT_RETRY.connect == 2
-        assert _TRANSPORT_RETRY.read == 2
-
-
 def test_execute_robust_retries_too_many_simultaneous_queries() -> None:
     # execute_robust must keep the old native-pool tenacity for concurrent load.
     from clickhouse_connect.driver.exceptions import DatabaseError
@@ -407,33 +384,6 @@ def test_command_does_not_query() -> None:
     assert result.meta == []
 
 
-def test_new_client_defers_database_until_after_connect() -> None:
-    import clickhouse_connect
-
-    # clickhouse-connect attaches the client database to its autoconnect
-    # probes. Passing it into get_client fails hard when the DB is missing
-    # (test bootstrap, migrations). Mirror the native driver: connect first,
-    # then set the default database for subsequent queries.
-    pool = ClickhouseConnectPool(
-        host="host",
-        user="test",
-        password="test",
-        database="snuba_test",
-    )
-    fake_client = mock.Mock()
-
-    with (
-        mock.patch.object(clickhouse_connect, "get_client", return_value=fake_client) as get_client,
-        mock.patch("snuba.clickhouse.connect.get_pool_manager"),
-    ):
-        client = pool._new_client()
-
-    assert client is fake_client
-    _, kwargs = get_client.call_args
-    assert "database" not in kwargs
-    assert fake_client.database == "snuba_test"
-
-
 def test_timeouts_are_passed_through() -> None:
     import clickhouse_connect
 
@@ -458,8 +408,7 @@ def test_timeouts_are_passed_through() -> None:
     assert kwargs["send_receive_timeout"] == 300000
     assert kwargs["connect_timeout"] == 60
     assert kwargs["compress"] == "lz4"
-    # Query-level retries stay off; urllib3 Retry on the pool handles blips.
-    assert kwargs["query_retries"] == 0
+    assert kwargs["query_retries"] == 2
 
 
 def test_send_receive_timeout_defaults_when_profile_has_none() -> None:
@@ -507,6 +456,7 @@ def test_timeout_options_override_constructor_values() -> None:
             {
                 "clickhouse_connect_connect_timeout": 7,
                 "clickhouse_connect_send_receive_timeout": 99,
+                "clickhouse_connect_query_retries": 0,
             },
         ),
         mock.patch.object(clickhouse_connect, "get_client") as get_client,
@@ -517,6 +467,7 @@ def test_timeout_options_override_constructor_values() -> None:
     _, kwargs = get_client.call_args
     assert kwargs["connect_timeout"] == 7
     assert kwargs["send_receive_timeout"] == 99
+    assert kwargs["query_retries"] == 0
 
 
 def test_read_query_client_settings_use_25s_timeout() -> None:
@@ -606,7 +557,7 @@ def test_totals_jsoncompact_uses_original_query_id_and_inherits_settings() -> No
     ).encode()
 
     pool = _make_pool(client)
-    pool.execute_with_totals(
+    result = pool.execute_with_totals(
         "SELECT g, sum(v) AS s FROM t GROUP BY g WITH TOTALS",
         query_id="abc-123",
         settings={"max_execution_time": 30},
@@ -616,6 +567,7 @@ def test_totals_jsoncompact_uses_original_query_id_and_inherits_settings() -> No
     assert kwargs["fmt"] == "JSONCompact"
     assert kwargs["settings"]["query_id"] == "abc-123"
     assert kwargs["settings"]["max_execution_time"] == 30
+    assert result.query_id == "abc-123"
 
 
 def test_execute_with_totals_honors_capture_trace() -> None:

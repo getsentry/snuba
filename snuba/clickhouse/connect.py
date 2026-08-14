@@ -26,7 +26,6 @@ from clickhouse_connect.driver.httputil import all_managers, get_pool_manager
 from clickhouse_connect.driver.query import limit_re, select_re
 from sentry_sdk import traces
 from urllib3.poolmanager import PoolManager
-from urllib3.util.retry import Retry
 
 from snuba import environment, settings
 from snuba.clickhouse.error_codes import ErrorCodes
@@ -44,10 +43,6 @@ from snuba.utils.sentry import SENTRY_OP
 
 logger = logging.getLogger("snuba.clickhouse")
 metrics = MetricsWrapper(environment.metrics, "clickhouse.connect")
-
-# Connect/read blips: 2 retries = 3 attempts, 0.1s backoff. Status retries stay
-# off so ClickHouse 4xx/5xx application errors are not replayed.
-_TRANSPORT_RETRY = Retry(total=2, connect=2, read=2, backoff_factor=0.1, status=0)
 
 DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS = 60 * 60  # 1h fallback when profile timeout is None
 DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
@@ -75,7 +70,6 @@ def _shared_pool(ca_certs: str | None, verify: bool) -> PoolManager:
                     "clickhouse_connect_pool_size", settings.CLICKHOUSE_MAX_POOL_SIZE
                 ),
                 num_pools=16,
-                retries=_TRANSPORT_RETRY,
             )
             _pool_managers[key] = manager
         return manager
@@ -208,7 +202,7 @@ class ClickhouseConnectPool(ClickhousePool):
         self.client_settings = client_settings
         self.query_limit = query_limit
 
-    def _new_client(self, use_database: bool = True, query_limit: int | None = None) -> Client:
+    def _new_client(self, query_limit: int | None = None) -> Client:
         connect_timeout = (
             get_option("clickhouse_connect_connect_timeout", 0) or self.connect_timeout
         )
@@ -228,20 +222,12 @@ class ClickhouseConnectPool(ClickhousePool):
                 "server.port": str(self.port),
             },
         ):
-            # Do not pass ``database`` into get_client. clickhouse-connect's
-            # autoconnect probes ``system.settings`` with the client database
-            # attached; if that database is missing (test bootstrap creates
-            # ``snuba_test`` via a pool opened on ``default``, migrations that
-            # recreate DBs, etc.) client construction fails with
-            # UNKNOWN_DATABASE before any user query runs. The native driver
-            # never required the database to exist at connect time. Create the
-            # client without a database context, then set it for subsequent
-            # queries/inserts.
             client = clickhouse_connect.get_client(
                 host=self.host,
                 port=self.port,
                 username=self.user,
                 password=self.password,
+                database=self.database,
                 interface="https" if self.secure else "http",
                 secure=self.secure,
                 verify=bool(self.verify),
@@ -252,14 +238,10 @@ class ClickhouseConnectPool(ClickhousePool):
                 pool_mgr=_shared_pool(self.ca_certs, bool(self.verify)),
                 # Per-call override avoids mutating shared/cached pool state.
                 query_limit=self.query_limit if query_limit is None else query_limit,
-                # Query-level retries stay off. urllib3 Retry on the shared
-                # pool handles connect/read blips once, not 3 * (query_retries+1).
-                query_retries=0,
+                query_retries=get_option("clickhouse_connect_query_retries", 2),
                 autogenerate_session_id=False,
                 compress="lz4",
             )
-            if use_database and self.database:
-                client.database = self.database
             return client
 
     def _build_query_settings(
@@ -442,6 +424,7 @@ class ClickhouseConnectPool(ClickhousePool):
                 meta=meta,
                 profile=self._profile_from_statistics(payload),
                 trace_output="",
+                query_id=str(payload.get("query_id") or query_id or ""),
             )
 
         if robust:
@@ -597,10 +580,9 @@ class ClickhouseConnectPool(ClickhousePool):
         params: Params = None,
         settings: Mapping[str, Any] | None = None,
         query_id: str | None = None,
-        use_database: bool = True,
     ) -> ClickhouseResult:
         with self._translate_clickhouse_errors():
-            client = self._new_client(use_database=use_database)
+            client = self._new_client()
             query_settings = self._build_query_settings(settings, query_id, False)
             with _query_span(statement, query_id):
                 client.command(
