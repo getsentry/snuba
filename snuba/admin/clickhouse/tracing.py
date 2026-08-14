@@ -20,6 +20,7 @@ from snuba.admin.clickhouse.trace_log_parsing import (
     TracingSummary,
     summarize_trace_output,
 )
+from snuba.clickhouse.connect import ClickhouseConnectPool
 from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.native import ClickhousePool, ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings
@@ -89,7 +90,7 @@ def run_query_and_get_trace(
     # Prefer clickhouse-connect's client-side query_limit. Native pools do not set
     # this instance attribute and are left alone.
     if "query_limit" in getattr(connection, "__dict__", {}):
-        connection.query_limit = MAX_TRACING_QUERY_LIMIT
+        cast(ClickhouseConnectPool, connection).query_limit = MAX_TRACING_QUERY_LIMIT
 
     query_result = connection.execute(
         query=query_without_settings,
