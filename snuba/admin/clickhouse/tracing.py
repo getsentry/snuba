@@ -91,28 +91,35 @@ def _split_settings_list(text: str) -> list[str]:
     return parts
 
 
+def _find_trailing_settings(query: str) -> int | None:
+    """Index of the last unquoted standalone SETTINGS token, if any."""
+    upper = query.upper()
+    search_end = len(upper)
+    while True:
+        settings_at = upper.rfind("SETTINGS", 0, search_end)
+        if settings_at == -1:
+            return None
+
+        before = upper[settings_at - 1] if settings_at > 0 else " "
+        after_at = settings_at + len("SETTINGS")
+        after = upper[after_at] if after_at < len(upper) else " "
+        if before in " \t\n\r;" and after in " \t\n\r" and _quotes_balanced(query[:settings_at]):
+            return settings_at
+
+        search_end = settings_at
+
+
 def _extract_settings_clause(query: str) -> tuple[str, dict[str, str], bool]:
     """Move a trailing SETTINGS clause into the driver settings dict.
 
     Returns (sql, settings, apply_query_limit). apply_query_limit is False when a
     SETTINGS clause remains in the SQL, so the driver must not append LIMIT after it.
     """
-    upper = query.upper()
-    settings_at = upper.rfind("SETTINGS")
-    if settings_at == -1:
+    settings_at = _find_trailing_settings(query)
+    if settings_at is None:
         return query, {}, True
 
-    # Require a standalone SETTINGS token, not a substring match.
-    before = upper[settings_at - 1] if settings_at > 0 else " "
     after_at = settings_at + len("SETTINGS")
-    after = upper[after_at] if after_at < len(upper) else " "
-    if before not in " \t\n\r;" or after not in " \t\n\r":
-        return query, {}, True
-
-    # SETTINGS inside an open string is not a trailing clause.
-    if not _quotes_balanced(query[:settings_at]):
-        return query, {}, True
-
     try:
         settings = {}
         for part in _split_settings_list(query[after_at:]):

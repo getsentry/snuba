@@ -57,6 +57,14 @@ def test_extract_settings_clause_moves_settings() -> None:
     assert settings == {}
     assert apply_limit is True
 
+    # A later quoted SETTINGS must not hide a real trailing clause.
+    body, settings, apply_limit = _extract_settings_clause(
+        "SELECT 1 WHERE col = 'has SETTINGS inside' SETTINGS max_threads = 4"
+    )
+    assert body == "SELECT 1 WHERE col = 'has SETTINGS inside'"
+    assert settings == {"max_threads": "4"}
+    assert apply_limit is True
+
     # Malformed trailing SETTINGS: leave SQL alone and disable driver LIMIT append.
     body, settings, apply_limit = _extract_settings_clause("SELECT 1 SETTINGS max_threads")
     assert body == "SELECT 1 SETTINGS max_threads"
