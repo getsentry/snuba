@@ -16,25 +16,24 @@ def test_scrub() -> None:
     assert scrub_row((1, 2, 3, "release name")) == (1, 2, 3, "<scrubbed: str>")
 
 
-def test_limit_tracing_query_adds_limit() -> None:
+def test_limit_tracing_query_adds_limit_when_missing() -> None:
     assert _limit_tracing_query("SELECT * FROM events") == "SELECT * FROM events LIMIT 10000"
     assert _limit_tracing_query("SELECT 1 SETTINGS max_threads = 10") == (
         "SELECT 1 LIMIT 10000 SETTINGS max_threads = 10"
     )
 
 
-def test_limit_tracing_query_preserves_smaller_limit() -> None:
-    query = "SELECT * FROM events LIMIT 100"
-    assert _limit_tracing_query(query) == query
-
-
-def test_limit_tracing_query_caps_larger_limit() -> None:
+def test_limit_tracing_query_preserves_existing_top_level_limit() -> None:
+    assert _limit_tracing_query("SELECT * FROM events LIMIT 100") == (
+        "SELECT * FROM events LIMIT 100"
+    )
     assert _limit_tracing_query("SELECT * FROM events LIMIT 20000") == (
-        "SELECT * FROM events LIMIT 10000"
+        "SELECT * FROM events LIMIT 20000"
     )
     assert _limit_tracing_query("SELECT * FROM events LIMIT 5, 20000") == (
-        "SELECT * FROM events LIMIT 5, 10000"
+        "SELECT * FROM events LIMIT 5, 20000"
     )
+    assert _limit_tracing_query("SELECT 1 LIMIT 5 BY x") == "SELECT 1 LIMIT 5 BY x"
 
 
 def test_limit_tracing_query_ignores_nested_and_quoted_limits() -> None:
@@ -42,10 +41,6 @@ def test_limit_tracing_query_ignores_nested_and_quoted_limits() -> None:
         "SELECT * FROM (SELECT * FROM events LIMIT 1) LIMIT 10000"
     )
     assert _limit_tracing_query("SELECT 'LIMIT 1'") == "SELECT 'LIMIT 1' LIMIT 10000"
-
-
-def test_limit_tracing_query_ignores_limit_by() -> None:
-    assert _limit_tracing_query("SELECT 1 LIMIT 5 BY x") == "SELECT 1 LIMIT 5 BY x LIMIT 10000"
 
 
 def test_summarize_from_query_log() -> None:
