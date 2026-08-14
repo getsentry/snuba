@@ -48,7 +48,6 @@ class FakeQueryResult:
 
 
 def _make_pool(client: mock.Mock, **kwargs: Any) -> ClickhouseConnectPool:
-
     client.server_tz = UTC
     pool = ClickhouseConnectPool(
         host="host",
