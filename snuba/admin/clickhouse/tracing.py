@@ -100,6 +100,8 @@ def run_query_and_get_trace(
     if not trace_output.strip() and summarized_trace_output.query_summaries:
         trace_output = format_trace_output_from_summary(summarized_trace_output)
 
+    query_summary = next(iter(summarized_trace_output.query_summaries.values()), None)
+
     return TraceOutput(
         trace_output=trace_output,
         summarized_trace_output=summarized_trace_output,
@@ -110,14 +112,7 @@ def run_query_and_get_trace(
         profile_events_meta=[],
         profile_events_profile={},
         query_id=query_id,
-        executed_query=next(
-            (
-                summary.query
-                for summary in summarized_trace_output.query_summaries.values()
-                if summary.is_distributed and summary.query
-            ),
-            "",
-        ),
+        executed_query=query_summary.query if query_summary else "",
     )
 
 
@@ -250,13 +245,10 @@ def summarize_from_query_log(
                 is_distributed=bool(is_initial_query),
                 query_id=str(row_query_id),
                 execute_summaries=[execute],
-                query=str(query_text) if query_text else None,
+                query=str(query_text or ""),
             )
         else:
-            if existing.execute_summaries is None:
-                existing.execute_summaries = [execute]
-            else:
-                existing.execute_summaries.append(execute)
+            existing.execute_summaries.append(execute)
             if query_text and not existing.query:
                 existing.query = str(query_text)
 

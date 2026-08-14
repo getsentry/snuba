@@ -213,7 +213,6 @@ def test_merge_query_log_summary_adds_missing_nodes_and_execute() -> None:
                 node_name="query-node",
                 is_distributed=True,
                 query_id="qid-1",
-                execute_summaries=None,
             )
         }
     )
