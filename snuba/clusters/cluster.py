@@ -120,7 +120,7 @@ class ClickhouseClientSettings(Enum):
 @dataclass(frozen=True)
 class ClickhouseNode:
     host_name: str
-    native_port: int
+    tcp_port: int
     shard: int | None = None
     replica: int | None = None
     # Port used to reach this node. Optional for nodes that never open a
@@ -129,7 +129,7 @@ class ClickhouseNode:
     port: int | None = None
 
     def __str__(self) -> str:
-        return f"{self.host_name}:{self.native_port}"
+        return f"{self.host_name}:{self.tcp_port}"
 
 
 class ClickhouseNodeType(Enum):
@@ -246,7 +246,7 @@ class ConnectionCache:
                     http_port=(
                         node.port if node.port is not None else DEFAULT_CLICKHOUSE_HTTP_PORT
                     ),
-                    native_port=node.native_port,
+                    tcp_port=node.tcp_port,
                     user=user,
                     password=password,
                     database=database,
@@ -465,22 +465,19 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
     def get_connection_id(self) -> ConnectionId:
         return ConnectionId(
             hostname=self.__query_node.host_name,
-            tcp_port=self.__query_node.native_port,
+            tcp_port=self.__query_node.tcp_port,
             http_port=self.__http_port,
             database_name=self.__database,
         )
 
     def __get_cluster_nodes(self, cluster_name: str) -> Sequence[ClickhouseNode]:
-        # system.clusters only reports the native port. The cluster's configured
-        # HTTP port is an Envoy intercept port that only fronts the cluster
-        # endpoint (the query node); individual nodes discovered here are
-        # addressed directly, bypassing Envoy, and serve HTTP on the well-known
-        # default port. Stamp that on each node so the HTTP driver connects to a
-        # port the node actually listens on.
+        # system.clusters reports the TCP port. Envoy only fronts the query
+        # endpoint; replicas are addressed directly on 8123.
+
         return [
             ClickhouseNode(
                 host_name=host[0],
-                native_port=host[1],
+                tcp_port=host[1],
                 shard=host[2],
                 replica=host[3],
                 port=DEFAULT_CLICKHOUSE_HTTP_PORT,

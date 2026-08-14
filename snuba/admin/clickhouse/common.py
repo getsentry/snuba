@@ -32,6 +32,12 @@ class InvalidStorageError(SerializableException):
     pass
 
 
+def _node_connect_port(node: ClickhouseNode, cluster: ClickhouseCluster) -> int:
+    if node.host_name == cluster.get_query_node().host_name:
+        return cluster.get_http_port()
+    return node.port if node.port is not None else DEFAULT_CLICKHOUSE_HTTP_PORT
+
+
 def is_valid_node(host: str, port: int, cluster: ClickhouseCluster, storage_name: str) -> bool:
     nodes = [
         cluster.get_query_node(),
@@ -49,7 +55,9 @@ def is_valid_node(host: str, port: int, cluster: ClickhouseCluster, storage_name
             },
         ) from e
 
-    return any(node.host_name == host and node.native_port == port for node in nodes)
+    return any(
+        node.host_name == host and _node_connect_port(node, cluster) == port for node in nodes
+    )
 
 
 def _get_storage(storage_name: str) -> ReadableTableStorage:
@@ -77,7 +85,7 @@ def _validate_node(
                 "host": clickhouse_host,
                 "port": clickhouse_port,
                 "query_host": cluster.get_query_node().host_name,
-                "query_port": cluster.get_query_node().native_port,
+                "query_port": cluster.get_http_port(),
             },
         )
 
@@ -102,26 +110,15 @@ def _build_validated_pool(
     # this module. The regression test
     # test_no_direct_clickhouse_pool_construction_in_admin enforces this.
     _validate_node(clickhouse_host, clickhouse_port, cluster, storage_name)
-    # Go through the shared connection cache so admin uses the same
-    # clickhouse-connect pool path as the cluster's own connections.
-    #
-    # cluster.get_http_port() is the port of the cluster's configured query
-    # endpoint, which may be a load balancer / proxy on a non-default port. It
-    # is correct *only* when we are connecting to that endpoint — i.e. the query
-    # node, the same host the normal read path reaches on
-    # cluster.get_http_port() (this is what get_ro_query_node_connection, and
-    # thus the tracing/querylog/cardinality tools, rely on). For any other host
-    # — a specific individual node selected by host in the admin tools — that
-    # port does not apply: an individual node serves HTTP on the well-known
-    # default port, so use that instead.
+    # Query-endpoint traffic uses the cluster Envoy listen port. Replica
+    # (by-host) traffic uses 8123 on that node.
     query_node = cluster.get_query_node()
-    is_query_node = (
-        clickhouse_host == query_node.host_name and clickhouse_port == query_node.native_port
-    )
-    http_port = cluster.get_http_port() if is_query_node else DEFAULT_CLICKHOUSE_HTTP_PORT
+    envoy_port = cluster.get_http_port()
+    is_query_endpoint = clickhouse_host == query_node.host_name and clickhouse_port == envoy_port
+    connect_port = envoy_port if is_query_endpoint else DEFAULT_CLICKHOUSE_HTTP_PORT
     return connection_cache.get_node_connection(
         client_settings,
-        ClickhouseNode(clickhouse_host, clickhouse_port, port=http_port),
+        ClickhouseNode(clickhouse_host, clickhouse_port, port=connect_port),
         username,
         password,
         database,
@@ -206,7 +203,7 @@ def get_ro_query_node_connection(
     cluster = storage.get_cluster()
     connection_id = cluster.get_connection_id()
     connection = get_ro_node_connection(
-        connection_id.hostname, connection_id.tcp_port, storage_name, client_settings
+        connection_id.hostname, cluster.get_http_port(), storage_name, client_settings
     )
 
     CLUSTER_CONNECTIONS[key] = connection

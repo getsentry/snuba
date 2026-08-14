@@ -352,17 +352,8 @@ def test_clusterless_rejects_unvalidated_host(
 )
 def test_by_host_connection_uses_default_http_port(helper_name: str) -> None:
     """
-    These helpers connect to a *specific individual* node by hostname (not the
-    cluster's query endpoint — see test_query_node_connection_uses_cluster_http_port).
-    The cluster's configured http_port belongs to the query endpoint (which may
-    sit behind a proxy/load balancer), not to an individual node, so a by-host
-    HTTP connection must target the node's own ClickHouse HTTP listener — the
-    well-known default port — rather than cluster.get_http_port().
-
-    Regression: the clickhouse-connect (HTTP) driver path passed
-    cluster.get_http_port(), which would send admin by-host traffic to the
-    wrong port. The native driver is unaffected (it uses the native port), but
-    the node we build must carry the default HTTP port for the HTTP driver.
+    By-host helpers target a replica. Replicas listen on 8123, not the
+    cluster Envoy port from get_http_port().
     """
     from snuba.admin.clickhouse import common
     from snuba.clusters.cluster import (

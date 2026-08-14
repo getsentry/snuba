@@ -190,9 +190,9 @@ class ClickhouseConnectPool(ClickhousePool):
         password: str,
         database: str,
         http_port: int = DEFAULT_CLICKHOUSE_HTTP_PORT,
-        # Native/tcp port is kept for node identity (system.clusters, migration
-        # state keys). HTTP is used for the actual connection.
-        native_port: int | None = None,
+        # TCP port is kept for node identity (system.clusters, migration
+        # state keys). Connections use http_port.
+        tcp_port: int | None = None,
         secure: bool = False,
         ca_certs: str | None = None,
         verify: bool | None = False,
@@ -204,8 +204,8 @@ class ClickhouseConnectPool(ClickhousePool):
         query_limit: int = 0,
     ) -> None:
         self.host = host
-        # Callers still key nodes by the native port (e.g. get_column_states).
-        self.port = native_port if native_port is not None else http_port
+        # Callers still key nodes by the TCP port (e.g. get_column_states).
+        self.port = tcp_port if tcp_port is not None else http_port
         self.http_port = http_port
         self.user = user
         self.password = password
