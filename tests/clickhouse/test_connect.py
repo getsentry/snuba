@@ -621,19 +621,18 @@ def test_totals_jsoncompact_decodes_value_types() -> None:
     result = reader.execute(cast(FormattedQuery, FakeFormattedQuery()), with_totals=True)
 
     row = result["data"][0]
-    # DateTime string -> datetime -> ISO string via the reader's transform.
-    assert row["ts"] == "2023-01-02T03:04:05+00:00"
+    assert row["ts"] == datetime(2023, 1, 2, 3, 4, 5)
     assert row["arr"] == [1, 2]
     assert row["opt"] is None
     totals = result["totals"]
-    assert totals["ts"] == "1970-01-01T00:00:00+00:00"
+    assert totals["ts"] == datetime(1970, 1, 1, 0, 0, 0)
     assert totals["cnt"] == 10
     assert totals["opt"] == 5
 
 
 def test_coerce_temporal_only_touches_date_and_datetime() -> None:
-    # Date/DateTime strings become objects (else the reader's transforms crash on a
-    # str); Nullable is unwrapped; every other type passes through untouched.
+    # Date/DateTime strings become objects; Nullable is unwrapped; every other
+    # type passes through untouched.
     from snuba.clickhouse.connect import _coerce_temporal
 
     assert _coerce_temporal("2023-01-02 03:04:05", "DateTime") == datetime(2023, 1, 2, 3, 4, 5)
@@ -761,44 +760,14 @@ def test_typed_select_keeps_existing_limit() -> None:
     assert "LIMIT 10000" not in sql
 
 
-def test_connect_type_names_drive_reader_transforms() -> None:
-    # The connect pool exposes clickhouse-connect's column_type.name in the
-    # result meta, and the driver-agnostic ClickhouseReader runs that through
-    # the same Date / DateTime / UUID regex transforms used for the
-    # driver. This pins that clickhouse-connect's type-name format matches what
-    # those regexes expect (including parametrized types like DateTime('UTC')
-    # and Nullable(UUID)), so transformations are not silently skipped on the
-    # HTTP path.
-
-    from clickhouse_connect.datatypes.registry import get_from_name
-
+def test_reader_keeps_driver_value_types() -> None:
     from snuba.clickhouse.reader import ClickhouseReader
 
     class FakeFormattedQuery:
         def get_sql(self) -> str:
             return "SELECT d, dt, dt_tz, uid, nuid"
 
-    # Column types named exactly as clickhouse-connect produces them. The
-    # assertion documents that clickhouse-connect uses the canonical ClickHouse
-    # type strings, so the reader regexes
-    # match identically for both drivers.
-    col_types = [
-        get_from_name("Date"),
-        get_from_name("DateTime"),
-        get_from_name("DateTime('UTC')"),
-        get_from_name("UUID"),
-        get_from_name("Nullable(UUID)"),
-    ]
-    assert [c.name for c in col_types] == [
-        "Date",
-        "DateTime",
-        "DateTime('UTC')",
-        "UUID",
-        "Nullable(UUID)",
-    ]
-
     client = mock.Mock()
-    # Reader always requests column types, so the connect pool uses JSONCompact.
     client.raw_query.return_value = json.dumps(
         {
             "meta": [
@@ -824,13 +793,10 @@ def test_connect_type_names_drive_reader_transforms() -> None:
     reader = ClickhouseReader(cache_partition_id=None, client=pool, query_settings_prefix=None)
     result = reader.execute(cast(FormattedQuery, FakeFormattedQuery()))
 
-    # Date/DateTime (incl. the parametrized tz variant) become ISO strings and
-    # UUID (incl. Nullable) becomes a string. Had the regexes failed to match
-    # the connect type names, these would still be the original objects.
     row = result["data"][0]
-    assert row["d"] == "2023-01-02T00:00:00+00:00"
-    assert row["dt"] == "2023-01-02T03:04:05+00:00"
-    assert row["dt_tz"] == "2023-01-02T03:04:05+00:00"
+    assert row["d"] == date(2023, 1, 2)
+    assert row["dt"] == datetime(2023, 1, 2, 3, 4, 5)
+    assert row["dt_tz"] == datetime(2023, 1, 2, 3, 4, 5)
     assert row["uid"] == "00000000-0000-0000-0000-000000000001"
     assert row["nuid"] == "00000000-0000-0000-0000-000000000001"
     client.query.assert_not_called()
