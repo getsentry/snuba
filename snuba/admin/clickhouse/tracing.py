@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -32,6 +33,62 @@ from snuba.utils.constants import (
 
 logger = structlog.get_logger().bind(module=__name__)
 
+MAX_TRACING_QUERY_LIMIT = 10_000
+
+
+def _limit_tracing_query(query: str, max_limit: int = MAX_TRACING_QUERY_LIMIT) -> str:
+    """Cap a top-level numeric LIMIT, or add one before SETTINGS/FORMAT."""
+    unquoted_query = re.sub(
+        r"'(?:''|\\.|[^'])*'|\"(?:\"\"|\\.|[^\"])*\"|`(?:``|\\.|[^`])*`",
+        lambda match: " " * len(match.group()),
+        query,
+    )
+    depth = 0
+    top_level_tokens: list[re.Match[str]] = []
+    for token in re.finditer(r"[()]|\b[A-Za-z_]+\b|\b\d+\b|,", unquoted_query):
+        if token.group() == "(":
+            depth += 1
+        elif token.group() == ")":
+            depth -= 1
+        elif depth == 0:
+            top_level_tokens.append(token)
+
+    for index, token in enumerate(top_level_tokens):
+        if token.group().upper() != "LIMIT" or index + 1 >= len(top_level_tokens):
+            continue
+
+        first_value = top_level_tokens[index + 1]
+        if not first_value.group().isdigit():
+            continue
+
+        limit_value = first_value
+        next_index = index + 2
+        if next_index < len(top_level_tokens) and top_level_tokens[next_index].group() == ",":
+            if next_index + 1 >= len(top_level_tokens):
+                continue
+            limit_value = top_level_tokens[next_index + 1]
+            next_index += 2
+
+        if (
+            next_index < len(top_level_tokens)
+            and top_level_tokens[next_index].group().upper() == "BY"
+        ):
+            continue
+
+        if int(limit_value.group()) <= max_limit:
+            return query
+        return f"{query[: limit_value.start()]}{max_limit}{query[limit_value.end() :]}"
+
+    insertion_point = len(query)
+    for token in top_level_tokens:
+        if token.group().upper() in {"FORMAT", "SETTINGS"}:
+            insertion_point = token.start()
+            break
+
+    prefix = query[:insertion_point].rstrip()
+    suffix = query[insertion_point:].lstrip()
+    return f"{prefix} LIMIT {max_limit}" + (f" {suffix}" if suffix else "")
+
 
 @dataclass
 class TraceOutput:
@@ -50,6 +107,7 @@ def run_query_and_get_trace(
     storage_name: str, query: str, settings: Mapping[str, Any] | None = None
 ) -> TraceOutput:
     validate_ro_query(query)
+    query = _limit_tracing_query(query)
     connection = get_ro_query_node_connection(storage_name, ClickhouseClientSettings.TRACING)
     query_result = connection.execute(
         query=query,

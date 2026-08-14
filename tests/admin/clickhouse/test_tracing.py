@@ -2,6 +2,7 @@ from unittest.mock import MagicMock, patch
 
 from snuba.admin.clickhouse.trace_log_parsing import ExecuteSummary, QuerySummary, TracingSummary
 from snuba.admin.clickhouse.tracing import (
+    _limit_tracing_query,
     format_trace_output_from_summary,
     merge_query_log_summary,
     run_query_and_get_trace,
@@ -13,6 +14,34 @@ from snuba.clickhouse.native import ClickhouseResult
 
 def test_scrub() -> None:
     assert scrub_row((1, 2, 3, "release name")) == (1, 2, 3, "<scrubbed: str>")
+
+
+def test_limit_tracing_query_adds_limit() -> None:
+    assert _limit_tracing_query("SELECT * FROM events") == "SELECT * FROM events LIMIT 10000"
+    assert _limit_tracing_query("SELECT 1 SETTINGS max_threads = 10") == (
+        "SELECT 1 LIMIT 10000 SETTINGS max_threads = 10"
+    )
+
+
+def test_limit_tracing_query_preserves_smaller_limit() -> None:
+    query = "SELECT * FROM events LIMIT 100"
+    assert _limit_tracing_query(query) == query
+
+
+def test_limit_tracing_query_caps_larger_limit() -> None:
+    assert _limit_tracing_query("SELECT * FROM events LIMIT 20000") == (
+        "SELECT * FROM events LIMIT 10000"
+    )
+    assert _limit_tracing_query("SELECT * FROM events LIMIT 5, 20000") == (
+        "SELECT * FROM events LIMIT 5, 10000"
+    )
+
+
+def test_limit_tracing_query_ignores_nested_and_quoted_limits() -> None:
+    assert _limit_tracing_query("SELECT * FROM (SELECT * FROM events LIMIT 1)") == (
+        "SELECT * FROM (SELECT * FROM events LIMIT 1) LIMIT 10000"
+    )
+    assert _limit_tracing_query("SELECT 'LIMIT 1'") == "SELECT 'LIMIT 1' LIMIT 10000"
 
 
 def test_summarize_from_query_log() -> None:
@@ -316,6 +345,7 @@ def test_run_query_and_get_trace_uses_query_log_when_wire_trace_empty() -> None:
     # No client-side query_id was forced onto the execute call.
     assert connection.execute.call_args.kwargs.get("query_id") in (None, "")
     assert connection.execute.call_args.kwargs["capture_trace"] is True
+    assert connection.execute.call_args.kwargs["query"] == "SELECT 1 LIMIT 10000"
 
 
 def test_run_query_and_get_trace_keeps_native_wire_trace() -> None:
