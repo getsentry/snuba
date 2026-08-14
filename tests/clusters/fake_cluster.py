@@ -59,6 +59,16 @@ class FakeClickhousePool(ClickhousePool):
             capture_trace=capture_trace,
         )
 
+    def command(
+        self,
+        statement: str,
+        params: Params = None,
+        settings: Mapping[str, Any] | None = None,
+        query_id: str | None = None,
+    ) -> ClickhouseResult:
+        self.__queries.append(statement)
+        return ClickhouseResult([])
+
     def close(self) -> None:
         return None
 

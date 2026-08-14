@@ -62,6 +62,8 @@ def _run_sql_query_on_host(
                 clickhouse_host, clickhouse_port, storage_name, settings
             )
         )
+        if sudo and _is_command_statement(sql):
+            return clusterless_connection.command(sql)
         return clusterless_connection.execute(query=sql, with_column_types=True)
 
     connection = (
@@ -69,6 +71,8 @@ def _run_sql_query_on_host(
         if not sudo
         else get_sudo_node_connection(clickhouse_host, clickhouse_port, storage_name, settings)
     )
+    if sudo and _is_command_statement(sql):
+        return connection.command(sql)
     return connection.execute(query=sql, with_column_types=True)
 
 
@@ -321,6 +325,15 @@ def is_query_drop(sql_query: str) -> bool:
     sql_query = " ".join(sql_query.split())
     match = DROP_TABLE_QUERY_RE.match(sql_query)
     return bool(match)
+
+
+def _is_command_statement(sql_query: str) -> bool:
+    return (
+        is_system_command(sql_query)
+        or is_query_alter(sql_query)
+        or is_query_optimize(sql_query)
+        or is_query_drop(sql_query)
+    )
 
 
 def validate_query(

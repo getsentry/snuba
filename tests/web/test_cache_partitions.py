@@ -41,6 +41,15 @@ class _StubPool(ClickhousePool):
     ) -> ClickhouseResult:
         return self.execute(query)
 
+    def command(
+        self,
+        statement: str,
+        params: Params = None,
+        settings: Mapping[str, Any] | None = None,
+        query_id: str | None = None,
+    ) -> ClickhouseResult:
+        return ClickhouseResult()
+
     def close(self) -> None:
         return None
 

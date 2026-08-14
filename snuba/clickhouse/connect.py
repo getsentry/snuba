@@ -270,19 +270,6 @@ class ClickhouseConnectPool(ClickhousePool):
         normalized = query.lstrip().upper()
         return not normalized.startswith(("CREATE DATABASE", "DROP DATABASE"))
 
-    # Match clickhouse-connect's command classification. These statements do not
-    # return a result matrix; over HTTP the driver surfaces QuerySummary fields
-    # as fake columns, which snuba-admin treats as real column_names.
-    _COMMAND_RE = re.compile(
-        r"^\s*(CREATE|ALTER|SYSTEM|GRANT|REVOKE|CHECK|DETACH|ATTACH|DROP|"
-        r"DELETE|KILL|OPTIMIZE|SET|RENAME|TRUNCATE|USE)\b",
-        re.IGNORECASE,
-    )
-
-    @classmethod
-    def _is_command(cls, query: str) -> bool:
-        return cls._COMMAND_RE.search(query) is not None
-
     def _build_query_settings(
         self,
         settings: Mapping[str, Any] | None,
@@ -355,24 +342,6 @@ class ClickhouseConnectPool(ClickhousePool):
             query_limit=query_limit,
         )
         query_settings = self._build_query_settings(settings, query_id, capture_trace)
-
-        # DDL / SYSTEM / etc. do not return a result matrix. Route them through
-        # command() so QuerySummary fields are not mistaken for columns.
-        if self._is_command(query):
-            with _query_span(query, query_id) as span:
-                span.set_attribute("settings", json.dumps(query_settings, default=repr))
-                client.command(
-                    query,
-                    parameters=_driver_params(params),
-                    settings=query_settings,
-                )
-            return ClickhouseResult(
-                results=[],
-                meta=[] if with_column_types else None,
-                profile=ClickhouseProfile(blocks=0, bytes=0, elapsed=0.0, progress_bytes=0, rows=0),
-                trace_output="",
-                query_id=str(query_id or ""),
-            )
 
         # Prefer JSONCompact whenever column types are required. Native HTTP
         # responses omit the column header on zero-row results, which forced a
@@ -632,6 +601,32 @@ class ClickhouseConnectPool(ClickhousePool):
                 capture_trace,
             )
         )
+
+    def command(
+        self,
+        statement: str,
+        params: Params = None,
+        settings: Mapping[str, Any] | None = None,
+        query_id: str | None = None,
+    ) -> ClickhouseResult:
+        with self._translate_clickhouse_errors():
+            client = self._new_client(
+                use_database=self._query_uses_database(statement),
+            )
+            query_settings = self._build_query_settings(settings, query_id, False)
+            with _query_span(statement, query_id):
+                client.command(
+                    statement,
+                    parameters=_driver_params(params),
+                    settings=query_settings,
+                )
+            return ClickhouseResult(
+                results=[],
+                meta=[],
+                profile=ClickhouseProfile(blocks=0, bytes=0, elapsed=0.0, progress_bytes=0, rows=0),
+                trace_output="",
+                query_id=str(query_id or ""),
+            )
 
     def execute_explain(self, query: str) -> ClickhouseResult:
         with self._translate_clickhouse_errors():

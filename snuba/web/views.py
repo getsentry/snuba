@@ -94,7 +94,7 @@ def truncate_dataset(dataset: Dataset) -> None:
 
                 table = schema.get_local_table_name()
 
-                clickhouse.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
+                clickhouse.command(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
 
 
 def _add_compression_attrs(response: Response) -> Response:

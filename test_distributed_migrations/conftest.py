@@ -59,7 +59,7 @@ def pytest_configure() -> None:
         database_name = cluster_node["database"]
 
         # create the test database
-        clickhouse_cluster.get_query_connection(ClickhouseClientSettings.MIGRATE).execute(
+        clickhouse_cluster.get_query_connection(ClickhouseClientSettings.MIGRATE).command(
             f"CREATE DATABASE IF NOT EXISTS {database_name} ON CLUSTER {clickhouse_cluster.get_clickhouse_cluster_name()};"
         )
 

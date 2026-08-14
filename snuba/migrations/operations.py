@@ -134,7 +134,7 @@ class SqlOperation(ABC):
             logger.info(f"Executing op: {sql}")
             logger.info(f"Executing on {self.target.value} node: {node}")
         try:
-            connection.execute(sql, settings=self._settings)
+            connection.command(sql, settings=self._settings)
             # No polling needed - alter_sync=2 and mutations_sync=2 ensure ClickHouse
             # blocks until all replicas confirm completion
         except Exception:
@@ -155,7 +155,7 @@ class SqlOperation(ABC):
             if settings.LOG_MIGRATIONS:
                 logger.info(f"Executing on {self.target.value} node: {node}")
             try:
-                connection.execute(sql, settings=self._settings)
+                connection.command(sql, settings=self._settings)
             except Exception:
                 logger.exception(
                     f"Failed to execute operation on {self.storage_set}, target: {self.target}\n{sql}\n{self._settings}"
@@ -813,7 +813,7 @@ class RunSqlAsCode(GenericOperation):
         if operation._storage_set in storage_sets:
             sql = operation.format_sql()
             logger.info(f"Executing {sql}")
-            clickhouse.execute(sql)
+            clickhouse.command(sql)
 
     def description(self) -> str | None:
         return self._get_operation(None).format_sql()

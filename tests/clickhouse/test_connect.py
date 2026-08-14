@@ -403,11 +403,11 @@ def test_totals_malformed_json_wrapped() -> None:
         pool.execute_with_totals("SELECT g, sum(v) FROM t GROUP BY g WITH TOTALS")
 
 
-def test_system_command_returns_empty_meta() -> None:
+def test_command_does_not_query() -> None:
     client = mock.Mock()
     pool = _make_pool(client)
 
-    result = pool.execute("SYSTEM START MERGES", with_column_types=True)
+    result = pool.command("SYSTEM START MERGES")
 
     client.command.assert_called_once()
     client.query.assert_not_called()

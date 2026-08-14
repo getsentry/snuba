@@ -83,8 +83,8 @@ def create_databases() -> None:
             connection = clickhouse_cluster.get_node_connection(
                 ClickhouseClientSettings.MIGRATE, node
             )
-            connection.execute(f"DROP DATABASE IF EXISTS {database_name};")
-            connection.execute(f"CREATE DATABASE {database_name};")
+            connection.command(f"DROP DATABASE IF EXISTS {database_name};")
+            connection.command(f"CREATE DATABASE {database_name};")
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[Any]) -> None:
@@ -325,8 +325,8 @@ def _drop_tables() -> None:
 
         for node in nodes:
             connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
-            connection.execute(f"DROP DATABASE IF EXISTS {database_name};")
-            connection.execute(f"CREATE DATABASE {database_name};")
+            connection.command(f"DROP DATABASE IF EXISTS {database_name};")
+            connection.command(f"CREATE DATABASE {database_name};")
 
 
 @pytest.fixture

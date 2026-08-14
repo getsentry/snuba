@@ -123,7 +123,7 @@ class Runner:
             ClickhouseClientSettings.MIGRATE, local_node
         )
 
-        local_node_connection.execute(
+        local_node_connection.command(
             f"ALTER TABLE {LOCAL_TABLE_NAME} UPDATE status=%(status)s WHERE migration_id=%(migration_id)s",
             {"status": new_status.value, "migration_id": migration_id},
         )

@@ -81,6 +81,15 @@ class ClickhousePool(ABC):
     ) -> ClickhouseResult:
         raise NotImplementedError
 
+    def command(
+        self,
+        statement: str,
+        params: Params = None,
+        settings: Mapping[str, Any] | None = None,
+        query_id: str | None = None,
+    ) -> ClickhouseResult:
+        raise NotImplementedError
+
     def execute_explain(self, query: str) -> ClickhouseResult:
         """
         Run an EXPLAIN statement and return its single ``explain`` text column,

@@ -180,10 +180,10 @@ def copy_tables(
         target_connection = source_connection
 
     for ts in mergetree_tables:
-        target_connection.execute(ts.statement)
+        target_connection.command(ts.statement)
 
     for ts in non_mergetree_tables:
-        target_connection.execute(ts.statement)
+        target_connection.command(ts.statement)
 
     # Verify tables were created on all replicas
     missing_tables_by_host, verified_hosts_num = verify_tables_on_replicas(
