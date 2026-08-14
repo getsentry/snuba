@@ -726,6 +726,28 @@ def test_totals_jsoncompact_uses_original_query_id_and_inherits_settings() -> No
     assert kwargs["settings"]["max_execution_time"] == 30
 
 
+def test_execute_with_totals_honors_capture_trace() -> None:
+    # Reader forwards capture_trace into execute_with_totals; WITH TOTALS must set
+    # send_logs_level=trace the same way the plain JSONCompact path does.
+    client = mock.Mock()
+    client.raw_query.return_value = json.dumps(
+        {
+            "meta": [{"name": "g", "type": "UInt64"}, {"name": "s", "type": "UInt64"}],
+            "data": [[1, 10]],
+            "totals": [0, 10],
+        }
+    ).encode()
+
+    pool = _make_pool(client)
+    pool.execute_with_totals(
+        "SELECT g, sum(v) AS s FROM t GROUP BY g WITH TOTALS",
+        capture_trace=True,
+    )
+
+    _, kwargs = client.raw_query.call_args
+    assert kwargs["settings"]["send_logs_level"] == "trace"
+
+
 def test_totals_jsoncompact_decodes_value_types() -> None:
     # JSONCompact values decode to the expected Python types. Covers DateTime
     # (string -> datetime so the reader can ISO-format it), Array, and Nullable.

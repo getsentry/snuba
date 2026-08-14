@@ -497,6 +497,8 @@ class ClickhouseConnectPool(ClickhousePool):
             json_settings["output_format_json_quote_64bit_integers"] = 0
             if query_id is not None:
                 json_settings["query_id"] = query_id
+            if capture_trace:
+                json_settings["send_logs_level"] = "trace"
 
             with _query_span(query, query_id):
                 raw = client.raw_query(
