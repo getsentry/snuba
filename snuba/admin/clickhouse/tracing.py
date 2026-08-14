@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import math
-import re
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, cast
 from uuid import UUID
 
+import sqlparse
 import structlog
+from sqlparse import tokens as sql_tokens
+from sqlparse.sql import Parenthesis, Token
 
 from snuba.admin.clickhouse.common import (
     get_ro_query_node_connection,
@@ -36,58 +38,120 @@ logger = structlog.get_logger().bind(module=__name__)
 MAX_TRACING_QUERY_LIMIT = 10_000
 
 
-def _limit_tracing_query(query: str, max_limit: int = MAX_TRACING_QUERY_LIMIT) -> str:
-    """Cap a top-level numeric LIMIT, or add one before SETTINGS/FORMAT."""
-    unquoted_query = re.sub(
-        r"'(?:''|\\.|[^'])*'|\"(?:\"\"|\\.|[^\"])*\"|`(?:``|\\.|[^`])*`",
-        lambda match: " " * len(match.group()),
-        query,
+def _flatten_sql_tokens(
+    token: Token, start: int = 0, *, inside_paren: bool = False
+) -> Iterator[tuple[Token, int, int, bool]]:
+    """Yield leaf sqlparse tokens with string offsets and top-level markers."""
+    if token.is_group:
+        pos = start
+        child_inside_paren = inside_paren or isinstance(token, Parenthesis)
+        for child in token.tokens:
+            yield from _flatten_sql_tokens(child, pos, inside_paren=child_inside_paren)
+            pos += len(child.value)
+        return
+
+    end = start + len(token.value)
+    yield token, start, end, not inside_paren
+
+
+def _is_whitespace_token(token: Token) -> bool:
+    return token.ttype in sql_tokens.Text.Whitespace or (
+        token.ttype in sql_tokens.Text and token.value.isspace()
     )
-    depth = 0
-    top_level_tokens: list[re.Match[str]] = []
-    for token in re.finditer(r"[()]|\b[A-Za-z_]+\b|\b\d+\b|,", unquoted_query):
-        if token.group() == "(":
-            depth += 1
-        elif token.group() == ")":
-            depth -= 1
-        elif depth == 0:
-            top_level_tokens.append(token)
 
-    for index, token in enumerate(top_level_tokens):
-        if token.group().upper() != "LIMIT" or index + 1 >= len(top_level_tokens):
+
+def _is_integer_token(token: Token) -> bool:
+    return token.ttype in sql_tokens.Literal.Number.Integer or (
+        token.ttype in sql_tokens.Literal.Number and token.value.isdigit()
+    )
+
+
+def _is_keyword_token(token: Token, *names: str) -> bool:
+    if token.ttype not in (sql_tokens.Keyword, sql_tokens.Name):
+        return False
+    return token.value.upper() in {name.upper() for name in names}
+
+
+def _limit_tracing_query(query: str, max_limit: int = MAX_TRACING_QUERY_LIMIT) -> str:
+    """Cap a top-level numeric LIMIT via sqlparse, or add one before SETTINGS/FORMAT."""
+    statements = sqlparse.parse(query)
+    if not statements:
+        return f"{query.rstrip()} LIMIT {max_limit}"
+
+    top_level_tokens = [
+        (token, start, end)
+        for token, start, end, is_top_level in _flatten_sql_tokens(statements[0])
+        if is_top_level
+    ]
+
+    index = 0
+    while index < len(top_level_tokens):
+        token, _start, _end = top_level_tokens[index]
+        if not _is_keyword_token(token, "LIMIT"):
+            index += 1
             continue
 
-        first_value = top_level_tokens[index + 1]
-        if not first_value.group().isdigit():
-            continue
-
-        limit_value = first_value
-        next_index = index + 2
-        if next_index < len(top_level_tokens) and top_level_tokens[next_index].group() == ",":
-            if next_index + 1 >= len(top_level_tokens):
-                continue
-            limit_value = top_level_tokens[next_index + 1]
-            next_index += 2
-
-        if (
-            next_index < len(top_level_tokens)
-            and top_level_tokens[next_index].group().upper() == "BY"
+        next_index = index + 1
+        while next_index < len(top_level_tokens) and _is_whitespace_token(
+            top_level_tokens[next_index][0]
         ):
+            next_index += 1
+        if next_index >= len(top_level_tokens) or not _is_integer_token(
+            top_level_tokens[next_index][0]
+        ):
+            index += 1
             continue
 
-        if int(limit_value.group()) <= max_limit:
+        first_token, first_start, first_end = top_level_tokens[next_index]
+        next_index += 1
+        while next_index < len(top_level_tokens) and _is_whitespace_token(
+            top_level_tokens[next_index][0]
+        ):
+            next_index += 1
+
+        if next_index < len(top_level_tokens) and top_level_tokens[next_index][0].value == ",":
+            next_index += 1
+            while next_index < len(top_level_tokens) and _is_whitespace_token(
+                top_level_tokens[next_index][0]
+            ):
+                next_index += 1
+            if next_index >= len(top_level_tokens) or not _is_integer_token(
+                top_level_tokens[next_index][0]
+            ):
+                index += 1
+                continue
+            limit_token, limit_start, limit_end = top_level_tokens[next_index]
+            next_index += 1
+        else:
+            limit_token, limit_start, limit_end = first_token, first_start, first_end
+
+        peek_index = next_index
+        while peek_index < len(top_level_tokens) and _is_whitespace_token(
+            top_level_tokens[peek_index][0]
+        ):
+            peek_index += 1
+        # ClickHouse LIMIT BY is not a row-count limit for the result set.
+        if peek_index < len(top_level_tokens) and _is_keyword_token(
+            top_level_tokens[peek_index][0], "BY"
+        ):
+            index = peek_index + 1
+            continue
+
+        if int(limit_token.value) <= max_limit:
             return query
-        return f"{query[: limit_value.start()]}{max_limit}{query[limit_value.end() :]}"
+        return f"{query[:limit_start]}{max_limit}{query[limit_end:]}"
 
     insertion_point = len(query)
-    for token in top_level_tokens:
-        if token.group().upper() in {"FORMAT", "SETTINGS"}:
-            insertion_point = token.start()
+    for token, start, _end in top_level_tokens:
+        if _is_keyword_token(token, "SETTINGS", "FORMAT"):
+            insertion_point = start
             break
 
     prefix = query[:insertion_point].rstrip()
     suffix = query[insertion_point:].lstrip()
-    return f"{prefix} LIMIT {max_limit}" + (f" {suffix}" if suffix else "")
+    if suffix:
+        return f"{prefix} LIMIT {max_limit} {suffix}"
+    return f"{prefix} LIMIT {max_limit}"
 
 
 @dataclass

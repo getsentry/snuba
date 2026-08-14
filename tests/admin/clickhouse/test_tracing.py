@@ -44,6 +44,10 @@ def test_limit_tracing_query_ignores_nested_and_quoted_limits() -> None:
     assert _limit_tracing_query("SELECT 'LIMIT 1'") == "SELECT 'LIMIT 1' LIMIT 10000"
 
 
+def test_limit_tracing_query_ignores_limit_by() -> None:
+    assert _limit_tracing_query("SELECT 1 LIMIT 5 BY x") == "SELECT 1 LIMIT 5 BY x LIMIT 10000"
+
+
 def test_summarize_from_query_log() -> None:
     connection = MagicMock()
     # Columns already formatted by ClickHouse (formatReadableSize / duration math),
