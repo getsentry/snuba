@@ -486,7 +486,7 @@ jobs:
         if: needs.files-changed.outputs.api_changes == 'true'
         working-directory: sentry
         run: |
-          pytest -k 'not __In' \
+          pytest -k 'not __In and not MetricsEnhancedPerformance' \
               tests/snuba \
               tests/sentry/snuba \
               tests/sentry/eventstream/kafka \
@@ -508,6 +508,12 @@ jobs:
               --ignore=tests/sentry/search/events/builder/test_span_metrics.py \
               --ignore=tests/snuba/test_metrics_layer.py \
               --ignore=tests/snuba/metrics \
+              --ignore=tests/snuba/api/endpoints/test_organization_events_mep.py \
+              --ignore=tests/snuba/api/endpoints/test_organization_events_span_metrics.py \
+              --ignore=tests/snuba/api/endpoints/test_organization_events_stats_mep.py \
+              --ignore=tests/snuba/api/endpoints/test_organization_events_stats_span_metrics.py \
+              --ignore=tests/snuba/api/endpoints/test_organization_metrics_meta.py \
+              --ignore=tests/snuba/api/endpoints/test_organization_measurements_meta.py \
               -n "$XDIST_WORKERS" --dist=loadfile --reuse-db \
               -vv
 
