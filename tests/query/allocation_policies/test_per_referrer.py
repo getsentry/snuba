@@ -19,7 +19,7 @@ class TestPerReferrerPolicy:
     def test_policy_pass_basic(self):
         policy = ReferrerGuardRailPolicy.from_kwargs(
             **{
-                "storage_key": "generic_metrics_distributions",
+                "storage_key": "generic_metrics_counters",
                 "required_tenant_types": ["referrer"],
             }
         )
@@ -53,7 +53,7 @@ class TestPerReferrerPolicy:
     def test_throttle(self) -> None:
         policy = ReferrerGuardRailPolicy.from_kwargs(
             **{
-                "storage_key": "generic_metrics_distributions",
+                "storage_key": "generic_metrics_counters",
                 "required_tenant_types": ["referrer"],
             }
         )
@@ -81,7 +81,7 @@ class TestPerReferrerPolicy:
     def test_override(self):
         policy = ReferrerGuardRailPolicy.from_kwargs(
             **{
-                "storage_key": "generic_metrics_distributions",
+                "storage_key": "generic_metrics_counters",
                 "required_tenant_types": ["referrer"],
             }
         )

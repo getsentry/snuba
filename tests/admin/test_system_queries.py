@@ -474,7 +474,7 @@ def test_connection_cache_is_keyed_on_client_settings() -> None:
     a cache keyed only on storage/host would hand the second caller whichever
     pool the first one happened to create: System Queries (QUERY -> readonly
     user, 25s cap) and the Cardinality Analyzer (CARDINALITY_ANALYZER -> trace
-    user, max_threads=10, 60s cap) both reach generic_metrics_distributions on
+    user, max_threads=10, 60s cap) both reach generic_metrics_counters on
     the query node.
     """
     from snuba.admin.clickhouse import common

@@ -156,7 +156,7 @@ def _settings_cache_token(client_settings: ClickhouseClientSettings) -> str:
     # would win and the other would silently execute against the wrong pool. For
     # example System Queries (QUERY -> readonly user, 25s cap) and the
     # Cardinality Analyzer (CARDINALITY_ANALYZER -> trace user, max_threads=10,
-    # 60s cap) both reach generic_metrics_distributions on the query node.
+    # 60s cap) both reach generic_metrics_counters on the query node.
     return client_settings.name
 
 

@@ -32,8 +32,8 @@ from snuba.query.mql.parser import parse_mql_query
 
 # Commonly used expressions
 from_distributions = QueryEntity(
-    EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+    EntityKey.GENERIC_METRICS_COUNTERS,
+    get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
 )
 
 
@@ -100,7 +100,7 @@ def condition(table_alias: str | None = None) -> list[FunctionCall]:
 
 
 mql_context = {
-    "entity": "generic_metrics_distributions",
+    "entity": "generic_metrics_counters",
     "start": "2023-11-23T18:30:00",
     "end": "2023-11-23T22:30:00",
     "rollup": {
@@ -115,8 +115,8 @@ mql_context = {
         "use_case_id": "transactions",
     },
     "indexer_mappings": {
-        "d:transactions/duration@millisecond": 123456,
-        "d:transactions/measurements.fp@millisecond": 789012,
+        "c:transactions/duration@millisecond": 123456,
+        "c:transactions/measurements.fp@millisecond": 789012,
         "status_code": 222222,
         "transaction": 333333,
     },
@@ -185,7 +185,7 @@ def tag_column(tag: str, table_alias: str | None = None) -> SubscriptableReferen
 
 
 def test_simple_formula() -> None:
-    query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)"
+    query_body = "sum(`c:transactions/duration@millisecond`){status_code:200} / sum(`c:transactions/duration@millisecond`)"
 
     expected_selected = SelectedExpression(
         "aggregate_value",
@@ -193,12 +193,12 @@ def test_simple_formula() -> None:
             FunctionCall(
                 None,
                 "sum",
-                (Column("_snuba_value", "d0", "value"),),
+                (Column("_snuba_value", "c0", "value"),),
             ),
             FunctionCall(
                 None,
                 "sum",
-                (Column("_snuba_value", "d1", "value"),),
+                (Column("_snuba_value", "c1", "value"),),
             ),
             "_snuba_aggregate_value",
         ),
@@ -206,17 +206,17 @@ def test_simple_formula() -> None:
 
     join_clause = JoinClause(
         left_node=IndividualNode(
-            alias="d1",
+            alias="c1",
             data_source=from_distributions,
         ),
         right_node=IndividualNode(
-            alias="d0",
+            alias="c0",
             data_source=from_distributions,
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
-                right=JoinConditionExpression(table_alias="d0", column="d0.time"),
+                left=JoinConditionExpression(table_alias="c1", column="c1.time"),
+                right=JoinConditionExpression(table_alias="c0", column="c0.time"),
             )
         ],
         join_type=JoinType.INNER,
@@ -224,12 +224,12 @@ def test_simple_formula() -> None:
     )
 
     tag_condition = binary_condition(
-        "equals", tag_column("status_code", "d0"), Literal(None, "200")
+        "equals", tag_column("status_code", "c0"), Literal(None, "200")
     )
-    metric_condition1 = metric_id_condition(123456, "d0")
-    metric_condition2 = metric_id_condition(123456, "d1")
+    metric_condition1 = metric_id_condition(123456, "c0")
+    metric_condition2 = metric_id_condition(123456, "c1")
     formula_condition = combine_and_conditions(
-        condition("d0") + condition("d1") + [tag_condition, metric_condition1, metric_condition2]
+        condition("c0") + condition("c1") + [tag_condition, metric_condition1, metric_condition2]
     )
 
     expected = CompositeQuery(
@@ -238,19 +238,19 @@ def test_simple_formula() -> None:
             expected_selected,
             SelectedExpression(
                 "time",
-                time_expression("d1"),
+                time_expression("c1"),
             ),
             SelectedExpression(
                 "time",
-                time_expression("d0"),
+                time_expression("c0"),
             ),
         ],
-        groupby=[time_expression("d1"), time_expression("d0")],
+        groupby=[time_expression("c1"), time_expression("c0")],
         condition=formula_condition,
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
-                expression=time_expression("d0"),
+                expression=time_expression("c0"),
             ),
         ],
         limit=1000,
@@ -266,7 +266,7 @@ def test_simple_formula() -> None:
 
 
 def test_bracket_on_formula() -> None:
-    query_body = "(min(`d:transactions/duration@millisecond`){status_code:400} - max(`d:transactions/duration@millisecond`){status_code:404}) / (sum(`d:transactions/duration@millisecond`){status_code:200} + avg(`d:transactions/duration@millisecond`){status_code:418})"
+    query_body = "(min(`c:transactions/duration@millisecond`){status_code:400} - max(`c:transactions/duration@millisecond`){status_code:404}) / (sum(`c:transactions/duration@millisecond`){status_code:200} + avg(`c:transactions/duration@millisecond`){status_code:418})"
 
     expected_selected = SelectedExpression(
         "aggregate_value",
@@ -275,24 +275,24 @@ def test_bracket_on_formula() -> None:
                 FunctionCall(
                     None,
                     "min",
-                    (Column("_snuba_value", "d0", "value"),),
+                    (Column("_snuba_value", "c0", "value"),),
                 ),
                 FunctionCall(
                     None,
                     "max",
-                    (Column("_snuba_value", "d1", "value"),),
+                    (Column("_snuba_value", "c1", "value"),),
                 ),
             ),
             plus(
                 FunctionCall(
                     None,
                     "sum",
-                    (Column("_snuba_value", "d2", "value"),),
+                    (Column("_snuba_value", "c2", "value"),),
                 ),
                 FunctionCall(
                     None,
                     "avg",
-                    (Column("_snuba_value", "d3", "value"),),
+                    (Column("_snuba_value", "c3", "value"),),
                 ),
             ),
             "_snuba_aggregate_value",
@@ -303,43 +303,43 @@ def test_bracket_on_formula() -> None:
         left_node=JoinClause(
             left_node=JoinClause(
                 left_node=IndividualNode(
-                    alias="d3",
+                    alias="c3",
                     data_source=from_distributions,
                 ),
                 right_node=IndividualNode(
-                    alias="d2",
+                    alias="c2",
                     data_source=from_distributions,
                 ),
                 keys=[
                     JoinCondition(
-                        left=JoinConditionExpression(table_alias="d3", column="d3.time"),
-                        right=JoinConditionExpression(table_alias="d2", column="d2.time"),
+                        left=JoinConditionExpression(table_alias="c3", column="c3.time"),
+                        right=JoinConditionExpression(table_alias="c2", column="c2.time"),
                     )
                 ],
                 join_type=JoinType.INNER,
                 join_modifier=None,
             ),
             right_node=IndividualNode(
-                alias="d1",
+                alias="c1",
                 data_source=from_distributions,
             ),
             keys=[
                 JoinCondition(
-                    left=JoinConditionExpression(table_alias="d2", column="d2.time"),
-                    right=JoinConditionExpression(table_alias="d1", column="d1.time"),
+                    left=JoinConditionExpression(table_alias="c2", column="c2.time"),
+                    right=JoinConditionExpression(table_alias="c1", column="c1.time"),
                 )
             ],
             join_type=JoinType.INNER,
             join_modifier=None,
         ),
         right_node=IndividualNode(
-            alias="d0",
+            alias="c0",
             data_source=from_distributions,
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
-                right=JoinConditionExpression(table_alias="d0", column="d0.time"),
+                left=JoinConditionExpression(table_alias="c1", column="c1.time"),
+                right=JoinConditionExpression(table_alias="c0", column="c0.time"),
             ),
         ],
         join_type=JoinType.INNER,
@@ -347,26 +347,26 @@ def test_bracket_on_formula() -> None:
     )
 
     tag_condition1 = binary_condition(
-        "equals", tag_column("status_code", "d0"), Literal(None, "400")
+        "equals", tag_column("status_code", "c0"), Literal(None, "400")
     )
     tag_condition2 = binary_condition(
-        "equals", tag_column("status_code", "d1"), Literal(None, "404")
+        "equals", tag_column("status_code", "c1"), Literal(None, "404")
     )
     tag_condition3 = binary_condition(
-        "equals", tag_column("status_code", "d2"), Literal(None, "200")
+        "equals", tag_column("status_code", "c2"), Literal(None, "200")
     )
     tag_condition4 = binary_condition(
-        "equals", tag_column("status_code", "d3"), Literal(None, "418")
+        "equals", tag_column("status_code", "c3"), Literal(None, "418")
     )
-    metric_condition1 = metric_id_condition(123456, "d0")
-    metric_condition2 = metric_id_condition(123456, "d1")
-    metric_condition3 = metric_id_condition(123456, "d2")
-    metric_condition4 = metric_id_condition(123456, "d3")
+    metric_condition1 = metric_id_condition(123456, "c0")
+    metric_condition2 = metric_id_condition(123456, "c1")
+    metric_condition3 = metric_id_condition(123456, "c2")
+    metric_condition4 = metric_id_condition(123456, "c3")
     formula_condition = combine_and_conditions(
-        condition("d0")
-        + condition("d1")
-        + condition("d2")
-        + condition("d3")
+        condition("c0")
+        + condition("c1")
+        + condition("c2")
+        + condition("c3")
         + [
             tag_condition1,
             metric_condition1,
@@ -385,32 +385,32 @@ def test_bracket_on_formula() -> None:
             expected_selected,
             SelectedExpression(
                 "time",
-                time_expression("d3"),
+                time_expression("c3"),
             ),
             SelectedExpression(
                 "time",
-                time_expression("d2"),
+                time_expression("c2"),
             ),
             SelectedExpression(
                 "time",
-                time_expression("d1"),
+                time_expression("c1"),
             ),
             SelectedExpression(
                 "time",
-                time_expression("d0"),
+                time_expression("c0"),
             ),
         ],
         groupby=[
-            time_expression("d3"),
-            time_expression("d2"),
-            time_expression("d1"),
-            time_expression("d0"),
+            time_expression("c3"),
+            time_expression("c2"),
+            time_expression("c1"),
+            time_expression("c0"),
         ],
         condition=formula_condition,
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
-                expression=time_expression("d0"),
+                expression=time_expression("c0"),
             ),
         ],
         limit=1000,
@@ -426,7 +426,7 @@ def test_bracket_on_formula() -> None:
 
 
 def test_multiple_filter_same_groupby_formula() -> None:
-    query_body = 'avg(`d:transactions/duration@millisecond`){transaction:"test" and status_code:418} by (status_code) / min(`d:transactions/duration@millisecond`){transaction:"prod" or status_code:400} by (status_code)'
+    query_body = 'avg(`c:transactions/duration@millisecond`){transaction:"test" and status_code:418} by (status_code) / min(`c:transactions/duration@millisecond`){transaction:"prod" or status_code:400} by (status_code)'
 
     expected_selected = SelectedExpression(
         "aggregate_value",
@@ -434,12 +434,12 @@ def test_multiple_filter_same_groupby_formula() -> None:
             FunctionCall(
                 None,
                 "avg",
-                (Column("_snuba_value", "d0", "value"),),
+                (Column("_snuba_value", "c0", "value"),),
             ),
             FunctionCall(
                 None,
                 "min",
-                (Column("_snuba_value", "d1", "value"),),
+                (Column("_snuba_value", "c1", "value"),),
             ),
             "_snuba_aggregate_value",
         ),
@@ -447,21 +447,21 @@ def test_multiple_filter_same_groupby_formula() -> None:
 
     join_clause = JoinClause(
         left_node=IndividualNode(
-            alias="d1",
+            alias="c1",
             data_source=from_distributions,
         ),
         right_node=IndividualNode(
-            alias="d0",
+            alias="c0",
             data_source=from_distributions,
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="tags_raw[222222]"),
-                right=JoinConditionExpression(table_alias="d0", column="tags_raw[222222]"),
+                left=JoinConditionExpression(table_alias="c1", column="tags_raw[222222]"),
+                right=JoinConditionExpression(table_alias="c0", column="tags_raw[222222]"),
             ),
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
-                right=JoinConditionExpression(table_alias="d0", column="d0.time"),
+                left=JoinConditionExpression(table_alias="c1", column="c1.time"),
+                right=JoinConditionExpression(table_alias="c0", column="c0.time"),
             ),
         ],
         join_type=JoinType.INNER,
@@ -469,21 +469,21 @@ def test_multiple_filter_same_groupby_formula() -> None:
     )
 
     tag_condition1 = binary_condition(
-        "equals", tag_column("transaction", "d0"), Literal(None, "test")
+        "equals", tag_column("transaction", "c0"), Literal(None, "test")
     )
     tag_condition2 = binary_condition(
-        "equals", tag_column("status_code", "d0"), Literal(None, "418")
+        "equals", tag_column("status_code", "c0"), Literal(None, "418")
     )
     tag_condition3 = binary_condition(
         "or",
-        binary_condition("equals", tag_column("transaction", "d1"), Literal(None, "prod")),
-        binary_condition("equals", tag_column("status_code", "d1"), Literal(None, "400")),
+        binary_condition("equals", tag_column("transaction", "c1"), Literal(None, "prod")),
+        binary_condition("equals", tag_column("status_code", "c1"), Literal(None, "400")),
     )
-    metric_condition1 = metric_id_condition(123456, "d0")
-    metric_condition2 = metric_id_condition(123456, "d1")
+    metric_condition1 = metric_id_condition(123456, "c0")
+    metric_condition2 = metric_id_condition(123456, "c1")
     formula_condition = combine_and_conditions(
-        condition("d0")
-        + condition("d1")
+        condition("c0")
+        + condition("c1")
         + [
             tag_condition1,
             tag_condition2,
@@ -499,32 +499,32 @@ def test_multiple_filter_same_groupby_formula() -> None:
             expected_selected,
             SelectedExpression(
                 "status_code",
-                subscriptable_expression("222222", "d0"),
+                subscriptable_expression("222222", "c0"),
             ),
             SelectedExpression(
                 "status_code",
-                subscriptable_expression("222222", "d1"),
+                subscriptable_expression("222222", "c1"),
             ),
             SelectedExpression(
                 "time",
-                time_expression("d1"),
+                time_expression("c1"),
             ),
             SelectedExpression(
                 "time",
-                time_expression("d0"),
+                time_expression("c0"),
             ),
         ],
         groupby=[
-            subscriptable_expression("222222", "d0"),
-            subscriptable_expression("222222", "d1"),
-            time_expression("d1"),
-            time_expression("d0"),
+            subscriptable_expression("222222", "c0"),
+            subscriptable_expression("222222", "c1"),
+            time_expression("c1"),
+            time_expression("c0"),
         ],
         condition=formula_condition,
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
-                expression=time_expression("d0"),
+                expression=time_expression("c0"),
             ),
         ],
         limit=1000,
@@ -541,7 +541,7 @@ def test_multiple_filter_same_groupby_formula() -> None:
 
 
 def test_distribute_tags() -> None:
-    query_body = "max(`d:transactions/duration@millisecond`){status_code:404} / (sum(`d:transactions/duration@millisecond`) + avg(`d:transactions/duration@millisecond`)){status_code:418}"
+    query_body = "max(`c:transactions/duration@millisecond`){status_code:404} / (sum(`c:transactions/duration@millisecond`) + avg(`c:transactions/duration@millisecond`)){status_code:418}"
 
     expected_selected = SelectedExpression(
         "aggregate_value",
@@ -549,18 +549,18 @@ def test_distribute_tags() -> None:
             FunctionCall(
                 None,
                 "max",
-                (Column("_snuba_value", "d0", "value"),),
+                (Column("_snuba_value", "c0", "value"),),
             ),
             plus(
                 FunctionCall(
                     None,
                     "sum",
-                    (Column("_snuba_value", "d1", "value"),),
+                    (Column("_snuba_value", "c1", "value"),),
                 ),
                 FunctionCall(
                     None,
                     "avg",
-                    (Column("_snuba_value", "d2", "value"),),
+                    (Column("_snuba_value", "c2", "value"),),
                 ),
             ),
             "_snuba_aggregate_value",
@@ -570,30 +570,30 @@ def test_distribute_tags() -> None:
     join_clause = JoinClause(
         left_node=JoinClause(
             left_node=IndividualNode(
-                alias="d2",
+                alias="c2",
                 data_source=from_distributions,
             ),
             right_node=IndividualNode(
-                alias="d1",
+                alias="c1",
                 data_source=from_distributions,
             ),
             keys=[
                 JoinCondition(
-                    left=JoinConditionExpression(table_alias="d2", column="d2.time"),
-                    right=JoinConditionExpression(table_alias="d1", column="d1.time"),
+                    left=JoinConditionExpression(table_alias="c2", column="c2.time"),
+                    right=JoinConditionExpression(table_alias="c1", column="c1.time"),
                 )
             ],
             join_type=JoinType.INNER,
             join_modifier=None,
         ),
         right_node=IndividualNode(
-            alias="d0",
+            alias="c0",
             data_source=from_distributions,
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
-                right=JoinConditionExpression(table_alias="d0", column="d0.time"),
+                left=JoinConditionExpression(table_alias="c1", column="c1.time"),
+                right=JoinConditionExpression(table_alias="c0", column="c0.time"),
             ),
         ],
         join_type=JoinType.INNER,
@@ -601,21 +601,21 @@ def test_distribute_tags() -> None:
     )
 
     tag_condition1 = binary_condition(
-        "equals", tag_column("status_code", "d0"), Literal(None, "404")
+        "equals", tag_column("status_code", "c0"), Literal(None, "404")
     )
     tag_condition2 = binary_condition(
-        "equals", tag_column("status_code", "d1"), Literal(None, "418")
+        "equals", tag_column("status_code", "c1"), Literal(None, "418")
     )
     tag_condition3 = binary_condition(
-        "equals", tag_column("status_code", "d2"), Literal(None, "418")
+        "equals", tag_column("status_code", "c2"), Literal(None, "418")
     )
-    metric_condition1 = metric_id_condition(123456, "d0")
-    metric_condition2 = metric_id_condition(123456, "d1")
-    metric_condition3 = metric_id_condition(123456, "d2")
+    metric_condition1 = metric_id_condition(123456, "c0")
+    metric_condition2 = metric_id_condition(123456, "c1")
+    metric_condition3 = metric_id_condition(123456, "c2")
     formula_condition = combine_and_conditions(
-        condition("d0")
-        + condition("d1")
-        + condition("d2")
+        condition("c0")
+        + condition("c1")
+        + condition("c2")
         + [
             tag_condition1,
             metric_condition1,
@@ -632,23 +632,23 @@ def test_distribute_tags() -> None:
             expected_selected,
             SelectedExpression(
                 "time",
-                time_expression("d2"),
+                time_expression("c2"),
             ),
             SelectedExpression(
                 "time",
-                time_expression("d1"),
+                time_expression("c1"),
             ),
             SelectedExpression(
                 "time",
-                time_expression("d0"),
+                time_expression("c0"),
             ),
         ],
-        groupby=[time_expression("d2"), time_expression("d1"), time_expression("d0")],
+        groupby=[time_expression("c2"), time_expression("c1"), time_expression("c0")],
         condition=formula_condition,
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
-                expression=time_expression("d0"),
+                expression=time_expression("c0"),
             ),
         ],
         limit=1000,
@@ -664,7 +664,7 @@ def test_distribute_tags() -> None:
 
 
 def test_formula_with_scalar() -> None:
-    query_body = "(-1 - avg(`d:transactions/duration@millisecond`){status_code:418}) / sum(`d:transactions/duration@millisecond`){status_code:418} + 1"
+    query_body = "(-1 - avg(`c:transactions/duration@millisecond`){status_code:418}) / sum(`c:transactions/duration@millisecond`){status_code:418} + 1"
 
     expected_selected = SelectedExpression(
         "aggregate_value",
@@ -675,13 +675,13 @@ def test_formula_with_scalar() -> None:
                     FunctionCall(
                         None,
                         "avg",
-                        (Column("_snuba_value", "d0", "value"),),
+                        (Column("_snuba_value", "c0", "value"),),
                     ),
                 ),
                 FunctionCall(
                     None,
                     "sum",
-                    (Column("_snuba_value", "d1", "value"),),
+                    (Column("_snuba_value", "c1", "value"),),
                 ),
             ),
             Literal(None, 1.0),
@@ -691,17 +691,17 @@ def test_formula_with_scalar() -> None:
 
     join_clause = JoinClause(
         left_node=IndividualNode(
-            alias="d1",
+            alias="c1",
             data_source=from_distributions,
         ),
         right_node=IndividualNode(
-            alias="d0",
+            alias="c0",
             data_source=from_distributions,
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
-                right=JoinConditionExpression(table_alias="d0", column="d0.time"),
+                left=JoinConditionExpression(table_alias="c1", column="c1.time"),
+                right=JoinConditionExpression(table_alias="c0", column="c0.time"),
             )
         ],
         join_type=JoinType.INNER,
@@ -709,16 +709,16 @@ def test_formula_with_scalar() -> None:
     )
 
     tag_condition1 = binary_condition(
-        "equals", tag_column("status_code", "d0"), Literal(None, "418")
+        "equals", tag_column("status_code", "c0"), Literal(None, "418")
     )
     tag_condition2 = binary_condition(
-        "equals", tag_column("status_code", "d1"), Literal(None, "418")
+        "equals", tag_column("status_code", "c1"), Literal(None, "418")
     )
-    metric_condition1 = metric_id_condition(123456, "d0")
-    metric_condition2 = metric_id_condition(123456, "d1")
+    metric_condition1 = metric_id_condition(123456, "c0")
+    metric_condition2 = metric_id_condition(123456, "c1")
     formula_condition = combine_and_conditions(
-        condition("d0")
-        + condition("d1")
+        condition("c0")
+        + condition("c1")
         + [tag_condition1, metric_condition1, tag_condition2, metric_condition2]
     )
 
@@ -728,19 +728,19 @@ def test_formula_with_scalar() -> None:
             expected_selected,
             SelectedExpression(
                 "time",
-                time_expression("d1"),
+                time_expression("c1"),
             ),
             SelectedExpression(
                 "time",
-                time_expression("d0"),
+                time_expression("c0"),
             ),
         ],
-        groupby=[time_expression("d1"), time_expression("d0")],
+        groupby=[time_expression("c1"), time_expression("c0")],
         condition=formula_condition,
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
-                expression=time_expression("d0"),
+                expression=time_expression("c0"),
             ),
         ],
         limit=1000,
@@ -756,7 +756,7 @@ def test_formula_with_scalar() -> None:
 
 
 def test_groupby() -> None:
-    query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by transaction"
+    query_body = "sum(`c:transactions/duration@millisecond`){status_code:200} by transaction / sum(`c:transactions/duration@millisecond`) by transaction"
 
     expected_selected = SelectedExpression(
         "aggregate_value",
@@ -764,12 +764,12 @@ def test_groupby() -> None:
             FunctionCall(
                 None,
                 "sum",
-                (Column("_snuba_value", "d0", "value"),),
+                (Column("_snuba_value", "c0", "value"),),
             ),
             FunctionCall(
                 None,
                 "sum",
-                (Column("_snuba_value", "d1", "value"),),
+                (Column("_snuba_value", "c1", "value"),),
             ),
             "_snuba_aggregate_value",
         ),
@@ -777,21 +777,21 @@ def test_groupby() -> None:
 
     join_clause = JoinClause(
         left_node=IndividualNode(
-            alias="d1",
+            alias="c1",
             data_source=from_distributions,
         ),
         right_node=IndividualNode(
-            alias="d0",
+            alias="c0",
             data_source=from_distributions,
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="tags_raw[333333]"),
-                right=JoinConditionExpression(table_alias="d0", column="tags_raw[333333]"),
+                left=JoinConditionExpression(table_alias="c1", column="tags_raw[333333]"),
+                right=JoinConditionExpression(table_alias="c0", column="tags_raw[333333]"),
             ),
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
-                right=JoinConditionExpression(table_alias="d0", column="d0.time"),
+                left=JoinConditionExpression(table_alias="c1", column="c1.time"),
+                right=JoinConditionExpression(table_alias="c0", column="c0.time"),
             ),
         ],
         join_type=JoinType.INNER,
@@ -799,12 +799,12 @@ def test_groupby() -> None:
     )
 
     tag_condition = binary_condition(
-        "equals", tag_column("status_code", "d0"), Literal(None, "200")
+        "equals", tag_column("status_code", "c0"), Literal(None, "200")
     )
-    metric_condition1 = metric_id_condition(123456, "d0")
-    metric_condition2 = metric_id_condition(123456, "d1")
+    metric_condition1 = metric_id_condition(123456, "c0")
+    metric_condition2 = metric_id_condition(123456, "c1")
     formula_condition = combine_and_conditions(
-        condition("d0") + condition("d1") + [tag_condition, metric_condition1, metric_condition2]
+        condition("c0") + condition("c1") + [tag_condition, metric_condition1, metric_condition2]
     )
 
     expected = CompositeQuery(
@@ -813,32 +813,32 @@ def test_groupby() -> None:
             expected_selected,
             SelectedExpression(
                 "transaction",
-                subscriptable_expression("333333", "d0"),
+                subscriptable_expression("333333", "c0"),
             ),
             SelectedExpression(
                 "transaction",
-                subscriptable_expression("333333", "d1"),
+                subscriptable_expression("333333", "c1"),
             ),
             SelectedExpression(
                 "time",
-                time_expression("d1"),
+                time_expression("c1"),
             ),
             SelectedExpression(
                 "time",
-                time_expression("d0"),
+                time_expression("c0"),
             ),
         ],
         groupby=[
-            subscriptable_expression("333333", "d0"),
-            subscriptable_expression("333333", "d1"),
-            time_expression("d1"),
-            time_expression("d0"),
+            subscriptable_expression("333333", "c0"),
+            subscriptable_expression("333333", "c1"),
+            time_expression("c1"),
+            time_expression("c0"),
         ],
         condition=formula_condition,
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
-                expression=time_expression("d0"),
+                expression=time_expression("c0"),
             ),
         ],
         limit=1000,
@@ -857,7 +857,7 @@ def test_groupby_with_totals() -> None:
     mql_context_new = deepcopy(mql_context)
     mql_context_new["rollup"]["with_totals"] = "True"
     mql_context_new["rollup"]["interval"] = None
-    query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by transaction"
+    query_body = "sum(`c:transactions/duration@millisecond`){status_code:200} by transaction / sum(`c:transactions/duration@millisecond`) by transaction"
 
     expected_selected = SelectedExpression(
         "aggregate_value",
@@ -865,12 +865,12 @@ def test_groupby_with_totals() -> None:
             FunctionCall(
                 None,
                 "sum",
-                (Column("_snuba_value", "d0", "value"),),
+                (Column("_snuba_value", "c0", "value"),),
             ),
             FunctionCall(
                 None,
                 "sum",
-                (Column("_snuba_value", "d1", "value"),),
+                (Column("_snuba_value", "c1", "value"),),
             ),
             "_snuba_aggregate_value",
         ),
@@ -878,17 +878,17 @@ def test_groupby_with_totals() -> None:
 
     join_clause = JoinClause(
         left_node=IndividualNode(
-            alias="d1",
+            alias="c1",
             data_source=from_distributions,
         ),
         right_node=IndividualNode(
-            alias="d0",
+            alias="c0",
             data_source=from_distributions,
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="tags_raw[333333]"),
-                right=JoinConditionExpression(table_alias="d0", column="tags_raw[333333]"),
+                left=JoinConditionExpression(table_alias="c1", column="tags_raw[333333]"),
+                right=JoinConditionExpression(table_alias="c0", column="tags_raw[333333]"),
             )
         ],
         join_type=JoinType.INNER,
@@ -896,12 +896,12 @@ def test_groupby_with_totals() -> None:
     )
 
     tag_condition = binary_condition(
-        "equals", tag_column("status_code", "d0"), Literal(None, "200")
+        "equals", tag_column("status_code", "c0"), Literal(None, "200")
     )
-    metric_condition1 = metric_id_condition(123456, "d0")
-    metric_condition2 = metric_id_condition(123456, "d1")
+    metric_condition1 = metric_id_condition(123456, "c0")
+    metric_condition2 = metric_id_condition(123456, "c1")
     formula_condition = combine_and_conditions(
-        condition("d0") + condition("d1") + [tag_condition, metric_condition1, metric_condition2]
+        condition("c0") + condition("c1") + [tag_condition, metric_condition1, metric_condition2]
     )
 
     expected = CompositeQuery(
@@ -910,16 +910,16 @@ def test_groupby_with_totals() -> None:
             expected_selected,
             SelectedExpression(
                 "transaction",
-                subscriptable_expression("333333", "d0"),
+                subscriptable_expression("333333", "c0"),
             ),
             SelectedExpression(
                 "transaction",
-                subscriptable_expression("333333", "d1"),
+                subscriptable_expression("333333", "c1"),
             ),
         ],
         groupby=[
-            subscriptable_expression("333333", "d0"),
-            subscriptable_expression("333333", "d1"),
+            subscriptable_expression("333333", "c0"),
+            subscriptable_expression("333333", "c1"),
         ],
         condition=formula_condition,
         limit=1000,
@@ -936,7 +936,7 @@ def test_groupby_with_totals() -> None:
 
 
 def test_mismatch_groupby() -> None:
-    query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by status_code"
+    query_body = "sum(`c:transactions/duration@millisecond`){status_code:200} by transaction / sum(`c:transactions/duration@millisecond`) by status_code"
     generic_metrics = get_dataset(
         "generic_metrics",
     )
@@ -948,19 +948,19 @@ def test_mismatch_groupby() -> None:
 
 
 def test_onesided_groupby() -> None:
-    query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`)"
+    query_body = "sum(`c:transactions/duration@millisecond`){status_code:200} by transaction / sum(`c:transactions/duration@millisecond`)"
     expected_selected = SelectedExpression(
         "aggregate_value",
         divide(
             FunctionCall(
                 None,
                 "sum",
-                (Column("_snuba_value", "d0", "value"),),
+                (Column("_snuba_value", "c0", "value"),),
             ),
             FunctionCall(
                 None,
                 "sum",
-                (Column("_snuba_value", "d1", "value"),),
+                (Column("_snuba_value", "c1", "value"),),
             ),
             "_snuba_aggregate_value",
         ),
@@ -968,17 +968,17 @@ def test_onesided_groupby() -> None:
 
     join_clause = JoinClause(
         left_node=IndividualNode(
-            alias="d1",
+            alias="c1",
             data_source=from_distributions,
         ),
         right_node=IndividualNode(
-            alias="d0",
+            alias="c0",
             data_source=from_distributions,
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
-                right=JoinConditionExpression(table_alias="d0", column="d0.time"),
+                left=JoinConditionExpression(table_alias="c1", column="c1.time"),
+                right=JoinConditionExpression(table_alias="c0", column="c0.time"),
             ),
         ],
         join_type=JoinType.INNER,
@@ -986,12 +986,12 @@ def test_onesided_groupby() -> None:
     )
 
     tag_condition = binary_condition(
-        "equals", tag_column("status_code", "d0"), Literal(None, "200")
+        "equals", tag_column("status_code", "c0"), Literal(None, "200")
     )
-    metric_condition1 = metric_id_condition(123456, "d0")
-    metric_condition2 = metric_id_condition(123456, "d1")
+    metric_condition1 = metric_id_condition(123456, "c0")
+    metric_condition2 = metric_id_condition(123456, "c1")
     formula_condition = combine_and_conditions(
-        condition("d0") + condition("d1") + [tag_condition, metric_condition1, metric_condition2]
+        condition("c0") + condition("c1") + [tag_condition, metric_condition1, metric_condition2]
     )
 
     expected = CompositeQuery(
@@ -1000,27 +1000,27 @@ def test_onesided_groupby() -> None:
             expected_selected,
             SelectedExpression(
                 "transaction",
-                subscriptable_expression("333333", "d0"),
+                subscriptable_expression("333333", "c0"),
             ),
             SelectedExpression(
                 "time",
-                time_expression("d1"),
+                time_expression("c1"),
             ),
             SelectedExpression(
                 "time",
-                time_expression("d0"),
+                time_expression("c0"),
             ),
         ],
         groupby=[
-            subscriptable_expression("333333", "d0"),
-            time_expression("d1"),
-            time_expression("d0"),
+            subscriptable_expression("333333", "c0"),
+            time_expression("c1"),
+            time_expression("c0"),
         ],
         condition=formula_condition,
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
-                expression=time_expression("d0"),
+                expression=time_expression("c0"),
             ),
         ],
         limit=1000,
@@ -1043,7 +1043,7 @@ def test_onesided_groupby() -> None:
 
 
 def test_formula_with_nested_functions() -> None:
-    query_body = "apdex(avg(`d:transactions/duration@millisecond`){status_code:418}, 123) / max(`d:transactions/duration@millisecond`){status_code:400}"
+    query_body = "apdex(avg(`c:transactions/duration@millisecond`){status_code:418}, 123) / max(`c:transactions/duration@millisecond`){status_code:400}"
 
     expected_selected = SelectedExpression(
         "aggregate_value",
@@ -1052,14 +1052,14 @@ def test_formula_with_nested_functions() -> None:
                 None,
                 "apdex",
                 (
-                    FunctionCall(None, "avg", (Column("_snuba_value", "d0", "value"),)),
+                    FunctionCall(None, "avg", (Column("_snuba_value", "c0", "value"),)),
                     Literal(None, 123.0),
                 ),
             ),
             FunctionCall(
                 None,
                 "max",
-                (Column("_snuba_value", "d1", "value"),),
+                (Column("_snuba_value", "c1", "value"),),
             ),
             "_snuba_aggregate_value",
         ),
@@ -1067,17 +1067,17 @@ def test_formula_with_nested_functions() -> None:
 
     join_clause = JoinClause(
         left_node=IndividualNode(
-            alias="d1",
+            alias="c1",
             data_source=from_distributions,
         ),
         right_node=IndividualNode(
-            alias="d0",
+            alias="c0",
             data_source=from_distributions,
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
-                right=JoinConditionExpression(table_alias="d0", column="d0.time"),
+                left=JoinConditionExpression(table_alias="c1", column="c1.time"),
+                right=JoinConditionExpression(table_alias="c0", column="c0.time"),
             )
         ],
         join_type=JoinType.INNER,
@@ -1085,16 +1085,16 @@ def test_formula_with_nested_functions() -> None:
     )
 
     tag_condition1 = binary_condition(
-        "equals", tag_column("status_code", "d0"), Literal(None, "418")
+        "equals", tag_column("status_code", "c0"), Literal(None, "418")
     )
     tag_condition2 = binary_condition(
-        "equals", tag_column("status_code", "d1"), Literal(None, "400")
+        "equals", tag_column("status_code", "c1"), Literal(None, "400")
     )
-    metric_condition1 = metric_id_condition(123456, "d0")
-    metric_condition2 = metric_id_condition(123456, "d1")
+    metric_condition1 = metric_id_condition(123456, "c0")
+    metric_condition2 = metric_id_condition(123456, "c1")
     formula_condition = combine_and_conditions(
-        condition("d0")
-        + condition("d1")
+        condition("c0")
+        + condition("c1")
         + [tag_condition1, metric_condition1, tag_condition2, metric_condition2]
     )
 
@@ -1104,19 +1104,19 @@ def test_formula_with_nested_functions() -> None:
             expected_selected,
             SelectedExpression(
                 "time",
-                time_expression("d1"),
+                time_expression("c1"),
             ),
             SelectedExpression(
                 "time",
-                time_expression("d0"),
+                time_expression("c0"),
             ),
         ],
-        groupby=[time_expression("d1"), time_expression("d0")],
+        groupby=[time_expression("c1"), time_expression("c0")],
         condition=formula_condition,
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
-                expression=time_expression("d0"),
+                expression=time_expression("c0"),
             ),
         ],
         limit=1000,
@@ -1132,7 +1132,7 @@ def test_formula_with_nested_functions() -> None:
 
 
 def test_formula_with_nested_functions_with_filter_outside() -> None:
-    query_body = "apdex(avg(`d:transactions/duration@millisecond`), 123){status_code:418} / max(`d:transactions/duration@millisecond`){status_code:400}"
+    query_body = "apdex(avg(`c:transactions/duration@millisecond`), 123){status_code:418} / max(`c:transactions/duration@millisecond`){status_code:400}"
 
     expected_selected = SelectedExpression(
         "aggregate_value",
@@ -1141,14 +1141,14 @@ def test_formula_with_nested_functions_with_filter_outside() -> None:
                 None,
                 "apdex",
                 (
-                    FunctionCall(None, "avg", (Column("_snuba_value", "d0", "value"),)),
+                    FunctionCall(None, "avg", (Column("_snuba_value", "c0", "value"),)),
                     Literal(None, 123.0),
                 ),
             ),
             FunctionCall(
                 None,
                 "max",
-                (Column("_snuba_value", "d1", "value"),),
+                (Column("_snuba_value", "c1", "value"),),
             ),
             "_snuba_aggregate_value",
         ),
@@ -1156,17 +1156,17 @@ def test_formula_with_nested_functions_with_filter_outside() -> None:
 
     join_clause = JoinClause(
         left_node=IndividualNode(
-            alias="d1",
+            alias="c1",
             data_source=from_distributions,
         ),
         right_node=IndividualNode(
-            alias="d0",
+            alias="c0",
             data_source=from_distributions,
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
-                right=JoinConditionExpression(table_alias="d0", column="d0.time"),
+                left=JoinConditionExpression(table_alias="c1", column="c1.time"),
+                right=JoinConditionExpression(table_alias="c0", column="c0.time"),
             )
         ],
         join_type=JoinType.INNER,
@@ -1174,16 +1174,16 @@ def test_formula_with_nested_functions_with_filter_outside() -> None:
     )
 
     tag_condition1 = binary_condition(
-        "equals", tag_column("status_code", "d0"), Literal(None, "418")
+        "equals", tag_column("status_code", "c0"), Literal(None, "418")
     )
     tag_condition2 = binary_condition(
-        "equals", tag_column("status_code", "d1"), Literal(None, "400")
+        "equals", tag_column("status_code", "c1"), Literal(None, "400")
     )
-    metric_condition1 = metric_id_condition(123456, "d0")
-    metric_condition2 = metric_id_condition(123456, "d1")
+    metric_condition1 = metric_id_condition(123456, "c0")
+    metric_condition2 = metric_id_condition(123456, "c1")
     formula_condition = combine_and_conditions(
-        condition("d0")
-        + condition("d1")
+        condition("c0")
+        + condition("c1")
         + [tag_condition1, metric_condition1, tag_condition2, metric_condition2]
     )
 
@@ -1193,19 +1193,19 @@ def test_formula_with_nested_functions_with_filter_outside() -> None:
             expected_selected,
             SelectedExpression(
                 "time",
-                time_expression("d1"),
+                time_expression("c1"),
             ),
             SelectedExpression(
                 "time",
-                time_expression("d0"),
+                time_expression("c0"),
             ),
         ],
-        groupby=[time_expression("d1"), time_expression("d0")],
+        groupby=[time_expression("c1"), time_expression("c0")],
         condition=formula_condition,
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
-                expression=time_expression("d0"),
+                expression=time_expression("c0"),
             ),
         ],
         limit=1000,
@@ -1221,7 +1221,7 @@ def test_formula_with_nested_functions_with_filter_outside() -> None:
 
 
 def test_curried_aggregate_formula() -> None:
-    query_body = "quantiles(0.5)(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)"
+    query_body = "quantiles(0.5)(`c:transactions/duration@millisecond`){status_code:200} / sum(`c:transactions/duration@millisecond`)"
 
     expected_selected = SelectedExpression(
         "aggregate_value",
@@ -1235,14 +1235,14 @@ def test_curried_aggregate_formula() -> None:
                         "quantiles",
                         (Literal(None, 0.5),),
                     ),
-                    (Column("_snuba_value", "d0", "value"),),
+                    (Column("_snuba_value", "c0", "value"),),
                 ),
                 Literal(None, 1),
             ),
             FunctionCall(
                 None,
                 "sum",
-                (Column("_snuba_value", "d1", "value"),),
+                (Column("_snuba_value", "c1", "value"),),
             ),
             "_snuba_aggregate_value",
         ),
@@ -1250,17 +1250,17 @@ def test_curried_aggregate_formula() -> None:
 
     join_clause = JoinClause(
         left_node=IndividualNode(
-            alias="d1",
+            alias="c1",
             data_source=from_distributions,
         ),
         right_node=IndividualNode(
-            alias="d0",
+            alias="c0",
             data_source=from_distributions,
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
-                right=JoinConditionExpression(table_alias="d0", column="d0.time"),
+                left=JoinConditionExpression(table_alias="c1", column="c1.time"),
+                right=JoinConditionExpression(table_alias="c0", column="c0.time"),
             )
         ],
         join_type=JoinType.INNER,
@@ -1268,12 +1268,12 @@ def test_curried_aggregate_formula() -> None:
     )
 
     tag_condition = binary_condition(
-        "equals", tag_column("status_code", "d0"), Literal(None, "200")
+        "equals", tag_column("status_code", "c0"), Literal(None, "200")
     )
-    metric_condition1 = metric_id_condition(123456, "d0")
-    metric_condition2 = metric_id_condition(123456, "d1")
+    metric_condition1 = metric_id_condition(123456, "c0")
+    metric_condition2 = metric_id_condition(123456, "c1")
     formula_condition = combine_and_conditions(
-        condition("d0") + condition("d1") + [tag_condition, metric_condition1, metric_condition2]
+        condition("c0") + condition("c1") + [tag_condition, metric_condition1, metric_condition2]
     )
 
     expected = CompositeQuery(
@@ -1282,19 +1282,19 @@ def test_curried_aggregate_formula() -> None:
             expected_selected,
             SelectedExpression(
                 "time",
-                time_expression("d1"),
+                time_expression("c1"),
             ),
             SelectedExpression(
                 "time",
-                time_expression("d0"),
+                time_expression("c0"),
             ),
         ],
-        groupby=[time_expression("d1"), time_expression("d0")],
+        groupby=[time_expression("c1"), time_expression("c0")],
         condition=formula_condition,
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
-                expression=time_expression("d0"),
+                expression=time_expression("c0"),
             ),
         ],
         limit=1000,
@@ -1313,7 +1313,7 @@ def test_formula_no_groupby_no_interval_with_totals() -> None:
     mql_context_new = deepcopy(mql_context)
     mql_context_new["rollup"]["with_totals"] = "True"
     mql_context_new["rollup"]["interval"] = None
-    query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)"
+    query_body = "sum(`c:transactions/duration@millisecond`){status_code:200} / sum(`c:transactions/duration@millisecond`)"
 
     expected_selected = SelectedExpression(
         "aggregate_value",
@@ -1321,12 +1321,12 @@ def test_formula_no_groupby_no_interval_with_totals() -> None:
             FunctionCall(
                 None,
                 "sum",
-                (Column("_snuba_value", "d0", "value"),),
+                (Column("_snuba_value", "c0", "value"),),
             ),
             FunctionCall(
                 None,
                 "sum",
-                (Column("_snuba_value", "d1", "value"),),
+                (Column("_snuba_value", "c1", "value"),),
             ),
             "_snuba_aggregate_value",
         ),
@@ -1334,11 +1334,11 @@ def test_formula_no_groupby_no_interval_with_totals() -> None:
 
     join_clause = JoinClause(
         left_node=IndividualNode(
-            alias="d1",
+            alias="c1",
             data_source=from_distributions,
         ),
         right_node=IndividualNode(
-            alias="d0",
+            alias="c0",
             data_source=from_distributions,
         ),
         keys=[],
@@ -1347,12 +1347,12 @@ def test_formula_no_groupby_no_interval_with_totals() -> None:
     )
 
     tag_condition = binary_condition(
-        "equals", tag_column("status_code", "d0"), Literal(None, "200")
+        "equals", tag_column("status_code", "c0"), Literal(None, "200")
     )
-    metric_condition1 = metric_id_condition(123456, "d0")
-    metric_condition2 = metric_id_condition(123456, "d1")
+    metric_condition1 = metric_id_condition(123456, "c0")
+    metric_condition2 = metric_id_condition(123456, "c1")
     formula_condition = combine_and_conditions(
-        condition("d0") + condition("d1") + [tag_condition, metric_condition1, metric_condition2]
+        condition("c0") + condition("c1") + [tag_condition, metric_condition1, metric_condition2]
     )
 
     expected = CompositeQuery(
@@ -1378,7 +1378,7 @@ def test_formula_onesided_groupby_no_interval_with_totals() -> None:
     mql_context_new = deepcopy(mql_context)
     mql_context_new["rollup"]["with_totals"] = "True"
     mql_context_new["rollup"]["interval"] = None
-    query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`)"
+    query_body = "sum(`c:transactions/duration@millisecond`){status_code:200} by transaction / sum(`c:transactions/duration@millisecond`)"
 
     expected_selected = SelectedExpression(
         "aggregate_value",
@@ -1386,12 +1386,12 @@ def test_formula_onesided_groupby_no_interval_with_totals() -> None:
             FunctionCall(
                 None,
                 "sum",
-                (Column("_snuba_value", "d0", "value"),),
+                (Column("_snuba_value", "c0", "value"),),
             ),
             FunctionCall(
                 None,
                 "sum",
-                (Column("_snuba_value", "d1", "value"),),
+                (Column("_snuba_value", "c1", "value"),),
             ),
             "_snuba_aggregate_value",
         ),
@@ -1399,11 +1399,11 @@ def test_formula_onesided_groupby_no_interval_with_totals() -> None:
 
     join_clause = JoinClause(
         left_node=IndividualNode(
-            alias="d1",
+            alias="c1",
             data_source=from_distributions,
         ),
         right_node=IndividualNode(
-            alias="d0",
+            alias="c0",
             data_source=from_distributions,
         ),
         keys=[],
@@ -1412,12 +1412,12 @@ def test_formula_onesided_groupby_no_interval_with_totals() -> None:
     )
 
     tag_condition = binary_condition(
-        "equals", tag_column("status_code", "d0"), Literal(None, "200")
+        "equals", tag_column("status_code", "c0"), Literal(None, "200")
     )
-    metric_condition1 = metric_id_condition(123456, "d0")
-    metric_condition2 = metric_id_condition(123456, "d1")
+    metric_condition1 = metric_id_condition(123456, "c0")
+    metric_condition2 = metric_id_condition(123456, "c1")
     formula_condition = combine_and_conditions(
-        condition("d0") + condition("d1") + [tag_condition, metric_condition1, metric_condition2]
+        condition("c0") + condition("c1") + [tag_condition, metric_condition1, metric_condition2]
     )
 
     expected = CompositeQuery(
@@ -1426,11 +1426,11 @@ def test_formula_onesided_groupby_no_interval_with_totals() -> None:
             expected_selected,
             SelectedExpression(
                 "transaction",
-                subscriptable_expression("333333", "d0"),
+                subscriptable_expression("333333", "c0"),
             ),
         ],
         groupby=[
-            subscriptable_expression("333333", "d0"),
+            subscriptable_expression("333333", "c0"),
         ],
         condition=formula_condition,
         order_by=[],
@@ -1448,7 +1448,7 @@ def test_formula_onesided_groupby_no_interval_with_totals() -> None:
 
 
 def test_formula_extrapolation_with_nested_functions() -> None:
-    query_body = "apdex(avg(`d:transactions/duration@millisecond`){status_code:418}, 123) / sum(`c:transactions/duration@millisecond`){status_code:400}"
+    query_body = "apdex(avg(`c:transactions/duration@millisecond`){status_code:418}, 123) / sum(`c:transactions/duration@millisecond`){status_code:400}"
 
     expected_selected = SelectedExpression(
         "aggregate_value",
@@ -1457,14 +1457,14 @@ def test_formula_extrapolation_with_nested_functions() -> None:
                 None,
                 "apdex",
                 (
-                    FunctionCall(None, "avg_weighted", (Column("_snuba_value", "d0", "value"),)),
+                    FunctionCall(None, "avg_weighted", (Column("_snuba_value", "c0", "value"),)),
                     Literal(None, 123.0),
                 ),
             ),
             FunctionCall(
                 None,
                 "sum_weighted",
-                (Column("_snuba_value", "c0", "value"),),
+                (Column("_snuba_value", "c1", "value"),),
             ),
             "_snuba_aggregate_value",
         ),
@@ -1472,20 +1472,17 @@ def test_formula_extrapolation_with_nested_functions() -> None:
 
     join_clause = JoinClause(
         left_node=IndividualNode(
-            alias="c0",
-            data_source=QueryEntity(
-                EntityKey.GENERIC_METRICS_COUNTERS,
-                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
-            ),
+            alias="c1",
+            data_source=from_distributions,
         ),
         right_node=IndividualNode(
-            alias="d0",
+            alias="c0",
             data_source=from_distributions,
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="c0", column="c0.time"),
-                right=JoinConditionExpression(table_alias="d0", column="d0.time"),
+                left=JoinConditionExpression(table_alias="c1", column="c1.time"),
+                right=JoinConditionExpression(table_alias="c0", column="c0.time"),
             )
         ],
         join_type=JoinType.INNER,
@@ -1493,16 +1490,16 @@ def test_formula_extrapolation_with_nested_functions() -> None:
     )
 
     tag_condition1 = binary_condition(
-        "equals", tag_column("status_code", "d0"), Literal(None, "418")
+        "equals", tag_column("status_code", "c0"), Literal(None, "418")
     )
     tag_condition2 = binary_condition(
-        "equals", tag_column("status_code", "c0"), Literal(None, "400")
+        "equals", tag_column("status_code", "c1"), Literal(None, "400")
     )
-    metric_condition1 = metric_id_condition(123456, "d0")
-    metric_condition2 = metric_id_condition(123456, "c0")
+    metric_condition1 = metric_id_condition(123456, "c0")
+    metric_condition2 = metric_id_condition(123456, "c1")
     formula_condition = combine_and_conditions(
-        condition("d0")
-        + condition("c0")
+        condition("c0")
+        + condition("c1")
         + [tag_condition1, metric_condition1, tag_condition2, metric_condition2]
     )
 
@@ -1512,19 +1509,19 @@ def test_formula_extrapolation_with_nested_functions() -> None:
             expected_selected,
             SelectedExpression(
                 "time",
-                time_expression("c0"),
+                time_expression("c1"),
             ),
             SelectedExpression(
                 "time",
-                time_expression("d0"),
+                time_expression("c0"),
             ),
         ],
-        groupby=[time_expression("c0"), time_expression("d0")],
+        groupby=[time_expression("c1"), time_expression("c0")],
         condition=formula_condition,
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
-                expression=time_expression("d0"),
+                expression=time_expression("c0"),
             ),
         ],
         limit=1000,

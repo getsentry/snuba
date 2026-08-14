@@ -32,24 +32,18 @@ def run_metrics_query(query: str, user: str) -> ClickhouseResult:
     decorator.
     """
     storage_keys = {
-        StorageKey("generic_metrics_distributions"),
-        StorageKey("generic_metrics_sets"),
         StorageKey("generic_metrics_counters"),
-        StorageKey("generic_metrics_gauges"),
     }
     schemas = {get_storage(storage_key).get_schema() for storage_key in storage_keys}
     raw_tables = {
-        "generic_metric_sets_raw_dist",
         "generic_metric_counters_raw_dist",
-        "generic_metric_distributions_raw_dist",
-        "generic_metric_gauges_raw_dist",
     }
-    meta_tables = set()
-    for mtype in ["counters", "sets", "distributions", "gauges"]:
-        meta_tables.add(f"generic_metric_{mtype}_meta_aggregated_dist")
-        meta_tables.add(f"generic_metric_{mtype}_meta_tag_value_aggregated_dist")
-        meta_tables.add(f"generic_metric_{mtype}_meta_dist")
-        meta_tables.add(f"generic_metric_{mtype}_meta_tag_values_dist")
+    meta_tables = {
+        "generic_metric_counters_meta_aggregated_dist",
+        "generic_metric_counters_meta_tag_value_aggregated_dist",
+        "generic_metric_counters_meta_dist",
+        "generic_metric_counters_meta_tag_values_dist",
+    }
 
     validate_ro_query(
         sql_query=query,
@@ -68,7 +62,7 @@ def __run_query(query: str) -> ClickhouseResult:
     query and does not validate/sanitize query or response data.
     """
     connection = get_ro_query_node_connection(
-        StorageKey("generic_metrics_distributions").value,
+        StorageKey("generic_metrics_counters").value,
         ClickhouseClientSettings.CARDINALITY_ANALYZER,
     )
 
