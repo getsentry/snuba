@@ -173,9 +173,7 @@ def run_query_and_get_trace(
         "settings": execute_settings,
     }
     if "query_limit" in getattr(connection, "__dict__", {}):
-        execute_kwargs["query_limit"] = (
-            MAX_TRACING_QUERY_LIMIT if apply_query_limit else 0
-        )
+        execute_kwargs["query_limit"] = MAX_TRACING_QUERY_LIMIT if apply_query_limit else 0
 
     query_result = connection.execute(**execute_kwargs)
 
