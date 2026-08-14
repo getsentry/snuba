@@ -470,11 +470,14 @@ jobs:
         if: needs.files-changed.outputs.api_changes == 'false'
         working-directory: sentry
         run: |
-          # Only these dirs carry the `snuba_ci` marker; collecting all of tests/ just to find them is wasteful.
+          # Generic metrics sets/gauges/distributions are gone; sentry master still
+          # inserts those entities. Skip until sentry stops depending on them.
           pytest -k 'not __In' \
             tests/sentry/snuba \
             tests/sentry/workflow_engine/endpoints \
             tests/snuba/rules/conditions \
+            --ignore=tests/sentry/snuba/metrics \
+            --ignore=tests/snuba/test_metrics_layer.py \
             -m snuba_ci \
             -n "$XDIST_WORKERS" --dist=loadfile --reuse-db \
             -vv
@@ -499,7 +502,12 @@ jobs:
               tests/sentry/api/endpoints/test_organization_spans_fields.py \
               tests/sentry/api/endpoints/test_organization_ai_conversations.py \
               tests/sentry/api/endpoints/test_organization_ai_conversation_details.py \
-              tests/sentry/sentry_metrics/querying \
+              --ignore=tests/sentry/snuba/metrics \
+              --ignore=tests/sentry/sentry_metrics \
+              --ignore=tests/sentry/search/events/builder/test_metrics.py \
+              --ignore=tests/sentry/search/events/builder/test_span_metrics.py \
+              --ignore=tests/snuba/test_metrics_layer.py \
+              --ignore=tests/snuba/metrics \
               -n "$XDIST_WORKERS" --dist=loadfile --reuse-db \
               -vv
 
@@ -511,6 +519,8 @@ jobs:
             tests/sentry/snuba \
             tests/sentry/workflow_engine/endpoints \
             tests/snuba/rules/conditions \
+            --ignore=tests/sentry/snuba/metrics \
+            --ignore=tests/snuba/test_metrics_layer.py \
             -m snuba_ci \
             -n "$XDIST_WORKERS" --dist=loadfile --reuse-db \
             -vv
