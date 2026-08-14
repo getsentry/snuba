@@ -139,6 +139,15 @@ def _as_float(value: Any) -> float:
 
 def _column_type_name(column_type: Any, server_timezone: Any) -> str:
     name = str(column_type.name)
+
+    # JSONCompact already embeds the timezone (DateTime('UTC')). Normalize the
+    # default UTC/GMT spelling to Universal for parity with the old native driver.
+    # Leave DateTime64(...) and non-UTC zones alone.
+    if name.startswith("DateTime(") and not name.startswith("DateTime64"):
+        if name in {"DateTime('UTC')", 'DateTime("UTC")', "DateTime('GMT')", 'DateTime("GMT")'}:
+            return "DateTime('Universal')"
+        return name
+
     if name != "DateTime":
         return name
 
