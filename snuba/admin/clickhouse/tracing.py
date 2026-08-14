@@ -60,7 +60,6 @@ class TraceOutput:
     profile_events_meta: list[Any]
     profile_events_profile: dict[str, int]
     query_id: str = ""
-    # SQL text from system.query_log when available (what ClickHouse actually ran).
     executed_query: str = ""
 
 

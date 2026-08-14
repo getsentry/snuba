@@ -193,7 +193,6 @@ class QuerySummary:
     stream_summaries: list[StreamSummary] | None = None
     aggregation_summaries: list[AggregationSummary] | None = None
     sorting_summaries: list[SortingSummary] | None = None
-    # SQL text from system.query_log when available (what ClickHouse actually ran).
     query: str = ""
 
 
