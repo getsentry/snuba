@@ -89,7 +89,7 @@ def forwards(logger: logging.Logger) -> None:
     clickhouse.execute(new_create_table_statement)
 
     # Copy over data in batches of 100,000
-    [(row_count,)] = clickhouse.command(f"SELECT count() FROM {TABLE_NAME}").results
+    [(row_count,)] = clickhouse.execute(f"SELECT count() FROM {TABLE_NAME}").results
     batch_size = 100000
     batch_count = math.ceil(row_count / batch_size)
 
@@ -113,8 +113,8 @@ def forwards(logger: logging.Logger) -> None:
 
     # Ensure each table has the same number of rows before deleting the old one
     assert (
-        clickhouse.command(f"SELECT COUNT() FROM {TABLE_NAME} FINAL;").results
-        == clickhouse.command(f"SELECT COUNT() FROM {TABLE_NAME_OLD} FINAL;").results
+        clickhouse.execute(f"SELECT COUNT() FROM {TABLE_NAME} FINAL;").results
+        == clickhouse.execute(f"SELECT COUNT() FROM {TABLE_NAME_OLD} FINAL;").results
     )
 
     clickhouse.command(f"DROP TABLE {TABLE_NAME_OLD};")

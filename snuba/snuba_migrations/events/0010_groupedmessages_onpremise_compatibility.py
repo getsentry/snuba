@@ -46,7 +46,7 @@ def fix_order_by(_logger: logging.Logger) -> None:
     clickhouse.execute(add_column_sql)
 
     # There shouldn't be any data in the table yet
-    assert clickhouse.command(f"SELECT COUNT() FROM {TABLE_NAME} FINAL;").results[0][0] == 0, (
+    assert clickhouse.execute(f"SELECT COUNT() FROM {TABLE_NAME} FINAL;").results[0][0] == 0, (
         f"{TABLE_NAME} is not empty"
     )
 

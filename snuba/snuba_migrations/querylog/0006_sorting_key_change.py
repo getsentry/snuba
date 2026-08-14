@@ -47,7 +47,7 @@ def update_querylog_table(clickhouse: ClickhousePool, database: str) -> None:
     clickhouse.execute(new_create_table_statement)
 
     # Copy the data over
-    [(row_count,)] = clickhouse.command(f"SELECT count() FROM {TABLE_NAME}").results
+    [(row_count,)] = clickhouse.execute(f"SELECT count() FROM {TABLE_NAME}").results
     batch_size = 100000
     batch_count = math.ceil(row_count / batch_size)
 
@@ -69,7 +69,7 @@ def update_querylog_table(clickhouse: ClickhousePool, database: str) -> None:
         clickhouse.execute(insert_op.format_sql())
 
     # Ensure each table has the same number of rows before deleting the old one
-    [(new_row_count,)] = clickhouse.command(f"SELECT count() FROM {TABLE_NAME_NEW}").results
+    [(new_row_count,)] = clickhouse.execute(f"SELECT count() FROM {TABLE_NAME_NEW}").results
     assert row_count == new_row_count
 
     clickhouse.command(f"RENAME TABLE {TABLE_NAME} TO {TABLE_NAME_OLD};")
