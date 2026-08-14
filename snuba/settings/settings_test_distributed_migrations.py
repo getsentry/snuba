@@ -11,7 +11,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
         "database": os.environ.get("CLICKHOUSE_DATABASE", "snuba_test"),
-        "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8229)),
+        "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
         "storage_sets": {},
         "single_node": False,
         "cluster_name": "query_cluster",
@@ -23,7 +23,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
         "database": os.environ.get("CLICKHOUSE_DATABASE", "snuba_test"),
-        "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8229)),
+        "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
         "storage_sets": {
             "migrations",
         },
@@ -37,7 +37,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
         "database": os.environ.get("CLICKHOUSE_DATABASE", "snuba_test"),
-        "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8229)),
+        "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
         "storage_sets": {
             "discover",
             "events",

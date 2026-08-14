@@ -365,6 +365,31 @@ def test_totals_malformed_json_wrapped() -> None:
         pool.execute_with_totals("SELECT g, sum(v) FROM t GROUP BY g WITH TOTALS")
 
 
+def test_system_command_returns_empty_meta() -> None:
+    client = mock.Mock()
+    pool = _make_pool(client)
+
+    result = pool.execute("SYSTEM START MERGES", with_column_types=True)
+
+    client.command.assert_called_once()
+    client.query.assert_not_called()
+    assert result.results == []
+    assert result.meta == []
+
+
+def test_pool_port_identity_uses_native_port() -> None:
+    pool = ClickhouseConnectPool(
+        host="clickhouse.local",
+        user="default",
+        password="",
+        database="snuba_test",
+        http_port=8123,
+        native_port=9000,
+    )
+    assert pool.port == 9000
+    assert pool.http_port == 8123
+
+
 def test_new_client_defers_database_until_after_connect() -> None:
     import clickhouse_connect
 
@@ -638,11 +663,21 @@ def test_coerce_temporal_only_touches_date_and_datetime() -> None:
     assert _coerce_temporal(0, "DateTime") == 0
 
 
-def test_empty_non_totals_result_does_not_refetch() -> None:
-    # An empty result yields empty meta (zero-byte Native body) and no second query;
-    # the meta is synthesized upstream in db_query, not refetched here.
+def test_empty_non_totals_result_refetches_meta_via_jsoncompact() -> None:
+    # Zero-row Native responses omit the column header. Fall back to one
+    # JSONCompact request so callers still get real types (matching the native
+    # driver), instead of blank synthesized meta.
     client = mock.Mock()
     client.query.return_value = FakeQueryResult(result_set=[], column_names=(), column_types=())
+    client.raw_query.return_value = json.dumps(
+        {
+            "meta": [
+                {"name": "flags_key", "type": "String"},
+                {"name": "count", "type": "UInt64"},
+            ],
+            "data": [],
+        }
+    ).encode()
 
     pool = _make_pool(client)
     result = pool.execute(
@@ -651,8 +686,9 @@ def test_empty_non_totals_result_does_not_refetch() -> None:
     )
 
     assert result.results == []
-    assert result.meta == []
-    client.raw_query.assert_not_called()
+    assert result.meta == [("flags_key", "String"), ("count", "UInt64")]
+    client.raw_query.assert_called_once()
+    assert client.raw_query.call_args.kwargs["fmt"] == "JSONCompact"
 
 
 def test_empty_with_totals_returns_meta_and_totals_via_jsoncompact() -> None:

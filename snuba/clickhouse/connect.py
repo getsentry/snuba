@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import atexit
+import re
 import json
 import logging
 import os
@@ -185,6 +186,9 @@ class ClickhouseConnectPool(ClickhousePool):
         password: str,
         database: str,
         http_port: int = DEFAULT_CLICKHOUSE_HTTP_PORT,
+        # Native/tcp port is kept for node identity (system.clusters, migration
+        # state keys). HTTP is used for the actual connection.
+        native_port: int | None = None,
         secure: bool = False,
         ca_certs: str | None = None,
         verify: bool | None = False,
@@ -196,7 +200,9 @@ class ClickhouseConnectPool(ClickhousePool):
         query_limit: int = 0,
     ) -> None:
         self.host = host
-        self.port = http_port
+        # Callers still key nodes by the native port (e.g. get_column_states).
+        self.port = native_port if native_port is not None else http_port
+        self.http_port = http_port
         self.user = user
         self.password = password
         self.database = database
@@ -227,7 +233,7 @@ class ClickhouseConnectPool(ClickhousePool):
                 SENTRY_OP: "db.clickhouse",
                 sentry_sdk.consts.SPANDATA.DB_SYSTEM: "clickhouse",
                 "server.address": self.host,
-                "server.port": str(self.port),
+                "server.port": str(self.http_port),
             },
         ):
             # Do not pass ``database`` into get_client. clickhouse-connect's
@@ -241,7 +247,7 @@ class ClickhouseConnectPool(ClickhousePool):
             # queries/inserts.
             client = clickhouse_connect.get_client(
                 host=self.host,
-                port=self.port,
+                port=self.http_port,
                 username=self.user,
                 password=self.password,
                 interface="https" if self.secure else "http",
@@ -265,6 +271,19 @@ class ClickhouseConnectPool(ClickhousePool):
     def _query_uses_database(query: str) -> bool:
         normalized = query.lstrip().upper()
         return not normalized.startswith(("CREATE DATABASE", "DROP DATABASE"))
+
+    # Match clickhouse-connect's command classification. These statements do not
+    # return a result matrix; over HTTP the driver surfaces QuerySummary fields
+    # as fake columns, which snuba-admin treats as real column_names.
+    _COMMAND_RE = re.compile(
+        r"^\s*(CREATE|ALTER|SYSTEM|GRANT|REVOKE|CHECK|DETACH|ATTACH|DROP|"
+        r"DELETE|KILL|OPTIMIZE|SET|RENAME|TRUNCATE|USE)\b",
+        re.IGNORECASE,
+    )
+
+    @classmethod
+    def _is_command(cls, query: str) -> bool:
+        return cls._COMMAND_RE.search(query) is not None
 
     def _build_query_settings(
         self,
@@ -340,6 +359,26 @@ class ClickhouseConnectPool(ClickhousePool):
         )
         query_settings = self._build_query_settings(settings, query_id, capture_trace)
 
+        # DDL / SYSTEM / etc. do not return a result matrix. Route them through
+        # command() so QuerySummary fields are not mistaken for columns.
+        if self._is_command(query):
+            with _query_span(query, query_id) as span:
+                span.set_attribute("settings", json.dumps(query_settings, default=repr))
+                client.command(
+                    query,
+                    parameters=_driver_params(params),
+                    settings=query_settings,
+                )
+            return ClickhouseResult(
+                results=[],
+                meta=[] if with_column_types else None,
+                profile=ClickhouseProfile(
+                    blocks=0, bytes=0, elapsed=0.0, progress_bytes=0, rows=0
+                ),
+                trace_output="",
+                query_id=str(query_id or ""),
+            )
+
         query_result = None
         try:
             with _query_span(query, query_id) as span:
@@ -351,13 +390,71 @@ class ClickhouseConnectPool(ClickhousePool):
                     column_oriented=columnar,
                     transport_settings=dict(_CLICKHOUSE_CONNECT_TRANSPORT_SETTINGS),
                 )
-            return self._consume_query_result(
+            result = self._consume_query_result(
                 query_result, with_column_types, query_id, client.server_tz
             )
         finally:
             if query_result is not None:
                 with suppress(Exception):
                     query_result.close()
+
+        # Zero-row Native responses omit the column header. The native driver
+        # always reported types; fall back to JSONCompact (same as WITH TOTALS)
+        # so empty SELECTs still expose real meta for admin/sentry callers.
+        if with_column_types and not result.meta:
+            return self._execute_jsoncompact(
+                client, query, params, query_id, settings, capture_trace
+            )
+        return result
+
+    def _execute_jsoncompact(
+        self,
+        client: Client,
+        query: str,
+        params: Params,
+        query_id: str | None,
+        settings: Mapping[str, Any] | None,
+        capture_trace: bool,
+    ) -> ClickhouseResult:
+        json_settings: dict[str, Any] = dict(settings) if settings else {}
+        json_settings["output_format_json_quote_64bit_integers"] = 0
+        if query_id is not None:
+            json_settings["query_id"] = query_id
+        if capture_trace:
+            json_settings["send_logs_level"] = "trace"
+
+        with _query_span(query, query_id):
+            raw = client.raw_query(
+                query,
+                parameters=_driver_params(params),
+                settings=json_settings,
+                fmt="JSONCompact",
+            )
+        payload = json.loads(raw)
+        meta = [
+            (column["name"], self._normalize_json_type(column["type"], client.server_tz))
+            for column in payload.get("meta", [])
+        ]
+        column_types = [ch_type for _, ch_type in meta]
+
+        def _row(values: Sequence[Any]) -> tuple[Any, ...]:
+            return tuple(
+                _coerce_temporal(value, column_types[i]) for i, value in enumerate(values)
+            )
+
+        results = [_row(row) for row in payload.get("data", [])]
+        return ClickhouseResult(
+            results=results,
+            meta=meta,
+            profile=self._profile_from_statistics(payload),
+            trace_output="",
+            query_id=str(payload.get("query_id") or query_id or ""),
+        )
+
+    @staticmethod
+    def _normalize_json_type(ch_type: str, server_timezone: Any) -> str:
+        # Reuse the same DateTime timezone spelling as the Native path.
+        return _column_type_name(type("T", (), {"name": ch_type})(), server_timezone)
 
     def execute_with_totals(
         self,
@@ -384,7 +481,13 @@ class ClickhouseConnectPool(ClickhousePool):
                 )
 
             payload = json.loads(raw)
-            meta = [(column["name"], column["type"]) for column in payload.get("meta", [])]
+            meta = [
+                (
+                    column["name"],
+                    self._normalize_json_type(column["type"], client.server_tz),
+                )
+                for column in payload.get("meta", [])
+            ]
             column_types = [ch_type for _, ch_type in meta]
 
             def _row(values: Sequence[Any]) -> tuple[Any, ...]:

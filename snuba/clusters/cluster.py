@@ -250,6 +250,7 @@ class ConnectionCache:
                         if node.http_port is not None
                         else DEFAULT_CLICKHOUSE_HTTP_PORT
                     ),
+                    native_port=node.native_port,
                     user=user,
                     password=password,
                     database=database,
