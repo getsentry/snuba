@@ -396,7 +396,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
-      fail-fast: false
       matrix:
         instance: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
     env:
@@ -471,16 +470,11 @@ jobs:
         if: needs.files-changed.outputs.api_changes == 'false'
         working-directory: sentry
         run: |
-          # Generic metrics sets/gauges/distributions are gone; sentry master still
-          # inserts those entities. Skip until sentry stops depending on them.
-          pytest -k 'not __In and not test_insights_query_spm and not test_perf_metric_to_transaction and not test_allowed_metric_detector' \
+          # Only these dirs carry the `snuba_ci` marker; collecting all of tests/ just to find them is wasteful.
+          pytest -k 'not __In' \
             tests/sentry/snuba \
             tests/sentry/workflow_engine/endpoints \
             tests/snuba/rules/conditions \
-            --ignore=tests/sentry/snuba/metrics \
-            --ignore=tests/snuba/test_metrics_layer.py \
-            --ignore=tests/sentry/snuba/test_metrics_performance.py \
-            --ignore=tests/sentry/snuba/test_metrics_enhanced_performance.py \
             -m snuba_ci \
             -n "$XDIST_WORKERS" --dist=loadfile --reuse-db \
             -vv
@@ -489,7 +483,7 @@ jobs:
         if: needs.files-changed.outputs.api_changes == 'true'
         working-directory: sentry
         run: |
-          pytest -k 'not __In and not MetricsEnhancedPerformance and not test_insights_query_spm and not EventComparisonTest and not test_perf_metric_to_transaction and not test_put_allows_custom_measurements and not test_custom_measurements_query_uses_units and not test_allowed_metric_detector' \
+          pytest -k 'not __In' \
               tests/snuba \
               tests/sentry/snuba \
               tests/sentry/eventstream/kafka \
@@ -505,20 +499,7 @@ jobs:
               tests/sentry/api/endpoints/test_organization_spans_fields.py \
               tests/sentry/api/endpoints/test_organization_ai_conversations.py \
               tests/sentry/api/endpoints/test_organization_ai_conversation_details.py \
-              --ignore=tests/sentry/snuba/metrics \
-              --ignore=tests/sentry/sentry_metrics \
-              --ignore=tests/sentry/search/events/builder/test_metrics.py \
-              --ignore=tests/sentry/search/events/builder/test_span_metrics.py \
-              --ignore=tests/snuba/test_metrics_layer.py \
-              --ignore=tests/snuba/metrics \
-              --ignore=tests/snuba/api/endpoints/test_organization_events_mep.py \
-              --ignore=tests/snuba/api/endpoints/test_organization_events_span_metrics.py \
-              --ignore=tests/snuba/api/endpoints/test_organization_events_stats_mep.py \
-              --ignore=tests/snuba/api/endpoints/test_organization_events_stats_span_metrics.py \
-              --ignore=tests/snuba/api/endpoints/test_organization_metrics_meta.py \
-              --ignore=tests/snuba/api/endpoints/test_organization_measurements_meta.py \
-              --ignore=tests/sentry/snuba/test_metrics_performance.py \
-              --ignore=tests/sentry/snuba/test_metrics_enhanced_performance.py \
+              tests/sentry/sentry_metrics/querying \
               -n "$XDIST_WORKERS" --dist=loadfile --reuse-db \
               -vv
 
@@ -526,14 +507,10 @@ jobs:
         if: needs.files-changed.outputs.api_changes == 'true'
         working-directory: sentry
         run: |
-          pytest -k 'not __In and not test_insights_query_spm and not test_perf_metric_to_transaction and not test_allowed_metric_detector' \
+          pytest -k 'not __In' \
             tests/sentry/snuba \
             tests/sentry/workflow_engine/endpoints \
             tests/snuba/rules/conditions \
-            --ignore=tests/sentry/snuba/metrics \
-            --ignore=tests/snuba/test_metrics_layer.py \
-            --ignore=tests/sentry/snuba/test_metrics_performance.py \
-            --ignore=tests/sentry/snuba/test_metrics_enhanced_performance.py \
             -m snuba_ci \
             -n "$XDIST_WORKERS" --dist=loadfile --reuse-db \
             -vv
