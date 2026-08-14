@@ -15,7 +15,7 @@ type ProfileEventsResults = {
 
 type TracingResult = {
   input_query?: string;
-  // SQL actually sent after admin-side rewrites (e.g. default LIMIT).
+  // SQL from system.query_log when available (what ClickHouse actually ran).
   executed_query?: string;
   timestamp: number;
   trace_output?: string;
@@ -43,6 +43,7 @@ type QuerySummary = {
   stream_summaries?: Array<StreamSummary>;
   aggregation_summaries?: Array<AggregationSummary>;
   sorting_summaries?: Array<SortingSummary>;
+  query?: string;
 };
 
 type IndexSummary = {

@@ -49,13 +49,6 @@ def _extract_settings_clause(query: str) -> tuple[str, dict[str, str]]:
     }
 
 
-def _executed_query_with_limit(query: str, max_limit: int = MAX_TRACING_QUERY_LIMIT) -> str:
-    """Best-effort SQL the connect driver will send when query_limit is enabled."""
-    if "LIMIT" in query.upper().split():
-        return query
-    return f"{query.rstrip()}\n LIMIT {max_limit}"
-
-
 @dataclass
 class TraceOutput:
     trace_output: str
@@ -67,7 +60,7 @@ class TraceOutput:
     profile_events_meta: list[Any]
     profile_events_profile: dict[str, int]
     query_id: str = ""
-    # SQL shape we expect ClickHouse to run after SETTINGS extraction + query_limit.
+    # SQL text from system.query_log when available (what ClickHouse actually ran).
     executed_query: str = ""
 
 
@@ -87,7 +80,6 @@ def run_query_and_get_trace(
     if "query_limit" in getattr(connection, "__dict__", {}):
         connection.query_limit = MAX_TRACING_QUERY_LIMIT
 
-    executed_query = _executed_query_with_limit(query_without_settings)
     query_result = connection.execute(
         query=query_without_settings,
         capture_trace=True,
@@ -118,8 +110,19 @@ def run_query_and_get_trace(
         profile_events_meta=[],
         profile_events_profile={},
         query_id=query_id,
-        executed_query=executed_query,
+        executed_query=_executed_query_from_summary(summarized_trace_output),
     )
+
+
+def _executed_query_from_summary(summary: TracingSummary) -> str:
+    """Prefer the initial/distributed query text recorded in system.query_log."""
+    for query_summary in summary.query_summaries.values():
+        if query_summary.is_distributed and query_summary.query:
+            return query_summary.query
+    for query_summary in summary.query_summaries.values():
+        if query_summary.query:
+            return query_summary.query
+    return ""
 
 
 def _resolve_query_id(
@@ -203,7 +206,8 @@ def summarize_from_query_log(
                 query_duration_ms > 0,
                 formatReadableSize(read_bytes / (query_duration_ms / 1000.0)),
                 '0.00 B'
-            ) AS bytes_per_second
+            ) AS bytes_per_second,
+            query
         FROM {source}
         WHERE event_time >= now() - INTERVAL 5 MINUTE
           AND type = 'QueryFinish'
@@ -231,6 +235,7 @@ def summarize_from_query_log(
             seconds,
             rows_per_second,
             bytes_per_second,
+            query_text,
         ) = row
         node_name = str(host)
 
@@ -249,12 +254,15 @@ def summarize_from_query_log(
                 is_distributed=bool(is_initial_query),
                 query_id=str(row_query_id),
                 execute_summaries=[execute],
+                query=str(query_text) if query_text else None,
             )
         else:
             if existing.execute_summaries is None:
                 existing.execute_summaries = [execute]
             else:
                 existing.execute_summaries.append(execute)
+            if query_text and not existing.query:
+                existing.query = str(query_text)
 
     return summary
 
@@ -294,6 +302,8 @@ def merge_query_log_summary(base: TracingSummary, from_query_log: TracingSummary
             continue
         if not existing.execute_summaries and log_summary.execute_summaries:
             existing.execute_summaries = list(log_summary.execute_summaries)
+        if log_summary.query and not existing.query:
+            existing.query = log_summary.query
         # Only overwrite flags for nodes query_log actually returned. Missing
         # hosts may be a hostname mismatch, not proof the node is non-distributed.
         existing.is_distributed = log_summary.is_distributed
