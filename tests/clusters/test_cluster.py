@@ -89,7 +89,7 @@ SLICED_CLUSTERS_CONFIG = [
         "password": "",
         "database": "default",
         "secure": False,
-        "storage_set_slices": {("generic_metrics_distributions", 0)},
+        "storage_set_slices": {("generic_metrics_counters", 0)},
         "single_node": True,
     },
     {
@@ -99,7 +99,7 @@ SLICED_CLUSTERS_CONFIG = [
         "password": "",
         "database": "slice_1_default",
         "secure": False,
-        "storage_set_slices": {("generic_metrics_distributions", 1)},
+        "storage_set_slices": {("generic_metrics_counters", 1)},
         "single_node": True,
     },
 ]
@@ -295,14 +295,14 @@ def test_get_node_connection_uses_connect_pool() -> None:
 def test_sliced_cluster() -> None:
     importlib.reload(cluster)
 
-    res_cluster = cluster.get_cluster(StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS, 1)
+    res_cluster = cluster.get_cluster(StorageSetKey.GENERIC_METRICS_COUNTERS, 1)
 
     assert res_cluster.is_single_node()
     assert res_cluster.get_database() == "slice_1_default"
     assert res_cluster.get_host() == "host_slice"
     assert res_cluster.get_port() == 9001
 
-    res_cluster_default = cluster.get_cluster(StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS, 0)
+    res_cluster_default = cluster.get_cluster(StorageSetKey.GENERIC_METRICS_COUNTERS, 0)
 
     assert res_cluster_default.is_single_node()
     assert res_cluster_default.get_database() == "default"

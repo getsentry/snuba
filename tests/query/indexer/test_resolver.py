@@ -28,12 +28,12 @@ metric_id_test_cases = [
     pytest.param(
         LogicalQuery(
             from_clause=QueryEntity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
-                    "sum(d:transactions/duration@millisecond)",
+                    "sum(c:transactions/duration@millisecond)",
                     FunctionCall(
                         "_snuba_aggregate_value",
                         "sum",
@@ -46,22 +46,22 @@ metric_id_test_cases = [
                 "equals",
                 (
                     Column(None, None, "metric_id"),
-                    Literal(None, "d:transactions/duration@millisecond"),
+                    Literal(None, "c:transactions/duration@millisecond"),
                 ),
             ),
             granularity=60,
             limit=1000,
             offset=0,
         ),
-        {"d:transactions/duration@millisecond": 123456},
+        {"c:transactions/duration@millisecond": 123456},
         LogicalQuery(
             from_clause=QueryEntity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
-                    "sum(d:transactions/duration@millisecond)",
+                    "sum(c:transactions/duration@millisecond)",
                     FunctionCall(
                         "_snuba_aggregate_value",
                         "sum",
@@ -86,8 +86,8 @@ metric_id_test_cases = [
     pytest.param(
         LogicalQuery(
             from_clause=QueryEntity(
-                EntityKey.GENERIC_METRICS_SETS,
-                get_entity(EntityKey.GENERIC_METRICS_SETS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -112,13 +112,13 @@ metric_id_test_cases = [
             offset=0,
         ),
         {
-            "transaction.user": "s:transactions/user@none",
-            "s:transactions/user@none": 567890,
+            "transaction.user": "c:transactions/user@none",
+            "c:transactions/user@none": 567890,
         },
         LogicalQuery(
             from_clause=QueryEntity(
-                EntityKey.GENERIC_METRICS_SETS,
-                get_entity(EntityKey.GENERIC_METRICS_SETS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -147,8 +147,8 @@ metric_id_test_cases = [
     pytest.param(
         LogicalQuery(
             from_clause=QueryEntity(
-                EntityKey.GENERIC_METRICS_SETS,
-                get_entity(EntityKey.GENERIC_METRICS_SETS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -201,15 +201,15 @@ metric_id_test_cases = [
             offset=0,
         ),
         {
-            "transaction.user": "s:transactions/user@none",
-            "s:transactions/user@none": 123456,
-            "transaction.duration": "s:transactions/duration@none",
-            "s:transactions/duration@none": 567890,
+            "transaction.user": "c:transactions/user@none",
+            "c:transactions/user@none": 123456,
+            "transaction.duration": "c:transactions/duration@none",
+            "c:transactions/duration@none": 567890,
         },
         LogicalQuery(
             from_clause=QueryEntity(
-                EntityKey.GENERIC_METRICS_SETS,
-                get_entity(EntityKey.GENERIC_METRICS_SETS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -337,7 +337,7 @@ tag_test_cases = [
             ),
             selected_columns=[
                 SelectedExpression(
-                    "sum(d:transactions/duration@millisecond)",
+                    "sum(c:transactions/duration@millisecond)",
                     FunctionCall(
                         "_snuba_aggregate_value",
                         "sum",
@@ -365,7 +365,7 @@ tag_test_cases = [
             ),
             selected_columns=[
                 SelectedExpression(
-                    "sum(d:transactions/duration@millisecond)",
+                    "sum(c:transactions/duration@millisecond)",
                     FunctionCall(
                         "_snuba_aggregate_value",
                         "sum",
@@ -395,7 +395,7 @@ tag_test_cases = [
             ),
             selected_columns=[
                 SelectedExpression(
-                    "sum(d:transactions/duration@millisecond)",
+                    "sum(c:transactions/duration@millisecond)",
                     FunctionCall(
                         "_snuba_aggregate_value",
                         "sum",
@@ -455,7 +455,7 @@ tag_test_cases = [
             ),
             selected_columns=[
                 SelectedExpression(
-                    "sum(d:transactions/duration@millisecond)",
+                    "sum(c:transactions/duration@millisecond)",
                     FunctionCall(
                         "_snuba_aggregate_value",
                         "sum",
@@ -511,7 +511,7 @@ tag_test_cases = [
             ),
             selected_columns=[
                 SelectedExpression(
-                    "sum(d:transactions/duration@millisecond)",
+                    "sum(c:transactions/duration@millisecond)",
                     FunctionCall(
                         "_snuba_aggregate_value",
                         "sum",
@@ -540,7 +540,7 @@ tag_test_cases = [
             ),
             selected_columns=[
                 SelectedExpression(
-                    "sum(d:transactions/duration@millisecond)",
+                    "sum(c:transactions/duration@millisecond)",
                     FunctionCall(
                         "_snuba_aggregate_value",
                         "sum",
@@ -568,12 +568,12 @@ tag_test_cases = [
     pytest.param(
         LogicalQuery(
             from_clause=QueryEntity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
-                    "sum(d:transactions/duration@millisecond)",
+                    "sum(c:transactions/duration@millisecond)",
                     FunctionCall(
                         "_snuba_aggregate_value",
                         "sum",
@@ -597,12 +597,12 @@ tag_test_cases = [
         {"transaction": 999999, "event_type": 888888, "t1": 777777},
         LogicalQuery(
             from_clause=QueryEntity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
-                    "sum(d:transactions/duration@millisecond)",
+                    "sum(c:transactions/duration@millisecond)",
                     FunctionCall(
                         "_snuba_aggregate_value",
                         "sum",
@@ -632,8 +632,8 @@ tag_test_cases = [
     pytest.param(
         LogicalQuery(
             from_clause=QueryEntity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -686,8 +686,8 @@ tag_test_cases = [
         },
         LogicalQuery(
             from_clause=QueryEntity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
             ),
             selected_columns=[
                 SelectedExpression(

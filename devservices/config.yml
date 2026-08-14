@@ -27,19 +27,13 @@ x-sentry-service-config:
       description: Consumer for functions
     metrics-consumer:
       description: Consumer for metrics
-    generic-metrics-distributions-consumer:
-      description: Consumer for generic metrics distributions
-    generic-metrics-sets-consumer:
-      description: Consumer for generic metrics sets
     generic-metrics-counters-consumer:
       description: Consumer for generic metrics counters
-    generic-metrics-gauges-consumer:
-      description: Consumer for generic metrics gauges
   modes:
     default: [redis, kafka, clickhouse]
     containerized: [clickhouse, redis, kafka, snuba]
     containerized-profiles: [clickhouse, redis, kafka, snuba, profiles-consumer, profile-chunks-consumer, functions-consumer, functions-consumer]
-    containerized-metrics-dev: [clickhouse, redis, kafka, snuba, metrics-consumer, generic-metrics-distributions-consumer, generic-metrics-sets-consumer, generic-metrics-counters-consumer, generic-metrics-gauges-consumer]
+    containerized-metrics-dev: [clickhouse, redis, kafka, snuba, metrics-consumer, generic-metrics-counters-consumer]
 
 x-programs:
   devserver:
@@ -224,62 +218,7 @@ services:
     labels:
       - orchestrator=devservices
     restart: unless-stopped
-  generic-metrics-distributions-consumer:
-    image: ghcr.io/getsentry/snuba:nightly-distroless
-    command: [
-          rust-consumer,
-          --storage=generic_metrics_distributions_raw,
-          --consumer-group=snuba-gen-metrics-distributions-consumers,
-          --use-rust-processor,
-          --auto-offset-reset=latest,
-          --no-strict-offset-reset,
-          --enforce-schema
-        ]
-    environment:
-      PYTHONUNBUFFERED: 1
-      SNUBA_SETTINGS: docker
-      DEBUG: 1
-      CLICKHOUSE_HOST: clickhouse
-      CLICKHOUSE_HTTP_PORT: 8123
-      DEFAULT_BROKERS: kafka:9093
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_DB: 1
-    extra_hosts:
-      host.docker.internal: host-gateway
-    networks:
-      - devservices
-    labels:
-      - orchestrator=devservices
-    restart: unless-stopped
-  generic-metrics-sets-consumer:
-    image: ghcr.io/getsentry/snuba:nightly-distroless
-    command: [
-          rust-consumer,
-          --storage=generic_metrics_sets_raw,
-          --consumer-group=snuba-gen-metrics-sets-consumers,
-          --use-rust-processor,
-          --auto-offset-reset=latest,
-          --no-strict-offset-reset,
-          --enforce-schema
-        ]
-    environment:
-      PYTHONUNBUFFERED: 1
-      SNUBA_SETTINGS: docker
-      DEBUG: 1
-      CLICKHOUSE_HOST: clickhouse
-      CLICKHOUSE_HTTP_PORT: 8123
-      DEFAULT_BROKERS: kafka:9093
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_DB: 1
-    extra_hosts:
-      host.docker.internal: host-gateway
-    networks:
-      - devservices
-    labels:
-      - orchestrator=devservices
-    restart: unless-stopped
+
   generic-metrics-counters-consumer:
     image: ghcr.io/getsentry/snuba:nightly-distroless
     command: [
@@ -308,34 +247,7 @@ services:
     labels:
       - orchestrator=devservices
     restart: unless-stopped
-  generic-metrics-gauges-consumer:
-    image: ghcr.io/getsentry/snuba:nightly-distroless
-    command: [
-          rust-consumer,
-          --storage=generic_metrics_gauges_raw,
-          --consumer-group=snuba-gen-metrics-gauges-consumers,
-          --use-rust-processor,
-          --auto-offset-reset=latest,
-          --no-strict-offset-reset,
-          --enforce-schema
-        ]
-    environment:
-      PYTHONUNBUFFERED: 1
-      SNUBA_SETTINGS: docker
-      DEBUG: 1
-      CLICKHOUSE_HOST: clickhouse
-      CLICKHOUSE_HTTP_PORT: 8123
-      DEFAULT_BROKERS: kafka:9093
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_DB: 1
-    extra_hosts:
-      host.docker.internal: host-gateway
-    networks:
-      - devservices
-    labels:
-      - orchestrator=devservices
-    restart: unless-stopped
+
 
 volumes:
   clickhouse-data:
