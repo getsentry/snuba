@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-import re
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -35,50 +34,24 @@ logger = structlog.get_logger().bind(module=__name__)
 
 MAX_TRACING_QUERY_LIMIT = 10_000
 
-# Mirrors clickhouse-connect's limit detection so the executed-query display matches
-# what the driver will do when query_limit is set.
-_LIMIT_RE = re.compile(r"\s+LIMIT($|\s)", re.IGNORECASE)
-_SETTINGS_SPLIT_RE = re.compile(r"\bSETTINGS\b", re.IGNORECASE)
 
-
-def _extract_settings_clause(query: str) -> tuple[str, dict[str, Any]]:
-    """
-    Move a trailing SETTINGS clause out of the SQL string.
-
-    clickhouse-connect's query_limit appends `LIMIT N` at the end of the SQL. That
-    is invalid when the query already ends with SETTINGS, so tracing lifts those
-    settings into the driver settings dict instead.
-    """
-    matches = list(_SETTINGS_SPLIT_RE.finditer(query))
-    if not matches:
+def _extract_settings_clause(query: str) -> tuple[str, dict[str, str]]:
+    """Move a trailing SETTINGS clause into the driver settings dict."""
+    settings_at = query.upper().rfind("SETTINGS")
+    if settings_at == -1:
         return query, {}
 
-    match = matches[-1]
-    body = query[: match.start()].rstrip()
-    settings: dict[str, Any] = {}
-    for part in query[match.end() :].split(","):
-        if "=" not in part:
-            continue
-        key, raw_value = part.split("=", 1)
-        key = key.strip()
-        raw_value = raw_value.strip()
-        if not key:
-            continue
-        if (raw_value.startswith("'") and raw_value.endswith("'")) or (
-            raw_value.startswith('"') and raw_value.endswith('"')
-        ):
-            settings[key] = raw_value[1:-1]
-            continue
-        try:
-            settings[key] = float(raw_value) if "." in raw_value else int(raw_value)
-        except ValueError:
-            settings[key] = raw_value
-    return body, settings
+    settings = dict(
+        part.strip().split("=", 1) for part in query[settings_at + len("SETTINGS") :].split(",")
+    )
+    return query[:settings_at].rstrip(), {
+        key.strip(): value.strip().strip("'\"") for key, value in settings.items()
+    }
 
 
 def _executed_query_with_limit(query: str, max_limit: int = MAX_TRACING_QUERY_LIMIT) -> str:
     """Best-effort SQL the connect driver will send when query_limit is enabled."""
-    if _LIMIT_RE.search(query):
+    if "LIMIT" in query.upper().split():
         return query
     return f"{query.rstrip()}\n LIMIT {max_limit}"
 

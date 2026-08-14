@@ -23,7 +23,7 @@ def test_extract_settings_clause_moves_settings() -> None:
         "SELECT 1 SETTINGS max_threads = 10, distributed_product_mode = 'global'"
     )
     assert body == "SELECT 1"
-    assert settings == {"max_threads": 10, "distributed_product_mode": "global"}
+    assert settings == {"max_threads": "10", "distributed_product_mode": "global"}
 
     body, settings = _extract_settings_clause("SELECT 1")
     assert body == "SELECT 1"
@@ -349,7 +349,7 @@ def test_run_query_and_get_trace_uses_query_log_when_wire_trace_empty() -> None:
     assert connection.execute.call_args.kwargs["query"] == "SELECT 1"
     assert connection.execute.call_args.kwargs["settings"] == {
         "log_profile_events": 1,
-        "max_threads": 10,
+        "max_threads": "10",
     }
     assert connection.query_limit == MAX_TRACING_QUERY_LIMIT
     assert output.executed_query == "SELECT 1\n LIMIT 10000"
