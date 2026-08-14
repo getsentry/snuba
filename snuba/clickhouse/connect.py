@@ -137,7 +137,6 @@ def _as_float(value: Any) -> float:
         return 0.0
 
 
-
 def _coerce_temporal(value: Any, ch_type: str) -> Any:
     if not isinstance(value, str):
         return value
