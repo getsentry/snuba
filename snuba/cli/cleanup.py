@@ -14,7 +14,7 @@ from snuba.environment import setup_logging, setup_sentry
 @click.option(
     "--clickhouse-port",
     type=int,
-    help="Clickhouse native port to write to.",
+    help="ClickHouse port identifying the target node.",
 )
 @click.option(
     "--clickhouse-secure",
@@ -86,17 +86,15 @@ def cleanup(
 
     connection: ClickhousePool
     if clickhouse_host and clickhouse_port:
-        # By-host CLI runs target individual storage nodes, which serve HTTP on
-        # the well-known default port. cluster.get_http_port() is only valid for
-        # the cluster query endpoint (may be an Envoy intercept port).
-        query_node = cluster.get_query_node()
-        is_query_node = (
-            clickhouse_host == query_node.host_name and clickhouse_port == query_node.native_port
-        )
-        http_port = cluster.get_http_port() if is_query_node else DEFAULT_CLICKHOUSE_HTTP_PORT
+        # Storage nodes serve HTTP on 8123. --clickhouse-port is only node
+        # identity (system.clusters / cron args), not the HTTP listener.
         connection = connection_cache.get_node_connection(
             ClickhouseClientSettings.CLEANUP,
-            ClickhouseNode(clickhouse_host, clickhouse_port, http_port=http_port),
+            ClickhouseNode(
+                clickhouse_host,
+                clickhouse_port,
+                http_port=DEFAULT_CLICKHOUSE_HTTP_PORT,
+            ),
             clickhouse_user,
             clickhouse_password,
             database,

@@ -102,7 +102,7 @@ def get_credentials() -> tuple[str, str]:
 @click.option(
     "--clickhouse-port",
     type=int,
-    help="Clickhouse native port to write to.",
+    help="ClickHouse port identifying the target node.",
     required=True,
     default=9000,
 )
@@ -166,11 +166,9 @@ def querylog_to_csv(
     query = get_query_results(event_type, [database], tables, start_time, end_time)
 
     (clickhouse_user, clickhouse_password) = get_credentials()
-    # Go through the shared connection cache so the driver (native vs
-    # clickhouse-connect HTTP pool behind the abstract ClickhousePool type.
-    # There is no cluster here to read an
-    # http_port from, so use the configured CLICKHOUSE_HTTP_PORT (the same env
-    # var the cluster config reads), defaulting to the well-known port.
+    # No cluster here to read an http_port from, so use CLICKHOUSE_HTTP_PORT
+    # (same env the cluster config reads), defaulting to 8123.
+
     http_port = int(os.environ.get("CLICKHOUSE_HTTP_PORT", DEFAULT_CLICKHOUSE_HTTP_PORT))
     # This exports system.query_log over an arbitrary time window and can scan a
     # lot; it is a maintenance/export job, not a user-facing read, so use the
