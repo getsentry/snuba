@@ -55,7 +55,7 @@ def _make_pool(client: mock.Mock, **kwargs: Any) -> ClickhouseConnectPool:
         database="test",
         **kwargs,
     )
-    pool._new_client = lambda: client  # type: ignore[method-assign]
+    pool._new_client = lambda query_limit=None: client  # type: ignore[method-assign]
     return pool
 
 
