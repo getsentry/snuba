@@ -157,16 +157,8 @@ def test_execute_passes_query_id_and_settings() -> None:
     assert kwargs["transport_settings"] == {"X-ClickHouse-Format": "Native"}
 
 
-@pytest.mark.parametrize(
-    "query",
-    [
-        "CREATE DATABASE snuba_test",
-        "  DROP DATABASE IF EXISTS snuba_test",
-    ],
-)
-def test_database_ddl_does_not_require_current_database(query: str) -> None:
+def test_command_can_skip_database() -> None:
     client = mock.Mock()
-    client.query.return_value = FakeQueryResult(result_set=[])
     pool = ClickhouseConnectPool(
         host="host",
         user="test",
@@ -175,9 +167,9 @@ def test_database_ddl_does_not_require_current_database(query: str) -> None:
     )
 
     with mock.patch.object(pool, "_new_client", return_value=client) as new_client:
-        pool.execute(query)
+        pool.command("CREATE DATABASE snuba_test", use_database=False)
 
-    new_client.assert_called_once_with(use_database=False, query_limit=None)
+    new_client.assert_called_once_with(use_database=False)
 
 
 def test_regular_query_uses_current_database() -> None:
@@ -193,7 +185,7 @@ def test_regular_query_uses_current_database() -> None:
     with mock.patch.object(pool, "_new_client", return_value=client) as new_client:
         pool.execute("SELECT 1")
 
-    new_client.assert_called_once_with(use_database=True, query_limit=None)
+    new_client.assert_called_once_with(query_limit=None)
 
 
 def test_execute_sets_native_format_for_embedded_insert_sql() -> None:

@@ -69,6 +69,7 @@ class ClickhousePool(ABC):
         params: Params = None,
         settings: Mapping[str, Any] | None = None,
         query_id: str | None = None,
+        use_database: bool = True,
     ) -> ClickhouseResult:
         raise NotImplementedError
 

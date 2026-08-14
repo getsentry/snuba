@@ -262,11 +262,6 @@ class ClickhouseConnectPool(ClickhousePool):
                 client.database = self.database
             return client
 
-    @staticmethod
-    def _query_uses_database(query: str) -> bool:
-        normalized = query.lstrip().upper()
-        return not normalized.startswith(("CREATE DATABASE", "DROP DATABASE"))
-
     def _build_query_settings(
         self,
         settings: Mapping[str, Any] | None,
@@ -334,10 +329,7 @@ class ClickhouseConnectPool(ClickhousePool):
         capture_trace: bool,
         query_limit: int | None = None,
     ) -> ClickhouseResult:
-        client = self._new_client(
-            use_database=self._query_uses_database(query),
-            query_limit=query_limit,
-        )
+        client = self._new_client(query_limit=query_limit)
         query_settings = self._build_query_settings(settings, query_id, capture_trace)
 
         # Prefer JSONCompact whenever column types are required. Native HTTP
@@ -605,11 +597,10 @@ class ClickhouseConnectPool(ClickhousePool):
         params: Params = None,
         settings: Mapping[str, Any] | None = None,
         query_id: str | None = None,
+        use_database: bool = True,
     ) -> ClickhouseResult:
         with self._translate_clickhouse_errors():
-            client = self._new_client(
-                use_database=self._query_uses_database(statement),
-            )
+            client = self._new_client(use_database=use_database)
             query_settings = self._build_query_settings(settings, query_id, False)
             with _query_span(statement, query_id):
                 client.command(
