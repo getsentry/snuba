@@ -1,5 +1,5 @@
 import json
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Any, cast
 from unittest import mock
 
@@ -48,9 +48,8 @@ class FakeQueryResult:
 
 
 def _make_pool(client: mock.Mock, **kwargs: Any) -> ClickhouseConnectPool:
-    from datetime import timezone
 
-    client.server_tz = timezone.utc
+    client.server_tz = UTC
     pool = ClickhouseConnectPool(
         host="host",
         user="test",
@@ -383,9 +382,7 @@ def test_new_client_defers_database_until_after_connect() -> None:
     fake_client = mock.Mock()
 
     with (
-        mock.patch.object(
-            clickhouse_connect, "get_client", return_value=fake_client
-        ) as get_client,
+        mock.patch.object(clickhouse_connect, "get_client", return_value=fake_client) as get_client,
         mock.patch("snuba.clickhouse.connect.get_pool_manager"),
     ):
         client = pool._new_client()
