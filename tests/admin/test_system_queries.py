@@ -312,7 +312,6 @@ def test_clusterless_rejects_unvalidated_host(
     InvalidNodeError and no credentials ever leave the process.
     """
     from snuba.admin.clickhouse import common
-    from snuba.clusters.cluster import connection_cache
 
     helper = getattr(common, helper_name)
 
@@ -322,15 +321,8 @@ def test_clusterless_rejects_unvalidated_host(
             "_validate_node",
             side_effect=InvalidNodeError("host not in cluster"),
         ) as mock_validate,
-        # connection_cache is the shared singleton; patching the method on the
-        # object affects the reference bound inside common as well.
-        patch.object(connection_cache, "get_node_connection") as mock_pool,
+        patch.object(common, "build_pool") as mock_pool,
     ):
-        # Clear any cached connection for this storage so the cache lookup
-        # can't short-circuit validation.
-        for key in [k for k in common.NODE_CONNECTIONS if k.startswith("errors-")]:
-            del common.NODE_CONNECTIONS[key]
-
         with pytest.raises(InvalidNodeError):
             helper("attacker.example.com", 9009, "errors", client_settings)
 
@@ -359,7 +351,6 @@ def test_by_host_connection_uses_default_http_port(helper_name: str) -> None:
     from snuba.clusters.cluster import (
         DEFAULT_CLICKHOUSE_HTTP_PORT,
         ClickhouseCluster,
-        connection_cache,
     )
 
     helper = getattr(common, helper_name)
@@ -369,42 +360,28 @@ def test_by_host_connection_uses_default_http_port(helper_name: str) -> None:
     # if the test cluster happens to be configured with the default port.
     sentinel_cluster_http_port = 65432
 
-    # Snapshot and restore the module-level connection cache around the call.
-    # The cache key is built from str(StorageKey), which falls back to its repr
-    # ("StorageKey.ERRORS-..."), so matching on a literal prefix is brittle;
-    # snapshot/restore is independent of the key format. Clearing it first also
-    # guarantees the helper builds a fresh node instead of returning a cached
-    # entry, so connection_cache.get_node_connection is actually invoked.
-    saved_connections = dict(common.NODE_CONNECTIONS)
-    common.NODE_CONNECTIONS.clear()
-    try:
-        with (
-            patch.object(common, "_validate_node"),  # treat the host as valid
-            patch.object(
-                ClickhouseCluster,
-                "get_port",
-                return_value=sentinel_cluster_http_port,
-            ),
-            patch.object(connection_cache, "get_node_connection") as mock_pool,
-        ):
-            helper(
-                "specific-node.example.com",
-                9000,
-                "errors",
-                ClickhouseClientSettings.QUERY,
-            )
-
-        assert mock_pool.called, "expected a pool to be acquired for a valid host"
-        node = mock_pool.call_args.args[1]
-        assert node.port == DEFAULT_CLICKHOUSE_HTTP_PORT
-        assert node.port != sentinel_cluster_http_port, (
-            "by-host connections must not use the cluster's configured port"
+    with (
+        patch.object(common, "_validate_node"),  # treat the host as valid
+        patch.object(
+            ClickhouseCluster,
+            "get_port",
+            return_value=sentinel_cluster_http_port,
+        ),
+        patch.object(common, "build_pool") as mock_pool,
+    ):
+        helper(
+            "specific-node.example.com",
+            9000,
+            "errors",
+            ClickhouseClientSettings.QUERY,
         )
-    finally:
-        # Restore the cache exactly, so this test never leaks a mocked
-        # connection into others (regardless of the cache key format).
-        common.NODE_CONNECTIONS.clear()
-        common.NODE_CONNECTIONS.update(saved_connections)
+
+    assert mock_pool.called, "expected a pool to be acquired for a valid host"
+    node = mock_pool.call_args.args[1]
+    assert node.port == DEFAULT_CLICKHOUSE_HTTP_PORT
+    assert node.port != sentinel_cluster_http_port, (
+        "by-host connections must not use the cluster's configured port"
+    )
 
 
 def test_query_node_connection_uses_cluster_http_port() -> None:
@@ -419,93 +396,51 @@ def test_query_node_connection_uses_cluster_http_port() -> None:
     tools to the wrong port.
     """
     from snuba.admin.clickhouse import common
-    from snuba.clusters.cluster import ClickhouseCluster, connection_cache
+    from snuba.clusters.cluster import ClickhouseCluster
 
     # A port that is deliberately not the well-known default, so the assertion
     # below proves the query-node path uses the cluster's configured port and
     # not the by-host default.
     sentinel_cluster_http_port = 65432
 
-    # get_ro_query_node_connection caches in CLUSTER_CONNECTIONS, and the
-    # underlying get_ro_node_connection caches in NODE_CONNECTIONS; snapshot and
-    # restore both so the call is exercised and nothing leaks.
-    saved_node = dict(common.NODE_CONNECTIONS)
-    saved_cluster = dict(common.CLUSTER_CONNECTIONS)
-    common.NODE_CONNECTIONS.clear()
-    common.CLUSTER_CONNECTIONS.clear()
-    try:
-        with (
-            patch.object(common, "_validate_node"),  # treat the host as valid
-            patch.object(
-                ClickhouseCluster,
-                "get_port",
-                return_value=sentinel_cluster_http_port,
-            ),
-            patch.object(connection_cache, "get_node_connection") as mock_pool,
-        ):
-            common.get_ro_query_node_connection("errors", ClickhouseClientSettings.QUERY)
+    with (
+        patch.object(common, "_validate_node"),  # treat the host as valid
+        patch.object(
+            ClickhouseCluster,
+            "get_port",
+            return_value=sentinel_cluster_http_port,
+        ),
+        patch.object(common, "build_pool") as mock_pool,
+    ):
+        common.get_ro_query_node_connection("errors", ClickhouseClientSettings.QUERY)
 
-        assert mock_pool.called, "expected a pool to be acquired for the query node"
-        node = mock_pool.call_args.args[1]
-        assert node.port == sentinel_cluster_http_port, (
-            "the query-node connection must use the cluster's configured port"
-        )
-    finally:
-        common.NODE_CONNECTIONS.clear()
-        common.NODE_CONNECTIONS.update(saved_node)
-        common.CLUSTER_CONNECTIONS.clear()
-        common.CLUSTER_CONNECTIONS.update(saved_cluster)
+    assert mock_pool.called, "expected a pool to be acquired for the query node"
+    node = mock_pool.call_args.args[1]
+    assert node.port == sentinel_cluster_http_port, (
+        "the query-node connection must use the cluster's configured port"
+    )
 
 
-def test_connection_cache_is_keyed_on_client_settings() -> None:
-    """
-    Two admin tools reaching the same storage on the same host with different
-    ClickhouseClientSettings must get their own pool. The settings — and, on the
-    read-only path, the credentials — are baked into a pool when it is built, so
-    a cache keyed only on storage/host would hand the second caller whichever
-    pool the first one happened to create: System Queries (QUERY -> readonly
-    user, 25s cap) and the Cardinality Analyzer (CARDINALITY_ANALYZER -> trace
-    user, max_threads=10, 60s cap) both reach generic_metrics_distributions on
-    the query node.
-    """
+def test_ro_profiles_use_matching_credentials() -> None:
+    """QUERY uses the readonly user; CARDINALITY_ANALYZER uses the trace user."""
     from snuba.admin.clickhouse import common
-    from snuba.clusters.cluster import connection_cache
 
-    saved_node = dict(common.NODE_CONNECTIONS)
-    saved_cluster = dict(common.CLUSTER_CONNECTIONS)
-    common.NODE_CONNECTIONS.clear()
-    common.CLUSTER_CONNECTIONS.clear()
-    try:
-        with (
-            patch.object(common, "_validate_node"),  # treat the host as valid
-            patch.object(settings, "CLICKHOUSE_READONLY_USER", "ro_user"),
-            patch.object(settings, "CLICKHOUSE_TRACE_USER", "trace_user"),
-            patch.object(connection_cache, "get_node_connection") as mock_pool,
-        ):
-            common.get_ro_query_node_connection("errors", ClickhouseClientSettings.QUERY)
-            common.get_ro_query_node_connection(
-                "errors", ClickhouseClientSettings.CARDINALITY_ANALYZER
-            )
+    with (
+        patch.object(common, "_validate_node"),
+        patch.object(settings, "CLICKHOUSE_READONLY_USER", "ro_user"),
+        patch.object(settings, "CLICKHOUSE_TRACE_USER", "trace_user"),
+        patch.object(common, "build_pool") as mock_pool,
+    ):
+        common.get_ro_query_node_connection("errors", ClickhouseClientSettings.QUERY)
+        common.get_ro_query_node_connection("errors", ClickhouseClientSettings.CARDINALITY_ANALYZER)
 
-        assert mock_pool.call_count == 2, (
-            "each client settings profile must build its own pool, not reuse the first caller's"
-        )
-        # _build_validated_pool passes (client_settings, node, username, password, ...)
-        profiles = [call.args[0] for call in mock_pool.call_args_list]
-        usernames = [call.args[2] for call in mock_pool.call_args_list]
-        assert profiles == [
-            ClickhouseClientSettings.QUERY,
-            ClickhouseClientSettings.CARDINALITY_ANALYZER,
-        ]
-        assert usernames == ["ro_user", "trace_user"], (
-            "the cardinality profile must not inherit the readonly credentials "
-            "cached by the QUERY profile"
-        )
-    finally:
-        common.NODE_CONNECTIONS.clear()
-        common.NODE_CONNECTIONS.update(saved_node)
-        common.CLUSTER_CONNECTIONS.clear()
-        common.CLUSTER_CONNECTIONS.update(saved_cluster)
+    profiles = [call.args[0] for call in mock_pool.call_args_list]
+    usernames = [call.args[2] for call in mock_pool.call_args_list]
+    assert profiles == [
+        ClickhouseClientSettings.QUERY,
+        ClickhouseClientSettings.CARDINALITY_ANALYZER,
+    ]
+    assert usernames == ["ro_user", "trace_user"]
 
 
 @pytest.mark.parametrize(
@@ -560,10 +495,10 @@ def test_sudo_mode_skips_experimental_analyzer(sql_query: str, sudo_mode: bool) 
 
 
 # Names that acquire a ClickhousePool (and therefore send credentials to a
-# node): the connection cache accessor and direct construction of either pool
-# implementation. Any of these in admin code must sit behind _validate_node.
+# node). Any of these in admin code must sit behind _validate_node.
 _POOL_ACQUISITION_NAMES = frozenset(
     {
+        "build_pool",
         "get_node_connection",
         "ClickhouseConnectPool",
     }

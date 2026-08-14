@@ -1,8 +1,7 @@
 from abc import ABC, abstractmethod
-from collections.abc import Mapping, MutableMapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
-from threading import Lock
 from typing import (
     Any,
     Generic,
@@ -182,75 +181,36 @@ class Cluster(ABC, Generic[TWriterOptions]):
 ClickhouseWriterOptions = Mapping[str, Any] | None
 
 
-# The node's connect port is part of ``ClickhouseNode``, so it does not
-# need a separate cache-key element.
-CacheKey = tuple[
-    ClickhouseNode,
-    ClickhouseClientSettings,
-    str,
-    str,
-    str,
-    bool,
-    str | None,
-    bool | None,
-]
+def build_pool(
+    client_settings: ClickhouseClientSettings,
+    node: ClickhouseNode,
+    user: str,
+    password: str,
+    database: str,
+    secure: bool = False,
+    ca_certs: str | None = None,
+    verify: bool | None = None,
+) -> ClickhousePool:
+    """Construct a clickhouse-connect HTTP pool for this node.
+
+    Sockets live in the process-wide urllib3 PoolManager. This wrapper is
+    cheap; callers should not cache it.
+    """
+    client_settings_dict, timeout = client_settings.value
+    return ClickhouseConnectPool(
+        host=node.host_name,
+        port=node.port,
+        user=user,
+        password=password,
+        database=database,
+        client_settings=client_settings_dict,
+        send_receive_timeout=timeout,
+        secure=secure,
+        ca_certs=ca_certs,
+        verify=verify,
+    )
 
 
-class ConnectionCache:
-    def __init__(self) -> None:
-        self.__cache: MutableMapping[CacheKey, ClickhousePool] = {}
-        self.__lock = Lock()
-
-    def get_node_connection(
-        self,
-        client_settings: ClickhouseClientSettings,
-        node: ClickhouseNode,
-        user: str,
-        password: str,
-        database: str,
-        secure: bool,
-        ca_certs: str | None,
-        verify: bool | None,
-    ) -> ClickhousePool:
-        """
-        Return a cached clickhouse-connect (HTTP) connection pool for the node,
-        typed as the abstract :class:`ClickhousePool`.
-
-        This is the single place pools are instantiated, so every caller — the
-        cluster query/node connections as well as the admin and CLI by-host
-        helpers — goes through it. Pool sizing is left to the pool itself (it
-        reads the ``clickhouse_connect_pool_size`` sentry-option).
-        """
-        with self.__lock:
-            client_settings_dict, timeout = client_settings.value
-            cache_key = (
-                node,
-                client_settings,
-                user,
-                password,
-                database,
-                secure,
-                ca_certs,
-                verify,
-            )
-            if cache_key not in self.__cache:
-                self.__cache[cache_key] = ClickhouseConnectPool(
-                    host=node.host_name,
-                    port=node.port,
-                    user=user,
-                    password=password,
-                    database=database,
-                    client_settings=client_settings_dict,
-                    send_receive_timeout=timeout,
-                    secure=secure,
-                    ca_certs=ca_certs,
-                    verify=verify,
-                )
-
-            return self.__cache[cache_key]
-
-
-connection_cache = ConnectionCache()
 _DEFAULT_MAX_CONNECTIONS = 1
 
 
@@ -308,7 +268,6 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         self.__single_node = single_node
         self.__cluster_name = cluster_name
         self.__distributed_cluster_name = distributed_cluster_name
-        self.__connection_cache = connection_cache
         self.__cache_partition_id = cache_partition_id
         self.__query_settings_prefix = query_settings_prefix
         # The local node used by the deleter is static cluster topology; cache
@@ -339,15 +298,9 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         node: ClickhouseNode,
     ) -> ClickhousePool:
         """
-        Get a Clickhouse connection using the client settings provided. Reuse any
-        connection to the same node with the same settings otherwise establish a new
-        connection.
-
-        Pools come from ``ConnectionCache.get_node_connection`` (clickhouse-connect
-        HTTP). The same path is used by every caller (reads, migrations, replacer,
-        optimize, ...).
+        Build a Clickhouse connection using the client settings provided.
         """
-        return self.__connection_cache.get_node_connection(
+        return build_pool(
             client_settings,
             node,
             self.__user,

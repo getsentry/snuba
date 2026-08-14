@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from collections.abc import MutableMapping
 
 from sql_metadata import Parser, QueryType  # type: ignore[import-untyped]
 
@@ -12,7 +11,7 @@ from snuba.clusters.cluster import (
     ClickhouseClientSettings,
     ClickhouseCluster,
     ClickhouseNode,
-    connection_cache,
+    build_pool,
 )
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.storages.factory import get_storage
@@ -90,9 +89,6 @@ def _validate_node(
         )
 
 
-NODE_CONNECTIONS: MutableMapping[str, ClickhousePool] = {}
-
-
 def _build_validated_pool(
     clickhouse_host: str,
     clickhouse_port: int,
@@ -106,8 +102,7 @@ def _build_validated_pool(
     # Single chokepoint for admin ClickhousePool acquisition. A pool ships the
     # user/password to the node (HTTP auth header), so an unvalidated host means
     # credentials reach whatever listener answers. All admin helpers must go
-    # through here — never acquire a pool from the connection cache directly in
-    # this module. The regression test
+    # through here. The regression test
     # test_no_direct_clickhouse_pool_construction_in_admin enforces this.
     _validate_node(clickhouse_host, clickhouse_port, cluster, storage_name)
     # Query-endpoint traffic uses the cluster Envoy listen port. Replica
@@ -116,7 +111,7 @@ def _build_validated_pool(
     envoy_port = cluster.get_port()
     is_query_endpoint = clickhouse_host == query_node.host_name and clickhouse_port == envoy_port
     connect_port = envoy_port if is_query_endpoint else DEFAULT_CLICKHOUSE_HTTP_PORT
-    return connection_cache.get_node_connection(
+    return build_pool(
         client_settings,
         ClickhouseNode(clickhouse_host, connect_port),
         username,
@@ -126,18 +121,6 @@ def _build_validated_pool(
         ca_certs=None,
         verify=False,
     )
-
-
-def _settings_cache_token(client_settings: ClickhouseClientSettings) -> str:
-    # Part of the admin connection cache keys because the ClickHouse settings
-    # (and, for the read-only getters, the credentials) a pool is built with are
-    # baked in at construction. Without this, two tools asking for the same
-    # storage/host with different profiles would collide: whichever ran first
-    # would win and the other would silently execute against the wrong pool. For
-    # example System Queries (QUERY -> readonly user, 25s cap) and the
-    # Cardinality Analyzer (CARDINALITY_ANALYZER -> trace user, max_threads=10,
-    # 60s cap) both reach generic_metrics_distributions on the query node.
-    return client_settings.name
 
 
 def get_ro_node_connection(
@@ -157,10 +140,6 @@ def get_ro_node_connection(
     )
 
     storage = _get_storage(storage_name)
-
-    key = f"{storage.get_storage_key()}-{clickhouse_host}-{_settings_cache_token(client_settings)}"
-    if key in NODE_CONNECTIONS:
-        return NODE_CONNECTIONS[key]
 
     cluster = storage.get_cluster()
     database = cluster.get_database()
@@ -185,20 +164,12 @@ def get_ro_node_connection(
         password,
         client_settings,
     )
-    NODE_CONNECTIONS[key] = connection
     return connection
-
-
-CLUSTER_CONNECTIONS: MutableMapping[str, ClickhousePool] = {}
 
 
 def get_ro_query_node_connection(
     storage_name: str, client_settings: ClickhouseClientSettings
 ) -> ClickhousePool:
-    key = f"{storage_name}-{_settings_cache_token(client_settings)}"
-    if key in CLUSTER_CONNECTIONS:
-        return CLUSTER_CONNECTIONS[key]
-
     storage = _get_storage(storage_name)
     cluster = storage.get_cluster()
     connection_id = cluster.get_connection_id()
@@ -206,7 +177,6 @@ def get_ro_query_node_connection(
         connection_id.hostname, cluster.get_port(), storage_name, client_settings
     )
 
-    CLUSTER_CONNECTIONS[key] = connection
     return connection
 
 
@@ -217,10 +187,6 @@ def get_sudo_node_connection(
     client_settings: ClickhouseClientSettings,
 ) -> ClickhousePool:
     storage = _get_storage(storage_name)
-
-    key = f"{storage.get_storage_key()}-{clickhouse_host}-sudo-{_settings_cache_token(client_settings)}"
-    if key in NODE_CONNECTIONS:
-        return NODE_CONNECTIONS[key]
 
     cluster = storage.get_cluster()
     database = cluster.get_database()
@@ -236,7 +202,6 @@ def get_sudo_node_connection(
         clickhouse_password,
         client_settings,
     )
-    NODE_CONNECTIONS[key] = connection
     return connection
 
 
@@ -250,10 +215,6 @@ def get_clusterless_node_connection(
     cluster = storage.get_cluster()
     database = cluster.get_database()
 
-    key = f"{storage.get_storage_key()}-{clickhouse_host}-clusterless-{database}-{_settings_cache_token(client_settings)}"
-    if key in NODE_CONNECTIONS:
-        return NODE_CONNECTIONS[key]
-
     (clickhouse_user, clickhouse_password) = cluster.get_credentials()
     connection = _build_validated_pool(
         clickhouse_host,
@@ -265,7 +226,6 @@ def get_clusterless_node_connection(
         clickhouse_password,
         client_settings,
     )
-    NODE_CONNECTIONS[key] = connection
     return connection
 
 
@@ -284,10 +244,6 @@ def get_ro_clusterless_node_connection(
     cluster = storage.get_cluster()
     database = cluster.get_database()
 
-    key = f"{storage.get_storage_key()}-{clickhouse_host}-clusterless-ro-{database}-{_settings_cache_token(client_settings)}"
-    if key in NODE_CONNECTIONS:
-        return NODE_CONNECTIONS[key]
-
     connection = _build_validated_pool(
         clickhouse_host,
         clickhouse_port,
@@ -298,7 +254,6 @@ def get_ro_clusterless_node_connection(
         settings.CLICKHOUSE_READONLY_PASSWORD,
         client_settings,
     )
-    NODE_CONNECTIONS[key] = connection
     return connection
 
 

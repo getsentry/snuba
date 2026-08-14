@@ -231,7 +231,7 @@ def test_discovered_nodes_use_default_http_port() -> None:
 
 
 @pytest.mark.clickhouse_db
-def test_cache_connections() -> None:
+def test_build_pool_uses_cluster_credentials() -> None:
     cluster_1 = cluster.ClickhouseCluster(
         "127.0.0.1",
         8001,
@@ -244,22 +244,7 @@ def test_cache_connections() -> None:
         {"events"},
         True,
     )
-
-    cluster_2 = cluster.ClickhouseCluster(
-        "127.0.0.1",
-        8001,
-        "default",
-        "",
-        "default",
-        False,
-        None,
-        False,
-        {"transactions"},
-        True,
-    )
-
-    # Same node but different user
-    cluster_3 = cluster.ClickhouseCluster(
+    cluster_ro = cluster.ClickhouseCluster(
         "127.0.0.1",
         8001,
         "readonly",
@@ -272,26 +257,13 @@ def test_cache_connections() -> None:
         True,
     )
 
-    assert cluster_1.get_query_connection(
-        cluster.ClickhouseClientSettings.QUERY
-    ) == cluster_1.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
-
-    assert cluster_1.get_node_connection(
-        cluster.ClickhouseClientSettings.OPTIMIZE,
-        cluster.ClickhouseNode("127.0.0.1", 8002),
-    ) == cluster_1.get_node_connection(
-        cluster.ClickhouseClientSettings.OPTIMIZE,
-        cluster.ClickhouseNode("127.0.0.1", 8002),
+    pool = cluster_1.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
+    assert pool.host == "127.0.0.1"
+    assert pool.port == 8001
+    assert pool.user == "default"
+    assert (
+        cluster_ro.get_query_connection(cluster.ClickhouseClientSettings.QUERY).user == "readonly"
     )
-
-    assert cluster_1.get_query_connection(
-        cluster.ClickhouseClientSettings.QUERY
-    ) == cluster_2.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
-
-    # Does not share a connection since user is different
-    assert cluster_1.get_query_connection(
-        cluster.ClickhouseClientSettings.QUERY
-    ) != cluster_3.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
 
 
 @pytest.mark.redis_db
