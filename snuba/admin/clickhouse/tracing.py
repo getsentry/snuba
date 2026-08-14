@@ -32,6 +32,37 @@ from snuba.utils.constants import (
 
 logger = structlog.get_logger().bind(module=__name__)
 
+MAX_TRACING_QUERY_LIMIT = 10_000
+
+
+def _extract_settings_clause(query: str) -> tuple[str, dict[str, str], bool]:
+    """Move a trailing SETTINGS clause into the driver settings dict.
+
+    SETTINGS is a simple ``key=value`` list separated by commas; values are strings
+    (same model as clickhouse-connect's settings argument).
+
+    Returns (sql, settings, apply_query_limit). apply_query_limit is False when a
+    SETTINGS clause remains in the SQL, so the driver must not append LIMIT after it.
+    """
+    settings_at = query.upper().rfind("SETTINGS")
+    if settings_at == -1:
+        return query, {}, True
+
+    try:
+        settings: dict[str, str] = {}
+        for part in query[settings_at + len("SETTINGS") :].split(","):
+            part = part.strip()
+            if not part:
+                continue
+            key, value = part.split("=", 1)
+            settings[key.strip()] = value.strip().strip("'\"")
+        if not settings:
+            return query, {}, False
+    except ValueError:
+        return query, {}, False
+
+    return query[:settings_at].rstrip(), settings, True
+
 
 @dataclass
 class TraceOutput:
@@ -44,19 +75,34 @@ class TraceOutput:
     profile_events_meta: list[Any]
     profile_events_profile: dict[str, int]
     query_id: str = ""
+    executed_query: str = ""
 
 
 def run_query_and_get_trace(
     storage_name: str, query: str, settings: Mapping[str, Any] | None = None
 ) -> TraceOutput:
     validate_ro_query(query)
+    query_without_settings, sql_settings, apply_query_limit = _extract_settings_clause(query)
+
+    execute_settings: dict[str, Any] = dict(settings or {})
+    # SQL SETTINGS win over request defaults for the same key.
+    execute_settings.update(sql_settings)
+
     connection = get_ro_query_node_connection(storage_name, ClickhouseClientSettings.TRACING)
-    query_result = connection.execute(
-        query=query,
-        capture_trace=True,
-        with_column_types=True,
-        settings=settings or {},
-    )
+    # Prefer clickhouse-connect's client-side query_limit. Pass it per execute so
+    # concurrent requests cannot race on a shared cached pool attribute. Native
+    # pools are left alone. Skip when SETTINGS remains in SQL: the driver appends
+    # LIMIT at the end, which is invalid after SETTINGS.
+    execute_kwargs: dict[str, Any] = {
+        "query": query_without_settings,
+        "capture_trace": True,
+        "with_column_types": True,
+        "settings": execute_settings,
+    }
+    if "query_limit" in getattr(connection, "__dict__", {}):
+        execute_kwargs["query_limit"] = MAX_TRACING_QUERY_LIMIT if apply_query_limit else 0
+
+    query_result = connection.execute(**execute_kwargs)
 
     trace_output = query_result.trace_output or ""
     summarized_trace_output = summarize_trace_output(trace_output)
@@ -71,6 +117,8 @@ def run_query_and_get_trace(
     if not trace_output.strip() and summarized_trace_output.query_summaries:
         trace_output = format_trace_output_from_summary(summarized_trace_output)
 
+    query_summary = next(iter(summarized_trace_output.query_summaries.values()), None)
+
     return TraceOutput(
         trace_output=trace_output,
         summarized_trace_output=summarized_trace_output,
@@ -81,6 +129,7 @@ def run_query_and_get_trace(
         profile_events_meta=[],
         profile_events_profile={},
         query_id=query_id,
+        executed_query=query_summary.query if query_summary else "",
     )
 
 
@@ -165,7 +214,8 @@ def summarize_from_query_log(
                 query_duration_ms > 0,
                 formatReadableSize(read_bytes / (query_duration_ms / 1000.0)),
                 '0.00 B'
-            ) AS bytes_per_second
+            ) AS bytes_per_second,
+            query
         FROM {source}
         WHERE event_time >= now() - INTERVAL 5 MINUTE
           AND type = 'QueryFinish'
@@ -193,6 +243,7 @@ def summarize_from_query_log(
             seconds,
             rows_per_second,
             bytes_per_second,
+            query_text,
         ) = row
         node_name = str(host)
 
@@ -211,12 +262,12 @@ def summarize_from_query_log(
                 is_distributed=bool(is_initial_query),
                 query_id=str(row_query_id),
                 execute_summaries=[execute],
+                query=str(query_text or ""),
             )
         else:
-            if existing.execute_summaries is None:
-                existing.execute_summaries = [execute]
-            else:
-                existing.execute_summaries.append(execute)
+            existing.execute_summaries.append(execute)
+            if query_text and not existing.query:
+                existing.query = str(query_text)
 
     return summary
 
@@ -256,6 +307,8 @@ def merge_query_log_summary(base: TracingSummary, from_query_log: TracingSummary
             continue
         if not existing.execute_summaries and log_summary.execute_summaries:
             existing.execute_summaries = list(log_summary.execute_summaries)
+        if log_summary.query and not existing.query:
+            existing.query = log_summary.query
         # Only overwrite flags for nodes query_log actually returned. Missing
         # hosts may be a hostname mismatch, not proof the node is non-distributed.
         existing.is_distributed = log_summary.is_distributed

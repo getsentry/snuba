@@ -15,6 +15,7 @@ type ProfileEventsResults = {
 
 type TracingResult = {
   input_query?: string;
+  executed_query?: string;
   timestamp: number;
   trace_output?: string;
   summarized_trace_output?: TracingSummary;
