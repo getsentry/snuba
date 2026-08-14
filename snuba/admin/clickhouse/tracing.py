@@ -36,30 +36,95 @@ logger = structlog.get_logger().bind(module=__name__)
 MAX_TRACING_QUERY_LIMIT = 10_000
 
 
-def _extract_settings_clause(query: str) -> tuple[str, dict[str, str]]:
-    """Move a trailing SETTINGS clause into the driver settings dict."""
+def _quotes_balanced(text: str) -> bool:
+    quote: str | None = None
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if quote is not None:
+            if ch == quote:
+                # ClickHouse escapes quotes by doubling them.
+                if i + 1 < len(text) and text[i + 1] == quote:
+                    i += 2
+                    continue
+                quote = None
+            i += 1
+            continue
+        if ch in "'\"":
+            quote = ch
+        i += 1
+    return quote is None
+
+
+def _split_settings_list(text: str) -> list[str]:
+    """Split SETTINGS assignments on commas outside quotes."""
+    parts: list[str] = []
+    buf: list[str] = []
+    quote: str | None = None
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if quote is not None:
+            buf.append(ch)
+            if ch == quote:
+                if i + 1 < len(text) and text[i + 1] == quote:
+                    buf.append(text[i + 1])
+                    i += 2
+                    continue
+                quote = None
+            i += 1
+            continue
+        if ch in "'\"":
+            quote = ch
+            buf.append(ch)
+        elif ch == ",":
+            part = "".join(buf).strip()
+            if part:
+                parts.append(part)
+            buf = []
+        else:
+            buf.append(ch)
+        i += 1
+    part = "".join(buf).strip()
+    if part:
+        parts.append(part)
+    return parts
+
+
+def _extract_settings_clause(query: str) -> tuple[str, dict[str, str], bool]:
+    """Move a trailing SETTINGS clause into the driver settings dict.
+
+    Returns (sql, settings, apply_query_limit). apply_query_limit is False when a
+    SETTINGS clause remains in the SQL, so the driver must not append LIMIT after it.
+    """
     upper = query.upper()
     settings_at = upper.rfind("SETTINGS")
     if settings_at == -1:
-        return query, {}
+        return query, {}, True
 
     # Require a standalone SETTINGS token, not a substring match.
     before = upper[settings_at - 1] if settings_at > 0 else " "
     after_at = settings_at + len("SETTINGS")
     after = upper[after_at] if after_at < len(upper) else " "
     if before not in " \t\n\r;" or after not in " \t\n\r":
-        return query, {}
+        return query, {}, True
+
+    # SETTINGS inside an open string is not a trailing clause.
+    if not _quotes_balanced(query[:settings_at]):
+        return query, {}, True
 
     try:
         settings = {}
-        for part in query[after_at:].split(","):
-            key, value = part.strip().split("=", 1)
+        for part in _split_settings_list(query[after_at:]):
+            key, value = part.split("=", 1)
             settings[key.strip()] = value.strip().strip("'\"")
+        if not settings:
+            return query, {}, False
     except ValueError:
-        # Not a real trailing SETTINGS clause (e.g. SETTINGS inside a string).
-        return query, {}
+        # Trailing SETTINGS present but not safely peelable.
+        return query, {}, False
 
-    return query[:settings_at].rstrip(), settings
+    return query[:settings_at].rstrip(), settings, True
 
 
 @dataclass
@@ -80,7 +145,7 @@ def run_query_and_get_trace(
     storage_name: str, query: str, settings: Mapping[str, Any] | None = None
 ) -> TraceOutput:
     validate_ro_query(query)
-    query_without_settings, sql_settings = _extract_settings_clause(query)
+    query_without_settings, sql_settings, apply_query_limit = _extract_settings_clause(query)
 
     execute_settings: dict[str, Any] = dict(settings or {})
     # SQL SETTINGS win over request defaults for the same key.
@@ -88,8 +153,9 @@ def run_query_and_get_trace(
 
     connection = get_ro_query_node_connection(storage_name, ClickhouseClientSettings.TRACING)
     # Prefer clickhouse-connect's client-side query_limit. Native pools do not set
-    # this instance attribute and are left alone.
-    if "query_limit" in getattr(connection, "__dict__", {}):
+    # this instance attribute and are left alone. Skip when SETTINGS remains in SQL:
+    # the driver appends LIMIT at the end, which is invalid after SETTINGS.
+    if apply_query_limit and "query_limit" in getattr(connection, "__dict__", {}):
         cast(ClickhouseConnectPool, connection).query_limit = MAX_TRACING_QUERY_LIMIT
 
     query_result = connection.execute(

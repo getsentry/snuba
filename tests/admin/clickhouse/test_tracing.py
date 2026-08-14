@@ -18,24 +18,50 @@ def test_scrub() -> None:
 
 
 def test_extract_settings_clause_moves_settings() -> None:
-    body, settings = _extract_settings_clause(
+    body, settings, apply_limit = _extract_settings_clause(
         "SELECT 1 SETTINGS max_threads = 10, distributed_product_mode = 'global'"
     )
     assert body == "SELECT 1"
     assert settings == {"max_threads": "10", "distributed_product_mode": "global"}
+    assert apply_limit is True
 
-    body, settings = _extract_settings_clause("SELECT 1")
+    body, settings, apply_limit = _extract_settings_clause("SELECT 1")
     assert body == "SELECT 1"
     assert settings == {}
+    assert apply_limit is True
 
     # SETTINGS inside a string or identifier must not crash or strip the query.
-    body, settings = _extract_settings_clause("SELECT 'SETTINGS' AS x")
+    body, settings, apply_limit = _extract_settings_clause("SELECT 'SETTINGS' AS x")
     assert body == "SELECT 'SETTINGS' AS x"
     assert settings == {}
+    assert apply_limit is True
 
-    body, settings = _extract_settings_clause("SELECT 1 FROM mysettings")
+    body, settings, apply_limit = _extract_settings_clause("SELECT 1 FROM mysettings")
     assert body == "SELECT 1 FROM mysettings"
     assert settings == {}
+    assert apply_limit is True
+
+    # Commas inside quoted setting values must peel cleanly.
+    body, settings, apply_limit = _extract_settings_clause(
+        "SELECT 1 SETTINGS log_comment = 'foo, bar', max_threads = 4"
+    )
+    assert body == "SELECT 1"
+    assert settings == {"log_comment": "foo, bar", "max_threads": "4"}
+    assert apply_limit is True
+
+    # SETTINGS inside an open string must leave the query alone and keep limit on.
+    body, settings, apply_limit = _extract_settings_clause(
+        "SELECT * WHERE col = 'SELECT 1 SETTINGS max_threads=4'"
+    )
+    assert body == "SELECT * WHERE col = 'SELECT 1 SETTINGS max_threads=4'"
+    assert settings == {}
+    assert apply_limit is True
+
+    # Malformed trailing SETTINGS: leave SQL alone and disable driver LIMIT append.
+    body, settings, apply_limit = _extract_settings_clause("SELECT 1 SETTINGS max_threads")
+    assert body == "SELECT 1 SETTINGS max_threads"
+    assert settings == {}
+    assert apply_limit is False
 
 
 def test_summarize_from_query_log() -> None:
