@@ -61,6 +61,7 @@ function QueryDisplay(props: {
       .then((result) => {
         const tracing_result = {
           input_query: `${query.sql}`,
+          executed_query: result.executed_query || `${query.sql}`,
           timestamp: result.timestamp,
           num_rows_result: result.num_rows_result,
           result: result.result,
@@ -146,12 +147,14 @@ function QueryDisplay(props: {
               <Title order={3}>Tracing Data</Title>
               {props.resultDataPopulator(queryResult, showFormatted)}
               <Accordion chevronPosition="left">
-                <Accordion.Item value="input-query" key="input-query">
+                <Accordion.Item value="executed-query" key="executed-query">
                   <Accordion.Control>
-                    <Title order={3}>Input Query</Title>
+                    <Title order={3}>Executed Query</Title>
                   </Accordion.Control>
                   <Accordion.Panel>
-                    <Code block>{queryResult.input_query}</Code>
+                    <Code block>
+                      {queryResult.executed_query || queryResult.input_query}
+                    </Code>
                   </Accordion.Panel>
                 </Accordion.Item>
               </Accordion>

@@ -15,6 +15,8 @@ type ProfileEventsResults = {
 
 type TracingResult = {
   input_query?: string;
+  // SQL actually sent after admin-side rewrites (e.g. default LIMIT).
+  executed_query?: string;
   timestamp: number;
   trace_output?: string;
   summarized_trace_output?: TracingSummary;

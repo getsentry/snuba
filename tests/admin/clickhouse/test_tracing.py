@@ -350,6 +350,7 @@ def test_run_query_and_get_trace_uses_query_log_when_wire_trace_empty() -> None:
     assert connection.execute.call_args.kwargs.get("query_id") in (None, "")
     assert connection.execute.call_args.kwargs["capture_trace"] is True
     assert connection.execute.call_args.kwargs["query"] == "SELECT 1 LIMIT 10000"
+    assert output.executed_query == "SELECT 1 LIMIT 10000"
 
 
 def test_run_query_and_get_trace_keeps_native_wire_trace() -> None:
