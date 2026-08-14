@@ -14,10 +14,8 @@ import structlog
 from snuba import settings
 from snuba.clickhouse.connect import ClickhouseConnectPool
 from snuba.clickhouse.http import HTTPBatchWriter, InsertStatement, JSONRow
-from snuba.clickhouse.pool import (
-    ClickhousePool,
-    ClickhouseReader,
-)
+from snuba.clickhouse.pool import ClickhousePool
+from snuba.clickhouse.reader import ClickhouseReader
 from snuba.clusters.storage_sets import (
     DEV_STORAGE_SETS,
     StorageSetKey,

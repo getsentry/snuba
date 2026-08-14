@@ -69,6 +69,36 @@ class FakeClickhousePool(ClickhousePool):
         self.__queries.append(statement)
         return ClickhouseResult([])
 
+    def execute_explain(self, query: str) -> ClickhouseResult:
+        return self.execute(query, with_column_types=True)
+
+    def execute_with_totals(
+        self,
+        query: str,
+        params: Params = None,
+        query_id: str | None = None,
+        settings: Mapping[str, Any] | None = None,
+        capture_trace: bool = False,
+        robust: bool = False,
+    ) -> ClickhouseResult:
+        return self.execute(
+            query,
+            params=params,
+            with_column_types=True,
+            query_id=query_id,
+            settings=settings,
+            capture_trace=capture_trace,
+        )
+
+    def insert(
+        self,
+        table: str,
+        data: Sequence[Mapping[str, Any]],
+        settings: Mapping[str, Any] | None = None,
+        query_id: str | None = None,
+    ) -> None:
+        return None
+
     def close(self) -> None:
         return None
 

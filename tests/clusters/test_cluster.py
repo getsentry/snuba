@@ -270,7 +270,7 @@ def test_build_pool_uses_cluster_credentials() -> None:
 @pytest.mark.clickhouse_db
 def test_get_node_connection_uses_connect_pool() -> None:
     from snuba.clickhouse.connect import ClickhouseConnectPool
-    from snuba.clickhouse.pool import ClickhouseReader
+    from snuba.clickhouse.reader import ClickhouseReader
 
     test_cluster = cluster.ClickhouseCluster(
         "127.0.0.1",

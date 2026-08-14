@@ -1,9 +1,10 @@
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 import pytest
 
-from snuba.clickhouse.pool import ClickhousePool, ClickhouseReader, ClickhouseResult, Params
+from snuba.clickhouse.pool import ClickhousePool, ClickhouseResult, Params
+from snuba.clickhouse.reader import ClickhouseReader
 from snuba.web.db_query import _get_cache_partition
 
 
@@ -49,6 +50,29 @@ class _StubPool(ClickhousePool):
         query_id: str | None = None,
     ) -> ClickhouseResult:
         return ClickhouseResult()
+
+    def execute_explain(self, query: str) -> ClickhouseResult:
+        return self.execute(query)
+
+    def execute_with_totals(
+        self,
+        query: str,
+        params: Params = None,
+        query_id: str | None = None,
+        settings: Mapping[str, Any] | None = None,
+        capture_trace: bool = False,
+        robust: bool = False,
+    ) -> ClickhouseResult:
+        return self.execute(query)
+
+    def insert(
+        self,
+        table: str,
+        data: Sequence[Mapping[str, Any]],
+        settings: Mapping[str, Any] | None = None,
+        query_id: str | None = None,
+    ) -> None:
+        return None
 
     def close(self) -> None:
         return None
