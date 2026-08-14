@@ -5,7 +5,7 @@ from collections.abc import Sequence
 import structlog
 from packaging import version
 
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.pool import ClickhousePool
 from snuba.clusters.cluster import (
     ClickhouseClientSettings,
     ClickhouseCluster,

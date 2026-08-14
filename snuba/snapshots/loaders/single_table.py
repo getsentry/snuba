@@ -2,7 +2,7 @@ import logging
 from collections.abc import Iterable
 
 from snuba.clickhouse.http import JSONRow
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.pool import ClickhousePool
 from snuba.datasets.cdc.row_processors import CdcRowProcessor
 from snuba.snapshots import BulkLoadSource
 from snuba.snapshots.loaders import BulkLoader, ProgressCallback

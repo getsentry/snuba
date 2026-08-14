@@ -10,7 +10,7 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.pool import ClickhousePool
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, migration_utilities, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers

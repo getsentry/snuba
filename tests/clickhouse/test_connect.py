@@ -626,7 +626,7 @@ def test_internal_profile_has_no_explicit_timeout() -> None:
 def test_clickhouse_reader_wraps_connect_pool() -> None:
     # The single driver-agnostic ClickhouseReader wraps the abstract pool, so it
     # works with the connect pool.
-    from snuba.clickhouse.native import ClickhouseReader
+    from snuba.clickhouse.pool import ClickhouseReader
 
     pool = _make_pool(mock.Mock())
     reader = ClickhouseReader(cache_partition_id=None, client=pool, query_settings_prefix=None)
@@ -637,7 +637,7 @@ def test_with_totals_via_single_jsoncompact_request() -> None:
     # WITH TOTALS runs through a single FORMAT JSONCompact request (data + meta +
     # totals), appending the totals as the trailing row the reader expects -- the
     # Native query() path is untouched, so there is no second scan.
-    from snuba.clickhouse.native import ClickhouseReader
+    from snuba.clickhouse.pool import ClickhouseReader
 
     class FakeFormattedQuery:
         def get_sql(self) -> str:
@@ -723,7 +723,7 @@ def test_execute_with_totals_honors_capture_trace() -> None:
 def test_totals_jsoncompact_decodes_value_types() -> None:
     # JSONCompact values decode to the expected Python types. Covers DateTime
     # (string -> datetime so the reader can ISO-format it), Array, and Nullable.
-    from snuba.clickhouse.native import ClickhouseReader
+    from snuba.clickhouse.pool import ClickhouseReader
 
     class FakeFormattedQuery:
         def get_sql(self) -> str:
@@ -900,7 +900,7 @@ def test_connect_type_names_drive_reader_transforms() -> None:
 
     from clickhouse_connect.datatypes.registry import get_from_name
 
-    from snuba.clickhouse.native import ClickhouseReader
+    from snuba.clickhouse.pool import ClickhouseReader
 
     class FakeFormattedQuery:
         def get_sql(self) -> str:
@@ -1073,7 +1073,7 @@ def test_execute_explain_wraps_client_init_errors() -> None:
 def test_reader_routes_with_totals_through_execute_with_totals() -> None:
     # The reader routes WITH TOTALS through execute_with_totals (not plain execute),
     # forwarding robust, so each driver handles totals its own way.
-    from snuba.clickhouse.native import ClickhouseReader, ClickhouseResult
+    from snuba.clickhouse.pool import ClickhouseReader, ClickhouseResult
 
     class FakeFormattedQuery:
         def get_sql(self) -> str:

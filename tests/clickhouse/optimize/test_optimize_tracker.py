@@ -7,7 +7,6 @@ import pytest
 
 from snuba import settings
 from snuba.clickhouse.connect import ClickhouseConnectPool
-from snuba.clickhouse.native import ClickhouseResult
 from snuba.clickhouse.optimize import optimize
 from snuba.clickhouse.optimize.optimize import run_optimize_cron_job
 from snuba.clickhouse.optimize.optimize_tracker import (
@@ -15,6 +14,7 @@ from snuba.clickhouse.optimize.optimize_tracker import (
     OptimizedPartitionTracker,
 )
 from snuba.clickhouse.optimize.util import MergeInfo
+from snuba.clickhouse.pool import ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_writable_storage

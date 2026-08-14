@@ -15,7 +15,7 @@ import structlog
 from snuba import settings
 from snuba.clickhouse.connect import ClickhouseConnectPool
 from snuba.clickhouse.http import HTTPBatchWriter, InsertStatement, JSONRow
-from snuba.clickhouse.native import (
+from snuba.clickhouse.pool import (
     ClickhousePool,
     ClickhouseReader,
 )

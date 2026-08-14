@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import TypedDict
 
 from snuba.admin.clickhouse.common import _get_storage, get_clusterless_node_connection
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.pool import ClickhousePool
 from snuba.clusters.cluster import ClickhouseClientSettings
 
 

@@ -7,7 +7,7 @@ from unittest import mock
 import pytest
 
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.clickhouse.native import ClickhouseResult
+from snuba.clickhouse.pool import ClickhouseResult
 from snuba.clusters import cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.readiness_state import ReadinessState

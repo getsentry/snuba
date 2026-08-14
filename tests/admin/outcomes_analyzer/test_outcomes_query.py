@@ -9,7 +9,7 @@ from snuba.admin.outcomes_analyzer.outcomes_analyzer import (
     _stringify_result,
     run_outcomes_query,
 )
-from snuba.clickhouse.native import ClickhouseResult
+from snuba.clickhouse.pool import ClickhouseResult
 
 
 def test_predefined_outcomes_queries_registered() -> None:

@@ -10,7 +10,7 @@ from snuba.admin.clickhouse.tracing import (
     scrub_row,
     summarize_from_query_log,
 )
-from snuba.clickhouse.native import ClickhouseResult
+from snuba.clickhouse.pool import ClickhouseResult
 
 
 def test_scrub() -> None:

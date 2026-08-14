@@ -6,7 +6,7 @@ from collections.abc import MutableMapping
 from sql_metadata import Parser, QueryType  # type: ignore[import-untyped]
 
 from snuba import settings
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.pool import ClickhousePool
 from snuba.clusters.cluster import (
     DEFAULT_CLICKHOUSE_HTTP_PORT,
     ClickhouseClientSettings,

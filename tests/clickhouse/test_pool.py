@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 
 from dateutil.tz import tz
 
-from snuba.clickhouse.native import transform_datetime
+from snuba.clickhouse.pool import transform_datetime
 
 
 def test_transform_datetime() -> None:

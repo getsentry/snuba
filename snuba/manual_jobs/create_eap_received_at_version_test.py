@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 
 from snuba.clickhouse.escaping import escape_identifier, escape_string
-from snuba.clickhouse.native import ClickhousePool, ClickhouseResult
+from snuba.clickhouse.pool import ClickhousePool, ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.manual_jobs import Job, JobLogger

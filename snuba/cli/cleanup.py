@@ -67,7 +67,7 @@ def cleanup(
     setup_sentry()
 
     from snuba.cleanup import logger, run_cleanup
-    from snuba.clickhouse.native import ClickhousePool
+    from snuba.clickhouse.pool import ClickhousePool
     from snuba.clusters.cluster import ClickhouseNode, connection_cache
 
     storage = get_writable_storage(StorageKey(storage_name))

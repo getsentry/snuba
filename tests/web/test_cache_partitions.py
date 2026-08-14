@@ -3,7 +3,7 @@ from typing import Any
 
 import pytest
 
-from snuba.clickhouse.native import ClickhousePool, ClickhouseReader, ClickhouseResult, Params
+from snuba.clickhouse.pool import ClickhousePool, ClickhouseReader, ClickhouseResult, Params
 from snuba.web.db_query import _get_cache_partition
 
 

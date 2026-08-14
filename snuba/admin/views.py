@@ -59,7 +59,7 @@ from snuba.admin.tool_policies import (
     get_user_allowed_tools,
 )
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.clickhouse.native import ClickhouseResult
+from snuba.clickhouse.pool import ClickhouseResult
 from snuba.datasets.factory import InvalidDatasetError, get_enabled_dataset_names
 from snuba.manual_jobs import Job, JobSpec
 from snuba.manual_jobs.runner import (

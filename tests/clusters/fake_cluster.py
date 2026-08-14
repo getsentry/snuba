@@ -1,7 +1,7 @@
 from collections.abc import Mapping, MutableMapping, Sequence
 from typing import Any
 
-from snuba.clickhouse.native import ClickhousePool, ClickhouseResult, Params
+from snuba.clickhouse.pool import ClickhousePool, ClickhouseResult, Params
 from snuba.clusters.cluster import (
     ClickhouseClientSettings,
     ClickhouseCluster,

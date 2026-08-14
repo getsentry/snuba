@@ -77,8 +77,8 @@ def optimize(
 ) -> None:
     from datetime import datetime
 
-    from snuba.clickhouse.native import ClickhousePool
     from snuba.clickhouse.optimize.optimize import logger
+    from snuba.clickhouse.pool import ClickhousePool
     from snuba.clusters.cluster import ClickhouseNode, connection_cache
 
     setup_logging(log_level)

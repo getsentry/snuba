@@ -6,7 +6,7 @@ import pytest
 
 from snuba import settings
 from snuba.clickhouse.connect import ClickhouseConnectPool
-from snuba.clickhouse.native import ClickhouseResult
+from snuba.clickhouse.pool import ClickhouseResult
 from snuba.clusters import cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages.factory import get_storage
@@ -298,7 +298,7 @@ def test_cache_connections() -> None:
 @pytest.mark.clickhouse_db
 def test_get_node_connection_uses_connect_pool() -> None:
     from snuba.clickhouse.connect import ClickhouseConnectPool
-    from snuba.clickhouse.native import ClickhouseReader
+    from snuba.clickhouse.pool import ClickhouseReader
 
     test_cluster = cluster.ClickhouseCluster(
         "127.0.0.1",

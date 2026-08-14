@@ -12,7 +12,7 @@ import structlog
 
 from snuba import settings
 from snuba.clickhouse.columns import Column
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.pool import ClickhousePool
 
 # this import needs to be exactly like this in order to facilitate use of
 # importlib.reload in tests

@@ -29,7 +29,7 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.clickhouse.columns import Tuple as TupleCol
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.pool import ClickhousePool
 from snuba.migrations.columns import MigrationModifiers
 
 grammar = Grammar(

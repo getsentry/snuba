@@ -10,7 +10,7 @@ from typing import (
 import pytest
 from sentry_options.testing import override_options
 
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.pool import ClickhousePool
 from snuba.clusters import cluster
 from snuba.clusters.cluster import ClickhouseNode
 from snuba.clusters.storage_sets import StorageSetKey

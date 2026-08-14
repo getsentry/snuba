@@ -13,7 +13,7 @@ from snuba.admin.clickhouse.common import (
 from snuba.admin.user import AdminUser
 from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.clickhouse.native import ClickhouseResult
+from snuba.clickhouse.pool import ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.utils.serializable_exception import SerializableException
 

@@ -30,7 +30,7 @@ from urllib3.poolmanager import PoolManager
 from snuba import environment, settings
 from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.clickhouse.native import (
+from snuba.clickhouse.pool import (
     ClickhousePool,
     ClickhouseProfile,
     ClickhouseResult,
