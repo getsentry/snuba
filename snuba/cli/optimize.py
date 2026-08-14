@@ -79,7 +79,11 @@ def optimize(
 
     from snuba.clickhouse.native import ClickhousePool
     from snuba.clickhouse.optimize.optimize import logger
-    from snuba.clusters.cluster import ClickhouseNode, connection_cache
+    from snuba.clusters.cluster import (
+        DEFAULT_CLICKHOUSE_HTTP_PORT,
+        ClickhouseNode,
+        connection_cache,
+    )
 
     setup_logging(log_level)
     setup_sentry()
@@ -102,16 +106,22 @@ def optimize(
     # that cluster.
     connection: ClickhousePool
     if clickhouse_host and clickhouse_port:
-        # Go through the shared connection cache so the driver (native vs
-        # clickhouse-connect HTTP pool behind the abstract ClickhousePool type.
-        # The OPTIMIZE timeout is carried by
-        # the client settings profile the cache reads.
+        # By-host CLI runs target individual storage nodes, which serve HTTP on
+        # the well-known default port. cluster.get_http_port() is only valid for
+        # the cluster query endpoint (may be an Envoy intercept port). The
+        # OPTIMIZE timeout is carried by the client settings profile.
+        cluster = storage.get_cluster()
+        query_node = cluster.get_query_node()
+        is_query_node = (
+            clickhouse_host == query_node.host_name and clickhouse_port == query_node.native_port
+        )
+        http_port = cluster.get_http_port() if is_query_node else DEFAULT_CLICKHOUSE_HTTP_PORT
         connection = connection_cache.get_node_connection(
             ClickhouseClientSettings.OPTIMIZE,
             ClickhouseNode(
                 clickhouse_host,
                 clickhouse_port,
-                http_port=storage.get_cluster().get_http_port(),
+                http_port=http_port,
             ),
             clickhouse_user,
             clickhouse_password,

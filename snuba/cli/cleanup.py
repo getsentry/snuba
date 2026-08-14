@@ -68,7 +68,11 @@ def cleanup(
 
     from snuba.cleanup import logger, run_cleanup
     from snuba.clickhouse.native import ClickhousePool
-    from snuba.clusters.cluster import ClickhouseNode, connection_cache
+    from snuba.clusters.cluster import (
+        DEFAULT_CLICKHOUSE_HTTP_PORT,
+        ClickhouseNode,
+        connection_cache,
+    )
 
     storage = get_writable_storage(StorageKey(storage_name))
 
@@ -82,11 +86,17 @@ def cleanup(
 
     connection: ClickhousePool
     if clickhouse_host and clickhouse_port:
-        # Go through the shared connection cache so the driver (native vs
-        # clickhouse-connect HTTP pool behind the abstract ClickhousePool type.
+        # By-host CLI runs target individual storage nodes, which serve HTTP on
+        # the well-known default port. cluster.get_http_port() is only valid for
+        # the cluster query endpoint (may be an Envoy intercept port).
+        query_node = cluster.get_query_node()
+        is_query_node = (
+            clickhouse_host == query_node.host_name and clickhouse_port == query_node.native_port
+        )
+        http_port = cluster.get_http_port() if is_query_node else DEFAULT_CLICKHOUSE_HTTP_PORT
         connection = connection_cache.get_node_connection(
             ClickhouseClientSettings.CLEANUP,
-            ClickhouseNode(clickhouse_host, clickhouse_port, http_port=cluster.get_http_port()),
+            ClickhouseNode(clickhouse_host, clickhouse_port, http_port=http_port),
             clickhouse_user,
             clickhouse_password,
             database,
