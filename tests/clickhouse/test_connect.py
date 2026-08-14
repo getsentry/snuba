@@ -275,9 +275,11 @@ def test_execute_robust_gives_up_after_too_many_simultaneous_retries() -> None:
     client.query.side_effect = DatabaseError("too many", code=TOO_MANY_SIMULTANEOUS_QUERIES)
 
     pool = _make_pool(client)
-    with mock.patch("snuba.clickhouse.connect.time.sleep"):
-        with pytest.raises(ClickhouseError) as excinfo:
-            pool.execute_robust("SELECT 1")
+    with (
+        mock.patch("snuba.clickhouse.connect.time.sleep"),
+        pytest.raises(ClickhouseError) as excinfo,
+    ):
+        pool.execute_robust("SELECT 1")
 
     assert excinfo.value.code == TOO_MANY_SIMULTANEOUS_QUERIES
     assert client.query.call_count == 3
