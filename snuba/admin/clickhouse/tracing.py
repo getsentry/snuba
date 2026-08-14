@@ -38,107 +38,32 @@ MAX_TRACING_QUERY_LIMIT = 10_000
 # Mirrors clickhouse-connect's limit detection so the executed-query display matches
 # what the driver will do when query_limit is set.
 _LIMIT_RE = re.compile(r"\s+LIMIT($|\s)", re.IGNORECASE)
-_SETTINGS_ASSIGNMENT_RE = re.compile(
-    r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$",
-)
+_SETTINGS_SPLIT_RE = re.compile(r"\bSETTINGS\b", re.IGNORECASE)
 
 
-def _find_top_level_settings_index(query: str) -> int | None:
-    """Return the index of the first top-level SETTINGS keyword, if any."""
-    depth = 0
-    in_single = in_double = in_backtick = False
-    escape = False
-    index = 0
-    length = len(query)
+def _extract_settings_clause(query: str) -> tuple[str, dict[str, Any]]:
+    """
+    Move a trailing SETTINGS clause out of the SQL string.
 
-    while index < length:
-        char = query[index]
-        if in_single:
-            if escape:
-                escape = False
-            elif char == "\\":
-                escape = True
-            elif char == "'":
-                in_single = False
-        elif in_double:
-            if escape:
-                escape = False
-            elif char == "\\":
-                escape = True
-            elif char == '"':
-                in_double = False
-        elif in_backtick:
-            if char == "`":
-                in_backtick = False
-        elif char == "'":
-            in_single = True
-        elif char == '"':
-            in_double = True
-        elif char == "`":
-            in_backtick = True
-        elif char == "(":
-            depth += 1
-        elif char == ")":
-            depth = max(0, depth - 1)
-        elif (
-            depth == 0
-            and query[index : index + 8].upper() == "SETTINGS"
-            and (index == 0 or not query[index - 1].isalnum())
-            and (index + 8 >= length or not query[index + 8].isalnum())
-        ):
-            return index
-        index += 1
-    return None
+    clickhouse-connect's query_limit appends `LIMIT N` at the end of the SQL. That
+    is invalid when the query already ends with SETTINGS, so tracing lifts those
+    settings into the driver settings dict instead.
+    """
+    matches = list(_SETTINGS_SPLIT_RE.finditer(query))
+    if not matches:
+        return query, {}
 
-
-def _parse_settings_clause(clause: str) -> dict[str, Any]:
-    """Parse `key = value, ...` pairs from a SETTINGS clause body."""
-    parts: list[str] = []
-    current: list[str] = []
-    depth = 0
-    in_single = False
-    escape = False
-
-    for char in clause:
-        if in_single:
-            current.append(char)
-            if escape:
-                escape = False
-            elif char == "\\":
-                escape = True
-            elif char == "'":
-                in_single = False
-            continue
-
-        if char == "'":
-            in_single = True
-            current.append(char)
-            continue
-        if char == "(":
-            depth += 1
-            current.append(char)
-            continue
-        if char == ")":
-            depth = max(0, depth - 1)
-            current.append(char)
-            continue
-        if char == "," and depth == 0:
-            parts.append("".join(current).strip())
-            current = []
-            continue
-        current.append(char)
-
-    if current:
-        parts.append("".join(current).strip())
-
+    match = matches[-1]
+    body = query[: match.start()].rstrip()
     settings: dict[str, Any] = {}
-    for part in parts:
-        if not part:
+    for part in query[match.end() :].split(","):
+        if "=" not in part:
             continue
-        match = _SETTINGS_ASSIGNMENT_RE.match(part)
-        if match is None:
+        key, raw_value = part.split("=", 1)
+        key = key.strip()
+        raw_value = raw_value.strip()
+        if not key:
             continue
-        key, raw_value = match.group(1), match.group(2).strip()
         if (raw_value.startswith("'") and raw_value.endswith("'")) or (
             raw_value.startswith('"') and raw_value.endswith('"')
         ):
@@ -148,24 +73,7 @@ def _parse_settings_clause(clause: str) -> dict[str, Any]:
             settings[key] = float(raw_value) if "." in raw_value else int(raw_value)
         except ValueError:
             settings[key] = raw_value
-    return settings
-
-
-def _extract_settings_clause(query: str) -> tuple[str, dict[str, Any]]:
-    """
-    Move a top-level SETTINGS clause out of the SQL string.
-
-    clickhouse-connect's query_limit appends `LIMIT N` at the end of the SQL. That
-    is invalid when the query already ends with SETTINGS, so tracing lifts those
-    settings into the driver settings dict instead.
-    """
-    settings_at = _find_top_level_settings_index(query)
-    if settings_at is None:
-        return query, {}
-
-    body = query[:settings_at].rstrip()
-    clause = query[settings_at + len("SETTINGS") :].strip()
-    return body, _parse_settings_clause(clause)
+    return body, settings
 
 
 def _executed_query_with_limit(query: str, max_limit: int = MAX_TRACING_QUERY_LIMIT) -> str:

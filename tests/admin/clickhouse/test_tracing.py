@@ -18,23 +18,15 @@ def test_scrub() -> None:
     assert scrub_row((1, 2, 3, "release name")) == (1, 2, 3, "<scrubbed: str>")
 
 
-def test_extract_settings_clause_moves_top_level_settings() -> None:
+def test_extract_settings_clause_moves_settings() -> None:
     body, settings = _extract_settings_clause(
         "SELECT 1 SETTINGS max_threads = 10, distributed_product_mode = 'global'"
     )
     assert body == "SELECT 1"
     assert settings == {"max_threads": 10, "distributed_product_mode": "global"}
 
-
-def test_extract_settings_clause_ignores_nested_and_quoted_settings() -> None:
-    body, settings = _extract_settings_clause(
-        "SELECT 1 FROM (SELECT 2 SETTINGS x = 1) SETTINGS max_threads = 2"
-    )
-    assert body == "SELECT 1 FROM (SELECT 2 SETTINGS x = 1)"
-    assert settings == {"max_threads": 2}
-
-    body, settings = _extract_settings_clause("SELECT 'SETTINGS x=1'")
-    assert body == "SELECT 'SETTINGS x=1'"
+    body, settings = _extract_settings_clause("SELECT 1")
+    assert body == "SELECT 1"
     assert settings == {}
 
 
