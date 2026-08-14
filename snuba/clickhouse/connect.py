@@ -189,10 +189,7 @@ class ClickhouseConnectPool(ClickhousePool):
         user: str,
         password: str,
         database: str,
-        http_port: int = DEFAULT_CLICKHOUSE_HTTP_PORT,
-        # TCP port is kept for node identity (system.clusters, migration
-        # state keys). Connections use http_port.
-        tcp_port: int | None = None,
+        port: int = DEFAULT_CLICKHOUSE_HTTP_PORT,
         secure: bool = False,
         ca_certs: str | None = None,
         verify: bool | None = False,
@@ -204,9 +201,7 @@ class ClickhouseConnectPool(ClickhousePool):
         query_limit: int = 0,
     ) -> None:
         self.host = host
-        # Callers still key nodes by the TCP port (e.g. get_column_states).
-        self.port = tcp_port if tcp_port is not None else http_port
-        self.http_port = http_port
+        self.port = port
         self.user = user
         self.password = password
         self.database = database
@@ -235,7 +230,7 @@ class ClickhouseConnectPool(ClickhousePool):
                 SENTRY_OP: "db.clickhouse",
                 sentry_sdk.consts.SPANDATA.DB_SYSTEM: "clickhouse",
                 "server.address": self.host,
-                "server.port": str(self.http_port),
+                "server.port": str(self.port),
             },
         ):
             # Do not pass ``database`` into get_client. clickhouse-connect's
@@ -249,7 +244,7 @@ class ClickhouseConnectPool(ClickhousePool):
             # queries/inserts.
             client = clickhouse_connect.get_client(
                 host=self.host,
-                port=self.http_port,
+                port=self.port,
                 username=self.user,
                 password=self.password,
                 interface="https" if self.secure else "http",

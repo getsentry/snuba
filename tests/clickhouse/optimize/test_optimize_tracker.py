@@ -302,7 +302,7 @@ def test_merge_info() -> None:
         mock_clickhouse_execute.return_value = merge_query_result
         merge_info = optimize.get_current_large_merges(
             clickhouse=ClickhouseConnectPool(
-                "127.0.0.1", "user", "password", "database", http_port=8123
+                "127.0.0.1", "user", "password", "database", port=8123
             ),
             database="default",
             table="errors_local",
@@ -325,7 +325,7 @@ def test_merge_info() -> None:
         assert merge_info[0].estimated_time == 8020.61436897 / (0.9895385071013121 + 0.0001)
         busy = optimize.is_busy_merging(
             clickhouse=ClickhouseConnectPool(
-                "127.0.0.1", "user", "password", "database", http_port=8123
+                "127.0.0.1", "user", "password", "database", port=8123
             ),
             database="default",
             table="errors_local",

@@ -118,7 +118,7 @@ def _build_validated_pool(
     connect_port = envoy_port if is_query_endpoint else DEFAULT_CLICKHOUSE_HTTP_PORT
     return connection_cache.get_node_connection(
         client_settings,
-        ClickhouseNode(clickhouse_host, clickhouse_port, port=connect_port),
+        ClickhouseNode(clickhouse_host, connect_port),
         username,
         password,
         database,

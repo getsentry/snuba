@@ -487,19 +487,6 @@ def test_system_command_returns_empty_meta() -> None:
     assert result.meta == []
 
 
-def test_pool_port_identity_uses_tcp_port() -> None:
-    pool = ClickhouseConnectPool(
-        host="clickhouse.local",
-        user="default",
-        password="",
-        database="snuba_test",
-        http_port=8123,
-        tcp_port=9000,
-    )
-    assert pool.port == 9000
-    assert pool.http_port == 8123
-
-
 def test_new_client_defers_database_until_after_connect() -> None:
     import clickhouse_connect
 

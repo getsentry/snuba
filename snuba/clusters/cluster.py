@@ -49,8 +49,7 @@ class ClickhouseClientSettingsType(NamedTuple):
 
 class ConnectionId(NamedTuple):
     hostname: str
-    tcp_port: int
-    http_port: int
+    port: int
     database_name: str
 
 
@@ -120,16 +119,12 @@ class ClickhouseClientSettings(Enum):
 @dataclass(frozen=True)
 class ClickhouseNode:
     host_name: str
-    tcp_port: int
+    port: int
     shard: int | None = None
     replica: int | None = None
-    # Port used to reach this node. Optional for nodes that never open a
-    # client (tests, replacer load balancer). Cluster-produced query nodes
-    # carry the cluster listen port; discovered storage nodes use 8123.
-    port: int | None = None
 
     def __str__(self) -> str:
-        return f"{self.host_name}:{self.tcp_port}"
+        return f"{self.host_name}:{self.port}"
 
 
 class ClickhouseNodeType(Enum):
@@ -241,12 +236,7 @@ class ConnectionCache:
             if cache_key not in self.__cache:
                 self.__cache[cache_key] = ClickhouseConnectPool(
                     host=node.host_name,
-                    # Fall back to 8123 only for nodes built without a port
-                    # (by-host helpers with no cluster listen port).
-                    http_port=(
-                        node.port if node.port is not None else DEFAULT_CLICKHOUSE_HTTP_PORT
-                    ),
-                    tcp_port=node.tcp_port,
+                    port=node.port,
                     user=user,
                     password=password,
                     database=database,
@@ -309,7 +299,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         self.__port = port
         self.__max_connections = max_connections or _DEFAULT_MAX_CONNECTIONS
         self.__block_connections = block_connections
-        self.__query_node = ClickhouseNode(host, port, port=http_port)
+        self.__query_node = ClickhouseNode(host, http_port)
         self.__user = user
         self.__password = password
         self.__database = database
@@ -465,22 +455,19 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
     def get_connection_id(self) -> ConnectionId:
         return ConnectionId(
             hostname=self.__query_node.host_name,
-            tcp_port=self.__query_node.tcp_port,
-            http_port=self.__http_port,
+            port=self.__http_port,
             database_name=self.__database,
         )
 
     def __get_cluster_nodes(self, cluster_name: str) -> Sequence[ClickhouseNode]:
-        # system.clusters reports the TCP port. Envoy only fronts the query
-        # endpoint; replicas are addressed directly on 8123.
-
+        # system.clusters reports the TCP port; discard it. Replicas serve HTTP
+        # on 8123. Envoy only fronts the query endpoint.
         return [
             ClickhouseNode(
                 host_name=host[0],
-                tcp_port=host[1],
+                port=DEFAULT_CLICKHOUSE_HTTP_PORT,
                 shard=host[2],
                 replica=host[3],
-                port=DEFAULT_CLICKHOUSE_HTTP_PORT,
             )
             for host in self.get_query_connection(ClickhouseClientSettings.INTERNAL)
             .execute(
