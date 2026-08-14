@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import atexit
 import json
+import logging
 import os
+import time
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
 from datetime import datetime
@@ -24,6 +26,7 @@ from sentry_sdk import traces
 from urllib3.poolmanager import PoolManager
 
 from snuba import environment, settings
+from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.native import (
     ClickhousePool,
@@ -36,7 +39,16 @@ from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.sentry import SENTRY_OP
 
+logger = logging.getLogger("snuba.clickhouse")
 metrics = MetricsWrapper(environment.metrics, "clickhouse.connect")
+
+# Transport failures that used to be NetworkError / SocketTimeoutError / EOFError
+# on the native driver. StreamFailureError and bare OperationalError map to -1.
+_RETRYABLE_TRANSPORT_CODES = {
+    -1,
+    ErrorCodes.NETWORK_ERROR,
+    ErrorCodes.SOCKET_TIMEOUT,
+}
 
 DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS = 60 * 60  # 1h fallback when profile timeout is None
 DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
@@ -443,17 +455,55 @@ class ClickhouseConnectPool(ClickhousePool):
         capture_trace: bool = False,
         retryable: bool = True,
     ) -> ClickhouseResult:
-        return self.execute(
-            query,
-            params=params,
-            with_column_types=with_column_types,
-            query_id=query_id,
-            settings=settings,
-            types_check=types_check,
-            columnar=columnar,
-            capture_trace=capture_trace,
-            retryable=retryable,
-        )
+        """
+        Execute a ClickHouse query with more tenacity than :meth:`execute`.
+
+        Retries transport failures and ``TOO_MANY_SIMULTANEOUS_QUERIES`` so
+        critical paths (e.g. the replacer) can finish under transient load
+        instead of failing immediately. Other server errors are raised as-is.
+        """
+        total_attempts = 3 if retryable else 1
+        attempts_remaining = total_attempts
+
+        while True:
+            try:
+                return self.execute(
+                    query,
+                    params=params,
+                    with_column_types=with_column_types,
+                    query_id=query_id,
+                    settings=settings,
+                    types_check=types_check,
+                    columnar=columnar,
+                    capture_trace=capture_trace,
+                    retryable=False,
+                )
+            except ClickhouseError as e:
+                logger.warning(
+                    "ClickHouse query execution failed: %s (%d tries left)",
+                    str(e),
+                    attempts_remaining,
+                )
+                if e.code == ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
+                    attempts_remaining -= 1
+                    if attempts_remaining <= 0:
+                        raise
+                    # Linear backoff. Falls back to a 1-second base when the
+                    # option is unset (0), matching the old native pool.
+                    sleep_interval_seconds = (
+                        get_option("simultaneous_queries_sleep_seconds", 0) or 1
+                    )
+                    time.sleep(
+                        float((total_attempts - attempts_remaining) * sleep_interval_seconds)
+                    )
+                    continue
+                if e.code in _RETRYABLE_TRANSPORT_CODES:
+                    attempts_remaining -= 1
+                    if attempts_remaining <= 0:
+                        raise
+                    time.sleep(1)
+                    continue
+                raise
 
     def execute_explain(self, query: str) -> ClickhouseResult:
         with self._translate_clickhouse_errors():

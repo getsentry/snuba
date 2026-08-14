@@ -231,9 +231,8 @@ def test_execute_does_not_handle_insert_rows() -> None:
 
 
 def test_too_many_simultaneous_queries_not_retried() -> None:
-    # We delegate all retries to clickhouse-connect, which does not retry the
-    # TOO_MANY_SIMULTANEOUS_QUERIES error. It should be surfaced directly,
-    # mapped to a ClickhouseError that preserves the error code.
+    # Plain execute does not retry TOO_MANY_SIMULTANEOUS_QUERIES. It surfaces
+    # immediately as a ClickhouseError that preserves the error code.
     from clickhouse_connect.driver.exceptions import DatabaseError
 
     client = mock.Mock()
@@ -245,8 +244,43 @@ def test_too_many_simultaneous_queries_not_retried() -> None:
         raise AssertionError("expected a ClickhouseError to be raised")
     except ClickhouseError as error:
         assert error.code == TOO_MANY_SIMULTANEOUS_QUERIES
-    # No retry on top of clickhouse-connect's own handling.
+    # No retry on the plain execute path.
     assert client.query.call_count == 1
+
+
+def test_execute_robust_retries_too_many_simultaneous_queries() -> None:
+    # execute_robust must keep the old native-pool tenacity for concurrent load.
+    from clickhouse_connect.driver.exceptions import DatabaseError
+
+    client = mock.Mock()
+    client.query.side_effect = [
+        DatabaseError("too many", code=TOO_MANY_SIMULTANEOUS_QUERIES),
+        DatabaseError("too many", code=TOO_MANY_SIMULTANEOUS_QUERIES),
+        FakeQueryResult(result_set=[[1]]),
+    ]
+
+    pool = _make_pool(client)
+    with mock.patch("snuba.clickhouse.connect.time.sleep") as sleep:
+        result = pool.execute_robust("SELECT 1")
+
+    assert result.results == [[1]]
+    assert client.query.call_count == 3
+    assert sleep.call_count == 2
+
+
+def test_execute_robust_gives_up_after_too_many_simultaneous_retries() -> None:
+    from clickhouse_connect.driver.exceptions import DatabaseError
+
+    client = mock.Mock()
+    client.query.side_effect = DatabaseError("too many", code=TOO_MANY_SIMULTANEOUS_QUERIES)
+
+    pool = _make_pool(client)
+    with mock.patch("snuba.clickhouse.connect.time.sleep"):
+        with pytest.raises(ClickhouseError) as excinfo:
+            pool.execute_robust("SELECT 1")
+
+    assert excinfo.value.code == TOO_MANY_SIMULTANEOUS_QUERIES
+    assert client.query.call_count == 3
 
 
 def test_generic_clickhouse_error_wrapped() -> None:
