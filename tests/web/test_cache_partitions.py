@@ -1,3 +1,6 @@
+from collections.abc import Mapping
+from typing import Any
+
 import pytest
 
 from snuba.clickhouse.native import ClickhousePool, ClickhouseReader, ClickhouseResult, Params
@@ -18,7 +21,7 @@ class _StubPool(ClickhousePool):
         params: Params = None,
         with_column_types: bool = False,
         query_id: str | None = None,
-        settings=None,
+        settings: Mapping[str, Any] | None = None,
         types_check: bool = False,
         columnar: bool = False,
         capture_trace: bool = False,
@@ -32,7 +35,7 @@ class _StubPool(ClickhousePool):
         params: Params = None,
         with_column_types: bool = False,
         query_id: str | None = None,
-        settings=None,
+        settings: Mapping[str, Any] | None = None,
         types_check: bool = False,
         columnar: bool = False,
         capture_trace: bool = False,
