@@ -65,6 +65,14 @@ def test_extract_settings_clause_moves_settings() -> None:
     assert settings == {"max_threads": "4"}
     assert apply_limit is True
 
+    # Backslash-escaped quotes must not make a later SETTINGS look open.
+    body, settings, apply_limit = _extract_settings_clause(
+        "SELECT 1 WHERE col = 'O\\'Brien' SETTINGS max_threads = 4"
+    )
+    assert body == "SELECT 1 WHERE col = 'O\\'Brien'"
+    assert settings == {"max_threads": "4"}
+    assert apply_limit is True
+
     # Malformed trailing SETTINGS: leave SQL alone and disable driver LIMIT append.
     body, settings, apply_limit = _extract_settings_clause("SELECT 1 SETTINGS max_threads")
     assert body == "SELECT 1 SETTINGS max_threads"
@@ -439,6 +447,35 @@ def test_run_query_and_get_trace_uses_query_log_when_wire_trace_empty() -> None:
     }
     assert connection.query_limit == MAX_TRACING_QUERY_LIMIT
     assert output.executed_query == "SELECT 1 LIMIT 10000"
+
+
+def test_run_query_and_get_trace_disables_query_limit_when_settings_remain() -> None:
+    connection = MagicMock()
+    # Simulate a pool that kept LIMIT on from a previous request.
+    connection.query_limit = MAX_TRACING_QUERY_LIMIT
+    connection.execute.return_value = ClickhouseResult(
+        results=[(1,)],
+        meta=[("count()", "UInt64")],
+        trace_output="",
+        query_id="qid",
+    )
+
+    with (
+        patch(
+            "snuba.admin.clickhouse.tracing.get_ro_query_node_connection",
+            return_value=connection,
+        ),
+        patch("snuba.admin.clickhouse.tracing.validate_ro_query"),
+        patch(
+            "snuba.admin.clickhouse.tracing.summarize_from_query_log",
+            return_value=TracingSummary({}),
+        ),
+    ):
+        run_query_and_get_trace("errors_ro", "SELECT 1 SETTINGS max_threads")
+
+    # SETTINGS stayed in SQL, so driver LIMIT must be cleared for this request.
+    assert connection.query_limit == 0
+    assert connection.execute.call_args.kwargs["query"] == "SELECT 1 SETTINGS max_threads"
 
 
 def test_run_query_and_get_trace_keeps_native_wire_trace() -> None:

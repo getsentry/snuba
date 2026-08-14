@@ -11,6 +11,8 @@ from uuid import UUID
 import structlog
 
 from snuba.admin.clickhouse.common import (
+    _end_of_sql_string_literal,
+    _sql_quotes_are_balanced,
     get_ro_query_node_connection,
     validate_ro_query,
 )
@@ -36,54 +38,30 @@ logger = structlog.get_logger().bind(module=__name__)
 MAX_TRACING_QUERY_LIMIT = 10_000
 
 
-def _quotes_balanced(text: str) -> bool:
-    quote: str | None = None
-    i = 0
-    while i < len(text):
-        ch = text[i]
-        if quote is not None:
-            if ch == quote:
-                # ClickHouse escapes quotes by doubling them.
-                if i + 1 < len(text) and text[i + 1] == quote:
-                    i += 2
-                    continue
-                quote = None
-            i += 1
-            continue
-        if ch in "'\"":
-            quote = ch
-        i += 1
-    return quote is None
-
-
 def _split_settings_list(text: str) -> list[str]:
     """Split SETTINGS assignments on commas outside quotes."""
     parts: list[str] = []
     buf: list[str] = []
-    quote: str | None = None
     i = 0
-    while i < len(text):
+    n = len(text)
+    while i < n:
         ch = text[i]
-        if quote is not None:
-            buf.append(ch)
-            if ch == quote:
-                if i + 1 < len(text) and text[i + 1] == quote:
-                    buf.append(text[i + 1])
-                    i += 2
-                    continue
-                quote = None
-            i += 1
-            continue
         if ch in "'\"":
-            quote = ch
-            buf.append(ch)
-        elif ch == ",":
+            end = _end_of_sql_string_literal(text, i)
+            if end is None:
+                buf.append(text[i:])
+                break
+            buf.append(text[i:end])
+            i = end
+            continue
+        if ch == ",":
             part = "".join(buf).strip()
             if part:
                 parts.append(part)
             buf = []
-        else:
-            buf.append(ch)
+            i += 1
+            continue
+        buf.append(ch)
         i += 1
     part = "".join(buf).strip()
     if part:
@@ -103,7 +81,11 @@ def _find_trailing_settings(query: str) -> int | None:
         before = upper[settings_at - 1] if settings_at > 0 else " "
         after_at = settings_at + len("SETTINGS")
         after = upper[after_at] if after_at < len(upper) else " "
-        if before in " \t\n\r;" and after in " \t\n\r" and _quotes_balanced(query[:settings_at]):
+        if (
+            before in " \t\n\r;"
+            and after in " \t\n\r"
+            and _sql_quotes_are_balanced(query[:settings_at])
+        ):
             return settings_at
 
         search_end = settings_at
@@ -160,10 +142,12 @@ def run_query_and_get_trace(
 
     connection = get_ro_query_node_connection(storage_name, ClickhouseClientSettings.TRACING)
     # Prefer clickhouse-connect's client-side query_limit. Native pools do not set
-    # this instance attribute and are left alone. Skip when SETTINGS remains in SQL:
-    # the driver appends LIMIT at the end, which is invalid after SETTINGS.
-    if apply_query_limit and "query_limit" in getattr(connection, "__dict__", {}):
-        cast(ClickhouseConnectPool, connection).query_limit = MAX_TRACING_QUERY_LIMIT
+    # this instance attribute and are left alone. Always set it so a previous
+    # request cannot leak LIMIT onto a later query that still has SETTINGS in SQL.
+    if "query_limit" in getattr(connection, "__dict__", {}):
+        cast(ClickhouseConnectPool, connection).query_limit = (
+            MAX_TRACING_QUERY_LIMIT if apply_query_limit else 0
+        )
 
     query_result = connection.execute(
         query=query_without_settings,
