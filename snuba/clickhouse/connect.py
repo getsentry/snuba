@@ -283,6 +283,10 @@ class ClickhouseConnectPool(ClickhousePool):
                 pool_mgr=_shared_pool(self.ca_certs, bool(self.verify)),
                 # Per-call override avoids mutating shared/cached pool state.
                 query_limit=self.query_limit if query_limit is None else query_limit,
+                # Disable connect's built-in HTTP retries. execute/execute_robust
+                # own the retry policy so a blip stays ~3 attempts, not 3 *
+                # (query_retries+1).
+                query_retries=0,
                 autogenerate_session_id=False,
                 compress="lz4",
             )

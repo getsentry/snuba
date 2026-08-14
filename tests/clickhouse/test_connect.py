@@ -538,6 +538,8 @@ def test_timeouts_are_passed_through() -> None:
     assert kwargs["send_receive_timeout"] == 300000
     assert kwargs["connect_timeout"] == 60
     assert kwargs["compress"] == "lz4"
+    # Snuba owns transport retries in execute/execute_robust; disable connect's.
+    assert kwargs["query_retries"] == 0
 
 
 def test_send_receive_timeout_defaults_when_profile_has_none() -> None:
