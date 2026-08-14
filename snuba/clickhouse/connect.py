@@ -135,6 +135,21 @@ def _as_float(value: Any) -> float:
         return 0.0
 
 
+def _column_type_name(column_type: Any, server_timezone: Any) -> str:
+    name = str(column_type.name)
+    if name != "DateTime":
+        return name
+
+    timezone_name = getattr(server_timezone, "key", None)
+    if timezone_name is None:
+        timezone_name = server_timezone.tzname(None)
+    if timezone_name in {"UTC", "GMT"}:
+        # Preserve the metadata spelling returned by clickhouse-driver for the
+        # ClickHouse server's default UTC timezone.
+        timezone_name = "Universal"
+    return f"DateTime('{timezone_name}')"
+
+
 def _coerce_temporal(value: Any, ch_type: str) -> Any:
     if not isinstance(value, str):
         return value
@@ -193,7 +208,9 @@ class ClickhouseConnectPool(ClickhousePool):
         self.client_settings = client_settings
         self.query_limit = query_limit
 
-    def _new_client(self, query_limit: int | None = None) -> Client:
+    def _new_client(
+        self, use_database: bool = True, query_limit: int | None = None
+    ) -> Client:
         connect_timeout = (
             get_option("clickhouse_connect_connect_timeout", 0) or self.connect_timeout
         )
@@ -213,12 +230,20 @@ class ClickhouseConnectPool(ClickhousePool):
                 "server.port": str(self.port),
             },
         ):
-            return clickhouse_connect.get_client(
+            # Do not pass ``database`` into get_client. clickhouse-connect's
+            # autoconnect probes ``system.settings`` with the client database
+            # attached; if that database is missing (test bootstrap creates
+            # ``snuba_test`` via a pool opened on ``default``, migrations that
+            # recreate DBs, etc.) client construction fails with
+            # UNKNOWN_DATABASE before any user query runs. The native driver
+            # never required the database to exist at connect time. Create the
+            # client without a database context, then set it for subsequent
+            # queries/inserts.
+            client = clickhouse_connect.get_client(
                 host=self.host,
                 port=self.port,
                 username=self.user,
                 password=self.password,
-                database=self.database,
                 interface="https" if self.secure else "http",
                 secure=self.secure,
                 verify=bool(self.verify),
@@ -232,6 +257,14 @@ class ClickhouseConnectPool(ClickhousePool):
                 autogenerate_session_id=False,
                 compress="lz4",
             )
+            if use_database and self.database:
+                client.database = self.database
+            return client
+
+    @staticmethod
+    def _query_uses_database(query: str) -> bool:
+        normalized = query.lstrip().upper()
+        return not normalized.startswith(("CREATE DATABASE", "DROP DATABASE"))
 
     def _build_query_settings(
         self,
@@ -247,7 +280,11 @@ class ClickhouseConnectPool(ClickhousePool):
         return query_settings or None
 
     def _consume_query_result(
-        self, query_result: Any, with_column_types: bool, query_id: str | None
+        self,
+        query_result: Any,
+        with_column_types: bool,
+        query_id: str | None,
+        server_timezone: Any,
     ) -> ClickhouseResult:
         summary = query_result.summary or {}
         read_bytes = _as_int(summary.get("read_bytes"))
@@ -273,7 +310,7 @@ class ClickhouseConnectPool(ClickhousePool):
                 query_id=query_id_out,
             )
         meta = [
-            (name, column_type.name)
+            (name, _column_type_name(column_type, server_timezone))
             for name, column_type in zip(
                 query_result.column_names, query_result.column_types, strict=True
             )
@@ -297,7 +334,10 @@ class ClickhouseConnectPool(ClickhousePool):
         capture_trace: bool,
         query_limit: int | None = None,
     ) -> ClickhouseResult:
-        client = self._new_client(query_limit=query_limit)
+        client = self._new_client(
+            use_database=self._query_uses_database(query),
+            query_limit=query_limit,
+        )
         query_settings = self._build_query_settings(settings, query_id, capture_trace)
 
         query_result = None
@@ -311,7 +351,9 @@ class ClickhouseConnectPool(ClickhousePool):
                     column_oriented=columnar,
                     transport_settings=dict(_CLICKHOUSE_CONNECT_TRANSPORT_SETTINGS),
                 )
-            return self._consume_query_result(query_result, with_column_types, query_id)
+            return self._consume_query_result(
+                query_result, with_column_types, query_id, client.server_tz
+            )
         finally:
             if query_result is not None:
                 with suppress(Exception):
@@ -440,6 +482,7 @@ class ClickhouseConnectPool(ClickhousePool):
                     table,
                     matrix,
                     column_names=column_names,
+                    database=self.database,
                     settings=insert_settings or None,
                 )
 
