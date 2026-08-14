@@ -137,35 +137,6 @@ def _as_float(value: Any) -> float:
         return 0.0
 
 
-def _column_type_name(column_type: Any, server_timezone: Any) -> str:
-    name = str(column_type.name)
-
-    # JSONCompact already embeds the timezone (DateTime('UTC')). Normalize the
-    # default UTC/GMT spelling to Universal for parity with the old native driver.
-    # Leave DateTime64(...) and non-UTC zones alone.
-    if name.startswith("DateTime(") and not name.startswith("DateTime64"):
-        if name in {"DateTime('UTC')", 'DateTime("UTC")', "DateTime('GMT')", 'DateTime("GMT")'}:
-            return "DateTime('Universal')"
-        return name
-
-    if name != "DateTime":
-        return name
-
-    # clickhouse-connect sets client.server_tz to None when the server timezone
-    # is unrecognized. Fall back to the same Universal spelling the native
-    # driver used for the default UTC zone rather than crashing on .tzname().
-    if server_timezone is None:
-        return "DateTime('Universal')"
-
-    timezone_name = getattr(server_timezone, "key", None)
-    if timezone_name is None:
-        timezone_name = server_timezone.tzname(None)
-    if timezone_name in {"UTC", "GMT"}:
-        # Preserve the metadata spelling returned by clickhouse-driver for the
-        # ClickHouse server's default UTC timezone.
-        timezone_name = "Universal"
-    return f"DateTime('{timezone_name}')"
-
 
 def _coerce_temporal(value: Any, ch_type: str) -> Any:
     if not isinstance(value, str):
@@ -339,7 +310,6 @@ class ClickhouseConnectPool(ClickhousePool):
         query_result: Any,
         with_column_types: bool,
         query_id: str | None,
-        server_timezone: Any,
     ) -> ClickhouseResult:
         summary = query_result.summary or {}
         read_bytes = _as_int(summary.get("read_bytes"))
@@ -365,7 +335,7 @@ class ClickhouseConnectPool(ClickhousePool):
                 query_id=query_id_out,
             )
         meta = [
-            (name, _column_type_name(column_type, server_timezone))
+            (name, str(column_type.name))
             for name, column_type in zip(
                 query_result.column_names, query_result.column_types, strict=True
             )
@@ -433,9 +403,7 @@ class ClickhouseConnectPool(ClickhousePool):
                     column_oriented=columnar,
                     transport_settings=dict(_CLICKHOUSE_CONNECT_TRANSPORT_SETTINGS),
                 )
-            return self._consume_query_result(
-                query_result, with_column_types, query_id, client.server_tz
-            )
+            return self._consume_query_result(query_result, with_column_types, query_id)
         finally:
             if query_result is not None:
                 with suppress(Exception):
@@ -466,10 +434,7 @@ class ClickhouseConnectPool(ClickhousePool):
                 fmt="JSONCompact",
             )
         payload = json.loads(raw)
-        meta = [
-            (column["name"], self._normalize_json_type(column["type"], client.server_tz))
-            for column in payload.get("meta", [])
-        ]
+        meta = [(column["name"], column["type"]) for column in payload.get("meta", [])]
         column_types = [ch_type for _, ch_type in meta]
 
         def _row(values: Sequence[Any]) -> tuple[Any, ...]:
@@ -483,11 +448,6 @@ class ClickhouseConnectPool(ClickhousePool):
             trace_output="",
             query_id=str(payload.get("query_id") or query_id or ""),
         )
-
-    @staticmethod
-    def _normalize_json_type(ch_type: str, server_timezone: Any) -> str:
-        # Reuse the same DateTime timezone spelling as the Native path.
-        return _column_type_name(type("T", (), {"name": ch_type})(), server_timezone)
 
     def execute_with_totals(
         self,
@@ -518,13 +478,7 @@ class ClickhouseConnectPool(ClickhousePool):
                 )
 
             payload = json.loads(raw)
-            meta = [
-                (
-                    column["name"],
-                    self._normalize_json_type(column["type"], client.server_tz),
-                )
-                for column in payload.get("meta", [])
-            ]
+            meta = [(column["name"], column["type"]) for column in payload.get("meta", [])]
             column_types = [ch_type for _, ch_type in meta]
 
             def _row(values: Sequence[Any]) -> tuple[Any, ...]:
