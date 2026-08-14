@@ -11,7 +11,7 @@ from uuid import UUID
 import sqlparse
 import structlog
 from sqlparse import tokens as sql_tokens
-from sqlparse.sql import Parenthesis, Statement, Token
+from sqlparse.sql import Parenthesis, Statement, Token, TokenList
 
 from snuba.admin.clickhouse.common import (
     get_ro_query_node_connection,
@@ -42,7 +42,7 @@ def _iter_top_level_tokens(token: Token, start: int = 0) -> Iterator[tuple[Token
     """Yield leaf tokens outside parentheses with string offsets."""
     if isinstance(token, Parenthesis):
         return
-    if token.is_group:
+    if isinstance(token, TokenList):
         pos = start
         for child in token.tokens:
             yield from _iter_top_level_tokens(child, pos)
