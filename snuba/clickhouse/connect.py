@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import atexit
-import re
 import json
 import logging
 import os
+import re
 import time
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
@@ -372,9 +372,7 @@ class ClickhouseConnectPool(ClickhousePool):
             return ClickhouseResult(
                 results=[],
                 meta=[] if with_column_types else None,
-                profile=ClickhouseProfile(
-                    blocks=0, bytes=0, elapsed=0.0, progress_bytes=0, rows=0
-                ),
+                profile=ClickhouseProfile(blocks=0, bytes=0, elapsed=0.0, progress_bytes=0, rows=0),
                 trace_output="",
                 query_id=str(query_id or ""),
             )
@@ -438,9 +436,7 @@ class ClickhouseConnectPool(ClickhousePool):
         column_types = [ch_type for _, ch_type in meta]
 
         def _row(values: Sequence[Any]) -> tuple[Any, ...]:
-            return tuple(
-                _coerce_temporal(value, column_types[i]) for i, value in enumerate(values)
-            )
+            return tuple(_coerce_temporal(value, column_types[i]) for i, value in enumerate(values))
 
         results = [_row(row) for row in payload.get("data", [])]
         return ClickhouseResult(
