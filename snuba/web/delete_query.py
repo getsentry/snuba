@@ -224,7 +224,7 @@ WHERE metric = 'PartMutation'
 
 
 def deletes_are_enabled() -> bool:
-    return get_option("storage_deletes_enabled", True)
+    return bool(get_option("storage_deletes_enabled", False))
 
 
 def _get_rows_to_delete(storage_key: StorageKey, select_query_to_count_rows: Query) -> int:

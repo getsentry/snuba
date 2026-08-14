@@ -24,7 +24,30 @@ from snuba.query.data_source.simple import Table
 from snuba.query.dsl import and_cond, column, equals, literal
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.web import QueryException
-from snuba.web.delete_query import _execute_query
+from snuba.web.delete_query import DeletesNotEnabledError, _execute_query, deletes_are_enabled
+
+
+def test_deletes_are_enabled_defaults_false() -> None:
+    assert deletes_are_enabled() is False
+
+
+def test_delete_from_storage_rejected_when_disabled_by_default() -> None:
+    from snuba.web.bulk_delete_query import delete_from_storage
+
+    storage = get_writable_storage(StorageKey("search_issues"))
+    with pytest.raises(DeletesNotEnabledError, match="Deletes not enabled in this region"):
+        delete_from_storage(
+            storage,
+            {"project_id": [1], "group_id": [1]},
+            {
+                "tenant_ids": {"project_id": 1, "organization_id": 1},
+                "referrer": "test",
+                "app_id": "test",
+                "team": "test",
+                "parent_api": "test",
+                "feature": "test",
+            },
+        )
 
 
 @pytest.mark.eap

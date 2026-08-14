@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 import pytest
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.endpoint_delete_trace_items_pb2 import (
     DeleteTraceItemsRequest,
     DeleteTraceItemsResponse,
@@ -75,6 +76,11 @@ def setup_teardown(eap: None, redis_db: None) -> None:
 @pytest.mark.eap
 @pytest.mark.redis_db
 class TestEndpointDeleteTrace(BaseApiTest):
+    @pytest.fixture(autouse=True)
+    def enable_storage_deletes(self) -> Any:
+        with override_options("snuba", {"storage_deletes_enabled": True}):
+            yield
+
     def test_missing_trace_id_raises_exception(self) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()

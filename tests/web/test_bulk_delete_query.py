@@ -50,6 +50,13 @@ def get_attribution_info(tenant_ids: Mapping[str, int | str] | None = None) -> M
     }
 
 
+@pytest.fixture(autouse=True)
+def enable_storage_deletes() -> Any:
+    # Product tests opt in. Default-off is covered in test_delete_query.py.
+    with override_options("snuba", {"storage_deletes_enabled": True}):
+        yield
+
+
 @patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10)
 def test_delete_success(mock_enforce_max_row: Mock) -> None:
     admin_client = AdminClient(get_default_kafka_configuration())
