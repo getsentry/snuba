@@ -64,7 +64,6 @@ def create_databases() -> None:
             user="default",
             password="",
             database="default",
-            http_port=cluster["http_port"],
             secure=cluster["secure"],
             ca_certs=cluster["ca_certs"],
             verify=cluster["verify"],

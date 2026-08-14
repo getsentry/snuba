@@ -273,7 +273,7 @@ impl ClickhouseClient {
 
         let scheme = if config.secure { "https" } else { "http" };
         let host = &config.host;
-        let port = &config.http_port;
+        let port = &config.port;
 
         // `decompress=1` tells ClickHouse the POST body is in its native
         // compressed format (LZ4 blocks framed with CityHash128 checksums) —
@@ -493,17 +493,13 @@ mod tests {
         ClickhouseConfig {
             host: std::env::var("CLICKHOUSE_HOST").unwrap_or("127.0.0.1".to_string()),
             port: std::env::var("CLICKHOUSE_PORT")
-                .unwrap_or("9000".to_string())
+                .unwrap_or("8123".to_string())
                 .parse::<u16>()
                 .unwrap(),
             secure: std::env::var("CLICKHOUSE_SECURE")
                 .unwrap_or("false".to_string())
                 .to_lowercase()
                 == "true",
-            http_port: std::env::var("CLICKHOUSE_HTTP_PORT")
-                .unwrap_or("8123".to_string())
-                .parse::<u16>()
-                .unwrap(),
             user: std::env::var("CLICKHOUSE_USER").unwrap_or("default".to_string()),
             password: std::env::var("CLICKHOUSE_PASSWORD").unwrap_or("".to_string()),
             database: std::env::var("CLICKHOUSE_DATABASE").unwrap_or("default".to_string()),
@@ -728,9 +724,8 @@ mod tests {
         // This will trigger network errors that should be retried
         let config = ClickhouseConfig {
             host: "127.0.0.1".to_string(),
-            port: 9000,
+            port: 9999, // Use a port that's not listening
             secure: false,
-            http_port: 9999, // Use a port that's not listening
             user: "default".to_string(),
             password: "".to_string(),
             database: "default".to_string(),
@@ -781,9 +776,8 @@ mod tests {
 
         let config = ClickhouseConfig {
             host: "127.0.0.1".to_string(),
-            port: 9000,
+            port,
             secure: false,
-            http_port: port,
             user: "default".to_string(),
             password: "".to_string(),
             database: "default".to_string(),

@@ -1,7 +1,6 @@
 type ClusterData = {
   host: string;
   port: number;
-  http_port: number;
   database: string;
   secure: boolean;
   single_node: boolean;

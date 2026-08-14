@@ -36,7 +36,6 @@ class ClusterInfo(TypedDict):
     # The cluster's configured query endpoint (an actual node or a proxy).
     host: str
     port: int
-    http_port: int
     database: str
     secure: bool
     single_node: bool
@@ -94,7 +93,6 @@ def _describe_cluster(cluster: ClickhouseCluster) -> ClusterInfo:
     return {
         "host": cluster.get_host(),
         "port": cluster.get_port(),
-        "http_port": cluster.get_http_port(),
         "database": cluster.get_database(),
         "secure": cluster.get_secure(),
         "single_node": cluster.is_single_node(),

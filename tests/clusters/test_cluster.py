@@ -34,7 +34,6 @@ REDUCED_CONFIG = [
         "user": "default",
         "password": "",
         "database": "default",
-        "http_port": 8123,
         "storage_sets": ENABLED_STORAGE_SETS,
         "single_node": True,
     },
@@ -44,7 +43,6 @@ REDUCED_CONFIG = [
         "user": "default",
         "password": "",
         "database": "default",
-        "http_port": 8123,
         "storage_sets": {"transactions"},
         "single_node": False,
         "cluster_name": "clickhouse_hosts",
@@ -59,7 +57,6 @@ FULL_CONFIG = [
         "user": "default",
         "password": "",
         "database": "default",
-        "http_port": 8123,
         "secure": False,
         "ca_certs": None,
         "verify": False,
@@ -72,7 +69,6 @@ FULL_CONFIG = [
         "user": "default",
         "password": "",
         "database": "default",
-        "http_port": 8123,
         "secure": False,
         "ca_certs": None,
         "verify": False,
@@ -92,7 +88,6 @@ SLICED_CLUSTERS_CONFIG = [
         "user": "default",
         "password": "",
         "database": "default",
-        "http_port": 8123,
         "secure": False,
         "storage_set_slices": {("generic_metrics_distributions", 0)},
         "single_node": True,
@@ -103,7 +98,6 @@ SLICED_CLUSTERS_CONFIG = [
         "user": "default",
         "password": "",
         "database": "slice_1_default",
-        "http_port": 8124,
         "secure": False,
         "storage_set_slices": {("generic_metrics_distributions", 1)},
         "single_node": True,
@@ -205,18 +199,17 @@ def test_get_local_nodes() -> None:
 
 @pytest.mark.clickhouse_db
 def test_discovered_nodes_use_default_http_port() -> None:
-    # The cluster's configured http_port is an Envoy intercept port that only
+    # The cluster's configured port is an Envoy intercept port that only
     # fronts the cluster endpoint (query node). Nodes discovered via
     # system.clusters are addressed directly (bypassing Envoy) and must carry
     # the well-known default HTTP port instead.
-    envoy_http_port = 8158
+    envoy_port = 8158
     distributed_cluster = cluster.ClickhouseCluster(
         "host_query",
-        9000,
+        envoy_port,
         "default",
         "",
         "default",
-        envoy_http_port,
         False,
         None,
         False,
@@ -231,7 +224,7 @@ def test_discovered_nodes_use_default_http_port() -> None:
         local_nodes = distributed_cluster.get_local_nodes()
 
     # The cluster endpoint keeps the Envoy intercept port ...
-    assert distributed_cluster.get_http_port() == envoy_http_port
+    assert distributed_cluster.get_port() == envoy_port
     # ... but directly-addressed nodes use the default HTTP port.
     assert len(local_nodes) == 2
     assert all(node.port == cluster.DEFAULT_CLICKHOUSE_HTTP_PORT for node in local_nodes)
@@ -241,11 +234,10 @@ def test_discovered_nodes_use_default_http_port() -> None:
 def test_cache_connections() -> None:
     cluster_1 = cluster.ClickhouseCluster(
         "127.0.0.1",
-        8000,
+        8001,
         "default",
         "",
         "default",
-        8001,
         False,
         None,
         False,
@@ -255,11 +247,10 @@ def test_cache_connections() -> None:
 
     cluster_2 = cluster.ClickhouseCluster(
         "127.0.0.1",
-        8000,
+        8001,
         "default",
         "",
         "default",
-        8001,
         False,
         None,
         False,
@@ -270,11 +261,10 @@ def test_cache_connections() -> None:
     # Same node but different user
     cluster_3 = cluster.ClickhouseCluster(
         "127.0.0.1",
-        8000,
+        8001,
         "readonly",
         "",
         "default",
-        8001,
         False,
         None,
         False,
@@ -312,11 +302,10 @@ def test_get_node_connection_uses_connect_pool() -> None:
 
     test_cluster = cluster.ClickhouseCluster(
         "127.0.0.1",
-        8000,
+        8001,
         "default",
         "",
         "default",
-        8001,
         False,
         None,
         False,

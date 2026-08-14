@@ -33,7 +33,7 @@ logger = structlog.get_logger().bind(module=__name__)
 
 # Well-known default ClickHouse HTTP port, used by by-host helpers (e.g. CLI
 # tools) that only know a node's address and have no cluster config to read an
-# http_port from.
+# port from.
 DEFAULT_CLICKHOUSE_HTTP_PORT = 8123
 # User-facing read queries get a 25s timeout, leaving headroom under a ~30s
 # frontend request budget to still return a response. Migrations, DDL and
@@ -259,7 +259,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
     ClickhouseCluster provides a reader, writer and Clickhouse connections that are
     shared by all storages located on the cluster.
 
-    ClickhouseCluster is initialized with a single address (host/port/http_port),
+    ClickhouseCluster is initialized with a single address (host/port),
     which is used for all read and write operations related to the cluster. This
     address can refer to either the address of the actual ClickHouse server, or a
     proxy server (e.g. for load balancing).
@@ -280,7 +280,6 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         user: str,
         password: str,
         database: str,
-        http_port: int,
         secure: bool,
         ca_certs: str | None,
         verify: bool | None,
@@ -299,11 +298,10 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         self.__port = port
         self.__max_connections = max_connections or _DEFAULT_MAX_CONNECTIONS
         self.__block_connections = block_connections
-        self.__query_node = ClickhouseNode(host, http_port)
+        self.__query_node = ClickhouseNode(host, port)
         self.__user = user
         self.__password = password
         self.__database = database
-        self.__http_port = http_port
         self.__secure = secure
         self.__ca_certs = ca_certs
         self.__verify = verify
@@ -397,7 +395,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
     ) -> BatchWriter[JSONRow]:
         return HTTPBatchWriter(
             host=self.__query_node.host_name,
-            port=self.__http_port,
+            port=self.__port,
             max_connections=self.__max_connections,
             block_connections=self.__block_connections,
             user=self.__user,
@@ -455,7 +453,7 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
     def get_connection_id(self) -> ConnectionId:
         return ConnectionId(
             hostname=self.__query_node.host_name,
-            port=self.__http_port,
+            port=self.__port,
             database_name=self.__database,
         )
 
@@ -484,9 +482,6 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
     def get_port(self) -> int:
         return self.__port
 
-    def get_http_port(self) -> int:
-        return self.__http_port
-
     def get_secure(self) -> bool:
         return self.__secure
 
@@ -498,7 +493,6 @@ CLUSTERS = [
         user=cluster.get("user", "default"),
         password=cluster.get("password", ""),
         database=cluster.get("database", "default"),
-        http_port=cluster["http_port"],
         secure=cluster.get("secure", False),
         ca_certs=cluster.get("ca_certs", None),
         verify=cluster.get("verify", False),
@@ -539,7 +533,6 @@ def _build_sliced_cluster(cluster: Mapping[str, Any]) -> ClickhouseCluster:
         user=cluster.get("user", "default"),
         password=cluster.get("password", ""),
         database=cluster.get("database", "default"),
-        http_port=cluster["http_port"],
         secure=cluster.get("secure", False),
         ca_certs=cluster.get("ca_certs", None),
         verify=cluster.get("verify", False),

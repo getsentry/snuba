@@ -2097,12 +2097,12 @@ mod tests {
     #[tokio::test]
     async fn test_row_binary_clickhouse_insert() {
         let host = std::env::var("CLICKHOUSE_HOST").unwrap_or("127.0.0.1".to_string());
-        let http_port: u16 = std::env::var("CLICKHOUSE_HTTP_PORT")
+        let port: u16 = std::env::var("CLICKHOUSE_PORT")
             .unwrap_or("8123".to_string())
             .parse()
             .unwrap();
         let database = std::env::var("CLICKHOUSE_DATABASE").unwrap_or("default".to_string());
-        let base_url = format!("http://{host}:{http_port}");
+        let base_url = format!("http://{host}:{port}");
 
         let http = reqwest::Client::new();
 

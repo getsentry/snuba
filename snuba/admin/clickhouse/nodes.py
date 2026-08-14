@@ -60,7 +60,7 @@ def _get_query_node(storage_key: StorageKey) -> Node | None:
     try:
         cluster = get_storage(storage_key).get_cluster()
         query_node = cluster.get_query_node()
-        return {"host": query_node.host_name, "port": cluster.get_http_port()}
+        return {"host": query_node.host_name, "port": cluster.get_port()}
     except (AssertionError, KeyError, UndefinedClickhouseCluster):
         return None
 

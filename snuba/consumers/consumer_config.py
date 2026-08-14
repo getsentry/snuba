@@ -16,7 +16,6 @@ from snuba.utils.streams.topics import Topic
 class ClickhouseClusterConfig:
     host: str
     port: int
-    http_port: int
     user: str
     password: str
     database: str
@@ -287,7 +286,6 @@ def resolve_storage_config(storage_name: str, storage: WritableTableStorage) -> 
     clickhouse_cluster = ClickhouseClusterConfig(
         host=cluster.get_host(),
         port=cluster.get_port(),
-        http_port=cluster.get_http_port(),
         user=user,
         password=password,
         secure=cluster.get_secure(),

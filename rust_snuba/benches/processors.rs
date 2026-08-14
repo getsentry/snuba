@@ -54,7 +54,6 @@ fn create_factory(
             host: "test".into(),
             port: 1234,
             secure: false,
-            http_port: 1234,
             user: "test".into(),
             password: "test".into(),
             database: "test".into(),

@@ -34,7 +34,7 @@ class InvalidStorageError(SerializableException):
 
 def _node_connect_port(node: ClickhouseNode, cluster: ClickhouseCluster) -> int:
     if node.host_name == cluster.get_query_node().host_name:
-        return cluster.get_http_port()
+        return cluster.get_port()
     return node.port if node.port is not None else DEFAULT_CLICKHOUSE_HTTP_PORT
 
 
@@ -85,7 +85,7 @@ def _validate_node(
                 "host": clickhouse_host,
                 "port": clickhouse_port,
                 "query_host": cluster.get_query_node().host_name,
-                "query_port": cluster.get_http_port(),
+                "query_port": cluster.get_port(),
             },
         )
 
@@ -113,7 +113,7 @@ def _build_validated_pool(
     # Query-endpoint traffic uses the cluster Envoy listen port. Replica
     # (by-host) traffic uses 8123 on that node.
     query_node = cluster.get_query_node()
-    envoy_port = cluster.get_http_port()
+    envoy_port = cluster.get_port()
     is_query_endpoint = clickhouse_host == query_node.host_name and clickhouse_port == envoy_port
     connect_port = envoy_port if is_query_endpoint else DEFAULT_CLICKHOUSE_HTTP_PORT
     return connection_cache.get_node_connection(
@@ -203,7 +203,7 @@ def get_ro_query_node_connection(
     cluster = storage.get_cluster()
     connection_id = cluster.get_connection_id()
     connection = get_ro_node_connection(
-        connection_id.hostname, cluster.get_http_port(), storage_name, client_settings
+        connection_id.hostname, cluster.get_port(), storage_name, client_settings
     )
 
     CLUSTER_CONNECTIONS[key] = connection

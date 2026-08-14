@@ -8,8 +8,7 @@ import { render, waitFor, fireEvent } from "@testing-library/react";
 function cluster(overrides: Partial<ClusterData> = {}): ClusterData {
   return {
     host: "localhost",
-    port: 9000,
-    http_port: 8123,
+    port: 8123,
     database: "default",
     secure: false,
     single_node: true,

@@ -47,7 +47,6 @@ def pytest_configure() -> None:
             user="default",
             password="",
             database="default",
-            http_port=cluster_node["http_port"],
             storage_sets=cluster_node["storage_sets"],
             single_node=cluster_node["single_node"],
             cluster_name=cluster_node.get("cluster_name", None),

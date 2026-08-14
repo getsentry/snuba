@@ -353,7 +353,7 @@ def test_clusterless_rejects_unvalidated_host(
 def test_by_host_connection_uses_default_http_port(helper_name: str) -> None:
     """
     By-host helpers target a replica. Replicas listen on 8123, not the
-    cluster Envoy port from get_http_port().
+    cluster Envoy port from get_port().
     """
     from snuba.admin.clickhouse import common
     from snuba.clusters.cluster import (
@@ -382,7 +382,7 @@ def test_by_host_connection_uses_default_http_port(helper_name: str) -> None:
             patch.object(common, "_validate_node"),  # treat the host as valid
             patch.object(
                 ClickhouseCluster,
-                "get_http_port",
+                "get_port",
                 return_value=sentinel_cluster_http_port,
             ),
             patch.object(connection_cache, "get_node_connection") as mock_pool,
@@ -398,7 +398,7 @@ def test_by_host_connection_uses_default_http_port(helper_name: str) -> None:
         node = mock_pool.call_args.args[1]
         assert node.port == DEFAULT_CLICKHOUSE_HTTP_PORT
         assert node.port != sentinel_cluster_http_port, (
-            "by-host connections must not use the cluster's configured http_port"
+            "by-host connections must not use the cluster's configured port"
         )
     finally:
         # Restore the cache exactly, so this test never leaks a mocked
@@ -413,8 +413,8 @@ def test_query_node_connection_uses_cluster_http_port() -> None:
     query-node helper (get_ro_query_node_connection — used by the tracing,
     querylog and cardinality tools) connects to the cluster's *configured query
     endpoint*, the same host the normal read path reaches on
-    cluster.get_http_port(). That endpoint may be a load balancer on a
-    non-default HTTP port, so this path must keep using cluster.get_http_port()
+    cluster.get_port(). That endpoint may be a load balancer on a
+    non-default HTTP port, so this path must keep using cluster.get_port()
     rather than the by-host default — otherwise the HTTP driver would send those
     tools to the wrong port.
     """
@@ -438,7 +438,7 @@ def test_query_node_connection_uses_cluster_http_port() -> None:
             patch.object(common, "_validate_node"),  # treat the host as valid
             patch.object(
                 ClickhouseCluster,
-                "get_http_port",
+                "get_port",
                 return_value=sentinel_cluster_http_port,
             ),
             patch.object(connection_cache, "get_node_connection") as mock_pool,
@@ -448,7 +448,7 @@ def test_query_node_connection_uses_cluster_http_port() -> None:
         assert mock_pool.called, "expected a pool to be acquired for the query node"
         node = mock_pool.call_args.args[1]
         assert node.port == sentinel_cluster_http_port, (
-            "the query-node connection must use the cluster's configured http_port"
+            "the query-node connection must use the cluster's configured port"
         )
     finally:
         common.NODE_CONNECTIONS.clear()
