@@ -38,9 +38,7 @@ logger = structlog.get_logger().bind(module=__name__)
 MAX_TRACING_QUERY_LIMIT = 10_000
 
 
-def _iter_top_level_tokens(
-    token: Token, start: int = 0
-) -> Iterator[tuple[Token, int]]:
+def _iter_top_level_tokens(token: Token, start: int = 0) -> Iterator[tuple[Token, int]]:
     """Yield leaf tokens outside parentheses with string offsets."""
     if isinstance(token, Parenthesis):
         return
