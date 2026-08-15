@@ -578,6 +578,7 @@ def test_with_totals_via_single_jsoncompact_request() -> None:
     assert kwargs["fmt"] == "JSONCompact"
     assert kwargs["settings"]["output_format_json_quote_64bit_integers"] == 0
     assert kwargs["settings"]["output_format_json_quote_denormals"] == 1
+    assert kwargs["settings"]["output_format_json_named_tuples_as_objects"] == 0
 
 
 def test_totals_jsoncompact_uses_original_query_id_and_inherits_settings() -> None:
@@ -762,6 +763,52 @@ def test_execute_coerces_quoted_denormal_floats() -> None:
     assert trend == float("inf")
     _, kwargs = client.raw_query.call_args
     assert kwargs["settings"]["output_format_json_quote_denormals"] == 1
+    assert kwargs["settings"]["output_format_json_named_tuples_as_objects"] == 0
+
+
+def test_coerce_jsoncompact_restores_tuple_floats() -> None:
+    # simpleLinearRegression is Tuple(k Float64, b Float64). With
+    # named_tuples_as_objects=0 CH emits arrays; elements still need float/nan
+    # coercion so Sentry process_value can map [nan, nan] -> [0, 0].
+    import math
+
+    from snuba.clickhouse.connect import _coerce_jsoncompact_value
+
+    named = "Tuple(k Float64, b Float64)"
+    positional = "Tuple(Float64, Float64)"
+
+    row = _coerce_jsoncompact_value(["nan", "nan"], named)
+    assert isinstance(row, list) and len(row) == 2
+    assert all(isinstance(v, float) and math.isnan(v) for v in row)
+
+    assert _coerce_jsoncompact_value([2, 1], named) == [2.0, 1.0]
+    assert _coerce_jsoncompact_value([1, 2], positional) == [1.0, 2.0]
+    # Object wire form (setting still on) becomes a list in declaration order.
+    assert _coerce_jsoncompact_value({"k": "nan", "b": 0}, named)[1] == 0.0
+    assert math.isnan(_coerce_jsoncompact_value({"k": "nan", "b": 0}, named)[0])
+
+
+def test_execute_coerces_named_tuple_denormals() -> None:
+    import math
+
+    client = mock.Mock()
+    client.raw_query.return_value = (
+        b'{"meta":[{"name":"linear_regression(transaction.duration, transaction.duration)",'
+        b'"type":"Tuple(k Float64, b Float64)"}],'
+        # One row, one Tuple column: nested array of element values.
+        b'"data":[[["nan","nan"]]]}'
+    )
+
+    result = _make_pool(client).execute(
+        "SELECT simpleLinearRegression(duration, duration) FROM t",
+        with_column_types=True,
+    )
+
+    value = result.results[0][0]
+    assert isinstance(value, list) and len(value) == 2
+    assert all(isinstance(v, float) and math.isnan(v) for v in value)
+    _, kwargs = client.raw_query.call_args
+    assert kwargs["settings"]["output_format_json_named_tuples_as_objects"] == 0
 
 
 def test_empty_typed_select_uses_single_jsoncompact_request() -> None:

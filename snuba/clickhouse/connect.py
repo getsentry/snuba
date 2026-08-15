@@ -166,11 +166,10 @@ def _unwrap_type_wrappers(ch_type: str) -> str:
         return ch_type
 
 
-def _split_map_type(ch_type: str) -> tuple[str, str] | None:
-    """Parse Map(K, V) at the top level; nested commas stay inside K or V."""
-    if not ch_type.startswith("Map(") or not ch_type.endswith(")"):
-        return None
-    body = ch_type[4:-1]
+def _split_top_level(body: str) -> list[str]:
+    """Split a comma-separated type body on top-level commas only."""
+    parts: list[str] = []
+    start = 0
     depth = 0
     for index, char in enumerate(body):
         if char == "(":
@@ -178,8 +177,52 @@ def _split_map_type(ch_type: str) -> tuple[str, str] | None:
         elif char == ")":
             depth -= 1
         elif char == "," and depth == 0:
-            return body[:index].strip(), body[index + 1 :].strip()
-    return None
+            parts.append(body[start:index].strip())
+            start = index + 1
+    tail = body[start:].strip()
+    if tail:
+        parts.append(tail)
+    return parts
+
+
+def _split_map_type(ch_type: str) -> tuple[str, str] | None:
+    """Parse Map(K, V) at the top level; nested commas stay inside K or V."""
+    if not ch_type.startswith("Map(") or not ch_type.endswith(")"):
+        return None
+    parts = _split_top_level(ch_type[4:-1])
+    if len(parts) != 2:
+        return None
+    return parts[0], parts[1]
+
+
+def _parse_tuple_element_types(ch_type: str) -> list[str] | None:
+    """Parse Tuple(...) element types, named or positional.
+
+    Named forms look like ``Tuple(k Float64, b Float64)``; positional like
+    ``Tuple(Float64, Float64)``. Element names are discarded — callers want the
+    native-driver list shape, not a named object.
+    """
+    if not ch_type.startswith("Tuple(") or not ch_type.endswith(")"):
+        return None
+    body = ch_type[6:-1].strip()
+    if not body:
+        return []
+
+    element_types: list[str] = []
+    for part in _split_top_level(body):
+        # Named element: "name Type...". Type may itself contain spaces only
+        # inside parentheses (e.g. "DateTime('UTC')"), so the first bare token
+        # is the name when the remainder is a plausible type start.
+        tokens = part.split(None, 1)
+        if (
+            len(tokens) == 2
+            and tokens[0].isidentifier()
+            and (tokens[1][0].isalpha() or tokens[1].startswith("Nullable"))
+        ):
+            element_types.append(tokens[1])
+        else:
+            element_types.append(part)
+    return element_types
 
 
 def _coerce_jsoncompact_value(value: Any, ch_type: str) -> Any:
@@ -191,7 +234,9 @@ def _coerce_jsoncompact_value(value: Any, ch_type: str) -> Any:
       makes them ints; str(1500) is "1500" while str(1500.0) is "1500.0"
     - non-finite floats are quoted strings ("nan"/"inf") when quote_denormals is on;
       without that CH writes null and Sentry cannot map nan->0 / inf->None
-    Nested Array/Map float elements get the same float coercion.
+    - named Tuples default to JSON objects; we request arrays and coerce elements
+      so simpleLinearRegression stays a list the native driver returned
+    Nested Array/Map/Tuple float elements get the same float coercion.
     """
     if value is None:
         return None
@@ -215,6 +260,22 @@ def _coerce_jsoncompact_value(value: Any, ch_type: str) -> Any:
     if array_match is not None and isinstance(value, list):
         elem_type = array_match.group(1)
         return [_coerce_jsoncompact_value(item, elem_type) for item in value]
+
+    tuple_types = _parse_tuple_element_types(inner)
+    if tuple_types is not None:
+        # Prefer list wire form (named_tuples_as_objects=0). If an object still
+        # arrives, keep declaration order from the type string.
+        if isinstance(value, dict):
+            items = list(value.values())
+        elif isinstance(value, list):
+            items = value
+        else:
+            return value
+        coerced: list[Any] = []
+        for index, item in enumerate(items):
+            elem_type = tuple_types[index] if index < len(tuple_types) else ""
+            coerced.append(_coerce_jsoncompact_value(item, elem_type) if elem_type else item)
+        return coerced
 
     map_parts = _split_map_type(inner)
     if map_parts is not None and isinstance(value, dict):
@@ -251,10 +312,14 @@ def _jsoncompact_settings(
 
     quote_denormals keeps NaN/Inf as tokens instead of null so callers (Sentry's
     process_value) can still distinguish empty-range nan from real nulls.
+
+    named_tuples_as_objects=0 matches the native driver: simpleLinearRegression
+    and other named Tuples arrive as arrays, not {"k": ..., "b": ...} objects.
     """
     json_settings: dict[str, Any] = dict(settings) if settings else {}
     json_settings["output_format_json_quote_64bit_integers"] = 0
     json_settings["output_format_json_quote_denormals"] = 1
+    json_settings["output_format_json_named_tuples_as_objects"] = 0
     if query_id is not None:
         json_settings["query_id"] = query_id
     if capture_trace:
