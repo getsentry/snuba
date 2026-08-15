@@ -577,15 +577,12 @@ class ClickhouseConnectPool(ClickhousePool):
     ) -> ClickhouseResult:
         def _once() -> ClickhouseResult:
             client = self._new_client()
-            if capture_trace and not query_id:
-                # Same client-side id rule as _execute_jsoncompact for query_log.
-                nonlocal_query_id = uuid.uuid4().hex
-            else:
-                nonlocal_query_id = query_id
-            json_settings = _jsoncompact_settings(settings, nonlocal_query_id, capture_trace)
+            # Same client-side id rule as _execute_jsoncompact for query_log.
+            resolved_query_id = query_id or (uuid.uuid4().hex if capture_trace else None)
+            json_settings = _jsoncompact_settings(settings, resolved_query_id, capture_trace)
             sql = _strip_trailing_semicolons(query)
 
-            with _query_span(sql, nonlocal_query_id):
+            with _query_span(sql, resolved_query_id):
                 raw = client.raw_query(
                     sql,
                     parameters=_driver_params(params),
@@ -612,7 +609,7 @@ class ClickhouseConnectPool(ClickhousePool):
                 meta=meta,
                 profile=self._profile_from_statistics(payload),
                 trace_output="",
-                query_id=str(payload.get("query_id") or nonlocal_query_id or ""),
+                query_id=str(payload.get("query_id") or resolved_query_id or ""),
             )
 
         if robust:
