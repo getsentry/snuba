@@ -577,6 +577,7 @@ def test_with_totals_via_single_jsoncompact_request() -> None:
     _, kwargs = client.raw_query.call_args
     assert kwargs["fmt"] == "JSONCompact"
     assert kwargs["settings"]["output_format_json_quote_64bit_integers"] == 0
+    assert kwargs["settings"]["output_format_json_quote_denormals"] == 1
 
 
 def test_totals_jsoncompact_uses_original_query_id_and_inherits_settings() -> None:
@@ -719,6 +720,48 @@ def test_coerce_jsoncompact_restores_whole_floats() -> None:
     assert _coerce_jsoncompact_value("2023-01-02 03:04:05", "DateTime") == datetime(
         2023, 1, 2, 3, 4, 5
     )
+
+
+def test_coerce_jsoncompact_restores_denormal_float_strings() -> None:
+    # With quote_denormals, CH emits quoted "nan"/"inf". Restore real floats so
+    # Sentry process_value can map nan->0 and inf->None (null would stay None).
+    import math
+
+    from snuba.clickhouse.connect import _coerce_jsoncompact_value
+
+    nan = _coerce_jsoncompact_value("nan", "Float64")
+    assert isinstance(nan, float) and math.isnan(nan)
+    assert math.isnan(_coerce_jsoncompact_value("-nan", "Float64"))
+    assert _coerce_jsoncompact_value("inf", "Float64") == float("inf")
+    assert _coerce_jsoncompact_value("+inf", "Float32") == float("inf")
+    assert _coerce_jsoncompact_value("-inf", "Nullable(Float64)") == float("-inf")
+    assert _coerce_jsoncompact_value("Infinity", "Float64") == float("inf")
+    assert math.isnan(_coerce_jsoncompact_value(["nan"], "Array(Float64)")[0])
+    # Real nulls stay None; ordinary strings are not treated as denormals.
+    assert _coerce_jsoncompact_value(None, "Nullable(Float64)") is None
+    assert _coerce_jsoncompact_value("not-a-float", "Float64") == "not-a-float"
+
+
+def test_execute_coerces_quoted_denormal_floats() -> None:
+    import math
+
+    client = mock.Mock()
+    # quote_denormals=1 wire form: non-finite floats as JSON strings.
+    client.raw_query.return_value = (
+        b'{"meta":[{"name":"aggregate_range_1","type":"Float64"},'
+        b'{"name":"trend","type":"Float64"}],'
+        b'"data":[["nan","inf"]]}'
+    )
+
+    result = _make_pool(client).execute(
+        "SELECT aggregate_range_1, trend FROM t", with_column_types=True
+    )
+
+    value, trend = result.results[0]
+    assert isinstance(value, float) and math.isnan(value)
+    assert trend == float("inf")
+    _, kwargs = client.raw_query.call_args
+    assert kwargs["settings"]["output_format_json_quote_denormals"] == 1
 
 
 def test_empty_typed_select_uses_single_jsoncompact_request() -> None:

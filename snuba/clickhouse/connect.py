@@ -139,6 +139,17 @@ def _coerce_temporal(value: Any, ch_type: str) -> Any:
 _LOW_CARDINALITY_RE = re.compile(r"^LowCardinality\((.+)\)$")
 _ARRAY_RE = re.compile(r"^Array\((.+)\)$")
 _FLOAT_RE = re.compile(r"^Float\d*$")
+# ClickHouse JSON with quote_denormals emits these as quoted strings.
+_DENORMAL_FLOAT_STRINGS = {
+    "nan": float("nan"),
+    "-nan": float("nan"),
+    "inf": float("inf"),
+    "+inf": float("inf"),
+    "infinity": float("inf"),
+    "+infinity": float("inf"),
+    "-inf": float("-inf"),
+    "-infinity": float("-inf"),
+}
 
 
 def _unwrap_type_wrappers(ch_type: str) -> str:
@@ -178,6 +189,8 @@ def _coerce_jsoncompact_value(value: Any, ch_type: str) -> Any:
     - Date/DateTime strings need datetime/date objects (then the reader ISO-formats)
     - whole Float values arrive as JSON numbers without a decimal, so json.loads
       makes them ints; str(1500) is "1500" while str(1500.0) is "1500.0"
+    - non-finite floats are quoted strings ("nan"/"inf") when quote_denormals is on;
+      without that CH writes null and Sentry cannot map nan->0 / inf->None
     Nested Array/Map float elements get the same float coercion.
     """
     if value is None:
@@ -192,6 +205,10 @@ def _coerce_jsoncompact_value(value: Any, ch_type: str) -> Any:
             return value
         if isinstance(value, (int, float)):
             return float(value)
+        if isinstance(value, str):
+            denormal = _DENORMAL_FLOAT_STRINGS.get(value.lower())
+            if denormal is not None:
+                return denormal
         return value
 
     array_match = _ARRAY_RE.match(inner)
@@ -223,6 +240,26 @@ def _apply_client_query_limit(client: Client, query: str) -> str:
     if re.search(r"\bSETTINGS\b", query, re.IGNORECASE):
         return query
     return f"{query}\n LIMIT {query_limit}"
+
+
+def _jsoncompact_settings(
+    settings: Mapping[str, Any] | None,
+    query_id: str | None,
+    capture_trace: bool,
+) -> dict[str, Any]:
+    """Settings shared by typed JSONCompact reads.
+
+    quote_denormals keeps NaN/Inf as tokens instead of null so callers (Sentry's
+    process_value) can still distinguish empty-range nan from real nulls.
+    """
+    json_settings: dict[str, Any] = dict(settings) if settings else {}
+    json_settings["output_format_json_quote_64bit_integers"] = 0
+    json_settings["output_format_json_quote_denormals"] = 1
+    if query_id is not None:
+        json_settings["query_id"] = query_id
+    if capture_trace:
+        json_settings["send_logs_level"] = "trace"
+    return json_settings
 
 
 @contextmanager
@@ -420,12 +457,7 @@ class ClickhouseConnectPool(ClickhousePool):
         settings: Mapping[str, Any] | None,
         capture_trace: bool,
     ) -> ClickhouseResult:
-        json_settings: dict[str, Any] = dict(settings) if settings else {}
-        json_settings["output_format_json_quote_64bit_integers"] = 0
-        if query_id is not None:
-            json_settings["query_id"] = query_id
-        if capture_trace:
-            json_settings["send_logs_level"] = "trace"
+        json_settings = _jsoncompact_settings(settings, query_id, capture_trace)
         query = _apply_client_query_limit(client, query)
 
         with _query_span(query, query_id):
@@ -464,12 +496,7 @@ class ClickhouseConnectPool(ClickhousePool):
     ) -> ClickhouseResult:
         def _once() -> ClickhouseResult:
             client = self._new_client()
-            json_settings: dict[str, Any] = dict(settings) if settings else {}
-            json_settings["output_format_json_quote_64bit_integers"] = 0
-            if query_id is not None:
-                json_settings["query_id"] = query_id
-            if capture_trace:
-                json_settings["send_logs_level"] = "trace"
+            json_settings = _jsoncompact_settings(settings, query_id, capture_trace)
 
             with _query_span(query, query_id):
                 raw = client.raw_query(
