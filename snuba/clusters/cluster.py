@@ -184,7 +184,7 @@ def build_pool(
     node: ClickhouseNode,
     user: str,
     password: str,
-    database: str,
+    database: str | None,
     secure: bool = False,
     ca_certs: str | None = None,
     verify: bool | None = None,

@@ -109,7 +109,7 @@ def backwards(logger: logging.Logger) -> None:
 
 def cleanup(clickhouse: ClickhousePool, logger: logging.Logger) -> None:
     def table_exists(table_name: str) -> bool:
-        return clickhouse.command(f"EXISTS TABLE {table_name};").results == [(1,)]
+        return clickhouse.execute(f"EXISTS TABLE {table_name};").results == [(1,)]
 
     if not table_exists(TABLE_NAME):
         raise Exception(f"Table {TABLE_NAME} is missing")

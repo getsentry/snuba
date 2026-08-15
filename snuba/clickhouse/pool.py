@@ -32,7 +32,7 @@ class ClickhousePool(ABC):
     port: int
     user: str
     password: str
-    database: str
+    database: str | None
 
     @abstractmethod
     def execute(

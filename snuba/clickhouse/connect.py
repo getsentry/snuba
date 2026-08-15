@@ -177,7 +177,7 @@ class ClickhouseConnectPool(ClickhousePool):
         host: str,
         user: str,
         password: str,
-        database: str,
+        database: str | None = None,
         port: int = DEFAULT_CLICKHOUSE_HTTP_PORT,
         secure: bool = False,
         ca_certs: str | None = None,

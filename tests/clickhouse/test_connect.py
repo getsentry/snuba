@@ -178,6 +178,21 @@ def test_new_client_connects_with_database() -> None:
     assert get_client.call_args.kwargs["database"] == "snuba_test"
 
 
+def test_new_client_accepts_none_database() -> None:
+    import clickhouse_connect
+
+    pool = ClickhouseConnectPool(host="host", user="test", password="test")
+
+    assert pool.database is None
+    with (
+        mock.patch.object(clickhouse_connect, "get_client") as get_client,
+        mock.patch("snuba.clickhouse.connect.get_pool_manager"),
+    ):
+        pool._new_client()
+
+    assert get_client.call_args.kwargs["database"] is None
+
+
 def test_execute_sets_native_format_for_embedded_insert_sql() -> None:
     client = mock.Mock()
     client.query.return_value = FakeQueryResult(result_set=[])

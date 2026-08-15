@@ -125,7 +125,7 @@ def test_get_table_statements(
     table_statements = get_create_table_statements(
         tables=[table],
         source_connection=get_clusterless_node_connection(
-            host, 9000, storage_name, client_settings=settings
+            host, cluster.get_port(), storage_name, client_settings=settings
         ),
         source_database=database_name,
         cluster_name="test_cluster",
@@ -162,7 +162,7 @@ def test_get_table_statement_without_cluster() -> None:
     table_statements = get_create_table_statements(
         tables=[table],
         source_connection=get_clusterless_node_connection(
-            host, 9000, storage_name, client_settings=settings
+            host, cluster.get_port(), storage_name, client_settings=settings
         ),
         source_database=database_name,
         cluster_name=cluster_name,
@@ -260,7 +260,7 @@ def test_verify_tables_on_replicas() -> None:
     cluster_name = None if cluster.is_single_node() else cluster.get_clickhouse_cluster_name()
 
     connection = get_clusterless_node_connection(
-        host, 9000, "outcomes_raw", client_settings=settings
+        host, cluster.get_port(), "outcomes_raw", client_settings=settings
     )
 
     # Test with table that exist, all should be verified

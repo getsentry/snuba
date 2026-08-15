@@ -16,6 +16,7 @@ from snuba.clusters.cluster import (
     ClickhouseClientSettings,
     ClickhouseCluster,
     ClickhouseNode,
+    build_pool,
 )
 from snuba.core.initialize import initialize_snuba
 from snuba.datasets.factory import reset_dataset_factory
@@ -324,7 +325,10 @@ def _drop_tables() -> None:
         ]
 
         for node in nodes:
-            connection = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
+            user, password = cluster.get_credentials()
+            connection = build_pool(
+                ClickhouseClientSettings.MIGRATE, node, user, password, None, cluster.get_secure()
+            )
             connection.command(f"DROP DATABASE IF EXISTS {database_name};")
             connection.command(f"CREATE DATABASE {database_name};")
 
