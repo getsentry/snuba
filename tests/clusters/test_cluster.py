@@ -187,7 +187,10 @@ def test_get_local_nodes() -> None:
         local_cluster = get_storage(StorageKey("errors")).get_cluster()
         assert len(local_cluster.get_local_nodes()) == 1
         assert local_cluster.get_local_nodes()[0].host_name == "host_1"
-        assert local_cluster.get_local_nodes()[0].port == 8123
+        # Single-node clusters return the configured query-node port (FULL_CONFIG
+        # still uses the legacy 9000 fixture value). Discovered multi-node replicas
+        # rewrite to DEFAULT_CLICKHOUSE_HTTP_PORT (8123) instead.
+        assert local_cluster.get_local_nodes()[0].port == 9000
         assert local_cluster.get_local_nodes()[0].shard is None
         assert local_cluster.get_local_nodes()[0].replica is None
 

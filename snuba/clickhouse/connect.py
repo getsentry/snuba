@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import time
+import uuid
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
 from datetime import datetime
@@ -285,6 +286,15 @@ def _coerce_jsoncompact_value(value: Any, ch_type: str) -> Any:
     return value
 
 
+def _strip_trailing_semicolons(query: str) -> str:
+    """Drop trailing ``;`` so ``raw_query`` can append ``FORMAT JSONCompact``.
+
+    clickhouse-connect always does ``query += "\\n FORMAT …"``. A statement that
+    already ends with ``;`` becomes multi-statement SQL and CH rejects it.
+    """
+    return query.rstrip().rstrip(";").rstrip()
+
+
 def _apply_client_query_limit(client: Client, query: str) -> str:
     """Mirror ``Client._prep_query``: append the client's default LIMIT.
 
@@ -522,8 +532,14 @@ class ClickhouseConnectPool(ClickhousePool):
         settings: Mapping[str, Any] | None,
         capture_trace: bool,
     ) -> ClickhouseResult:
+        # Admin tracing falls back to system.query_log using this id. Assign one
+        # client-side when missing: JSONCompact does not return query_id, and
+        # send_logs_level wire traces are empty on the HTTP path.
+        if capture_trace and not query_id:
+            query_id = uuid.uuid4().hex
+
         json_settings = _jsoncompact_settings(settings, query_id, capture_trace)
-        query = _apply_client_query_limit(client, query)
+        query = _apply_client_query_limit(client, _strip_trailing_semicolons(query))
 
         with _query_span(query, query_id):
             raw = client.raw_query(
@@ -561,11 +577,17 @@ class ClickhouseConnectPool(ClickhousePool):
     ) -> ClickhouseResult:
         def _once() -> ClickhouseResult:
             client = self._new_client()
-            json_settings = _jsoncompact_settings(settings, query_id, capture_trace)
+            if capture_trace and not query_id:
+                # Same client-side id rule as _execute_jsoncompact for query_log.
+                nonlocal_query_id = uuid.uuid4().hex
+            else:
+                nonlocal_query_id = query_id
+            json_settings = _jsoncompact_settings(settings, nonlocal_query_id, capture_trace)
+            sql = _strip_trailing_semicolons(query)
 
-            with _query_span(query, query_id):
+            with _query_span(sql, nonlocal_query_id):
                 raw = client.raw_query(
-                    query,
+                    sql,
                     parameters=_driver_params(params),
                     settings=json_settings,
                     fmt="JSONCompact",
@@ -590,7 +612,7 @@ class ClickhouseConnectPool(ClickhousePool):
                 meta=meta,
                 profile=self._profile_from_statistics(payload),
                 trace_output="",
-                query_id=str(payload.get("query_id") or query_id or ""),
+                query_id=str(payload.get("query_id") or nonlocal_query_id or ""),
             )
 
         if robust:

@@ -110,9 +110,16 @@ class ClickhouseReader(Reader):
         if "query_id" in settings:
             query_id = settings.pop("query_id")
 
+        sql = query.get_sql()
+        # Mutations must not go through JSONCompact (FORMAT is invalid after DELETE).
+        # get_deleter() uses this reader for DELETE ... WHERE mutations.
+        if re.match(r"^\s*(DELETE|ALTER|OPTIMIZE|SYSTEM|TRUNCATE)\b", sql, re.IGNORECASE):
+            result = self.__client.command(sql, settings=settings, query_id=query_id)
+            return self.__transform_result(result, with_totals=False)
+
         if with_totals:
             result = self.__client.execute_with_totals(
-                query.get_sql(),
+                sql,
                 query_id=query_id,
                 settings=settings,
                 capture_trace=capture_trace,
@@ -121,7 +128,7 @@ class ClickhouseReader(Reader):
         else:
             execute_func = self.__client.execute_robust if robust else self.__client.execute
             result = execute_func(
-                query.get_sql(),
+                sql,
                 with_column_types=True,
                 query_id=query_id,
                 settings=settings,
