@@ -34,7 +34,7 @@ def transform_uuid(value: UUID) -> str:
 transform_column_types = build_result_transformer(
     [
         (re.compile(r"^Date(\(.+\))?$"), transform_date),
-        (re.compile(r"^DateTime(\(.+\))?$"), transform_datetime),
+        (re.compile(r"^DateTime(?:64)?(\(.+\))?$"), transform_datetime),
         (re.compile(r"^UUID$"), transform_uuid),
     ]
 )

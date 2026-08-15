@@ -781,7 +781,7 @@ def test_reader_isoformats_date_datetime_and_uuid() -> None:
 
     class FakeFormattedQuery:
         def get_sql(self) -> str:
-            return "SELECT d, dt, dt_tz, uid, nuid"
+            return "SELECT d, dt, dt_tz, dt64, uid, nuid"
 
     client = mock.Mock()
     client.raw_query.return_value = json.dumps(
@@ -790,6 +790,7 @@ def test_reader_isoformats_date_datetime_and_uuid() -> None:
                 {"name": "d", "type": "Date"},
                 {"name": "dt", "type": "DateTime"},
                 {"name": "dt_tz", "type": "DateTime('UTC')"},
+                {"name": "dt64", "type": "DateTime64(6, 'UTC')"},
                 {"name": "uid", "type": "UUID"},
                 {"name": "nuid", "type": "Nullable(UUID)"},
             ],
@@ -798,6 +799,7 @@ def test_reader_isoformats_date_datetime_and_uuid() -> None:
                     "2023-01-02",
                     "2023-01-02 03:04:05",
                     "2023-01-02 03:04:05",
+                    "2023-01-02 03:04:05.123456",
                     "00000000-0000-0000-0000-000000000001",
                     "00000000-0000-0000-0000-000000000001",
                 ]
@@ -813,6 +815,7 @@ def test_reader_isoformats_date_datetime_and_uuid() -> None:
     assert row["d"] == "2023-01-02T00:00:00+00:00"
     assert row["dt"] == "2023-01-02T03:04:05+00:00"
     assert row["dt_tz"] == "2023-01-02T03:04:05+00:00"
+    assert row["dt64"] == "2023-01-02T03:04:05.123456+00:00"
     assert row["uid"] == "00000000-0000-0000-0000-000000000001"
     assert row["nuid"] == "00000000-0000-0000-0000-000000000001"
     client.query.assert_not_called()
