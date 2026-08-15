@@ -636,11 +636,12 @@ def test_totals_jsoncompact_decodes_value_types() -> None:
     result = reader.execute(cast(FormattedQuery, FakeFormattedQuery()), with_totals=True)
 
     row = result["data"][0]
-    assert row["ts"] == datetime(2023, 1, 2, 3, 4, 5)
+    # Reader ISO-formats DateTime for JSON/HTTP API consumers.
+    assert row["ts"] == "2023-01-02T03:04:05+00:00"
     assert row["arr"] == [1, 2]
     assert row["opt"] is None
     totals = result["totals"]
-    assert totals["ts"] == datetime(1970, 1, 1, 0, 0, 0)
+    assert totals["ts"] == "1970-01-01T00:00:00+00:00"
     assert totals["cnt"] == 10
     assert totals["opt"] == 5
 
@@ -775,7 +776,7 @@ def test_typed_select_keeps_existing_limit() -> None:
     assert "LIMIT 10000" not in sql
 
 
-def test_reader_keeps_driver_value_types() -> None:
+def test_reader_isoformats_date_datetime_and_uuid() -> None:
     from snuba.clickhouse.reader import ClickhouseReader
 
     class FakeFormattedQuery:
@@ -809,9 +810,9 @@ def test_reader_keeps_driver_value_types() -> None:
     result = reader.execute(cast(FormattedQuery, FakeFormattedQuery()))
 
     row = result["data"][0]
-    assert row["d"] == date(2023, 1, 2)
-    assert row["dt"] == datetime(2023, 1, 2, 3, 4, 5)
-    assert row["dt_tz"] == datetime(2023, 1, 2, 3, 4, 5)
+    assert row["d"] == "2023-01-02T00:00:00+00:00"
+    assert row["dt"] == "2023-01-02T03:04:05+00:00"
+    assert row["dt_tz"] == "2023-01-02T03:04:05+00:00"
     assert row["uid"] == "00000000-0000-0000-0000-000000000001"
     assert row["nuid"] == "00000000-0000-0000-0000-000000000001"
     client.query.assert_not_called()

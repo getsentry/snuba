@@ -1,15 +1,47 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
+from datetime import date, datetime
 from typing import Any, cast
+from uuid import UUID
+
+from dateutil.tz import tz
 
 from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.clickhouse.pool import ClickhousePool, ClickhouseResult
-from snuba.reader import Reader, Result
+from snuba.reader import Reader, Result, build_result_transformer
+
+
+def transform_date(value: date) -> str:
+    """Convert a timezone-naive date into an ISO 8601 UTC datetime string."""
+    return datetime(*value.timetuple()[:6]).replace(tzinfo=tz.tzutc()).isoformat()
+
+
+def transform_datetime(value: datetime) -> str:
+    """Convert a datetime into an ISO 8601 UTC string."""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=tz.tzutc())
+    else:
+        value = value.astimezone(tz.tzutc())
+    return value.isoformat()
+
+
+def transform_uuid(value: UUID) -> str:
+    return str(value)
+
+
+transform_column_types = build_result_transformer(
+    [
+        (re.compile(r"^Date(\(.+\))?$"), transform_date),
+        (re.compile(r"^DateTime(\(.+\))?$"), transform_datetime),
+        (re.compile(r"^UUID$"), transform_uuid),
+    ]
+)
 
 
 class ClickhouseReader(Reader):
-    """Adapt a ClickhouseResult into the Result used by query paths."""
+    """Adapt a ClickhouseResult into the JSON-flavored Result used by query paths."""
 
     def __init__(
         self,
@@ -39,22 +71,30 @@ class ClickhouseReader(Reader):
 
         meta = [{"name": m[0], "type": m[1]} for m in [meta[i] for i in columns.values()]]
 
+        new_result: Result = {}
         if with_totals:
             assert len(data) > 0, "WITH TOTALS query returned no rows (missing totals row)"
             totals = data.pop(-1)
-            return {
+            new_result = {
                 "data": data,
                 "meta": meta,
                 "totals": totals,
                 "profile": profile,
                 "trace_output": result.trace_output,
             }
-        return {
-            "data": data,
-            "meta": meta,
-            "profile": profile,
-            "trace_output": result.trace_output,
-        }
+        else:
+            new_result = {
+                "data": data,
+                "meta": meta,
+                "profile": profile,
+                "trace_output": result.trace_output,
+            }
+
+        # JSON/HTTP APIs and Sentry sessions series bucketing expect ISO strings
+        # (and UUID strings), not raw driver datetime/date/UUID objects. str()
+        # on datetime is not ISO and breaks time-bucket matching.
+        transform_column_types(new_result)
+        return new_result
 
     def execute(
         self,
