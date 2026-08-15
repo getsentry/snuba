@@ -129,12 +129,15 @@ def get_ro_node_connection(
     storage_name: str,
     client_settings: ClickhouseClientSettings,
 ) -> ClickhousePool:
-    assert client_settings in {
-        ClickhouseClientSettings.QUERY,
-        ClickhouseClientSettings.QUERYLOG,
-        ClickhouseClientSettings.TRACING,
-        ClickhouseClientSettings.CARDINALITY_ANALYZER,
-    }, (
+    # Compare by name: tests that importlib.reload(cluster) leave stale Enum
+    # identities in other modules, so `in {EnumMember, ...}` can false-negative.
+    allowed = {
+        ClickhouseClientSettings.QUERY.name,
+        ClickhouseClientSettings.QUERYLOG.name,
+        ClickhouseClientSettings.TRACING.name,
+        ClickhouseClientSettings.CARDINALITY_ANALYZER.name,
+    }
+    assert getattr(client_settings, "name", None) in allowed, (
         "admin can only use QUERY, QUERYLOG, TRACING or CARDINALITY_ANALYZER "
         "ClickhouseClientSettings"
     )
@@ -144,10 +147,10 @@ def get_ro_node_connection(
     cluster = storage.get_cluster()
     database = cluster.get_database()
 
-    if (
-        client_settings == ClickhouseClientSettings.QUERY
-        or client_settings == ClickhouseClientSettings.QUERYLOG
-    ):
+    if getattr(client_settings, "name", None) in {
+        ClickhouseClientSettings.QUERY.name,
+        ClickhouseClientSettings.QUERYLOG.name,
+    }:
         username = settings.CLICKHOUSE_READONLY_USER
         password = settings.CLICKHOUSE_READONLY_PASSWORD
     else:
