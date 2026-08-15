@@ -136,6 +136,77 @@ def _coerce_temporal(value: Any, ch_type: str) -> Any:
     return parsed if inner.startswith("DateTime") else parsed.date()
 
 
+_LOW_CARDINALITY_RE = re.compile(r"^LowCardinality\((.+)\)$")
+_ARRAY_RE = re.compile(r"^Array\((.+)\)$")
+_FLOAT_RE = re.compile(r"^Float\d*$")
+
+
+def _unwrap_type_wrappers(ch_type: str) -> str:
+    """Strip Nullable / LowCardinality wrappers ClickHouse puts around a base type."""
+    while True:
+        _, inner = unwrap_nullable_type(ch_type)
+        if inner != ch_type:
+            ch_type = inner
+            continue
+        match = _LOW_CARDINALITY_RE.match(ch_type)
+        if match is not None:
+            ch_type = match.group(1)
+            continue
+        return ch_type
+
+
+def _split_map_type(ch_type: str) -> tuple[str, str] | None:
+    """Parse Map(K, V) at the top level; nested commas stay inside K or V."""
+    if not ch_type.startswith("Map(") or not ch_type.endswith(")"):
+        return None
+    body = ch_type[4:-1]
+    depth = 0
+    for index, char in enumerate(body):
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        elif char == "," and depth == 0:
+            return body[:index].strip(), body[index + 1 :].strip()
+    return None
+
+
+def _coerce_jsoncompact_value(value: Any, ch_type: str) -> Any:
+    """Restore native-ish Python types from JSONCompact wire values.
+
+    JSONCompact + json.loads drops type fidelity the native path kept:
+    - Date/DateTime strings need datetime/date objects (then the reader ISO-formats)
+    - whole Float values arrive as JSON numbers without a decimal, so json.loads
+      makes them ints; str(1500) is "1500" while str(1500.0) is "1500.0"
+    Nested Array/Map float elements get the same float coercion.
+    """
+    if value is None:
+        return None
+
+    value = _coerce_temporal(value, ch_type)
+    inner = _unwrap_type_wrappers(ch_type)
+
+    if _FLOAT_RE.match(inner) is not None:
+        # bool is a subclass of int; leave true/false alone.
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return float(value)
+        return value
+
+    array_match = _ARRAY_RE.match(inner)
+    if array_match is not None and isinstance(value, list):
+        elem_type = array_match.group(1)
+        return [_coerce_jsoncompact_value(item, elem_type) for item in value]
+
+    map_parts = _split_map_type(inner)
+    if map_parts is not None and isinstance(value, dict):
+        _key_type, value_type = map_parts
+        return {key: _coerce_jsoncompact_value(item, value_type) for key, item in value.items()}
+
+    return value
+
+
 def _apply_client_query_limit(client: Client, query: str) -> str:
     """Mirror ``Client._prep_query``: append the client's default LIMIT.
 
@@ -369,7 +440,9 @@ class ClickhouseConnectPool(ClickhousePool):
         column_types = [ch_type for _, ch_type in meta]
 
         def _row(values: Sequence[Any]) -> tuple[Any, ...]:
-            return tuple(_coerce_temporal(value, column_types[i]) for i, value in enumerate(values))
+            return tuple(
+                _coerce_jsoncompact_value(value, column_types[i]) for i, value in enumerate(values)
+            )
 
         results = [_row(row) for row in payload.get("data", [])]
         return ClickhouseResult(
@@ -412,7 +485,8 @@ class ClickhouseConnectPool(ClickhousePool):
 
             def _row(values: Sequence[Any]) -> tuple[Any, ...]:
                 return tuple(
-                    _coerce_temporal(value, column_types[i]) for i, value in enumerate(values)
+                    _coerce_jsoncompact_value(value, column_types[i])
+                    for i, value in enumerate(values)
                 )
 
             results = [_row(row) for row in payload.get("data", [])]
