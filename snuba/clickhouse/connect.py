@@ -472,16 +472,16 @@ class ClickhouseConnectPool(ClickhousePool):
                 with self._translate_clickhouse_errors():
                     return operation()
             except ClickhouseError as e:
-                logger.warning(
-                    "ClickHouse query execution failed: %s (%d tries left)",
-                    str(e),
-                    attempts_remaining,
-                )
                 if e.code != ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
                     raise
                 attempts_remaining -= 1
                 if attempts_remaining <= 0:
                     raise
+                logger.warning(
+                    "ClickHouse query execution failed: %s (%d tries left)",
+                    str(e),
+                    attempts_remaining,
+                )
                 sleep_interval_seconds = get_option("simultaneous_queries_sleep_seconds", 0) or 1
                 time.sleep(float((total_attempts - attempts_remaining) * sleep_interval_seconds))
 
