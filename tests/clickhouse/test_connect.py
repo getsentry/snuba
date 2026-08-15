@@ -134,9 +134,7 @@ def test_execute_coerces_whole_float_json_numbers() -> None:
         b'"data":[[1500,[1,1.5,2]]]}'
     )
 
-    result = _make_pool(client).execute(
-        "SELECT `spans.http`, vals FROM t", with_column_types=True
-    )
+    result = _make_pool(client).execute("SELECT `spans.http`, vals FROM t", with_column_types=True)
 
     assert result.results == [(1500.0, [1.0, 1.5, 2.0])]
     assert isinstance(result.results[0][0], float)
@@ -711,16 +709,16 @@ def test_coerce_jsoncompact_restores_whole_floats() -> None:
         "a": 1.0,
         "b": 1.5,
     }
-    assert _coerce_jsoncompact_value(
-        {"a": [1, 2]}, "Map(String, Array(Float64))"
-    ) == {"a": [1.0, 2.0]}
+    assert _coerce_jsoncompact_value({"a": [1, 2]}, "Map(String, Array(Float64))") == {
+        "a": [1.0, 2.0]
+    }
     # Non-float types stay put (ints stay ints; bool is not promoted).
     assert _coerce_jsoncompact_value(5, "UInt64") == 5
     assert isinstance(_coerce_jsoncompact_value(5, "UInt64"), int)
     assert _coerce_jsoncompact_value(True, "Bool") is True
-    assert _coerce_jsoncompact_value(
-        "2023-01-02 03:04:05", "DateTime"
-    ) == datetime(2023, 1, 2, 3, 4, 5)
+    assert _coerce_jsoncompact_value("2023-01-02 03:04:05", "DateTime") == datetime(
+        2023, 1, 2, 3, 4, 5
+    )
 
 
 def test_empty_typed_select_uses_single_jsoncompact_request() -> None:
