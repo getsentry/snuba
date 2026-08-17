@@ -59,7 +59,6 @@ from snuba.request import Request as SnubaRequest
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common.common import (
-    add_existence_check_to_map_attribute_reads,
     attribute_key_to_expression,
     base_conditions_and,
     get_field_existence_expression,
@@ -68,7 +67,6 @@ from snuba.web.rpc.common.common import (
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
     typed_array_select_subcolumn_name,
-    use_indexed_name_for_request,
     use_sampling_factor,
     valid_sampling_factor_conditions,
 )

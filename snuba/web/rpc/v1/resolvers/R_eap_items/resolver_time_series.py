@@ -45,7 +45,6 @@ from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
-    use_indexed_name_for_request,
     use_sampling_factor,
     valid_sampling_factor_conditions,
 )

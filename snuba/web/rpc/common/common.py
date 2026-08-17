@@ -1017,7 +1017,8 @@ def trace_item_filters_to_expression(
                 attribute_key_to_expression,
                 membership_as_has,
                 use_indexed_name,
-                organization_id=organization_id)
+                organization_id=organization_id,
+            )
         return and_cond(
             *(
                 trace_item_filters_to_expression(
@@ -1026,7 +1027,8 @@ def trace_item_filters_to_expression(
                     attribute_key_to_expression,
                     membership_as_has,
                     use_indexed_name,
-                    organization_id=organization_id)
+                    organization_id=organization_id,
+                )
                 for x in filters
             )
         )
@@ -1042,7 +1044,8 @@ def trace_item_filters_to_expression(
                 attribute_key_to_expression,
                 membership_as_has,
                 use_indexed_name,
-                organization_id=organization_id)
+                organization_id=organization_id,
+            )
         return or_cond(
             *(
                 trace_item_filters_to_expression(
@@ -1051,7 +1054,8 @@ def trace_item_filters_to_expression(
                     attribute_key_to_expression,
                     membership_as_has,
                     use_indexed_name,
-                    organization_id=organization_id)
+                    organization_id=organization_id,
+                )
                 for x in filters
             )
         )
@@ -1068,7 +1072,8 @@ def trace_item_filters_to_expression(
                     attribute_key_to_expression,
                     membership_as_has,
                     use_indexed_name,
-                    organization_id=organization_id)
+                    organization_id=organization_id,
+                )
             )
         return not_cond(
             and_cond(
@@ -1079,7 +1084,8 @@ def trace_item_filters_to_expression(
                         attribute_key_to_expression,
                         membership_as_has,
                         use_indexed_name,
-                        organization_id=organization_id)
+                        organization_id=organization_id,
+                    )
                     for x in filters
                 )
             )

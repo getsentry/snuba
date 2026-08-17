@@ -35,7 +35,6 @@ from snuba.web.rpc.common.common import (
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
     typed_array_map_selected_expressions,
-    use_indexed_name_for_request,
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
