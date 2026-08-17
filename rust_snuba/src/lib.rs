@@ -25,6 +25,7 @@ mod logging;
 mod metrics;
 mod options;
 mod processors;
+mod pull;
 mod rebalancing;
 mod strategies;
 mod types;
