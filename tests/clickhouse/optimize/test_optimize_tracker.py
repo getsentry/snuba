@@ -6,7 +6,7 @@ from unittest.mock import call, patch
 import pytest
 
 from snuba import settings
-from snuba.clickhouse.native import ClickhouseNativePool, ClickhouseResult
+from snuba.clickhouse.connect import ClickhouseConnectPool
 from snuba.clickhouse.optimize import optimize
 from snuba.clickhouse.optimize.optimize import run_optimize_cron_job
 from snuba.clickhouse.optimize.optimize_tracker import (
@@ -14,6 +14,7 @@ from snuba.clickhouse.optimize.optimize_tracker import (
     OptimizedPartitionTracker,
 )
 from snuba.clickhouse.optimize.util import MergeInfo
+from snuba.clickhouse.pool import ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_writable_storage
@@ -297,10 +298,12 @@ def test_merge_info() -> None:
         ]
     )
 
-    with patch.object(ClickhouseNativePool, "execute") as mock_clickhouse_execute:
+    with patch.object(ClickhouseConnectPool, "execute") as mock_clickhouse_execute:
         mock_clickhouse_execute.return_value = merge_query_result
         merge_info = optimize.get_current_large_merges(
-            clickhouse=ClickhouseNativePool("127.0.0.1", 9000, "user", "password", "database"),
+            clickhouse=ClickhouseConnectPool(
+                "127.0.0.1", "user", "password", "database", port=8123
+            ),
             database="default",
             table="errors_local",
         )
@@ -321,7 +324,9 @@ def test_merge_info() -> None:
 
         assert merge_info[0].estimated_time == 8020.61436897 / (0.9895385071013121 + 0.0001)
         busy = optimize.is_busy_merging(
-            clickhouse=ClickhouseNativePool("127.0.0.1", 9000, "user", "password", "database"),
+            clickhouse=ClickhouseConnectPool(
+                "127.0.0.1", "user", "password", "database", port=8123
+            ),
             database="default",
             table="errors_local",
         )

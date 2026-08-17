@@ -2,7 +2,6 @@ import uuid
 from collections import defaultdict
 from collections.abc import Callable, Iterable
 from dataclasses import replace
-from datetime import datetime
 from typing import Any
 
 import sentry_sdk
@@ -73,6 +72,7 @@ from snuba.web.rpc.v1.resolvers.common.cross_item_queries import (
 )
 from snuba.web.rpc.v1.resolvers.common.formula_reliability import (
     FormulaReliabilityCalculator,
+    _unix_seconds,
 )
 
 OP_TO_EXPR = {
@@ -175,7 +175,7 @@ def _convert_result_timeseries(
                     buckets=time_buckets,
                 )
             result_timeseries_timestamp_to_row[(group_by_key, col_name)][
-                int(datetime.fromisoformat(row["time"]).timestamp())
+                int(_unix_seconds(row["time"]))
             ] = row
 
     # Go through every possible time bucket in the query, if there's row data for it, fill in its data

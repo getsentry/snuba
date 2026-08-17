@@ -21,7 +21,7 @@ from snuba.admin.clickhouse.trace_log_parsing import (
     summarize_trace_output,
 )
 from snuba.clickhouse.escaping import escape_string
-from snuba.clickhouse.native import ClickhousePool, ClickhouseResult
+from snuba.clickhouse.pool import ClickhousePool, ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey

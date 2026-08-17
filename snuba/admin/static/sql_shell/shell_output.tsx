@@ -306,7 +306,7 @@ function HelpOutput({ mode, classes }: { mode: ShellMode; classes: Record<string
 
   const systemCommands = [
     { cmd: "USE <storage>", desc: "Set the active storage for queries" },
-    { cmd: "HOST <host:port>", desc: "Set the target host (e.g., HOST 127.0.0.1:9000)" },
+    { cmd: "HOST <host:port>", desc: "Set the target host (e.g., HOST 127.0.0.1:8123)" },
     { cmd: "SHOW STORAGES", desc: "List all available storages" },
     { cmd: "SHOW HOSTS", desc: "List available hosts for current storage" },
     { cmd: "SUDO ON/OFF", desc: "Toggle sudo mode" },

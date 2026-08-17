@@ -22,7 +22,7 @@ from snuba.redis import RedisClientKey, get_redis_client
 @click.option(
     "--clickhouse-port",
     type=int,
-    help="Clickhouse native port to write to.",
+    help="ClickHouse port identifying the target node.",
 )
 @click.option(
     "--clickhouse-secure",
@@ -77,9 +77,9 @@ def optimize(
 ) -> None:
     from datetime import datetime
 
-    from snuba.clickhouse.native import ClickhousePool
     from snuba.clickhouse.optimize.optimize import logger
-    from snuba.clusters.cluster import ClickhouseNode, connection_cache
+    from snuba.clickhouse.pool import ClickhousePool
+    from snuba.clusters.cluster import ClickhouseNode, build_pool
 
     setup_logging(log_level)
     setup_sentry()
@@ -102,17 +102,10 @@ def optimize(
     # that cluster.
     connection: ClickhousePool
     if clickhouse_host and clickhouse_port:
-        # Go through the shared connection cache so the driver (native vs
-        # clickhouse-connect/HTTP) is selected by the use_clickhouse_connect_driver sentry-option, behind
-        # the abstract ClickhousePool type. The OPTIMIZE timeout is carried by
-        # the client settings profile the cache reads.
-        connection = connection_cache.get_node_connection(
+        # --clickhouse-port is the HTTP connect port.
+        connection = build_pool(
             ClickhouseClientSettings.OPTIMIZE,
-            ClickhouseNode(
-                clickhouse_host,
-                clickhouse_port,
-                http_port=storage.get_cluster().get_http_port(),
-            ),
+            ClickhouseNode(clickhouse_host, clickhouse_port),
             clickhouse_user,
             clickhouse_password,
             database,

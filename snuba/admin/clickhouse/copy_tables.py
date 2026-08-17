@@ -2,9 +2,26 @@ from collections.abc import MutableMapping, Sequence
 from dataclasses import dataclass
 from typing import TypedDict
 
-from snuba.admin.clickhouse.common import _get_storage, get_clusterless_node_connection
-from snuba.clickhouse.native import ClickhousePool
-from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.admin.clickhouse.common import (
+    _get_storage,
+    _node_connect_port,
+    get_clusterless_node_connection,
+)
+from snuba.clickhouse.pool import ClickhousePool
+from snuba.clusters.cluster import (
+    DEFAULT_CLICKHOUSE_HTTP_PORT,
+    ClickhouseClientSettings,
+    ClickhouseCluster,
+)
+
+
+def _http_port_for_host(host: str, cluster: ClickhouseCluster) -> int:
+    if host == cluster.get_query_node().host_name:
+        return cluster.get_port()
+    for node in (*cluster.get_local_nodes(), *cluster.get_distributed_nodes()):
+        if node.host_name == host:
+            return _node_connect_port(node, cluster)
+    return DEFAULT_CLICKHOUSE_HTTP_PORT
 
 
 @dataclass
@@ -132,13 +149,15 @@ def copy_tables(
     # Table copies can run long, so use the unbounded INTERNAL profile rather
     # than the 30s user-read QUERY profile.
     settings = ClickhouseClientSettings.INTERNAL
-    source_connection = get_clusterless_node_connection(
-        source_host, 9000, storage_name, client_settings=settings
-    )
-
     storage = _get_storage(storage_name)
     cluster = storage.get_cluster()
     database_name = cluster.get_database()
+    source_connection = get_clusterless_node_connection(
+        source_host,
+        _http_port_for_host(source_host, cluster),
+        storage_name,
+        client_settings=settings,
+    )
 
     if skip_on_cluster:
         cluster_name = None
@@ -174,16 +193,19 @@ def copy_tables(
 
     if target_host:
         target_connection = get_clusterless_node_connection(
-            target_host, 9000, storage_name, client_settings=settings
+            target_host,
+            _http_port_for_host(target_host, cluster),
+            storage_name,
+            client_settings=settings,
         )
     else:
         target_connection = source_connection
 
     for ts in mergetree_tables:
-        target_connection.execute(ts.statement)
+        target_connection.command(ts.statement)
 
     for ts in non_mergetree_tables:
-        target_connection.execute(ts.statement)
+        target_connection.command(ts.statement)
 
     # Verify tables were created on all replicas
     missing_tables_by_host, verified_hosts_num = verify_tables_on_replicas(

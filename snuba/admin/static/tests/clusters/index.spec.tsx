@@ -8,8 +8,7 @@ import { render, waitFor, fireEvent } from "@testing-library/react";
 function cluster(overrides: Partial<ClusterData> = {}): ClusterData {
   return {
     host: "localhost",
-    port: 9000,
-    http_port: 8123,
+    port: 8123,
     database: "default",
     secure: false,
     single_node: true,
@@ -50,7 +49,7 @@ it("lists every cluster with its ClickHouse version", async () => {
     expect(mockClient.getClickhouseClusters).toBeCalledTimes(1)
   );
 
-  expect(getByText("localhost:9000", { exact: false })).toBeTruthy();
+  expect(getByText("localhost:8123", { exact: false })).toBeTruthy();
   expect(getByText("clickhouse-query:9001", { exact: false })).toBeTruthy();
   // Once in the table row, once in the summary of versions in use.
   expect(getAllByText("24.8.14.10459", { exact: false })).toHaveLength(2);
@@ -122,5 +121,5 @@ it("keeps refresh reachable when the clusters could not be loaded", async () => 
   await waitFor(() =>
     expect(mockClient.getClickhouseClusters).toBeCalledTimes(2)
   );
-  expect(getByText("localhost:9000", { exact: false })).toBeTruthy();
+  expect(getByText("localhost:8123", { exact: false })).toBeTruthy();
 });

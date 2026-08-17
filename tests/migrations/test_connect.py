@@ -7,7 +7,7 @@ from unittest import mock
 import pytest
 
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.clickhouse.native import ClickhouseResult
+from snuba.clickhouse.pool import ClickhouseResult
 from snuba.clusters import cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.readiness_state import ReadinessState
@@ -28,7 +28,6 @@ _QUERYLOG_CLUSTER = cluster.ClickhouseCluster(
     user="",
     password="",
     database="default",
-    http_port=420,
     secure=False,
     ca_certs=None,
     verify=False,
@@ -44,7 +43,6 @@ _EVENTS_CLUSTER = cluster.ClickhouseCluster(
     user="",
     password="",
     database="default",
-    http_port=420,
     secure=False,
     ca_certs=None,
     verify=False,
@@ -60,7 +58,6 @@ _REST_CLUSTER = cluster.ClickhouseCluster(
     user="",
     password="",
     database="default",
-    http_port=420,
     secure=False,
     ca_certs=None,
     verify=False,

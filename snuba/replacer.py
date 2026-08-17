@@ -24,7 +24,7 @@ from arroyo.processing.strategies.healthcheck import Healthcheck
 from arroyo.types import BrokerValue, Commit, Message, Partition
 
 from snuba import settings
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.pool import ClickhousePool
 from snuba.clusters.cluster import (
     ClickhouseClientSettings,
     ClickhouseCluster,

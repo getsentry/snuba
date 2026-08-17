@@ -59,7 +59,7 @@ from snuba.admin.tool_policies import (
     get_user_allowed_tools,
 )
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.clickhouse.native import ClickhouseResult
+from snuba.clickhouse.pool import ClickhouseResult
 from snuba.datasets.factory import InvalidDatasetError, get_enabled_dataset_names
 from snuba.manual_jobs import Job, JobSpec
 from snuba.manual_jobs.runner import (
@@ -407,7 +407,7 @@ def auto_replacements_bypass_projects() -> Response:
 # Sample cURL command:
 #
 # curl -X POST \
-#  -d '{"host": "127.0.0.1", "port": 9000, "sql": "select count() from system.parts;", storage: "errors", sudo: false}' \
+#  -d '{"host": "127.0.0.1", "port": 8123, "sql": "select count() from system.parts;", storage: "errors", sudo: false}' \
 #  -H 'Content-Type: application/json' \
 #  http://127.0.0.1:1219/run_clickhouse_system_query
 @application.route("/run_clickhouse_system_query", methods=["POST"])

@@ -12,7 +12,6 @@ from threading import Lock
 from typing import Any, cast
 
 import rapidjson
-from clickhouse_driver.errors import ErrorCodes
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
 from sentry_options import OptionValue
 from sentry_sdk import traces
@@ -20,6 +19,7 @@ from sentry_sdk.api import configure_scope
 
 from snuba import environment, settings
 from snuba.attribution.attribution_info import AttributionInfo
+from snuba.clickhouse.error_codes import ErrorCodes
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.clickhouse.formatter.query import format_query_anonymized

@@ -6,7 +6,7 @@ from typing import Any, cast
 import pytest
 
 from snuba.clickhouse.http import JSONRowEncoder
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.pool import ClickhousePool
 from snuba.clusters.cluster import CLUSTERS, ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.consumers.types import KafkaMessageMetadata
