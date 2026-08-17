@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
+from functools import cache
 from typing import (
     Any,
     Generic,
@@ -179,6 +180,7 @@ class Cluster(ABC, Generic[TWriterOptions]):
 ClickhouseWriterOptions = Mapping[str, Any] | None
 
 
+@cache
 def build_pool(
     client_settings: ClickhouseClientSettings,
     node: ClickhouseNode,
@@ -189,10 +191,11 @@ def build_pool(
     ca_certs: str | None = None,
     verify: bool | None = None,
 ) -> ClickhousePool:
-    """Construct a clickhouse-connect HTTP pool for this node.
+    """Return the process-local clickhouse-connect pool for this configuration.
 
-    Sockets live in the process-wide urllib3 PoolManager. This wrapper is
-    cheap; callers should not cache it.
+    Client construction probes ClickHouse for server settings and timezone.
+    Cache the wrapper so repeated readers reuse both that initialized client
+    and the process-wide urllib3 socket pool.
     """
     client_settings_dict, timeout = client_settings.value
     return ClickhouseConnectPool(

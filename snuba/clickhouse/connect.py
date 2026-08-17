@@ -384,6 +384,9 @@ class ClickhouseConnectPool(ClickhousePool):
         self.send_receive_timeout = send_receive_timeout
         self.client_settings = client_settings
         self.query_limit = query_limit
+        self._client_lock = Lock()
+        self._client_pid = os.getpid()
+        self._clients: dict[tuple[Any, ...], Client] = {}
 
     def _new_client(self, query_limit: int | None = None) -> Client:
         connect_timeout = (
@@ -396,36 +399,62 @@ class ClickhouseConnectPool(ClickhousePool):
                 if self.send_receive_timeout is not None
                 else DEFAULT_SEND_RECEIVE_TIMEOUT_SECONDS
             )
-        with traces.start_span(
-            name="clickhouse client",
-            attributes={
-                SENTRY_OP: "db.clickhouse",
-                sentry_sdk.consts.SPANDATA.DB_SYSTEM: "clickhouse",
-                "server.address": self.host,
-                "server.port": str(self.port),
-            },
-        ):
-            client = clickhouse_connect.get_client(
-                host=self.host,
-                port=self.port,
-                username=self.user,
-                password=self.password,
-                database=self.database,
-                interface="https" if self.secure else "http",
-                secure=self.secure,
-                verify=bool(self.verify),
-                ca_cert=self.ca_certs,
-                connect_timeout=connect_timeout,
-                send_receive_timeout=send_receive_timeout,
-                settings=dict(self.client_settings),
-                pool_mgr=_shared_pool(self.ca_certs, bool(self.verify)),
-                # Per-call override avoids mutating shared/cached pool state.
-                query_limit=self.query_limit if query_limit is None else query_limit,
-                query_retries=get_option("clickhouse_connect_query_retries", 2),
-                autogenerate_session_id=False,
-                compress="lz4",
-            )
-            return client
+        resolved_query_limit = self.query_limit if query_limit is None else query_limit
+        query_retries = get_option("clickhouse_connect_query_retries", 2)
+        cache_key = (
+            connect_timeout,
+            send_receive_timeout,
+            resolved_query_limit,
+            query_retries,
+        )
+        pid = os.getpid()
+        if pid == self._client_pid:
+            client = self._clients.get(cache_key)
+            if client is not None:
+                return client
+        else:
+            # A fork inherits Python objects and lock state, but must reuse
+            # neither. Reset before acquiring the lock in the single-threaded
+            # child, then build lazily against the child's socket pool.
+            self._client_lock = Lock()
+            self._clients = {}
+            self._client_pid = pid
+
+        with self._client_lock:
+            client = self._clients.get(cache_key)
+            if client is not None:
+                return client
+
+            with traces.start_span(
+                name="clickhouse client",
+                attributes={
+                    SENTRY_OP: "db.clickhouse",
+                    sentry_sdk.consts.SPANDATA.DB_SYSTEM: "clickhouse",
+                    "server.address": self.host,
+                    "server.port": str(self.port),
+                },
+            ):
+                client = clickhouse_connect.get_client(
+                    host=self.host,
+                    port=self.port,
+                    username=self.user,
+                    password=self.password,
+                    database=self.database,
+                    interface="https" if self.secure else "http",
+                    secure=self.secure,
+                    verify=bool(self.verify),
+                    ca_cert=self.ca_certs,
+                    connect_timeout=connect_timeout,
+                    send_receive_timeout=send_receive_timeout,
+                    settings=dict(self.client_settings),
+                    pool_mgr=_shared_pool(self.ca_certs, bool(self.verify)),
+                    query_limit=resolved_query_limit,
+                    query_retries=query_retries,
+                    autogenerate_session_id=False,
+                    compress="lz4",
+                )
+                self._clients[cache_key] = client
+                return client
 
     def _build_query_settings(
         self,

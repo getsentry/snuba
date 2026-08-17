@@ -1105,16 +1105,38 @@ def test_use_protocol_version_enabled() -> None:
     assert clickhouse_connect_common.get_setting("use_protocol_version") is True
 
 
-def test_new_client_per_query() -> None:
-    clients = [mock.Mock(name=f"c{i}") for i in range(3)]
-    for c in clients:
-        c.query.return_value = FakeQueryResult(result_set=[[1]])
-    pool = ClickhouseConnectPool(host="h", user="u", password="p", database="d")
-    pool._new_client = mock.Mock(side_effect=clients)  # type: ignore[method-assign]
-    pool.execute("SELECT 1")
-    pool.execute("SELECT 2")
-    pool.execute("SELECT 3")
-    assert pool._new_client.call_count == 3
+def test_client_is_cached_per_pool_and_query_limit() -> None:
+    with (
+        mock.patch("snuba.clickhouse.connect.get_pool_manager"),
+        mock.patch("clickhouse_connect.get_client") as get_client,
+    ):
+        get_client.side_effect = [mock.Mock(name="default"), mock.Mock(name="limited")]
+        pool = ClickhouseConnectPool(host="h", user="u", password="p", database="d")
+
+        default = pool._new_client()
+        assert pool._new_client() is default
+        limited = pool._new_client(query_limit=10000)
+        assert pool._new_client(query_limit=10000) is limited
+
+        assert get_client.call_count == 2
+        assert get_client.call_args_list[0].kwargs["query_limit"] == 0
+        assert get_client.call_args_list[1].kwargs["query_limit"] == 10000
+
+
+def test_client_is_rebuilt_after_fork() -> None:
+    with (
+        mock.patch("snuba.clickhouse.connect.get_pool_manager"),
+        mock.patch("clickhouse_connect.get_client") as get_client,
+    ):
+        get_client.side_effect = [mock.Mock(name="parent"), mock.Mock(name="child")]
+        pool = ClickhouseConnectPool(host="h", user="u", password="p", database="d")
+
+        parent = pool._new_client()
+        pool._client_pid = -1
+        child = pool._new_client()
+
+        assert child is not parent
+        assert get_client.call_count == 2
 
 
 def test_shared_socket_pool() -> None:

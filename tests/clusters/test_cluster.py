@@ -264,6 +264,7 @@ def test_build_pool_uses_cluster_credentials() -> None:
     assert pool.host == "127.0.0.1"
     assert pool.port == 8001
     assert pool.user == "default"
+    assert cluster_1.get_query_connection(cluster.ClickhouseClientSettings.QUERY) is pool
     assert (
         cluster_ro.get_query_connection(cluster.ClickhouseClientSettings.QUERY).user == "readonly"
     )
