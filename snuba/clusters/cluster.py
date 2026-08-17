@@ -464,6 +464,12 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
     def get_secure(self) -> bool:
         return self.__secure
 
+    def get_ca_certs(self) -> str | None:
+        return self.__ca_certs
+
+    def get_verify(self) -> bool | None:
+        return self.__verify
+
 
 CLUSTERS = [
     ClickhouseCluster(

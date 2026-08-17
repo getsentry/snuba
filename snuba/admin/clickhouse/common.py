@@ -117,9 +117,9 @@ def _build_validated_pool(
         username,
         password,
         database,
-        secure=False,
-        ca_certs=None,
-        verify=False,
+        secure=cluster.get_secure(),
+        ca_certs=cluster.get_ca_certs(),
+        verify=cluster.get_verify(),
     )
 
 

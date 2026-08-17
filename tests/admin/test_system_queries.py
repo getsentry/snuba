@@ -443,6 +443,27 @@ def test_ro_profiles_use_matching_credentials() -> None:
     assert usernames == ["ro_user", "trace_user"]
 
 
+def test_validated_pool_propagates_cluster_tls_settings() -> None:
+    """Admin pools must inherit the cluster TLS config, not hardcode insecure."""
+    from snuba.admin.clickhouse import common
+    from snuba.clusters.cluster import ClickhouseCluster
+
+    with (
+        patch.object(common, "_validate_node"),
+        patch.object(ClickhouseCluster, "get_secure", return_value=True),
+        patch.object(ClickhouseCluster, "get_ca_certs", return_value="/etc/ssl/certs/ca.pem"),
+        patch.object(ClickhouseCluster, "get_verify", return_value=True),
+        patch.object(common, "build_pool") as mock_pool,
+    ):
+        common.get_ro_query_node_connection("errors", ClickhouseClientSettings.QUERY)
+
+    assert mock_pool.called
+    kwargs = mock_pool.call_args.kwargs
+    assert kwargs["secure"] is True
+    assert kwargs["ca_certs"] == "/etc/ssl/certs/ca.pem"
+    assert kwargs["verify"] is True
+
+
 @pytest.mark.parametrize(
     "sql_query, sudo_mode",
     [
