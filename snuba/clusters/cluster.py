@@ -181,6 +181,33 @@ ClickhouseWriterOptions = Mapping[str, Any] | None
 
 
 @cache
+def _build_pool_cached(
+    client_settings: ClickhouseClientSettings,
+    host: str,
+    port: int,
+    user: str,
+    password: str,
+    database: str | None,
+    secure: bool,
+    ca_certs: str | None,
+    verify: bool | None,
+) -> ClickhousePool:
+    """Return the process-local pool for this exact endpoint and configuration."""
+    client_settings_dict, timeout = client_settings.value
+    return ClickhouseConnectPool(
+        host=host,
+        port=port,
+        user=user,
+        password=password,
+        database=database,
+        client_settings=client_settings_dict,
+        send_receive_timeout=timeout,
+        secure=secure,
+        ca_certs=ca_certs,
+        verify=verify,
+    )
+
+
 def build_pool(
     client_settings: ClickhouseClientSettings,
     node: ClickhouseNode,
@@ -191,24 +218,23 @@ def build_pool(
     ca_certs: str | None = None,
     verify: bool | None = None,
 ) -> ClickhousePool:
-    """Return the process-local clickhouse-connect pool for this configuration.
+    """Return a cached client pool scoped to one cluster endpoint and configuration.
 
     Client construction probes ClickHouse for server settings and timezone.
-    Cache the wrapper so repeated readers reuse both that initialized client
-    and the process-wide urllib3 socket pool.
+    Host and port are explicit cache-key fields so clients are never shared
+    across cluster endpoints. Credentials, database, TLS, and client settings
+    also remain part of the key.
     """
-    client_settings_dict, timeout = client_settings.value
-    return ClickhouseConnectPool(
-        host=node.host_name,
-        port=node.port,
-        user=user,
-        password=password,
-        database=database,
-        client_settings=client_settings_dict,
-        send_receive_timeout=timeout,
-        secure=secure,
-        ca_certs=ca_certs,
-        verify=verify,
+    return _build_pool_cached(
+        client_settings,
+        node.host_name,
+        node.port,
+        user,
+        password,
+        database,
+        secure,
+        ca_certs,
+        verify,
     )
 
 

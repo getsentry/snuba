@@ -269,6 +269,25 @@ def test_build_pool_uses_cluster_credentials() -> None:
         cluster_ro.get_query_connection(cluster.ClickhouseClientSettings.QUERY).user == "readonly"
     )
 
+    different_host = cluster.build_pool(
+        cluster.ClickhouseClientSettings.QUERY,
+        cluster.ClickhouseNode("127.0.0.2", 8001),
+        "default",
+        "",
+        "default",
+    )
+    different_port = cluster.build_pool(
+        cluster.ClickhouseClientSettings.QUERY,
+        cluster.ClickhouseNode("127.0.0.1", 8002),
+        "default",
+        "",
+        "default",
+    )
+    assert different_host is not pool
+    assert different_port is not pool
+    assert (different_host.host, different_host.port) == ("127.0.0.2", 8001)
+    assert (different_port.host, different_port.port) == ("127.0.0.1", 8002)
+
 
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
