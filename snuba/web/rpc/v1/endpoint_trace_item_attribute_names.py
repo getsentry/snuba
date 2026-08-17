@@ -39,8 +39,10 @@ from snuba.web.rpc.common.common import (
 )
 from snuba.web.rpc.common.debug_info import extract_response_meta
 from snuba.web.rpc.proto_visitor import ProtoVisitor, TraceItemFilterWrapper
-from snuba.web.rpc.v1.resolvers.R_eap_items import co_occurring_attrs
-from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs import CoOccurringAttrsSource
+from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs import (
+    V2,
+    CoOccurringAttrsSource,
+)
 
 # max value the user can provide for 'limit' in their request
 MAX_REQUEST_LIMIT = 1000
@@ -69,29 +71,6 @@ def _order_by_count(request: TraceItemAttributeNamesRequest) -> bool:
     are unaffected.
     """
     return request.order_by.column == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT
-
-
-def _effective_order_by_column(
-    request: TraceItemAttributeNamesRequest,
-    source: CoOccurringAttrsSource,
-) -> TraceItemAttributeNamesRequest.OrderBy.Column.ValueType:
-    """The ordering the query will apply, which may differ from the one requested.
-
-    Only v2 records ``last_seen``, so a recency request that lands on v1 degrades to frequency
-    ordering rather than failing: both rank "attributes worth showing first", so an
-    autocomplete caller still gets a useful answer. It stays detectable because ``last_seen``
-    is then absent from the response, and via a metric.
-
-    Everything downstream keys off this rather than ``request.order_by.column``, so the
-    ClickHouse ORDER BY and the Python re-sort cannot disagree about which ordering was used.
-    """
-    column = request.order_by.column
-    if (
-        column == TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_LAST_SEEN
-        and not source.has_last_seen
-    ):
-        return TraceItemAttributeNamesRequest.OrderBy.Column.COLUMN_COUNT
-    return column
 
 
 def _aggregates_attributes(
@@ -254,7 +233,6 @@ def _add_substring_match_optimization(
 
 def get_co_occurring_attributes(
     request: TraceItemAttributeNamesRequest,
-    source: CoOccurringAttrsSource | None = None,
 ) -> SnubaRequest:
     """Constructs the clickhouse query for co-occurring attributes:
 
@@ -263,7 +241,7 @@ def get_co_occurring_attributes(
 
           -- Default ordering (order_by unset or COLUMN_NAME): distinct keys by name
           SELECT distinct(arrayJoin(arrayFilter(attr -> ((NOT has(['test_tag_1_0'], attr.2)) AND startsWith(attr.2, 'test_')), arrayMap(x -> ('TYPE_STRING', x), attributes_string)))) AS attr_key
-          FROM eap_item_co_occurring_attrs_1_local
+          FROM eap_item_co_occurring_attrs_2_local
           WHERE (item_type = 1) AND (project_id IN [1]) AND (organization_id = 1) AND (date < toDateTime(toDate('2025-03-17', 'Universal'))) AND (date >= toDateTime(toDate('2025-03-10', 'Universal')))
 
           -- This is a faster way of looking up whether all attributes co-exist, it uses an array of hashes. This avoids string equality comparisons
@@ -279,9 +257,8 @@ def get_co_occurring_attributes(
           --          max(last_seen) AS last_seen
           --   ... GROUP BY attr_key ORDER BY <count|last_seen> DESC, attr_key ASC
 
-      **Storage:** the roll-up this reads and the parts of the query shape that differ between
-      the two (per-type key arrays, the aggregates) come from the `CoOccurringAttrsSource`
-      returned by `resolvers.R_eap_items.co_occurring_attrs.for_request`.
+      **Storage:** always ``eap_item_co_occurring_attrs_v2``. Per-type key arrays and
+      aggregates come from ``CoOccurringAttrsV2``.
 
       **Explanation:**
 
@@ -318,12 +295,8 @@ def get_co_occurring_attributes(
           - The attribute keys are deduplicated, resulting in less data to scan (~95% row reduction rate)
           - there is a bloom filter index on all key values
     """
-    # Callers that need the source themselves must pass the one they resolved: resolving reads
-    # runtime options, and an option flipping between two reads would build the query for one
-    # storage while the response is processed as if it were the other.
-    if source is None:
-        source = co_occurring_attrs.for_request(request)
-    order_by_column = _effective_order_by_column(request, source)
+    source = V2
+    order_by_column = request.order_by.column
 
     # get all attribute keys from the filter
     collector = AttributeKeyCollector()
@@ -497,9 +470,8 @@ def convert_co_occurring_results_to_attributes(
 ) -> list[TraceItemAttributeNamesResponse.Attribute]:
     """Build the response attributes, re-sorting to match the ClickHouse ORDER BY.
 
-    ``order_by_column`` must be the value the query was built with (see
-    ``_effective_order_by_column``), or the merge below re-sorts into a different order than
-    ClickHouse used. Defaults to the requested column.
+    ``order_by_column`` must match the query's ORDER BY, or the merge re-sorts into a
+    different order than ClickHouse used. Defaults to the requested column.
     """
     if order_by_column is None:
         order_by_column = request.order_by.column
@@ -607,24 +579,8 @@ class EndpointTraceItemAttributeNames(
         )
 
     def _execute(self, in_msg: TraceItemAttributeNamesRequest) -> TraceItemAttributeNamesResponse:
-        # Resolved once and shared, so the query and the response re-sort cannot disagree.
-        source = co_occurring_attrs.for_request(in_msg)
-        order_by_column = _effective_order_by_column(in_msg, source)
-        if order_by_column != in_msg.order_by.column:
-            # Keeps an otherwise silent downgrade visible during the v2 rollout.
-            self.metrics.increment(
-                "attribute_names_order_by_degraded",
-                1,
-                tags={
-                    "requested": TraceItemAttributeNamesRequest.OrderBy.Column.Name(
-                        in_msg.order_by.column
-                    ),
-                    "applied": TraceItemAttributeNamesRequest.OrderBy.Column.Name(order_by_column),
-                    "storage": source.storage_key.value,
-                },
-            )
-
-        snuba_request = get_co_occurring_attributes(in_msg, source)
+        order_by_column = in_msg.order_by.column
+        snuba_request = get_co_occurring_attributes(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,

@@ -1,10 +1,8 @@
 import uuid
-from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
-from sentry_options.testing import override_options
 from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeNamesRequest,
     TraceItemAttributeNamesResponse,
@@ -24,9 +22,6 @@ from snuba.web.rpc.v1.endpoint_trace_item_attribute_names import (
     get_co_occurring_attributes,
 )
 from snuba.web.rpc.v1.resolvers.R_eap_items.co_occurring_attrs import (
-    CO_OCCURRING_ATTRS_STORAGE_KEY,
-    CO_OCCURRING_ATTRS_V2_OPTION,
-    CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION,
     CO_OCCURRING_ATTRS_V2_STORAGE_KEY,
 )
 from tests.base import BaseApiTest
@@ -79,25 +74,6 @@ def populate_eap_spans_storage(num_rows: int) -> None:
 @pytest.fixture(autouse=True)
 def setup_teardown(eap: None, redis_db: None) -> None:
     populate_eap_spans_storage(num_rows=TOTAL_GENERATED_SPANS)
-
-
-@pytest.fixture(autouse=True, params=[False, True], ids=["co_occurring_v1", "co_occurring_v2"])
-def co_occurring_storage(request: pytest.FixtureRequest) -> Generator[bool]:
-    """Run every test in this module against both co-occurring-attributes storages, so the
-    shared behaviour holds on either side of the rollout.
-
-    The v2 start timestamp is pinned back so the date gate does not send the v2 leg to v1:
-    whether ``BASE_TIME`` clears the real cutoff depends on the day the suite runs.
-    """
-    use_v2 = bool(request.param)
-    with override_options(
-        "snuba",
-        {
-            CO_OCCURRING_ATTRS_V2_OPTION: use_v2,
-            CO_OCCURRING_ATTRS_V2_START_TIMESTAMP_OPTION: 0,
-        },
-    ):
-        yield use_v2
 
 
 @pytest.mark.eap
@@ -305,10 +281,7 @@ class TestTraceItemAttributeNames(BaseApiTest):
         res = EndpointTraceItemAttributeNames().execute(req)
         assert res.meta.query_info != []
 
-    def test_reads_the_storage_selected_by_the_rollout_flag(
-        self, co_occurring_storage: bool
-    ) -> None:
-        """The option picks which storage is read, in either direction."""
+    def test_reads_v2_storage(self) -> None:
         req = TraceItemAttributeNamesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -322,14 +295,9 @@ class TestTraceItemAttributeNames(BaseApiTest):
             limit=10,
             type=AttributeKey.Type.TYPE_STRING,
         )
-        expected = (
-            CO_OCCURRING_ATTRS_V2_STORAGE_KEY
-            if co_occurring_storage
-            else CO_OCCURRING_ATTRS_STORAGE_KEY
-        )
         from_clause = get_co_occurring_attributes(req).query.get_from_clause()
         assert isinstance(from_clause, StorageDataSource)
-        assert from_clause.key == expected
+        assert from_clause.key == CO_OCCURRING_ATTRS_V2_STORAGE_KEY
 
     def test_basic_co_occurring_attrs(self) -> None:
         req = TraceItemAttributeNamesRequest(
