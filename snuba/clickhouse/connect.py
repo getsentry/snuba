@@ -242,8 +242,9 @@ def _coerce_jsoncompact_value(value: Any, ch_type: str) -> Any:
     if value is None:
         return None
 
-    value = _coerce_temporal(value, ch_type)
+    # Unwrap before temporal coercion so LowCardinality(DateTime) still parses.
     inner = _unwrap_type_wrappers(ch_type)
+    value = _coerce_temporal(value, inner)
 
     if _FLOAT_RE.match(inner) is not None:
         # bool is a subclass of int; leave true/false alone.

@@ -238,10 +238,14 @@ def get_ro_clusterless_node_connection(
     storage_name: str,
     client_settings: ClickhouseClientSettings,
 ) -> ClickhousePool:
-    assert client_settings in {
-        ClickhouseClientSettings.QUERY,
-        ClickhouseClientSettings.QUERYLOG,
-    }, "ro clusterless connections must use a read-only client settings profile"
+    # Compare by name: same reload-safe rule as get_ro_node_connection.
+    allowed = {
+        ClickhouseClientSettings.QUERY.name,
+        ClickhouseClientSettings.QUERYLOG.name,
+    }
+    assert getattr(client_settings, "name", None) in allowed, (
+        "ro clusterless connections must use a read-only client settings profile"
+    )
 
     storage = _get_storage(storage_name)
     cluster = storage.get_cluster()

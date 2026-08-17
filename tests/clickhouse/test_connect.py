@@ -685,6 +685,14 @@ def test_coerce_temporal_only_touches_date_and_datetime() -> None:
     assert _coerce_temporal("2023-01-02 03:04:05", "Nullable(DateTime)") == datetime(
         2023, 1, 2, 3, 4, 5
     )
+    assert _coerce_temporal("2023-01-02 03:04:05", "LowCardinality(DateTime)") == datetime(
+        2023, 1, 2, 3, 4, 5
+    )
+    from snuba.clickhouse.connect import _coerce_jsoncompact_value
+
+    assert _coerce_jsoncompact_value(
+        "2023-01-02 03:04:05", "LowCardinality(Nullable(DateTime))"
+    ) == datetime(2023, 1, 2, 3, 4, 5)
     # Non-temporal values and non-strings (incl. None) pass through untouched.
     assert _coerce_temporal(5, "UInt64") == 5
     assert _coerce_temporal(1.5, "Float64") == 1.5
@@ -931,6 +939,7 @@ def test_reader_isoformats_date_datetime_and_uuid() -> None:
                 {"name": "dt", "type": "DateTime"},
                 {"name": "dt_tz", "type": "DateTime('UTC')"},
                 {"name": "dt64", "type": "DateTime64(6, 'UTC')"},
+                {"name": "lc_dt", "type": "LowCardinality(DateTime)"},
                 {"name": "uid", "type": "UUID"},
                 {"name": "nuid", "type": "Nullable(UUID)"},
             ],
@@ -940,6 +949,7 @@ def test_reader_isoformats_date_datetime_and_uuid() -> None:
                     "2023-01-02 03:04:05",
                     "2023-01-02 03:04:05",
                     "2023-01-02 03:04:05.123456",
+                    "2023-01-02 03:04:05",
                     "00000000-0000-0000-0000-000000000001",
                     "00000000-0000-0000-0000-000000000001",
                 ]
@@ -956,6 +966,7 @@ def test_reader_isoformats_date_datetime_and_uuid() -> None:
     assert row["dt"] == "2023-01-02T03:04:05+00:00"
     assert row["dt_tz"] == "2023-01-02T03:04:05+00:00"
     assert row["dt64"] == "2023-01-02T03:04:05.123456+00:00"
+    assert row["lc_dt"] == "2023-01-02T03:04:05+00:00"
     assert row["uid"] == "00000000-0000-0000-0000-000000000001"
     assert row["nuid"] == "00000000-0000-0000-0000-000000000001"
     client.query.assert_not_called()

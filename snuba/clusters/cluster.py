@@ -468,7 +468,8 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
 CLUSTERS = [
     ClickhouseCluster(
         host=cluster["host"],
-        port=cluster["port"],
+        # Prefer http_port when present so older dual-port configs still dial HTTP.
+        port=cluster.get("http_port", cluster["port"]),
         user=cluster.get("user", "default"),
         password=cluster.get("password", ""),
         database=cluster.get("database", "default"),
@@ -508,7 +509,8 @@ def _get_storage_set_cluster_map() -> dict[StorageSetKey, ClickhouseCluster]:
 def _build_sliced_cluster(cluster: Mapping[str, Any]) -> ClickhouseCluster:
     return ClickhouseCluster(
         host=cluster["host"],
-        port=cluster["port"],
+        # Prefer http_port when present so older dual-port configs still dial HTTP.
+        port=cluster.get("http_port", cluster["port"]),
         user=cluster.get("user", "default"),
         password=cluster.get("password", ""),
         database=cluster.get("database", "default"),
