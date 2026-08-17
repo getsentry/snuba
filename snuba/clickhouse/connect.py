@@ -632,8 +632,15 @@ class ClickhouseConnectPool(ClickhousePool):
 
             results = [_row(row) for row in payload.get("data", [])]
             totals = payload.get("totals")
-            if totals:
-                results.append(_row(totals))
+            # WITH TOTALS always carries a totals array in JSONCompact. Missing or
+            # empty totals used to skip the trailing row and crash the reader
+            # with AssertionError; surface a real ClickHouse client error instead.
+            if not isinstance(totals, list) or not totals:
+                raise ClickhouseError(
+                    "WITH TOTALS response missing totals row",
+                    code=-1,
+                )
+            results.append(_row(totals))
             return ClickhouseResult(
                 results=results,
                 meta=meta,

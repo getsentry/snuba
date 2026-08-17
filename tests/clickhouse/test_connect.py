@@ -869,6 +869,45 @@ def test_empty_with_totals_returns_meta_and_totals_via_jsoncompact() -> None:
     client.query.assert_not_called()
 
 
+@pytest.mark.parametrize("payload_totals", [None, [], "bad"])
+def test_execute_with_totals_rejects_missing_or_empty_totals(payload_totals: object) -> None:
+    # Missing/empty totals used to skip the trailing row and crash the reader with
+    # AssertionError. Fail at the pool with a real ClickhouseError instead.
+    client = mock.Mock()
+    body: dict[str, object] = {
+        "meta": [{"name": "g", "type": "UInt64"}, {"name": "s", "type": "UInt64"}],
+        "data": [[1, 10]],
+    }
+    if payload_totals is not None:
+        body["totals"] = payload_totals
+    client.raw_query.return_value = json.dumps(body).encode()
+
+    pool = _make_pool(client)
+    with pytest.raises(ClickhouseError) as excinfo:
+        pool.execute_with_totals("SELECT g, sum(v) AS s FROM t GROUP BY g WITH TOTALS")
+    assert "missing totals" in str(excinfo.value).lower()
+
+
+def test_reader_with_totals_empty_results_raises_clickhouse_error() -> None:
+    from snuba.clickhouse.pool import ClickhouseResult
+    from snuba.clickhouse.reader import ClickhouseReader
+
+    class FakeFormattedQuery:
+        def get_sql(self) -> str:
+            return "SELECT g, sum(v) AS s FROM t GROUP BY g WITH TOTALS"
+
+    pool = mock.Mock()
+    # No trailing totals row at all: reader must raise, not AssertionError.
+    pool.execute_with_totals.return_value = ClickhouseResult(
+        results=[],
+        meta=[("g", "UInt64"), ("s", "UInt64")],
+    )
+    reader = ClickhouseReader(cache_partition_id=None, client=pool, query_settings_prefix=None)
+
+    with pytest.raises(ClickhouseError):
+        reader.execute(cast(FormattedQuery, FakeFormattedQuery()), with_totals=True)
+
+
 def test_typed_select_uses_single_jsoncompact_request() -> None:
     # Common read path with column types: one JSONCompact request, never Native
     # followed by a meta refetch.

@@ -8,6 +8,7 @@ from uuid import UUID
 
 from dateutil.tz import tz
 
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.clickhouse.pool import ClickhousePool, ClickhouseResult
 from snuba.reader import Reader, Result, build_result_transformer
@@ -73,7 +74,11 @@ class ClickhouseReader(Reader):
 
         new_result: Result = {}
         if with_totals:
-            assert len(data) > 0, "WITH TOTALS query returned no rows (missing totals row)"
+            if not data:
+                raise ClickhouseError(
+                    "WITH TOTALS query returned no rows (missing totals row)",
+                    code=-1,
+                )
             totals = data.pop(-1)
             new_result = {
                 "data": data,
