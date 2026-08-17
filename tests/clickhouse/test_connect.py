@@ -1171,6 +1171,58 @@ def test_client_is_cached_per_pool_and_query_limit() -> None:
         assert get_client.call_count == 2
         assert get_client.call_args_list[0].kwargs["query_limit"] == 0
         assert get_client.call_args_list[1].kwargs["query_limit"] == 10000
+        # Same option snapshot may keep multiple query_limit variants live.
+        assert set(pool._clients) == {
+            ((1, 35, 2), 0),
+            ((1, 35, 2), 10000),
+        }
+
+
+def test_option_change_closes_stale_clients() -> None:
+    # Runtime option flips create a new client and close ones built under the
+    # previous timeout/retry snapshot so the cache cannot grow unbounded.
+    import clickhouse_connect
+    from sentry_options.testing import override_options
+
+    with (
+        mock.patch("snuba.clickhouse.connect.get_pool_manager"),
+        mock.patch.object(clickhouse_connect, "get_client") as get_client,
+    ):
+        old_default = mock.Mock(name="old_default")
+        old_limited = mock.Mock(name="old_limited")
+        new_default = mock.Mock(name="new_default")
+        get_client.side_effect = [old_default, old_limited, new_default]
+        pool = ClickhouseConnectPool(
+            host="h",
+            user="u",
+            password="p",
+            database="d",
+            connect_timeout=1,
+            send_receive_timeout=35,
+        )
+
+        assert pool._new_client() is old_default
+        assert pool._new_client(query_limit=10000) is old_limited
+
+        with override_options(
+            "snuba",
+            {
+                "clickhouse_connect_connect_timeout": 7,
+                "clickhouse_connect_send_receive_timeout": 99,
+                "clickhouse_connect_query_retries": 0,
+            },
+        ):
+            rebuilt = pool._new_client()
+
+        assert rebuilt is new_default
+        assert rebuilt is not old_default
+        old_default.close.assert_called_once_with()
+        old_limited.close.assert_called_once_with()
+        assert list(pool._clients.values()) == [new_default]
+        assert get_client.call_count == 3
+        assert get_client.call_args_list[2].kwargs["connect_timeout"] == 7
+        assert get_client.call_args_list[2].kwargs["send_receive_timeout"] == 99
+        assert get_client.call_args_list[2].kwargs["query_retries"] == 0
 
 
 def test_close_closes_and_discards_cached_clients() -> None:

@@ -402,12 +402,10 @@ class ClickhouseConnectPool(ClickhousePool):
             )
         resolved_query_limit = self.query_limit if query_limit is None else query_limit
         query_retries = get_option("clickhouse_connect_query_retries", 2)
-        cache_key = (
-            connect_timeout,
-            send_receive_timeout,
-            resolved_query_limit,
-            query_retries,
-        )
+        # Runtime options that change how the client is built. query_limit is
+        # separate so concurrent limit variants can share one option snapshot.
+        settings_key = (connect_timeout, send_receive_timeout, query_retries)
+        cache_key = (settings_key, resolved_query_limit)
         pid = os.getpid()
         if pid == self._client_pid:
             client = self._clients.get(cache_key)
@@ -421,10 +419,19 @@ class ClickhouseConnectPool(ClickhousePool):
             self._clients = {}
             self._client_pid = pid
 
+        stale_clients: list[Client] = []
         with self._client_lock:
             client = self._clients.get(cache_key)
             if client is not None:
                 return client
+
+            # Option flip: drop clients built under older timeout/retry values
+            # so the cache cannot grow unbounded as sentry-options change.
+            # Keep same-settings query_limit variants (e.g. default + tracing).
+            stale_clients = [old for key, old in self._clients.items() if key[0] != settings_key]
+            self._clients = {
+                key: old for key, old in self._clients.items() if key[0] == settings_key
+            }
 
             with traces.start_span(
                 name="clickhouse client",
@@ -455,7 +462,11 @@ class ClickhouseConnectPool(ClickhousePool):
                     compress="lz4",
                 )
                 self._clients[cache_key] = client
-                return client
+
+        for old in stale_clients:
+            with suppress(Exception):
+                old.close()
+        return client
 
     def _build_query_settings(
         self,
