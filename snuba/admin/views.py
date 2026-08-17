@@ -407,7 +407,7 @@ def auto_replacements_bypass_projects() -> Response:
 # Sample cURL command:
 #
 # curl -X POST \
-#  -d '{"host": "127.0.0.1", "port": 9000, "sql": "select count() from system.parts;", storage: "errors", sudo: false}' \
+#  -d '{"host": "127.0.0.1", "port": 8123, "sql": "select count() from system.parts;", storage: "errors", sudo: false}' \
 #  -H 'Content-Type: application/json' \
 #  http://127.0.0.1:1219/run_clickhouse_system_query
 @application.route("/run_clickhouse_system_query", methods=["POST"])
