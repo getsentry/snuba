@@ -71,12 +71,7 @@ _NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, NormalizedColumn]] = {
 # historical rows).
 # This should mostly remain empty, and shoudl be only used in scenarios where we add a new index
 # column, and need to wait for the population to happen.
-_UNPOPULATED_NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, NormalizedColumn]] = {
-    sentry_column("session_id"): NormalizedColumn("session_id", [AttributeKey.Type.TYPE_STRING]),
-    "gen_ai.conversation.id": NormalizedColumn(
-        "ai_conversation_id", [AttributeKey.Type.TYPE_STRING]
-    ),
-}
+_UNPOPULATED_NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, NormalizedColumn]] = {}
 
 _ALL_NORMALIZED_COLUMNS_EAP_ITEMS: Final[Mapping[str, NormalizedColumn]] = {
     **_NORMALIZED_COLUMNS_EAP_ITEMS,
