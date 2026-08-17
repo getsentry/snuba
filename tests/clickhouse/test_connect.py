@@ -1134,6 +1134,42 @@ def test_client_is_cached_per_pool_and_query_limit() -> None:
         assert get_client.call_args_list[1].kwargs["query_limit"] == 10000
 
 
+def test_close_closes_and_discards_cached_clients() -> None:
+    with (
+        mock.patch("snuba.clickhouse.connect.get_pool_manager"),
+        mock.patch("clickhouse_connect.get_client") as get_client,
+    ):
+        default = mock.Mock(name="default")
+        limited = mock.Mock(name="limited")
+        replacement = mock.Mock(name="replacement")
+        get_client.side_effect = [default, limited, replacement]
+        pool = ClickhouseConnectPool(host="h", user="u", password="p", database="d")
+
+        pool._new_client()
+        pool._new_client(query_limit=10000)
+        pool.close()
+
+        default.close.assert_called_once_with()
+        limited.close.assert_called_once_with()
+        assert pool._new_client() is replacement
+
+
+def test_close_is_idempotent() -> None:
+    with (
+        mock.patch("snuba.clickhouse.connect.get_pool_manager"),
+        mock.patch("clickhouse_connect.get_client") as get_client,
+    ):
+        client = mock.Mock()
+        get_client.return_value = client
+        pool = ClickhouseConnectPool(host="h", user="u", password="p", database="d")
+        pool._new_client()
+
+        pool.close()
+        pool.close()
+
+        client.close.assert_called_once_with()
+
+
 def test_client_is_rebuilt_after_fork() -> None:
     with (
         mock.patch("snuba.clickhouse.connect.get_pool_manager"),

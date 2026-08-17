@@ -841,4 +841,11 @@ class ClickhouseConnectPool(ClickhousePool):
         )
 
     def close(self) -> None:
-        pass
+        """Close and discard clients created by this pool."""
+        with self._client_lock:
+            clients = list(self._clients.values())
+            self._clients = {}
+
+        for client in clients:
+            with suppress(Exception):
+                client.close()
