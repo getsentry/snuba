@@ -1,3 +1,4 @@
+import os
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -206,6 +207,14 @@ def _build_pool_cached(
         ca_certs=ca_certs,
         verify=verify,
     )
+
+
+def _clear_pool_cache_after_fork() -> None:
+    """Drop inherited pool objects so children never reuse parent locks/clients."""
+    _build_pool_cached.cache_clear()
+
+
+os.register_at_fork(after_in_child=_clear_pool_cache_after_fork)
 
 
 def build_pool(

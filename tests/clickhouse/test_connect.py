@@ -1186,6 +1186,60 @@ def test_client_is_rebuilt_after_fork() -> None:
         assert get_client.call_count == 2
 
 
+def test_pool_cache_cleared_after_fork() -> None:
+    """Children must not inherit cached pools (locks/clients) from the parent."""
+    from snuba.clusters import cluster
+
+    node = cluster.ClickhouseNode("h", 8123)
+    cluster._clear_pool_cache_after_fork()
+    try:
+        with mock.patch.object(
+            cluster,
+            "ClickhouseConnectPool",
+            side_effect=lambda **kwargs: mock.Mock(name=f"pool-{kwargs['host']}"),
+        ):
+            parent = cluster.build_pool(
+                cluster.ClickhouseClientSettings.QUERY,
+                node,
+                "u",
+                "p",
+                "d",
+            )
+            assert (
+                cluster.build_pool(
+                    cluster.ClickhouseClientSettings.QUERY,
+                    node,
+                    "u",
+                    "p",
+                    "d",
+                )
+                is parent
+            )
+
+            cluster._clear_pool_cache_after_fork()
+
+            child = cluster.build_pool(
+                cluster.ClickhouseClientSettings.QUERY,
+                node,
+                "u",
+                "p",
+                "d",
+            )
+            assert child is not parent
+            assert (
+                cluster.build_pool(
+                    cluster.ClickhouseClientSettings.QUERY,
+                    node,
+                    "u",
+                    "p",
+                    "d",
+                )
+                is child
+            )
+    finally:
+        cluster._clear_pool_cache_after_fork()
+
+
 def test_shared_socket_pool() -> None:
     import snuba.clickhouse.connect as connect_mod
 
