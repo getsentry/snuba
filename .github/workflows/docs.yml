@@ -24,7 +24,7 @@ jobs:
       - uses: getsentry/action-setup-venv@5a80476d175edf56cb205b08bc58986fa99d1725 # v3.2.0
         with:
 
-          cache-dependency-path: docs-requirements.txt
+          cache-dependency-path: uv.lock
           install-cmd: echo
 
       - name: Generate config schema docs

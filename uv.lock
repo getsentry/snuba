@@ -3,10 +3,10 @@ revision = 3
 requires-python = ">=3.13"
 resolution-markers = [
     "python_full_version >= '3.15' and platform_python_implementation == 'CPython' and sys_platform == 'darwin'",
-    "python_full_version == '3.14.*' and platform_python_implementation == 'CPython' and sys_platform == 'darwin'",
-    "python_full_version < '3.14' and platform_python_implementation == 'CPython' and sys_platform == 'darwin'",
     "python_full_version >= '3.15' and platform_python_implementation == 'CPython' and sys_platform == 'linux'",
+    "python_full_version == '3.14.*' and platform_python_implementation == 'CPython' and sys_platform == 'darwin'",
     "python_full_version == '3.14.*' and platform_python_implementation == 'CPython' and sys_platform == 'linux'",
+    "python_full_version < '3.14' and platform_python_implementation == 'CPython' and sys_platform == 'darwin'",
     "python_full_version < '3.14' and platform_python_implementation == 'CPython' and sys_platform == 'linux'",
 ]
 supported-markers = [
@@ -25,6 +25,14 @@ members = [
 ]
 
 [[package]]
+name = "alabaster"
+version = "1.0.0"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/alabaster-1.0.0-py3-none-any.whl", hash = "sha256:fc6786402dc3fcb2de3cabd5fe455a2db534b371124f1f21de8731783dec828b" },
+]
+
+[[package]]
 name = "ast-serialize"
 version = "0.3.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
@@ -40,6 +48,14 @@ version = "25.3.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 wheels = [
     { url = "https://pypi.devinfra.sentry.io/wheels/attrs-25.3.0-py3-none-any.whl", hash = "sha256:427318ce031701fea540783410126f03899a97ffc6f61596ad581ac2e40e3bc3" },
+]
+
+[[package]]
+name = "babel"
+version = "2.17.0"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/babel-2.17.0-py3-none-any.whl", hash = "sha256:4d0b53093fdfb4b21c92b5213dba5a1b23885afa8383709427046b21c366e5f2" },
 ]
 
 [[package]]
@@ -257,6 +273,14 @@ version = "0.6.2"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 wheels = [
     { url = "https://pypi.devinfra.sentry.io/wheels/docopt-0.6.2-py2.py3-none-any.whl", hash = "sha256:e007feaeb5f3e1bb9d3eeaa65e7e0c08429fb4f8c44505baf8178d43a461d57b" },
+]
+
+[[package]]
+name = "docutils"
+version = "0.22.4"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/docutils-0.22.4-py3-none-any.whl", hash = "sha256:d0013f540772d1420576855455d050a2180186c91c15779301ac2ccb3eeb68de" },
 ]
 
 [[package]]
@@ -504,6 +528,14 @@ wheels = [
 ]
 
 [[package]]
+name = "imagesize"
+version = "1.4.1"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/imagesize-1.4.1-py2.py3-none-any.whl", hash = "sha256:0d8d18d08f840c19d0ee7ca1fd82490fdc3729b7ac93f49870406ddde8ef8d8b" },
+]
+
+[[package]]
 name = "iniconfig"
 version = "2.0.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
@@ -556,6 +588,18 @@ wheels = [
 ]
 
 [[package]]
+name = "jsonschema2md"
+version = "0.4.0"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+dependencies = [
+    { name = "click" },
+    { name = "pyyaml" },
+]
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/jsonschema2md-0.4.0-py3-none-any.whl", hash = "sha256:506d7012f44b487f3b4e6447b322fe9f6a8a2161c548d4d90e7b1aeb27f01d9d" },
+]
+
+[[package]]
 name = "librt"
 version = "0.11.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
@@ -582,6 +626,17 @@ wheels = [
 ]
 
 [[package]]
+name = "markdown-it-py"
+version = "4.0.0"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+dependencies = [
+    { name = "mdurl" },
+]
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/markdown_it_py-4.0.0-py3-none-any.whl", hash = "sha256:87327c59b172c5011896038353a81343b6754500a08cd7a4973bb48c6d578147" },
+]
+
+[[package]]
 name = "markupsafe"
 version = "3.0.2"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
@@ -593,6 +648,25 @@ wheels = [
     { url = "https://pypi.devinfra.sentry.io/wheels/markupsafe-3.0.2-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:a9b641e08e48285dec7d214852c1f0777825894c8d32c6bf063680a6920e059e" },
     { url = "https://pypi.devinfra.sentry.io/wheels/markupsafe-3.0.2-cp314-cp314-manylinux_2_17_aarch64.manylinux2014_aarch64.manylinux_2_31_aarch64.whl", hash = "sha256:0406d87102be97a2d171daaeb3fb31d57ef3adf25d3c1156a6858b128a989ed7" },
     { url = "https://pypi.devinfra.sentry.io/wheels/markupsafe-3.0.2-cp314-cp314-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_31_x86_64.whl", hash = "sha256:cc7368b6958726d486c42b8d232226351eaa392e7ff0856acc5b5fd168fdd1fe" },
+]
+
+[[package]]
+name = "mdit-py-plugins"
+version = "0.5.0"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+dependencies = [
+    { name = "markdown-it-py" },
+]
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/mdit_py_plugins-0.5.0-py3-none-any.whl", hash = "sha256:07a08422fc1936a5d26d146759e9155ea466e842f5ab2f7d2266dd084c8dab1f" },
+]
+
+[[package]]
+name = "mdurl"
+version = "0.1.2"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8" },
 ]
 
 [[package]]
@@ -646,6 +720,22 @@ version = "1.1.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 wheels = [
     { url = "https://pypi.devinfra.sentry.io/wheels/mypy_extensions-1.1.0-py3-none-any.whl", hash = "sha256:1be4cccdb0f2482337c4743e60421de3a356cd97508abadd57d47403e94f5505" },
+]
+
+[[package]]
+name = "myst-parser"
+version = "5.0.0"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+dependencies = [
+    { name = "docutils" },
+    { name = "jinja2" },
+    { name = "markdown-it-py" },
+    { name = "mdit-py-plugins" },
+    { name = "pyyaml" },
+    { name = "sphinx" },
+]
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/myst_parser-5.0.0-py3-none-any.whl", hash = "sha256:ab31e516024918296e169139072b81592336f2fef55b8986aa31c9f04b5f7211" },
 ]
 
 [[package]]
@@ -962,6 +1052,14 @@ wheels = [
 ]
 
 [[package]]
+name = "roman-numerals"
+version = "4.1.0"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/roman_numerals-4.1.0-py3-none-any.whl", hash = "sha256:647ba99caddc2cc1e55a51e4360689115551bf4476d90e8162cf8c345fe233c7" },
+]
+
+[[package]]
 name = "rpds-py"
 version = "0.20.0"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
@@ -1162,8 +1260,16 @@ wheels = [
 ]
 
 [[package]]
+name = "snowballstemmer"
+version = "3.0.1"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/snowballstemmer-3.0.1-py3-none-any.whl", hash = "sha256:6cd7b3897da8d6c9ffb968a6781fa6532dce9c3618a4b127d920dab764a19064" },
+]
+
+[[package]]
 name = "snuba"
-version = "26.8.0.dev0"
+version = "26.9.0.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "blinker" },
@@ -1235,6 +1341,11 @@ dev = [
     { name = "types-simplejson" },
     { name = "typing-extensions", version = "4.12.2", source = { registry = "https://pypi.devinfra.sentry.io/simple" }, marker = "python_full_version < '3.15'" },
     { name = "typing-extensions", version = "4.15.0", source = { registry = "https://pypi.devinfra.sentry.io/simple" }, marker = "python_full_version >= '3.15'" },
+]
+docs = [
+    { name = "jsonschema2md" },
+    { name = "myst-parser" },
+    { name = "sphinx" },
 ]
 
 [package.metadata]
@@ -1308,6 +1419,11 @@ dev = [
     { name = "types-simplejson", specifier = ">=3.17.7" },
     { name = "typing-extensions", specifier = ">=4.12.2" },
 ]
+docs = [
+    { name = "jsonschema2md", specifier = "==0.4.0" },
+    { name = "myst-parser", specifier = "==5.0.0" },
+    { name = "sphinx", specifier = "==9.0.4" },
+]
 
 [[package]]
 name = "snuba-sdk"
@@ -1318,6 +1434,80 @@ dependencies = [
 ]
 wheels = [
     { url = "https://pypi.devinfra.sentry.io/wheels/snuba_sdk-3.0.39-py2.py3-none-any.whl", hash = "sha256:512fc4b6a345b3c08abd43de4cbecd5c6698247fb94385bdd346d7b97fc04787" },
+]
+
+[[package]]
+name = "sphinx"
+version = "9.0.4"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+dependencies = [
+    { name = "alabaster" },
+    { name = "babel" },
+    { name = "docutils" },
+    { name = "imagesize" },
+    { name = "jinja2" },
+    { name = "packaging" },
+    { name = "pygments" },
+    { name = "requests" },
+    { name = "roman-numerals" },
+    { name = "snowballstemmer" },
+    { name = "sphinxcontrib-applehelp" },
+    { name = "sphinxcontrib-devhelp" },
+    { name = "sphinxcontrib-htmlhelp" },
+    { name = "sphinxcontrib-jsmath" },
+    { name = "sphinxcontrib-qthelp" },
+    { name = "sphinxcontrib-serializinghtml" },
+]
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/sphinx-9.0.4-py3-none-any.whl", hash = "sha256:5bebc595a5e943ea248b99c13814c1c5e10b3ece718976824ffa7959ff95fffb" },
+]
+
+[[package]]
+name = "sphinxcontrib-applehelp"
+version = "2.0.0"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/sphinxcontrib_applehelp-2.0.0-py3-none-any.whl", hash = "sha256:4cd3f0ec4ac5dd9c17ec65e9ab272c9b867ea77425228e68ecf08d6b28ddbdb5" },
+]
+
+[[package]]
+name = "sphinxcontrib-devhelp"
+version = "2.0.0"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/sphinxcontrib_devhelp-2.0.0-py3-none-any.whl", hash = "sha256:aefb8b83854e4b0998877524d1029fd3e6879210422ee3780459e28a1f03a8a2" },
+]
+
+[[package]]
+name = "sphinxcontrib-htmlhelp"
+version = "2.1.0"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/sphinxcontrib_htmlhelp-2.1.0-py3-none-any.whl", hash = "sha256:166759820b47002d22914d64a075ce08f4c46818e17cfc9470a9786b759b19f8" },
+]
+
+[[package]]
+name = "sphinxcontrib-jsmath"
+version = "1.0.1"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/sphinxcontrib_jsmath-1.0.1-py2.py3-none-any.whl", hash = "sha256:2ec2eaebfb78f3f2078e73666b1415417a116cc848b72e5172e596c871103178" },
+]
+
+[[package]]
+name = "sphinxcontrib-qthelp"
+version = "2.0.0"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/sphinxcontrib_qthelp-2.0.0-py3-none-any.whl", hash = "sha256:b18a828cdba941ccd6ee8445dbe72ffa3ef8cbe7505d8cd1fa0d42d3f2d5f3eb" },
+]
+
+[[package]]
+name = "sphinxcontrib-serializinghtml"
+version = "2.0.0"
+source = { registry = "https://pypi.devinfra.sentry.io/simple" }
+wheels = [
+    { url = "https://pypi.devinfra.sentry.io/wheels/sphinxcontrib_serializinghtml-2.0.0-py3-none-any.whl", hash = "sha256:6e2cb0eef194e10c27ec0023bfeb25badbbb5868244cf5bc5bdc04e4464bf331" },
 ]
 
 [[package]]
@@ -1452,8 +1642,8 @@ version = "4.12.2"
 source = { registry = "https://pypi.devinfra.sentry.io/simple" }
 resolution-markers = [
     "python_full_version == '3.14.*' and platform_python_implementation == 'CPython' and sys_platform == 'darwin'",
-    "python_full_version < '3.14' and platform_python_implementation == 'CPython' and sys_platform == 'darwin'",
     "python_full_version == '3.14.*' and platform_python_implementation == 'CPython' and sys_platform == 'linux'",
+    "python_full_version < '3.14' and platform_python_implementation == 'CPython' and sys_platform == 'darwin'",
     "python_full_version < '3.14' and platform_python_implementation == 'CPython' and sys_platform == 'linux'",
 ]
 wheels = [
