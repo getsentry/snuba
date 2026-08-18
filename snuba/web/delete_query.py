@@ -3,7 +3,7 @@ import uuid
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from snuba import settings
+from snuba import environment, settings
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.columns import ColumnSet
@@ -39,9 +39,13 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.reader import Result
 from snuba.state.sentry_options import get_option
 from snuba.utils.metrics.util import with_span
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.schemas import ColumnValidator, InvalidColumnType
 from snuba.web import QueryException, QueryExtraData, QueryResult
 from snuba.web.db_query import _apply_allocation_policies_quota
+
+
+metrics = MetricsWrapper(environment.metrics, "snuba.delete")
 
 
 class DeletesNotEnabledError(Exception):
@@ -296,8 +300,13 @@ def _enforce_max_rows(delete_query: Query, count_storage_key: StorageKey | None 
         raise NoRowsToDeleteException
     max_rows_allowed = get_storage(storage_key).get_deletion_settings().max_rows_to_delete
     if get_option("enforce_max_rows_to_delete", True) and rows_to_delete > max_rows_allowed:
+        metrics.increment(
+            "max_rows_exceeded",
+            tags={"storage": storage_key.value},
+        )
         raise TooManyDeleteRowsException(
-            f"Too many rows to delete ({rows_to_delete}), maximum allowed is {max_rows_allowed}"
+            f"Too many rows to delete ({rows_to_delete}), maximum allowed is {max_rows_allowed}",
+            should_report=False,
         )
 
     return rows_to_delete
