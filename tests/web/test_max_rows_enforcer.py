@@ -75,7 +75,7 @@ class TestMaxRowsEnforcer(BaseApiTest):
             allowed_columns=["project_id", "organization_id"],
         ),
     )
-    def test_max_row_enforcer_rejects(self, mock: mock.MagicMock) -> None:
+    def test_max_row_enforcer_rejects(self, _get_deletion_settings: mock.MagicMock) -> None:
         self._insert_event()
         with (
             mock.patch("snuba.web.delete_query.metrics.increment") as increment,
