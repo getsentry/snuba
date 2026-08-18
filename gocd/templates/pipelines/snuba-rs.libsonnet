@@ -19,7 +19,7 @@ local saas_datadog_monitor_ids = {
 
 // Snuba deploy to ST is blocked till SaaS deploy is healthy
 local saas_health_check(region) =
-  if region == 'us' || region == 'de' then
+  if region == 'us' || region == 'de' || region == 's4s2' then
     [
       {
         health_check: {
