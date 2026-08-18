@@ -10,6 +10,9 @@ local gocdtasks = import 'github.com/getsentry/gocd-jsonnet/libs/gocd-tasks.libs
 local saas_datadog_monitor_ids = {
   us: '311884335 311884334',
   de: '311884404 311884405',
+  'customer-1': '314685652 314685651',
+  'customer-2': '314685913 314685914',
+  'customer-7': '314685866 314685865',
 };
 
 // Snuba deploy to ST is blocked till SaaS deploy is healthy
