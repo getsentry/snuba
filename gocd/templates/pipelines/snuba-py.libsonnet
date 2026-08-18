@@ -43,6 +43,7 @@ local migrate_stage(stage_name, region) = [
 local saas_datadog_monitor_ids = {
   us: '311884335 311884334',
   de: '311884404 311884405',
+  s4s2: '314687721 314687720',
   'customer-1': '314685652 314685651',
   'customer-2': '314685913 314685914',
   'customer-7': '314685866 314685865',
