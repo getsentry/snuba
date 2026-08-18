@@ -60,7 +60,7 @@ local saas_health_check(region) =
                 SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
                 DATADOG_API_KEY: '{{SECRET:[devinfra][sentry_datadog_api_key]}}',
                 DATADOG_APP_KEY: '{{SECRET:[devinfra][sentry_datadog_app_key]}}',
-                DATADOG_MONITOR_IDS: std.get(saas_datadog_monitor_ids, region, ''),
+                DATADOG_MONITOR_IDS: saas_datadog_monitor_ids[region],
                 LABEL_SELECTOR: 'service=snuba',
                 SENTRY_ENVIRONMENT: region,
               },
@@ -115,7 +115,7 @@ local deploy_canary_stage(region) =
                 SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
                 DATADOG_API_KEY: '{{SECRET:[devinfra][sentry_datadog_api_key]}}',
                 DATADOG_APP_KEY: '{{SECRET:[devinfra][sentry_datadog_app_key]}}',
-                DATADOG_MONITOR_IDS: std.get(saas_datadog_monitor_ids, region, ''),
+                DATADOG_MONITOR_IDS: saas_datadog_monitor_ids[region],
                 LABEL_SELECTOR: 'service=snuba,is_canary=true',
               },
               tasks: [
@@ -140,7 +140,7 @@ local deploy_canary_stage(region) =
                 SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
                 DATADOG_API_KEY: '{{SECRET:[devinfra][sentry_datadog_api_key]}}',
                 DATADOG_APP_KEY: '{{SECRET:[devinfra][sentry_datadog_app_key]}}',
-                DATADOG_MONITOR_IDS: std.get(saas_datadog_monitor_ids, region, ''),
+                DATADOG_MONITOR_IDS: saas_datadog_monitor_ids[region],
                 LABEL_SELECTOR: 'service=snuba,is_canary=true',
               },
               tasks: [
