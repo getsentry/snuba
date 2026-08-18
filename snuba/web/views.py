@@ -46,7 +46,11 @@ from snuba.datasets.factory import InvalidDatasetError, get_dataset_name
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import StorageNotAvailable, WritableTableStorage
 from snuba.query.allocation_policies import AllocationPolicyViolations
-from snuba.query.exceptions import InvalidQueryException, QueryPlanException
+from snuba.query.exceptions import (
+    InvalidQueryException,
+    QueryPlanException,
+    TooManyDeleteRowsException,
+)
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import all_redis_clients
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
@@ -346,6 +350,7 @@ def storage_delete(*, storage: WritableTableStorage, timer: Timer) -> Response |
             InvalidJsonRequestException,
             DeletesNotEnabledError,
             InvalidQueryException,
+            TooManyDeleteRowsException,
         ) as error:
             details = {
                 "type": "invalid_query",
