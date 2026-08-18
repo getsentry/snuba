@@ -50,9 +50,5 @@ class QueryPlanException(SerializableException):
         return cls(exception_type=exception_type, message=message)
 
 
-class TooManyDeleteRowsException(SerializableException):
-    pass
-
-
 class NoRowsToDeleteException(SerializableException):
     pass

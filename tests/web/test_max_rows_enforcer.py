@@ -15,7 +15,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.data_source.simple import Table
 from snuba.query.dsl import and_cond, column, equals, literal
-from snuba.query.exceptions import TooManyDeleteRowsException
+from snuba.query.exceptions import InvalidQueryException
 from snuba.web.delete_query import _enforce_max_rows
 from tests.base import BaseApiTest
 from tests.web.rpc.v1.test_utils import write_eap_item
@@ -79,7 +79,7 @@ class TestMaxRowsEnforcer(BaseApiTest):
         self._insert_event()
         with (
             mock.patch("snuba.web.delete_query.metrics.increment") as increment,
-            pytest.raises(TooManyDeleteRowsException) as exc_info,
+            pytest.raises(InvalidQueryException) as exc_info,
         ):
             _enforce_max_rows(self.query)
 

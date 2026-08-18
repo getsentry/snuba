@@ -29,11 +29,7 @@ from snuba.query.allocation_policies import (
 from snuba.query.conditions import combine_and_conditions
 from snuba.query.data_source.simple import Table
 from snuba.query.dsl import column, equals, in_cond, literal, literals_tuple
-from snuba.query.exceptions import (
-    InvalidQueryException,
-    NoRowsToDeleteException,
-    TooManyDeleteRowsException,
-)
+from snuba.query.exceptions import InvalidQueryException, NoRowsToDeleteException
 from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.reader import Result
@@ -304,7 +300,7 @@ def _enforce_max_rows(delete_query: Query, count_storage_key: StorageKey | None 
             tags={"storage": storage_key.value},
         )
         # Expected client guardrail; keep metric coverage, never report to Sentry.
-        raise TooManyDeleteRowsException(
+        raise InvalidQueryException(
             f"Too many rows to delete ({rows_to_delete}), maximum allowed is {max_rows_allowed}",
             should_report=False,
         )
