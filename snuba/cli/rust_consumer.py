@@ -199,6 +199,17 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     help="Use RowBinary format for ClickHouse inserts instead of JSONEachRow. Currently only supported for EAPItemsProcessor.",
 )
 @click.option(
+    "--skip-write/--no-skip-write",
+    "skip_write",
+    is_flag=True,
+    default=False,
+    help=(
+        "Skip ClickHouse inserts (and commit-log produce). Still consumes Kafka "
+        "and commits offsets. Use for shadow / soak consumers that must not "
+        "write production tables."
+    ),
+)
+@click.option(
     "--consumer-version",
     default="v2",
     type=click.Choice(["v1", "v2"]),
@@ -238,6 +249,7 @@ def rust_consumer(
     quantized_rebalance_consumer_group_delay_secs: int | None,
     join_timeout_ms: int | None,
     use_row_binary: bool,
+    skip_write: bool,
     consumer_version: str | None,
 ) -> None:
     """
@@ -295,6 +307,7 @@ def rust_consumer(
         max_dlq_buffer_length,
         join_timeout_ms,
         use_row_binary,
+        skip_write,
     )
 
     sys.exit(exitcode)

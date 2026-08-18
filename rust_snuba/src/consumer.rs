@@ -46,6 +46,7 @@ pub fn consumer(
     max_dlq_buffer_length: Option<usize>,
     join_timeout_ms: Option<u64>,
     use_row_binary: bool,
+    skip_write: bool,
 ) -> usize {
     py.allow_threads(|| {
         consumer_impl(
@@ -67,6 +68,7 @@ pub fn consumer(
             join_timeout_ms,
             health_check,
             use_row_binary,
+            skip_write,
         )
     })
 }
@@ -91,6 +93,7 @@ pub fn consumer_impl(
     join_timeout_ms: Option<u64>,
     health_check: &str,
     use_row_binary: bool,
+    skip_write: bool,
 ) -> usize {
     setup_logging();
     crate::init_sentry_options().expect("failed to initialize sentry-options");
@@ -187,6 +190,13 @@ pub fn consumer_impl(
         );
     }
 
+    if skip_write {
+        tracing::warn!(
+            consumer_group = %consumer_group,
+            "ClickHouse writes disabled (--skip-write); offsets still commit"
+        );
+    }
+
     let config = KafkaConfig::new_consumer_config(
         vec![],
         consumer_group.to_owned(),
@@ -235,7 +245,11 @@ pub fn consumer_impl(
         )
     });
 
-    let commit_log_producer = if let Some(topic_config) = consumer_config.commit_log_topic {
+    // Shadow consumers (--skip-write) must not produce commit log either; that
+    // stream drives post-processing against written rows.
+    let commit_log_producer = if skip_write {
+        None
+    } else if let Some(topic_config) = consumer_config.commit_log_topic {
         let producer_config =
             KafkaConfig::new_producer_config(vec![], Some(topic_config.broker_config));
         let producer = KafkaProducer::new(producer_config);
@@ -297,6 +311,7 @@ pub fn consumer_impl(
         join_timeout_ms,
         health_check: health_check.to_string(),
         use_row_binary,
+        skip_write,
         dlq_configured,
     };
 

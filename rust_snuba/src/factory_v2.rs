@@ -63,6 +63,8 @@ pub struct ConsumerStrategyFactoryV2 {
     pub join_timeout_ms: Option<u64>,
     pub health_check: String,
     pub use_row_binary: bool,
+    /// When true, process messages but do not INSERT into ClickHouse.
+    pub skip_write: bool,
     // Whether this consumer has a DLQ topic configured. The DLQ-by-age strategy
     // is only inserted when true, since without a DLQ policy an InvalidMessage
     // is logged and silently dropped by arroyo (losing data).
@@ -167,7 +169,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     next_step,
                     self.storage_config.clickhouse_cluster.clone(),
                     self.storage_config.clickhouse_table_name.clone(),
-                    false,
+                    self.skip_write,
                     &self.clickhouse_concurrency,
                     self.storage_config.name.clone(),
                     columns,
@@ -177,7 +179,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                     next_step,
                     self.storage_config.clickhouse_cluster.clone(),
                     self.storage_config.clickhouse_table_name.clone(),
-                    false,
+                    self.skip_write,
                     &self.clickhouse_concurrency,
                     self.storage_config.name.clone(),
                 ))
