@@ -1,49 +1,56 @@
+use std::time::Duration;
+
 use sentry_arroyo::processing::stream::{BatchStage, PipelineExt, PullSource, StageResult};
 
-use crate::config::ProcessorConfig;
-use crate::processors::ProcessingFunction;
 use crate::types::InsertBatch;
 
 use super::batch::buffer::InsertBatchBuffer;
+use super::stages::clickhouse_writer_stage::ClickHouseWriterStage;
 use super::stages::noop_stage::NoopStage;
 use super::stages::processor_stage::ProcessorStage;
-
-/// Configuration for a pull-based snuba consumer pipeline.
-pub struct PipelineConfig {
-    pub processor: ProcessingFunction,
-    pub processor_config: ProcessorConfig,
-    pub max_batch_rows: u64,
-    pub max_batch_bytes: u64,
-}
+use super::writer::ClickHouseWriter;
 
 /// A fully wired snuba consumer pipeline.
 ///
-/// Owns the source and all stages. Call `stream()` to get the
-/// pipeline as an async stream, then `.commit()` or append
-/// additional stages before committing.
+/// Takes pre-constructed stages — Pipeline is pure composition,
+/// not a factory. The caller (test setup, main, factory function)
+/// is responsible for constructing the concrete stages.
+///
+/// Generic over `W` (ClickHouse writer) — use `DryRunWriter` for
+/// testing/staging, `ClickhouseClient` for production.
 ///
 /// Pipeline shape:
 ///   Source → Processor → Batch → Writer → CommitLog → COGS
-pub struct Pipeline<S: PullSource> {
-    source: S,
+pub struct Pipeline<W: ClickHouseWriter> {
+    source: Box<dyn PullSource>,
     processor: ProcessorStage,
     batch: BatchStage<InsertBatch, InsertBatchBuffer>,
-    writer: NoopStage<Vec<InsertBatch>>,
+    max_batch_time: Option<Duration>,
+    idle_timeout: Option<Duration>,
+    writer: ClickHouseWriterStage<W>,
+    writer_concurrency: usize,
     commit_log: NoopStage<Vec<InsertBatch>>,
     cogs: NoopStage<Vec<InsertBatch>>,
 }
 
-impl<S: PullSource> Pipeline<S> {
-    pub fn build(source: S, config: &PipelineConfig) -> Self {
+impl<W: ClickHouseWriter> Pipeline<W> {
+    pub fn new(
+        source: impl PullSource + 'static,
+        processor: ProcessorStage,
+        batch: BatchStage<InsertBatch, InsertBatchBuffer>,
+        max_batch_time: Option<Duration>,
+        idle_timeout: Option<Duration>,
+        writer: ClickHouseWriterStage<W>,
+        writer_concurrency: usize,
+    ) -> Self {
         Self {
-            source,
-            processor: ProcessorStage::new(config.processor, config.processor_config.clone()),
-            batch: BatchStage::new(
-                InsertBatchBuffer::new(),
-                config.max_batch_rows,
-                config.max_batch_bytes,
-            ),
-            writer: NoopStage::new("clickhouse_writer"),
+            source: Box::new(source),
+            processor,
+            batch,
+            max_batch_time,
+            idle_timeout,
+            writer,
+            writer_concurrency,
             commit_log: NoopStage::new("commit_log"),
             cogs: NoopStage::new("cogs"),
         }
@@ -55,8 +62,8 @@ impl<S: PullSource> Pipeline<S> {
         self.source
             .stream()
             .apply(&self.processor)
-            .apply(&self.batch)
-            .apply(&self.writer)
+            .apply_with_timer(&self.batch, self.idle_timeout, self.max_batch_time)
+            .apply_concurrent(&self.writer, self.writer_concurrency)
             .apply(&self.commit_log)
             .apply(&self.cogs)
     }
