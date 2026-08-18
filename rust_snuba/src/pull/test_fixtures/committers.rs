@@ -15,10 +15,6 @@ impl MockCommitter {
             committed: Mutex::new(Vec::new()),
         }
     }
-
-    pub fn committed(&self) -> Vec<HashMap<Partition, u64>> {
-        self.committed.lock().unwrap().clone()
-    }
 }
 
 impl OffsetCommitter for MockCommitter {
