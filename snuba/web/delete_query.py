@@ -304,6 +304,7 @@ def _enforce_max_rows(delete_query: Query, count_storage_key: StorageKey | None 
             "max_rows_exceeded",
             tags={"storage": storage_key.value},
         )
+        # Expected client guardrail; keep metric coverage, never report to Sentry.
         raise TooManyDeleteRowsException(
             f"Too many rows to delete ({rows_to_delete}), maximum allowed is {max_rows_allowed}",
             should_report=False,
