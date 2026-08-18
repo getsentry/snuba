@@ -216,34 +216,34 @@ pub fn consumer_impl(
     let dlq_concurrency_config = ConcurrencyConfig::new(10);
 
     // DLQ policy applies only if we are not skipping writes, otherwise we don't want to be
-    // writing to the DLQ topics in prod.
+    // writing to the DLQ topics in prod. DlqByAge is keyed off the same flag.
+    let dlq_policy = if skip_write {
+        None
+    } else {
+        consumer_config.dlq_topic.map(|dlq_topic_config| {
+            let producer = KafkaProducer::new(KafkaConfig::new_producer_config(
+                vec![],
+                Some(dlq_topic_config.broker_config),
+            ));
 
-    // Whether a DLQ topic is configured. The DLQ-by-age strategy relies on the
-    // DLQ policy, so it is only wired into the factory when this is true.
-    let dlq_configured = consumer_config.dlq_topic.is_some();
+            let kafka_dlq_producer = Box::new(KafkaDlqProducer::new(
+                producer,
+                Topic::new(&dlq_topic_config.physical_topic_name),
+            ));
 
-    let dlq_policy = consumer_config.dlq_topic.map(|dlq_topic_config| {
-        let producer = KafkaProducer::new(KafkaConfig::new_producer_config(
-            vec![],
-            Some(dlq_topic_config.broker_config),
-        ));
-
-        let kafka_dlq_producer = Box::new(KafkaDlqProducer::new(
-            producer,
-            Topic::new(&dlq_topic_config.physical_topic_name),
-        ));
-
-        let handle = dlq_concurrency_config.handle();
-        DlqPolicy::new(
-            handle,
-            kafka_dlq_producer,
-            DlqLimit {
-                max_invalid_ratio: None,
-                max_consecutive_count: None,
-            },
-            max_dlq_buffer_length,
-        )
-    });
+            let handle = dlq_concurrency_config.handle();
+            DlqPolicy::new(
+                handle,
+                kafka_dlq_producer,
+                DlqLimit {
+                    max_invalid_ratio: None,
+                    max_consecutive_count: None,
+                },
+                max_dlq_buffer_length,
+            )
+        })
+    };
+    let dlq_configured = dlq_policy.is_some();
 
     // Shadow consumers (--skip-write) must not produce commit log either; that
     // stream drives post-processing against written rows.

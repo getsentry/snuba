@@ -204,9 +204,9 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     is_flag=True,
     default=False,
     help=(
-        "Skip ClickHouse inserts, commit-log produce, replacements produce, and "
-        "COGS. Still consumes Kafka and commits offsets. Use for shadow / soak "
-        "consumers that must not write production tables."
+        "Skip ClickHouse inserts, commit-log produce, replacements produce, "
+        "COGS, and DLQ produce. Still consumes Kafka and commits offsets. Use "
+        "for shadow / soak consumers that must not write production tables."
     ),
 )
 @click.option(
