@@ -46,3 +46,39 @@ def test_consumer_config() -> None:
             max_batch_size=1,
             max_batch_time_ms=1000,
         )
+
+
+def test_group_instance_id_in_broker_config() -> None:
+    """Static membership: --group-instance-id lands in librdkafka broker config."""
+    resolved = resolve_consumer_config(
+        storage_names=["errors"],
+        raw_topic=None,
+        commit_log_topic=None,
+        replacements_topic=None,
+        slice_id=None,
+        bootstrap_servers=["some_server:9092"],
+        commit_log_bootstrap_servers=[],
+        replacement_bootstrap_servers=[],
+        max_batch_size=1,
+        max_batch_time_ms=1000,
+        group_instance_id="snuba-eap-items-consumer-0",
+    )
+
+    assert resolved.raw_topic.broker_config["group.instance.id"] == "snuba-eap-items-consumer-0"
+
+
+def test_group_instance_id_rejects_empty() -> None:
+    with pytest.raises(ValueError, match="group_instance_id must be non-empty"):
+        resolve_consumer_config(
+            storage_names=["errors"],
+            raw_topic=None,
+            commit_log_topic=None,
+            replacements_topic=None,
+            slice_id=None,
+            bootstrap_servers=["some_server:9092"],
+            commit_log_bootstrap_servers=[],
+            replacement_bootstrap_servers=[],
+            max_batch_size=1,
+            max_batch_time_ms=1000,
+            group_instance_id="   ",
+        )

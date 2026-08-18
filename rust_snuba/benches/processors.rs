@@ -103,6 +103,7 @@ fn create_factory(
         join_timeout_ms: None,
         health_check: "arroyo".to_string(),
         use_row_binary: false,
+        skip_write: false,
         dlq_configured: false,
     };
     Box::new(factory)
