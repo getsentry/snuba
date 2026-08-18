@@ -261,7 +261,11 @@ pub fn consumer_impl(
         None
     };
 
-    let replacements_config = if let Some(topic_config) = consumer_config.replacements_topic {
+    // Shadow consumers must not produce replacements either; those mutate
+    // ClickHouse via the replacements consumer.
+    let replacements_config = if skip_write {
+        None
+    } else if let Some(topic_config) = consumer_config.replacements_topic {
         let producer_config =
             KafkaConfig::new_producer_config(vec![], Some(topic_config.broker_config));
         Some((

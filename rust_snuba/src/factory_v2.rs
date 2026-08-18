@@ -146,8 +146,8 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
 
         // Produce cogs if generic metrics AND we are not skipping writes AND record_cogs is true
         let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<()>>> =
-            match (self.env_config.record_cogs, cogs_label) {
-                (true, Some(resource_id)) => Box::new(RecordCogs::new(
+            match (self.env_config.record_cogs, self.skip_write, cogs_label) {
+                (true, false, Some(resource_id)) => Box::new(RecordCogs::new(
                     next_step,
                     resource_id,
                     self.accountant_topic_config.broker_config.clone(),
@@ -237,17 +237,22 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactoryV2 {
                 true,
                 Some(processors::ProcessingFunctionType::ProcessingFunctionWithReplacements(func)),
             ) => {
-                let (replacements_config, replacements_destination) =
-                    self.replacements_config.clone().unwrap();
-
-                let producer = KafkaProducer::new(replacements_config);
-                let replacements_step = ProduceReplacements::new(
-                    next_step,
-                    producer,
-                    replacements_destination,
-                    &self.replacements_concurrency,
-                    false,
-                );
+                let replacements_step = if self.skip_write {
+                    ProduceReplacements::skipping(next_step)
+                } else {
+                    let (replacements_config, replacements_destination) =
+                        self.replacements_config.clone().expect(
+                            "replacements topic required for processors that emit replacements",
+                        );
+                    let producer = KafkaProducer::new(replacements_config);
+                    ProduceReplacements::new(
+                        next_step,
+                        producer,
+                        replacements_destination,
+                        &self.replacements_concurrency,
+                        false,
+                    )
+                };
 
                 make_rust_processor_with_replacements(
                     replacements_step,

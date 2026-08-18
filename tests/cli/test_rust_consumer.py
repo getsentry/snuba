@@ -35,3 +35,29 @@ def test_rust_consumer_passes_group_instance_id(
     resolve_config.assert_called_once()
     assert resolve_config.call_args.kwargs["group_instance_id"] == "snuba-eap-items-consumer-0"
     mock_rust.consumer.assert_called_once()
+
+
+@patch("snuba.cli.rust_consumer.asdict", return_value={})
+@patch("snuba.cli.rust_consumer.resolve_consumer_config")
+def test_rust_consumer_passes_skip_write(resolve_config: Mock, *_mocks: Sequence[Mock]) -> None:
+    """Shadow soak consumers pass --skip-write so rust-consumer does not insert."""
+    resolve_config.return_value = Mock()
+    mock_rust = Mock()
+    mock_rust.consumer.return_value = 0
+
+    runner = CliRunner()
+    with patch.dict(sys.modules, {"rust_snuba": mock_rust}):
+        result = runner.invoke(
+            rust_consumer,
+            [
+                "--storage",
+                "eap_items",
+                "--consumer-group",
+                "snuba-eap-items-consumers",
+                "--skip-write",
+            ],
+        )
+
+    assert result.exit_code == 0, result.output
+    mock_rust.consumer.assert_called_once()
+    assert mock_rust.consumer.call_args.args[-1] is True
