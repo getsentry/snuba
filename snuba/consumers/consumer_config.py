@@ -199,6 +199,10 @@ def resolve_consumer_config(
         )
 
     if group_instance_id is not None:
+        # KIP-345 static membership: unique per consumer process. Empty values
+        # would still enable static membership with a useless id and risk fencing.
+        if not str(group_instance_id).strip():
+            raise ValueError("group_instance_id must be non-empty when provided")
         resolved_raw_topic = _add_to_topic_broker_config(
             resolved_raw_topic, "group.instance.id", group_instance_id
         )

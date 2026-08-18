@@ -175,6 +175,18 @@ pub fn consumer_impl(
         first_storage.name,
     );
 
+    if let Some(group_instance_id) = consumer_config
+        .raw_topic
+        .broker_config
+        .get("group.instance.id")
+    {
+        tracing::info!(
+            group_instance_id = %group_instance_id,
+            consumer_group = %consumer_group,
+            "Static membership enabled (KIP-345 group.instance.id)"
+        );
+    }
+
     let config = KafkaConfig::new_consumer_config(
         vec![],
         consumer_group.to_owned(),

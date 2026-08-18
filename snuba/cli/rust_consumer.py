@@ -119,7 +119,13 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     "--group-instance-id",
     type=str,
     default=None,
-    help="Kafka group instance id. passing a value here will run kafka with static membership.",
+    help=(
+        "Kafka group.instance.id (KIP-345 static membership). When set, this "
+        "member keeps its partition assignment across restarts as long as it "
+        "rejoins within session.timeout.ms. Must be unique per live member of "
+        "the consumer group (e.g. one id per single-replica Deployment). "
+        "Tune session.timeout.ms via Kafka broker/topic consumer config."
+    ),
 )
 @click.option(
     "--python-max-queue-depth",
