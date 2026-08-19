@@ -338,34 +338,6 @@ def _jsoncompact_settings(
     return json_settings
 
 
-def _redact_span_sql(sql: str) -> str:
-    """Empty single-quoted literals so EXPLAIN spans do not keep filter values."""
-    out: list[str] = []
-    i = 0
-    n = len(sql)
-    while i < n:
-        ch = sql[i]
-        if ch == "'":
-            j = i + 1
-            while j < n:
-                if sql[j] == "\\" and j + 1 < n:
-                    j += 2
-                    continue
-                if sql[j] == "'":
-                    if j + 1 < n and sql[j + 1] == "'":
-                        j += 2
-                        continue
-                    j += 1
-                    break
-                j += 1
-            out.append("''")
-            i = j
-            continue
-        out.append(ch)
-        i += 1
-    return "".join(out)
-
-
 @contextmanager
 def _query_span(
     sql: str, query_id: str | None = None, name: str = "clickhouse query"
@@ -865,7 +837,7 @@ class ClickhouseConnectPool(ClickhousePool):
         with self._translate_clickhouse_errors():
             client = self._new_client()
             query_settings = self._build_query_settings(settings, None, False)
-            with _query_span(_redact_span_sql(query)):
+            with _query_span(query):
                 output = client.command(query, settings=query_settings)
             return self._explain_result(output)
 

@@ -143,17 +143,6 @@ def test_empty_explain_fails_closed_with_allowlist() -> None:
         )
 
 
-def test_explain_keeps_typed_literals() -> None:
-    conn = _explain_connection("my_table")
-    validate_ro_query(
-        "SELECT * FROM my_table WHERE email = 'user@example.com'",
-        allowed_tables={"my_table"},
-        connection=conn,
-    )
-    explained = conn.execute_explain.call_args[0][0]
-    assert "user@example.com" in explained
-
-
 def test_array_join_without_explain_fails_closed() -> None:
     # Offline, sql_metadata still reports ARRAY JOIN columns as tables.
     with pytest.raises(InvalidCustomQuery):

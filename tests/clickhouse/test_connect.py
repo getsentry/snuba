@@ -1011,15 +1011,6 @@ def test_reader_isoformats_date_datetime_and_uuid() -> None:
     client.query.assert_not_called()
 
 
-def test_redact_span_sql_empties_single_quoted_literals() -> None:
-    from snuba.clickhouse.connect import _redact_span_sql
-
-    assert (
-        _redact_span_sql("EXPLAIN QUERY TREE SELECT * FROM t WHERE email = 'user@example.com'")
-        == "EXPLAIN QUERY TREE SELECT * FROM t WHERE email = ''"
-    )
-
-
 def test_execute_explain_uses_command_and_returns_text_rows() -> None:
     # execute_explain serves EXPLAIN via command() -- which sends the statement
     # verbatim, no "FORMAT Native" appended -- not the Native query() path.
