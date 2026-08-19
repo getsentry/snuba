@@ -297,27 +297,6 @@ def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
 
 
 @pytest.mark.redis_db
-def test_force_overwrite_requires_run_and_reverse_policy(
-    admin_api: FlaskClient,
-) -> None:
-    migration_id = "0001_migrations"
-    with (
-        patch(
-            "snuba.admin.auth.DEFAULT_ROLES",
-            [
-                generate_migration_test_role("system", "none"),
-                generate_tool_test_role("all"),
-            ],
-        ),
-        patch.object(Runner, "force_overwrite_status") as mock_overwrite,
-    ):
-        response = admin_api.post(f"/migrations/system/overwrite/{migration_id}/status/not_started")
-        assert response.status_code == 403
-        assert json.loads(response.data) == {"error": "Group not allowed overwrite policy"}
-        assert mock_overwrite.call_count == 0
-
-
-@pytest.mark.redis_db
 def test_get_iam_roles(caplog: Any) -> None:
     system_role = generate_migration_test_role("system", "all")
     tool_role = generate_tool_test_role("snql-to-sql")

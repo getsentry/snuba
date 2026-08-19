@@ -396,21 +396,12 @@ def test_prod_snql_query_invalid_query(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.events_db
-def test_force_overwrite(admin_api: FlaskClient) -> None:
-    migration_id = "0012_add_group_id_bloom_filter_index"
-    migrations = json.loads(admin_api.get("/migrations/search_issues/list").data)
-    downgraded_migration = [m for m in migrations if m.get("migration_id") == migration_id][0]
-    assert downgraded_migration["status"] == "completed"
-
+def test_force_overwrite_route_removed(admin_api: FlaskClient) -> None:
     response = admin_api.post(
-        f"/migrations/search_issues/overwrite/{migration_id}/status/not_started",
+        "/migrations/search_issues/overwrite/0012_add_group_id_bloom_filter_index/status/not_started",
         headers={"Referer": "https://snuba-admin.getsentry.net/"},
     )
-    assert response.status_code == 200
-    migrations = json.loads(admin_api.get("/migrations/search_issues/list").data)
-    downgraded_migration = [m for m in migrations if m.get("migration_id") == migration_id][0]
-    assert downgraded_migration["status"] == "not_started"
+    assert response.status_code == 404
 
 
 @pytest.mark.redis_db
