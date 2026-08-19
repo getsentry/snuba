@@ -1,5 +1,5 @@
 pub mod batch;
-pub mod pipeline;
+pub mod pipelines;
 pub mod stages;
 pub mod writer;
 

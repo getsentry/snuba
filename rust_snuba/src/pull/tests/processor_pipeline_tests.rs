@@ -9,11 +9,11 @@ use sentry_kafka_schemas::get_schema;
 use crate::config::ProcessorConfig;
 use crate::processors::{get_processing_function, ProcessingFunctionType};
 use crate::pull::batch::buffer::PipelineBatchBuffer;
+use crate::pull::pipelines::fire_and_forget::FireAndForgetPipeline;
 use crate::pull::stages::clickhouse_writer_stage::ClickHouseWriterStage;
 use crate::pull::stages::processor_stage::ProcessorStage;
 use crate::pull::test_fixtures::writer::MockWriter;
 
-use super::super::pipeline::Pipeline;
 use super::super::test_fixtures::collector::TestCollector;
 use super::super::test_fixtures::sources::VecSource;
 
@@ -29,7 +29,7 @@ use super::super::test_fixtures::sources::VecSource;
 #[case::eap_items("EAPItemsProcessor", "snuba-items")]
 #[case::llm_proxy_cost("LlmProxyCostProcessor", "snuba-llm-proxy-cost")]
 #[tokio::test]
-async fn test_pull_pipeline(#[case] processor_name: &str, #[case] topic: &str) {
+async fn test_fire_and_forget_pipeline(#[case] processor_name: &str, #[case] topic: &str) {
     let processor = match get_processing_function(processor_name)
         .unwrap_or_else(|| panic!("Unknown processor: {processor_name}"))
     {
@@ -51,7 +51,6 @@ async fn test_pull_pipeline(#[case] processor_name: &str, #[case] topic: &str) {
         "{processor_name}: no examples for topic {topic}"
     );
 
-    // Duplicate payloads to ensure enough data for batching
     let payloads: Vec<KafkaPayload> = payloads
         .iter()
         .cycle()
@@ -67,12 +66,12 @@ async fn test_pull_pipeline(#[case] processor_name: &str, #[case] topic: &str) {
 
     let writer = Arc::new(MockWriter::new());
 
-    let pipeline = Pipeline::new(
+    let pipeline = FireAndForgetPipeline::new(
         VecSource::from_payloads(payloads),
         ProcessorStage::new(processor, ProcessorConfig::default()),
         BatchStage::new(PipelineBatchBuffer::new(), 2, u64::MAX),
-        Some(Duration::from_secs(2)), // max_batch_time
-        None,                         // idle_timeout
+        Some(Duration::from_secs(2)),
+        None,
         ClickHouseWriterStage::new(Arc::clone(&writer)),
         2,
     );
@@ -92,14 +91,12 @@ async fn test_pull_pipeline(#[case] processor_name: &str, #[case] topic: &str) {
     );
 
     for (i, batch_meta) in collector.batches.iter().enumerate() {
-        // Verify commit log offsets are populated
         assert!(
             !batch_meta.commit_log_offsets.0.is_empty(),
             "{processor_name}: batch {i} has no commit log offsets"
         );
     }
 
-    // Verify the writer was called
     let write_calls = writer.calls();
     assert!(
         !write_calls.is_empty(),
