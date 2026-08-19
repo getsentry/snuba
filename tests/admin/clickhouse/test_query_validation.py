@@ -111,6 +111,18 @@ def test_backtick_array_join_alias_does_not_drop_dotted_table() -> None:
         )
 
 
+def test_explain_table_name_ignores_trailing_dump_fields() -> None:
+    conn = Mock()
+    conn.execute_explain.return_value = ClickhouseResult(
+        results=[("TABLE id: 0, table_name: my_table, alias: t",)]
+    )
+    validate_ro_query(
+        "SELECT * FROM my_table FINAL",
+        allowed_tables={"my_table"},
+        connection=conn,
+    )
+
+
 def test_explain_strips_existing_settings_clause() -> None:
     conn = _explain_connection("my_table")
     validate_ro_query(

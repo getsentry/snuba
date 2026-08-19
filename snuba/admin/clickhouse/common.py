@@ -344,7 +344,7 @@ def _strip_sql_string_literals(sql_query: str) -> str:
     return "".join(out)
 
 
-_TABLE_NAME_RE = re.compile(r"table_name:\s*(\S+)", re.IGNORECASE)
+_TABLE_NAME_RE = re.compile(r"table_name:\s*([^\s,]+)", re.IGNORECASE)
 
 
 def _tables_from_query_tree(explain_output: str) -> set[str]:
