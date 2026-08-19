@@ -361,16 +361,8 @@ def _tables_from_query_tree(explain_output: str) -> set[str]:
     return tables
 
 
-def _strip_trailing_settings(sql: str) -> str:
-    settings_at = sql.upper().rfind("SETTINGS")
-    if settings_at <= 0 or not sql[settings_at - 1].isspace():
-        return sql
-    return sql[:settings_at].rstrip()
-
-
 def _tables_from_explain(sql_query: str, connection: ClickhousePool) -> set[str]:
-    # Trailing user SETTINGS stay out of the SQL so EXPLAIN is one statement.
-    sql = _strip_trailing_settings(sql_query.strip().rstrip(";"))
+    sql = sql_query.strip().rstrip(";")
     try:
         result = connection.execute_explain(f"EXPLAIN QUERY TREE {sql}")
     except ClickhouseError as err:
