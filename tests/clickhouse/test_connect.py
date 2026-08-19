@@ -1030,10 +1030,14 @@ def test_execute_explain_uses_command_and_returns_text_rows() -> None:
     )
 
     pool = _make_pool(client)
-    result = pool.execute_explain("EXPLAIN AST SELECT query FROM system.clusters")
+    result = pool.execute_explain(
+        "EXPLAIN AST SELECT query FROM system.clusters",
+        settings={"allow_experimental_analyzer": 1},
+    )
 
     # Used the text command() path, never the Native query() path.
     client.command.assert_called_once()
+    assert client.command.call_args.kwargs["settings"] == {"allow_experimental_analyzer": 1}
     client.query.assert_not_called()
 
     # One single-column row per explain line, indentation preserved -- the shape

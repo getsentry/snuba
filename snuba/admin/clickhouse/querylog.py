@@ -3,7 +3,7 @@ from snuba.admin.clickhouse.common import (
     get_ro_query_node_connection,
     validate_ro_query,
 )
-from snuba.clickhouse.pool import ClickhouseResult
+from snuba.clickhouse.pool import ClickhousePool, ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages.factory import get_storage
@@ -31,16 +31,25 @@ def run_querylog_query(
     """
     schema = get_storage(StorageKey.QUERYLOG).get_schema()
     assert isinstance(schema, TableSchema)
-    validate_ro_query(
-        sql_query=query, allowed_tables={schema.get_table_name(), "clickhouse_queries"}
+    allowed_tables = {schema.get_table_name(), "clickhouse_queries"}
+    connection = validate_ro_query(
+        sql_query=query,
+        allowed_tables=allowed_tables,
+        get_connection=lambda: get_ro_query_node_connection(
+            StorageKey.QUERYLOG.value, ClickhouseClientSettings.QUERYLOG
+        ),
     )
-    return __run_querylog_query(query, max_threads=max_threads)
+    assert connection is not None
+    return __run_querylog_query(query, connection, max_threads=max_threads)
 
 
 def describe_querylog_schema() -> ClickhouseResult:
     schema = get_storage(StorageKey.QUERYLOG).get_schema()
     assert isinstance(schema, TableSchema)
-    return __run_querylog_query(f"DESCRIBE TABLE {schema.get_table_name()}")
+    connection = get_ro_query_node_connection(
+        StorageKey.QUERYLOG.value, ClickhouseClientSettings.QUERYLOG
+    )
+    return __run_querylog_query(f"DESCRIBE TABLE {schema.get_table_name()}", connection)
 
 
 def _get_clickhouse_threads(max_threads: int | None = None) -> int:
@@ -51,15 +60,13 @@ def _get_clickhouse_threads(max_threads: int | None = None) -> int:
     return min(config_threads, _MAX_CH_THREADS)
 
 
-def __run_querylog_query(query: str, max_threads: int | None = None) -> ClickhouseResult:
+def __run_querylog_query(
+    query: str, connection: ClickhousePool, max_threads: int | None = None
+) -> ClickhouseResult:
     """
     Runs given Query against Querylog table in ClickHouse. This function assumes valid
     query and does not validate/sanitize query or response data.
     """
-    connection = get_ro_query_node_connection(
-        StorageKey.QUERYLOG.value, ClickhouseClientSettings.QUERYLOG
-    )
-
     query_result = connection.execute(
         query=query,
         with_column_types=True,

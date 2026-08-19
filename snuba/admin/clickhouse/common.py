@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 
 from sql_metadata import Parser, QueryType  # type: ignore[import-untyped]
 
@@ -267,7 +268,7 @@ def get_ro_clusterless_node_connection(
 def _end_of_sql_string_literal(sql_query: str, start: int) -> int | None:
     """Return the index just past a string literal that starts at ``start``.
 
-    ``start`` must point at the opening ``'`` or ``"``. Walks forward handling:
+    ``start`` must point at the opening ``'``, ``"``, or backtick. Walks forward handling:
     - backslash escapes (``\'``, ``\"``)
     - SQL-style doubled quotes (``''``, ``""``)
 
@@ -343,14 +344,53 @@ def _strip_sql_string_literals(sql_query: str) -> str:
     return "".join(out)
 
 
-def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) -> None:
+def _field_after(line: str, key: str) -> str | None:
+    marker = f"{key}:"
+    idx = line.lower().find(marker)
+    if idx == -1:
+        return None
+    rest = line[idx + len(marker) :].lstrip()
+    for sep in (",", " ", "\t"):
+        rest = rest.split(sep, 1)[0]
+    return rest or None
+
+
+def _tables_from_query_tree(explain_output: str) -> set[str]:
+    """Tables ClickHouse reports for a SELECT, excluding ARRAY JOIN columns."""
+    tables: set[str] = set()
+    for raw_line in explain_output.splitlines():
+        line = raw_line.strip()
+        if line.startswith("TABLE_FUNCTION") or _field_after(line, "table_function_name"):
+            raise InvalidCustomQuery("table functions are not allowed in the query")
+        name = _field_after(line, "table_name")
+        if name is None:
+            continue
+        tables.add(name.rsplit(".", 1)[-1])
+    return tables
+
+
+def _tables_from_explain(sql_query: str, connection: ClickhousePool) -> set[str]:
+    sql = sql_query.strip().rstrip(";")
+    result = connection.execute_explain(f"EXPLAIN QUERY TREE {sql}")
+    text = "\n".join(str(row[0]) for row in result.results if row)
+    return _tables_from_query_tree(text)
+
+
+def validate_ro_query(
+    sql_query: str,
+    allowed_tables: set[str] | None = None,
+    connection: ClickhousePool | None = None,
+    get_connection: Callable[[], ClickhousePool] | None = None,
+) -> ClickhousePool | None:
     """
     Validates that the query is a safe read-only query.
 
-    If allowed_tables is provided, ensures the 'from' clause contains
-    an allowed table. All tables are allowed otherwise.
+    Keyword and SELECT checks always run first. get_connection is only called
+    after those pass, so ALTER/INSERT never opens ClickHouse. When a pool is
+    available, table names come from EXPLAIN QUERY TREE. Without one,
+    sql_metadata is used and ARRAY JOIN columns stay in the set (fail closed).
 
-    Raises InvalidCustomQuery if query is invalid or not allowed.
+    Returns the pool if one was provided or created.
     """
     if not _sql_quotes_are_balanced(sql_query):
         raise InvalidCustomQuery("Unbalanced quotes detected in query")
@@ -389,30 +429,22 @@ def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) ->
     if parsed.query_type != QueryType.SELECT:
         raise InvalidCustomQuery("Only SELECT queries are allowed")
 
-    # This parser doesn't handle ARRAY JOIN clauses correctly, so do some
-    # massaging to get around that. What ends up happening is that the columns
-    # in the ARRAY JOIN are treated as table aliases, so end up in this dictionary
-    # as well as in the tables list. E.g. FROM x ARRAY JOIN y AS z becomes
-    # tables_aliases = {'ARRAY': x, 'z': y} and tables = ['x', 'y'].
-    # Confusingly it will also sometimes lower case ARRAY, so check for both.
-    tables_set = set(parsed.tables)
-    array_join = None
-    array_join_keys = ["ARRAY", "array", "LEFT", "left"]
-    for ak in array_join_keys:
-        if ak in parsed.tables_aliases:
-            array_join = ak
-            break
+    pool = connection if connection is not None else (get_connection() if get_connection else None)
+    if pool is not None:
+        tables_set = _tables_from_explain(sql_query, pool)
+    elif allowed_tables:
+        # sql_metadata reports ARRAY JOIN columns as tables. Without ClickHouse
+        # to resolve them, leave those names in the set so the allowlist fails
+        # closed instead of guessing which dotted names are columns.
+        tables_set = set(parsed.tables)
+    else:
+        return None
 
-    if array_join:
-        for v in parsed.tables_aliases.values():
-            tables_set.discard(v)  # Remove the columns
-
-        tables_set.add(parsed.tables_aliases[array_join])  # Add the table back
-
-    if allowed_tables and not tables_set.issubset(allowed_tables):
+    if allowed_tables and (not tables_set or not tables_set.issubset(allowed_tables)):
         raise InvalidCustomQuery(
             f"Invalid FROM clause, only the following tables are allowed: {allowed_tables}"
         )
+    return pool
 
 
 def format_predefined_sql(sql: str) -> str:
