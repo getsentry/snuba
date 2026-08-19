@@ -248,12 +248,20 @@ def reverse_migration(group: str, migration_id: str) -> Response:
     methods=["POST"],
 )
 @check_tool_perms(tools=[AdminTools.MIGRATIONS])
+@check_migration_perms
 def force_overwrite_migration_status(group: str, migration_id: str, new_status: str) -> Response:
     try:
         migration_group = MigrationGroup(group)
     except ValueError as err:
         logger.error(err, exc_info=True)
         return make_response(jsonify({"error": "Group not found"}), 400)
+
+    migration_key = MigrationKey(migration_group, migration_id)
+    policies = get_migration_group_policies(g.user)[group]
+    if not any(
+        policy.can_run(migration_key) and policy.can_reverse(migration_key) for policy in policies
+    ):
+        return make_response(jsonify({"error": "Group not allowed overwrite policy"}), 403)
 
     runner.force_overwrite_status(migration_group, migration_id, Status(new_status))
     user = request.headers.get(USER_HEADER_KEY)
