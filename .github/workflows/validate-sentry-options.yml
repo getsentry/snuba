@@ -32,8 +32,7 @@ jobs:
   validate-schema:
     needs: cli-version
     name: Validate Schema Evolution
-    # main at pin time
-    uses: getsentry/sentry-options/.github/workflows/validate-schema.yml@24dbd915e6f091626630a284f9439bf983c32dbe
+    uses: getsentry/sentry-options/.github/workflows/validate-schema.yml@main
     secrets:
       SENTRY_INTERNAL_APP_PRIVATE_KEY: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
     with:
