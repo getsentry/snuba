@@ -2,7 +2,7 @@
 
 eval $(regions-project-env-vars --region="${SENTRY_REGION}")
 
-IMAGE_TAG="${GO_REVISION_SNUBA_REPO}-distroless"
+IMAGE_TAG="${GO_REVISION_SNUBA_REPO}"
 
 /devinfra/scripts/get-cluster-credentials
 
