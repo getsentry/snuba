@@ -21,6 +21,9 @@ on:
       version:
         required: true
         type: string
+    secrets:
+      GETSENTRY_BOT_REVERT_TOKEN:
+        required: true
 
 # disable all permissions -- we use the PAT's permissions instead
 permissions: {}
