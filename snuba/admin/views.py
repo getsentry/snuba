@@ -21,10 +21,11 @@ from snuba import settings
 from snuba.admin.audit_log.action import AuditLogAction
 from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth import USER_HEADER_KEY, UnauthorizedException, authorize_request
+from snuba.admin.auth_roles import ExecuteSudoSystemQuery
 from snuba.admin.cardinality_analyzer.cardinality_analyzer import run_metrics_query
 from snuba.admin.clickhouse.clusters import get_cluster_info
 from snuba.admin.clickhouse.common import InvalidCustomQuery, InvalidNodeError
-from snuba.admin.clickhouse.copy_tables import copy_tables
+from snuba.admin.clickhouse.copy_tables import InvalidClusterName, copy_tables
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_cardinality_analyzer_queries import (
@@ -478,6 +479,15 @@ def copy_table_query() -> Response:
         skip_on_cluster = req.get("skip_on_cluster", False)
         cluster_name_override = req.get("cluster_name")
 
+        if not dry_run:
+            can_sudo = any(
+                isinstance(action, ExecuteSudoSystemQuery)
+                for role in g.user.roles
+                for action in role.actions
+            )
+            if not can_sudo:
+                raise UnauthorizedForSudo()
+
         resp = copy_tables(
             source_host=source_host,
             storage_name=storage,
@@ -531,6 +541,20 @@ def copy_table_query() -> Response:
             ),
             400,
         )
+    except InvalidClusterName as err:
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "request",
+                        "message": err.message or "Invalid cluster name",
+                    }
+                }
+            ),
+            400,
+        )
+    except UnauthorizedForSudo as err:
+        return make_response(jsonify({"error": err.message or "Cannot sudo"}), 400)
 
     try:
         return make_response(jsonify(resp), 200)
