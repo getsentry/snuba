@@ -121,7 +121,7 @@ def handle_http_exception(exception: HTTPException) -> HTTPException:
 def handle_uncaught_exception(exception: Exception) -> Response:
     logger.error(exception, exc_info=True)
     return Response(
-        json.dumps({"error": {"type": "unknown", "message": str(exception)}}),
+        json.dumps({"error": {"type": "unknown", "message": "Internal error"}}),
         500,
         {"Content-Type": "application/json"},
     )
