@@ -50,6 +50,26 @@ def test_allowed_tables_with_left_array_join() -> None:
         )
 
 
+def test_table_aliased_as_array_does_not_drop_joined_tables() -> None:
+    # Aliasing a table as `array` must not be treated as ARRAY JOIN and drop
+    # the real JOIN target from the allowlist check.
+    with pytest.raises(InvalidCustomQuery):
+        validate_ro_query(
+            "SELECT * FROM my_table AS array JOIN other_table",
+            allowed_tables={"my_table"},
+        )
+
+
+def test_table_aliased_as_left_does_not_drop_joined_tables() -> None:
+    # Aliasing a table as `left` must not be treated as LEFT ARRAY JOIN and drop
+    # the real JOIN target from the allowlist check.
+    with pytest.raises(InvalidCustomQuery):
+        validate_ro_query(
+            "SELECT * FROM my_table AS left JOIN other_table",
+            allowed_tables={"my_table"},
+        )
+
+
 def test_replace_functions_allowed() -> None:
     # ClickHouse replace* functions should be allowed in read-only queries
     validate_ro_query("SELECT replaceAll(message, 'foo', 'bar') FROM my_table")

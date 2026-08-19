@@ -389,25 +389,14 @@ def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) ->
     if parsed.query_type != QueryType.SELECT:
         raise InvalidCustomQuery("Only SELECT queries are allowed")
 
-    # This parser doesn't handle ARRAY JOIN clauses correctly, so do some
-    # massaging to get around that. What ends up happening is that the columns
-    # in the ARRAY JOIN are treated as table aliases, so end up in this dictionary
-    # as well as in the tables list. E.g. FROM x ARRAY JOIN y AS z becomes
-    # tables_aliases = {'ARRAY': x, 'z': y} and tables = ['x', 'y'].
-    # Confusingly it will also sometimes lower case ARRAY, so check for both.
+    # sql_metadata treats ARRAY JOIN columns as tables. Only strip dotted
+    # column refs, and only when the query actually contains ARRAY JOIN —
+    # aliasing a table as `array`/`left` must not drop other JOIN tables.
     tables_set = set(parsed.tables)
-    array_join = None
-    array_join_keys = ["ARRAY", "array", "LEFT", "left"]
-    for ak in array_join_keys:
-        if ak in parsed.tables_aliases:
-            array_join = ak
-            break
-
-    if array_join:
-        for v in parsed.tables_aliases.values():
-            tables_set.discard(v)  # Remove the columns
-
-        tables_set.add(parsed.tables_aliases[array_join])  # Add the table back
+    if re.search(r"\b(?:left\s+)?array\s+join\b", lowered):
+        for value in parsed.tables_aliases.values():
+            if "." in value:
+                tables_set.discard(value)
 
     if allowed_tables and not tables_set.issubset(allowed_tables):
         raise InvalidCustomQuery(
