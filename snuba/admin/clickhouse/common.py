@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 
 from sql_metadata import Parser, QueryType  # type: ignore[import-untyped]
 
@@ -379,17 +380,17 @@ def validate_ro_query(
     sql_query: str,
     allowed_tables: set[str] | None = None,
     connection: ClickhousePool | None = None,
-) -> None:
+    get_connection: Callable[[], ClickhousePool] | None = None,
+) -> ClickhousePool | None:
     """
     Validates that the query is a safe read-only query.
 
-    If allowed_tables is provided, ensures the query only reads those tables.
-    When a connection is given, table names come from ClickHouse EXPLAIN QUERY
-    TREE so ARRAY JOIN columns are not mistaken for tables. Without a
-    connection, sql_metadata is used and ARRAY JOIN columns stay in the set
-    (fail closed).
+    Keyword and SELECT checks always run first. get_connection is only called
+    after those pass, so ALTER/INSERT never opens ClickHouse. When a pool is
+    available, table names come from EXPLAIN QUERY TREE. Without one,
+    sql_metadata is used and ARRAY JOIN columns stay in the set (fail closed).
 
-    Raises InvalidCustomQuery if query is invalid or not allowed.
+    Returns the pool if one was provided or created.
     """
     if not _sql_quotes_are_balanced(sql_query):
         raise InvalidCustomQuery("Unbalanced quotes detected in query")
@@ -428,25 +429,22 @@ def validate_ro_query(
     if parsed.query_type != QueryType.SELECT:
         raise InvalidCustomQuery("Only SELECT queries are allowed")
 
-    if connection is not None:
-        tables_set = _tables_from_explain(sql_query, connection)
+    pool = connection if connection is not None else (get_connection() if get_connection else None)
+    if pool is not None:
+        tables_set = _tables_from_explain(sql_query, pool)
     elif allowed_tables:
         # sql_metadata reports ARRAY JOIN columns as tables. Without ClickHouse
         # to resolve them, leave those names in the set so the allowlist fails
         # closed instead of guessing which dotted names are columns.
         tables_set = set(parsed.tables)
     else:
-        return
+        return None
 
-    if allowed_tables:
-        if not tables_set:
-            raise InvalidCustomQuery(
-                f"Invalid FROM clause, only the following tables are allowed: {allowed_tables}"
-            )
-        if not tables_set.issubset(allowed_tables):
-            raise InvalidCustomQuery(
-                f"Invalid FROM clause, only the following tables are allowed: {allowed_tables}"
-            )
+    if allowed_tables and (not tables_set or not tables_set.issubset(allowed_tables)):
+        raise InvalidCustomQuery(
+            f"Invalid FROM clause, only the following tables are allowed: {allowed_tables}"
+        )
+    return pool
 
 
 def format_predefined_sql(sql: str) -> str:

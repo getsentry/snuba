@@ -78,6 +78,9 @@ def test_rejects_non_select() -> None:
 @mock.patch("snuba.admin.outcomes_analyzer.outcomes_analyzer.get_ro_query_node_connection")
 def test_allows_hourly_dist_query(mock_conn: mock.MagicMock) -> None:
     mock_pool = mock.MagicMock()
+    mock_pool.execute_explain.return_value = ClickhouseResult(
+        results=[("TABLE id: 0, table_name: outcomes_hourly_dist",)]
+    )
     mock_pool.execute.return_value = ClickhouseResult(
         results=[[1]],
         meta=[("c", "UInt64")],

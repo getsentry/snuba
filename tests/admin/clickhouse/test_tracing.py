@@ -384,7 +384,10 @@ def test_run_query_and_get_trace_uses_query_log_when_wire_trace_empty() -> None:
             "snuba.admin.clickhouse.tracing.get_ro_query_node_connection",
             return_value=connection,
         ),
-        patch("snuba.admin.clickhouse.tracing.validate_ro_query"),
+        patch(
+            "snuba.admin.clickhouse.tracing.validate_ro_query",
+            return_value=connection,
+        ),
         patch(
             "snuba.admin.clickhouse.tracing.summarize_from_query_log",
             return_value=query_log_summary,
@@ -435,7 +438,10 @@ def test_run_query_and_get_trace_drops_caller_query_id() -> None:
             "snuba.admin.clickhouse.tracing.get_ro_query_node_connection",
             return_value=connection,
         ),
-        patch("snuba.admin.clickhouse.tracing.validate_ro_query"),
+        patch(
+            "snuba.admin.clickhouse.tracing.validate_ro_query",
+            return_value=connection,
+        ),
         patch(
             "snuba.admin.clickhouse.tracing.summarize_from_query_log",
             return_value=TracingSummary({}),
@@ -470,7 +476,10 @@ def test_run_query_and_get_trace_rejects_unparsed_query_id_settings() -> None:
             "snuba.admin.clickhouse.tracing.get_ro_query_node_connection",
             return_value=connection,
         ),
-        patch("snuba.admin.clickhouse.tracing.validate_ro_query"),
+        patch(
+            "snuba.admin.clickhouse.tracing.validate_ro_query",
+            return_value=connection,
+        ),
         pytest.raises(InvalidCustomQuery, match="query_id is not allowed in SETTINGS"),
     ):
         run_query_and_get_trace(
@@ -497,7 +506,10 @@ def test_run_query_and_get_trace_disables_query_limit_when_settings_remain() -> 
             "snuba.admin.clickhouse.tracing.get_ro_query_node_connection",
             return_value=connection,
         ),
-        patch("snuba.admin.clickhouse.tracing.validate_ro_query"),
+        patch(
+            "snuba.admin.clickhouse.tracing.validate_ro_query",
+            return_value=connection,
+        ),
         patch(
             "snuba.admin.clickhouse.tracing.summarize_from_query_log",
             return_value=TracingSummary({}),
@@ -530,7 +542,10 @@ def test_run_query_and_get_trace_keeps_native_wire_trace() -> None:
             "snuba.admin.clickhouse.tracing.get_ro_query_node_connection",
             return_value=connection,
         ),
-        patch("snuba.admin.clickhouse.tracing.validate_ro_query"),
+        patch(
+            "snuba.admin.clickhouse.tracing.validate_ro_query",
+            return_value=connection,
+        ),
         patch(
             "snuba.admin.clickhouse.tracing.summarize_from_query_log",
             return_value=TracingSummary({}),

@@ -50,16 +50,15 @@ def run_metrics_query(query: str, user: str) -> ClickhouseResult:
         | raw_tables
         | meta_tables
     )
-    validate_ro_query(sql_query=query)
-    connection = get_ro_query_node_connection(
-        StorageKey("generic_metrics_counters").value,
-        ClickhouseClientSettings.CARDINALITY_ANALYZER,
-    )
-    validate_ro_query(
+    connection = validate_ro_query(
         sql_query=query,
         allowed_tables=allowed_tables,
-        connection=connection,
+        get_connection=lambda: get_ro_query_node_connection(
+            StorageKey("generic_metrics_counters").value,
+            ClickhouseClientSettings.CARDINALITY_ANALYZER,
+        ),
     )
+    assert connection is not None
     return _stringify_result(__run_query(query, connection))
 
 

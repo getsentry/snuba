@@ -21,6 +21,17 @@ def test_select_query() -> None:
         validate_ro_query("INSERT INTO my_table (col) VALUES ('value')")
 
 
+def test_disallowed_query_does_not_open_connection() -> None:
+    opened = Mock(side_effect=AssertionError("connection opened before validation"))
+    with pytest.raises(InvalidCustomQuery):
+        validate_ro_query(
+            "ALTER TABLE my_table DELETE WHERE 1",
+            allowed_tables={"my_table"},
+            get_connection=opened,
+        )
+    opened.assert_not_called()
+
+
 def test_multiple_queries() -> None:
     with pytest.raises(InvalidCustomQuery):
         validate_ro_query("SELECT * FROM my_table; SELECT * FROM other_table")

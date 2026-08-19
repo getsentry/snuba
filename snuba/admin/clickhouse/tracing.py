@@ -83,9 +83,13 @@ class TraceOutput:
 def run_query_and_get_trace(
     storage_name: str, query: str, settings: Mapping[str, Any] | None = None
 ) -> TraceOutput:
-    validate_ro_query(query)
-    connection = get_ro_query_node_connection(storage_name, ClickhouseClientSettings.TRACING)
-    validate_ro_query(query, connection=connection)
+    connection = validate_ro_query(
+        query,
+        get_connection=lambda: get_ro_query_node_connection(
+            storage_name, ClickhouseClientSettings.TRACING
+        ),
+    )
+    assert connection is not None
     query_without_settings, sql_settings, apply_query_limit = _extract_settings_clause(query)
 
     execute_settings: dict[str, Any] = dict(settings or {})
