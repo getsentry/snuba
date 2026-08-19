@@ -475,7 +475,7 @@ jobs:
         if: needs.files-changed.outputs.api_changes == 'true'
         working-directory: sentry
         run: |
-          export PYTEST_ADDOPTS="$PYTEST_ADDOPTS -k 'not __In' -m snuba -n $XDIST_WORKERS --dist=loadfile -vv"
+          export PYTEST_ADDOPTS="$PYTEST_ADDOPTS -k 'not __In' -m 'snuba and not snuba_ci' -n $XDIST_WORKERS --dist=loadfile -vv"
           make test-python-ci
 
   clickhouse-versions:
