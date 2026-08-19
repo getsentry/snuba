@@ -1,5 +1,5 @@
 use sentry_arroyo::backends::kafka::types::KafkaPayload;
-use sentry_arroyo::processing::stream::{PipelineEnvelope, Stage, StageResult};
+use sentry_arroyo::processing::stream::{PipelineEnvelope, RejectionReason, Stage, StageResult};
 
 use crate::config::ProcessorConfig;
 use crate::processors::ProcessingFunction;
@@ -64,10 +64,19 @@ impl Stage for ProcessorStage {
                     envelope.raw,
                 ))
             }
-            Ok(Err(e)) => StageResult::Fail(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                e.to_string(),
-            ))),
+            Ok(Err(e)) => {
+                tracing::warn!(
+                    "Processor error at {:?}:{}, rejecting: {}",
+                    envelope.metadata.partition,
+                    envelope.metadata.offset,
+                    e
+                );
+                StageResult::Reject {
+                    metadata: envelope.metadata,
+                    raw: envelope.raw,
+                    reason: RejectionReason::Invalid,
+                }
+            }
             Err(join_err) => StageResult::Fail(Box::new(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 format!("processor task panicked: {}", join_err),
