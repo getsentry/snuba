@@ -13,7 +13,7 @@ class AuditLogAction(Enum):
     FORCE_MIGRATION_OVERWRITE = "force.migration.overwrite"
     RAN_SUDO_SYSTEM_QUERY = "ran.sudo.system.query"
     RAN_CLUSTERLESS_SYSTEM_QUERY = "ran.clusterless.system.query"
-    RAN_ADHOC_MANUAL_JOB = "ran.adhoc.manual.job"
+    RAN_MANUAL_JOB = "ran.manual.job"
 
 
 MIGRATION_ACTIONS = [

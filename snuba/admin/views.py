@@ -1109,11 +1109,12 @@ def execute_job(job_id: str) -> Response:
 
     audit_log.record(
         g.user.email,
-        AuditLogAction.RAN_ADHOC_MANUAL_JOB,
+        AuditLogAction.RAN_MANUAL_JOB,
         {
             "job_id": job_spec.job_id,
             "job_type": job_spec.job_type,
             "status": status,
+            "adhoc": 0,
             "params": json.dumps(job_spec.params or {}, sort_keys=True),
         },
         notify=True,
@@ -1185,11 +1186,12 @@ def run_job_by_type(job_type: str) -> Response:
 
     audit_log.record(
         g.user.email,
-        AuditLogAction.RAN_ADHOC_MANUAL_JOB,
+        AuditLogAction.RAN_MANUAL_JOB,
         {
             "job_id": job_id,
             "job_type": job_type,
             "status": status,
+            "adhoc": 1,
             "params": json.dumps(params, sort_keys=True),
         },
         notify=True,

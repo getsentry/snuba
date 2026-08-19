@@ -723,11 +723,12 @@ def test_run_job_by_type_reports_parameters_and_user(admin_api: FlaskClient) -> 
     job_id = json.loads(response.data)["job_id"]
     audit_log.record.assert_called_once_with(
         "operator@sentry.io",
-        AuditLogAction.RAN_ADHOC_MANUAL_JOB,
+        AuditLogAction.RAN_MANUAL_JOB,
         {
             "job_id": job_id,
             "job_type": "ToyJob",
             "status": "finished",
+            "adhoc": 1,
             "params": json.dumps(params, sort_keys=True),
         },
         notify=True,
@@ -748,11 +749,12 @@ def test_failed_run_job_by_type_is_reported(admin_api: FlaskClient) -> None:
     job_id = json.loads(response.data)["job_id"]
     audit_log.record.assert_called_once_with(
         "unknown",
-        AuditLogAction.RAN_ADHOC_MANUAL_JOB,
+        AuditLogAction.RAN_MANUAL_JOB,
         {
             "job_id": job_id,
             "job_type": "ToyJob",
             "status": "failed",
+            "adhoc": 1,
             "params": json.dumps(params, sort_keys=True),
         },
         notify=True,
@@ -772,11 +774,12 @@ def test_execute_job_reports_parameters_and_user(admin_api: FlaskClient) -> None
     assert response.data.decode() == "finished"
     audit_log.record.assert_called_once_with(
         "operator@sentry.io",
-        AuditLogAction.RAN_ADHOC_MANUAL_JOB,
+        AuditLogAction.RAN_MANUAL_JOB,
         {
             "job_id": "abc1234",
             "job_type": "ToyJob",
             "status": "finished",
+            "adhoc": 0,
             "params": json.dumps({"p1": "value1"}, sort_keys=True),
         },
         notify=True,
@@ -798,11 +801,12 @@ def test_failed_execute_job_is_reported(admin_api: FlaskClient) -> None:
     assert json.loads(response.data) == {"error": "failed as requested"}
     audit_log.record.assert_called_once_with(
         "unknown",
-        AuditLogAction.RAN_ADHOC_MANUAL_JOB,
+        AuditLogAction.RAN_MANUAL_JOB,
         {
             "job_id": "abc1234",
             "job_type": "ToyJob",
             "status": "failed",
+            "adhoc": 0,
             "params": json.dumps({"p1": "value1"}, sort_keys=True),
         },
         notify=True,
