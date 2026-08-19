@@ -53,9 +53,6 @@ class Job(ABC, metaclass=RegisteredClass):
         self.job_spec = job_spec
         self.is_async = job_spec.is_async
         _set_job_type(job_spec.job_id, job_spec.job_type)
-        if job_spec.params:
-            for k, v in job_spec.params.items():
-                setattr(self, k, v)
 
     @abstractmethod
     def execute(self, logger: JobLogger) -> None:
