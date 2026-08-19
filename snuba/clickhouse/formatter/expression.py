@@ -238,15 +238,19 @@ class ExpressionFormatterAnonymized(ClickhouseExpressionFormatter):
         # if they are input by the user, but that is better than leaking PII
         return _BETWEEN_SQUARE_BRACKETS_REGEX.sub("$A", alias)
 
+    def visit_dangerous_raw_sql(self, exp: DangerousRawSQL) -> str:
+        # Literals inside optimizer-built SQL still have to be redacted before
+        # the string is recorded as sql_anonymized.
+        anonymized = re.sub(r"'(?:\\.|[^'\\])*'", "'$S'", exp.sql)
+        anonymized = re.sub(r"\b\d+\b", str(_gen_random_number()), anonymized)
+        return self._alias(anonymized, exp.alias)
+
     def _alias(self, formatted_exp: str, alias: str | None) -> str:
         if not alias:
             return formatted_exp
+        anonymized_alias = escape_alias(self._anonimize_alias(alias))
+        assert anonymized_alias is not None
         if self._parsing_context.is_alias_present(alias):
-            ret = escape_alias(alias)
-            # This is for the type checker. escape_alias can return None if
-            # we pass None. But here we do not pass None so a None return value
-            # is not valid.
-            assert ret is not None
-            return ret
+            return anonymized_alias
         self._parsing_context.add_alias(alias)
-        return f"({formatted_exp} AS {escape_alias(self._anonimize_alias(alias))})"
+        return f"({formatted_exp} AS {anonymized_alias})"

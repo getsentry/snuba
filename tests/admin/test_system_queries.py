@@ -55,7 +55,6 @@ from snuba.clusters.cluster import ClickhouseClientSettings
             memory DESC
         """,
         "SELECT hostname(), avg(query_duration_ms) FROM clusterAllReplicas('default', system.query_log) GROUP BY hostname()",
-        "SELECT count() FROM merge('system', '.*settings')",
     ],
 )
 @pytest.mark.events_db
@@ -110,6 +109,20 @@ def test_invalid_system_query(sql_query: str) -> None:
             sql_query,
             False,
         )
+
+
+@pytest.mark.events_db
+def test_merge_table_function_is_rejected() -> None:
+    # merge() is valid ClickHouse SQL. EXPLAIN succeeds, then
+    # is_query_using_only_system_tables returns False because the analyzer
+    # does not resolve merge() to system.* tables.
+    assert not is_valid_system_query(
+        settings.CLUSTERS[0]["host"],
+        int(settings.CLUSTERS[0]["port"]),
+        "errors",
+        "SELECT * FROM merge('default', 'errors.*')",
+        False,
+    )
 
 
 @pytest.mark.parametrize(

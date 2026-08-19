@@ -1,3 +1,4 @@
+import re
 from collections.abc import MutableMapping, Sequence
 from dataclasses import dataclass
 from typing import TypedDict
@@ -7,12 +8,31 @@ from snuba.admin.clickhouse.common import (
     _node_connect_port,
     get_clusterless_node_connection,
 )
+from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.pool import ClickhousePool
 from snuba.clusters.cluster import (
     DEFAULT_CLICKHOUSE_HTTP_PORT,
     ClickhouseClientSettings,
     ClickhouseCluster,
 )
+from snuba.utils.serializable_exception import SerializableException
+
+
+class InvalidClusterName(SerializableException):
+    pass
+
+
+# Caller-supplied cluster names are interpolated into executed DDL and into
+# clusterAllReplicas() on connections holding full cluster credentials.
+CLUSTER_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]{1,128}$")
+
+
+def validate_cluster_name(cluster_name: str) -> str:
+    if not CLUSTER_NAME_RE.match(cluster_name):
+        raise InvalidClusterName(
+            "cluster name must be 1-128 characters of letters, digits, underscores or dashes"
+        )
+    return cluster_name
 
 
 def _http_port_for_host(host: str, cluster: ClickhouseCluster) -> int:
@@ -77,7 +97,7 @@ def get_create_table_statements(
 
         if cluster_name:
             table_statement = table_statement.replace(
-                db_table, f"{db_table} ON CLUSTER '{cluster_name}'"
+                db_table, f"{db_table} ON CLUSTER {escape_string(cluster_name)}"
             )
 
         table_statements.append(
@@ -106,7 +126,7 @@ def verify_tables_on_replicas(
     if the expected created tables are missing.
     """
     if cluster_name:
-        from_clause = f"FROM clusterAllReplicas('{cluster_name}', system.tables)"
+        from_clause = f"FROM clusterAllReplicas({escape_string(cluster_name)}, system.tables)"
     else:
         from_clause = "FROM system.tables"
 
@@ -115,7 +135,7 @@ def verify_tables_on_replicas(
         hostName() as host,
         groupArray(name) as table_name
     {from_clause}
-    WHERE database = '{database_name}'
+    WHERE database = {escape_string(database_name)}
     GROUP BY host
     ORDER BY host
     """
@@ -162,7 +182,7 @@ def copy_tables(
     if skip_on_cluster:
         cluster_name = None
     elif cluster_name_override:
-        cluster_name = cluster_name_override
+        cluster_name = validate_cluster_name(cluster_name_override)
     elif not cluster.is_single_node():
         cluster_name = storage.get_cluster().get_clickhouse_cluster_name()
         assert cluster_name, "Missing cluster name for ON CLUSTER create statement"

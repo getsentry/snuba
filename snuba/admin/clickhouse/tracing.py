@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -11,6 +12,7 @@ from uuid import UUID
 import structlog
 
 from snuba.admin.clickhouse.common import (
+    InvalidCustomQuery,
     get_ro_query_node_connection,
     validate_ro_query,
 )
@@ -87,8 +89,18 @@ def run_query_and_get_trace(
     query_without_settings, sql_settings, apply_query_limit = _extract_settings_clause(query)
 
     execute_settings: dict[str, Any] = dict(settings or {})
-    # SQL SETTINGS win over request defaults for the same key.
+    # SQL SETTINGS win over request defaults for the same key, except query_id:
+    # a caller-chosen id can point summarize_from_query_log at another query.
+    sql_settings.pop("query_id", None)
     execute_settings.update(sql_settings)
+    execute_settings.pop("query_id", None)
+    # The SETTINGS splitter does not respect quoted commas. If extraction failed
+    # and leftover SQL still names query_id, refuse rather than let ClickHouse
+    # honor the caller-chosen id.
+    if not apply_query_limit and re.search(
+        r"\bquery_id\b", query_without_settings, flags=re.IGNORECASE
+    ):
+        raise InvalidCustomQuery("query_id is not allowed in SETTINGS")
     # Prefer clickhouse-connect's client-side query_limit. Pass it per execute so
     # concurrent requests cannot race on a shared cached pool attribute. Native
     # pools are left alone. Skip when SETTINGS remains in SQL: the driver appends
