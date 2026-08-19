@@ -123,6 +123,15 @@ def test_explain_table_name_ignores_trailing_dump_fields() -> None:
     )
 
 
+def test_table_functions_rejected_via_explain() -> None:
+    conn = Mock()
+    conn.execute_explain.return_value = ClickhouseResult(
+        results=[("TABLE_FUNCTION table_function_name: merge",)]
+    )
+    with pytest.raises(InvalidCustomQuery, match="table functions"):
+        validate_ro_query("SELECT * FROM merge('default', '.*')", connection=conn)
+
+
 def test_array_join_without_explain_fails_closed() -> None:
     # Offline, sql_metadata still reports ARRAY JOIN columns as tables.
     with pytest.raises(InvalidCustomQuery):

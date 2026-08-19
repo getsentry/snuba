@@ -5,7 +5,6 @@ import re
 from sql_metadata import Parser, QueryType  # type: ignore[import-untyped]
 
 from snuba import settings
-from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.pool import ClickhousePool
 from snuba.clusters.cluster import (
     DEFAULT_CLICKHOUSE_HTTP_PORT,
@@ -371,10 +370,7 @@ def _tables_from_query_tree(explain_output: str) -> set[str]:
 
 def _tables_from_explain(sql_query: str, connection: ClickhousePool) -> set[str]:
     sql = sql_query.strip().rstrip(";")
-    try:
-        result = connection.execute_explain(f"EXPLAIN QUERY TREE {sql}")
-    except ClickhouseError as err:
-        raise InvalidCustomQuery(err.message or "Invalid query") from err
+    result = connection.execute_explain(f"EXPLAIN QUERY TREE {sql}")
     text = "\n".join(str(row[0]) for row in result.results if row)
     return _tables_from_query_tree(text)
 
@@ -432,18 +428,17 @@ def validate_ro_query(
     if parsed.query_type != QueryType.SELECT:
         raise InvalidCustomQuery("Only SELECT queries are allowed")
 
-    if not allowed_tables:
-        return
-
     if connection is not None:
         tables_set = _tables_from_explain(sql_query, connection)
-    else:
+    elif allowed_tables:
         # sql_metadata reports ARRAY JOIN columns as tables. Without ClickHouse
         # to resolve them, leave those names in the set so the allowlist fails
         # closed instead of guessing which dotted names are columns.
         tables_set = set(parsed.tables)
+    else:
+        return
 
-    if not tables_set.issubset(allowed_tables):
+    if allowed_tables and not tables_set.issubset(allowed_tables):
         raise InvalidCustomQuery(
             f"Invalid FROM clause, only the following tables are allowed: {allowed_tables}"
         )
